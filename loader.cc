@@ -15,6 +15,7 @@
 #include <osv/elf.hh>
 #include "arch-tls.hh"
 #include <osv/debug.hh>
+#include <osv/clock.hh>
 
 #include "smp.hh"
 
@@ -54,6 +55,7 @@
 #include "libc/network/__dns.hh"
 
 using namespace osv;
+using namespace osv::clock::literals;
 
 asm(".pushsection \".debug_gdb_scripts\", \"MS\",@progbits,1 \n"
     ".byte 1 \n"
@@ -131,6 +133,7 @@ static bool opt_bootchart = false;
 static std::vector<std::string> opt_ip;
 static std::string opt_defaultgw;
 static std::string opt_nameserver;
+static std::chrono::nanoseconds boot_delay;
 bool opt_assign_net = false;
 
 static int sampler_frequency;
@@ -172,6 +175,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("ip", bpo::value<std::vector<std::string>>(), "set static IP on NIC")
         ("defaultgw", bpo::value<std::string>(), "set default gateway address")
         ("nameserver", bpo::value<std::string>(), "set nameserver address")
+        ("delay", bpo::value<float>()->default_value(0), "delay in seconds before boot")
     ;
     bpo::variables_map vars;
     // don't allow --foo bar (require --foo=bar) so we can find the first non-option
@@ -273,6 +277,8 @@ std::tuple<int, char**> parse_options(int ac, char** av)
     if (vars.count("nameserver")) {
         opt_nameserver = vars["nameserver"].as<std::string>();
     }
+
+    boot_delay = std::chrono::duration_cast<std::chrono::nanoseconds>(1_s * vars["delay"].as<float>());
 
     av += nr_options;
     ac -= nr_options;
@@ -497,6 +503,12 @@ void main_cont(int ac, char** av)
     smp_launch();
     setenv("OSV_CPUS", std::to_string(sched::cpus.size()).c_str(), 1);
     boot_time.event("SMP launched");
+
+    auto end = osv::clock::uptime::now() + boot_delay;
+    while (end > osv::clock::uptime::now()) {
+        // spin
+    }
+
     memory::enable_debug_allocator();
 
 #ifndef AARCH64_PORT_STUB
