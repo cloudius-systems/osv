@@ -19,4 +19,10 @@ enum {
 /* for pltgot relocation */
 #define ARCH_JUMP_SLOT R_AARCH64_JUMP_SLOT
 
+inline void elf_entry_point(void* ep)
+{
+    // Not implemented:
+    assert(0);
+}
+
 #endif /* ARCH_ELF_HH */

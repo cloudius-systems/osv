@@ -37,4 +37,16 @@ enum {
 /* for pltgot relocation */
 #define ARCH_JUMP_SLOT R_X86_64_JUMP_SLOT
 
+inline void elf_entry_point(void* ep)
+{
+    asm volatile (
+        "pushq $0\n\t" // Zero
+        "pushq $0\n\t" // Environment pointers
+        "pushq $0\n\t" // Zero
+        "pushq $0\n\t" // Argument count
+        "jmpq  *%0\n\t"
+        :
+        : "r"(ep));
+}
+
 #endif /* ARCH_ELF_HH */

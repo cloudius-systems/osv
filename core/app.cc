@@ -139,7 +139,7 @@ application::application(const std::string& command, const std::vector<std::stri
 
     _main = _lib->lookup<int (int, char**)>("main");
     if (!_main) {
-        _entry_point = reinterpret_cast<void(*)()>(_lib->entry_point());
+        _entry_point = _lib->entry_point();
     }
     if (!_entry_point && !_main) {
         throw launch_error("Failed looking up main");
@@ -202,7 +202,7 @@ void application::main()
         // may be called twice, TLS may be overriden and the program may not
         // received correct arguments, environment variables and auxiliary
         // vector.
-        _entry_point();
+        elf_entry_point(_entry_point);
     }
 
     // _entry_point() doesn't return

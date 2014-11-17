@@ -154,7 +154,7 @@ private:
     mutex _termination_mutex;
     std::shared_ptr<elf::object> _lib;
     main_func_t* _main;
-    void (*_entry_point)();
+    void* _entry_point;
     static app_registry apps;
 
     // Must be destroyed before _lib
