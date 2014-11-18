@@ -875,6 +875,7 @@ objects += arch/x64/ioapic.o
 objects += arch/x64/apic.o
 objects += arch/x64/apic-clock.o
 objects += arch/x64/entry-xen.o
+objects += arch/x64/prctl.o
 objects += arch/x64/xen.o
 objects += arch/x64/xen_intr.o
 objects += core/sampler.o

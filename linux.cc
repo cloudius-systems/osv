@@ -153,11 +153,14 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
         } while (0)
 
 
+extern long arch_prctl(int code, unsigned long addr);
+
 long syscall(long number, ...)
 {
     switch (number) {
     SYSCALL1(uname, struct utsname *);
     SYSCALL1(brk, void*);
+    SYSCALL2(arch_prctl, int, unsigned long);
     SYSCALL3(write, int, const void *, size_t);
     SYSCALL0(gettid);
     SYSCALL2(clock_gettime, clockid_t, struct timespec *);
