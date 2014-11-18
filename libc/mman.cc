@@ -16,6 +16,7 @@
 #include "libc/libc.hh"
 #include <safe-ptr.hh>
 #include <java/jvm_balloon.hh>
+#include <osv/stubbing.hh>
 
 TRACEPOINT(trace_memory_mmap, "addr=%p, length=%d, prot=%d, flags=%d, fd=%d, offset=%d", void *, size_t, int, int, int, off_t);
 TRACEPOINT(trace_memory_mmap_err, "%d", int);
@@ -224,4 +225,10 @@ int madvise(void *addr, size_t length, int advice)
 {
     auto err = mmu::advise(addr, length, libc_madvise_to_advise(advice));
     return err.to_libc();
+}
+
+int brk(void *addr)
+{
+    WARN_STUBBED();
+    return libc_error(ENOMEM);
 }
