@@ -19,6 +19,7 @@
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 #include <sys/socket.h>
+#include <sys/utsname.h>
 
 #include <unordered_map>
 
@@ -155,6 +156,7 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
 long syscall(long number, ...)
 {
     switch (number) {
+    SYSCALL1(uname, struct utsname *);
     SYSCALL3(write, int, const void *, size_t);
     SYSCALL0(gettid);
     SYSCALL2(clock_gettime, clockid_t, struct timespec *);
