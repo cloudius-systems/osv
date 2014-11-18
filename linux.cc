@@ -157,6 +157,7 @@ long syscall(long number, ...)
 {
     switch (number) {
     SYSCALL1(uname, struct utsname *);
+    SYSCALL1(brk, void*);
     SYSCALL3(write, int, const void *, size_t);
     SYSCALL0(gettid);
     SYSCALL2(clock_gettime, clockid_t, struct timespec *);
