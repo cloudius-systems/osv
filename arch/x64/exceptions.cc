@@ -272,7 +272,7 @@ void general_protection(exception_frame* ef)
 }
 
 #define DUMMY_HANDLER(x) \
-     extern "C" void x(); void x() { abort("DUMMY_HANDLER for " #x " aborting.\n"); }
+     extern "C" void x(exception_frame* ef); void x(exception_frame *ef) { dump_registers(ef); abort("DUMMY_HANDLER for " #x " aborting.\n"); }
 
 DUMMY_HANDLER(debug_exception)
 DUMMY_HANDLER(breakpoint)
