@@ -381,7 +381,8 @@ tools += tools/route/lsroute.so
 tools += tools/mkfs/mkfs.so
 tools += tools/cpiod/cpiod.so
 tools += tools/uush/uush.so
-
+tools += tools/uush/ls.so
+tools += tools/uush/mkdir.so
 tools += tools/libtools.so
 
 tools/route/lsroute.so: EXTRA_LIBS = -Ltools/ -ltools

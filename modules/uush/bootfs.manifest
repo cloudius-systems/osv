@@ -1,3 +1,5 @@
 [manifest]
 /tools/uush.so: tools/uush/uush.so
+/ls.so: tools/uush/ls.so
+/mkdir.so: tools/uush/mkdir.so
 /tools/tst-hello.so: tests/tst-hello.so

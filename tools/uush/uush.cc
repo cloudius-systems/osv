@@ -109,6 +109,23 @@ bool do_line(char *line, size_t len)
         return false;
     }
 
+    if (cmd->args[0].compare("cd") == 0) {
+        int argc = cmd->args.size();
+        const char *newdir;
+
+        if (argc == 1) {
+            newdir = "/";
+        } else {
+            newdir = cmd->args[1].c_str();
+        }
+
+        if (chdir(newdir) < 0) {
+            perror("uush");
+        }
+
+        return true;
+    }
+
     if (cmd->background) {
         cmd->thr = std::thread(uush::exec, cmd);
         uush::bg_tasks.push_back(cmd);
