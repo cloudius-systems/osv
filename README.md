@@ -58,7 +58,13 @@ Before start building OSv, you'll need to add your account to kvm group.
 usermod -aG kvm <user name>
 ```
 
-**Ubuntu users**: you may use [Oracle JDK][] if you don't want to pull too many
+**Ubuntu**:
+
+```
+scripts/setup.py
+```
+
+You may use [Oracle JDK][] if you don't want to pull too many
 dependencies for ``openjdk-7-jdk``
 
 [Oracle JDK]: https://launchpad.net/~webupd8team/+archive/java
