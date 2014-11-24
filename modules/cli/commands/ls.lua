@@ -4,9 +4,11 @@ local rwx
 local format_file
 local sort_files
 
+local flag_a = false
 local flag_l = false
 local flag_t = false
 local flag_r = false
+local flag_R = false
 
 local year_before = 0
 local year_after = 0
@@ -24,20 +26,23 @@ List information  about the FILEs (the current directory by default).
 
 Options:
 
-  -a, --all      do not ignore entries starting with .
-  -l             use a long listing format
-  -r, --reverse  reverse order while sorting
-  -t             sort by modification time, newest first
-      --help     display this help and exit
+  -a, --all        do not ignore entries starting with .
+  -l               use a long listing format
+  -r, --reverse    reverse order while sorting
+  -R, --recursive  list subdirectories recursively
+  -t               sort by modification time, newest first
+      --help       display this help and exit
 ]]
 
 cmd.main = function(args)
   local args, opts = cmd.parser:parse(args)
 
   -- Flags
+  flag_a = opts.all
   flag_l = opts.l
   flag_t = opts.t
   flag_r = opts.reverse
+  flag_R = opts.recursive
 
   -- Date boundary for long listing
   local dtmp = os.date("*t")
@@ -46,100 +51,124 @@ cmd.main = function(args)
   dtmp.year = dtmp.year + 1
   year_after = os.time(dtmp)
 
-  -- No arguments means cwd
-  if #args == 0 then
-    table.insert(args, cwd.get())
-  end
-
-  -- Filter all the erroneous arguments, saving the stat
-  local rargs = {}
-  for _, arg in ipairs(args) do
-    local content, status = osv_request({"file", cwd.resolve(arg)}, "GET", {op = "GETFILESTATUS"})
-    osv_resp_assert(status, 200, 404, 400)
-
-    if status == 404 then
-      io.stderr:write("ls: ", arg, ": no such file or directory\n")
-    elseif status == 400 then
-      io.stderr:write("ls: ", arg, ": failed to fetch data\n")
-    else
-      table.insert(rargs, {file=content, arg=arg})
-    end
-  end
-
-  -- Counter to separate sections with blank lines
-  local print_counter = 0
-
-  -- Sort the arguments
-  table.sort(rargs, function(a, b)
-    return sort_files(a.file, b.file)
-  end)
-
-  -- List non-directory arguments
-  local file_list = {}
-  for arg_i, arg in ipairs(rargs) do
-    local file, path = arg.file, arg.arg
-
-    if file.type ~= "DIRECTORY" then
-      print_counter = print_counter + 1
-      file.pathSuffix = path
-      table.insert(file_list, format_file(file, flag_l))
-    end
-  end
-
-  if #file_list > 0 then
-    -- Print the files
-    if flag_l then
-      io.write(table_format(file_list), '\n')
-    else
-      io.write(list_format(file_list), '\n')
+  local function list_files(args)
+    -- No arguments means cwd
+    if #args == 0 then
+      table.insert(args, cwd.get())
     end
 
-    -- Empty line if we have more arguments
-    if print_counter < #rargs then
-      io.write('\n')
-    end
-  end
+    -- Filter all the erroneous arguments, saving the stat
+    local rargs = {}
+    for _, arg in ipairs(args) do
+      local content, status = osv_request({"file", cwd.resolve(arg)}, "GET", {op = "GETFILESTATUS"})
+      osv_resp_assert(status, 200, 404, 400)
 
-  -- List the directory arguments
-  for rarg_i, rarg in ipairs(rargs) do
-    local file, rpath = rarg.file, cwd.resolve(rarg.arg)
-
-    if file.type == "DIRECTORY" then
-      print_counter = print_counter + 1
-
-      local content, status = osv_request({"file", rpath}, "GET", {op = "LISTSTATUS"})
-      osv_resp_assert(status, 200)
-
-      -- Sort
-      table.sort(content, sort_files)
-
-      -- Build the output list
-      local file_list = {}
-      local total_blocks = 0
-      for _, file in ipairs(content) do
-        total_blocks = total_blocks + math.ceil(file.length / file.blockSize)
-        table.insert(file_list, format_file(file, flag_l))
-      end
-
-      -- Print label of current folder listing
-      if #rargs > 1 then
-        io.write(rarg.arg, ":", "\n")
-      end
-
-      -- Format accordingly
-      if flag_l then
-        io.write("total ", tostring(total_blocks), "\n")
-        io.write(table_format(file_list), "\n")
+      if status == 404 then
+        io.stderr:write("ls: ", arg, ": no such file or directory\n")
+      elseif status == 400 then
+        io.stderr:write("ls: ", arg, ": failed to fetch data\n")
       else
-        io.write(list_format(file_list), "\n")
+        table.insert(rargs, {file=content, arg=arg})
+      end
+    end
+
+    -- Counter to separate sections with blank lines
+    local print_counter = 0
+
+    -- Sort the arguments
+    table.sort(rargs, function(a, b)
+      return sort_files(a.file, b.file)
+    end)
+
+    -- List non-directory arguments
+    local file_list = {}
+    for arg_i, arg in ipairs(rargs) do
+      local file, path = arg.file, arg.arg
+
+      if file.type ~= "DIRECTORY" then
+        print_counter = print_counter + 1
+        file.pathSuffix = path
+        if ((path:sub(0, 1) == '.' and flag_a)
+            or (not (path:sub(0, 1) == '.'))) then
+          table.insert(file_list, format_file(file, flag_l))
+        end
+      end
+    end
+
+    if #file_list > 0 then
+      -- Print the files
+      if flag_l then
+        io.write(table_format(file_list), '\n')
+      else
+        io.write(list_format(file_list), '\n')
       end
 
-      -- Empty line after folder listing
+      -- Empty line if we have more arguments
       if print_counter < #rargs then
-        io.write("\n")
+        io.write('\n')
+      end
+    end
+
+    -- List the directory arguments
+    for rarg_i, rarg in ipairs(rargs) do
+      local file, rpath = rarg.file, cwd.resolve(rarg.arg)
+
+      if file.type == "DIRECTORY" then
+        print_counter = print_counter + 1
+
+        local content, status = osv_request({"file", rpath}, "GET", {op = "LISTSTATUS"})
+        osv_resp_assert(status, 200)
+
+        -- Sort
+        table.sort(content, sort_files)
+
+        -- Build the output list
+        local file_list = {}
+        local total_blocks = 0
+        for _, file in ipairs(content) do
+          total_blocks = total_blocks + math.ceil(file.length / file.blockSize)
+          if ((file.pathSuffix:sub(0, 1) == '.' and flag_a)
+              or (not (file.pathSuffix:sub(0, 1) == '.'))) then
+            table.insert(file_list, format_file(file, flag_l))
+          end
+        end
+
+        -- Print label of current folder listing
+        if #rargs > 1 or flag_R then
+          io.write(rarg.arg, ":", "\n")
+        end
+
+        -- Format accordingly
+        if flag_l then
+          io.write("total ", tostring(total_blocks), "\n")
+          io.write(table_format(file_list), "\n")
+        else
+          io.write(list_format(file_list), "\n")
+        end
+
+        -- Empty line after folder listing
+        if print_counter < #rargs or flag_R then
+          io.write("\n")
+        end
+
+        -- Honour the recursive operation
+        if flag_R then
+          for _, file in ipairs(content) do
+            if file.type == "DIRECTORY" and
+                file.pathSuffix ~= '.' and file.pathSuffix ~= '..' then
+                if rpath:sub(-1) == '/' then
+                  list_files({rpath .. file.pathSuffix})
+                else
+                  list_files({rpath .. "/" .. file.pathSuffix})
+                end
+            end
+          end
+        end
       end
     end
   end
+  -- Start listing!
+  list_files(args)
 end
 
 format_file = function(file, longformat)
