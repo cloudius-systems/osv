@@ -1319,28 +1319,40 @@ init_table get_init(Elf64_Ehdr* header)
 ulong program::register_dtv(object* obj)
 {
     SCOPE_LOCK(_module_index_list_mutex);
-    auto i = find(_module_index_list, nullptr);
-    if (i != _module_index_list.end()) {
+    auto list = _module_index_list_rcu.read_by_owner();
+    if (!list) {
+        _module_index_list_rcu.assign(new vector<object*>({obj}));
+        return 0;
+    }
+    auto i = find(*list, nullptr);
+    if (i != list->end()) {
         *i = obj;
-        return i - _module_index_list.begin();
+        return i - list->begin();
     } else {
-        _module_index_list.push_back(obj);
-        return _module_index_list.size() - 1;
+        auto newlist = new vector<object*>(*list);
+        newlist->push_back(obj);
+        _module_index_list_rcu.assign(newlist);
+        osv::rcu_dispose(list);
+        return newlist->size() - 1;
     }
 }
 
 void program::free_dtv(object* obj)
 {
     SCOPE_LOCK(_module_index_list_mutex);
-    auto i = find(_module_index_list, obj);
-    assert(i != _module_index_list.end());
+    auto list = _module_index_list_rcu.read_by_owner();
+    auto i = find(*list, obj);
+    assert(i != list->end());
     *i = nullptr;
 }
 
 void* program::tls_addr(ulong module)
 {
-    SCOPE_LOCK(_module_index_list_mutex);
-    return _module_index_list[module]->tls_addr();
+    object *obj;
+    WITH_LOCK(osv::rcu_read_lock) {
+        obj = (*(_module_index_list_rcu.read()))[module];
+    }
+    return obj->tls_addr();
 }
 
 // Used in implementation of program::with_modules. We cannot keep the RCU
