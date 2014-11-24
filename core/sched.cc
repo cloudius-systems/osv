@@ -764,6 +764,9 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
 {
     trace_thread_create(this);
     setup_tcb();
+    // module 0 is always the core:
+    assert(_tls.size() == elf::program::core_module_index);
+    _tls.push_back((char *)_tcb->tls_base);
     WITH_LOCK(thread_map_mutex) {
         if (!main) {
             auto ttid = _s_idgen;
@@ -861,6 +864,11 @@ thread::~thread()
     }
     if (_attr._stack.deleter) {
         _attr._stack.deleter(_attr._stack);
+    }
+    for (char *tls : _tls) {
+        if (tls != (char *)_tcb->tls_base) {
+            delete[] tls;
+        }
     }
     free_tcb();
     rcu_dispose(_detached_state.release());
@@ -1142,24 +1150,12 @@ std::string thread::name() const
     return _attr._name.data();
 }
 
-void* thread::get_tls(ulong module)
-{
-    if (module == elf::program::core_module_index) {
-        return _tcb->tls_base;
-    }
-
-    if (module >= _tls.size()) {
-        return nullptr;
-    }
-    return _tls[module].get();
-}
-
 void* thread::setup_tls(ulong module, const void* tls_template,
         size_t init_size, size_t uninit_size)
 {
     _tls.resize(std::max(module + 1, _tls.size()));
-    _tls[module].reset(new char[init_size + uninit_size]);
-    auto p = _tls[module].get();
+    _tls[module]  = new char[init_size + uninit_size];
+    auto p = _tls[module];
     memcpy(p, tls_template, init_size);
     memset(p + init_size, 0, uninit_size);
     return p;

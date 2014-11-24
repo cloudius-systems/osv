@@ -484,7 +484,7 @@ public:
      * and this sequential 32-bit counter can wrap around.
      */
     unsigned int id() __attribute__((no_instrument_function));
-    void* get_tls(ulong module);
+    inline void* get_tls(ulong module);
     void* setup_tls(ulong module, const void* tls_template,
             size_t init_size, size_t uninit_size);
     void set_name(std::string name);
@@ -609,7 +609,7 @@ private:
     unsigned int _id;
     std::atomic<bool> _interrupted;
     std::function<void ()> _cleanup;
-    std::vector<std::unique_ptr<char[]>> _tls;
+    std::vector<char*> _tls;
     bool _app;
     void destroy();
     friend class thread_ref_guard;
@@ -1205,6 +1205,14 @@ inline cpu* thread::tcpu() const
 inline thread_handle thread::handle()
 {
     return thread_handle(*this);
+}
+
+inline void* thread::get_tls(ulong module)
+{
+    if (module >= _tls.size()) {
+        return nullptr;
+    }
+    return _tls[module];
 }
 
 #ifdef __OSV_CORE__

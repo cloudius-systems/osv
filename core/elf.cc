@@ -1346,15 +1346,6 @@ void program::free_dtv(object* obj)
     *i = nullptr;
 }
 
-void* program::tls_addr(ulong module)
-{
-    object *obj;
-    WITH_LOCK(osv::rcu_read_lock) {
-        obj = (*(_module_index_list_rcu.read()))[module];
-    }
-    return obj->tls_addr();
-}
-
 // Used in implementation of program::with_modules. We cannot keep the RCU
 // read lock (which disables preemption) while a user function is running,
 // so we use this function to make a copy the current list of modules.
@@ -1431,6 +1422,12 @@ struct module_and_offset {
     ulong offset;
 };
 
+char *object::setup_tls()
+{
+    return (char *) sched::thread::current()->setup_tls(
+            _module_index, _tls_segment, _tls_init_size, _tls_uninit_size);
+}
+
 extern "C"
 void* __tls_get_addr(module_and_offset* mao)
 {
@@ -1438,7 +1435,15 @@ void* __tls_get_addr(module_and_offset* mao)
     abort();
 #endif /* AARCH64_PORT_STUB */
 
-    return get_program()->tls_addr(mao->module) + mao->offset;
+    auto tls = sched::thread::current()->get_tls(mao->module);
+    if (tls) {
+        return tls + mao->offset;
+    } else {
+        // This module's TLS block hasn't yet been allocated for this thread:
+        object *obj = get_program()->tls_object(mao->module);
+        assert(mao->module == obj->module_index());
+        return obj->setup_tls() + mao->offset;
+    }
 }
 
 

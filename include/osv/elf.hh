@@ -330,6 +330,7 @@ public:
     bool contains_addr(const void* addr);
     ulong module_index() const;
     void* tls_addr();
+    inline char *setup_tls();
     std::vector<Elf64_Shdr> sections();
     std::string section_name(const Elf64_Shdr& shdr);
     std::vector<Elf64_Sym> symbols();
@@ -522,7 +523,7 @@ public:
     void with_modules(functor f);
     dladdr_info lookup_addr(const void* addr);
     elf::object *object_containing_addr(const void *addr);
-    void* tls_addr(ulong module);
+    inline object *tls_object(ulong module);
 private:
     void add_debugger_obj(object* obj);
     void del_debugger_obj(object* obj);
@@ -612,6 +613,12 @@ T*
 object::lookup(const char* symbol)
 {
     return reinterpret_cast<T*>(lookup<void>(symbol));
+}
+
+object *program::tls_object(ulong module)
+{
+    SCOPE_LOCK(osv::rcu_read_lock);
+    return (*(get_program()->_module_index_list_rcu.read()))[module];
 }
 
 }
