@@ -13,6 +13,18 @@
 
 #include <string.h>
 
+// Among other things, this code tests spinlock. The spinlock leaves
+// preemption disabled between its lock() and unlock(), and while preemption
+// is disabled we're not allowed to do certain things, among them is to run
+// new functions (which need to be looked up, and this uses a mutex) and to
+// run new code (which needs to be paged in). We need to use
+// OSV_ELF_MLOCK_OBJECT() to ensure both things: All symbols will be resolved
+// on load and not when first used, and all program text will be locked into
+// memory.
+#include <osv/elf.hh>
+OSV_ELF_MLOCK_OBJECT();
+
+
 // increment_thread loops() non-atomically incrementing a shared value.
 // If N threads like this run concurrently, at the end the sum will
 // not end up N*len.
