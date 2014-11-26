@@ -19,7 +19,7 @@
 namespace mmu {
 constexpr int max_phys_addr_size = 48;
 constexpr int device_range_start = 0x8000000;
-constexpr int device_range_stop = 0x10000000;
+constexpr int device_range_stop = 0x40000000;
 extern u64 mem_addr; /* set by the dtb_setup constructor */
 
 template<int N>
@@ -156,7 +156,6 @@ pt_element<N> make_pte(phys addr, bool leaf, unsigned perm = perm_read | perm_wr
     if (addr >= mmu::device_range_start && addr < mmu::device_range_stop) {
         /* we need to mark device memory as such, because the
            semantics of the load/store instructions change */
-        debug_early_u64("make_pte: device memory at ", (u64)addr);
         pte.set_attridx(0);
     } else {
         pte.set_attridx(4);
