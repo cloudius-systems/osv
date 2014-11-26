@@ -1,6 +1,7 @@
 #!/usr/bin/python2
 
 import boto.ec2, argparse, urllib, time, json, subprocess, os.path
+import argparse
 
 class Metadata(object):
     base = 'http://169.254.169.254/latest/meta-data/'
@@ -69,4 +70,11 @@ def make_ami(input, name):
     print('ami {} created\n'.format(ami))
     return ami
 
-make_ami(input, 'test-ami')
+if __name__ == "__main__":
+    # Parse arguments
+    parser = argparse.ArgumentParser(prog='run')
+    parser.add_argument("-n", "--name", action="store", default="test-ami",
+                        help="ami name to be created")
+
+    args = parser.parse_args()
+    make_ami(input, args.name)
