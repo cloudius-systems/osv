@@ -8,7 +8,7 @@
 #ifndef DRIVER_H
 #define DRIVER_H
 
-#include "drivers/pci.hh"
+#include <osv/pci.hh>
 #include "drivers/pci-device.hh"
 #include <vector>
 #include <string>

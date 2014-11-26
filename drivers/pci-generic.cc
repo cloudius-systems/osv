@@ -9,8 +9,8 @@
 #include <iomanip>
 
 #include <osv/debug.hh>
+#include <osv/pci.hh>
 
-#include "drivers/pci.hh"
 #include "drivers/driver.hh"
 #include "drivers/device.hh"
 #include "drivers/pci-function.hh"
@@ -18,48 +18,6 @@
 #include "drivers/pci-device.hh"
 
 namespace pci {
-
-static inline void prepare_pci_config_access(u8 bus, u8 slot, u8 func, u8 offset)
-{
-    outl(PCI_CONFIG_ADDRESS_ENABLE | (bus<<PCI_BUS_OFFSET) | (slot<<PCI_SLOT_OFFSET) | (func<<PCI_FUNC_OFFSET) | (offset & ~0x03), PCI_CONFIG_ADDRESS);
-}
-
-u32 read_pci_config(u8 bus, u8 slot, u8 func, u8 offset)
-{
-    prepare_pci_config_access(bus, slot, func, offset);
-    return inl(PCI_CONFIG_DATA);
-}
-
-u16 read_pci_config_word(u8 bus, u8 slot, u8 func, u8 offset)
-{
-    prepare_pci_config_access(bus, slot, func, offset);
-    return inw(PCI_CONFIG_DATA + (offset & 0x02));
-}
-
-u8 read_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset)
-{
-    prepare_pci_config_access(bus, slot, func, offset);
-    return inb(PCI_CONFIG_DATA + (offset & 0x03));
-}
-
-void write_pci_config(u8 bus, u8 slot, u8 func, u8 offset, u32 val)
-{
-    prepare_pci_config_access(bus, slot, func, offset);
-    outl(val, PCI_CONFIG_DATA);
-}
-
-void write_pci_config_word(u8 bus, u8 slot, u8 func, u8 offset, u16 val)
-{
-    prepare_pci_config_access(bus, slot, func, offset);
-    outw(val, PCI_CONFIG_DATA + (offset & 0x02));
-}
-
-
-void write_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset, u8 val)
-{
-    prepare_pci_config_access(bus, slot, func, offset);
-    outb(val, PCI_CONFIG_DATA + (offset & 0x03));
-}
 
 void pci_device_print(u8 bus, u8 slot, u8 func)
 {
@@ -157,4 +115,5 @@ void pci_device_enumeration()
             break;
     }
 }
-}
+
+} /* namespace pci */

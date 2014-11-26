@@ -26,7 +26,7 @@ extern "C" {
 #include <osv/semaphore.hh>
 
 #include "drivers/console.hh"
-#include "drivers/pci.hh"
+#include <osv/pci.hh>
 #include <osv/interrupt.hh>
 
 #include <osv/prio.hh>

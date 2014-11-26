@@ -9,7 +9,7 @@
 #define DRIVERS_ISA_SERIAL_HH
 
 #include "console-driver.hh"
-#include "drivers/pci.hh"
+#include <osv/pci.hh>
 #include <osv/sched.hh>
 #include <osv/interrupt.hh>
 

@@ -6,7 +6,7 @@
  */
 
 #include "drivers/driver.hh"
-#include "drivers/pci.hh"
+#include <osv/pci.hh>
 #include <osv/debug.hh>
 
 #include "driver.hh"

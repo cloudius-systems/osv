@@ -13,7 +13,7 @@
 #include <list>
 
 #include <osv/sched.hh>
-#include "drivers/pci.hh"
+#include <osv/pci.hh>
 #include "drivers/pci-function.hh"
 #include <osv/types.h>
 #include <initializer_list>

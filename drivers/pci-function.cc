@@ -7,7 +7,7 @@
 
 #include <osv/debug.hh>
 #include <osv/mmio.hh>
-#include "pci.hh"
+#include <osv/pci.hh>
 #include "device.hh"
 #include "pci-function.hh"
 

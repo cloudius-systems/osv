@@ -5,7 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "drivers/pci.hh"
+#include <osv/pci.hh>
 #include "drivers/pci-function.hh"
 #include "drivers/pci-bridge.hh"
 

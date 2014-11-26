@@ -9,7 +9,7 @@
 #define XENFRONT_DRIVER_H
 
 #include "driver.hh"
-#include "drivers/pci.hh"
+#include <osv/pci.hh>
 #include "drivers/driver.hh"
 #include "drivers/pci-function.hh"
 #include "drivers/pci-device.hh"

@@ -5,12 +5,10 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#ifndef ARCH_X86_PCI_H
-#define ARCH_X86_PCI_H
+#ifndef PCI_GENERIC_HH
+#define PCI_GENERIC_HH
 
 #include <stdint.h>
-#include "pci-function.hh"
-#include "processor.hh"
 #include <osv/types.h>
 
 #define pci_tag "pci"
@@ -20,14 +18,6 @@
 #define pci_e(...)   tprintf_e(pci_tag, __VA_ARGS__)
 
 namespace pci {
-
-using processor::inb;
-using processor::inw;
-using processor::inl;
-using processor::outb;
-using processor::outw;
-using processor::outl;
-
     enum pc_early_defines {
         PCI_VENDOR_ID      = 0x0,
         PCI_CONFIG_ADDRESS = 0xcf8,
@@ -51,16 +41,11 @@ using processor::outl;
         PCI_CAPABILITIES_PTR = 0x34,
     };
 
-    u32 read_pci_config(u8 bus, u8 slot, u8 func, u8 offset);
-    u16 read_pci_config_word(u8 bus, u8 slot, u8 func, u8 offset);
-    u8 read_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset);
-    void write_pci_config(u8 bus, u8 slot, u8 func, u8 offset, u32 val);
-    void write_pci_config_word(u8 bus, u8 slot, u8 func, u8 offset, u16 val);
-    void write_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset, u8 val);
+    /* these ones are implemented in the generic pci code in drivers/pci.cc */
     void pci_device_print(u8 bus, u8 slot, u8 func);
     void pci_devices_print();
     void pci_device_enumeration();
 
-};
+} /* namespace pci */
 
-#endif
+#endif /* PCI_GENERIC_HH */

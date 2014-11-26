@@ -9,7 +9,8 @@
 #define __TST_DEVICES__
 
 #include "tst-hub.hh"
-#include "drivers/pci.hh"
+#include <osv/pci.hh>
+#include "drivers/driver.hh"
 #include <osv/debug.hh>
 
 class test_devices : public unit_tests::vtest {

@@ -825,7 +825,7 @@ drivers += drivers/xenfront.o drivers/xenfront-xenbus.o drivers/xenfront-blk.o
 drivers += drivers/pvpanic.o
 drivers += drivers/ahci.o
 drivers += drivers/ide.o
-drivers += drivers/pci.o
+drivers += drivers/pci-generic.o
 drivers += drivers/scsi-common.o
 drivers += drivers/vmw-pvscsi.o
 endif # x64
@@ -852,6 +852,9 @@ objects += arch/$(arch)/cpuid.o
 objects += arch/$(arch)/firmware.o
 objects += arch/$(arch)/hypervisor.o
 
+ifeq ($(arch),x64)
+objects += arch/$(arch)/pci.o
+endif # x64
 
 arch/x64/string-ssse3.o: CXXFLAGS += -mssse3
 

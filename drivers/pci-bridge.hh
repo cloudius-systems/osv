@@ -8,7 +8,7 @@
 #ifndef PCI_BRIDGE_H
 #define PCI_BRIDGE_H
 
-#include "drivers/pci.hh"
+#include <osv/pci.hh>
 #include "drivers/pci-function.hh"
 
 namespace pci {
