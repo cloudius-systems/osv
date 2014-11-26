@@ -51,11 +51,12 @@ namespace pci {
             PCI_BAR_64BIT_ADDRESS        = 0x01
         };
 
+        // pos is the offset within the configuration space
         bar(function* dev, u8 pos);
         virtual ~bar();
 
-        // pos is the offset within the configuration space
-        void test_bar_size();
+        // read/write pci cfg registers to determine size
+        u64 read_bar_size();
 
         bool is_pio() { return !_is_mmio; }
         bool is_mmio() { return _is_mmio; }
@@ -84,6 +85,11 @@ namespace pci {
     private:
 
         void init();
+
+        /* Architecture-specific hook on bar creation, which allows
+         * rewriting the bar registers. Returns the bar register.
+         */
+        u32 arch_add_bar(u32 val);
 
         // To which pci_function it relates
         function* _dev;
@@ -183,7 +189,9 @@ namespace pci {
 
         enum pci_command_bits {
             PCI_COMMAND_INTX_DISABLE = (1 << 10),
-            PCI_COMMAND_BUS_MASTER = (1 << 2)
+            PCI_COMMAND_BUS_MASTER = (1 << 2),
+            PCI_COMMAND_BAR_MEM_ENABLE = (1 << 1),
+            PCI_COMMAND_BAR_IO_ENABLE = (1 << 0)
         };
 
         enum pci_header_type {
@@ -271,6 +279,8 @@ namespace pci {
 
         bool get_bus_master();
         void set_bus_master(bool m);
+
+        void set_bars_enable(bool mem, bool io);
 
         // Enable/Disable intx assertions
         bool is_intx_enabled();

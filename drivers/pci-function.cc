@@ -35,27 +35,28 @@ namespace pci {
 
         _is_mmio = ((val & PCI_BAR_MEMORY_INDICATOR_MASK) == PCI_BAR_MMIO);
         if (_is_mmio) {
-            _addr_lo = val & PCI_BAR_MEM_ADDR_LO_MASK;
             _is_64 = ((val & PCI_BAR_MEM_ADDR_SPACE_MASK)
                 == PCI_BAR_64BIT_ADDRESS);
             _is_prefetchable = ((val & PCI_BAR_PREFETCHABLE_MASK)
                 == PCI_BAR_PREFETCHABLE);
+        }
+        _addr_size = read_bar_size();
 
+        val = pci::bar::arch_add_bar(val);
+
+        if (_is_mmio) {
+            _addr_lo = val & PCI_BAR_MEM_ADDR_LO_MASK;
             if (_is_64) {
                 _addr_hi = _dev->pci_readl(_pos + 4);
             }
-
         } else {
             _addr_lo = val & PCI_BAR_PIO_ADDR_MASK;
         }
 
         _addr_64 = ((u64)_addr_hi << 32) | (u64)(_addr_lo);
-
-        // Determine the bar size
-        test_bar_size();
     }
 
-    void bar::test_bar_size()
+    u64 bar::read_bar_size()
     {
         u32 lo_orig = _dev->pci_readl(_pos);
 
@@ -82,7 +83,7 @@ namespace pci {
         }
 
         u64 bits = (u64)hi << 32 | lo;
-        _addr_size = ~bits + 1;
+        return ~bits + 1;
     }
 
     void bar::map()
@@ -377,6 +378,18 @@ namespace pci {
             (master) ?
                 command | PCI_COMMAND_BUS_MASTER :
                 command & ~PCI_COMMAND_BUS_MASTER;
+        set_command(command);
+    }
+
+    void function::set_bars_enable(bool mem, bool io)
+    {
+        u16 command = get_command();
+        if (mem) {
+            command |= PCI_COMMAND_BAR_MEM_ENABLE;
+        }
+        if (io) {
+            command |= PCI_COMMAND_BAR_IO_ENABLE;
+        }
         set_command(command);
     }
 

@@ -7,6 +7,7 @@
 
 #include <osv/debug.hh>
 #include <osv/pci.hh>
+#include "drivers/pci-function.hh"
 
 namespace pci {
 
@@ -69,6 +70,14 @@ void write_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset, u8 val)
 {
     prepare_pci_config_access(bus, slot, func, offset);
     outb(val, PCI_CONFIG_DATA + (offset & 0x03));
+}
+
+u32 pci::bar::arch_add_bar(u32 val)
+{
+    /* nothing to do on X86 since firmware already sets to sane values.
+     * why is this not available on other archs (ARM) as well? Damn.
+     */
+    return val;
 }
 
 } /* namespace pci */
