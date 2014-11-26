@@ -67,7 +67,7 @@ xenbus::xenbus(pci::device& pci_dev)
     // bringup
     evtchn_init(NULL);
 
-    if (features().xen_vector_callback) {
+    if (processor::features().xen_vector_callback) {
         xen::xen_set_callback();
     } else {
         _pgsi.reset(xen::xen_set_callback(irqno));

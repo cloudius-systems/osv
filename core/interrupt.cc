@@ -21,6 +21,7 @@ TRACEPOINT(trace_msix_migrate, "vector=0x%02x apic_id=0x%x",
                                unsigned, unsigned);
 
 using namespace pci;
+using namespace processor;
 
 msix_vector::msix_vector(pci::function* dev)
     : _dev(dev)

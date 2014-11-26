@@ -17,7 +17,6 @@
 #include <osv/debug.hh>
 #include "device.hh"
 
-using namespace processor;
 using namespace hw;
 
 namespace pci {

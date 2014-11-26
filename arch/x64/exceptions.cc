@@ -131,7 +131,7 @@ shared_vector interrupt_descriptor_table::register_level_triggered_handler(
         for (unsigned i = 32; i < 256; ++i) {
             auto o = _handlers[i].read_by_owner();
             if ((o && o->gsi == gsi) || o == nullptr) {
-                auto n = new handler(o, pre_eoi, [] { apic->eoi(); }, post_eoi);
+                auto n = new handler(o, pre_eoi, [] { processor::apic->eoi(); }, post_eoi);
                 n->gsi = gsi;
 
                 _handlers[i].assign(n);
@@ -167,7 +167,7 @@ void interrupt_descriptor_table::unregister_level_triggered_handler(shared_vecto
 
 unsigned interrupt_descriptor_table::register_handler(std::function<void ()> post_eoi)
 {
-    return register_interrupt_handler([] { return true; }, [] { apic->eoi(); }, post_eoi);
+    return register_interrupt_handler([] { return true; }, [] { processor::apic->eoi(); }, post_eoi);
 }
 
 void interrupt_descriptor_table::unregister_handler(unsigned vector)
