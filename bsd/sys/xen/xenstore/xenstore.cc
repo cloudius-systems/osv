@@ -1405,7 +1405,7 @@ xs_write(void *op, struct xs_transaction t, const char *path, const char *string
 
 void *xs_daemon_open()
 {
-	return nullptr;
+	return (void *)-1;
 }
 
 void xs_close(void *h)
