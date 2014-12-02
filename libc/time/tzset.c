@@ -82,8 +82,8 @@ void tzset(void)
 {
 	char *z, *a;
 	
-	strcpy(std_name, "GMT");
-	strcpy(dst_name, "GMT");
+	strcpy(std_name, "UTC");
+	strcpy(dst_name, "UTC");
 	__tzname[0] = std_name;
 	__tzname[1] = dst_name;
 	__timezone = 0;
