@@ -15,7 +15,7 @@ extern "C" {
 
 #include <bits/alltypes.h>
 
-typedef struct __DIR_s DIR;
+typedef struct __dirstream DIR;
 
 struct dirent
 {
@@ -26,15 +26,12 @@ struct dirent
 	char d_name[256];
 };
 
-#define dirent64 dirent
-
 #define d_fileno d_ino
 
 int            closedir(DIR *);
 DIR           *fdopendir(int);
 DIR           *opendir(const char *);
 struct dirent *readdir(DIR *);
-struct dirent *readdir64(DIR *);
 int            readdir_r(DIR *__restrict, struct dirent *__restrict, struct dirent **__restrict);
 void           rewinddir(DIR *);
 void           seekdir(DIR *, long);
@@ -66,7 +63,7 @@ int versionsort(const struct dirent **, const struct dirent **);
 #if defined(_LARGEFILE64_SOURCE) || defined(_GNU_SOURCE)
 #define dirent64 dirent
 #define readdir64 readdir
-//#define readdir64_r readdir_r
+#define readdir64_r readdir_r
 #define scandir64 scandir
 #define alphasort64 alphasort
 #define versionsort64 versionsort

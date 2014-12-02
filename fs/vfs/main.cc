@@ -64,7 +64,6 @@
 #include "vfs.h"
 
 #include "libc/internal/libc.h"
-#include "libc/dirent/dirent.h"
 
 #include <algorithm>
 #include <unordered_map>
@@ -605,6 +604,11 @@ TRACEPOINT(trace_vfs_readdir, "%d %p", int, dirent*);
 TRACEPOINT(trace_vfs_readdir_ret, "");
 TRACEPOINT(trace_vfs_readdir_err, "%d", int);
 
+struct __dirstream
+{
+    int fd;
+};
+
 DIR *opendir(const char *path)
 {
     DIR *dir = new DIR;
@@ -618,6 +622,23 @@ DIR *opendir(const char *path)
         return nullptr;
     }
     return dir;
+}
+
+DIR *fdopendir(int fd)
+{
+    DIR *dir;
+    struct stat st;
+    if (fstat(fd, &st) < 0) {
+        return nullptr;
+    }
+    if (!S_ISDIR(st.st_mode)) {
+        errno = ENOTDIR;
+        return nullptr;
+    }
+    dir = new DIR;
+    dir->fd = fd;
+    return dir;
+
 }
 
 int dirfd(DIR *dirp)
@@ -679,6 +700,7 @@ int readdir_r(DIR *dir, struct dirent *entry, struct dirent **result)
 }
 
 // FIXME: in 64bit dirent64 and dirent are identical, so it's safe to alias
+#undef readdir64_r
 extern "C" int readdir64_r(DIR *dir, struct dirent64 *entry,
         struct dirent64 **result)
         __attribute__((alias("readdir_r")));

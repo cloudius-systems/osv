@@ -52,7 +52,6 @@ musl += ctype/wcwidth.o
 
 musl += dirent/alphasort.o
 musl += dirent/scandir.o
-libc += dirent/fdopendir.o
 
 libc += env/__environ.o
 musl += env/clearenv.o
