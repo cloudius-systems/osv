@@ -11,7 +11,6 @@
 #include <cstring>
 #include <string.h>
 #include <exception>
-#include <libintl.h>
 #include <cxxabi.h>
 #include <sys/mman.h>
 #include <unistd.h>
