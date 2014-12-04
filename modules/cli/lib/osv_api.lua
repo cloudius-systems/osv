@@ -223,6 +223,19 @@ local renderer = {
     end
     return table_format(tt)
   end,
+  Routes = function(response)
+    local tt = {{"destination", "gateway", "flags", "netif", "ipv6"}}
+    for _, thread in ipairs(response) do
+      table.insert(tt, {
+        thread["destination"],
+        thread["gateway"],
+        thread["flags"],
+        thread["netif"],
+        tostring(thread["ipv6"])
+      })
+    end
+    return table_format(tt)
+  end,
   [""] = function(response)
     return response
   end

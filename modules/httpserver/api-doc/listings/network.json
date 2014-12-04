@@ -63,7 +63,7 @@
                "method":"GET",
                "summary":"Get the ip route table",
                "notes":"Get a list of the available routes",
-               "type":"array",
+               "type":"Routes",
                "items": {"type": "Route"},
                "nickname":"getRoute",
                "produces":[
