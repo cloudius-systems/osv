@@ -1,1 +1,1 @@
-#include <linux/soundcard.h>
+../../../musl/include/sys/soundcard.h

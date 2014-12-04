@@ -1,1 +1,1 @@
-#include <linux/vt.h>
+../../../musl/include/sys/vt.h

@@ -1,1 +1,1 @@
-#include <syslog.h>
+../../../musl/include/sys/syslog.h

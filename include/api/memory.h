@@ -1,1 +1,1 @@
-#include <string.h>
+../../musl/include/memory.h

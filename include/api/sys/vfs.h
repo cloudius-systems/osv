@@ -1,1 +1,1 @@
-#include <sys/statfs.h>
+../../../musl/include/sys/vfs.h
