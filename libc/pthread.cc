@@ -976,3 +976,10 @@ int pthread_attr_getaffinity_np(const pthread_attr_t *attr, size_t cpusetsize,
 
     return 0;
 }
+
+int sched_getaffinity(pid_t pid, size_t cpusetsize,
+        cpu_set_t *cpuset)
+{
+    WARN_STUBBED();
+    return EINVAL;
+}

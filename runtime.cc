@@ -336,6 +336,7 @@ long sysconf(int name)
     case _SC_IOV_MAX: return KERN_IOV_MAX;
     case _SC_THREAD_SAFE_FUNCTIONS: return 1;
     case _SC_GETGR_R_SIZE_MAX: return 1;
+    case _SC_OPEN_MAX: return FDMAX;
     default:
         debug(fmt("sysconf(): stubbed for parameter %1%\n") % name);
         errno = EINVAL;
