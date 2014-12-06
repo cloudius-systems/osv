@@ -796,7 +796,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
         remote_thread_local_var(s_current) = this;
 
         const auto& app = application::get_current();
-        if (app) {
+        if (_app && app) {
             _func = [app, func] {
                 app->adopt_current();
                 func();
