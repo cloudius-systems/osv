@@ -156,7 +156,7 @@ boost::asio::ip::address client::getaddr(const std::string& server)
     boost::asio::ip::tcp::resolver::query query(server, "80");
     boost::system::error_code error;
     boost::asio::ip::tcp::resolver::iterator it(resolver.resolve(query, error));
-    if (error == boost::asio::error::host_not_found)
+    if (error)
         throw connection_exception(
             std::string("Unable to resolve address for ") + server);
     return it->endpoint().address();
