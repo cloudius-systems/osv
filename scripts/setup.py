@@ -51,6 +51,19 @@ class Fedora(object):
 
     versions = [Fedora_20, Fedora_21]
 
+class RHELbased(Fedora):
+    name = ['Scientific Linux', 'NauLinux', 'CentOS Linux',
+            'Red Hat Enterprise Linux', 'Oracle Linux']
+
+    class RHELbased_70(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '7.0'
+
+    versions = [RHELbased_70]
+
 class Debian(object):
     name = 'debian'
     install = 'apt-get -y install'
@@ -105,7 +118,8 @@ class Ubuntu(object):
 distros = [
            Debian(),
            Fedora(),
-           Ubuntu()
+           Ubuntu(),
+           RHELbased()
            ]
 
 parser = argparse.ArgumentParser(prog='setup')
@@ -118,9 +132,16 @@ cmdargs = parser.parse_args()
 (name, version, id) = platform.linux_distribution()
 
 for distro in distros:
-    if distro.name == name:
+    if type(distro.name) == type([]):
+        dname = filter(lambda n: name.startswith(n), distro.name)
+        if len(dname):
+            distro.name = dname[0]
+        else:
+            continue
+
+    if name.startswith(distro.name):
         for dver in distro.versions:
-            if dver.version == version:
+            if dver.version == version or version.startswith(dver.version+'.'):
                 pkg = distro.packages + dver.packages
                 if cmdargs.ec2:
                     pkg += distro.ec2_packages + dver.ec2_packages
