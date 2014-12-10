@@ -60,11 +60,16 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
         }
         return 0;
     case FUTEX_WAKE:
-        assert(val == INT_MAX);
+        assert(val > 0);
         WITH_LOCK(queues_mutex) {
             auto i = queues.find(uaddr);
             if (i != queues.end()) {
-                i->second.wake_all(queues_mutex);
+                // use wake_all if INT_MAX is given as value, should be slightly faster
+                if(val == INT_MAX) {
+                  i->second.wake_all(queues_mutex);
+                } else {
+                  i->second.wake_some(queues_mutex,val);
+                }
                 queues.erase(i);
             }
         }

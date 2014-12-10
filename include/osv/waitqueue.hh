@@ -64,6 +64,18 @@ public:
      */
     void wake_one(mutex& mtx);
     /**
+     * Wake a given amount of threads waiting on the condition variable
+     *
+     * Wake up to the given amount of threads currently waiting on the condition variable,
+     * or do nothing if there is no thread waiting.
+     *
+     * The threads are not awakened immediately; they will only wake after mtx
+     * is released (one by one).
+     *
+     * wake_one() must be called with the mutex held and the max number of threads to wake.
+     */
+    void wake_some(mutex& mtx, int count);
+    /**
      * Wake all threads waiting on the condition variable
      *
      * Wake all of the threads currently waiting on the condition variable,

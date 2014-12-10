@@ -11,6 +11,7 @@
 
 TRACEPOINT(trace_waitqueue_wait, "%p", waitqueue *);
 TRACEPOINT(trace_waitqueue_wake_one, "%p", waitqueue *);
+TRACEPOINT(trace_waitqueue_wake_some, "%p count=%d", waitqueue *, int);
 TRACEPOINT(trace_waitqueue_wake_all, "%p", waitqueue *);
 
 namespace sched {
@@ -69,6 +70,25 @@ void waitqueue::wake_one(mutex& mtx)
         // again for the mutex, we do "wait morphing" - have it continue to
         // sleep until the mutex becomes available.
         wr->wake_lock(&mtx);
+    }
+}
+
+void waitqueue::wake_some(mutex& mtx, int count)
+{
+    trace_waitqueue_wake_some(this, count);
+    wait_record *wr = _waiters_fifo.oldest;
+    while (wr && (count > 0)) {
+        _waiters_fifo.oldest = wr->next;
+        if (wr->next == nullptr) {
+          _waiters_fifo.newest = nullptr;
+        }
+        auto next_wr = wr->next; // need to save - *wr invalid after wake
+        // Rather than wake the waiter here (wr->wake()) and have it wait
+        // again for the mutex, we do "wait morphing" - have it continue to
+        // sleep until the mutex becomes available.
+        wr->wake_lock(&mtx);
+        count --;
+        wr = next_wr;
     }
 }
 
