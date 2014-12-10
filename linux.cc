@@ -60,25 +60,25 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
         }
         return 0;
     case FUTEX_WAKE:
-        assert(val > 0);
+        if(val <= 0) {
+            return -1;
+        }
         WITH_LOCK(queues_mutex) {
             auto i = queues.find(uaddr);
+            int wokenup = 0;
             if (i != queues.end()) {
                 // use wake_all if INT_MAX is given as value, should be slightly faster
                 if(val == INT_MAX) {
-                  i->second.wake_all(queues_mutex);
+                    wokenup = i->second.wake_all(queues_mutex);
                 } else {
-                  i->second.wake_some(queues_mutex,val);
+                    wokenup = i->second.wake_some(queues_mutex,val);
                 }
                 if(i->second.empty()) {
-                  queues.erase(i);
+                    queues.erase(i);
                 }
             }
         }
-        // FIXME: We are expected to return a count of woken threads, but
-        // wake_all doesn't have this feature, and the only user we care
-        // about, __cxa_guard_*, doesn't need this return value anyway.
-        return 0;
+        return wokenup;
     default:
         abort("Unimplemented futex() operation %d\n", op);
     }

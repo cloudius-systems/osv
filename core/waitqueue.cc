@@ -57,11 +57,18 @@ void waitqueue::wait(mutex& mtx)
     sched::thread::wait_for(mtx, *this);
 }
 
-void waitqueue::wake_one(mutex& mtx)
+int waitqueue::wake_one(mutex& mtx)
 {
     trace_waitqueue_wake_one(this);
+    return wake_some(mtx,1);
+}
+
+int waitqueue::wake_some(mutex& mtx, int count)
+{
+    trace_waitqueue_wake_some(this, count);
     wait_record *wr = _waiters_fifo.oldest;
-    if (wr) {
+    int wokenup = 0;
+    while (wr && (count > 0)) {
         _waiters_fifo.oldest = wr->next;
         if (wr->next == nullptr) {
             _waiters_fifo.newest = nullptr;
@@ -70,38 +77,26 @@ void waitqueue::wake_one(mutex& mtx)
         // again for the mutex, we do "wait morphing" - have it continue to
         // sleep until the mutex becomes available.
         wr->wake_lock(&mtx);
-    }
-}
-
-void waitqueue::wake_some(mutex& mtx, int count)
-{
-    trace_waitqueue_wake_some(this, count);
-    wait_record *wr = _waiters_fifo.oldest;
-    while (wr && (count > 0)) {
-        _waiters_fifo.oldest = wr->next;
-        if (wr->next == nullptr) {
-          _waiters_fifo.newest = nullptr;
-        }
-        auto next_wr = wr->next; // need to save - *wr invalid after wake
-        // Rather than wake the waiter here (wr->wake()) and have it wait
-        // again for the mutex, we do "wait morphing" - have it continue to
-        // sleep until the mutex becomes available.
-        wr->wake_lock(&mtx);
         count --;
-        wr = next_wr;
+        wokenup++;
+        wr = _waiters_fifo.oldest;
     }
+    return wokenup;
 }
 
-void waitqueue::wake_all(mutex& mtx)
+int waitqueue::wake_all(mutex& mtx)
 {
     trace_waitqueue_wake_all(this);
     wait_record *wr = _waiters_fifo.oldest;
     _waiters_fifo.oldest = _waiters_fifo.newest = nullptr;
+    int wokenup = 0;
     while (wr) {
         auto next_wr = wr->next; // need to save - *wr invalid after wake
         // FIXME: splice the entire chain at once?
         wr->wake_lock(&mtx);
         wr = next_wr;
+        wokenup++;
     }
+    return wokenup;
 }
 

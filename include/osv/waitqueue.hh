@@ -61,20 +61,24 @@ public:
      * is released.
      *
      * wake_one() must be called with the mutex held.
-     */
-    void wake_one(mutex& mtx);
-    /**
-     * Wake a given amount of threads waiting on the condition variable
      *
-     * Wake up to the given amount of threads currently waiting on the condition variable,
+     * Returns the number of threads woken up.
+     */
+    int wake_one(mutex& mtx);
+    /**
+     * Wake a given number of threads waiting on the condition variable
+     *
+     * Wake up to the given number of threads currently waiting on the condition variable,
      * or do nothing if there is no thread waiting.
      *
      * The threads are not awakened immediately; they will only wake after mtx
      * is released (one by one).
      *
-     * wake_one() must be called with the mutex held and the max number of threads to wake.
+     * wake_some() must be called with the mutex held and the max number of threads to wake.
+     *
+     * Returns the number of threads woken up.
      */
-    void wake_some(mutex& mtx, int count);
+    int wake_some(mutex& mtx, int count);
     /**
      * Wake all threads waiting on the condition variable
      *
@@ -85,8 +89,10 @@ public:
      * is released (one by one).
      *
      * wake_all() must be called with the mutex held.
+     *
+     * Returns the number of threads woken up.
      */
-    void wake_all(mutex& mtx);
+    int wake_all(mutex& mtx);
     /**
      * Query whether any threads are waiting on the waitqueue.
      *
