@@ -71,7 +71,7 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
                 if(val == INT_MAX) {
                     wokenup = i->second.wake_all(queues_mutex);
                 } else {
-                    wokenup = i->second.wake_some(queues_mutex,val);
+                    wokenup = i->second.wake_some(queues_mutex, val);
                 }
                 if(i->second.empty()) {
                     queues.erase(i);
