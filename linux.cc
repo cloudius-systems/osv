@@ -15,6 +15,7 @@
 
 #include <syscall.h>
 #include <stdarg.h>
+#include <errno.h>
 #include <time.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
@@ -60,17 +61,25 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
         }
         return 0;
     case FUTEX_WAKE:
-        assert(val == INT_MAX);
+        if(val < 0) {
+            errno = EINVAL;
+            return -1;
+        }
+
         WITH_LOCK(queues_mutex) {
             auto i = queues.find(uaddr);
             if (i != queues.end()) {
-                i->second.wake_all(queues_mutex);
-                queues.erase(i);
+                int waken = 0;
+                while( (val > waken) && !(i->second.empty()) ) {
+                    i->second.wake_one(queues_mutex);
+                    waken++;
+                }
+                if(i->second.empty()) {
+                    queues.erase(i);
+                }
+                return waken;
             }
         }
-        // FIXME: We are expected to return a count of woken threads, but
-        // wake_all doesn't have this feature, and the only user we care
-        // about, __cxa_guard_*, doesn't need this return value anyway.
         return 0;
     default:
         abort("Unimplemented futex() operation %d\n", op);
