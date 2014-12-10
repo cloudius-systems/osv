@@ -123,31 +123,34 @@ def start_osv_qemu(options):
     if options.wait:
         args += ["-S"]
 
-    if options.vmxnet3:
-        net_device_options = ['vmxnet3']
-    else:
-        net_device_options = ['virtio-net-pci']
-
-    if options.mac:
-        net_device_options.append('mac=%s' % options.mac)
-
-    if options.networking:
-        if options.vhost:
-            args += ["-netdev", "tap,id=hn0,script=scripts/qemu-ifup.sh,vhost=on"]
+    for idx in range(int(options.nics)):
+        if options.vmxnet3:
+            net_device_options = ['vmxnet3']
         else:
-            args += ["-netdev", "bridge,id=hn0,br=%s,helper=/usr/libexec/qemu-bridge-helper" % (options.bridge)]
-        net_device_options.extend(['netdev=hn0', 'id=nic1'])
-    else:
-        args += ["-netdev", "user,id=un0,net=192.168.122.0/24,host=192.168.122.1"]
-        net_device_options.append('netdev=un0')
-        if options.api:
-            args += ["-redir", "tcp:8000::8000"]
-        args += ["-redir", "tcp:2222::22"]
+            net_device_options = ['virtio-net-pci']
 
-        for rule in options.forward:
-            args += ['-redir', rule]
+        if options.mac:
+            net_device_options.append('mac=%s' % options.mac)
 
-    args += ["-device", ','.join(net_device_options)]
+        if options.networking:
+            if options.vhost:
+                args += ["-netdev", "tap,id=hn%d,script=scripts/qemu-ifup.sh,vhost=on" % idx]
+            else:
+                args += ["-netdev", "bridge,id=hn%d,br=%s,helper=/usr/libexec/qemu-bridge-helper" % (idx, options.bridge)]
+            net_device_options.extend(['netdev=hn%d' % idx, 'id=nic%d' % idx])
+        else:
+            args += ["-netdev", "user,id=un%d,net=192.168.122.0/24,host=192.168.122.1" % idx]
+            net_device_options.append("netdev=un%d" % idx)
+
+        args += ["-device", ','.join(net_device_options)]
+
+    if options.api:
+        args += ["-redir", "tcp:8000::8000"]
+    args += ["-redir", "tcp:2222::22"]
+
+    for rule in options.forward:
+        args += ['-redir', rule]
+
     args += ["-device", "virtio-rng-pci"]
 
     if options.hypervisor == "kvm":
@@ -445,6 +448,8 @@ if __name__ == "__main__":
     parser.add_argument("--qemu-path", action="store",
                         default="qemu-system-x86_64",
                         help="specify qemu command path")
+    parser.add_argument("--nics", action="store", default="1",
+                        help="number of NICs configured for the VM")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
