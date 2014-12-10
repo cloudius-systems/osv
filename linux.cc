@@ -70,7 +70,9 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
                 } else {
                   i->second.wake_some(queues_mutex,val);
                 }
-                queues.erase(i);
+                if(i->second.empty()) {
+                  queues.erase(i);
+                }
             }
         }
         // FIXME: We are expected to return a count of woken threads, but
