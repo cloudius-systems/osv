@@ -50,7 +50,6 @@ enum {
 int futex(int *uaddr, int op, int val, const struct timespec *timeout,
         int *uaddr2, int val3)
 {
-    int result = 0;
     switch (op & FUTEX_CMD_MASK) {
     case FUTEX_WAIT:
         assert(timeout == 0);
@@ -67,21 +66,21 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
             return -1;
         }
 
-        result = 0;
         WITH_LOCK(queues_mutex) {
             auto i = queues.find(uaddr);
             if (i != queues.end()) {
-                while( (val > 0) && !(i->second.empty()) ) {
+                int waken = 0;
+                while( (val > waken) && !(i->second.empty()) ) {
                     i->second.wake_one(queues_mutex);
-                    result++;
-                    val--;
+                    waken++;
                 }
                 if(i->second.empty()) {
                     queues.erase(i);
                 }
+                return waken;
             }
         }
-        return result;
+        return 0;
     default:
         abort("Unimplemented futex() operation %d\n", op);
     }
