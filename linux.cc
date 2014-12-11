@@ -15,6 +15,7 @@
 
 #include <syscall.h>
 #include <stdarg.h>
+#include <errno.h>
 #include <time.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
@@ -61,17 +62,19 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
         }
         return 0;
     case FUTEX_WAKE:
-        if(val <= 0) {
+        if(val < 0) {
+            errno = EINVAL;
             return -1;
         }
+
+        result = 0;
         WITH_LOCK(queues_mutex) {
             auto i = queues.find(uaddr);
             if (i != queues.end()) {
-                // use wake_all if INT_MAX is given as value, should be slightly faster
-                if(val == INT_MAX) {
-                    result = i->second.wake_all(queues_mutex);
-                } else {
-                    result = i->second.wake_some(queues_mutex, val);
+                while( (val > 0) && !(i->second.empty()) ) {
+                    i->second.wake_one(queues_mutex);
+                    result++;
+                    val--;
                 }
                 if(i->second.empty()) {
                     queues.erase(i);

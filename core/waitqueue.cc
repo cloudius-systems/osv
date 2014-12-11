@@ -11,7 +11,6 @@
 
 TRACEPOINT(trace_waitqueue_wait, "%p", waitqueue *);
 TRACEPOINT(trace_waitqueue_wake_one, "%p", waitqueue *);
-TRACEPOINT(trace_waitqueue_wake_some, "%p count=%d", waitqueue *, int);
 TRACEPOINT(trace_waitqueue_wake_all, "%p", waitqueue *);
 
 namespace sched {
@@ -57,18 +56,11 @@ void waitqueue::wait(mutex& mtx)
     sched::thread::wait_for(mtx, *this);
 }
 
-int waitqueue::wake_one(mutex& mtx)
+void waitqueue::wake_one(mutex& mtx)
 {
     trace_waitqueue_wake_one(this);
-    return wake_some(mtx,1);
-}
-
-int waitqueue::wake_some(mutex& mtx, int count)
-{
-    trace_waitqueue_wake_some(this, count);
     wait_record *wr = _waiters_fifo.oldest;
-    int wokenup = 0;
-    while (wr && (count > 0)) {
+    if (wr) {
         _waiters_fifo.oldest = wr->next;
         if (wr->next == nullptr) {
             _waiters_fifo.newest = nullptr;
@@ -77,26 +69,19 @@ int waitqueue::wake_some(mutex& mtx, int count)
         // again for the mutex, we do "wait morphing" - have it continue to
         // sleep until the mutex becomes available.
         wr->wake_lock(&mtx);
-        count --;
-        wokenup++;
-        wr = _waiters_fifo.oldest;
     }
-    return wokenup;
 }
 
-int waitqueue::wake_all(mutex& mtx)
+void waitqueue::wake_all(mutex& mtx)
 {
     trace_waitqueue_wake_all(this);
     wait_record *wr = _waiters_fifo.oldest;
     _waiters_fifo.oldest = _waiters_fifo.newest = nullptr;
-    int wokenup = 0;
     while (wr) {
         auto next_wr = wr->next; // need to save - *wr invalid after wake
         // FIXME: splice the entire chain at once?
         wr->wake_lock(&mtx);
         wr = next_wr;
-        wokenup++;
     }
-    return wokenup;
 }
 
