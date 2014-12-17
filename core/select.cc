@@ -43,8 +43,7 @@ int select (int nfds,
         struct timespec ts = {};
 
         if (timeout == NULL) {
-            errno = EINVAL;
-            return -1;
+            return pause();
         }
 
         ts.tv_sec = timeout->tv_sec;

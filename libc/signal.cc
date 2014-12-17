@@ -365,6 +365,20 @@ int kill(pid_t pid, int sig)
     return 0;
 }
 
+int pause(void) {
+    try
+    {
+        sched::thread::wait_until_interruptible([] {return false;});
+    }
+    catch (int e)
+    {
+        assert(e == EINTR);
+    }
+
+    errno = EINTR;
+    return -1;
+}
+
 // Our alarm() implementation has one system-wide alarm-thread, which waits
 // for the single timer (or instructions to change the timer) and sends
 // SIGALRM when the timer expires.
