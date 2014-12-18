@@ -137,6 +137,13 @@ uint32_t Keyboard::readkey()
     if ((st & KBS_DIB) == 0)
         return 0;
     data = processor::inb(KBDATAP);
+    // Ad-hoc hack which I still don't understand. Apparently, we sometimes
+    // get spurious input events with bit 5 - meaning "transmit timeout" -
+    // on. These events do not indicate a real input character and should
+    // be ignored. I don't yet know why they happen.
+    if ((st & (1 << 5))) {
+        return 0;
+    }
 
     if (data == 0xE0) {
         shift |= MOD_E0ESC;
