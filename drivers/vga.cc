@@ -87,6 +87,7 @@ void VGAConsole::push_queue(const char *str, size_t len)
 {
     for (size_t i = 0; i < len; i++)
         _read_queue.push(str[i]);
+    _thread->wake();
 }
 
 hw_driver* VGAConsole::probe(hw_device* hw_dev)
