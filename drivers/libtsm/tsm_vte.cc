@@ -1289,6 +1289,7 @@ static void csi_dev_attr(struct tsm_vte *vte)
 		   vte->csi_argv[0], vte->csi_argv[1], vte->csi_argv[2]);
 }
 
+#if 0
 static void csi_dsr(struct tsm_vte *vte)
 {
 	char buf[64];
@@ -1306,6 +1307,7 @@ static void csi_dsr(struct tsm_vte *vte)
 			vte_write(vte, buf, len);
 	}
 }
+#endif
 
 static void do_csi(struct tsm_vte *vte, uint32_t data)
 {
@@ -1514,10 +1516,12 @@ static void do_csi(struct tsm_vte *vte, uint32_t data)
 			num = 1;
 		tsm_screen_tab_right(vte->con, num);
 		break;
+#if 0
 	case 'n': /* DSR */
 		/* device status reports */
 		csi_dsr(vte);
 		break;
+#endif
 	case 'S': /* SU */
 		/* scroll up */
 		num = vte->csi_argv[0];
