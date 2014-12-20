@@ -366,8 +366,23 @@ void cli_console_size_dirty() {
     goto giveup;
   }
 
+  // QEMU can throw us a curveball here... If we get any response to our
+  // escape sequence above, we expected it to be from a real terminal emulator
+  // the user is running, and look - as expected - like \033[%d;%dR. But when
+  // QEMU's "-serial vc" is used (this is the default if serial isn't set
+  // explictly on QEMU's command line) - QEMU sends us an unexpected response,
+  // just a single escape character! So if we see an escape character, and
+  // nothing more after it, this is QEMU playing tricks on us, and there is no
+  // real terminal answering us, so give up.
+  if (getchar() != '\033') {
+      goto giveup;
+  }
+  if (!(poll(&pfd, 1, 100))) {
+      goto giveup;
+  }
+
   int cur_h, cur_w;
-  int res = scanf("\033[%d;%dR", &cur_h, &cur_w);
+  int res = scanf("[%d;%dR", &cur_h, &cur_w);
   if (!res) {
     goto giveup;
   }
