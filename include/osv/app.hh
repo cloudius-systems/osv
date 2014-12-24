@@ -51,6 +51,13 @@ private:
     mutex lock;
 };
 
+struct application_runtime {
+    application_runtime(application& app) : app(app) { }
+    ~application_runtime();
+
+    application& app;
+};
+
 /**
  * Represents an executing program.
  *
@@ -135,7 +142,11 @@ public:
      */
     std::string get_command();
 
+    std::shared_ptr<application_runtime> runtime() const { return _runtime; }
 private:
+    shared_app_t get_shared() {
+        return shared_from_this();
+    }
     void start();
     void main();
     void run_main(std::string path, int argc, char** argv);
@@ -159,6 +170,11 @@ private:
 
     // Must be destroyed before _lib
     boost::signals2::signal<void()> _termination_signal;
+
+    std::shared_ptr<application_runtime> _runtime;
+    sched::thread* _joiner;
+    std::atomic<bool> _terminated;
+    friend struct application_runtime;
 };
 
 }

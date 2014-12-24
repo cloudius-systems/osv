@@ -797,6 +797,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
 
         const auto& app = application::get_current();
         if (_app && app) {
+            _app_runtime = app->runtime();
             _func = [app, func] {
                 app->adopt_current();
                 func();

@@ -41,6 +41,12 @@ namespace elf {
     struct tls_data;
 }
 
+namespace osv {
+
+struct application_runtime;
+
+}
+
 /**
  * OSV Scheduler namespace
  */
@@ -469,6 +475,13 @@ public:
     void detach();
     void set_cleanup(std::function<void ()> cleanup);
     bool is_app() const { return _app; }
+    void set_app_runtime(const std::shared_ptr<osv::application_runtime>& app) {
+        assert(_app);
+        _app_runtime = app;
+    }
+    std::shared_ptr<osv::application_runtime> app_runtime() {
+        return _app_runtime;
+    }
     /**
      * Return thread's numeric id
      *
@@ -611,6 +624,7 @@ private:
     std::function<void ()> _cleanup;
     std::vector<char*> _tls;
     bool _app;
+    std::shared_ptr<osv::application_runtime> _app_runtime;
     void destroy();
     friend class thread_ref_guard;
     friend void thread_main_c(thread* t);

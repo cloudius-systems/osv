@@ -38,8 +38,6 @@ extern "C" void __libc_start_main(int (*main)(int, char**), int, char**,
 
 namespace osv {
 
-static thread_local shared_app_t current_app;
-
 void app_registry::join() {
     while (true) {
         shared_app_t p;
@@ -78,23 +76,30 @@ void app_registry::push(shared_app_t app) {
     }
 }
 
+application_runtime::~application_runtime()
+{
+    if (app._joiner) {
+        app._joiner->wake_with([&] { app._terminated.store(true); });
+    }
+}
+
 app_registry application::apps;
 
 shared_app_t application::get_current()
 {
-    return current_app;
+    auto runtime = sched::thread::current()->app_runtime();
+    if (!runtime) {
+        return nullptr;
+    }
+    return runtime->app.get_shared();
 }
 
 TRACEPOINT(trace_app_adopt_current, "app=%p", application*);
 
 void application::adopt_current()
 {
-    if (current_app) {
-        current_app->abandon_current();
-    }
-
     trace_app_adopt_current(this);
-    current_app = shared_from_this();
+    sched::thread::current()->set_app_runtime(runtime());
 }
 
 TRACEPOINT(trace_app_abandon_current, "app=%p", application*);
@@ -102,7 +107,7 @@ TRACEPOINT(trace_app_abandon_current, "app=%p", application*);
 void application::abandon_current()
 {
     trace_app_abandon_current(this);
-    current_app.reset();
+    sched::thread::current()->set_app_runtime(nullptr);
 }
 
 shared_app_t application::run(const std::vector<std::string>& args)
@@ -126,6 +131,9 @@ application::application(const std::string& command, const std::vector<std::stri
     : _args(args)
     , _command(command)
     , _termination_requested(false)
+    , _runtime(new application_runtime(*this))
+    , _joiner(nullptr)
+    , _terminated(false)
 {
     try {
         _lib = elf::get_program()->get_library(_command);
@@ -164,6 +172,7 @@ TRACEPOINT(trace_app_destroy, "app=%p", application*);
 
 application::~application()
 {
+    assert(_runtime.use_count() == 1 || !_runtime);
     trace_app_destroy(this);
 }
 
@@ -178,6 +187,14 @@ int application::join()
     trace_app_join(this);
     auto err = pthread_join(_thread, NULL);
     assert(!err);
+
+    _joiner = sched::thread::current();
+    _runtime.reset();
+    sched::thread::wait_until([&] { return _terminated.load(); });
+
+    _termination_signal.disconnect_all_slots();
+    _lib.reset();
+
     trace_app_join_ret(_return_code);
     return _return_code;
 }
@@ -268,7 +285,7 @@ TRACEPOINT(trace_app_termination_callback_fired, "app=%p", application*);
 
 void application::on_termination_request(std::function<void()> callback)
 {
-    auto app = current_app;
+    auto app = get_current();
     std::unique_lock<mutex> lock(app->_termination_mutex);
     if (app->_termination_requested) {
         lock.unlock();
@@ -293,7 +310,7 @@ void application::request_termination()
         _termination_requested = true;
     }
 
-    if (current_app.get() == this) {
+    if (get_current().get() == this) {
         _termination_signal();
     } else {
         std::thread terminator([&] {
