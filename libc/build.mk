@@ -577,6 +577,7 @@ musl += stdlib/ldiv.o
 musl += stdlib/llabs.o
 musl += stdlib/lldiv.o
 musl += stdlib/qsort.o
+libc += stdlib/qsort_r.o
 libc += stdlib/strtol.o
 libc += stdlib/strtod.o
 libc += stdlib/wcstol.o
