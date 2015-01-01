@@ -1459,3 +1459,24 @@ sys_chmod(const char *path, mode_t mode)
     drele(dp);
     return error;
 }
+
+int
+sys_fchmod(int fd, mode_t mode)
+{
+    fileref f(fileref_from_fd(fd));
+    if (!f)
+        return EBADF;
+    // Posix is ambivalent on what fchmod() should do on an fd that does not
+    // refer to a real file. It suggests an implementation may (but not must)
+    // fail EINVAL on a pipe, can behave in an "unspecified" manner on a
+    // socket, and for a STREAM, it must succeed and do nothing. Linux seems
+    // to just do the last thing (do nothing and succeed).
+    if (!f->f_dentry) {
+        return 0;
+    }
+    if (f->f_dentry->d_mount->m_flags & MNT_RDONLY) {
+        return EROFS;
+    } else {
+        return vn_setmode(f->f_dentry->d_vnode, mode);
+    }
+}

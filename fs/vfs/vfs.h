@@ -130,6 +130,7 @@ int	 sys_umount(const char *path);
 int	 sys_pivot_root(const char *new_root, const char *old_put);
 int	 sys_sync(void);
 int	 sys_chmod(const char *path, mode_t mode);
+int	 sys_fchmod(int fd, mode_t mode);
 
 
 int	 task_alloc(struct task **pt);

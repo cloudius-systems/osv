@@ -1870,9 +1870,14 @@ TRACEPOINT(trace_vfs_fchmod_ret, "");
 int fchmod(int fd, mode_t mode)
 {
     trace_vfs_fchmod(fd, mode);
-    WARN_STUBBED();
+    auto error = sys_fchmod(fd, mode & ALLPERMS);
     trace_vfs_fchmod_ret();
-    return 0;
+    if (error) {
+        errno = error;
+        return -1;
+    } else {
+        return 0;
+    }
 }
 
 TRACEPOINT(trace_vfs_fchown, "\"%d\" %d %d", int, uid_t, gid_t);

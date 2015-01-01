@@ -8,6 +8,8 @@
 #include <sys/stat.h>
 #include <unistd.h>
 #include <errno.h>
+#include <stdio.h>
+#include <fcntl.h>
 
 #include <iostream>
 
@@ -33,6 +35,7 @@ bool do_expect(T actual, T expected, const char *actuals, const char *expecteds,
 
 int main(int argc, char **argv)
 {
+    // test chmod():
     remove("/tmp/f1");
     remove("/tmp/f2");
     expect(mknod("/tmp/f1", 0777|S_IFREG, 0), 0);
@@ -47,6 +50,26 @@ int main(int argc, char **argv)
     expect_errno(chmod("/tmp/f2", 0123), ENOENT);
 
     remove("/tmp/f1");
+
+    // Test fchmod(). We try stat() after closing the file, to avoid mixing
+    // bug #570 into this test (the test below will test bug #570).
+    int fd = creat("/tmp/f1", 0777);
+    expect(fd >= 0, true);
+    expect(fchmod(fd, 0345), 0);
+    close(fd);
+    expect(stat("/tmp/f1", &st), 0);
+    expect((int)(st.st_mode & 0777), 0345);
+    // fchmod() on a closed file should fail with BADF
+    expect_errno(fchmod(fd, 0346), EBADF);
+    remove("/tmp/f1");
+    // Posix specifies that fchmod() on a pipe may fail with EINVAL, but does
+    // not require it. It turns out that in Linux fchmod succeeds (and does
+    // nothing) in this case.
+    int pipefd[2];
+    expect(pipe(pipefd), 0);
+    expect(fchmod(pipefd[0], 0345), 0);
+    close(pipefd[0]);
+    close(pipefd[1]);
 
     std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";
     return fails == 0 ? 0 : 1;
