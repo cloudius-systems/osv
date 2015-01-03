@@ -72,9 +72,10 @@ VGAConsole::VGAConsole(pci::device& pci_dev)
     tsm_screen_set_max_sb(_tsm_screen, 1024);
     tsm_vte_new(&_tsm_vte, _tsm_screen, tsm_write_cb, this, tsm_log_cb, this);
 
-    /* Leave first 8 lines 0x0, to clear BIOS message. */
-    for (unsigned i = NCOLS * 8; i < BUFFER_SIZE; i++)
-        _history[i] = 0x700 | ' ';
+    // copy the current screen to _history
+    for (unsigned i = 0; i < BUFFER_SIZE; i++) {
+        _history[i] = _buffer[i];
+    }
 
     /* This driver does not clear framebuffer, since most of hypervisor clears on start up */
 
