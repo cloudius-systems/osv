@@ -1053,11 +1053,28 @@ gen/include/bits/alltypes.h: $(src)/include/api/$(arch)/bits/alltypes.h.sh
 	$(call very-quiet, mkdir -p $(dir $@))
 	$(call quiet, sh $^ > $@, GEN $@)
 
-gen/include/osv/version.h: $(src)/scripts/gen-version-header
-	$(call quiet, sh $(src)/scripts/gen-version-header $@, GEN $@)
-.PHONY: gen/include/osv/version.h
+# We want to run scripts/gen-version-header every time, even if version.h
+# already exists, but not to cause make to automatically assume the execution
+# of this rule means version.h changed. We need an "order only prerequisite".
+gen/include/osv/version.h: | perhaps-modify-version-h
+perhaps-modify-version-h:
+	$(call quiet, sh $(src)/scripts/gen-version-header gen/include/osv/version.h, GEN gen/include/osv/version.h)
+.PHONY: perhaps-modify-version-h
 
+# In this makefile, we don't explicitly list dependencies of source files
+# on header files; Rather, we assume that on first compilation all source
+# files will be compiled, and while doing so we build dependency files (*.d),
+# which will be used on re-compilation to know what to recompile.
+# This is all great except for one thing: we have a few headers which are
+# programatically generated here, and we need to do that even on the first
+# compilation. We can either add explicit dependencies on them (we did this
+# for ctype-data.h) or use a mechanism which ensure that these are generated
+# before any compilation is done. We use a little-known make trick to do that:
+# make always starts by trying to rebuild the makefile itself. So dependencies
+# we add to the makefile path will automatically be built on startup, before
+# any other target is built.
 $(src)/build.mk: $(generated-headers)
+.PHONY: $(src)/build.mk
 
 # Automatically generate modules/tests/usr.manifest which includes all tests.
 $(src)/modules/tests/usr.manifest: $(src)/build.mk
