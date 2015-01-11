@@ -192,7 +192,7 @@ int application::join()
     _runtime.reset();
     sched::thread::wait_until([&] { return _terminated.load(); });
 
-    _termination_signal.disconnect_all_slots();
+    _termination_signal.reset();
     _lib.reset();
 
     trace_app_join_ret(_return_code);
@@ -293,7 +293,10 @@ void application::on_termination_request(std::function<void()> callback)
         return;
     }
 
-    app->_termination_signal.connect(callback);
+    if (!app->_termination_signal) {
+        app->_termination_signal.reset(new boost::signals2::signal<void()>());
+    }
+    app->_termination_signal->connect(callback);
 }
 
 TRACEPOINT(trace_app_request_termination, "app=%p, requested=%d", application*, bool);
@@ -310,12 +313,16 @@ void application::request_termination()
         _termination_requested = true;
     }
 
+    if (!_termination_signal) {
+        trace_app_request_termination_ret();
+        return;
+    }
     if (get_current().get() == this) {
-        _termination_signal();
+        (*_termination_signal)();
     } else {
         std::thread terminator([&] {
             adopt_current();
-            _termination_signal();
+            (*_termination_signal)();
         });
         terminator.join();
     }

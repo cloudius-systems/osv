@@ -169,7 +169,7 @@ private:
     static app_registry apps;
 
     // Must be destroyed before _lib
-    boost::signals2::signal<void()> _termination_signal;
+    std::unique_ptr<boost::signals2::signal<void()>> _termination_signal;
 
     std::shared_ptr<application_runtime> _runtime;
     sched::thread* _joiner;
