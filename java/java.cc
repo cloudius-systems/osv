@@ -17,6 +17,7 @@
 #include "java_api.hh"
 #include "osv/version.hh"
 #include "jni_helpers.hh"
+#include <osv/defer.hh>
 
 extern size_t jvm_heap_size;
 
@@ -181,6 +182,13 @@ static int java_main(int argc, char **argv)
         return 1;
     }
 
+    auto cleanup = defer([jvm] {
+        // DestroyJavaVM() waits for all all non-daemon threads to end, and
+        // only then destroys the JVM.
+        jvm->DetachCurrentThread();
+        jvm->DestroyJavaVM();
+    });
+
     jvm_heap_size = 0;
 
     java_api::set(jvm);
@@ -226,11 +234,6 @@ static int java_main(int argc, char **argv)
         balloon(auto_heap == 0 ? nullptr : new jvm_balloon_shrinker(jvm));
 
     env->CallStaticVoidMethod(mainclass, mainmethod, args);
-
-    // DestroyJavaVM() waits for all all non-daemon threads to end, and
-    // only then destroys the JVM.
-    jvm->DetachCurrentThread();
-    jvm->DestroyJavaVM();
 
     return 0;
 }
