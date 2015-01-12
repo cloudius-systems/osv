@@ -18,6 +18,7 @@
 #include "osv/version.hh"
 #include "jni_helpers.hh"
 #include <osv/defer.hh>
+#include <osv/app.hh>
 
 extern size_t jvm_heap_size;
 
@@ -246,5 +247,15 @@ int main(int argc, char **argv)
         res = java_main(argc, argv);
     }, argc, argv);
     t.join();
+    // Unfortunately, Java's jvm->DestroyJavaVM() doesn't fully clean up, and
+    // leaves behind some detached threads such as GC threads and compilation
+    // threads. If we return with those still existing, loader.cc will wait
+    // (using application::join()) in vain for these threads to finish.
+    // So let's stop these threads. This call is unsafe, in the sense we
+    // assume that those renegade threads are not holding any critical
+    // resources (e.g., not in the middle of I/O or memory allocation).
+    while(!osv::application::unsafe_stop_and_abandon_other_threads()) {
+        usleep(100000);
+    }
     return res;
 }
