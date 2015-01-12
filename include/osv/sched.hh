@@ -529,6 +529,15 @@ public:
      * explained in set_priority().
      */
     float priority() const;
+    /**
+      * Prevent a waiting thread from ever waking (returns false if the thread
+      * was not in waiting state). This capability is not safe: If the thread
+      * currently holds critical OSv resources, they will never be released.
+      * Worst of all is the possibility that the thread is holding (or on the
+      * wait queue for) a crucial mutex (e.g., for I/O or memory allocation),
+      * which could cause the whole system to block. So use at your own peril.
+      */
+     bool unsafe_stop();
 private:
     static void wake_impl(detached_state* st,
             unsigned allowed_initial_states_mask = 1 << unsigned(status::waiting));

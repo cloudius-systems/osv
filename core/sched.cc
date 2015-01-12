@@ -1004,6 +1004,18 @@ void thread::wake_lock(mutex* mtx, wait_record* wr)
     }
 }
 
+bool thread::unsafe_stop()
+{
+    WITH_LOCK(rcu_read_lock) {
+        auto st = _detached_state.get();
+        auto expected = status::waiting;
+        return st->st.compare_exchange_strong(expected,
+                status::terminated, std::memory_order_relaxed)
+                || expected == status::terminated;
+    }
+}
+
+
 void thread::main()
 {
     _func();
