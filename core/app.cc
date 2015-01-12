@@ -110,6 +110,25 @@ void application::abandon_current()
     sched::thread::current()->set_app_runtime(nullptr);
 }
 
+bool application::unsafe_stop_and_abandon_other_threads()
+{
+    auto current = sched::thread::current();
+    auto current_runtime = current->app_runtime();
+    bool success = true;
+    // We don't have a list of threads belonging to this app, so need to do
+    // it the long slow way, listing all threads...
+    sched::with_all_threads([&](sched::thread &t) {
+        if (&t != current && t.app_runtime() == current_runtime) {
+            if (t.unsafe_stop()) {
+                t.set_app_runtime(nullptr);
+            } else {
+                success = false;
+            }
+        }
+    });
+    return success;
+}
+
 shared_app_t application::run(const std::vector<std::string>& args)
 {
     return run(args[0], args);

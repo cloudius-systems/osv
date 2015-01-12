@@ -132,6 +132,19 @@ public:
     void request_termination();
 
     /**
+     * "stop" all threads attached to this application except this one, and
+     * remove them from this application's context. Running threads are not
+     * touched (if there is one, false is returned), and other threads are
+     * moved to a state that will never run again. This operation is slow and
+     * generally unsafe because the stopped threads could be holding resources
+     * such as internal OSv mutexes, which will never be released.
+     * Only call this method if you are sure that the remaining threads
+     * are not in the middle of I/O, memory allocation, or anything else which
+     * might be holding critical OSv resources.
+     */
+    static bool unsafe_stop_and_abandon_other_threads();
+
+    /**
      * Returns application's return code. May only be called after join() returns.
      */
     int get_return_code();
