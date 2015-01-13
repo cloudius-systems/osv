@@ -18,7 +18,6 @@
 #include <pthread.h>
 #include <osv/mutex.h>
 #include <osv/elf.hh>
-#include <boost/signals2.hpp>
 #include <list>
 
 extern "C" void __libc_start_main(int(*)(int, char**), int, char**, void(*)(),
@@ -168,8 +167,9 @@ private:
     void (*_entry_point)();
     static app_registry apps;
 
-    // Must be destroyed before _lib
-    std::unique_ptr<boost::signals2::signal<void()>> _termination_signal;
+    // Must be destroyed before _lib, because contained function objects may
+    // have destructors which are part of the application's code.
+    std::list<std::function<void()>> _termination_request_callbacks;
 
     std::shared_ptr<application_runtime> _runtime;
     sched::thread* _joiner;
