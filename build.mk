@@ -837,6 +837,7 @@ drivers += drivers/virtio.o
 drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-rng.o
 drivers += drivers/virtio-blk.o
+drivers += drivers/virtio-net.o
 endif # aarch64
 
 objects := bootfs.o
