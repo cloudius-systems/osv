@@ -131,9 +131,9 @@ blk::blk(pci::device& pci_dev)
     if (pci_dev.is_msix()) {
         _msi.easy_register({ { 0, [=] { queue->disable_interrupts(); }, t } });
     } else {
-        _irq.reset(new gsi_level_interrupt(pci_dev.get_interrupt_line(),
-                                           [=] { return ack_irq(); },
-                                           [=] { t->wake(); }));
+        _irq.reset(new pci_interrupt(pci_dev,
+                                     [=] { return ack_irq(); },
+                                     [=] { t->wake(); }));
     }
 
     // Enable indirect descriptor

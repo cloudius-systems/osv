@@ -38,7 +38,7 @@ static int virtio_rng_read(void *buf, int size)
 namespace virtio {
 rng::rng(pci::device& pci_dev)
     : virtio_driver(pci_dev)
-    , _irq(pci_dev.get_interrupt_line(), [&] { return ack_irq(); }, [&] { handle_irq(); })
+    , _irq(pci_dev, [&] { return ack_irq(); }, [&] { handle_irq(); })
     , _thread([&] { worker(); }, sched::thread::attr().name("virtio-rng"))
 {
     _queue = get_virt_queue(0);

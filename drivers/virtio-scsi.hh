@@ -174,7 +174,7 @@ private:
     std::string _driver_name;
     scsi_config _config;
 
-    std::unique_ptr<gsi_level_interrupt> _irq;
+    std::unique_ptr<pci_interrupt> _irq;
 
     //maintains the virtio instance number for multiple drives
     static int _instance;
