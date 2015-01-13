@@ -833,6 +833,9 @@ endif # x64
 
 ifeq ($(arch),aarch64)
 drivers += drivers/pl011.o
+drivers += drivers/virtio.o
+drivers += drivers/virtio-vring.o
+drivers += drivers/virtio-rng.o
 endif # aarch64
 
 objects := bootfs.o
