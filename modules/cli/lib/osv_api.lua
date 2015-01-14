@@ -48,11 +48,11 @@ end
 
 function osv_schema()
   if not schema then
-    local schm, status = osv_request("/api/api-docs.json", "GET")
+    local schm, status = osv_request("/api-doc", "GET")
     assert(status == 200, "Failed to load schema from: " .. context.api)
 
     for _, resource in ipairs(schm.apis) do
-      local api_def_url = "/api/" .. string.sub(resource.path, 5)
+      local api_def_url = "/api/listings/" .. resource.path .. ".json"
       resource.definition = osv_request(api_def_url, "GET")
       resource.cli_alias = string.sub(resource.definition.resourcePath, 2)
 
