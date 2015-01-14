@@ -22,6 +22,9 @@
 #include <iostream>
 #include <osv/app.hh>
 #include <fstream>
+#include <dlfcn.h>
+#include <boost/filesystem.hpp>
+#include <boost/foreach.hpp>
 #include "yaml-cpp/yaml.h"
 #include "json/api_docs.hh"
 
@@ -135,6 +138,29 @@ void global_server::set_routes()
     api::app::init(_routes);
     api::files_mapping::init(_routes);
     api::hardware::init(_routes);
+
+    {
+        namespace fs = boost::filesystem;
+        using init_func_t = void(void*);
+        void* plugin;
+        init_func_t* plugin_init;
+        fs::path plugin_path("/usr/mgmt/plugins/");
+        if (!fs::exists(plugin_path) && !fs::is_directory(plugin_path)) return;
+        BOOST_FOREACH(const fs::path& p, std::make_pair(fs::directory_iterator(plugin_path),
+                                               fs::directory_iterator())) {
+            if (fs::extension(p)==".so") {
+                plugin = dlopen(p.c_str(), RTLD_LAZY);
+                if ( plugin == nullptr ) {
+                    continue;
+                }
+                plugin_init = reinterpret_cast<init_func_t*>(dlsym(plugin, "init"));
+                if ( plugin_init == nullptr ) {
+                    continue;
+                }
+                plugin_init(reinterpret_cast<void*>(&_routes));
+            }
+        }
+    }
 }
 
 }
