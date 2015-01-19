@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include "routes.hh"
 #include "jolokia.hh"
 #include "autogen/jolokia.json.hh"
 #include "json/formatter.hh"
@@ -24,6 +25,10 @@ static void verify_jvm() {
     if (!jvm_getter::is_jvm_running()) {
         throw httpserver::not_found_exception("JVM not running");
     }
+}
+extern "C" void init(void* arg) {
+    auto r = reinterpret_cast<httpserver::routes*>(arg);
+    httpserver::api::jolokia::init(*r);
 }
 /**
  * Initialize the routes object with specific routes mapping
