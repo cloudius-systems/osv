@@ -8,6 +8,8 @@ api.require('fonts')
 api.require('ca-certificates')
 api.require('libz')
 api.require('josvsym')
+api.require('httpserver-jolokia-plugin')
+api.require('httpserver-jvm-plugin')
 
 jdkdir = os.path.basename(os.path.expandvars('${jdkbase}'))
 
