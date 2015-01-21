@@ -81,6 +81,7 @@ static int check_vnode_duplicity(void)
 int main(int argc, char *argv[])
 {
     const char *oldpath, *newpath;
+    char oldp[64], newp[64];
     struct stat st[2];
     char buf[4] = { 0 };
     char buf2[4] = { 0 };
@@ -89,7 +90,6 @@ int main(int argc, char *argv[])
         oldpath = argv[1];
         newpath = argv[2];
     } else {
-	char oldp[64], newp[64];
 
 	strcpy(oldp, "/usr/tst-fs-linkXXXXXX");
         mktemp(oldp);
