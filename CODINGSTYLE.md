@@ -97,10 +97,12 @@ with a single space - not with a newline.
 
 ## 5. Commenting
 5.1 Use the // C++ comment style for normal comment
+
 5.2 When documenting a namespace, class, method or function using Doxygen, use /** */ comments.
 
 ## 6. Macros, Enums and RTL
 6.1 Avoid Macros when a method would do. Prefer enum and constant to macro.
+
 6.2 Prefer "enum class" to "enum".
 
 6.3 Macro names and enum label should be capitalized. For "enum class",
