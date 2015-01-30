@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Huawei Technologies Duesseldorf GmbH
+ * Copyright (C) 2014-2015 Huawei Technologies Duesseldorf GmbH
  *
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
@@ -7,6 +7,10 @@
  */
 
 #include "pl011.hh"
+
+/* spec: see PrimeCell UART (PL011) Technical Reference Manual.
+ * implemented according to Revision: r1p5.
+ */
 
 namespace console {
 
