@@ -41,11 +41,13 @@ extern char *cmdline;
  */
 size_t dtb_get_phys_memory(u64 *addr);
 
-/* u64 dtb_get_uart_base()
+/* u64 dtb_get_uart(int *irqid)
  *
- * return the base address of the uart, or NULL on failure.
+ * return the base address of the uart and writes the
+ * irqid of the uart interrupt to irqid,
+ * or returns zero on failure.
  */
-u64 dtb_get_uart_base();
+u64 dtb_get_uart(int *irqid);
 
 /* int gdb_get_timer_irq()
  *

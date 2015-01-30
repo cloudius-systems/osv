@@ -232,10 +232,10 @@ size_t dtb_get_phys_memory(u64 *addr)
     return retval;
 }
 
-u64 dtb_get_uart_base()
+u64 dtb_get_uart(int *irqid)
 {
     u64 retval;
-    int node; size_t len __attribute__((unused));
+    int node; size_t len;
 
     if (!dtb)
         return 0;
@@ -245,6 +245,14 @@ u64 dtb_get_uart_base()
         return 0;
 
     len = dtb_get_reg(node, &retval);
+    if (!len)
+        return 0;
+
+    struct dtb_int_spec int_spec[1];
+    if (!dtb_get_int_spec(node, int_spec, 1))
+        return 0;
+
+    *irqid = int_spec[0].irq_id;
     return retval;
 }
 

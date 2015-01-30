@@ -167,13 +167,15 @@ void arch_init_drivers()
 
 void arch_init_early_console()
 {
-    u64 addr = dtb_get_uart_base();
+    int irqid;
+    u64 addr = dtb_get_uart(&irqid);
     if (!addr) {
         /* keep using default addresses */
         return;
     }
 
     console::arch_early_console.set_base_addr(addr);
+    console::arch_early_console.set_irqid(irqid);
 }
 
 bool arch_setup_console(std::string opt_console)

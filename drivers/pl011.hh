@@ -23,11 +23,14 @@ public:
 
     void set_base_addr(u64 addr);
     u64 get_base_addr();
+    void set_irqid(int irqid);
 
 private:
     virtual void dev_start();
     virtual const char *thread_name() { return "pl011-input"; }
     void irq_handler();
+    /* default UART irq = SPI 1 = 32 + 1 */
+    unsigned int irqid = 33;
     std::unique_ptr<spi_interrupt> _irq;
 };
 
