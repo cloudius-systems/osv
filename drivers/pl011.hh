@@ -28,6 +28,7 @@ public:
 private:
     virtual void dev_start();
     virtual const char *thread_name() { return "pl011-input"; }
+    bool ack_irq();
     void irq_handler();
     /* default UART irq = SPI 1 = 32 + 1 */
     unsigned int irqid = 33;

@@ -17,6 +17,7 @@ enum {
     UARTDR    = 0x000,
     UARTFR    = 0x018,
     UARTIMSC  = 0x038,
+    UARTMIS   = 0x040,
     UARTICR   = 0x044
 };
 
@@ -48,9 +49,17 @@ char PL011_Console::readch() {
     return uart[UARTDR];
 }
 
+bool PL011_Console::ack_irq() {
+    /* check Masked Interrupt Status Register for UARTRXINTR */
+    if (uart[UARTMIS] & 0x10) {
+        /* Interrupt Clear Register, clear UARTRXINTR */
+        uart[UARTICR] = 0x10;
+        return true;
+    }
+    return false;
+}
+
 void PL011_Console::irq_handler() {
-    /* Interrupt Clear Register, clear UARTRXINTR */
-    uart[UARTICR] = 0x10;
     _thread->wake();
 }
 
@@ -60,7 +69,7 @@ void PL011_Console::dev_start() {
 
     /* UART irq = SPI 1 = 32 + 1 */
     _irq.reset(new spi_interrupt(gic::irq_type::IRQ_TYPE_EDGE, this->irqid,
-                                 [] { return true; },
+                                 [this] { return this->ack_irq(); },
                                  [this] { this->irq_handler(); }));
 }
 
