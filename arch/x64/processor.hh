@@ -339,9 +339,11 @@ inline u64 ticks()
 }
 
 struct fpu_state {
-    char x[512];
-    char extra[];
-};
+    char legacy[512];
+    char xsavehdr[24];
+    char reserved[40];
+    char ymm[256];
+} __attribute__((packed));
 
 inline void fxsave(fpu_state* s)
 {
