@@ -82,7 +82,7 @@ struct fpu_state_alloc_page {
 struct fpu_state_inplace {
     processor::fpu_state s;
     processor::fpu_state *addr() { return &s; }
-} __attribute__((aligned(16)));
+} __attribute__((aligned(64)));
 
 typedef save_fpu<fpu_state_alloc_page> arch_fpu;
 typedef save_fpu<fpu_state_inplace> inplace_arch_fpu;
