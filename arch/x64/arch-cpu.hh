@@ -69,21 +69,25 @@ void fpu_state_restore(processor::fpu_state *s);
 template <class T>
 struct save_fpu {
     T state;
-    // FIXME: xsave and friends
-    typedef processor::fpu_state fpu_state;
-    void save() { processor::fxsave(state.addr()); }
-    void restore() { processor::fxrstor(state.addr()); }
+    void save() {
+        fpu_state_save(state.addr());
+    }
+    void restore() {
+        fpu_state_restore(state.addr());
+    }
 };
 
 struct fpu_state_alloc_page {
     processor::fpu_state* s =
             static_cast<processor::fpu_state*>(memory::alloc_page());
+    explicit fpu_state_alloc_page() { fpu_state_init(s); }
     processor::fpu_state *addr(){ return s; }
     ~fpu_state_alloc_page(){ memory::free_page(s); }
 };
 
 struct fpu_state_inplace {
     processor::fpu_state s;
+    explicit fpu_state_inplace() { fpu_state_init(&s); }
     processor::fpu_state *addr() { return &s; }
 } __attribute__((aligned(64)));
 
@@ -158,6 +162,10 @@ inline void arch_cpu::init_on_cpu()
         cr4 |= cr4_osxsave;
     }
     write_cr4(cr4);
+
+    if (features().xsave) {
+        write_xcr(xcr0, xcr0_x87 | xcr0_sse | xcr0_avx);
+    }
 
     // We can't trust the FPU and the MXCSR to be always initialized to default values.
     // In at least one particular version of Xen it is not, leading to SIMD exceptions.
