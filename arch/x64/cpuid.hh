@@ -22,6 +22,7 @@ struct features_type {
     bool x2apic;
     bool tsc_deadline;
     bool xsave;
+    bool osxsave;
     bool avx;
     bool rdrand;
     bool clflush;
