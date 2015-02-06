@@ -45,6 +45,11 @@ constexpr ulong cr4_smep = 1u << 20;
 
 constexpr ulong rflags_if = 1u << 9;
 
+constexpr u32 xcr0 = 0;
+constexpr u64 xcr0_x87 = 1u << 0;
+constexpr u64 xcr0_sse = 1u << 1;
+constexpr u64 xcr0_avx = 1u << 2;
+
 struct cpuid_result {
     u32 a, b, c, d;
 };
