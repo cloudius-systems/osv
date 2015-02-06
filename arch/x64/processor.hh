@@ -366,6 +366,20 @@ inline void xrstor(const fpu_state* s, u64 mask)
     asm volatile("xrstorq %[fpu]" : : [fpu]"m"(*s), "a"(a), "d"(d));
 }
 
+inline void write_xcr(u32 reg, u64 val)
+{
+    u32 a = val;
+    u32 d = val >> 32;
+    asm volatile("xsetbv" : : "c"(reg), "a"(a), "d"(d));
+}
+
+inline u64 read_xcr(u32 reg)
+{
+    u32 a, d;
+    asm volatile("xgetbv" : "=a"(a), "=d"(d) : "c"(reg));
+    return (a | ((u64)d << 32));
+}
+
 inline void init_fpu()
 {
     asm volatile ("fninit" ::: "memory");
