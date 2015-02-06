@@ -62,6 +62,9 @@ struct arch_thread {
     char exception_stack[4096*4] __attribute__((aligned(16)));
 };
 
+void fpu_state_init(processor::fpu_state *s);
+void fpu_state_save(processor::fpu_state *s);
+void fpu_state_restore(processor::fpu_state *s);
 
 template <class T>
 struct save_fpu {
