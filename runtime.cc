@@ -268,6 +268,8 @@ static struct __locale_struct c_locale = {
     c_locale_array + 128, // __ctype_b
 };
 
+locale_t __c_locale_ptr = &c_locale;
+
 void* __stack_chk_guard = reinterpret_cast<void*>(0x12345678abcdefull);
 UNIMPL(void __stack_chk_fail(void))
 
