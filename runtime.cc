@@ -63,7 +63,10 @@
 
 typedef unsigned char __guard;
 
-#define __alias(x) __attribute__((alias(x)))
+#define __ALIAS(old, new) \
+        __typeof(old) new __attribute__((alias(#old)))
+#define ALIAS(old, new) extern "C" __ALIAS(old, new)
+
 
 extern "C" {
     void __cxa_pure_virtual(void);
@@ -323,6 +326,8 @@ __locale_t __newlocale(int category_mask, const char *locale, locale_t base)
     return nullptr;
 }
 
+ALIAS(__newlocale, newlocale);
+
 long sysconf(int name)
 {
     switch (name) {
@@ -393,8 +398,8 @@ void exit(int status)
 // registered with atexit(3) or on_exit(3)."
 //
 // Since we do nothing for those anyway, they are equal.
-void _exit(int status) __attribute((alias("exit")));
-void _Exit(int status) __attribute((alias("exit")));
+ALIAS(exit, _exit);
+ALIAS(exit, _Exit);
 
 int atexit(void (*func)())
 {
