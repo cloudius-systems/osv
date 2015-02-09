@@ -249,6 +249,15 @@ void file::load_elf_header()
           || _ehdr.e_ident[EI_OSABI] == 0)) {
         throw std::runtime_error("bad os abi");
     }
+    // We currently only support running ET_DYN objects (shared library or
+    // position-independent executable). In the future we can add support for
+    // ET_EXEC (ordinary, position-dependent executables) but it will require
+    // loading them at their specified address and moving the kernel out of
+    // their way.
+    if (_ehdr.e_type != ET_DYN) {
+        throw std::runtime_error(
+                "bad executable type (only shared-object or PIE supported)");
+    }
 }
 
 void file::read(Elf64_Off offset, void* data, size_t size)

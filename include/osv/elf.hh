@@ -50,6 +50,18 @@ enum {
 };
 
 enum {
+    ET_NONE = 0, // No file type
+    ET_REL = 1, // Relocatable file (i.e., .o object)
+    ET_EXEC = 2, // Executable file (non relocatable)
+    ET_DYN = 3, // Shared object file (shared library or PIE)
+    ET_CORE = 4, // Core file
+    ET_LOOS = 0xfe00, // operating system specific range
+    ET_HIOS = 0xfeff,
+    ET_LOPROC = 0xff00, // processor specific range
+    ET_HIPROC = 0xffff
+};
+
+enum {
     ELFCLASS32 = 1, // 32-bit objects
     ELFCLASS64 = 2, // 64-bit objects
 };
