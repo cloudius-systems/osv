@@ -952,8 +952,28 @@ int sched_setaffinity(pid_t pid, size_t cpusetsize,
 int pthread_getaffinity_np(const pthread_t thread, size_t cpusetsize,
         cpu_set_t *cpuset)
 {
-    WARN_STUBBED();
-    return EINVAL;
+    if (sched::cpus.size() > cpusetsize * 8) {
+        // not enough room in cpuset
+        return EINVAL;
+    }
+    sched::thread &t = pthread::from_libc(thread)->_thread;
+    // Currently OSv does not have a real notion of a list of allowable
+    // CPUs for a thread, as Linux does. The closest feature we have in OSv is
+    // the knowledge of whether *right now* the thread is pinned to a single
+    // CPU, and if not it can run on all cpus. Note that this thread (if not
+    // the current thread) might be only temporarily pinned - e.g. inside a
+    // migration_lock while accessing a per-cpu variable.
+    // FIXME: For better support of this feature, we'll need to add
+    // a per-thread cpuset, separate from _migration_lock_counter.
+    memset(cpuset, 0, cpusetsize);
+    if (t.migratable()) {
+        for (unsigned i = 0; i < sched::cpus.size(); i++) {
+            CPU_SET(i, cpuset);
+        }
+    } else {
+        CPU_SET(t.tcpu()->id, cpuset);
+    }
+    return 0;
 }
 
 int pthread_attr_getaffinity_np(const pthread_attr_t *attr, size_t cpusetsize,
