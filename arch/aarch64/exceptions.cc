@@ -16,6 +16,20 @@
 __thread exception_frame* current_interrupt_frame;
 class interrupt_table idt __attribute__((init_priority((int)init_prio::idt)));
 
+interrupt_desc::interrupt_desc(struct interrupt_desc *old, void *o, int i,
+                               interrupt_handler h, gic::irq_type t)
+{
+    if (old) {
+        *this = *old;
+    } else {
+        this->id = i;
+        this->type = t;
+    }
+
+    this->objs.push_back(o);
+    this->handlers.push_back(h);
+}
+
 interrupt_table::interrupt_table() {
     debug_early_entry("interrupt_table::interrupt_table()");
 
@@ -23,34 +37,20 @@ interrupt_table::interrupt_table() {
     gic::gic->init_dist(0);
 
     this->nr_irqs = gic::gic->nr_irqs;
-
     debug_early("interrupt table: gic driver created.\n");
 }
 
-void interrupt_table::enable_irq(struct interrupt_desc *desc)
-{
-    if (desc && desc->handler) {
-        debug_early_u64("enabling InterruptID=", desc->id);
-        gic::gic->set_irq_type(desc->id, desc->type);
-        gic::gic->unmask_irq(desc->id);
-    }
-}
-
-void interrupt_table::enable_ppis()
-{
-    WITH_LOCK(osv::rcu_read_lock) {
-        for (int i = 16; i < 32; i++) {
-            struct interrupt_desc *desc = this->irq_desc[i].read();
-            this->enable_irq(desc);
-        }
-    }
-}
-
-void interrupt_table::enable_spi(int i)
+void interrupt_table::enable_irq(int i)
 {
     WITH_LOCK(osv::rcu_read_lock) {
         struct interrupt_desc *desc = this->irq_desc[i].read();
-        this->enable_irq(desc);
+        if (desc && !desc->handlers.empty()) {
+            debug_early_u64("enable_irq: enabling InterruptID=", (u64)i);
+            gic::gic->set_irq_type(desc->id, desc->type);
+            gic::gic->unmask_irq(desc->id);
+        } else {
+            debug_early_u64("enable_irq: failed to enable InterruptID=", (u64)i);
+        }
     }
 }
 
@@ -60,16 +60,9 @@ void interrupt_table::register_handler(void *obj, int i,
     WITH_LOCK(_lock) {
         assert(i < this->nr_irqs);
         struct interrupt_desc *old = this->irq_desc[i].read_by_owner();
-
-        if (old) {
-            debug_early_u64("already registered IRQ id=", (u64)i);
-            return;
-        }
-
-        struct interrupt_desc *desc = new interrupt_desc(obj, i, h, t);
+        struct interrupt_desc *desc = new interrupt_desc(old, obj, i, h, t);
         this->irq_desc[i].assign(desc);
         osv::rcu_dispose(old);
-
         debug_early_u64("registered IRQ id=", (u64)i);
     }
 }
@@ -80,12 +73,18 @@ int interrupt_table::invoke_interrupt(int id)
         assert(id < this->nr_irqs);
         struct interrupt_desc *desc = this->irq_desc[id].read();
 
-        if (!desc || !desc->handler) {
+        if (!desc || desc->handlers.empty()) {
             return 0;
         }
 
-        desc->handler(desc);
-        return 1;
+        int nr_shared = desc->handlers.size();
+        for (int i = 0 ; i < nr_shared; i++) {
+            if (desc->handlers[i](desc->objs[i])) {
+                return 1;
+            }
+        }
+
+        return 0;
     }
 }
 

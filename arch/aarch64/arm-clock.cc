@@ -83,7 +83,7 @@ public:
     unsigned int read_tval();
     void write_tval(unsigned int cntv_tval);
 
-    static void irq_handler(struct interrupt_desc *);
+    static bool irq_handler(void *obj);
 
     unsigned int irqid; /* global InterruptID */
 };
@@ -94,12 +94,14 @@ arm_clock_events::arm_clock_events()
     this->irqid = res ? res : 16 + 11; /* default PPI 11 */
     idt.register_handler(this, this->irqid, &arm_clock_events::irq_handler,
                          gic::irq_type::IRQ_TYPE_EDGE);
+    idt.enable_irq(this->irqid);
 }
 
-void arm_clock_events::irq_handler(struct interrupt_desc *desc)
+bool arm_clock_events::irq_handler(void *obj)
 {
-    arm_clock_events *that = (arm_clock_events *)desc->obj;
+    arm_clock_events *that = (arm_clock_events *)obj;
     that->_callback->fired();
+    return true;
 }
 
 arm_clock_events::~arm_clock_events()

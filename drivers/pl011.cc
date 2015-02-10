@@ -43,11 +43,12 @@ char PL011_Console::readch() {
     return uart[UARTDR];
 }
 
-void PL011_Console::irq_handler(struct interrupt_desc *desc) {
-    PL011_Console *that = (PL011_Console *)desc->obj;
+bool PL011_Console::irq_handler(void *obj) {
+    PL011_Console *that = (PL011_Console *)obj;
     /* Interrupt Clear Register, clear UARTRXINTR */
     uart[UARTICR] = 0x10;
     that->_thread->wake();
+    return true;
 }
 
 void PL011_Console::dev_start() {
@@ -57,7 +58,7 @@ void PL011_Console::dev_start() {
     this->irqid = 33; /* UART irq = SPI 1 = 32 + 1 */
     idt.register_handler(this, this->irqid, &PL011_Console::irq_handler,
                          gic::irq_type::IRQ_TYPE_EDGE);
-    idt.enable_spi(this->irqid);
+    idt.enable_irq(this->irqid);
 }
 
 void PL011_Console::write(const char *str, size_t len) {

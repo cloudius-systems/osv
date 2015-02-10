@@ -27,7 +27,7 @@ private:
     virtual void dev_start();
     virtual const char *thread_name() { return "pl011-input"; }
     unsigned int irqid;
-    static void irq_handler(struct interrupt_desc *desc);
+    static bool irq_handler(void *obj);
 };
 
 }

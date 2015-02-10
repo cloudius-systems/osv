@@ -34,22 +34,20 @@ struct exception_frame {
 
 extern __thread exception_frame* current_interrupt_frame;
 
-typedef void (*interrupt_handler)(struct interrupt_desc *);
+typedef bool (*interrupt_handler)(void *obj);
 
 struct interrupt_desc {
-    interrupt_desc(void *o, int i, interrupt_handler h, gic::irq_type t)
-        : obj(o), id(i), handler(h), type(t) {}
-    void *obj;
+    interrupt_desc(struct interrupt_desc *old, void *o, int i, interrupt_handler h, gic::irq_type t);
     int id;
-    interrupt_handler handler;
     gic::irq_type type;
+    std::vector<interrupt_handler> handlers;
+    std::vector<void *> objs;
 };
 
 class interrupt_table {
 public:
     interrupt_table();
-    void enable_ppis();
-    void enable_spi(int id);
+    void enable_irq(int id);
     void register_handler(void *obj, int id, interrupt_handler h, gic::irq_type t);
 
     /* invoke_interrupt returns 0 if no handler is registered */
