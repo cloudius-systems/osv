@@ -134,10 +134,10 @@ class Connect(gdb.Command):
     def invoke(self, arg, from_tty):
         gdb.execute('target remote :1234')
         global status_enum
-        status_enum.running = gdb.parse_and_eval('sched::thread::running')
-        status_enum.waiting = gdb.parse_and_eval('sched::thread::waiting')
-        status_enum.queued = gdb.parse_and_eval('sched::thread::queued')
-        status_enum.waking = gdb.parse_and_eval('sched::thread::waking')
+        status_enum.running = gdb.parse_and_eval('sched::thread::status::running')
+        status_enum.waiting = gdb.parse_and_eval('sched::thread::status::waiting')
+        status_enum.queued = gdb.parse_and_eval('sched::thread::status::queued')
+        status_enum.waking = gdb.parse_and_eval('sched::thread::status::waking')
 
 
 Connect()
