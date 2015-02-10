@@ -22,6 +22,7 @@ void page_fault(exception_frame *ef)
     u64 addr;
     asm volatile ("mrs %0, far_el1" : "=r"(addr));
     debug_early_u64("faulting address ", (u64)addr);
+    debug_early_u64("elr exception ra ", (u64)ef->elr);
 
     if (fixup_fault(ef)) {
         debug_early("fixed up with fixup_fault\n");
