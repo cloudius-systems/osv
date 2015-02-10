@@ -65,10 +65,7 @@ void arch_setup_free_memory()
     u64 dist, cpu;
     size_t dist_len, cpu_len;
     if (!dtb_get_gic_v2(&dist, &dist_len, &cpu, &cpu_len)) {
-        dist = 0x8000000;
-        dist_len = 0x10000;
-        cpu = 0x8010000;
-        cpu_len = 0x10000;
+        abort("arch-setup: failed to get GICv2 information from dtb.\n");
     }
     gic::gic = new gic::gic_driver(dist, cpu);
     mmu::linear_map((void *)dist, (mmu::phys)dist, dist_len);

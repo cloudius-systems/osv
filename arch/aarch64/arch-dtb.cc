@@ -154,14 +154,12 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
     int len;
 
     if (fdt_check_header(dtb) != 0) {
-        debug_early("dtb_setup: device tree blob invalid, using defaults.\n");
-        goto out_err_def_mem;
+        abort("dtb_setup: device tree blob invalid.\n");
     }
 
     memory::phys_mem_size = dtb_get_phys_memory(&mmu::mem_addr);
     if (!memory::phys_mem_size) {
-        debug_early("dtb_setup: failed to parse memory information.\n");
-        goto out_err_def_mem;
+        abort("dtb_setup: failed to parse memory information.\n");
     }
 
     /* command line will be overwritten with DTB: move it inside DTB */
@@ -174,8 +172,7 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
         }
     }
     if (node < 0) {
-        debug_early("dtb_setup: failed to add node /chosen for cmdline.\n");
-        goto out_err_dtb;
+        abort("dtb_setup: failed to add node /chosen for cmdline.\n");
     }
 
     cmdline_override = (char *)fdt_getprop(dtb, node, "bootargs", &len);
@@ -184,8 +181,7 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
     } else {
         len = strlen(cmdline) + 1;
         if (fdt_setprop(dtb, node, "bootargs", cmdline, len) < 0) {
-            debug_early("dtb_setup: failed to set bootargs in /chosen.\n");
-            goto out_err_dtb;
+            abort("dtb_setup: failed to set bootargs in /chosen.\n");
         }
     }
     if ((size_t)len > max_cmdline) {
@@ -195,22 +191,13 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
     dtb = (void *)OSV_KERNEL_BASE;
 
     if (fdt_move(olddtb, dtb, 0x10000) != 0) {
-        debug_early("dtb_setup: failed to move dtb (dtb too large?)\n");
-        goto out_err_dtb;
+        abort("dtb_setup: failed to move dtb (dtb too large?)\n");
     }
 
     cmdline = (char *)fdt_getprop(dtb, node, "bootargs", NULL);
     if (!cmdline) {
         abort("dtb_setup: cannot find cmdline after dtb move.\n");
     }
-    goto out_ok; /* success */
-
- out_err_def_mem:
-    memory::phys_mem_size = 0x20000000; /* 512 MB memory */
-    mmu::mem_addr = 0x40000000;
- out_err_dtb:
-    dtb = NULL;
- out_ok:
     register u64 edata;
     asm volatile ("adrp %0, .edata" : "=r"(edata));
 
