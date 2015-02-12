@@ -706,7 +706,8 @@ libc += unistd/getppid.o
 libc += unistd/getsid.o
 libc += unistd/setsid.o
 
-libc += regex/fnmatch.o
+musl += regex/fnmatch.o
+musl += regex/glob.o
 libc += regex/glob.o
 
 libc += pthread.o

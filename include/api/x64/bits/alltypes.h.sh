@@ -100,6 +100,7 @@ TYPEDEF struct { union { int __i[8]; void *__p[4]; } __u; } pthread_barrier_t;
 
 TYPEDEF long off_t;
 TYPEDEF long __off_t;
+TYPEDEF long regoff_t;
 
 TYPEDEF unsigned int mode_t;
 
