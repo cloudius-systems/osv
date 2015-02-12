@@ -101,7 +101,10 @@ TYPEDEF struct { union { int __i[8]; void *__p[4]; } __u; } pthread_barrier_t;
 
 TYPEDEF long off_t;
 TYPEDEF long __off_t;
-TYPEDEF long regoff_t;
+// While it makes more sense for regoff_t to be long (like off_t), not int,
+// glibc's regex.h defines it to be int, and so must we if we want to be
+// compatible with Linux's ABI.
+TYPEDEF int regoff_t;
 
 TYPEDEF unsigned int mode_t;
 

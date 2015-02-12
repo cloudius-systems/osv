@@ -302,6 +302,7 @@ tests += tests/tst-epoll.so
 tests += tests/misc-lfring.so
 tests += tests/misc-fsx.so
 tests += tests/tst-sleep.so
+tests += tests/tst-regex.so
 tests += tests/tst-resolve.so
 tests += tests/tst-except.so
 tests += tests/misc-tcp-sendonly.so

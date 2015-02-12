@@ -709,6 +709,14 @@ libc += unistd/setsid.o
 musl += regex/fnmatch.o
 musl += regex/glob.o
 libc += regex/glob.o
+musl += regex/regcomp.o
+musl/src/regex/regcomp.o: CFLAGS += -UNDEBUG
+musl += regex/regexec.o
+musl/src/regex/regexec.o: CFLAGS += -UNDEBUG
+musl += regex/regerror.o
+musl += regex/tre-mem.o
+musl/src/regex/tre-mem.o: CFLAGS += -UNDEBUG
+
 
 libc += pthread.o
 libc += libc.o
