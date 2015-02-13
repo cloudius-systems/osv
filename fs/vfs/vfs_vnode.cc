@@ -328,7 +328,7 @@ vn_stat(struct vnode *vp, struct stat *st)
 
 	st->st_ino = (ino_t)vap->va_nodeid;
 	st->st_size = vap->va_size;
-	mode = vp->v_mode;
+	mode = vap->va_mode;
 	switch (vp->v_type) {
 	case VREG:
 		mode |= S_IFREG;
@@ -399,13 +399,14 @@ vn_settimes(struct vnode *vp, struct timespec times[2])
  * Set chmod permissions on the vnode.
  */
 int
-vn_setmode(struct vnode *vp, mode_t mode)
+vn_setmode(struct vnode *vp, mode_t new_mode)
 {
     struct vattr vattr;
     memset(&vattr, 0, sizeof(vattr));
-    vattr.va_mode = mode;
+    vattr.va_mode = new_mode;
     vattr.va_mask = AT_MODE;
     vn_lock(vp);
+    vp->v_mode = new_mode;
     int error = VOP_SETATTR(vp, &vattr);
     vn_unlock(vp);
     return error;

@@ -71,6 +71,22 @@ int main(int argc, char **argv)
     close(pipefd[0]);
     close(pipefd[1]);
 
+    // Guarantee that stat() returns the correct mode just after updating it.
+    fd = creat("/tmp/f1", 0777);
+    expect(fd >= 0, true);
+    close(fd);
+    expect(chmod("/tmp/f1", 0777), 0);
+    fd = open("/tmp/f1", O_RDONLY);
+    expect(stat("/tmp/f1", &st), 0);
+    expect((int)(st.st_mode & 0777), 0777);
+    expect(chmod("/tmp/f1", 0765), 0);
+    expect(stat("/tmp/f1", &st), 0);
+    expect((int)(st.st_mode & 0777), 0765);
+    close(fd);
+    expect(stat("/tmp/f1", &st), 0);
+    expect((int)(st.st_mode & 0777), 0765);
+    remove("/tmp/f1");
+
     std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";
     return fails == 0 ? 0 : 1;
 }
