@@ -370,6 +370,7 @@ private:
     void relocate_pltgot();
     unsigned symtab_len();
     ulong get_tls_size();
+    void collect_dependencies(std::unordered_set<elf::object*>& ds);
 protected:
     program& _prog;
     std::string _pathname;

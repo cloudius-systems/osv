@@ -869,6 +869,16 @@ ulong object::get_tls_size()
     return _tls_init_size + _tls_uninit_size;
 }
 
+void object::collect_dependencies(std::unordered_set<elf::object*>& ds)
+{
+    ds.insert(this);
+    for (auto&& d : _needed) {
+        if (!ds.count(d.get())) {
+            d->collect_dependencies(ds);
+        }
+    }
+}
+
 std::string object::soname()
 {
     return dynamic_exists(DT_SONAME) ? dynamic_str(DT_SONAME) : std::string();
