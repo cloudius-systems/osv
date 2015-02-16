@@ -351,8 +351,6 @@ tests += tests/tst-fallocate.so
 tests += tests/misc-printf.so
 tests += tests/tst-hostname.so
 tests += tests/tst-sendfile.so
-tests += tests/libstatic-thread-variable.so tests/tst-static-thread-variable.so
-tests/tst-static-thread-variable.so: tests/libstatic-thread-variable.so
 tests += tests/misc-lock-perf.so
 tests += tests/tst-uio.so
 tests += tests/tst-printf.so
