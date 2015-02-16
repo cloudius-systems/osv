@@ -33,6 +33,7 @@ static __thread int v4 = 456;
 // -ftls-model=initial-exec, and we can force this model on one variable
 // with an attribute.
 __thread int v5 __attribute__ ((tls_model ("initial-exec"))) = 567;
+static __thread int v6 __attribute__ ((tls_model ("initial-exec"))) = 678;
 
 extern __thread int ex3 __attribute__ ((tls_model ("initial-exec")));
 
@@ -41,7 +42,7 @@ extern __thread int ex3 __attribute__ ((tls_model ("initial-exec")));
 // builds all tests as shared objects (.so), and the linker will report an
 // error, because local-exec is not allowed in shared libraries, just in
 // executables (including PIE).
-__thread int v6 __attribute__ ((tls_model ("local-exec"))) = 678;
+__thread int v7 __attribute__ ((tls_model ("local-exec"))) = 789;
 #endif
 
 extern void external_library();
@@ -62,9 +63,10 @@ int main(int argc, char** argv)
     report(v3 == 345, "v3");
     report(v4 == 456, "v4");
     report(v5 == 567, "v5");
+    report(v6 == 678, "v6");
     report(ex3 == 765, "ex3");
 #ifndef __OSV__
-    report(v6 == 678, "v6");
+    report(v7 == 789, "v7");
 #endif
 
     external_library();
@@ -79,8 +81,9 @@ int main(int argc, char** argv)
     v3 = 0;
     v4 = 0;
     v5 = 0;
-#ifndef __OSV__
     v6 = 0;
+#ifndef __OSV__
+    v7 = 0;
 #endif
 
     // Try the same in a new thread
@@ -92,9 +95,10 @@ int main(int argc, char** argv)
             report(v3 == 345, "v3 in new thread");
             report(v4 == 456, "v4 in new thread");
             report(v5 == 567, "v5 in new thread");
+            report(v6 == 678, "v6 in new thread");
             report(ex3 == 765, "ex3 in new thread");
 #ifndef __OSV__
-            report(v6 == 678, "v6 in new thread");
+            report(v7 == 789, "v7 in new thread");
 #endif
 
             external_library();
