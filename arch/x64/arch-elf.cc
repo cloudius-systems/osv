@@ -8,6 +8,7 @@
  */
 
 #include <osv/elf.hh>
+#include <osv/sched.hh>
 
 namespace elf {
 
@@ -84,10 +85,16 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
         *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
         break;
     case R_X86_64_TPOFF64:
-        if (sym)
-            *static_cast<u64*>(addr) = symbol(sym).symbol->st_value - get_tls_size();
-        else
-            *static_cast<void**>(addr) = _base + addend - get_tls_size();
+        if (sym) {
+            auto sm = symbol(sym);
+            sm.obj->alloc_static_tls();
+            auto tls_offset = sm.obj->static_tls_end() + sched::kernel_tls_size();
+            *static_cast<u64*>(addr) = sm.symbol->st_value + addend - tls_offset;
+        } else {
+            alloc_static_tls();
+            auto tls_offset = static_tls_end() + sched::kernel_tls_size();
+            *static_cast<u64*>(addr) = addend - tls_offset;
+        }
         break;
     default:
         return false;
@@ -100,6 +107,21 @@ bool object::arch_relocate_jump_slot(u32 sym, void *addr, Elf64_Sxword addend)
 {
     *static_cast<void**>(addr) = symbol(sym).relocated_addr();
     return true;
+}
+
+void object::prepare_initial_tls(void* buffer, size_t size,
+                                 std::vector<ptrdiff_t>& offsets)
+{
+    if (!_static_tls) {
+        return;
+    }
+    auto tls_size = get_tls_size();
+    auto ptr = static_cast<char*>(buffer) + size - _static_tls_offset - tls_size;
+    memcpy(ptr, _tls_segment, _tls_init_size);
+    memset(ptr + _tls_init_size, 0, _tls_uninit_size);
+
+    offsets.resize(std::max(_module_index + 1, offsets.size()));
+    offsets[_module_index] = - _static_tls_offset - tls_size - sched::kernel_tls_size();
 }
 
 }

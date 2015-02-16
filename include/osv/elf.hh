@@ -348,6 +348,10 @@ public:
     std::vector<Elf64_Sym> symbols();
     const char * symbol_name(const Elf64_Sym *);
     void* entry_point() const;
+    void init_static_tls();
+    size_t initial_tls_size() { return _initial_tls_size; }
+    void* initial_tls() { return _initial_tls.get(); }
+    std::vector<ptrdiff_t>& initial_tls_offsets() { return _initial_tls_offsets; }
 protected:
     virtual void load_segment(const Elf64_Phdr& segment) = 0;
     virtual void unload_segment(const Elf64_Phdr& segment) = 0;
@@ -371,6 +375,8 @@ private:
     unsigned symtab_len();
     ulong get_tls_size();
     void collect_dependencies(std::unordered_set<elf::object*>& ds);
+    void prepare_initial_tls(void* buffer, size_t size, std::vector<ptrdiff_t>& offsets);
+    void alloc_static_tls();
 protected:
     program& _prog;
     std::string _pathname;
@@ -380,10 +386,19 @@ protected:
     void* _end;
     void* _tls_segment;
     ulong _tls_init_size, _tls_uninit_size;
+    bool _static_tls;
+    ptrdiff_t _static_tls_offset;
+    static std::atomic<ptrdiff_t> _static_tls_alloc;
+    // _initial_tls is a prepared static TLS template for this object and all
+    // its dependencies.
+    std::unique_ptr<char[]> _initial_tls;
+    size_t _initial_tls_size;
+    std::vector<ptrdiff_t> _initial_tls_offsets;
     Elf64_Dyn* _dynamic_table;
     ulong _module_index;
     std::unique_ptr<char[]> _section_names_cache;
     bool _is_executable;
+    bool is_core();
 
     // Keep list of references to other modules, to prevent them from being
     // unloaded. When this object is unloaded, the reference count of all
@@ -403,7 +418,12 @@ protected:
     bool arch_relocate_rela(u32 type, u32 sym, void *addr,
                             Elf64_Sxword addend);
     bool arch_relocate_jump_slot(u32 sym, void *addr, Elf64_Sxword addend);
-
+    size_t static_tls_end() {
+        if (is_core()) {
+            return 0;
+        }
+        return _static_tls_offset + get_tls_size();
+    }
 private:
     std::atomic<void*> _visibility;
     bool visible(void) const;

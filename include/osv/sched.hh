@@ -884,6 +884,7 @@ private:
 void init(std::function<void ()> cont);
 
 void init_tls(elf::tls_data tls);
+size_t kernel_tls_size();
 
 inline void acquire(mutex_t& mtx)
 {

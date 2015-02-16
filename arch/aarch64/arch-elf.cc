@@ -64,4 +64,10 @@ bool object::arch_relocate_jump_slot(u32 sym, void *addr, Elf64_Sxword addend)
     return true;
 }
 
+void object::prepare_initial_tls(void* buffer, size_t size,
+                                 std::vector<ptrdiff_t>& offsets)
+{
+    abort();
+}
+
 }

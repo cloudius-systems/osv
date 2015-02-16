@@ -119,18 +119,37 @@ void thread::init_stack()
 void thread::setup_tcb()
 {
     assert(tls.size);
+
+    void* user_tls_data;
+    auto user_tls_size = 0;
+    if (_app_runtime) {
+        auto obj = _app_runtime->app.lib();
+        assert(obj);
+        user_tls_size = obj->initial_tls_size();
+        user_tls_data = obj->initial_tls();
+    }
+
     // FIXME: respect alignment
-    void* p = malloc(sched::tls.size + sizeof(*_tcb));
-    memcpy(p, sched::tls.start, sched::tls.filesize);
-    memset(p + sched::tls.filesize, 0, sched::tls.size - sched::tls.filesize);
-    _tcb = static_cast<thread_control_block*>(p + tls.size);
+    void* p = malloc(sched::tls.size + user_tls_size + sizeof(*_tcb));
+    if (user_tls_size) {
+        memcpy(p, user_tls_data, user_tls_size);
+    }
+    memcpy(p + user_tls_size, sched::tls.start, sched::tls.filesize);
+    memset(p + user_tls_size + sched::tls.filesize, 0,
+           sched::tls.size - sched::tls.filesize);
+    _tcb = static_cast<thread_control_block*>(p + tls.size + user_tls_size);
     _tcb->self = _tcb;
-    _tcb->tls_base = p;
+    _tcb->tls_base = p + user_tls_size;
 }
 
 void thread::free_tcb()
 {
-    free(_tcb->tls_base);
+    if (_app_runtime) {
+        auto obj = _app_runtime->app.lib();
+        free(_tcb->tls_base - obj->initial_tls_size());
+    } else {
+        free(_tcb->tls_base);
+    }
 }
 
 void thread_main_c(thread* t)

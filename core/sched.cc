@@ -777,6 +777,17 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
     // module 0 is always the core:
     assert(_tls.size() == elf::program::core_module_index);
     _tls.push_back((char *)_tcb->tls_base);
+    if (_app_runtime) {
+        auto& offsets = _app_runtime->app.lib()->initial_tls_offsets();
+        for (unsigned i = 1; i < offsets.size(); i++) {
+            if (!offsets[i]) {
+                _tls.push_back(nullptr);
+            } else {
+                _tls.push_back(reinterpret_cast<char*>(_tcb) + offsets[i]);
+            }
+        }
+    }
+
     WITH_LOCK(thread_map_mutex) {
         if (!main) {
             auto ttid = _s_idgen;
@@ -867,10 +878,14 @@ thread::~thread()
     if (_attr._stack.deleter) {
         _attr._stack.deleter(_attr._stack);
     }
-    for (char *tls : _tls) {
-        if (tls != (char *)_tcb->tls_base) {
-            delete[] tls;
+    for (unsigned i = 1; i < _tls.size(); i++) {
+        if (_app_runtime) {
+            auto& offsets = _app_runtime->app.lib()->initial_tls_offsets();
+            if (i < offsets.size() && offsets[i]) {
+                continue;
+            }
         }
+        delete[] _tls[i];
     }
     free_tcb();
     rcu_dispose(_detached_state.release());
@@ -1406,6 +1421,11 @@ void init(std::function<void ()> cont)
 void init_tls(elf::tls_data tls_data)
 {
     tls = tls_data;
+}
+
+size_t kernel_tls_size()
+{
+    return tls.size;
 }
 
 // For a description of the algorithms behind the thread_runtime::*

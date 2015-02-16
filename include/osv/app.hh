@@ -144,6 +144,7 @@ public:
     std::string get_command();
 
     std::shared_ptr<application_runtime> runtime() const { return _runtime; }
+    std::shared_ptr<elf::object> lib() const { return _lib; }
 private:
     shared_app_t get_shared() {
         return shared_from_this();

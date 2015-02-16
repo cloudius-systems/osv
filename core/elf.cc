@@ -96,12 +96,17 @@ u64 symbol_module::size() const
     return symbol->st_size;
 }
 
+std::atomic<ptrdiff_t> object::_static_tls_alloc;
+
 object::object(program& prog, std::string pathname)
     : _prog(prog)
     , _pathname(pathname)
     , _tls_segment()
     , _tls_init_size()
     , _tls_uninit_size()
+    , _static_tls(false)
+    , _static_tls_offset(0)
+    , _initial_tls_size(0)
     , _dynamic_table(nullptr)
     , _module_index(_prog.register_dtv(this))
     , _is_executable(false)
@@ -941,6 +946,47 @@ void* object::tls_addr()
     return r;
 }
 
+void object::alloc_static_tls()
+{
+    auto tls_size = get_tls_size();
+    if (!_static_tls && tls_size) {
+        _static_tls = true;
+        _static_tls_offset = _static_tls_alloc.fetch_add(tls_size, std::memory_order_relaxed);
+    }
+}
+
+bool object::is_core()
+{
+    return _prog._core.get() == this;
+}
+
+void object::init_static_tls()
+{
+    std::unordered_set<object*> deps;
+    collect_dependencies(deps);
+    bool static_tls = false;
+    for (auto&& obj : deps) {
+        if (obj->is_core()) {
+            continue;
+        }
+        static_tls |= obj->_static_tls;
+        _initial_tls_size = std::max(_initial_tls_size, obj->static_tls_end());
+    }
+    if (!static_tls) {
+        _initial_tls_size = 0;
+        return;
+    }
+    assert(_initial_tls_size);
+    _initial_tls.reset(new char[_initial_tls_size]);
+    for (auto&& obj : deps) {
+        if (obj->is_core()) {
+            continue;
+        }
+        obj->prepare_initial_tls(_initial_tls.get(), _initial_tls_size,
+                                 _initial_tls_offsets);
+    }
+}
+
 program* s_program;
 
 program::program(void* addr)
@@ -1084,6 +1130,9 @@ program::get_library(std::string name, std::vector<std::string> extra_path)
     SCOPE_LOCK(_mutex);
     std::vector<std::shared_ptr<object>> loaded_objects;
     auto ret = load_object(name, extra_path, loaded_objects);
+    if (ret) {
+        ret->init_static_tls();
+    }
     // After loading the object and all its needed objects, run these objects'
     // init functions in reverse order (so those of deepest needed object runs
     // first) and finally make the loaded objects visible in search order.
