@@ -104,19 +104,6 @@ public:
     int join();
 
     /**
-     * Moves current thread under this application context
-     * Each thread can belong only to one application. If current
-     * thread is already associated with some applicaiton it is
-     * first removed from it.
-     */
-    void adopt_current();
-
-    /**
-     * Removes current thread from this application context.
-     */
-    void abandon_current();
-
-    /**
      * Installs a termination callback which will be called when
      * termination is requested or immediately if termination was
      * already requested.

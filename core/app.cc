@@ -96,22 +96,6 @@ shared_app_t application::get_current()
     return runtime->app.get_shared();
 }
 
-TRACEPOINT(trace_app_adopt_current, "app=%p", application*);
-
-void application::adopt_current()
-{
-    trace_app_adopt_current(this);
-    sched::thread::current()->set_app_runtime(runtime());
-}
-
-TRACEPOINT(trace_app_abandon_current, "app=%p", application*);
-
-void application::abandon_current()
-{
-    trace_app_abandon_current(this);
-    sched::thread::current()->set_app_runtime(nullptr);
-}
-
 bool application::unsafe_stop_and_abandon_other_threads()
 {
     auto current = sched::thread::current();
@@ -227,8 +211,6 @@ TRACEPOINT(trace_app_main_ret, "return_code=%d", int);
 
 void application::main()
 {
-    adopt_current();
-
     __libc_stack_end = __builtin_frame_address(0);
 
     sched::thread::current()->set_name(_command);
@@ -340,7 +322,6 @@ void application::request_termination()
     } else {
         override_current_app = this;
         std::thread terminator([&] {
-            adopt_current();
             for (auto &callback : _termination_request_callbacks) {
                 callback();
             }
