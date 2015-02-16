@@ -28,6 +28,8 @@ namespace osv {
 class application;
 using shared_app_t = std::shared_ptr<application>;
 
+extern __thread application* override_current_app;
+
 class launch_error : public std::runtime_error
 {
 public:

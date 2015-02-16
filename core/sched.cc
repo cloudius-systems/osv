@@ -763,6 +763,20 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
     , _joiner(nullptr)
 {
     trace_thread_create(this);
+
+    if (!main && sched::s_current) {
+        auto app = application::get_current().get();
+        if (override_current_app) {
+            app = override_current_app;
+        }
+        if (_app && app) {
+            _app_runtime = app->runtime();
+            _func = [app, func] {
+                app->adopt_current();
+                func();
+            };
+        }
+    }
     setup_tcb();
     // module 0 is always the core:
     assert(_tls.size() == elf::program::core_module_index);
@@ -794,15 +808,6 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
     // do that for us instead)
     if (!main && sched::s_current) {
         remote_thread_local_var(s_current) = this;
-
-        const auto& app = application::get_current();
-        if (_app && app) {
-            _app_runtime = app->runtime();
-            _func = [app, func] {
-                app->adopt_current();
-                func();
-            };
-        }
     }
     init_stack();
 

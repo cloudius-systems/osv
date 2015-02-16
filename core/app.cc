@@ -38,6 +38,8 @@ extern "C" void __libc_start_main(int (*main)(int, char**), int, char**,
 
 namespace osv {
 
+__thread application* override_current_app;
+
 void app_registry::join() {
     while (true) {
         shared_app_t p;
@@ -178,10 +180,12 @@ void application::start()
     // FIXME: we cannot create the thread inside the constructor because
     // the thread would attempt to call shared_from_this() before object
     // is constructed which is illegal.
+    override_current_app = this;
     auto err = pthread_create(&_thread, NULL, [](void *app) -> void* {
         ((application*)app)->main();
         return nullptr;
     }, this);
+    override_current_app = nullptr;
     if (err) {
         throw launch_error("Failed to create the main thread, err=" + std::to_string(err));
     }
@@ -334,12 +338,14 @@ void application::request_termination()
             callback();
         }
     } else {
+        override_current_app = this;
         std::thread terminator([&] {
             adopt_current();
             for (auto &callback : _termination_request_callbacks) {
                 callback();
             }
         });
+        override_current_app = nullptr;
         terminator.join();
     }
 
