@@ -13,6 +13,11 @@ extern uint8_t phys_bits, virt_bits;
 constexpr uint8_t rsvd_bits_used = 1;
 constexpr uint8_t max_phys_bits = 52 - rsvd_bits_used;
 
+enum class mattr {
+    normal
+};
+constexpr mattr mattr_default = mattr::normal;
+
 constexpr uint64_t pte_addr_mask(bool large)
 {
     return ((1ull << max_phys_bits) - 1) & ~(0xfffull) & ~(uint64_t(large) << page_size_shift);
@@ -120,8 +125,10 @@ inline void pt_element_common<N>::set_pfn(u64 pfn, bool large) {
     set_addr(pfn << page_size_shift, large);
 }
 
+// Currently mem_attr is ignored on x86_64
 template<int N>
-pt_element<N> make_pte(phys addr, bool leaf, unsigned perm = perm_read | perm_write | perm_exec)
+pt_element<N> make_pte(phys addr, bool leaf, unsigned perm = perm_rwx,
+                       mattr mem_attr = mattr_default)
 {
     assert(pt_level_traits<N>::leaf_capable::value || !leaf);
     bool large = pt_level_traits<N>::large_capable::value && leaf;

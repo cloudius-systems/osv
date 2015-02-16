@@ -18,9 +18,16 @@
 
 namespace mmu {
 constexpr int max_phys_addr_size = 48;
+// device_range_* are used only for debug purpose
 constexpr int device_range_start = 0x8000000;
 constexpr int device_range_stop = 0x40000000;
 extern u64 mem_addr; /* set by the dtb_setup constructor */
+
+enum class mattr {
+    normal,
+    dev
+};
+constexpr mattr mattr_default = mattr::normal;
 
 template<int N>
 class pt_element : public pt_element_common<N> {
@@ -35,6 +42,7 @@ public:
             x |= (3ul << 8);
     }
 
+    // mair_el1 register defines values for each 8 indexes. See boot.S
     inline void set_attridx(unsigned char c) {
         assert(c <= 7);
         x &= ~(7ul << 2);
@@ -136,8 +144,14 @@ inline void pt_element_common<N>::set_pfn(u64 pfn, bool large) {
     set_addr(pfn << page_size_shift, large);
 }
 
+static inline bool dbg_mem_is_dev(phys addr)
+{
+    return addr >= mmu::device_range_start && addr < mmu::device_range_stop;
+}
+
 template<int N>
-pt_element<N> make_pte(phys addr, bool leaf, unsigned perm = perm_read | perm_write | perm_exec)
+pt_element<N> make_pte(phys addr, bool leaf, unsigned perm = perm_rwx,
+                       mattr mem_attr = mattr_default)
 {
     assert(pt_level_traits<N>::leaf_capable::value || !leaf);
     bool large = pt_level_traits<N>::large_capable::value && leaf;
@@ -153,12 +167,18 @@ pt_element<N> make_pte(phys addr, bool leaf, unsigned perm = perm_read | perm_wr
     pte.set_accessed(true);
     pte.set_share(true);
 
-    if (addr >= mmu::device_range_start && addr < mmu::device_range_stop) {
-        /* we need to mark device memory as such, because the
-           semantics of the load/store instructions change */
-        pte.set_attridx(0);
-    } else {
+    // we need to mark device memory as such, because the
+    // semantics of the load/store instructions change
+    switch (mem_attr) {
+    default:
+    case mattr::normal:
+        assert(!dbg_mem_is_dev(addr));
         pte.set_attridx(4);
+        break;
+    case mattr::dev:
+        assert(dbg_mem_is_dev(addr));
+        pte.set_attridx(0);
+        break;
     }
 
     return pte;

@@ -458,13 +458,15 @@ class linear_page_mapper :
         public page_table_operation<allocate_intermediate_opt::yes, skip_empty_opt::no, descend_opt::no> {
     phys start;
     phys end;
+    mattr mem_attr;
 public:
-    linear_page_mapper(phys start, size_t size) : start(start), end(start + size) {}
+    linear_page_mapper(phys start, size_t size, mattr mem_attr = mattr_default) :
+        start(start), end(start + size), mem_attr(mem_attr) {}
     template<int N>
     bool page(hw_ptep<N> ptep, uintptr_t offset) {
         phys addr = start + offset;
         assert(addr < end);
-        ptep.write(make_leaf_pte(ptep, addr));
+        ptep.write(make_leaf_pte(ptep, addr, mmu::perm_rwx, mem_attr));
         return true;
     }
 };
@@ -1698,12 +1700,13 @@ int shm_file::close()
     return 0;
 }
 
-void linear_map(void* _virt, phys addr, size_t size, size_t slop)
+void linear_map(void* _virt, phys addr, size_t size,
+                size_t slop, mattr mem_attr)
 {
     uintptr_t virt = reinterpret_cast<uintptr_t>(_virt);
     slop = std::min(slop, page_size_level(nr_page_sizes - 1));
     assert((virt & (slop - 1)) == (addr & (slop - 1)));
-    linear_page_mapper phys_map(addr, size);
+    linear_page_mapper phys_map(addr, size, mem_attr);
     map_range(virt, virt, size, phys_map, slop);
 }
 

@@ -231,10 +231,12 @@ inline pt_element<N> make_intermediate_pte(hw_ptep<N> ptep, phys addr)
 }
 
 template<int N>
-inline pt_element<N> make_leaf_pte(hw_ptep<N> ptep, phys addr, unsigned perm = perm_read | perm_write | perm_exec)
+inline pt_element<N> make_leaf_pte(hw_ptep<N> ptep, phys addr,
+                                   unsigned perm = perm_rwx,
+                                   mattr mem_attr = mattr_default)
 {   
     static_assert(pt_level_traits<N>::leaf_capable::value, "non leaf pte");
-    return make_pte<N>(addr, true, perm);
+    return make_pte<N>(addr, true, perm, mem_attr);
 }
 
 phys virt_to_phys(void *virt);
@@ -300,8 +302,15 @@ bool is_page_aligned(void* addr)
     return is_page_aligned(reinterpret_cast<intptr_t>(addr));
 }
 
+// The mattr type is defined differently for each architecture
+// and interpreted by the architecture-specific code, and has
+// an architecture-specific meaning.
+// Currently mem_attr is ignored on x86_64. For aarch64 specifics see
+// definitions in arch/aarch64/arch-mmu.hh
 void linear_map(void* virt, phys addr, size_t size,
-                size_t slop = mmu::page_size);
+                size_t slop = mmu::page_size,
+                mattr mem_attr = mmu::mattr_default);
+
 void free_initial_memory_range(uintptr_t addr, size_t size);
 void switch_to_runtime_page_tables();
 

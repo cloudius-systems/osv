@@ -59,7 +59,8 @@ void arch_setup_free_memory()
 
     /* linear_map [TTBR0 - UART] */
     addr = (mmu::phys)console::arch_early_console.get_base_addr();
-    mmu::linear_map((void *)addr, addr, 0x1000);
+    mmu::linear_map((void *)addr, addr, 0x1000, mmu::page_size,
+                    mmu::mattr::dev);
 
     /* linear_map [TTBR0 - GIC DIST and GIC CPU] */
     u64 dist, cpu;
@@ -68,8 +69,10 @@ void arch_setup_free_memory()
         abort("arch-setup: failed to get GICv2 information from dtb.\n");
     }
     gic::gic = new gic::gic_driver(dist, cpu);
-    mmu::linear_map((void *)dist, (mmu::phys)dist, dist_len);
-    mmu::linear_map((void *)cpu, (mmu::phys)cpu, cpu_len);
+    mmu::linear_map((void *)dist, (mmu::phys)dist, dist_len, mmu::page_size,
+                    mmu::mattr::dev);
+    mmu::linear_map((void *)cpu, (mmu::phys)cpu, cpu_len, mmu::page_size,
+                    mmu::mattr::dev);
 
     mmu::switch_to_runtime_page_tables();
 
