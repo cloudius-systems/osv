@@ -66,39 +66,65 @@ void gsi_interrupt::clear()
     }
 }
 
-gsi_edge_interrupt::gsi_edge_interrupt(unsigned gsi,
-                                       std::function<void ()> handler)
-    : _vector(idt.register_handler(handler))
+gsi_edge_interrupt::gsi_edge_interrupt(unsigned id, std::function<void ()> h)
+    : interrupt(id, h)
 {
-    _gsi.set(gsi, _vector);
+    idt.register_interrupt(this);
 }
 
 gsi_edge_interrupt::~gsi_edge_interrupt()
 {
+    idt.unregister_interrupt(this);
+}
+
+void gsi_edge_interrupt::set_vector(unsigned v)
+{
+    _vector = v;
+}
+
+unsigned gsi_edge_interrupt::get_vector()
+{
+    return _vector;
+}
+
+void gsi_edge_interrupt::enable()
+{
+    _gsi.set(get_id(), _vector);
+}
+
+void gsi_edge_interrupt::disable()
+{
     _gsi.clear();
-    idt.unregister_handler(_vector);
 }
 
-gsi_level_interrupt::gsi_level_interrupt(unsigned gsi,
-                                         std::function<bool ()> ack,
-                                         std::function<void ()> handler)
-    : _vector(idt.register_level_triggered_handler(gsi, ack, handler))
+gsi_level_interrupt::gsi_level_interrupt(unsigned id, std::function<bool ()> a,
+                                         std::function<void ()> h)
+    : interrupt(id, a, h), _vector(0, 0)
 {
-    _gsi.set(gsi, _vector.get().vector);
-}
-
-void gsi_level_interrupt::set_ack_and_handler(unsigned gsi,
-        std::function<bool ()> ack,
-        std::function<void ()> handler)
-{
-    _vector = idt.register_level_triggered_handler(gsi, ack, handler);
-    _gsi.set(gsi, _vector.get().vector);
+    idt.register_interrupt(this);
 }
 
 gsi_level_interrupt::~gsi_level_interrupt()
 {
-    _gsi.clear();
-    if (_vector)
-        idt.unregister_level_triggered_handler(_vector.get());
+    idt.unregister_interrupt(this);
 }
 
+void gsi_level_interrupt::set_vector(shared_vector v)
+{
+    _vector = v;
+}
+
+shared_vector gsi_level_interrupt::get_vector()
+{
+    return _vector;
+}
+
+void gsi_level_interrupt::enable()
+{
+    _gsi.set(get_id(), _vector.vector);
+}
+
+void gsi_level_interrupt::disable()
+{
+    _gsi.clear();
+}

@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2013 Cloudius Systems, Ltd.
  *
- * Copyright (C) 2014 Huawei Technologies Duesseldorf GmbH
+ * Copyright (C) 2014-2015 Huawei Technologies Duesseldorf GmbH
  *
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
@@ -15,6 +15,7 @@
 #include <osv/types.h>
 #include <osv/rcu.hh>
 #include <osv/mutex.h>
+#include <osv/interrupt.hh>
 #include <vector>
 
 #include "gic.hh"
@@ -34,30 +35,30 @@ struct exception_frame {
 
 extern __thread exception_frame* current_interrupt_frame;
 
-typedef bool (*interrupt_handler)(void *obj);
+class interrupt_desc {
+public:
+    interrupt_desc(interrupt_desc *old, interrupt *interrupt);
+    interrupt_desc(interrupt_desc *old);
 
-struct interrupt_desc {
-    interrupt_desc(struct interrupt_desc *old, void *o, int i, interrupt_handler h, gic::irq_type t);
-    int id;
-    gic::irq_type type;
-    std::vector<interrupt_handler> handlers;
-    std::vector<void *> objs;
+    std::vector<std::function<void ()>> handlers;
+    std::vector<std::function<bool ()>> acks;
 };
 
 class interrupt_table {
 public:
     interrupt_table();
-    void enable_irq(int id);
-    void register_handler(void *obj, int id, interrupt_handler h, gic::irq_type t);
+    void register_interrupt(interrupt *interrupt);
+    void unregister_interrupt(interrupt *interrupt);
 
-    /* invoke_interrupt returns 0 if no handler is registered */
-    int invoke_interrupt(int id);
+    /* invoke_interrupt returns false if unhandled */
+    bool invoke_interrupt(unsigned int id);
 
 protected:
-    void enable_irq(struct interrupt_desc *desc);
+    void enable_irq(int id);
+    void disable_irq(int id);
 
-    int nr_irqs; /* number of supported InterruptIDs, read from gic */
-    osv::rcu_ptr<struct interrupt_desc> irq_desc[gic::max_nr_irqs];
+    unsigned int nr_irqs; /* number of supported InterruptIDs, read from gic */
+    osv::rcu_ptr<interrupt_desc> irq_desc[gic::max_nr_irqs];
     mutex _lock;
 };
 

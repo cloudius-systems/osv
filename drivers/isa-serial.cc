@@ -117,7 +117,7 @@ void isa_serial_console::enable_interrupt()
 }
 
 void isa_serial_console::dev_start() {
-    _irq = new gsi_edge_interrupt(4, [&] { _thread->wake(); });
+    _irq.reset(new gsi_edge_interrupt(4, [&] { _thread->wake(); }));
     enable_interrupt();
 }
 

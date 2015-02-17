@@ -8,6 +8,7 @@
 #include "drivers/clockevent.hh"
 #include "drivers/clock.hh"
 #include "arm-clock.hh"
+#include <osv/interrupt.hh>
 #include "exceptions.hh"
 
 #include <osv/debug.hh>
@@ -83,25 +84,17 @@ public:
     unsigned int read_tval();
     void write_tval(unsigned int cntv_tval);
 
-    static bool irq_handler(void *obj);
-
-    unsigned int irqid; /* global InterruptID */
+    std::unique_ptr<ppi_interrupt> _irq;
 };
 
 arm_clock_events::arm_clock_events()
 {
     int res = dtb_get_timer_irq();
-    this->irqid = res ? res : 16 + 11; /* default PPI 11 */
-    idt.register_handler(this, this->irqid, &arm_clock_events::irq_handler,
-                         gic::irq_type::IRQ_TYPE_EDGE);
-    idt.enable_irq(this->irqid);
-}
-
-bool arm_clock_events::irq_handler(void *obj)
-{
-    arm_clock_events *that = (arm_clock_events *)obj;
-    that->_callback->fired();
-    return true;
+    if (!res) {
+        res = 16 + 11; /* default PPI 11 */
+    }
+    _irq.reset(new ppi_interrupt(gic::irq_type::IRQ_TYPE_EDGE, res,
+                                 [this] { this->_callback->fired(); }));
 }
 
 arm_clock_events::~arm_clock_events()

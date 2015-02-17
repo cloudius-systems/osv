@@ -1,5 +1,5 @@
 /*
- * Copyright (C) 2014 Huawei Technologies Duesseldorf GmbH
+ * Copyright (C) 2014-2015 Huawei Technologies Duesseldorf GmbH
  *
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
@@ -10,6 +10,7 @@
 
 #include "console-driver.hh"
 #include "exceptions.hh"
+#include <osv/interrupt.hh>
 
 namespace console {
 
@@ -26,8 +27,8 @@ public:
 private:
     virtual void dev_start();
     virtual const char *thread_name() { return "pl011-input"; }
-    unsigned int irqid;
-    static bool irq_handler(void *obj);
+    void irq_handler();
+    std::unique_ptr<spi_interrupt> _irq;
 };
 
 }

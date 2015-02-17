@@ -83,7 +83,7 @@ void gic_driver::init_dist(int smp_idx)
     debug_early_u64("number of supported IRQs: ", (u64)this->nr_irqs);
 
     /* set all SPIs to level-sensitive at the start */
-    for (int i = 32; i < this->nr_irqs; i += 16)
+    for (unsigned int i = 32; i < this->nr_irqs; i += 16)
         this->gicd.write_reg_raw((u32)gicd_reg_irq2::GICD_ICFGR, i / 4, 0);
 
     unsigned int mask = this->cpu_targets[smp_idx];
@@ -93,7 +93,7 @@ void gic_driver::init_dist(int smp_idx)
     }
 
     /* send all SPIs to this only, set priority */
-    for (int i = 32; i < this->nr_irqs; i += 4) {
+    for (unsigned int i = 32; i < this->nr_irqs; i += 4) {
         if (mask) {
             this->gicd.write_reg_raw((u32)gicd_reg_irq8::GICD_ITARGETSR, i,
                                      mask);
@@ -103,7 +103,7 @@ void gic_driver::init_dist(int smp_idx)
     }
 
     /* disable all SPIs */
-    for (int i = 32; i < this->nr_irqs; i += 32)
+    for (unsigned int i = 32; i < this->nr_irqs; i += 32)
         this->gicd.write_reg_raw((u32)gicd_reg_irq1::GICD_ICENABLER, i / 8,
                                  0xffffffff);
 

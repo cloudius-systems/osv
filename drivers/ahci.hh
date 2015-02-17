@@ -217,7 +217,7 @@ public:
 private:
     std::map<int, port *> _all_ports;
     std::string _driver_name;
-    gsi_level_interrupt _gsi;
+    std::unique_ptr<gsi_level_interrupt> _gsi;
     bool _poll_mode = false;
     pci::device& _pci_dev;
     interrupt_manager _msi;

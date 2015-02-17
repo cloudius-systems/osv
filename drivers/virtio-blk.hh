@@ -157,7 +157,7 @@ private:
     bool _ro;
     // This mutex protects parallel make_request invocations
     mutex _lock;
-    gsi_level_interrupt _gsi;
+    std::unique_ptr<gsi_level_interrupt> _irq;
 };
 
 }
