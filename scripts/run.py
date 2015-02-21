@@ -136,7 +136,14 @@ def start_osv_qemu(options):
             if options.vhost:
                 args += ["-netdev", "tap,id=hn%d,script=scripts/qemu-ifup.sh,vhost=on" % idx]
             else:
-                args += ["-netdev", "bridge,id=hn%d,br=%s,helper=/usr/libexec/qemu-bridge-helper" % (idx, options.bridge)]
+                for bridge_helper_dir in ['/usr/libexec', '/usr/lib/qemu']:
+                    bridge_helper = bridge_helper_dir + '/qemu-bridge-helper'
+                    if os.path.exists(bridge_helper):
+                       break
+                else:
+                    print("Unable to find qemu-bridge-helper program", file=sys.stderr)
+                    return
+                args += ["-netdev", "bridge,id=hn%d,br=%s,helper=%s" % (idx, options.bridge, bridge_helper)]
             net_device_options.extend(['netdev=hn%d' % idx, 'id=nic%d' % idx])
         else:
             args += ["-netdev", "user,id=un%d,net=192.168.122.0/24,host=192.168.122.1" % idx]
