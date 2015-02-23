@@ -20,6 +20,7 @@
 #include <osv/condvar.h>
 #include <osv/semaphore.hh>
 #include <osv/mmu.hh>
+#include <osv/contiguous_alloc.hh>
 #include <boost/lockfree/stack.hpp>
 #include <boost/lockfree/policies.hpp>
 
@@ -30,9 +31,6 @@ namespace memory {
 const size_t page_size = 4096;
 
 extern size_t phys_mem_size;
-
-void* alloc_phys_contiguous_aligned(size_t sz, size_t align);
-void free_phys_contiguous_aligned(void* p);
 
 void setup_free_memory(void* start, size_t bytes);
 
