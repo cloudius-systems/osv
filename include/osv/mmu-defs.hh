@@ -11,6 +11,7 @@
 #include <stdint.h>
 #include <atomic>
 #include <osv/rcu.hh>
+#include <osv/virt_to_phys.hh>
 
 struct exception_frame;
 
@@ -27,7 +28,6 @@ constexpr int pte_per_page_shift = 9; // log2(pte_per_page)
 constexpr uintptr_t huge_page_size = mmu::page_size*pte_per_page; // 2 MB
 
 typedef uint64_t f_offset;
-typedef uint64_t phys;
 
 enum class mem_area {
     main,

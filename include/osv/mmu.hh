@@ -239,8 +239,6 @@ inline pt_element<N> make_leaf_pte(hw_ptep<N> ptep, phys addr,
     return make_pte<N>(addr, true, perm, mem_attr);
 }
 
-phys virt_to_phys(void *virt);
-
 class virt_pte_visitor {
 public:
     virtual void pte(pt_element<0>) = 0;
