@@ -68,6 +68,7 @@ namespace pthread_private {
     public:
         explicit pthread(void *(*start)(void *arg), void *arg, sigset_t sigset,
             const thread_attr* attr);
+        void start();
         static pthread* from_libc(pthread_t p);
         pthread_t to_libc();
         int join(void** retval);
@@ -99,6 +100,10 @@ namespace pthread_private {
             }, attributes(attr ? *attr : thread_attr()), false, true)
     {
         _thread.set_cleanup([=] { delete this; });
+    }
+
+    void pthread::start()
+    {
         _thread.start();
     }
 
@@ -206,6 +211,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     }
 
     *thread = t->to_libc();
+    t->start();
     return 0;
 }
 
