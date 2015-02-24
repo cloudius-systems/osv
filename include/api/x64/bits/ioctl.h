@@ -127,6 +127,7 @@ struct winsize {
 #define N_SYNC_PPP      14
 #define N_HCI           15
 
+#define SIOCOUTQ        TIOCOUTQ
 #define FIOSETOWN       0x8901
 #define SIOCSPGRP       0x8902
 #define FIOGETOWN       0x8903

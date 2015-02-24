@@ -49,6 +49,12 @@
 #include <bsd/sys/net/route.h>
 #include <bsd/sys/net/vnet.h>
 
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet/in_pcb.h>
+#include <bsd/sys/netinet/tcp_var.h>
+#include <bsd/sys/netinet/tcp_fsm.h>
+
 #include <mutex>
 
 using namespace std;
@@ -187,6 +193,22 @@ socket_file::bsd_ioctl(u_long cmd, void *data)
         *(int *)data = so->so_rcv.sb_cc;
         break;
 
+    case SIOCOUTQ:
+        /*
+         * Check the so_type here because we want so to be a TCP socket.
+         * To ensure that we can get tcpcb and state correctly
+         */
+        if (so->so_type == SOCK_STREAM) {
+
+            struct inpcb *inp = sotoinpcb(so);
+            struct tcpcb *tp = intotcpcb(inp);
+
+            if (tp->get_state() == TCPS_LISTEN) {
+               error = EINVAL;
+               break;
+            }
+         }
+         /* fall through */
     case FIONWRITE:
         /* Unlocked read. */
         *(int *)data = so->so_snd.sb_cc;
