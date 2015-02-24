@@ -12,6 +12,8 @@
 #include <arch-cpu.hh>
 #include <osv/debug.hh>
 
+extern "C" void call_signal_handler_thunk(void);
+
 namespace arch {
 
 struct signal_frame {
@@ -19,15 +21,6 @@ struct signal_frame {
     siginfo_t si;
     struct sigaction sa;
 };
-
-}
-
-extern "C" {
-    void call_signal_handler(arch::signal_frame* frame);
-    void call_signal_handler_thunk(void);
-}
-
-namespace arch {
 
 void build_signal_frame(exception_frame* ef,
                         const siginfo_t& si,
@@ -50,8 +43,9 @@ void build_signal_frame(exception_frame* ef,
 
 }
 
-unsigned __thread signal_nesting;
+static unsigned __thread signal_nesting;
 
+extern "C"
 void call_signal_handler(arch::signal_frame* frame)
 {
     if (signal_nesting) {
@@ -110,7 +104,6 @@ void call_signal_handler(arch::signal_frame* frame)
         frame->sa.sa_handler(frame->si.si_signo);
     }
     --signal_nesting;
-    // FIXME: all te other gory details
 }
 
 
