@@ -18,7 +18,6 @@ struct signal_frame {
     exception_frame state;
     siginfo_t si;
     struct sigaction sa;
-    sched::inplace_arch_fpu fpu;
 };
 
 }
@@ -38,13 +37,10 @@ void build_signal_frame(exception_frame* ef,
     rsp -= 128;                 // skip red zone
     rsp -= sizeof(signal_frame);
     // the Linux x86_64 calling conventions want 16-byte aligned rsp.
-    // Moreover, we need to obey the alignment needed for the "signal_frame"
-    // type (it has strict alignment requirements because of the fpu state
-    // embedded in it).
+    // signal_frame may want even stricter alignment (but probably won't).
     rsp = align_down(rsp, std::max(16UL, alignof(signal_frame)));
-    // the signal_frame class may have constructors (namely, initializing the
-    // fpu state area), so a simple cast is not enough.
-    auto frame = new(rsp) signal_frame;
+    // signal_frame has no constructors/destructors, so cast is enough
+    auto frame = static_cast<signal_frame*>(rsp);
     frame->state = *ef;
     frame->si = si;
     frame->sa = sa;
@@ -63,8 +59,14 @@ void call_signal_handler(arch::signal_frame* frame)
         // indicate trouble
         abort("nested signals");
     }
+    // The user's signal handler might use the FPU, so save its current state.
+    // FIXME: this fpu saving is not necessary if the callers already save the
+    // FPU state. Currently, only divide_error() is missing FPU saving, and
+    // callers (such as page_fault()) already save it. If we fix
+    // divide_error(), we can probably get rid of the fpu saving here.
+    sched::fpu_lock fpu;
+    SCOPE_LOCK(fpu);
     ++signal_nesting;
-    frame->fpu.save();
     if (frame->sa.sa_flags & SA_SIGINFO) {
         ucontext_t uc = {};
         auto& regs = uc.uc_mcontext.gregs;
@@ -107,11 +109,7 @@ void call_signal_handler(arch::signal_frame* frame)
     } else {
         frame->sa.sa_handler(frame->si.si_signo);
     }
-    frame->fpu.restore();
     --signal_nesting;
-    // In case signal_frame ever gets a destructor, we need to call it now
-    // (currently there is no destructor, and it does nothing).
-    frame->~signal_frame();
     // FIXME: all te other gory details
 }
 
