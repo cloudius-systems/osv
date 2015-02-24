@@ -37,10 +37,14 @@ void build_signal_frame(exception_frame* ef,
     void* rsp = reinterpret_cast<void*>(ef->rsp);
     rsp -= 128;                 // skip red zone
     rsp -= sizeof(signal_frame);
-    // the Linux x86_64 calling conventions want 16-byte aligned rsp, and
-    // signal_frame also needs to be 16-byte aligned (for the fpu state):
-    rsp = align_down(rsp, 16);
-    signal_frame* frame = static_cast<signal_frame*>(rsp);
+    // the Linux x86_64 calling conventions want 16-byte aligned rsp.
+    // Moreover, we need to obey the alignment needed for the "signal_frame"
+    // type (it has strict alignment requirements because of the fpu state
+    // embedded in it).
+    rsp = align_down(rsp, std::max(16UL, alignof(signal_frame)));
+    // the signal_frame class may have constructors (namely, initializing the
+    // fpu state area), so a simple cast is not enough.
+    auto frame = new(rsp) signal_frame;
     frame->state = *ef;
     frame->si = si;
     frame->sa = sa;
@@ -105,6 +109,9 @@ void call_signal_handler(arch::signal_frame* frame)
     }
     frame->fpu.restore();
     --signal_nesting;
+    // In case signal_frame ever gets a destructor, we need to call it now
+    // (currently there is no destructor, and it does nothing).
+    frame->~signal_frame();
     // FIXME: all te other gory details
 }
 
