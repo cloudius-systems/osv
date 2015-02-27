@@ -14,6 +14,7 @@
 #include "drivers/pci-function.hh"
 #include "drivers/pci-device.hh"
 #include <osv/interrupt.hh>
+#include <osv/msi.hh>
 #include <osv/mmu.hh>
 #include <osv/mempool.hh>
 #include <osv/bio.h>
