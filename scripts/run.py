@@ -90,10 +90,19 @@ def start_osv_qemu(options):
         cache = 'none' if is_direct_io_supported(options.image_file) else 'unsafe'
 
     args = [
-        "-vnc", options.vnc,
-        "-gdb", "tcp::1234,server,nowait",
         "-m", options.memsize,
         "-smp", options.vcpus]
+
+    if not options.novnc:
+        args += [
+        "-vnc", options.vnc]
+    else:
+        args += [
+        "--nographic"]
+
+    if not options.nogdb:
+        args += [
+        "-gdb", "tcp::%s,server,nowait" % options.gdb]
 
     if options.graphics:
         args += [
@@ -227,16 +236,17 @@ def start_osv_xen(options):
             print("Unrecognized memory size", file=sys.stderr)
             return
 
-    vncoptions = re.match("^(?P<vncaddr>[^:]*):?(?P<vncdisplay>[0-9]*$)", options.vnc)
+    if not options.novnc:
+        vncoptions = re.match("^(?P<vncaddr>[^:]*):?(?P<vncdisplay>[0-9]*$)", options.vnc)
 
-    if not vncoptions:
-        raise Exception('Invalid vnc option format: \"' + options.vnc + "\"")
+        if not vncoptions:
+            raise Exception('Invalid vnc option format: \"' + options.vnc + "\"")
 
-    if vncoptions.group("vncaddr"):
-        args += ["vnclisten=%s" % (vncoptions.group("vncaddr"))]
+        if vncoptions.group("vncaddr"):
+            args += ["vnclisten=%s" % (vncoptions.group("vncaddr"))]
 
-    if vncoptions.group("vncdisplay"):
-        args += ["vncdisplay=%s" % (vncoptions.group("vncdisplay"))]
+        if vncoptions.group("vncdisplay"):
+            args += ["vncdisplay=%s" % (vncoptions.group("vncdisplay"))]
 
     args += [
         "memory=%d" % (memory),
@@ -457,6 +467,12 @@ if __name__ == "__main__":
                         help="specify qemu command path")
     parser.add_argument("--nics", action="store", default="1",
                         help="number of NICs configured for the VM")
+    parser.add_argument("--novnc", action="store_true",
+                        help="disable vnc")
+    parser.add_argument("--nogdb", action="store_true",
+                        help="disable gdb")
+    parser.add_argument("--gdb", action="store", default="1234",
+                        help="specify gdb port number")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
