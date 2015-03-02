@@ -812,7 +812,7 @@ void page_range_allocator::for_each(unsigned min_order, Func f)
     }
 }
 
-static void* malloc_large(size_t size, size_t alignment)
+static void* malloc_large(size_t size, size_t alignment, bool block = true)
 {
     auto requested_size = size;
     size_t offset;
@@ -840,7 +840,10 @@ static void* malloc_large(size_t size, size_t alignment)
                 trace_memory_malloc_large(obj, requested_size, size, alignment);
                 return obj;
             }
-            reclaimer_thread.wait_for_memory(size);
+            if (block)
+                reclaimer_thread.wait_for_memory(size);
+            else
+                return nullptr;
         }
     }
 }
@@ -1783,12 +1786,12 @@ void enable_debug_allocator()
     dbg::enabled = true;
 }
 
-void* alloc_phys_contiguous_aligned(size_t size, size_t align)
+void* alloc_phys_contiguous_aligned(size_t size, size_t align, bool block)
 {
     assert(is_power_of_two(align));
     // make use of the standard large allocator returning properly aligned
     // physically contiguous memory:
-    auto ret = malloc_large(size, align);
+    auto ret = malloc_large(size, align, block);
     assert (!(reinterpret_cast<uintptr_t>(ret) & (align - 1)));
     return ret;
 }
