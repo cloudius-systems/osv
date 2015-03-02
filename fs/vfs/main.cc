@@ -2114,7 +2114,7 @@ static void import_extra_zfs_pools(void)
     }
 }
 
-extern "C" void mount_zfs_rootfs(void)
+extern "C" void mount_zfs_rootfs(bool pivot_root)
 {
     int ret;
 
@@ -2128,6 +2128,10 @@ extern "C" void mount_zfs_rootfs(void)
     ret = sys_mount("/dev/vblk0.1", "/zfs", "zfs", 0, (void *)"osv/zfs");
     if (ret)
         kprintf("failed to mount /zfs, error = %s\n", strerror(ret));
+
+    if (!pivot_root) {
+        return;
+    }
 
     ret = sys_pivot_root("/zfs", "/");
     if (ret)

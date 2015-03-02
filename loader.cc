@@ -82,7 +82,7 @@ void setup_tls(elf::init_table inittab)
 extern "C" {
     void premain();
     void vfs_init(void);
-    void mount_zfs_rootfs(void);
+    void mount_zfs_rootfs(bool);
     void ramdisk_init(void);
 }
 
@@ -124,6 +124,7 @@ static bool opt_noshutdown = false;
 bool opt_power_off_on_abort = false;
 static bool opt_log_backtrace = false;
 static bool opt_mount = true;
+static bool opt_pivot = true;
 static bool opt_random = true;
 static bool opt_init = true;
 static std::string opt_console = "all";
@@ -161,7 +162,8 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("trace", bpo::value<std::vector<std::string>>(), "tracepoints to enable")
         ("trace-backtrace", "log backtraces in the tracepoint log")
         ("leak", "start leak detector after boot")
-        ("nomount", "don't mount the file system")
+        ("nomount", "don't mount the ZFS file system")
+        ("nopivot", "do not pivot the root from bootfs to the ZFS")
         ("assign-net", "assign virtio network to the application")
         ("norandom", "don't initialize any random device")
         ("noshutdown", "continue running after main() returns")
@@ -239,6 +241,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         }
     }
     opt_mount = !vars.count("nomount");
+    opt_pivot = !vars.count("nopivot");
     opt_random = !vars.count("norandom");
     opt_init = !vars.count("noinit");
 
@@ -351,7 +354,7 @@ void* do_main_thread(void *_main_args)
 
     if (opt_mount) {
         zfsdev::zfsdev_init();
-        mount_zfs_rootfs();
+        mount_zfs_rootfs(opt_pivot);
         bsd_shrinker_init();
     }
     boot_time.event("ZFS mounted");
