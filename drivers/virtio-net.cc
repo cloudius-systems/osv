@@ -293,8 +293,9 @@ net::net(pci::device& dev)
             { 1, [&] { _txq.vqueue->disable_interrupts(); }, nullptr }
         });
     } else {
-        _gsi.set_ack_and_handler(dev.get_interrupt_line(),
-            [=] { return this->ack_irq(); }, [=] { poll_task->wake(); });
+        _irq.reset(new pci_interrupt(dev,
+                                     [=] { return this->ack_irq(); },
+                                     [=] { poll_task->wake(); }));
     }
 
     fill_rx_ring();

@@ -15,6 +15,9 @@
 #include <osv/mutex.h>
 #include <vector>
 
+class gsi_edge_interrupt;
+class gsi_level_interrupt;
+
 struct exception_frame {
     ulong r15;
     ulong r14;
@@ -56,13 +59,25 @@ class interrupt_descriptor_table {
 public:
     interrupt_descriptor_table();
     void load_on_cpu();
-    unsigned register_handler(std::function<void ()> handler);
-    // The pre_eoi should 'true' when the interrupt is for the device, 'false' otherwise.
-    shared_vector register_level_triggered_handler(unsigned gsi, std::function<bool ()> pre_eoi, std::function<void ()> handler);
-    void unregister_level_triggered_handler(shared_vector v);
-    unsigned register_interrupt_handler(std::function<bool ()> pre_eoi, std::function<void ()> eoi, std::function<void ()> handler);
-    void unregister_handler(unsigned vector);
+    void register_interrupt(gsi_edge_interrupt *interrupt);
+    void unregister_interrupt(gsi_edge_interrupt *interrupt);
+    void register_interrupt(gsi_level_interrupt *interrupt);
+    void unregister_interrupt(gsi_level_interrupt *interrupt);
     void invoke_interrupt(unsigned vector);
+
+    /* TODO: after merge of MSI and Xen callbacks as interrupt class,
+     * exposing these as 'public' should not be necessary anymore.
+     */
+    unsigned register_interrupt_handler(std::function<bool ()> pre_eoi,
+                                        std::function<void ()> eoi,
+                                        std::function<void ()> post_eoi);
+
+    /* register_handler is a simplified way to call register_interrupt_handler
+     * with no pre_eoi, and apic eoi.
+     */
+    unsigned register_handler(std::function<void ()> post_eoi);
+    void unregister_handler(unsigned vector);
+
 private:
     enum {
         type_intr_gate = 14,
@@ -129,6 +144,12 @@ private:
     };
     osv::rcu_ptr<handler> _handlers[256];
     mutex _lock;
+
+    shared_vector register_level_triggered_handler(unsigned gsi,
+                                                   std::function<bool ()> pre_eoi,
+                                                   std::function<void ()> post_eoi);
+
+    void unregister_level_triggered_handler(shared_vector v);
 };
 
 extern interrupt_descriptor_table idt;

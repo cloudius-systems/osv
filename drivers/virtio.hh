@@ -16,6 +16,7 @@
 #include "drivers/pci-device.hh"
 #include "drivers/virtio-vring.hh"
 #include <osv/interrupt.hh>
+#include <osv/msi.hh>
 
 namespace virtio {
 

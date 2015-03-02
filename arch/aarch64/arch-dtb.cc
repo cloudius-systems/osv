@@ -24,6 +24,8 @@ extern "C" {
 void *dtb;
 char *cmdline;
 
+static int dtb_pci_node = -1;
+
 struct dtb_int_spec {
     int irq_id;
     unsigned int flags;
@@ -230,10 +232,10 @@ size_t dtb_get_phys_memory(u64 *addr)
     return retval;
 }
 
-u64 dtb_get_uart_base()
+u64 dtb_get_uart(int *irqid)
 {
     u64 retval;
-    int node; size_t len __attribute__((unused));
+    int node; size_t len;
 
     if (!dtb)
         return 0;
@@ -243,6 +245,14 @@ u64 dtb_get_uart_base()
         return 0;
 
     len = dtb_get_reg(node, &retval);
+    if (!len)
+        return 0;
+
+    struct dtb_int_spec int_spec[1];
+    if (!dtb_get_int_spec(node, int_spec, 1))
+        return 0;
+
+    *irqid = int_spec[0].irq_id;
     return retval;
 }
 
@@ -289,5 +299,156 @@ bool dtb_get_gic_v2(u64 *dist, size_t *dist_len, u64 *cpu, size_t *cpu_len)
     *cpu = addr[1];
     *cpu_len = len[1];
 
+    return true;
+}
+
+static int dtb_get_pci_node()
+{
+    if (dtb_pci_node >= 0) {
+        return dtb_pci_node;
+    }
+
+    if (!dtb) {
+        abort("dtb_get_pci_node: dtb == NULL\n");
+    }
+
+    dtb_pci_node = fdt_node_offset_by_compatible(dtb, -1, "pci-host-ecam-generic");
+    if (dtb_pci_node >= 0) {
+        goto out;
+    }
+
+    dtb_pci_node = fdt_node_offset_by_compatible(dtb, -1, "pci-host-cam-generic");
+    if (dtb_pci_node >= 0) {
+        goto out;
+    }
+
+    abort("dtb_get_pci_node: no CAM or ECAM node found.\n");
+ out:
+    return dtb_pci_node;
+}
+
+bool dtb_get_pci_is_ecam()
+{
+    int offset = dtb_get_pci_node();
+    return !fdt_node_check_compatible(dtb, offset, "pci-host-ecam-generic");
+}
+
+/* this gets the PCI configuration space base address */
+bool dtb_get_pci_cfg(u64 *addr, size_t *len)
+{
+    int node;
+
+    if (!dtb)
+        return false;
+
+    node = dtb_get_pci_node();
+    *len = dtb_get_reg(node, addr);
+    return *len > 0;
+}
+
+/* just get the CPU memory areas for now */
+bool dtb_get_pci_ranges(u64 *addr, size_t *len, int n)
+{
+    u32 addr_cells_pci, addr_cells, size_cells;
+    int node;
+
+    memset(addr, 0, sizeof(u64) * n);
+    memset(len, 0, sizeof(size_t) * n);
+
+    if (!dtb)
+        return false;
+
+    node = dtb_get_pci_node();
+
+    if (!dtb_getprop_u32(node, "#address-cells", &addr_cells_pci))
+        return false;
+
+    if (!dtb_getprop_u32_cascade(node, "#address-cells", &addr_cells))
+        return false;
+
+    if (!dtb_getprop_u32_cascade(node, "#size-cells", &size_cells))
+        return false;
+
+    int size;
+    u32 *ranges = (u32 *)fdt_getprop(dtb, node, "ranges", &size);
+    int required = (addr_cells + size_cells) * sizeof(u32) * n;
+
+    if (!ranges || size < required)
+        return false;
+
+    for (int x = 0; x < n; x++) {
+        for (u32 i = 0; i < addr_cells_pci; i++, ranges++) {
+            /* ignore the PCI address */
+        }
+        for (u32 i = 0; i < addr_cells; i++, ranges++) {
+            addr[x] = addr[x] << 32 | fdt32_to_cpu(*ranges);
+        }
+        for (u32 i = 0; i < size_cells; i++, ranges++) {
+            len[x] = len[x] << 32 | fdt32_to_cpu(*ranges);
+        }
+    }
+
+    return true;
+}
+
+/* get the number of mappings between pci devices and platform IRQs. */
+int dtb_get_pci_irqmap_count()
+{
+    if (!dtb)
+        return -1;
+
+    int size, node = dtb_get_pci_node();
+    u32 *prop = (u32 *)fdt_getprop(dtb, node, "interrupt-map", &size);
+
+    /* we require each entry to be 32 bytes, to match the exact encoding
+     * we are expecting. */
+    if (!prop || size < 0 || size % 32 != 0) {
+        return -1;
+    } else {
+        return size / 32;
+    }
+}
+
+/* gets the mask for just the slot member of the pci address. */
+u32 dtb_get_pci_irqmask()
+{
+    u32 *prop;
+    int node, size;
+
+    if (!dtb)
+        return 0;
+
+    node = dtb_get_pci_node();
+    prop = (u32 *)fdt_getprop(dtb, node, "interrupt-map-mask", &size);
+
+    if (size != 16)
+        return 0;
+
+    /* see irqmap below */
+    return (fdt32_to_cpu(prop[0]) & DTB_PHYSHI_BDF_MASK) | DTB_PIN_MASK;
+}
+
+bool dtb_get_pci_irqmap(u32 *bdfs, int *irq_ids, int n)
+{
+    if (!dtb)
+        return false;
+
+    int size, node = dtb_get_pci_node();
+    u32 *prop = (u32 *)fdt_getprop(dtb, node, "interrupt-map", &size);
+
+    /* we require each entry to be 32 bytes, to match the exact encoding
+     * we are expecting. */
+    if (!prop || size < 0 || size % 32 != 0 || n > size / 32) {
+        return false;
+    }
+    for (int i = 0; i < n; i++) {
+        /* get the BDF part of PHYS.HI */
+        bdfs[i] = fdt32_to_cpu(prop[0]) & DTB_PHYSHI_BDF_MASK;
+        /* ignore PHYS.mid/low prop[1], prop[2] */
+        bdfs[i] |= fdt32_to_cpu(prop[3]) & DTB_PIN_MASK;
+        /* ignore parent gic id prop[4], prop[5] */
+        irq_ids[i] = fdt32_to_cpu(prop[6]);
+        prop += 8; /* skip to the next entry */
+    }
     return true;
 }

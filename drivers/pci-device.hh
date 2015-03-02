@@ -9,7 +9,6 @@
 #define PCI_DEVICE_H
 
 #include <osv/types.h>
-#include <osv/pci.hh>
 #include "pci-function.hh"
 
 namespace pci {

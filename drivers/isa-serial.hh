@@ -23,7 +23,7 @@ public:
     virtual bool input_ready() override;
     virtual char readch();
 private:
-    gsi_edge_interrupt* _irq;
+    std::unique_ptr<gsi_edge_interrupt> _irq;
     static const u16 ioport = 0x3f8;
 
     virtual void dev_start();

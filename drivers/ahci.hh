@@ -14,6 +14,7 @@
 #include "drivers/pci-function.hh"
 #include "drivers/pci-device.hh"
 #include <osv/interrupt.hh>
+#include <osv/msi.hh>
 #include <osv/mmu.hh>
 #include <osv/mempool.hh>
 #include <osv/bio.h>
@@ -217,7 +218,7 @@ public:
 private:
     std::map<int, port *> _all_ports;
     std::string _driver_name;
-    gsi_level_interrupt _gsi;
+    std::unique_ptr<gsi_level_interrupt> _gsi;
     bool _poll_mode = false;
     pci::device& _pci_dev;
     interrupt_manager _msi;

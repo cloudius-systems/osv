@@ -159,7 +159,7 @@ public:
 public:
     class gic_dist gicd;
     class gic_cpu gicc;
-    int nr_irqs;
+    unsigned int nr_irqs;
 protected:
     /* cpu_targets: our smp cpu index is not necessarily equal
        to the gic interface target. We query the gic to get

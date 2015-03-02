@@ -5,16 +5,9 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <algorithm>
-#include <list>
-#include <map>
-
-#include <osv/sched.hh>
-#include "drivers/pci-function.hh"
-#include "exceptions.hh"
-#include <osv/interrupt.hh>
-#include "apic.hh"
+#include <osv/msi.hh>
 #include <osv/trace.hh>
+#include "apic.hh"
 
 TRACEPOINT(trace_msix_interrupt, "vector=0x%02x", unsigned);
 TRACEPOINT(trace_msix_migrate, "vector=0x%02x apic_id=0x%x",
@@ -266,23 +259,4 @@ bool interrupt_manager::unmask_interrupts(const std::vector<msix_vector*>& vecto
     }
 
     return (true);
-}
-
-inter_processor_interrupt::inter_processor_interrupt(std::function<void ()> handler)
-    : _vector(idt.register_handler(handler))
-{
-}
-
-inter_processor_interrupt::~inter_processor_interrupt()
-{
-    idt.unregister_handler(_vector);
-}
-
-void inter_processor_interrupt::send(sched::cpu* cpu)
-{
-    apic->ipi(cpu->arch.apic_id, _vector);
-}
-
-void inter_processor_interrupt::send_allbutself(){
-    apic->ipi_allbutself(_vector);
 }

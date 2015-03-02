@@ -19,6 +19,7 @@
 #include "drivers/pci-device.hh"
 #include <osv/mempool.hh>
 #include <osv/interrupt.hh>
+#include <osv/msi.hh>
 #include <osv/percpu_xmit.hh>
 
 namespace vmw {

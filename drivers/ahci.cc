@@ -443,7 +443,8 @@ void hba::enable_irq()
     if (_pci_dev.is_msix() || _pci_dev.is_msi() ) {
         _msi.easy_register({ { 0, [=] { ack_irq(); }, nullptr} });
     } else {
-        _gsi.set_ack_and_handler(_pci_dev.get_interrupt_line(), [=] { return ack_irq(); }, [] {});
+        _gsi.reset(new gsi_level_interrupt(_pci_dev.get_interrupt_line(),
+                                           [=] { return ack_irq(); }, [] {}));
     }
 }
 

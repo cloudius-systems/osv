@@ -122,6 +122,15 @@ unsigned interrupt_descriptor_table::register_interrupt_handler(
     abort();
 }
 
+void interrupt_descriptor_table::unregister_handler(unsigned vector)
+{
+    WITH_LOCK(_lock) {
+        auto o = _handlers[vector].read_by_owner();
+        _handlers[vector].assign(nullptr);
+        osv::rcu_dispose(o);
+    }
+}
+
 shared_vector interrupt_descriptor_table::register_level_triggered_handler(
         unsigned gsi,
         std::function<bool ()> pre_eoi,
@@ -170,13 +179,32 @@ unsigned interrupt_descriptor_table::register_handler(std::function<void ()> pos
     return register_interrupt_handler([] { return true; }, [] { processor::apic->eoi(); }, post_eoi);
 }
 
-void interrupt_descriptor_table::unregister_handler(unsigned vector)
+void interrupt_descriptor_table::register_interrupt(gsi_edge_interrupt *interrupt)
 {
-    WITH_LOCK(_lock) {
-        auto o = _handlers[vector].read_by_owner();
-        _handlers[vector].assign(nullptr);
-        osv::rcu_dispose(o);
-    }
+    unsigned v = register_handler(interrupt->get_handler());
+    interrupt->set_vector(v);
+    interrupt->enable();
+}
+
+void interrupt_descriptor_table::unregister_interrupt(gsi_edge_interrupt *interrupt)
+{
+    interrupt->disable();
+    unregister_handler(interrupt->get_vector());
+}
+
+void interrupt_descriptor_table::register_interrupt(gsi_level_interrupt *interrupt)
+{
+    shared_vector v = register_level_triggered_handler(interrupt->get_id(),
+                                                       interrupt->get_ack(),
+                                                       interrupt->get_handler());
+    interrupt->set_vector(v);
+    interrupt->enable();
+}
+
+void interrupt_descriptor_table::unregister_interrupt(gsi_level_interrupt *interrupt)
+{
+    interrupt->disable();
+    unregister_level_triggered_handler(interrupt->get_vector());
 }
 
 void interrupt_descriptor_table::invoke_interrupt(unsigned vector)

@@ -44,7 +44,7 @@ private:
 
     static const size_t _pool_size = 64;
     std::vector<char> _entropy;
-    gsi_level_interrupt _gsi;
+    pci_interrupt _irq;
     sched::thread _thread;
     condvar _producer;
     condvar _consumer;
