@@ -6,12 +6,13 @@
  */
 
 /*
- * This is a test for issue 557. The server opens a socket, accepts connection
+ * This is a test for the SIOCOUTQ (synonymous with TIOCOUTQ) ioctl described
+ * in the tcp(7) manual page. The server opens a socket, accepts connection
  * and does nothing more. The client opens a socket, sets send buffer size to
  * predefined value (16k bytes), sets non-blocking mode on the socket and then issues
  * few writes to server until EWOULDBLOCK. It fills in frist the receive buffer on
  * the server and then the send buffer on the client. When EWOULDBLOCK returned, both
- * buffers are full. SIOCOUTQ shall return value set by the setsockopt on the client
+ * buffers are full. TIOCOUTQ shall return value set by the setsockopt on the client
  * socket. If it is true the test passes. If it not true - it fails.
  */
 
@@ -67,9 +68,9 @@ static int server(void)
         close(listenfd);
         return 1;
     }
-    /* listenfd is in LISTEN state. SIOCOUTQ shall return EINVAL */
+    /* listenfd is in LISTEN state. TIOCOUTQ shall return EINVAL */
     int unused;
-    int err = ioctl(listenfd, SIOCOUTQ, &unused);
+    int err = ioctl(listenfd, TIOCOUTQ, &unused);
     if ((err == 0) || (err < 0 && errno != EINVAL)) {
        perror("ioctl failed");
        close(listenfd);
@@ -103,7 +104,7 @@ static int client(void)
         perror("connect socket");
         abort();
     }
-    if (ioctl(sock, SIOCOUTQ, &unsent) < 0) {
+    if (ioctl(sock, TIOCOUTQ, &unsent) < 0) {
         perror("ioctl failed");
         abort();
     }
@@ -132,7 +133,7 @@ static int client(void)
               (errno == EWOULDBLOCK || errno == EAGAIN)))
            break;
 
-       if (ioctl(sock, SIOCOUTQ, &unsent) < 0) {
+       if (ioctl(sock, TIOCOUTQ, &unsent) < 0) {
            perror("ioctl");
            abort();
         }
@@ -168,7 +169,7 @@ static void report(bool ok, const char* msg)
 
 int main(int argc, char **argv)
 {
-    report(test(), "SIOCOUTQ test");
+    report(test(), "TIOCOUTQ test");
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);
     return fails;
 }

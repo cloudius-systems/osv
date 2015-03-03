@@ -193,7 +193,7 @@ socket_file::bsd_ioctl(u_long cmd, void *data)
         *(int *)data = so->so_rcv.sb_cc;
         break;
 
-    case SIOCOUTQ:
+    case TIOCOUTQ:
         /*
          * Check the so_type here because we want so to be a TCP socket.
          * To ensure that we can get tcpcb and state correctly
