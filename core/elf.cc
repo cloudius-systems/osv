@@ -1065,6 +1065,12 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         std::vector<std::shared_ptr<object>> &loaded_objects)
 {
     fileref f;
+    if (_files.count(name)) {
+        auto obj = _files[name].lock();
+        if (obj) {
+            return obj;
+        }
+    }
     if (name.find('/') == name.npos) {
         std::vector<std::string> search_path;
         search_path.insert(search_path.end(), extra_path.begin(), extra_path.end());
