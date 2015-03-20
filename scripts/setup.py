@@ -35,6 +35,13 @@ class Fedora(object):
     test_packages = ['openssl-devel']
     ec2_post_install = standard_ec2_post_install
 
+    class Fedora_19(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '19'
+
     class Fedora_20(object):
         packages = []
         ec2_packages = []
@@ -49,7 +56,7 @@ class Fedora(object):
         ec2_post_install = None
         version = '21'
 
-    versions = [Fedora_20, Fedora_21]
+    versions = [Fedora_19, Fedora_20, Fedora_21]
 
 class RHELbased(Fedora):
     name = ['Scientific Linux', 'NauLinux', 'CentOS Linux',
