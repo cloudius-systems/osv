@@ -365,6 +365,7 @@ tests += tests/tst-app.so
 tests += tests/misc-gtod.so
 tests += tests/misc-concurrent-io.so
 tests += tests/tst-console.so
+tests += tests/tst-select-timeout.so
 endif
 
 tests/hello/Hello.class: javabase=tests/hello

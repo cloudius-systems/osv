@@ -101,12 +101,32 @@ int select (int nfds,
 
     select_d("select() timeout_ms=%d", timeout_ms);
 
+    osv::clock::uptime::time_point time_before_poll;
+    if (timeout) {
+        time_before_poll = osv::clock::uptime::now();
+    }
+
     /* call poll() */
     error = poll(req, poll_fd_idx, timeout_ms);
     if (error < 0) {
         select_d("select() poll() failed");
         free(req);
         return -1;
+    }
+
+    /* update timeout to be the amount of time not slept (to be consistent
+     * with Linux select() behavior)
+     */
+    if (timeout) {
+        auto time_after_poll = osv::clock::uptime::now();
+        auto time_slept_us = std::chrono::duration_cast<std::chrono::microseconds>(time_after_poll - time_before_poll).count();
+        struct timeval time_slept = { .tv_sec  = time_slept_us / 1000000,
+                                      .tv_usec = time_slept_us % 1000000 };
+        timersub(timeout, &time_slept, timeout);
+        if (timeout->tv_sec < 0) {
+            timeout->tv_sec = 0;
+            timeout->tv_usec = 0;
+        }
     }
 
     /* handle result */
