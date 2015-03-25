@@ -58,6 +58,9 @@
 #include <bsd/x64/machine/atomic.h>
 #include <bsd/x64/machine/in_cksum.h>
 
+extern bool opt_maxnic;
+extern int maxnic;
+
 using namespace memory;
 
 namespace vmw {
@@ -417,6 +420,10 @@ void vmxnet3::fill_driver_shared()
 
 hw_driver* vmxnet3::probe(hw_device* dev)
 {
+    if (opt_maxnic) {
+        if (maxnic-- <= 0)
+            return nullptr;
+    }
     try {
         if (auto pci_dev = dynamic_cast<pci::device*>(dev)) {
             pci_dev->dump_config();

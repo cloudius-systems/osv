@@ -136,6 +136,8 @@ static std::string opt_defaultgw;
 static std::string opt_nameserver;
 static std::chrono::nanoseconds boot_delay;
 bool opt_assign_net = false;
+bool opt_maxnic = false;
+int maxnic;
 
 static int sampler_frequency;
 static bool opt_enable_sampler = false;
@@ -165,6 +167,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("nomount", "don't mount the ZFS file system")
         ("nopivot", "do not pivot the root from bootfs to the ZFS")
         ("assign-net", "assign virtio network to the application")
+        ("maxnic", bpo::value<int>(), "maximum NIC number")
         ("norandom", "don't initialize any random device")
         ("noshutdown", "continue running after main() returns")
 	("power-off-on-abort", "use poweroff instead of halt if it's aborted")
@@ -210,6 +213,11 @@ std::tuple<int, char**> parse_options(int ac, char** av)
 
     if (vars.count("assign-net")) {
         opt_assign_net = true;
+    }
+
+    if (vars.count("maxnic")) {
+        opt_maxnic = true;
+        maxnic = vars["maxnic"].as<int>();
     }
 
     if (vars.count("trace-backtrace")) {

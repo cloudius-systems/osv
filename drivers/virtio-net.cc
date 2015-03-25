@@ -58,6 +58,9 @@ using namespace memory;
 // tx zero copy
 // vlans?
 
+extern bool opt_maxnic;
+extern int maxnic;
+
 namespace virtio {
 
 int net::_instance = 0;
@@ -853,6 +856,10 @@ u32 net::get_driver_features()
 
 hw_driver* net::probe(hw_device* dev)
 {
+    if (opt_maxnic) {
+        if (maxnic-- <= 0)
+            return nullptr;
+    }
     return virtio::probe<net, VIRTIO_NET_DEVICE_ID>(dev);
 }
 
