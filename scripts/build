@@ -1,0 +1,125 @@
+#!/usr/bin/bash
+# This script replaces our old "make" command line - instead of
+# "make mode=debug image=rogue", use "build mode=debug image=rogue".
+# This first runs "make" with the same parameters, and then builds
+# the requested image.
+
+set -e
+
+# Pass to "make" all the given args except "image=..." or "module=..."
+declare -a args
+for i
+do
+	case $i in
+	image=*|module=*|check) ;;
+	*)	# yuck... Is there a prettier way to append to array?
+		args[${#args[@]}]="$i" ;;
+	esac
+done
+make "${args[@]}" | tee build.out
+
+for i
+do
+	case $i in
+	clean)	# "build clean" is like "make clean" to clean the kernel,
+		# plus additional cleanups of all modules.
+		set -x
+		OSV_BASE=`pwd` ./scripts/module.py clean -q
+		exit;;
+	esac
+done
+
+# Find out where "make" decided to put its compilation results. We'll
+# put the images in the same place
+OUT=`awk < build.out '/^Building into / { print $3; exit }'`
+if ! test -d $OUT || ! test -f $OUT/loader.img
+then
+	echo "Can't figure out where 'make' left results..." >&2
+	exit 2
+fi
+
+# Look for arguments that look like "name=value", and set them in an
+# assoative array "vars".
+declare -A vars
+j_arg=
+for i
+do
+	case $i in
+	*=*)	name=${i%%=*}
+		value=${i#*=}
+		vars[$name]=$value;;
+	-j*)	j_arg=$i;;
+	check)	# "build check" is a shortcut for
+		# "build image=tests; scripts/test.py"
+		vars[image]=tests;;
+	esac
+done
+
+img_format=${vars[img_format]-qcow2}
+# fs_size_mb is in megabytes (1024*1024 bytes)
+fs_size_mb=${vars[fs_size_mb]-10240}
+# fs_size is in bytes
+fs_size=${vars[fs_size]-$(($fs_size_mb*1024*1024))}
+# size must be a multiple of 512. Round it down
+fs_size=$((fs_size - (fs_size & 511)))
+
+SRC=`pwd`
+arch=`expr $OUT : '.*\.\(.*\)'`
+
+# Set "modules" according to the image= or modules= paramters, or some
+# defaults (with same rules as in our old makefile)
+case $arch in
+aarch64) image=${vars[image]-uush};;
+*) image=${vars[image]-default};;
+esac
+modules=${vars[modules]-!$image}
+
+# TODO: some modules need these... Would be better if they wouldn't...
+jdkbase=`find $SRC/external/$arch/openjdk.bin/usr/lib/jvm -maxdepth 1 -type d -name 'java*'`
+gccbase=$SRC/external/$arch/gcc.bin
+glibcbase=$SRC/external/$arch/glibc.bin
+miscbase=$SRC/external/$arch/misc.bin
+
+loader_size=`stat --printf %s $OUT/loader.img`
+zfs_start=$(($loader_size+2097151 & ~2097151))
+zfs_size=$(($fs_size - $zfs_start))
+
+case $OUT in
+/*)	OSV_BUILD_PATH=$OUT;;
+*)	OSV_BUILD_PATH=`pwd`/$OUT;;
+esac
+
+jdkbase=$jdkbase ARCH=$arch OSV_BASE=$SRC OSV_BUILD_PATH=$OSV_BUILD_PATH scripts/module.py $j_arg build -c $modules
+
+# The python scripts called below assume the current directory is $OUT (as was
+# the case in our old build.mk).
+cd $OUT
+
+cp loader.img bare.raw
+$SRC/scripts/imgedit.py setpartition bare.raw 2 $zfs_start $zfs_size
+
+qemu-img convert -f raw -O $img_format bare.raw usr.img
+qemu-img resize usr.img ${fs_size}b >/dev/null 2>&1
+# TODO: This "bootfs.manifest" is a misonmer... It doesn't really set the
+# bootfs (this was done by the makefile) and will just be written to the
+# zfs. But it's kind of redundant that mkzfs.py uploads things to zfs, when
+# the upload_manifest.py call does this below. We should just drop this
+# upload part from mkzfs.py....
+# Moreover, it's redundant that module.py above created a bootfs.manifest which
+# includes bootfs.manifest.skel even if the module asked for nothing in
+# bootfs.manifest - why do we need those things (like cpiod.so)
+# in every image's ZFS? For capstan?
+$SRC/scripts/mkzfs.py -o usr.img -d usr.img.d -m bootfs.manifest
+
+$SRC/scripts/upload_manifest.py -o usr.img -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
+$SRC/scripts/imgedit.py setargs usr.img `cat cmdline`
+
+# Support "build check"
+for i
+do
+	case $i in
+	check)	set -x
+		cd $SRC
+		./scripts/test.py
+	esac
+done

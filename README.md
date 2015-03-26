@@ -84,10 +84,18 @@ Finally, build everything at once:
 make
 ```
 
-By default make creates image in qcow2 format. To change this pass format value via img_format variable, i.e.
+to build only the OSv kernel, or more usefully,
 
 ```
-make img_format=raw
+scripts/build
+```
+
+to build an image of the OSv kernel and the default application.
+
+By default build creates image in qcow2 format. To change this pass format value via img_format variable, i.e.
+
+```
+scripts/build img_format=raw
 ```
 
 By default make will use the static libraries and headers of gcc in external submodule. To change this pass `host` via *_env variables:
@@ -145,10 +153,10 @@ test invoke TCPExternalCommunication
 
 ```
 # Building and running a simple java application example
-$ make image=java-example
+$ scripts/build image=java-example
 $ scripts/run.py -e "java.so -cp /java-example Hello"
 
 # Running an ifconfig by explicit execution of ifconfig.so (compiled C++ code)
-$ make
+$ scripts/build
 $ sudo scripts/run.py -nv -e "/tools/ifconfig.so"
 ```

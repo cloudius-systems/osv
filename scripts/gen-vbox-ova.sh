@@ -3,7 +3,6 @@
 # Setup name and dir
 name=osv
 vmdir=~/VirtualBox\ VMs/$name
-vdi_img=build/release/osv.vdi
 ova_img=build/release/osv.ova
 
 # Stop vm
@@ -20,9 +19,8 @@ VBoxManage registervm "$vmdir/$name.vbox"
 # Setup mem
 VBoxManage modifyvm osv --memory 1024
 
+qemu-img convert -O vdi build/release/usr.img "$vmdir/$name.vdi"
 # Setup SATA controller
-make osv.vdi
-cp $vdi_img "$vmdir/$name.vdi"
 VBoxManage storagectl  $name  --name SATA --add sata --controller IntelAHCI
 VBoxManage storageattach  $name --storagectl SATA --port 0 --type hdd --medium "$vmdir/$name.vdi"
 
@@ -42,6 +40,6 @@ VBoxManage modifyvm $name  --uart1 0x3f8 4
 #VBoxManage modifyvm $name  --uartmode1 file "$vmdir/$name.log"
 
 # Export ova
-VBoxManage export osv -o build/release/osv.ova --ovf10 --vsys 0 --product "OSv" --vendor "Cloudius Systems"
+VBoxManage export $name -o build/release/osv.ova --ovf10 --vsys 0 --product "OSv" --vendor "Cloudius Systems"
 
 echo "$PWD/$ova_img is created"
