@@ -52,14 +52,31 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
 {
     switch (op & FUTEX_CMD_MASK) {
     case FUTEX_WAIT:
-        assert(timeout == 0);
         WITH_LOCK(queues_mutex) {
             if (*uaddr == val) {
                 waitqueue &q = queues[uaddr];
-                q.wait(queues_mutex);
+                if (timeout) {
+                    sched::timer tmr(*sched::thread::current());
+                    tmr.set(std::chrono::seconds(timeout->tv_sec) +
+                            std::chrono::nanoseconds(timeout->tv_nsec));
+                    sched::thread::wait_for(queues_mutex, tmr, q);
+                    // FIXME: testing if tmr was expired isn't quite right -
+                    // we could have had both a wakeup and timer expiration
+                    // racing. It would be more correct to check if we were
+                    // waken by a FUTEX_WAKE. But how?
+                    if (tmr.expired()) {
+                        errno = ETIMEDOUT;
+                        return -1;
+                    }
+                } else {
+                    q.wait(queues_mutex);
+                }
+                return 0;
+            } else {
+                errno = EWOULDBLOCK;
+                return -1;
             }
         }
-        return 0;
     case FUTEX_WAKE:
         if(val < 0) {
             errno = EINVAL;
