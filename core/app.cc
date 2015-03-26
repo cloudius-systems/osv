@@ -244,7 +244,14 @@ void application::run_main(std::string path, int argc, char** argv)
 
     std::unique_ptr<char []> argv_buf(new char[sz]);
     char *ab = argv_buf.get();
-    char *contig_argv[argc + 1];
+    // In Linux, the pointer arrays argv[] and envp[] are continguous.
+    // Unfortunately, some programs rely on this fact (e.g., libgo's
+    // runtime_goenvs_unix()) so it is useful that we do this too.
+    int envcount = 0;
+    while (environ[envcount]) {
+        envcount++;
+    }
+    char *contig_argv[argc + 1 + envcount + 1];
 
     for (int i = 0; i < argc; ++i) {
         size_t asize = strlen(argv[i]);
@@ -254,6 +261,11 @@ void application::run_main(std::string path, int argc, char** argv)
         ab += asize + 1;
     }
     contig_argv[argc] = nullptr;
+
+    for (int i = 0; i < envcount; i++) {
+        contig_argv[argc + 1 + i] = environ[i];
+    }
+    contig_argv[argc + 1 + envcount] = nullptr;
 
     // make sure to have a fresh optind across calls
     // FIXME: fails if run() is executed in parallel
