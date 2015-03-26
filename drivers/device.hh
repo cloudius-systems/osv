@@ -41,6 +41,8 @@ namespace hw {
 
 
     class hw_device {
+    private:
+        bool _attached = false;
     public:
         virtual ~hw_device() {};
 
@@ -52,6 +54,9 @@ namespace hw {
 
         // After calling reset the device should be in init state
         virtual void reset() = 0;
+
+        bool is_attached() { return _attached; }
+        void set_attached() { _attached = true; }
     };
 
 

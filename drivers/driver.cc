@@ -38,6 +38,7 @@ namespace hw {
         dm->for_each_device([this] (hw_device* dev) {
             for (auto probe : _probes) {
                 if (auto drv = probe(dev)) {
+                    dev->set_attached();
                     _drivers.push_back(drv);
                     break;
                 }
