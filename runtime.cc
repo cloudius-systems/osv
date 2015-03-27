@@ -73,7 +73,6 @@ extern "C" {
     void abort(void);
     void *malloc(size_t size);
     void free(void *);
-    void __stack_chk_fail(void);
     __locale_t __newlocale(int __category_mask, __const char *__locale,
 			   __locale_t __base) __THROW;
     int mallopt(int param, int value);
@@ -274,7 +273,9 @@ static struct __locale_struct c_locale = {
 locale_t __c_locale_ptr = &c_locale;
 
 void* __stack_chk_guard = reinterpret_cast<void*>(0x12345678abcdefull);
-UNIMPL(void __stack_chk_fail(void))
+extern "C" void __stack_chk_fail(void) {
+    abort("__stack_chk_fail(): Stack overflow detected. Aborting.\n");
+}
 
 namespace {
     bool all_categories(int category_mask)
