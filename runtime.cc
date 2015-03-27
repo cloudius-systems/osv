@@ -7,7 +7,7 @@
 
 #include <osv/sched.hh>
 #include <osv/elf.hh>
-#include <cstdlib>
+#include <stdlib.h>
 #include <cstring>
 #include <string.h>
 #include <exception>
@@ -61,24 +61,9 @@
 
 #define __LC_LAST 13
 
-typedef unsigned char __guard;
-
 #define __ALIAS(old, new) \
         __typeof(old) new __attribute__((alias(#old)))
 #define ALIAS(old, new) extern "C" __ALIAS(old, new)
-
-
-extern "C" {
-    void __cxa_pure_virtual(void);
-    void abort(void);
-    void *malloc(size_t size);
-    void free(void *);
-    __locale_t __newlocale(int __category_mask, __const char *__locale,
-			   __locale_t __base) __THROW;
-    int mallopt(int param, int value);
-    FILE *popen(const char *command, const char *type);
-    int pclose(FILE *stream);
-}
 
 void *__dso_handle;
 
@@ -296,6 +281,7 @@ struct __locale_data {
 #define _NL_CTYPE_TOUPPER 1
 #define _NL_CTYPE_TOLOWER 3
 
+extern "C"
 __locale_t __newlocale(int category_mask, const char *locale, locale_t base)
     __THROW
 {
@@ -380,7 +366,7 @@ int mallopt(int param, int value)
 
 FILE *popen(const char *command, const char *type)
 {
-    debug("popen not implemented\n");
+    WARN_STUBBED();
     return NULL;
 }
 
