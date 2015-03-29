@@ -113,6 +113,9 @@ all: $(out)/loader.img $(java-targets)
 	$(call very-quiet, ln -nsf $(notdir $(out)) $(outlink))
 .PHONY: all
 
+check:
+	./scripts/build check
+.PHONY: check
 
 # Remember that "make clean" needs the same parameters that set $(out) in
 # the first place, so to clean the output of "make mode=debug" you need to
