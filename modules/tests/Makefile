@@ -60,7 +60,7 @@ tests := tst-pthread.so tst-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-sendfile.so misc-lock-perf.so tst-uio.so tst-printf.so \
 	tst-pthread-affinity.so tst-pthread-tsd.so tst-thread-local.so \
 	tst-zfs-mount.so tst-regex.so tst-tcp-siocoutq.so \
-	libtls.so tst-tls.so tst-select-timeout.cc
+	libtls.so tst-tls.so tst-select-timeout.so
 
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
