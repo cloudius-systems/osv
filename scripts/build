@@ -6,12 +6,19 @@
 
 set -e
 
+# If "MAKEFLAGS" is set, we've been run from "make". The following hacks
+# allows our Makefile to forward "make image=..." requests to to us
+# without running into an infinite loop when we call "make".
+MAKEFLAGS=${MAKEFLAGS/ image=/ zzz=}
+MAKEFLAGS=${MAKEFLAGS/ modules=/ zzz=}
+unset image modules
+
 # Pass to "make" all the given args except "image=..." or "module=..."
 declare -a args
 for i
 do
 	case $i in
-	image=*|module=*|check) ;;
+	image=*|modules=*|check) ;;
 	*)	# yuck... Is there a prettier way to append to array?
 		args[${#args[@]}]="$i" ;;
 	esac

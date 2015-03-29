@@ -19,11 +19,21 @@
 .DELETE_ON_ERROR:
 ###########################################################################
 ifdef image
-$(error Please use scripts/build to build images)
+#$(error Please use scripts/build to build images)
+$(info "make image=..." deprecated. Please use "scripts/build image=...".)
 endif
-ifdef module
-$(error Please use scripts/build to build images)
+ifdef modules
+#$(error Please use scripts/build to build images)
+$(info "make modules=..." deprecated. Please use "scripts/build modules=...".)
 endif
+
+# Ugly hack to support the old "make ... image=..." image building syntax, and
+# pass it into scripts/build. We should eventually get rid of this, and turn
+# the above deprecated messages into errors.
+ugly_backward_compatibility_hack: all
+	@test -n "$(image)" &&  ./scripts/build image=$(image) || :
+	@test -n "$(modules)" &&  ./scripts/build modules=$(modules) || :
+
 ###########################################################################
 
 include conf/base.mk
