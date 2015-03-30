@@ -44,10 +44,9 @@ include conf/$(mode).mk
 # environment variable.
 HOST_CXX := g++
 
-detect_arch = $(word 1, $(shell echo -e \
-                               "x64        __x86_64__\n"  \
-                               "aarch64    __aarch64__\n" \
-                       | $1 -E -xc - | grep ' 1$$'))
+detect_arch = $(word 1, $(shell { echo "x64        __x86_64__";  \
+                                  echo "aarch64    __aarch64__"; \
+                       } | $1 -E -xc - | grep ' 1$$'))
 
 host_arch := $(call detect_arch, $(HOST_CXX))
 
