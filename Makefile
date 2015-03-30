@@ -94,6 +94,7 @@ OBJCOPY=$(CROSS_PREFIX)objcopy
 # one fell swoop.
 out = build/$(mode).$(arch)
 outlink = build/$(mode)
+outlink2 = build/last
 
 ifneq ($(MAKECMDGOALS),clean)
 $(info Building into $(out))
@@ -120,6 +121,7 @@ endif
 
 all: $(out)/loader.img $(java-targets)
 	$(call very-quiet, ln -nsf $(notdir $(out)) $(outlink))
+	$(call very-quiet, ln -nsf $(notdir $(out)) $(outlink2))
 .PHONY: all
 
 check:
@@ -131,7 +133,7 @@ check:
 # do "make mode=debug clean".
 clean:
 	rm -rf $(out)
-	rm -f $(outlink)
+	rm -f $(outlink) $(outlink2)
 .PHONY: clean
 
 # Manually listing recompilation dependencies in the Makefile (such as which
