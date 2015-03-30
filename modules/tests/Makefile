@@ -30,11 +30,14 @@ COMMON = $(autodepend) $(INCLUDES) -g -O2 -fPIC -DBOOST_TEST_DYN_LINK \
 	-U _FORTIFY_SOURCE -D_KERNEL -D__OSV__ -DCONF_debug_memory=0 \
 	-Wall -Wno-pointer-arith -Wformat=0 -Wno-format-security
 
+LIBS =
+
 CXXFLAGS = -std=gnu++11 $(COMMON)
 CFLAGS = -std=gnu99 $(COMMON)
 
 # The following are rules for making a .so from .c or .cc. We could have
-# done the compilation from .c to .so directly, without an intermediate file,
+# done the compilation from .c to .so directly, in one step without an
+# intermediate file (which needs to stay behind, as explained above).
 # but this prevents "ccache" from working - because it doesn't cache results
 # of linking. So with the intermediate step, the (slow) compilation result is
 # cached, and just the (fast) linking is redone. This intermediate step
@@ -47,7 +50,7 @@ $(out)/%.o: $(src)/%.c
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $< , CC $*.c)
 $(out)/%.so: $(out)/%.o
-	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $< , LD $*.so)
+	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $< $(LIBS), LD $*.so)
 
 tests := tst-pthread.so tst-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	misc-bsd-callout.so tst-bsd-kthread.so tst-bsd-taskqueue.so \
@@ -102,7 +105,7 @@ boost-tests := tst-rename.so tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	tst-seek.so
 
 BOOSTLIBS=$(src)/external/$(ARCH)/misc.bin/usr/lib64
-$(boost-tests:%=$(out)/tests/%): \
+$(boost-tests:%=$(out)/tests/%): LIBS += \
 	 $(BOOSTLIBS)/libboost_unit_test_framework.so \
 	 $(BOOSTLIBS)/libboost_filesystem.so
 
