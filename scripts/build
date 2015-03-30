@@ -1,4 +1,4 @@
-#!/usr/bin/bash
+#!/usr/bin/env bash
 # This script replaces our old "make" command line - instead of
 # "make mode=debug image=rogue", use "build mode=debug image=rogue".
 # This first runs "make" with the same parameters, and then builds
