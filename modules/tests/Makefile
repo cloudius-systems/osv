@@ -28,11 +28,11 @@ CFLAGS = -std=gnu99 $(COMMON)
 
 $(out)/%.so: $(src)/%.cc
 	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $^, CXX $*.cc)
+	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $<, CXX $*.cc)
 
 $(out)/%.so: $(src)/%.c
 	$(makedir)
-	$(call quiet, $(CC) $(CFLAGS) -shared -o $@ $^, CC $*.c)
+	$(call quiet, $(CC) $(CFLAGS) -shared -o $@ $<, CC $*.c)
 
 tests := tst-pthread.so tst-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	misc-bsd-callout.so tst-bsd-kthread.so tst-bsd-taskqueue.so \
@@ -60,7 +60,8 @@ tests := tst-pthread.so tst-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-sendfile.so misc-lock-perf.so tst-uio.so tst-printf.so \
 	tst-pthread-affinity.so tst-pthread-tsd.so tst-thread-local.so \
 	tst-zfs-mount.so tst-regex.so tst-tcp-siocoutq.so \
-	libtls.so tst-tls.so tst-select-timeout.so
+	libtls.so tst-tls.so tst-select-timeout.so tst-bzero.so \
+	tst-inherited.so tst-date.so
 
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
