@@ -164,13 +164,8 @@ def build(args):
             module_names +=  config["default"]
         module_names += selected_modules
         module_names = [i for i in module_names if not i in disabled_modules]
-
-        # The user may ask to disable a module which wasn't in the explicit or
-        # default list of enabled modules. In this case, tell the module
-        # resolver to override any request to "require" it.
-        if disabled_modules - set(module_names):
-            print("Warning: some disabled modules were not requested. Avoiding requiring them.");
-        resolve.do_not_require(disabled_modules - set(module_names))
+        for missing in list(disabled_modules - set(module_names)):
+             raise Exception("Attempt to disable module %s but not enabled" % missing)
 
         for module in module_names:
             if module[0] == '-':
