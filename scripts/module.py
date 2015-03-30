@@ -86,16 +86,18 @@ def get_command_line(basic_apps):
     args = [format_args(app.get_launcher_args()) for app in basic_apps]
     return '&'.join((a for a in args if a))
 
-def make_cmd(cmdline, jobserver):
+def make_cmd(cmdline, j, jobserver):
     ret = 'make ' + cmdline
     if jobserver is not None:
         ret += ' -j --jobserver-fds=' + jobserver
+    elif j is not None:
+        ret += ' -j' + j
     return ret
 
 def make_modules(modules, args):
     for module in modules:
         if os.path.exists(os.path.join(module.local_path, 'Makefile')):
-            if subprocess.call(make_cmd('module', jobserver = args.jobserver_fds),
+            if subprocess.call(make_cmd('module', j=args.j, jobserver = args.jobserver_fds),
                                shell=True, cwd=module.local_path):
                 raise Exception('make failed for ' + module.name)
 
@@ -161,9 +163,14 @@ def build(args):
         if add_default and "default" in config:
             module_names +=  config["default"]
         module_names += selected_modules
-        for missing in list(disabled_modules - set(module_names)):
-            raise Exception("Attempt to disable module %s but not enabled" % missing)
         module_names = [i for i in module_names if not i in disabled_modules]
+
+        # The user may ask to disable a module which wasn't in the explicit or
+        # default list of enabled modules. In this case, tell the module
+        # resolver to override any request to "require" it.
+        if disabled_modules - set(module_names):
+            print("Warning: some disabled modules were not requested. Avoiding requiring them.");
+        resolve.do_not_require(disabled_modules - set(module_names))
 
         for module in module_names:
             if module[0] == '-':
@@ -208,9 +215,9 @@ def clean(args):
         if os.path.exists(os.path.join(local_path, 'Makefile')):
             if not args.quiet:
                 print('Cleaning ' + local_path + ' ...')
-            if subprocess.call(make_cmd('-q clean', jobserver = args.jobserver_fds),
+            if subprocess.call(make_cmd('-q clean', j = args.j, jobserver = args.jobserver_fds),
                                shell=True, cwd=local_path, stderr=subprocess.PIPE, **extra_args) != 2:
-                if subprocess.call(make_cmd('clean', jobserver = args.jobserver_fds),
+                if subprocess.call(make_cmd('clean', j = args.j, jobserver = args.jobserver_fds),
                                    shell=True, cwd=local_path, **extra_args):
                     raise Exception('\'make clean\' failed in ' + local_path)
 
@@ -220,7 +227,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='module.py')
     parser.add_argument('--jobserver-fds', action = 'store', default = None,
                         help = 'make -j support')
-    parser.add_argument('-j', action = 'store_true', default = None,
+    parser.add_argument('-j', action = 'store', default = None,
                         help = 'make -j support')
     subparsers = parser.add_subparsers(help="Command")
 
