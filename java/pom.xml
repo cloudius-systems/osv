@@ -19,6 +19,7 @@
         <module>tests</module>
         <module>tests-isolates</module>
         <module>tests-jre-extension</module>
+        <module>jolokia-agent</module>
     </modules>
 
     <dependencies>
