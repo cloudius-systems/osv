@@ -4,7 +4,7 @@
 # This first runs "make" with the same parameters, and then builds
 # the requested image.
 
-set -e
+trap 'echo "$0 failed: $BASH_COMMAND" >&2; exit $?' ERR
 
 # If "MAKEFLAGS" is set, we've been run from "make". The following hacks
 # allows our Makefile to forward "make image=..." requests to to us
@@ -62,7 +62,6 @@ do
 	esac
 done
 
-img_format=${vars[img_format]-qcow2}
 # fs_size_mb is in megabytes (1024*1024 bytes)
 fs_size_mb=${vars[fs_size_mb]-10240}
 # fs_size is in bytes
@@ -105,7 +104,7 @@ cd $OUT
 cp loader.img bare.raw
 $SRC/scripts/imgedit.py setpartition bare.raw 2 $zfs_start $zfs_size
 
-qemu-img convert -f raw -O $img_format bare.raw usr.img
+qemu-img convert -f raw -O qcow2 bare.raw usr.img
 qemu-img resize usr.img ${fs_size}b >/dev/null 2>&1
 # TODO: This "bootfs.manifest" is a misonmer... It doesn't really set the
 # bootfs (this was done by the makefile) and will just be written to the
