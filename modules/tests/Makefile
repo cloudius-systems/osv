@@ -8,6 +8,13 @@ arch := $(ARCH)
 # TODO: need to set up CXX, etc., for cross compilation, as in the main
 # Makefile...
 
+# Ask make to not delete "intermediate" results, such as the .o in the chain
+# .cc -> .o -> .so. Otherwise, during the first build, make considers the .o
+# to be intermediate, and deletes it, but the newly-created ".d" files lists
+# the ".o" as a target - so it needs to be created again on the second make.
+# See commit fac05c95 for a longer explanation.
+.SECONDARY:
+
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
 makedir = $(call very-quiet, mkdir -p $(dir $@))
@@ -26,13 +33,21 @@ COMMON = $(autodepend) $(INCLUDES) -g -O2 -fPIC -DBOOST_TEST_DYN_LINK \
 CXXFLAGS = -std=gnu++11 $(COMMON)
 CFLAGS = -std=gnu99 $(COMMON)
 
-$(out)/%.so: $(src)/%.cc
+# The following are rules for making a .so from .c or .cc. We could have
+# done the compilation from .c to .so directly, without an intermediate file,
+# but this prevents "ccache" from working - because it doesn't cache results
+# of linking. So with the intermediate step, the (slow) compilation result is
+# cached, and just the (fast) linking is redone. This intermediate step
+# speeds up "make clean; scripts/build image=tests" from 1:40 minutes to
+# just 32 seconds.
+$(out)/%.o: $(src)/%.cc
 	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $<, CXX $*.cc)
-
-$(out)/%.so: $(src)/%.c
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+$(out)/%.o: $(src)/%.c
 	$(makedir)
-	$(call quiet, $(CC) $(CFLAGS) -shared -o $@ $<, CC $*.c)
+	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $< , CC $*.c)
+$(out)/%.so: $(out)/%.o
+	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $< , LD $*.so)
 
 tests := tst-pthread.so tst-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	misc-bsd-callout.so tst-bsd-kthread.so tst-bsd-taskqueue.so \
