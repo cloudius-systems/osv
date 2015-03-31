@@ -37,13 +37,13 @@ do
 done
 
 # Find out where "make" decided to put its compilation results. We'll
-# put the images in the same place
-OUT=`awk < build.out '/^Building into / { print $3; exit }'`
-if ! test -d $OUT || ! test -f $OUT/loader.img
+# put the images in the same place.
+if test ! -L build/last -o ! -f build/last/loader.img
 then
-	echo "Can't figure out where 'make' left results..." >&2
+	echo "'make' did not leave expected results" >&2
 	exit 2
 fi
+OUT=`realpath --relative-base=. build/last`
 
 # Look for arguments that look like "name=value", and set them in an
 # assoative array "vars".
