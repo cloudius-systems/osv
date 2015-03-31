@@ -81,10 +81,10 @@ esac
 modules=${vars[modules]-!$image}
 
 # TODO: some modules need these... Would be better if they wouldn't...
-jdkbase=`find $SRC/external/$arch/openjdk.bin/usr/lib/jvm -maxdepth 1 -type d -name 'java*'`
-gccbase=$SRC/external/$arch/gcc.bin
-glibcbase=$SRC/external/$arch/glibc.bin
-miscbase=$SRC/external/$arch/misc.bin
+jdkbase=${vars[jdkbase]-`find $SRC/external/$arch/openjdk.bin/usr/lib/jvm -maxdepth 1 -type d -name 'java*'`}
+gccbase=${vars[gccbase]-$SRC/external/$arch/gcc.bin}
+glibcbase=${vars[glibcbase]-$SRC/external/$arch/glibc.bin}
+miscbase=${vars[miscbase]-$SRC/external/$arch/misc.bin}
 
 loader_size=`stat --printf %s $OUT/loader.img`
 zfs_start=$(($loader_size+2097151 & ~2097151))
