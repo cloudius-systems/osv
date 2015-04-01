@@ -975,7 +975,6 @@ libc += locale/iswxdigit_l.o
 libc += locale/isxdigit_l.o
 libc += locale/langinfo.o
 musl += locale/localeconv.o
-#libc += locale/newlocale.o
 libc += locale/nl_langinfo_l.o
 libc += locale/setlocale.o
 musl += locale/strcasecmp_l.o
