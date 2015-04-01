@@ -22,7 +22,7 @@ vboximage=build/release/usr.vdi
 gceimage=build/release/osv.tar.gz
 vmwimage=build/release/usr.vmdk
 index=$out/index.yaml
-build="make image=$image"
+build="scripts/build image=$image"
 
 mkdir -p $out
 

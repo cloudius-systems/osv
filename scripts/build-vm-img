@@ -6,7 +6,7 @@ name=$1
 image=$2
 description=$3
 out=build/standalone/$name
-build="make image=$image"
+build="scripts/build image=$image"
 
 function usage()
 {
@@ -47,7 +47,7 @@ format=tar.gz
 mv $img $out/$(basename $name)-$version.gce.tar.gz
 
 ### Image for VMware Workstation
-make osv.vmdk >/dev/null
+scripts/convert vmdk
 scripts/gen-vmx.sh
 cd build/release
 zip osv-vmw.zip osv.vmx osv.vmdk >/dev/null
