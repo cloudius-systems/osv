@@ -347,22 +347,22 @@ tools := tools/mkfs/mkfs.so tools/cpiod/cpiod.so
 
 $(out)/tools/%.o: COMMON += -fPIC
 
-#tools := tools/ifconfig/ifconfig.so
-#tools += tools/route/lsroute.so
-#tools += tools/uush/uush.so
-#tools += tools/uush/ls.so
-#tools += tools/uush/mkdir.so
+# TODO: The "ifconfig" and "lsroute" programs are only needed for the mgmt
+# module... Better move it out of the OSv core...
+tools += tools/ifconfig/ifconfig.so
+tools += tools/route/lsroute.so
+$(out)/tools/route/lsroute.so: EXTRA_LIBS = -L$(out)/tools/ -ltools
+$(out)/tools/route/lsroute.so: $(out)/tools/libtools.so
+$(out)/tools/ifconfig/ifconfig.so: EXTRA_LIBS = -L$(out)/tools/ -ltools
+$(out)/tools/ifconfig/ifconfig.so: $(out)/tools/libtools.so
+
+tools += tools/uush/uush.so
+tools += tools/uush/ls.so
+tools += tools/uush/mkdir.so
+
 # TODO: we only need this libtools for the httpserver module... Better
 # move it to its own module, it shouldn't be in the OSv core...
 tools += tools/libtools.so
-#
-#$(out)/tools/route/lsroute.so: EXTRA_LIBS = -Ltools/ -ltools
-#
-#$(out)/tools/route/lsroute.so: $(out)/tools/libtools.so
-#
-#$(OUT)/tools/ifconfig/ifconfig.so: EXTRA_LIBS = -Ltools/ -ltools
-#
-#$(OUT)/tools/ifconfig/ifconfig.so: $(out)/tools/libtools.so
 
 ifeq ($(arch),aarch64)
 # note that the bootfs.manifest entry for the uush image
