@@ -6,27 +6,27 @@
 trap 'echo "$0 failed: $BASH_COMMAND" >&2; exit $?' ERR
 
 # We assume "scripts/build" has already been run successfully
-DIR=build/last
+DIR=build/`readlink build/last`
 INPUT=$DIR/usr.img
 if test ! -f $INPUT
 then
     echo "$INPUT not found. Please build an image with scripts/build first."
 fi
 
-echo "Input image: `realpath --relative-base=. $INPUT`"
+echo "Input image: $INPUT"
 
 case $1 in
 "")     echo "Usage: $0 <image-type>" >&2
         exit 1;;
 vmdk)   OUTPUT=$DIR/osv.vmdk
         qemu-img convert -O vmdk $INPUT $OUTPUT
-        echo "Created image: `realpath --relative-base=. $OUTPUT`";;
+        echo "Created image: $OUTPUT";;
 vdi)    OUTPUT=$DIR/osv.vdi
         qemu-img convert -O vdi $INPUT $OUTPUT
-        echo "Created image: `realpath --relative-base=. $OUTPUT`";;
+        echo "Created image: $OUTPUT";;
 raw)    OUTPUT=$DIR/osv.raw
         qemu-img convert -O raw $INPUT $OUTPUT
-        echo "Created image: `realpath --relative-base=. $OUTPUT`";;
+        echo "Created image: $OUTPUT";;
 *)      echo "Unsupported image type '$1'. Supported types: vmdk, vdi, raw." >&2
         exit 1;;
 esac

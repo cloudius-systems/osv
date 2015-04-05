@@ -43,7 +43,7 @@ then
 	echo "'make' did not leave expected results" >&2
 	exit 2
 fi
-OUT=`realpath --relative-base=. build/last`
+OUT=build/`readlink build/last`
 
 # Look for arguments that look like "name=value", and set them in an
 # assoative array "vars".
