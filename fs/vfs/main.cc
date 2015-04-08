@@ -1481,6 +1481,43 @@ int access(const char *pathname, int mode)
     return -1;
 }
 
+int faccessat(int dirfd, const char *pathname, int mode, int flags)
+{
+    if (flags & AT_SYMLINK_NOFOLLOW) {
+        UNIMPLEMENTED("faccessat() with AT_SYMLINK_NOFOLLOW");
+    }
+
+    if (pathname[0] == '/' || dirfd == AT_FDCWD) {
+        return access(pathname, mode);
+    }
+
+    struct file *fp;
+    int error = fget(dirfd, &fp);
+    if (error) {
+        errno = error;
+        return -1;
+    }
+
+    struct vnode *vp = fp->f_dentry->d_vnode;
+    vn_lock(vp);
+
+    std::unique_ptr<char []> up (new char[PATH_MAX]);
+    char *p = up.get();
+
+    /* build absolute path */
+    strlcpy(p, fp->f_dentry->d_mount->m_path, PATH_MAX);
+    strlcat(p, fp->f_dentry->d_path, PATH_MAX);
+    strlcat(p, "/", PATH_MAX);
+    strlcat(p, pathname, PATH_MAX);
+
+    error = access(p, mode);
+
+    vn_unlock(vp);
+    fdrop(fp);
+
+    return error;
+}
+
 extern "C" 
 int euidaccess(const char *pathname, int mode)
 {
