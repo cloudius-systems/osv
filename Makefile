@@ -1614,6 +1614,7 @@ libc += syslog.o
 libc += cxa_thread_atexit.o
 libc += cpu_set.o
 libc += malloc_hooks.o
+libc += mallopt.o
 
 libc += linux/makedev.o
 
