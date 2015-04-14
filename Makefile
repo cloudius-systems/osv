@@ -705,6 +705,7 @@ solaris += $(zfs)
 
 $(zfs:%=$(out)/%): CFLAGS+= \
 	-DBUILDING_ZFS \
+	-Wno-array-bounds \
 	-Ibsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs \
 	-Ibsd/sys/cddl/contrib/opensolaris/common/zfs
 
