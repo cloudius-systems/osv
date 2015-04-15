@@ -672,6 +672,11 @@ int pthread_setcanceltype(int state, int *oldstate)
     return 0;
 }
 
+void pthread_testcancel(void)
+{
+   WARN_STUBBED();
+}
+
 int pthread_once(pthread_once_t *once_control, void (*init_routine)(void))
 {
     // In Linux (the target ABI we're trying to emulate, PTHREAD_ONCE_INIT
