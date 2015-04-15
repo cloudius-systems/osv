@@ -359,11 +359,6 @@ size_t confstr(int name, char* buf, size_t len)
     abort();
 }
 
-int mallopt(int param, int value)
-{
-    return 0;
-}
-
 FILE *popen(const char *command, const char *type)
 {
     WARN_STUBBED();

@@ -705,6 +705,7 @@ solaris += $(zfs)
 
 $(zfs:%=$(out)/%): CFLAGS+= \
 	-DBUILDING_ZFS \
+	-Wno-array-bounds \
 	-Ibsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs \
 	-Ibsd/sys/cddl/contrib/opensolaris/common/zfs
 
@@ -1613,6 +1614,8 @@ libc += __read_chk.o
 libc += syslog.o
 libc += cxa_thread_atexit.o
 libc += cpu_set.o
+libc += malloc_hooks.o
+libc += mallopt.o
 
 libc += linux/makedev.o
 

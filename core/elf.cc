@@ -553,7 +553,8 @@ symbol_module object::symbol(unsigned idx)
         return symbol_module(sym, this);
     }
     if (!ret.symbol) {
-        abort("Failed looking up symbol %s\n", demangle(name).c_str());
+        abort("%s: failed looking up symbol %s\n",
+                pathname().c_str(), demangle(name).c_str());
     }
     return ret;
 }
