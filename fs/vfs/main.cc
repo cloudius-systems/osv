@@ -580,6 +580,59 @@ int fstat(int fd, struct stat *st)
 
 LFS64(fstat);
 
+extern "C"
+int __fxstatat(int ver, int dirfd, const char *pathname, struct stat *st,
+        int flags)
+{
+    if (flags & AT_SYMLINK_NOFOLLOW) {
+        UNIMPLEMENTED("fstatat() with AT_SYMLINK_NOFOLLOW");
+    }
+
+    if (pathname[0] == '/' || dirfd == AT_FDCWD) {
+        return stat(pathname, st);
+    }
+    // If AT_EMPTY_PATH and pathname is an empty string, fstatat() operates on
+    // dirfd itself, and in that case it doesn't have to be a directory.
+    if ((flags & AT_EMPTY_PATH) && !pathname[0]) {
+        return fstat(dirfd, st);
+    }
+
+    struct file *fp;
+    int error = fget(dirfd, &fp);
+    if (error) {
+        errno = error;
+        return -1;
+    }
+
+    struct vnode *vp = fp->f_dentry->d_vnode;
+    vn_lock(vp);
+
+    std::unique_ptr<char []> up (new char[PATH_MAX]);
+    char *p = up.get();
+    /* build absolute path */
+    strlcpy(p, fp->f_dentry->d_mount->m_path, PATH_MAX);
+    strlcat(p, fp->f_dentry->d_path, PATH_MAX);
+    strlcat(p, "/", PATH_MAX);
+    strlcat(p, pathname, PATH_MAX);
+
+    error = stat(p, st);
+
+    vn_unlock(vp);
+    fdrop(fp);
+
+    return error;
+}
+
+LFS64(__fxstatat);
+
+extern "C"
+int fstatat(int dirfd, const char *path, struct stat *st, int flags)
+{
+    return __fxstatat(1, dirfd, path, st, flags);
+}
+
+LFS64(fstatat);
+
 extern "C" int flock(int fd, int operation)
 {
     if (!fileref_from_fd(fd)) {
