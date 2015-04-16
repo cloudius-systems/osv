@@ -141,7 +141,7 @@ $(solaris-tests:%=$(out)/tests/%): COMMON+= \
 all_tests := $(tests:%=tests/%)
 
 # Automatically generate usr.manifest which includes all tests.
-usr.manifest: $(all_tests:%=$(out)/%) $(lastword $(MAKEFILE_LIST))
+usr.manifest: $(all_tests:%=$(out)/%) $(lastword $(MAKEFILE_LIST)) usr.manifest.skel
 	@echo "  generating modules/tests/usr.manifest"
 	@cat $@.skel > $@
 	@echo $(all_tests) | tr ' ' '\n' | awk '{print "/" $$0 ": ./" $$0}' >> $@
