@@ -187,13 +187,13 @@ int getpagesize()
 
 int vfork()
 {
-    debug("vfork stubbed\n");
+    WARN_STUBBED();
     return -1;
 }
 
 int fork()
 {
-    debug("fork stubbed\n");
+    WARN_STUBBED();
     return -1;
 }
 
