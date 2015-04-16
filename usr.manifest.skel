@@ -1,7 +1,7 @@
 [manifest]
 /usr/lib/libgcc_s.so.1: %(gccbase)s/lib64/libgcc_s.so.1
-/usr/lib/&/libboost_filesystem.so.1.54.0: %(miscbase)s/usr/lib64/&
-/usr/lib/&/libboost_regex.so.1.54.0: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libboost_filesystem.so.1.55.0: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libboost_regex.so.1.55.0: %(miscbase)s/usr/lib64/&
 /&/etc/hosts: ../../static/&
 /etc/mnttab: ->/proc/mounts
 /&/etc/fstab: ../../static/&
