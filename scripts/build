@@ -24,6 +24,12 @@ do
 	esac
 done
 make "${args[@]}" | tee build.out
+# check exit status of make
+if [ ${PIPESTATUS[0]} -ne 0 ]
+then
+    echo "make failed. Exiting from build script"
+    exit
+fi
 
 for i
 do
