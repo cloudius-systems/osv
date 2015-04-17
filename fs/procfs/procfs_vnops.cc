@@ -24,6 +24,8 @@
 #include <sys/resource.h>
 #include <mntent.h>
 
+#include "cpuid.hh"
+
 namespace procfs {
 
 using namespace std;
