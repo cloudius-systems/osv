@@ -185,10 +185,12 @@ ifeq ($(build_env), host)
     gcc_lib_env ?= host
     cxx_lib_env ?= host
     gcc_include_env ?= host
+    boost_env ?= host
 else
     gcc_lib_env ?= external
     cxx_lib_env ?= external
     gcc_include_env ?= external
+    boost_env ?= external
 endif
 
 
@@ -1698,11 +1700,21 @@ else
     libgcc_eh.a := $(shell find $(gccbase)/ -name libgcc_eh.a |  grep -v /32/)
 endif
 
-boost-lib-dir := $(firstword $(dir $(shell find $(miscbase)/ -name libboost_system*.a)))
-
-# link with -mt if present, else the base version (and hope it is multithreaded)
-
-boost-mt := $(if $(filter %-mt.a, $(wildcard $(boost-lib-dir)/*.a)),-mt)
+ifeq ($(boost_env), host)
+    # link with -mt if present, else the base version (and hope it is multithreaded)
+    boost-mt := -mt
+    boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system$(boost-mt).a))
+    ifeq ($(filter /%,$(boost-lib-dir)),)
+        boost-mt :=
+        boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system$(boost-mt).a))
+        ifeq ($(filter /%,$(boost-lib-dir)),)
+            $(error Error: libgcc_eh.a needs to be installed.)
+        endif
+    endif
+else
+    boost-lib-dir := $(firstword $(dir $(shell find $(miscbase)/ -name libboost_system*.a)))
+    boost-mt := $(if $(filter %-mt.a, $(wildcard $(boost-lib-dir)/*.a)),-mt)
+endif
 
 boost-libs := $(boost-lib-dir)/libboost_program_options$(boost-mt).a \
               $(boost-lib-dir)/libboost_system$(boost-mt).a
