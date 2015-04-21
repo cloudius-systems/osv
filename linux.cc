@@ -103,6 +103,42 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
     }
 }
 
+// We're not supposed to export the get_mempolicy() function, as this
+// function is not part of glibc (which OSv emulates), but part of a
+// separate library libnuma, which the user can simply load. libnuma's
+// implementation of get_mempolicy() calls syscall(__NR_get_mempolicy,...),
+// so this is what we need to expose, below.
+
+#define MPOL_DEFAULT 0
+#define MPOL_F_NODE         (1<<0)
+#define MPOL_F_ADDR         (1<<1)
+#define MPOL_F_MEMS_ALLOWED (1<<2)
+
+static long get_mempolicy(int *policy, unsigned long *nmask,
+        unsigned long maxnode, void *addr, int flags)
+{
+    // As OSv has no support for NUMA nodes, we do here the minimum possible,
+    // which is basically to return the same policy (MPOL_DEFAULT) and list
+    // of nodes (just node 0) no matter if the caller asked for the default
+    // policy, the allowed policy, or the policy for a specific address.
+    if ((flags & MPOL_F_NODE)) {
+        *policy = 0; // in this case, store a node id, not a policy
+        return 0;
+    }
+    if (policy) {
+        *policy = MPOL_DEFAULT;
+    }
+    if (nmask) {
+        if (maxnode < 1) {
+            errno = EINVAL;
+            return -1;
+        }
+        nmask[0] |= 1;
+    }
+    return 0;
+}
+
+
 #define SYSCALL0(fn) case (__NR_##fn): return fn()
 
 #define SYSCALL1(fn, __t1)                  \
@@ -157,6 +193,24 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
         return fn(arg1, arg2, arg3, arg4);      \
         } while (0)
 
+#define SYSCALL5(fn, __t1, __t2, __t3, __t4, __t5)    \
+        case (__NR_##fn): do {                  \
+        va_list args;                           \
+        __t1 arg1;                              \
+        __t2 arg2;                              \
+        __t3 arg3;                              \
+        __t4 arg4;                              \
+        __t5 arg5;                              \
+        va_start(args, number);                 \
+        arg1 = va_arg(args, __t1);              \
+        arg2 = va_arg(args, __t2);              \
+        arg3 = va_arg(args, __t3);              \
+        arg4 = va_arg(args, __t4);              \
+        arg5 = va_arg(args, __t5);              \
+        va_end(args);                           \
+        return fn(arg1, arg2, arg3, arg4, arg5);\
+        } while (0)
+
 #define SYSCALL6(fn, __t1, __t2, __t3, __t4, __t5, __t6)        \
         case (__NR_##fn): do {                                  \
         va_list args;                                           \
@@ -194,6 +248,7 @@ long syscall(long number, ...)
     SYSCALL4(epoll_ctl, int, int, int, struct epoll_event *);
     SYSCALL4(epoll_wait, int, struct epoll_event *, int, int);
     SYSCALL4(accept4, int, struct sockaddr *, socklen_t *, int);
+    SYSCALL5(get_mempolicy, int *, unsigned long *, unsigned long, void *, int);
     }
 
     abort("syscall(): unimplemented system call %d. Aborting.\n", number);
