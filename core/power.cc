@@ -62,8 +62,17 @@ void reboot(void)
 {
 #ifdef __x86_64__
     // It would be nice if AcpiReset() worked, but it doesn't seem to work
-    // (on qemu & kvm), so let's resort to brute force...
+    // (on qemu & kvm), so let's resort to other techniques, which appear
+    // to work. Hopefully one of them will work on any hypervisor.
+    // Method 1: "fast reset" via System Control Port A (port 0x92)
     processor::outb(1, 0x92);
+    // Method 2: Reset using the 8042 PS/2 Controller ("keyboard controller")
+    processor::outb(0xfe, 0x64);
+    // Method 3: Cause triple fault by loading a broken IDT and triggering an
+    // interrupt.
+    processor::lidt(processor::desc_ptr(0, 0));
+    __asm__ __volatile__("int3");
+    // If we're still here, none of the above methods worked...
     debug("osv::reboot() did not work :(\n");
 #else /* !__x86_64__ */
     // FIXME:
