@@ -139,6 +139,30 @@ static long get_mempolicy(int *policy, unsigned long *nmask,
 }
 
 
+// As explained in the sched_getaffinity(2) manual page, the interface of the
+// sched_getaffinity() function is slightly different than that of the actual
+// system call we need to implement here.
+#define __NR_sched_getaffinity_syscall __NR_sched_getaffinity
+static int sched_getaffinity_syscall(
+        pid_t pid, unsigned len, unsigned long *mask)
+{
+        int ret = sched_getaffinity(
+                pid, len, reinterpret_cast<cpu_set_t *>(mask));
+        if (ret == 0) {
+            // The Linux system call doesn't zero the entire len bytes of the
+            // given mask - it only sets up to the configured maximum number of
+            // CPUs (e.g., 64) and returns the amount of bytes it set at mask.
+            // We don't have this limitation (our sched_getaffinity() does zero
+            // the whole len), but some user code (e.g., libnuma's
+            // set_numa_max_cpu()) expect a reasonably low number to be
+            // returned, even when len is unrealistically high, so let's
+            // return a lower length too.
+            ret = std::min(len, sched::max_cpus / 8);
+        }
+        return ret;
+}
+
+
 #define SYSCALL0(fn) case (__NR_##fn): return fn()
 
 #define SYSCALL1(fn, __t1)                  \
@@ -249,6 +273,7 @@ long syscall(long number, ...)
     SYSCALL4(epoll_wait, int, struct epoll_event *, int, int);
     SYSCALL4(accept4, int, struct sockaddr *, socklen_t *, int);
     SYSCALL5(get_mempolicy, int *, unsigned long *, unsigned long, void *, int);
+    SYSCALL3(sched_getaffinity_syscall, pid_t, unsigned, unsigned long *);
     }
 
     abort("syscall(): unimplemented system call %d. Aborting.\n", number);
