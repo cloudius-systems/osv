@@ -18,6 +18,26 @@ class run(basic_app):
     def get_launcher_args(self):
         return self.cmdline
 
+class run_java_wrapper(basic_app):
+    def __init__(self, verbose=False, javasopath=None, configuration=None):
+        require('java')
+
+        if (configuration is None) or (len(configuration) <= 0):
+            raise ValueError("No configuration file provided")
+
+        args = ['/javawrapper.so']
+        if verbose:
+            args.append('-verbose')
+        
+        if (not (javasopath is None)) and (len(javasopath) > 0):
+            args.append('-javasopath')
+            args.append(javasopath)
+
+        args.append(configuration)
+        self.cmdline = ' '.join(args)
+
+    def get_launcher_args(self):
+        return self.cmdline
 
 class run_on_init(basic_app):
     next_sequence = 0

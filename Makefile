@@ -116,7 +116,8 @@ ifeq ($(arch),aarch64)
 java-targets :=
 else
 java-targets := $(out)/java/jvm/java.so $(out)/java/jni/balloon.so $(out)/java/jni/elf-loader.so $(out)/java/jni/networking.so \
-        $(out)/java/jni/stty.so $(out)/java/jni/tracepoint.so $(out)/java/jni/power.so $(out)/java/jni/monitor.so
+        $(out)/java/jni/stty.so $(out)/java/jni/tracepoint.so $(out)/java/jni/power.so $(out)/java/jni/monitor.so \
+        $(out)/java/wrapper/javawrapper.so
 endif
 
 all: $(out)/loader.img $(java-targets)
