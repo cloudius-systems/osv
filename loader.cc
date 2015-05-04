@@ -135,6 +135,7 @@ static bool opt_bootchart = false;
 static std::vector<std::string> opt_ip;
 static std::string opt_defaultgw;
 static std::string opt_nameserver;
+static std::string opt_redirect;
 static std::chrono::nanoseconds boot_delay;
 bool opt_assign_net = false;
 bool opt_maxnic = false;
@@ -182,6 +183,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("defaultgw", bpo::value<std::string>(), "set default gateway address")
         ("nameserver", bpo::value<std::string>(), "set nameserver address")
         ("delay", bpo::value<float>()->default_value(0), "delay in seconds before boot")
+        ("redirect", bpo::value<std::string>(), "redirect stdout and stderr to file")
     ;
     bpo::variables_map vars;
     // don't allow --foo bar (require --foo=bar) so we can find the first non-option
@@ -288,6 +290,10 @@ std::tuple<int, char**> parse_options(int ac, char** av)
 
     if (vars.count("nameserver")) {
         opt_nameserver = vars["nameserver"].as<std::string>();
+    }
+
+    if (vars.count("redirect")) {
+        opt_redirect = vars["redirect"].as<std::string>();
     }
 
     boot_delay = std::chrono::duration_cast<std::chrono::nanoseconds>(1_s * vars["delay"].as<float>());
@@ -437,6 +443,25 @@ void* do_main_thread(void *_main_args)
 
     if (opt_bootchart) {
         boot_time.print_chart();
+    }
+
+    if (!opt_redirect.empty()) {
+        // redirect stdout and stdin to the given file, instead of the console
+        // use ">>filename" to append, instead of replace, to a file.
+        bool append = (opt_redirect.substr(0, 2) == ">>");
+        auto fn = opt_redirect.substr(append ? 2 : 0);
+        int fd = open(fn.c_str(),
+                O_WRONLY | O_CREAT | (append ? 0 : O_TRUNC), 777);
+        if (fd < 0) {
+            perror("output redirection failed");
+        } else {
+            std::cout << (append ? "Appending" : "Writing") <<
+                    " stdout and stderr to " << fn << "\n";
+            close(1);
+            close(2);
+            dup(fd);
+            dup(fd);
+        }
     }
 
     auto commands = prepare_commands(std::get<0>(*main_args), std::get<1>(*main_args));
