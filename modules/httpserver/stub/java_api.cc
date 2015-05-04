@@ -5,7 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "java_api.hh"
+#include "jvm/java_api.hh"
 
 java_api* java_api::_instance = nullptr;
 using namespace std;

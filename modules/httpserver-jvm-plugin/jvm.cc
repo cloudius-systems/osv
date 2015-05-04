@@ -7,7 +7,7 @@
 
 #include "jvm.hh"
 #include "autogen/jvm.json.hh"
-#include "java_api.hh"
+#include "jvm/java_api.hh"
 #include <string>
 
 namespace httpserver {

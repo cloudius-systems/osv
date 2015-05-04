@@ -21,7 +21,7 @@
 #include <osv/hypervisor.hh>
 #include <osv/sched.hh>
 #include <osv/clock.hh>
-#include "java_api.hh"
+#include "jvm/java_api.hh"
 #include <osv/debug.hh>
 #include "yaml-cpp/yaml.h"
 

@@ -22,7 +22,7 @@
 #include <osv/error.h>
 #include <osv/trace.hh>
 #include <stack>
-#include "java/jvm_balloon.hh"
+#include "java/jvm/jvm_balloon.hh"
 #include <fs/fs.hh>
 #include <osv/file.h>
 #include "dump.hh"

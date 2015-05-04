@@ -1,6 +1,6 @@
 #include <jni.h>
 #include "monitor.hh"
-#include "java/jvm_balloon.hh"
+#include "java/jvm/jvm_balloon.hh"
 
 /*
  * Class:     io_osv_OSvGCMonitor
