@@ -22,6 +22,8 @@ cmd.main = function(args)
 
     if status == 404 then
       io.stderr:write(path .. ": File not found" .. "\n")
+    elseif status == 200 then
+      io.stderr:write(path .. ": Is a directory" .. "\n")
     else
       io.write(content, '\n')
     end
