@@ -1708,7 +1708,7 @@ ifeq ($(boost_env), host)
         boost-mt :=
         boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system$(boost-mt).a))
         ifeq ($(filter /%,$(boost-lib-dir)),)
-            $(error Error: libgcc_eh.a needs to be installed.)
+            $(error Error: libboost_system.a needs to be installed.)
         endif
     endif
 else
