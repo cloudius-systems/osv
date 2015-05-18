@@ -32,7 +32,7 @@ def start_server(path):
     try:
         os.chdir(path)
         handler = http.SimpleHTTPRequestHandler
-        server = SocketServer.TCPServer(("", port), handler,False)
+        server = SocketServer.TCPServer(("", port), handler, False)
         server.allow_reuse_address = True
         server.server_bind()
         server.server_activate()

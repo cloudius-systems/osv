@@ -36,7 +36,7 @@ if len(sys.argv) <= 2:
     sys.exit()
 
 
-tracepoint_names= sys.argv[2:]
+tracepoint_names = sys.argv[2:]
 
 period = 2.0  # How many seconds between refreshes
 

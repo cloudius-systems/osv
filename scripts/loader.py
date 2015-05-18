@@ -18,7 +18,8 @@ modules = os.path.join(osv_dir, 'modules')
 
 sys.path.append(os.path.join(osv_dir, 'scripts'))
 
-from osv.trace import Trace,Thread,TracePoint,BacktraceFormatter,format_time
+from osv.trace import (Trace, Thread, TracePoint, BacktraceFormatter,
+                       format_time)
 from osv import trace, debug
 
 virtio_driver_type = gdb.lookup_type('virtio::virtio_driver')
@@ -82,13 +83,13 @@ class syminfo_resolver(object):
         sal = gdb.find_pc_line(addr)
         filename = None
         line = None
-        try :
+        try:
             # prefer (filename:line),
             filename = sal.symtab.filename
             line = sal.line
-        except :
+        except:
             # but if can't get it, at least give the name of the object
-            if not infosym.startswith("No symbol matches") :
+            if not infosym.startswith("No symbol matches"):
                 filename = infosym[infosym.rfind("/")+1:].rstrip()
 
         if filename and filename.startswith('../../'):
@@ -207,7 +208,7 @@ def free_page_ranges():
             if addr == first_addr:
                 break
 
-def vma_list(node = None):
+def vma_list(node=None):
     if node == None:
         fpr = gdb.lookup_global_symbol('mmu::vma_list').value()
         p = fpr['tree_']['data_']['node_plus_pred_']
@@ -249,8 +250,8 @@ class osv_memory(gdb.Command):
         mmapmem = 0
         for vma in vma_list():
             start = ulong(vma['_range']['_start'])
-            end   = ulong(vma['_range']['_end'])
-            size  = ulong(end - start)
+            end = ulong(vma['_range']['_end'])
+            size = ulong(end - start)
             mmapmem += size
 
         memsize = gdb.parse_and_eval('memory::phys_mem_size')
@@ -539,10 +540,10 @@ class osv_mmap(gdb.Command):
     def invoke(self, arg, from_tty):
         for vma in vma_list():
             start = ulong(vma['_range']['_start'])
-            end   = ulong(vma['_range']['_end'])
-            flags =  flagstr(ulong(vma['_flags']))
-            perm =  permstr(ulong(vma['_perm']))
-            size  = '{:<16}'.format('[%s kB]' % (ulong(end - start)/1024))
+            end = ulong(vma['_range']['_end'])
+            flags = flagstr(ulong(vma['_flags']))
+            perm = permstr(ulong(vma['_perm']))
+            size = '{:<16}'.format('[%s kB]' % (ulong(end - start)/1024))
 
             if 'F' in flags:
                 file_vma = vma.cast(gdb.lookup_type('mmu::file_vma').pointer())
@@ -568,11 +569,11 @@ class osv_vma_find(gdb.Command):
             for vma in vmas:
                 vma_addr = ulong(vma)
                 start = ulong(vma['_range']['_start'])
-                end   = ulong(vma['_range']['_end'])
+                end = ulong(vma['_range']['_end'])
                 if start <= addr and end > addr:
-                    flags =  flagstr(ulong(vma['_flags']))
-                    perm =  permstr(ulong(vma['_perm']))
-                    size  = '{:<16}'.format('[%s kB]' % (ulong(end - start)/1024))
+                    flags = flagstr(ulong(vma['_flags']))
+                    perm = permstr(ulong(vma['_perm']))
+                    size = '{:<16}'.format('[%s kB]' % (ulong(end - start)/1024))
                     print('0x%016x -> vma 0x%016x' % (addr, vma_addr))
                     print('0x%016x 0x%016x %s flags=%s perm=%s' % (start, end, size, flags, perm))
                     break
@@ -1056,7 +1057,7 @@ class concat(object):
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            l  = len(self.view1)
+            l = len(self.view1)
             if index.start >= l:
                 return self.view2.__getitem__(slice(index.start - l, index.stop - l, index.step))
             if index.stop > l:
@@ -1089,7 +1090,7 @@ def all_traces():
         precpu_base = ulong(cpu.obj['percpu_base'])
         trace_buffer = gdb.parse_and_eval('(trace_buf *)0x%x' % (precpu_base + trace_buffer_offset))
         trace_log_base_ptr = trace_buffer['_base']
-        trace_log_base  = unique_ptr_get(trace_log_base_ptr)
+        trace_log_base = unique_ptr_get(trace_log_base_ptr)
         last = ulong(trace_buffer['_last'])
         max_trace = ulong(trace_buffer['_size'])
 
@@ -1194,24 +1195,24 @@ def show_leak():
     allocations = tracker['allocations']
     # Build a list of allocations to be sorted lexicographically by call chain
     # and summarize allocations with the same call chain:
-    percent='   '
+    percent = '   '
     gdb.write('Fetching data from qemu/osv: %s' % percent)
     gdb.flush()
     allocs = []
-    for i in range(size_allocations) :
+    for i in range(size_allocations):
         newpercent = '%2d%%' % round(100.0*i/(size_allocations-1))
-        if newpercent != percent :
+        if newpercent != percent:
             percent = newpercent
             gdb.write('\b\b\b%s' % newpercent)
             gdb.flush()
         a = allocations[i]
         addr = ulong(a['addr'])
-        if addr == 0 :
+        if addr == 0:
             continue
         nbacktrace = to_int(a['nbacktrace'])
         backtrace = a['backtrace']
         callchain = []
-        for j in range(nbacktrace) :
+        for j in range(nbacktrace):
             callchain.append(ulong(backtrace[nbacktrace-1-j]))
         allocs.append((i, callchain))
     gdb.write('\n')
@@ -1236,7 +1237,7 @@ def show_leak():
     cur_last_seq = -1
     cur_max_size = -1
     cur_min_size = -1
-    for k, alloc in enumerate(allocs) :
+    for k, alloc in enumerate(allocs):
         i = alloc[0]
         callchain = alloc[1]
         seq = ulong(allocations[i]['seq'])
@@ -1245,27 +1246,27 @@ def show_leak():
         cur_n += 1
         cur_total_size += size
         cur_total_seq += seq
-        if cur_first_seq<0 or seq<cur_first_seq :
+        if cur_first_seq < 0 or seq < cur_first_seq:
             cur_first_seq = seq
-        if cur_last_seq<0 or seq>cur_last_seq :
+        if cur_last_seq < 0 or seq > cur_last_seq:
             cur_last_seq = seq
-        if cur_min_size<0 or size<cur_min_size :
+        if cur_min_size < 0 or size < cur_min_size:
             cur_min_size = size
-        if cur_max_size<0 or size>cur_max_size :
+        if cur_max_size < 0 or size > cur_max_size:
             cur_max_size = size
         # If the next entry has the same call chain, just continue summing
-        if k!=len(allocs)-1 and callchain==allocs[k+1][1] :
+        if k != len(allocs) - 1 and callchain == allocs[k+1][1]:
             continue
         # We're done with a bunch of allocations with same call chain:
-        r = Record(bytes = cur_total_size,
-                   allocations = cur_n,
-                   minsize = cur_min_size,
-                   maxsize = cur_max_size,
-                   avgsize = cur_total_size/cur_n,
-                   minbirth = cur_first_seq,
-                   maxbirth = cur_last_seq,
-                   avgbirth = cur_total_seq/cur_n,
-                   callchain = callchain)
+        r = Record(bytes=cur_total_size,
+                   allocations=cur_n,
+                   minsize=cur_min_size,
+                   maxsize=cur_max_size,
+                   avgsize=cur_total_size/cur_n,
+                   minbirth=cur_first_seq,
+                   maxbirth=cur_last_seq,
+                   avgbirth=cur_total_seq/cur_n,
+                   callchain=callchain)
         records.append(r)
         cur_n = 0
         cur_total_size = 0
@@ -1281,16 +1282,16 @@ def show_leak():
 
     gdb.write('\nAllocations still in memory at this time (seq=%d):\n\n' %
               tracker['current_seq'])
-    for r in records :
+    for r in records:
         gdb.write('Found %d bytes in %d allocations [size ' % (r.bytes, r.allocations))
-        if r.minsize != r.maxsize :
+        if r.minsize != r.maxsize:
             gdb.write('%d/%.1f/%d' % (r.minsize, r.avgsize, r.maxsize))
-        else :
+        else:
             gdb.write('%d' % r.minsize)
         gdb.write(', birth ')
-        if r.minbirth != r.maxbirth :
+        if r.minbirth != r.maxbirth:
             gdb.write('%d/%.1f/%d' % (r.minbirth, r.avgbirth, r.maxbirth))
-        else :
+        else:
             gdb.write('%d' % r.minbirth)
         gdb.write(']\nfrom:\n')
         for f in reversed(r.callchain):
@@ -1398,7 +1399,7 @@ class osv_pagetable_walk(gdb.Command):
             level -= 1
             ptep = pte + pt_index(addr, level) * 8
 
-def runqueue(cpuid, node = None):
+def runqueue(cpuid, node=None):
     if node == None:
         cpus = gdb.lookup_global_symbol('sched::cpus').value()
         cpu = cpus['_M_impl']['_M_start'][cpuid]
@@ -1425,7 +1426,7 @@ class osv_runqueue(gdb.Command):
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
         ncpus = to_int(gdb.parse_and_eval('sched::cpus._M_impl._M_finish - sched::cpus._M_impl._M_start'))
-        for cpu in range(ncpus) :
+        for cpu in range(ncpus):
             gdb.write("CPU %d:\n" % cpu)
             for thread in runqueue(cpu):
                 print('%d 0x%x %g' % (thread['_id'], ulong(thread), thread['_runtime']['_Rtt']))

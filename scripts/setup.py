@@ -5,7 +5,7 @@
 import sys, platform, argparse
 import subprocess
 
-standard_ec2_packages=['python-pip', 'wget']
+standard_ec2_packages = ['python-pip', 'wget']
 standard_ec2_post_install = ['pip install awscli &&'
                              'wget http://s3.amazonaws.com/ec2-downloads/ec2-api-tools.zip &&'
                              'rm -rf /usr/local/ec2 &&'
@@ -154,12 +154,12 @@ for distro in distros:
                     pkg += distro.ec2_packages + dver.ec2_packages
                 if cmdargs.test:
                     pkg += distro.test_packages + dver.test_packages
-                subprocess.check_call(distro.install + ' ' + str.join(' ', pkg), shell = True)
+                subprocess.check_call(distro.install + ' ' + str.join(' ', pkg), shell=True)
                 if cmdargs.ec2:
                     if distro.ec2_post_install:
-                        subprocess.check_call(distro.ec2_post_install, shell = True)
+                        subprocess.check_call(distro.ec2_post_install, shell=True)
                     if dver.ec2_post_install:
-                        subprocess.check_call(dver.ec2_post_install, shell = True)
+                        subprocess.check_call(dver.ec2_post_install, shell=True)
                 sys.exit(0)
         print 'Your distribution version is not supported by this script'
         sys.exit(1)

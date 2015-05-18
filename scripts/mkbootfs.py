@@ -13,26 +13,26 @@ def add_var(option, opt, value, parser):
     var, val = value.split('=')
     defines[var] = val
 
-opt = optparse.OptionParser(option_list = [
+opt = optparse.OptionParser(option_list=[
         make_option('-o',
-                    dest = 'output',
-                    help = 'write to FILE',
-                    metavar = 'FILE'),
+                    dest='output',
+                    help='write to FILE',
+                    metavar='FILE'),
         make_option('-d',
-                    dest = 'depends',
-                    help = 'write dependencies to FILE',
-                    metavar = 'FILE',
-                    default = None),
+                    dest='depends',
+                    help='write dependencies to FILE',
+                    metavar='FILE',
+                    default=None),
         make_option('-m',
-                    dest = 'manifest',
-                    help = 'read manifest from FILE',
-                    metavar = 'FILE'),
+                    dest='manifest',
+                    help='read manifest from FILE',
+                    metavar='FILE'),
         make_option('-D',
-                    type = 'string',
-                    help = 'define VAR=DATA',
-                    metavar = 'VAR=DATA',
-                    action = 'callback',
-                    callback = add_var),
+                    type='string',
+                    help='define VAR=DATA',
+                    metavar='VAR=DATA',
+                    action='callback',
+                    callback=add_var),
 ])
 
 (options, args) = opt.parse_args()
@@ -48,7 +48,7 @@ manifest.read(options.manifest)
 
 depends.write(u'%s: \\\n' % (options.output,))
 
-files = dict([(f, manifest.get('manifest', f, vars = defines))
+files = dict([(f, manifest.get('manifest', f, vars=defines))
               for f in manifest.options('manifest')])
 
 def expand(items):
@@ -59,7 +59,7 @@ def expand(items):
             for dirpath, dirnames, filenames in os.walk(hostname):
                 for filename in filenames:
                     relpath = dirpath[len(hostname):]
-                    if relpath != "" :
+                    if relpath != "":
                         relpath += "/"
                     yield (name + relpath + filename,
                            hostname + relpath + filename)

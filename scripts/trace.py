@@ -610,7 +610,7 @@ def add_trace_listing_options(parser):
     parser.add_argument("-b", "--backtrace", action="store_true", help="show backtrace")
     parser.add_argument("--no-header", action="store_true", help="do not show the header")
 
-def convert_dump(args) :
+def convert_dump(args):
     if os.path.isfile(args.dumpfile):
         if os.path.exists(args.tracefile):
             os.remove(args.tracefile)
@@ -622,7 +622,7 @@ def convert_dump(args) :
         print("error: %s not found" % (args.dumpfile))
         sys.exit(1)
 
-def download_dump(args) :
+def download_dump(args):
     if os.path.exists(args.tracefile):
         os.remove(args.tracefile)
         assert(not os.path.exists(args.tracefile))
@@ -674,7 +674,7 @@ if __name__ == "__main__":
         Specifying a time range will result in only those samples being printed which overlap with the time range.
         """)
     add_trace_listing_options(cmd_list_timed)
-    cmd_list_timed.add_argument("--sort", action="store", choices=['duration','time'], help="sort samples by given field")
+    cmd_list_timed.add_argument("--sort", action="store", choices=['duration', 'time'], help="sort samples by given field")
     cmd_list_timed.set_defaults(func=list_timed, paginate=True)
 
     cmd_summary = subparsers.add_parser("summary", help="print trace summery", description="""

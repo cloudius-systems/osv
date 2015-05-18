@@ -14,7 +14,7 @@ class Metadata(object):
     def region(self):
         return self.availability_zone()[:-1]
 
-def wait_for(ec2_obj, status = 'available'):
+def wait_for(ec2_obj, status='available'):
     while ec2_obj.status != status:
         #print('object status {} wanted {}'.format(ec2_obj.status, status))
         time.sleep(1)
@@ -38,8 +38,8 @@ def make_ami(input, name):
     print('Connecting')
     conn = boto.ec2.connect_to_region(metadata.region())
     print('Creating volume')
-    vol =  conn.create_volume(size = to_gib(image_size(input)),
-                              zone = metadata.availability_zone(),
+    vol = conn.create_volume(size=to_gib(image_size(input)),
+                              zone=metadata.availability_zone(),
                               )
     print('Waiting for {}'.format(vol.id))
     wait_for(vol)
@@ -60,12 +60,12 @@ def make_ami(input, name):
     print('Deleting {}'.format(vol.id))
     vol.delete()
     print('Registering image from {}'.format(snap.id))
-    ami = conn.register_image(name = name,
-                              architecture = 'x86_64',
-                              root_device_name = 'xvda',
-                              virtualization_type = 'hvm',
-                              snapshot_id = snap.id,
-                              delete_root_volume_on_termination = True,
+    ami = conn.register_image(name=name,
+                              architecture='x86_64',
+                              root_device_name='xvda',
+                              virtualization_type='hvm',
+                              snapshot_id=snap.id,
+                              delete_root_volume_on_termination=True,
                               )
     print('ami {} created\n'.format(ami))
     return ami

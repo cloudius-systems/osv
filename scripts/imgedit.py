@@ -27,7 +27,7 @@ def chs(x):
         h = 254
         s = 63
 
-    return c,h,s
+    return c, h, s
 
 def read_chars_up_to_null(file):
     while True:
@@ -51,10 +51,10 @@ class nbd_file(object):
     def __init__(self, filename):
         self._filename = filename
         self._offset = 0
-        self._buf    = None
+        self._buf = None
         self._closed = True
         self._process = subprocess.Popen("qemu-nbd %s" % filename,
-                                        shell = True, stdout=_devnull)
+                                        shell=True, stdout=_devnull)
         # wait for qemu-nbd to start: this thing doesn't tell anything on stdout
         while True:
             try:
