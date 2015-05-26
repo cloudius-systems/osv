@@ -3,8 +3,8 @@
 # and much easier to do it in the main OSv makefile :-(
 SRC = $(shell readlink -f ../..)
 module:
-	cd $(SRC)/java && mvn package -q -DskipTests=true
+	cd $(SRC)/java && mvn package -DskipTests=true
 
 clean:
-	cd $(SRC)/java && mvn clean -q
+	cd $(SRC)/java && mvn clean
 	-rm -f dependency-reduced-pom.xml
