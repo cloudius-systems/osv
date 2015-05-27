@@ -30,6 +30,7 @@ $(NCURSES_BUILD)/Makefile: $(NCURSES_BUILD)/configure
 $(NCURSES_BUILD)/configure: $(NCURSES_ARCHIVE) | $(BUILD)
 	cd $(BUILD) && \
 		tar xzf ../$(NCURSES_ARCHIVE)
+	cd $(NCURSES_BUILD); patch -p1 < ../../ncurses-5.9-gcc-5.patch
 	touch $(NCURSES_BUILD)/configure
 
 $(NCURSES_ARCHIVE): | $(DOWNLOAD)
