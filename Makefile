@@ -204,11 +204,10 @@ miscbase = external/$(arch)/misc.bin
 jdkbase := $(shell find external/$(arch)/openjdk.bin/usr/lib/jvm \
                          -maxdepth 1 -type d -name 'java*')
 
-gcc-inc-base := $(dir $(shell find $(gccbase)/ -name vector | grep -v -e debug/vector$$ -e profile/vector$$))
-gcc-inc-base2 := $(dir $(shell find $(gccbase)/ -name unwind.h))
-gcc-inc-base3 := $(dir $(shell dirname `find $(gccbase)/ -name c++config.h | grep -v /32/`))
 
 ifeq ($(gcc_include_env), external)
+  gcc-inc-base := $(dir $(shell find $(gccbase)/ -name vector | grep -v -e debug/vector$$ -e profile/vector$$))
+  gcc-inc-base3 := $(dir $(shell dirname `find $(gccbase)/ -name c++config.h | grep -v /32/`))
   INCLUDES += -isystem $(gcc-inc-base)
   INCLUDES += -isystem $(gcc-inc-base3)
 endif
@@ -222,10 +221,11 @@ libfdt_base = external/$(arch)/libfdt
 INCLUDES += -isystem $(libfdt_base)
 endif
 
-INCLUDES += -isystem $(miscbase)/usr/include
+INCLUDES += $(boost-includes)
 INCLUDES += -isystem include/api
 INCLUDES += -isystem include/api/$(arch)
 ifeq ($(gcc_include_env), external)
+  gcc-inc-base2 := $(dir $(shell find $(gccbase)/ -name unwind.h))
   # must be after include/api, since it includes some libc-style headers:
   INCLUDES += -isystem $(gcc-inc-base2)
 endif
@@ -282,7 +282,9 @@ COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -
 	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) $(gcc-sysroot) \
 	$(configuration) -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207" -DARCH_STRING=$(ARCH_STR) $(EXTRA_FLAGS)
 ifeq ($(gcc_include_env), external)
+ifeq ($(boost_env), external)
   COMMON += -nostdinc
+endif
 endif
 
 tracing-flags-0 =
@@ -1711,9 +1713,14 @@ ifeq ($(boost_env), host)
             $(error Error: libboost_system.a needs to be installed.)
         endif
     endif
+    # When boost_env=host, we won't use "-nostdinc", so the build machine's
+    # header files will be used normally. So we don't need to add anything
+    # special for Boost.
+    boost-includes =
 else
     boost-lib-dir := $(firstword $(dir $(shell find $(miscbase)/ -name libboost_system*.a)))
     boost-mt := $(if $(filter %-mt.a, $(wildcard $(boost-lib-dir)/*.a)),-mt)
+    boost-includes = -isystem $(miscbase)/usr/include
 endif
 
 boost-libs := $(boost-lib-dir)/libboost_program_options$(boost-mt).a \
