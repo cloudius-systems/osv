@@ -24,7 +24,7 @@ class Fedora(object):
     name = 'Fedora'
     install = 'yum -y install'
     packages = ['gcc-c++', 'gcc-c++-aarch64-linux-gnu', 'git', 'gdb', 'qemu-img',
-                'qemu-system-x86', 'libvirt', 'maven', 'java-1.7.0-openjdk',
+                'qemu-system-x86', 'libvirt', 'maven',
                 'ant', 'autoconf', 'automake', 'boost-static', 'genromfs', 'libtool',
                 'flex', 'bison', 'maven-shade-plugin', 'python-dpkt', 'tcpdump', 'gdb',
                 'gnutls-utils', 'openssl', 'python-requests', 'p11-kit', 'patch', 'wget',
@@ -36,27 +36,34 @@ class Fedora(object):
     ec2_post_install = standard_ec2_post_install
 
     class Fedora_19(object):
-        packages = []
+        packages = ['java-1.7.0-openjdk']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '19'
 
     class Fedora_20(object):
-        packages = []
+        packages = ['java-1.7.0-openjdk']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '20'
 
     class Fedora_21(object):
-        packages = []
+        packages = ['java-1.7.0-openjdk']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '21'
 
-    versions = [Fedora_19, Fedora_20, Fedora_21]
+    class Fedora_22(object):
+        packages = ['java-1.8.0-openjdk']
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '22'
+
+    versions = [Fedora_19, Fedora_20, Fedora_21, Fedora_22]
 
 class RHELbased(Fedora):
     name = ['Scientific Linux', 'NauLinux', 'CentOS Linux',
