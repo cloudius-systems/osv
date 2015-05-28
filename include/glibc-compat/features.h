@@ -10,6 +10,11 @@
 
 #include_next <features.h>
 
-#define __GLIBC_PREREQ(x, y) 1
+#define __GNU_LIBRARY__ 6
+#define __GLIBC__       2
+#define __GLIBC_MINOR__ 20
+
+#define __GLIBC_PREREQ(maj, min) \
+        ((__GLIBC__ << 16) + __GLIBC_MINOR__ >= ((maj) << 16) + (min))
 
 #endif /* FEATURES_H_ */
