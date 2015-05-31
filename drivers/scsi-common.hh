@@ -38,7 +38,7 @@ struct cdb_test_unit_ready {
     u8 control;
 } __attribute__((packed));
 
-struct cdb_inquery {
+struct cdb_inquiry {
     u8 command;
     u8 reserved_01;
     u8 page_code;
@@ -170,7 +170,7 @@ public:
     void scan();
     bool cdb_data_rw(const u8 *cdb);
     bool cdb_data_in(const u8 *cdb);
-    void exec_inquery(u16 target, u16 lun);
+    void exec_inquiry(u16 target, u16 lun);
     void exec_test_unit_ready(u16 taget, u16 lun);
     void exec_request_sense(u16 taget, u16 lun);
     std::vector<u16> exec_report_luns(u16 target);
