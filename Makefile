@@ -816,6 +816,7 @@ objects += arch/$(arch)/msi.o
 $(out)/arch/x64/string-ssse3.o: CXXFLAGS += -mssse3
 
 ifeq ($(arch),aarch64)
+objects += arch/$(arch)/psci.o
 objects += arch/$(arch)/arm-clock.o
 objects += arch/$(arch)/gic.o
 objects += arch/$(arch)/arch-dtb.o

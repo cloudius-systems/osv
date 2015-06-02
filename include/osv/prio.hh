@@ -21,6 +21,7 @@ enum class init_prio : int {
     threadlist,
     pthread,
     notifiers,
+    psci,
     acpi,
     vma_list,
     reclaimer,
