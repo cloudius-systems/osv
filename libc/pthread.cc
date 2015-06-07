@@ -791,6 +791,11 @@ int pthread_mutexattr_settype(pthread_mutexattr_t *attr, int type)
     return 0;
 }
 
+int pthread_mutexattr_setpshared(pthread_mutexattr_t *attr, int pshared)
+{
+    return 0;
+}
+
 int pthread_condattr_init(pthread_condattr_t *attr)
 {
     // We assume there's room for at least one byte in pthread_condattr_t
