@@ -343,8 +343,9 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
     }
     n->switch_to();
     if (p->_detached_state->_cpu->terminating_thread) {
-        p->_detached_state->_cpu->terminating_thread->destroy();
-        p->_detached_state->_cpu->terminating_thread = nullptr;
+        cpu *c = p->_detached_state->_cpu;
+        c->terminating_thread->destroy();
+        c->terminating_thread = nullptr;
     }
 }
 
