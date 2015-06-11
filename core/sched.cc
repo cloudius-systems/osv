@@ -342,10 +342,15 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
         mmu::flush_tlb_local();
     }
     n->switch_to();
-    if (p->_detached_state->_cpu->terminating_thread) {
-        cpu *c = p->_detached_state->_cpu;
-        c->terminating_thread->destroy();
-        c->terminating_thread = nullptr;
+
+    // Note: after the call to n->switch_to(), we should no longer use any of
+    // the local variables, nor "this" object, because we just switched to n's
+    // stack and the values we can access now are those that existed in the
+    // reschedule call which scheduled n out, and will now be returning.
+    // So to get the current cpu, we must use cpu::current(), not "this".
+    if (cpu::current()->terminating_thread) {
+        cpu::current()->terminating_thread->destroy();
+        cpu::current()->terminating_thread = nullptr;
     }
 }
 
