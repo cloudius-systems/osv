@@ -81,7 +81,7 @@ int main(int argc, char **argv)
         std::atomic<sched::thread *>thread;
         auto t1 = new sched::thread([&] {
             while(!thread.load())
-                ;
+                sched::thread::yield();
             thread.load()->wake_with([&] { thread.store(nullptr); });
         });
         t1->start();
