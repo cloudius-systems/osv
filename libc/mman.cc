@@ -85,8 +85,7 @@ int mprotect(void *addr, size_t len, int prot)
     // we don't support mprotecting() the linear map (e.g.., malloc() memory)
     // because that could leave the linear map a mess.
     if (reinterpret_cast<long>(addr) < 0) {
-        debug("mprotect() on linear map not supported\n");
-        abort();
+        abort("mprotect() on linear map not supported\n");
     }
 
     if (!mmu::is_page_aligned(addr) || !mmu::is_page_aligned(len)) {
