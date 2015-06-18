@@ -41,18 +41,6 @@ void gic_driver::init_cpu(int smp_idx)
         this->cpu_targets[smp_idx] = 0;
     }
 
-    /* disable all PPI interrupts */
-    this->gicd.write_reg_raw((u32)gicd_reg_irq1::GICD_ICENABLER, 0,
-                             0xffff0000);
-    /* enable all SGI interrupts */
-    this->gicd.write_reg_raw((u32)gicd_reg_irq1::GICD_ISENABLER, 0,
-                             0x0000ffff);
-    /* set priority on SGI/PPI (at least bits [7:4] must be implemented) */
-    for (int i = 0; i < 32; i += 4) {
-        this->gicd.write_reg_raw((u32)gicd_reg_irq8::GICD_IPRIORITYR, i,
-                                 0xc0c0c0c0);
-    }
-
     /* set priority mask register for CPU */
     for (int i = 0; i < 32; i += 4) {
         this->gicc.write_reg(gicc_reg::GICC_PMR, 0xf0);
@@ -107,6 +95,17 @@ void gic_driver::init_dist(int smp_idx)
         this->gicd.write_reg_raw((u32)gicd_reg_irq1::GICD_ICENABLER, i / 8,
                                  0xffffffff);
 
+    /* disable all PPI interrupts */
+    this->gicd.write_reg_raw((u32)gicd_reg_irq1::GICD_ICENABLER, 0,
+                             0xffff0000);
+    /* enable all SGI interrupts */
+    this->gicd.write_reg_raw((u32)gicd_reg_irq1::GICD_ISENABLER, 0,
+                             0x0000ffff);
+    /* set priority on SGI/PPI (at least bits [7:4] must be implemented) */
+    for (int i = 0; i < 32; i += 4) {
+        this->gicd.write_reg_raw((u32)gicd_reg_irq8::GICD_IPRIORITYR, i,
+                                 0xc0c0c0c0);
+    }
     /* enable distributor interface */
     gicd_ctlr |= 1;
     this->gicd.write_reg(gicd_reg::GICD_CTLR, gicd_ctlr);
