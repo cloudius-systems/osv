@@ -10,7 +10,7 @@
 
 #include <osv/types.h>
 #include <osv/mmu-defs.hh>
-#include <osv/mutex.h>
+#include <osv/spinlock.h>
 
 /* This is GICv2. Revisit for v3 if/when needed. */
 namespace gic {
@@ -168,7 +168,7 @@ protected:
        Note that for uniprocessor we will have just a zero
        stored in cpu_targets[0] instead. */
     unsigned char cpu_targets[max_cpu_if];
-    mutex gic_lock;
+    spinlock_t gic_lock;
 };
 
 /* the gic driver class is created by the interrupt table class */
