@@ -18,7 +18,7 @@
 #include <osv/interrupt.hh>
 #endif /* !AARCH64_PORT_STUB */
 
-#include "smp.hh"
+#include <smp.hh>
 #include "osv/trace.hh"
 #include <osv/percpu.hh>
 #include <osv/prio.hh>

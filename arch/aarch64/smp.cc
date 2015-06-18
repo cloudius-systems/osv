@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <smp.hh>
 #include <osv/debug.h>
 #include <osv/sched.hh>
 #include <osv/prio.hh>
@@ -39,7 +40,7 @@ void secondary_bringup(sched::cpu* c)
     c->load_balance();
 }
 
-void __attribute__((constructor(init_prio::sched))) smp_init()
+void smp_init()
 {
     int nr_cpus = dtb_get_cpus_count();
     if (nr_cpus < 1) {
@@ -99,4 +100,15 @@ void smp_main()
     cpu->init_on_cpu();
     cpu->bringup_thread->_detached_state->_cpu = cpu;
     cpu->bringup_thread->switch_to_first();
+}
+
+static inter_processor_interrupt smp_stop_cpu_ipi { IPI_SMP_STOP, [] {
+    while (true) {
+        arch::halt_no_interrupts();
+    }
+}};
+
+void smp_crash_other_processors()
+{
+    smp_stop_cpu_ipi.send_allbutself();
 }

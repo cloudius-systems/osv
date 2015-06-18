@@ -46,11 +46,14 @@ protected:
     std::function<void (void)> handler;
 };
 
+/* IPI signaled events */
+
 enum ipi_id {
     IPI_WAKEUP,
     IPI_TLB_FLUSH,
     IPI_SAMPLER_START,
     IPI_SAMPLER_STOP,
+    IPI_SMP_STOP,
 };
 
 #include "arch-interrupt.hh"

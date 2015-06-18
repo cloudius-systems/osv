@@ -5,7 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "smp.hh"
+#include <smp.hh>
 #include "processor.hh"
 #include "msr.hh"
 #include "apic.hh"
@@ -71,7 +71,7 @@ void parse_madt()
     debug(fmt("%d CPUs detected\n") % nr_cpus);
 }
 
-void __attribute__((constructor(init_prio::sched))) smp_init()
+void smp_init()
 {
     parse_madt();
     sched::current_cpu = sched::cpus[0];
@@ -144,7 +144,7 @@ void smp_main()
     cpu->bringup_thread->switch_to_first();
 }
 
-void crash_other_processors()
+void smp_crash_other_processors()
 {
     if (apic && smp_processors > 1) {
         apic->nmi_allbutself();
