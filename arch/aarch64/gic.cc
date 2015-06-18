@@ -58,6 +58,7 @@ void gic_driver::init_cpu(int smp_idx)
 void gic_driver::init_dist(int smp_idx)
 {
     debug_early_entry("gic_driver::init_dist()");
+    assert(smp_idx < max_cpu_if);
 
     /* disable first */
     unsigned int gicd_ctlr;

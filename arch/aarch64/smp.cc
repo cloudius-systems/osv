@@ -9,23 +9,55 @@
 #include <osv/sched.hh>
 #include <osv/prio.hh>
 #include <osv/printf.hh>
+#include "processor.hh"
+#include "psci.hh"
+#include "arch-dtb.hh"
+#include <alloca.h>
+
+extern "C" { /* see boot.S */
+    extern u64 smpboot_ttbr0;
+    extern u64 smpboot_ttbr1;
+    extern init_stack *smp_stack_free;
+    extern u64 start_secondary_cpu();
+}
 
 volatile unsigned smp_processors = 1;
 
 sched::cpu* smp_initial_find_current_cpu()
 {
     for (auto c : sched::cpus) {
-        /* just return the single cpu we have for now */
-        return c;
+        if (c->arch.mpid == processor::read_mpidr())
+            return c;
     }
     abort();
 }
 
+void secondary_bringup(sched::cpu* c)
+{
+    __sync_fetch_and_add(&smp_processors, 1);
+    c->idle_thread->start();
+    c->load_balance();
+}
+
 void __attribute__((constructor(init_prio::sched))) smp_init()
 {
-    auto c = new sched::cpu(0);
-    c->arch.smp_idx = 0;
-    sched::cpus.push_back(c);
+    int nr_cpus = dtb_get_cpus_count();
+    if (nr_cpus < 1) {
+        abort("smp_init: could not get cpus from device tree.\n");
+    }
+    u64 *mpids = (u64 *)alloca(sizeof(u64) * nr_cpus);
+    if (!dtb_get_cpus_mpid(mpids, nr_cpus)) {
+        abort("smp_init: failed to get cpus mpids from device tree.\n");
+    }
+
+    for (int i = 0; i < nr_cpus; i++) {
+        auto c = new sched::cpu(i);
+        c->arch.mpid = mpids[i];
+        c->arch.smp_idx = i;
+        c->arch.initstack.next = smp_stack_free;  /* setup thread stack */
+        smp_stack_free = &c->arch.initstack;
+        sched::cpus.push_back(c);
+    }
     sched::current_cpu = sched::cpus[0];
 
     for (auto c : sched::cpus) {
@@ -35,10 +67,10 @@ void __attribute__((constructor(init_prio::sched))) smp_init()
 
 void smp_launch()
 {
-    auto boot_cpu = smp_initial_find_current_cpu();
+    debug_early_entry("smp_launch");
     for (auto c : sched::cpus) {
         auto name = osv::sprintf("balancer%d", c->id);
-        if (c == boot_cpu) {
+        if (c->arch.smp_idx == 0) {
             sched::thread::current()->_detached_state->_cpu = c;
             // c->init_on_cpu() already done in main().
             (new sched::thread([c] { c->load_balance(); },
@@ -46,8 +78,25 @@ void smp_launch()
             c->init_idle_thread();
             c->idle_thread->start();
             continue;
-        } else {
-            abort();
         }
+        sched::thread::attr attr;
+        attr.stack(81920).pin(c).name(name);
+        c->init_idle_thread();
+        c->bringup_thread = new sched::thread([=] { secondary_bringup(c); }, attr, true);
+        smpboot_ttbr0 = processor::read_ttbr0();
+        smpboot_ttbr1 = processor::read_ttbr1();
+        psci::_psci.cpu_on(c->arch.mpid, mmu::virt_to_phys(reinterpret_cast<void *>(start_secondary_cpu)));
     }
+    while (smp_processors != sched::cpus.size())
+        barrier();
+}
+
+void smp_main()
+{
+    debug_early_entry("smp_main");
+    sched::cpu* cpu = smp_initial_find_current_cpu();
+    assert(cpu);
+    cpu->init_on_cpu();
+    cpu->bringup_thread->_detached_state->_cpu = cpu;
+    cpu->bringup_thread->switch_to_first();
 }

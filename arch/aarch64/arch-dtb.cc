@@ -302,6 +302,45 @@ bool dtb_get_gic_v2(u64 *dist, size_t *dist_len, u64 *cpu, size_t *cpu_len)
     return true;
 }
 
+/* this gets the cpus node and returns the number of cpu elements in it. */
+int dtb_get_cpus_count()
+{
+    int node, subnode, count;
+    if (!dtb)
+        return -1;
+
+    node = fdt_path_offset(dtb, "/cpus");
+    if (node < 0)
+        return -1;
+
+    for (count = 0, subnode = fdt_first_subnode(dtb, node);
+         subnode >= 0;
+         count++,   subnode = fdt_next_subnode(dtb, subnode)) {
+    }
+    return count;
+}
+
+/* this gets the cpu mpidr values for all cpus */
+bool dtb_get_cpus_mpid(u64 *mpids, int n)
+{
+    int node, subnode;
+
+    if (!dtb)
+        return false;
+
+    node = fdt_path_offset(dtb, "/cpus");
+    if (node < 0)
+        return false;
+
+    for (subnode = fdt_first_subnode(dtb, node);
+         n > 0 && subnode >= 0;
+         subnode = fdt_next_subnode(dtb, subnode), n--, mpids++) {
+
+        (void)dtb_get_reg(subnode, mpids);
+    }
+    return true;
+}
+
 static int dtb_get_pci_node()
 {
     if (dtb_pci_node >= 0) {

@@ -63,6 +63,20 @@ int dtb_get_timer_irq();
  */
 bool dtb_get_gic_v2(u64 *dist, size_t *dist_len, u64 *cpu, size_t *cpu_len);
 
+/* int dtb_get_cpus_count();
+ *
+ * gets the number of available cpus.
+ * A return value of -1 signals a parse error.
+ */
+int dtb_get_cpus_count();
+
+/* bool dtb_get_cpus_mpid(u64 *mpids, int n)
+ *
+ * gets the mpid for all cpus.
+ * A return value of false signals a parse error.
+ */
+bool dtb_get_cpus_mpid(u64 *mpids, int n);
+
 /* bool dtb_get_pci_is_ecam()
  *
  * returns true if PCI supports ECAM (PCIE).
