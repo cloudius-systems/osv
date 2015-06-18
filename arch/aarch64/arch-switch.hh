@@ -104,8 +104,6 @@ void thread::free_tcb()
 
 void thread_main_c(thread* t)
 {
-    debug_early_u64("thread_main_c: thread* t=", (u64)t);
-
     arch::irq_enable();
 
 #ifdef CONF_preempt

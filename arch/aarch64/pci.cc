@@ -93,11 +93,11 @@ void set_pci_irqmap(u32 *bdfs, int *irq_ids, int count, u32 mask)
 
 void dump_pci_irqmap()
 {
-    debug_ll("PCI irqmap\n");
+    debug("PCI irqmap\n");
     for (auto it = pci_irqmap.begin(); it != pci_irqmap.end(); ++it) {
-        debug_ll("Bus,Device,Function 0x%08x -> SPI irq 0x%04x\n",
-                 (*it).first, (*it).second);
-        debug_ll("B,D,F irqmap-mask   0x%08x\n", pci_irqmask);
+        debug("Bus,Device,Function 0x%08x -> SPI irq 0x%04x\n",
+              (*it).first, (*it).second);
+        debug("B,D,F irqmap-mask   0x%08x\n", pci_irqmask);
     }
 }
 
@@ -151,10 +151,9 @@ unsigned get_pci_irq_line(pci::device &dev)
 
     int irq_id = pci::get_pci_irq_from_bdfp(bdfp);
     assert(irq_id > 0);
-    debug_early_u64("get_pci_irq_line: bdfp  = ", (u64)bdfp);
     /* add the SPI base number 32 to the irq id */
     irq_id += 32;
-    debug_early_u64("get_pci_irq_line: irqid = ", (u64)irq_id);
+    debug("get_pci_irq_line: bdfp  = %u, irqid = %d\n", bdfp, irq_id);
     return irq_id;
 }
 
