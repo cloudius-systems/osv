@@ -10,10 +10,14 @@
 
 #include <osv/sched.hh>
 
-class inter_processor_interrupt {
+class inter_processor_interrupt : public interrupt {
 public:
-    explicit inter_processor_interrupt(std::function<void ()>);
+    explicit inter_processor_interrupt(enum ipi_id, std::function<void ()>);
     ~inter_processor_interrupt();
+
+    void set_vector(unsigned v);
+    unsigned get_vector();
+
     void send(sched::cpu* cpu);
     void send_allbutself();
 private:

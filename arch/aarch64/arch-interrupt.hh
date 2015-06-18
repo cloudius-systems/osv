@@ -13,7 +13,22 @@
 
 #include <functional>
 
-/* Software-Generated Interrupts: not used yet */
+/* Software-Generated Interrupts */
+
+namespace sched {
+    class cpu;
+}
+
+class sgi_interrupt : public interrupt {
+public:
+    sgi_interrupt(enum ipi_id, std::function<void ()>);
+    ~sgi_interrupt();
+
+    void send(sched::cpu* cpu);
+    void send_allbutself();
+};
+
+typedef class sgi_interrupt inter_processor_interrupt;
 
 /* Private Periphereal Interrupts */
 

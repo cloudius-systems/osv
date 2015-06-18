@@ -8,6 +8,9 @@
 #include <osv/mutex.h>
 #include <osv/debug.hh>
 #include <osv/mmio.hh>
+#include <osv/irqlock.hh>
+
+#include "processor.hh"
 
 #include "gic.hh"
 
@@ -130,6 +133,38 @@ void gic_driver::set_irq_type(unsigned int id, irq_type type)
 {
     WITH_LOCK(gic_lock) {
         this->gicd.write_reg_grp(gicd_reg_irq2::GICD_ICFGR, id, (u32)type << 1);
+    }
+}
+
+/* send software-generated interrupt to other cpus; vector is [0..15]
+ * GICD_SGIR distributor register:
+ *
+ * 31        26 | 25  24 | 23          16 | 15    | 14       4 | 3     0
+ *   reserved   | filter |    cpulist     | NSATT |  reserved  |  INTID
+ */
+void gic_driver::send_sgi(sgi_filter filter, int smp_idx, unsigned int vector)
+{
+    u32 sgir = 0;
+    assert(smp_idx < max_cpu_if);
+    assert(vector <= 0x0f);
+    irq_save_lock_type irq_lock;
+
+    WITH_LOCK(irq_lock) {
+        WITH_LOCK(gic_lock) {
+            switch (filter) {
+            case sgi_filter::SGI_TARGET_LIST:
+                sgir = cpu_targets[smp_idx] << 16u;
+                break;
+            case sgi_filter::SGI_TARGET_ALL_BUT_SELF:
+                sgir = 1 << 24u;
+                break;
+            case sgi_filter::SGI_TARGET_SELF:
+                sgir = 2 << 24u;
+                break;
+            }
+            asm volatile ("dmb ishst");
+            this->gicd.write_reg(gicd_reg::GICD_SGIR, sgir | vector);
+        }
     }
 }
 

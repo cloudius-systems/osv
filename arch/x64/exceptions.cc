@@ -179,6 +179,17 @@ unsigned interrupt_descriptor_table::register_handler(std::function<void ()> pos
     return register_interrupt_handler([] { return true; }, [] { processor::apic->eoi(); }, post_eoi);
 }
 
+void interrupt_descriptor_table::register_interrupt(inter_processor_interrupt *interrupt)
+{
+    unsigned v = register_handler(interrupt->get_handler());
+    interrupt->set_vector(v);
+}
+
+void interrupt_descriptor_table::unregister_interrupt(inter_processor_interrupt *interrupt)
+{
+    unregister_handler(interrupt->get_vector());
+}
+
 void interrupt_descriptor_table::register_interrupt(gsi_edge_interrupt *interrupt)
 {
     unsigned v = register_handler(interrupt->get_handler());

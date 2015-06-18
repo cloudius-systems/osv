@@ -10,14 +10,15 @@
 
 using namespace processor;
 
-inter_processor_interrupt::inter_processor_interrupt(std::function<void ()> handler)
-    : _vector(idt.register_handler(handler))
+inter_processor_interrupt::inter_processor_interrupt(enum ipi_id ipi_id, std::function<void ()> handler)
+    : interrupt(ipi_id, handler)
 {
+    idt.register_interrupt(this);
 }
 
 inter_processor_interrupt::~inter_processor_interrupt()
 {
-    idt.unregister_handler(_vector);
+    idt.unregister_interrupt(this);
 }
 
 void inter_processor_interrupt::send(sched::cpu* cpu)
@@ -25,8 +26,19 @@ void inter_processor_interrupt::send(sched::cpu* cpu)
     apic->ipi(cpu->arch.apic_id, _vector);
 }
 
-void inter_processor_interrupt::send_allbutself(){
+void inter_processor_interrupt::send_allbutself()
+{
     apic->ipi_allbutself(_vector);
+}
+
+void inter_processor_interrupt::set_vector(unsigned v)
+{
+    _vector = v;
+}
+
+unsigned inter_processor_interrupt::get_vector()
+{
+    return _vector;
 }
 
 gsi_edge_interrupt::gsi_edge_interrupt(unsigned id, std::function<void ()> h)
