@@ -103,6 +103,9 @@ arm_clock_events::~arm_clock_events()
 
 void arm_clock_events::setup_on_cpu()
 {
+    u32 ctl = this->read_ctl();
+    ctl &= ~0x7;
+    this->write_ctl(ctl);
 }
 
 unsigned int arm_clock_events::read_ctl()
@@ -153,10 +156,5 @@ void arm_clock_events::set(std::chrono::nanoseconds nanos)
 void __attribute__((constructor)) setup_arm_clock_events()
 {
     arm_clock_events *timer;
-    debug_early_entry("setup_arm_clock_events()");
     clock_event = timer = new arm_clock_events;
-
-    u32 ctl = timer->read_ctl();
-    ctl &= ~0x7;
-    timer->write_ctl(ctl);
 }
