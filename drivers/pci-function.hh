@@ -28,27 +28,28 @@ namespace pci {
 
         enum pci_bar_encoding_masks {
             // mmio, pio
-            PCI_BAR_MEMORY_INDICATOR_MASK     = (1 << 0),
+            PCI_BAR_MEMORY_INDICATOR_MASK   = (1 << 0),
             // 32bit, 64bit
-            PCI_BAR_MEM_ADDR_SPACE_MASK        = (1 << 1) | (1 << 2),
-            PCI_BAR_PREFETCHABLE_MASK        = (1 << 3),
+            PCI_BAR_MEM_ADDR_SPACE_MASK     = (1 << 1) | (1 << 2),
+            PCI_BAR_PREFETCHABLE_MASK       = (1 << 3),
             PCI_BAR_MEM_ADDR_LO_MASK        = 0xFFFFFFF0,
-            PCI_BAR_PIO_ADDR_MASK            = 0xFFFFFFFC,
+            PCI_BAR_PIO_ADDR_MASK           = 0xFFFFFFFC,
         };
 
         enum pci_bar_type_indicator {
-            PCI_BAR_MMIO                 = 0x00,
+            PCI_BAR_MMIO                = 0x00,
             PCI_BAR_PIO                 = 0x01
         };
 
         enum pci_bar_prefetchable {
             PCI_BAR_NON_PREFETCHABLE    = 0x00,
-            PCI_BAR_PREFETCHABLE        = 0x01
+            PCI_BAR_PREFETCHABLE        = 0x08
         };
 
         enum pci_bar_address_space {
-            PCI_BAR_32BIT_ADDRESS        = 0x00,
-            PCI_BAR_64BIT_ADDRESS        = 0x01
+            PCI_BAR_32BIT_ADDRESS       = 0x00,
+            PCI_BAR_32BIT_BELOW_1MB     = 0x02,
+            PCI_BAR_64BIT_ADDRESS       = 0x04
         };
 
         // pos is the offset within the configuration space
