@@ -7,7 +7,7 @@
 
 #include <jni.h>
 
-#include "osv/mutex.h"
+#include <osv/mutex.h>
 #include "jni_helpers.hh"
 
 using namespace std;
