@@ -35,7 +35,8 @@ static void exec_app(const std::string& cmnd_line) {
         }
     }
     for (auto cmnd: new_commands) {
-        osv::run(cmnd);
+        std::vector<std::string> c(cmnd.begin(), std::prev(cmnd.end()));
+        osv::run(c);
     }
 }
 
