@@ -497,7 +497,7 @@ public:
      * sequentially to new threads (skipping ids which are currently in use),
      * and this sequential 32-bit counter can wrap around.
      */
-    unsigned int id() __attribute__((no_instrument_function));
+    unsigned int id() const __attribute__((no_instrument_function));
     inline void* get_tls(ulong module);
     void* setup_tls(ulong module, const void* tls_template,
             size_t init_size, size_t uninit_size);

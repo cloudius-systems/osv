@@ -1166,7 +1166,7 @@ void thread::timer_fired()
     wake();
 }
 
-unsigned int thread::id()
+unsigned int thread::id() const
 {
     return _id;
 }
