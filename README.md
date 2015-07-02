@@ -92,10 +92,14 @@ scripts/build
 
 to build an image of the OSv kernel and the default application.
 
-By default build creates image in qcow2 format. To change this pass format value via img_format variable, i.e.
+scripts/build creates the image ```build/last/usr.img``` in qcow2 format.
+To convert this image to other formats, use the ```scripts/convert```
+tool, which can create an image in the vmdk, vdi, raw, or qcow2-old formats
+(qcow2-old is an older qcow2 format, compatible with older versions of QEMU).
+For example:
 
 ```
-scripts/build img_format=raw
+scripts/convert raw
 ```
 
 By default make will use the static libraries and headers of gcc in external submodule. To change this pass `host` via *_env variables:
