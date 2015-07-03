@@ -413,6 +413,11 @@ void start_early_threads();
 
 void cpu::idle()
 {
+    // The idle thread must not sleep, because the whole point is that the
+    // scheduler can always find at least one runnable thread.
+    // We set preempt_disable just to help us verify this.
+    preempt_disable();
+
     if (id == 0) {
         start_early_threads();
     }
@@ -1395,18 +1400,22 @@ void init_detached_threads_reaper()
 
 void start_early_threads()
 {
-    WITH_LOCK(thread_map_mutex) {
-        for (auto th : thread_map) {
-            thread *t = th.second;
-            if (t == sched::thread::current()) {
-                continue;
-            }
-            t->remote_thread_local_var(s_current) = t;
-            thread::status expected = thread::status::prestarted;
-            if (t->_detached_state->st.compare_exchange_strong(expected,
+    // We're called from the idle thread, which must not sleep, hence this
+    // strange try_lock() loop instead of just a lock().
+    while (!thread_map_mutex.try_lock()) {
+        cpu::schedule();
+    }
+    SCOPE_ADOPT_LOCK(thread_map_mutex);
+    for (auto th : thread_map) {
+        thread *t = th.second;
+        if (t == sched::thread::current()) {
+            continue;
+        }
+        t->remote_thread_local_var(s_current) = t;
+        thread::status expected = thread::status::prestarted;
+        if (t->_detached_state->st.compare_exchange_strong(expected,
                 thread::status::unstarted, std::memory_order_relaxed)) {
-                t->start();
-            }
+            t->start();
         }
     }
 }
