@@ -13,11 +13,7 @@
 #include <osv/debug.hh>
 #include <osv/irqlock.hh>
 #include <osv/align.hh>
-
-#ifndef AARCH64_PORT_STUB
 #include <osv/interrupt.hh>
-#endif /* !AARCH64_PORT_STUB */
-
 #include <smp.hh>
 #include "osv/trace.hh"
 #include <osv/percpu.hh>
