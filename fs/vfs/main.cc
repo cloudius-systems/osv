@@ -1425,8 +1425,6 @@ int dup2(int oldfd, int newfd)
  */
 #define SETFL (O_APPEND | O_ASYNC | O_DIRECT | O_NOATIME | O_NONBLOCK)
 
-#define SETFL_IGNORED (~SETFL)
-
 TRACEPOINT(trace_vfs_fcntl, "%d %d 0x%x", int, int, int);
 TRACEPOINT(trace_vfs_fcntl_ret, "\"%s\"", int);
 TRACEPOINT(trace_vfs_fcntl_err, "%d", int);
@@ -1443,6 +1441,13 @@ int fcntl(int fd, int cmd, int arg)
     if (error)
         goto out_errno;
 
+    // An important note about our handling of FD_CLOEXEC / O_CLOEXEC:
+    // close-on-exec shouldn't have been a file flag (fp->f_flags) - it is a
+    // file descriptor flag, meaning that that two dup()ed file descriptors
+    // could have different values for FD_CLOEXEC. Our current implementation
+    // *wrongly* makes close-on-exec an f_flag (using the bit O_CLOEXEC).
+    // There is little practical difference, though, because this flag is
+    // ignored in OSv anyway, as it doesn't support exec().
     switch (cmd) {
     case F_DUPFD:
         error = _fdalloc(fp, &ret, arg);
@@ -1450,22 +1455,21 @@ int fcntl(int fd, int cmd, int arg)
             goto out_errno;
         break;
     case F_GETFD:
-        ret = fp->f_flags & FD_CLOEXEC;
+        ret = (fp->f_flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
         break;
     case F_SETFD:
         FD_LOCK(fp);
-        fp->f_flags = (fp->f_flags & ~FD_CLOEXEC) |
-                (arg & FD_CLOEXEC);
+        fp->f_flags = (fp->f_flags & ~O_CLOEXEC) |
+                ((arg & FD_CLOEXEC) ? O_CLOEXEC : 0);
         FD_UNLOCK(fp);
         break;
     case F_GETFL:
-        ret = oflags(fp->f_flags);
+        // As explained above, the O_CLOEXEC should have been in f_flags,
+        // and shouldn't be returned. Linux always returns 0100000 ("the
+        // flag formerly known as O_LARGEFILE) so let's do it too.
+        ret = (oflags(fp->f_flags) & ~O_CLOEXEC) | 0100000;
         break;
     case F_SETFL:
-        /* Ignore flags */
-        arg &= ~SETFL_IGNORED;
-
-        assert((arg & ~SETFL) == 0);
         FD_LOCK(fp);
         fp->f_flags = fflags((oflags(fp->f_flags) & ~SETFL) |
                 (arg & SETFL));
