@@ -1423,8 +1423,9 @@ int dup2(int oldfd, int newfd)
 /*
  * The file control system call.
  */
-#define SETFL (O_APPEND | O_NONBLOCK | O_ASYNC)
-#define SETFL_IGNORED (O_RDONLY | O_WRONLY | O_RDWR | O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC)
+#define SETFL (O_APPEND | O_ASYNC | O_DIRECT | O_NOATIME | O_NONBLOCK)
+
+#define SETFL_IGNORED (~SETFL)
 
 TRACEPOINT(trace_vfs_fcntl, "%d %d 0x%x", int, int, int);
 TRACEPOINT(trace_vfs_fcntl_ret, "\"%s\"", int);
