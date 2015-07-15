@@ -33,7 +33,7 @@ from top of OSv source tree.
 This script requires following Amazon credentials to be provided via environment variables:
 
     export AWS_ACCESS_KEY_ID=<Access key ID>
-    export AWS_SECRET_ACCESS_KEY<Secret access key>
+    export AWS_SECRET_ACCESS_KEY=<Secret access key>
 
     See http://docs.aws.amazon.com/AWSSimpleQueueService/latest/SQSGettingStartedGuide/AWSCredentials.html
     for more details
