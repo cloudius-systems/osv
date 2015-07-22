@@ -17,6 +17,8 @@
 #include <osv/commands.hh>
 #include <osv/elf.hh>
 
+#define DTB_INTERRUPT_CELLS 3
+
 extern "C" {
 #include "libfdt.h"
 }
@@ -117,17 +119,16 @@ static bool dtb_get_reg_n(int node, u64 *addr, size_t *len, int n)
     return true;
 }
 
-/* NB: assumes #interrupt-cells = 3 */
 static bool dtb_get_int_spec(int node, struct dtb_int_spec *s, int n)
 {
     int size;
     u32 *ints = (u32 *)fdt_getprop(dtb, node, "interrupts", &size);
-    int required = (3 * n) * sizeof(u32);
+    int required = (DTB_INTERRUPT_CELLS * n) * sizeof(u32);
 
     if (!ints || size < required)
         return false;
 
-    for (int i = 0; i < n; i++, ints += 3) {
+    for (int i = 0; i < n; i++, ints += DTB_INTERRUPT_CELLS) {
         u32 value = fdt32_to_cpu(ints[0]);
         switch (value) {
         case 0:
@@ -430,22 +431,68 @@ bool dtb_get_pci_ranges(u64 *addr, size_t *len, int n)
     return true;
 }
 
+/* Interrupt Mapping spec version 0.9
+ *
+ * http://www.firmware.org/1275/practice/imap/imap0_9d.pdf
+ * (good luck reading that mess)
+ */
+
+static int dtb_get_pua_cells(u32 phandle)
+{
+    u32 retval;
+
+    if (!dtb)
+        return -1;
+
+    int node = fdt_node_offset_by_phandle(dtb, phandle);
+    if (node < 0) {
+        return -1;
+    }
+    if (!dtb_getprop_u32(node, "#address-cells", &retval)) {
+        /* if it's not there, it is assumed to be empty, see spec */
+        retval = 0;
+    }
+    return retval;
+}
+
 /* get the number of mappings between pci devices and platform IRQs. */
 int dtb_get_pci_irqmap_count()
 {
+    int count;
     if (!dtb)
         return -1;
 
     int size, node = dtb_get_pci_node();
     u32 *prop = (u32 *)fdt_getprop(dtb, node, "interrupt-map", &size);
 
-    /* we require each entry to be 32 bytes, to match the exact encoding
-     * we are expecting. */
-    if (!prop || size < 0 || size % 32 != 0) {
+    if (!prop) {
         return -1;
-    } else {
-        return size / 32;
     }
+
+    int cells = size / sizeof(u32);
+
+    for (count = 0; cells > 0; count++) {
+        if (cells < 5) {
+            return -1;
+        }
+        /* skip */
+        prop += 4;
+        /* get the parent gic phandle */
+        u32 phandle = fdt32_to_cpu(prop[0]);
+        prop += 1;
+        cells -= 5;
+        /* ignore parent address */
+        int pua_cells = dtb_get_pua_cells(phandle);
+        if (pua_cells < 0) {
+            return -1;
+        }
+        if (cells < pua_cells + DTB_INTERRUPT_CELLS) {
+            return -1;
+        }
+        prop += pua_cells + DTB_INTERRUPT_CELLS;
+        cells -= pua_cells + DTB_INTERRUPT_CELLS;
+    }
+    return count;
 }
 
 /* gets the mask for just the slot member of the pci address. */
@@ -459,6 +506,11 @@ u32 dtb_get_pci_irqmask()
 
     node = dtb_get_pci_node();
     prop = (u32 *)fdt_getprop(dtb, node, "interrupt-map-mask", &size);
+
+    /* we require each entry to be 16 bytes, as PCI unit interrupt specifier
+     * always consists of 4 cells,
+     * 3 for the unit address and 1 for the interrupt specifier.
+     */
 
     if (size != 16)
         return 0;
@@ -475,19 +527,46 @@ bool dtb_get_pci_irqmap(u32 *bdfs, int *irq_ids, int n)
     int size, node = dtb_get_pci_node();
     u32 *prop = (u32 *)fdt_getprop(dtb, node, "interrupt-map", &size);
 
-    /* we require each entry to be 32 bytes, to match the exact encoding
-     * we are expecting. */
-    if (!prop || size < 0 || size % 32 != 0 || n > size / 32) {
+    if (!prop) {
         return false;
     }
+
+    int cells = size / sizeof(u32);
+
     for (int i = 0; i < n; i++) {
+        if (cells < 5) {
+            return false;
+        }
         /* get the BDF part of PHYS.HI */
         bdfs[i] = fdt32_to_cpu(prop[0]) & DTB_PHYSHI_BDF_MASK;
-        /* ignore PHYS.mid/low prop[1], prop[2] */
-        bdfs[i] |= fdt32_to_cpu(prop[3]) & DTB_PIN_MASK;
-        /* ignore parent gic id prop[4], prop[5] */
-        irq_ids[i] = fdt32_to_cpu(prop[6]);
-        prop += 8; /* skip to the next entry */
+        prop += 1;
+        /* ignore PHYS.mid/low */
+        prop += 2;
+        /* get the PCI interrupt pin */
+        bdfs[i] |= fdt32_to_cpu(prop[0]) & DTB_PIN_MASK;
+        prop += 1;
+        /* get the parent gic phandle */
+        u32 phandle = fdt32_to_cpu(prop[0]);
+        prop += 1;
+        cells -= 5;
+
+        /* ignore parent address */
+        int pua_cells = dtb_get_pua_cells(phandle);
+        if (pua_cells < 0) {
+            return false;
+        }
+        if (cells < pua_cells + DTB_INTERRUPT_CELLS) {
+            return false;
+        }
+        prop += pua_cells;
+        /* ignore interrupt type */
+        prop += 1;
+        /* get interrupt value */
+        irq_ids[i] = fdt32_to_cpu(prop[0]);
+        prop += 1;
+        /* ignore interrupt flags */
+        prop += 1;
+        size -= pua_cells * DTB_INTERRUPT_CELLS;
     }
     return true;
 }
