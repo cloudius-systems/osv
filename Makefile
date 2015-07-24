@@ -27,6 +27,11 @@ ifdef modules
 $(info "make modules=..." deprecated. Please use "scripts/build modules=...".)
 endif
 
+# Set rootfs to zfs by default
+ifndef rootfs
+rootfs=zfs
+endif
+
 # Ugly hack to support the old "make ... image=..." image building syntax, and
 # pass it into scripts/build. We should eventually get rid of this, and turn
 # the above deprecated messages into errors.
@@ -293,7 +298,7 @@ tracing-flags = $(tracing-flags-$(conf-tracing))
 
 gcc-opt-Og := $(call compiler-flag, -Og, -Og, compiler/empty.cc)
 
-CXXFLAGS = -std=gnu++11 $(COMMON)
+CXXFLAGS = -std=gnu++11 $(COMMON) -DOSV_ROOT_FS=\"$(rootfs)\"
 CFLAGS = -std=gnu99 $(COMMON)
 
 # should be limited to files under libc/ eventually
@@ -393,7 +398,7 @@ $(out)/boot.bin: arch/x64/boot16.ld $(out)/arch/x64/boot16.o
 
 image-size = $(shell stat --printf %s $(out)/lzloader.elf)
 
-$(out)/loader.img: $(out)/boot.bin $(out)/lzloader.elf
+$(out)/loader.img: $(out)/boot.bin $(out)/lzloader.elf $(out)/mkfs.mfs
 	$(call quiet, dd if=$(out)/boot.bin of=$@ > /dev/null 2>&1, DD loader.img boot.bin)
 	$(call quiet, dd if=$(out)/lzloader.elf of=$@ conv=notrunc seek=128 > /dev/null 2>&1, \
 		DD loader.img lzloader.elf)
@@ -1666,6 +1671,10 @@ fs +=	vfs/main.o \
 fs +=	ramfs/ramfs_vfsops.o \
 	ramfs/ramfs_vnops.o
 
+fs +=   mfs/mfs_vfsops.o \
+        mfs/mfs_inode.o  \
+        mfs/mfs_vnops.o
+
 fs +=	devfs/devfs_vnops.o \
 	devfs/device.o
 
@@ -1812,6 +1821,9 @@ $(out)/gen-ctype-data: gen-ctype-data.cc
 
 ################################################################################
 
+# Build mkfs.mfs so we don't have to use the system one
+$(out)/mkfs.mfs: fs/mfs/mkmfs.c
+	$(call quiet, $(HOST_CXX) -o $@ $^, HOST_CXX $@)
 
 
 

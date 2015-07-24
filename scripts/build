@@ -13,6 +13,7 @@ MAKEFLAGS=${MAKEFLAGS/ image=/ zzz=}
 MAKEFLAGS=${MAKEFLAGS/ modules=/ zzz=}
 unset image modules
 
+
 # Pass to "make" all the given args except "image=..." or "module=..."
 declare -a args
 for i
@@ -55,6 +56,7 @@ OUT=build/`readlink build/last`
 # Look for arguments that look like "name=value", and set them in an
 # assoative array "vars".
 declare -A vars
+vars[rootfs]="zfs"
 j_arg=
 for i
 do
@@ -86,6 +88,7 @@ aarch64) image=${vars[image]-uush};;
 *) image=${vars[image]-default};;
 esac
 modules=${vars[modules]-!$image}
+rootfs=${vars[rootfs]}
 
 # TODO: some modules need these... Would be better if they wouldn't...
 jdkbase=${vars[jdkbase]-`find $SRC/external/$arch/openjdk.bin/usr/lib/jvm -maxdepth 1 -type d -name 'java*'`}
@@ -95,7 +98,9 @@ miscbase=${vars[miscbase]-$SRC/external/$arch/misc.bin}
 
 loader_size=`stat --printf %s $OUT/loader.img`
 zfs_start=$(($loader_size+2097151 & ~2097151))
+mfs_start=$zfs_start
 zfs_size=$(($fs_size - $zfs_start))
+
 
 case $OUT in
 /*)	OSV_BUILD_PATH=$OUT;;
@@ -109,23 +114,43 @@ jdkbase=$jdkbase ARCH=$arch OSV_BASE=$SRC OSV_BUILD_PATH=$OSV_BUILD_PATH scripts
 cd $OUT
 
 cp loader.img bare.raw
-$SRC/scripts/imgedit.py setpartition bare.raw 2 $zfs_start $zfs_size
 
-qemu-img convert -f raw -O qcow2 bare.raw usr.img
-qemu-img resize usr.img ${fs_size}b >/dev/null 2>&1
-# TODO: This "bootfs.manifest" is a misonmer... It doesn't really set the
-# bootfs (this was done by the makefile) and will just be written to the
-# zfs. But it's kind of redundant that mkzfs.py uploads things to zfs, when
-# the upload_manifest.py call does this below. We should just drop this
-# upload part from mkzfs.py....
-# Moreover, it's redundant that module.py above created a bootfs.manifest which
-# includes bootfs.manifest.skel even if the module asked for nothing in
-# bootfs.manifest - why do we need those things (like cpiod.so)
-# in every image's ZFS? For capstan?
-$SRC/scripts/mkzfs.py -o usr.img -d usr.img.d -m bootfs.manifest
+if [ "$rootfs" = "mfs" ]
+then
+    rm -rf mfs mfs.blk
+    mkdir mfs
+    $SRC/scripts/mklocalfs.py -o mfs -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
+    ./mkfs.mfs mfs mfs.blk
+    mfs_size=`stat --printf %s mfs.blk`
+    img_size=$((mfs_start + mfs_size))
+    $SRC/scripts/imgedit.py setpartition bare.raw 2 $mfs_start $mfs_size
+    qemu-img resize bare.raw ${img_size}b 2>&1
+    dd if=mfs.blk of=bare.raw obs=${mfs_start} seek=1
+    qemu-img convert -f raw -O qcow2 bare.raw usr.img
+    $SRC/scripts/imgedit.py setargs usr.img "`cat cmdline`"
+fi
 
-$SRC/scripts/upload_manifest.py -o usr.img -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
-$SRC/scripts/imgedit.py setargs usr.img `cat cmdline`
+if [ "$rootfs" = "zfs" ]
+then
+
+    $SRC/scripts/imgedit.py setpartition bare.raw 2 $zfs_start $zfs_size
+
+    qemu-img convert -f raw -O qcow2 bare.raw usr.img
+    qemu-img resize usr.img ${fs_size}b >/dev/null 2>&1
+    # TODO: This "bootfs.manifest" is a misonmer... It doesn't really set the
+    # bootfs (this was done by the makefile) and will just be written to the
+    # zfs. But it's kind of redundant that mkzfs.py uploads things to zfs, when
+    # the upload_manifest.py call does this below. We should just drop this
+    # upload part from mkzfs.py....
+    # Moreover, it's redundant that module.py above created a bootfs.manifest which
+    # includes bootfs.manifest.skel even if the module asked for nothing in
+    # bootfs.manifest - why do we need those things (like cpiod.so)
+    # in every image's ZFS? For capstan?
+    $SRC/scripts/mkzfs.py -o usr.img -d usr.img.d -m bootfs.manifest
+
+    $SRC/scripts/upload_manifest.py -o usr.img -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
+    $SRC/scripts/imgedit.py setargs usr.img `cat cmdline`
+fi
 
 # Support "build check"
 for i

@@ -2190,7 +2190,6 @@ static void import_extra_zfs_pools(void)
 {
     struct stat st;
     int ret;
-
     // The file '/etc/mnttab' is a LibZFS requirement and will not
     // exist during cpiod phase. The functionality provided by this
     // function isn't needed during that phase, so let's skip it.
@@ -2209,7 +2208,7 @@ static void import_extra_zfs_pools(void)
     }
 }
 
-extern "C" void mount_zfs_rootfs(bool pivot_root)
+extern "C" void mount_rootfs(bool pivot_root, std::string rootfs)
 {
     int ret;
 
@@ -2220,7 +2219,9 @@ extern "C" void mount_zfs_rootfs(bool pivot_root)
     if (ret)
         kprintf("failed to unmount /dev, error = %s\n", strerror(ret));
 
-    ret = sys_mount("/dev/vblk0.1", "/zfs", "zfs", 0, (void *)"osv/zfs");
+    kprintf("VFS: Using %s as the root file system", rootfs.c_str());
+
+    ret = sys_mount("/dev/vblk0.1", "/zfs", rootfs.c_str(), 0, (void *)"osv/zfs");
     if (ret)
         kprintf("failed to mount /zfs, error = %s\n", strerror(ret));
 
@@ -2254,8 +2255,9 @@ extern "C" void mount_zfs_rootfs(bool pivot_root)
         }
     }
     endmntent(ent);
-
-    import_extra_zfs_pools();
+    if (rootfs == "zfs") {
+        import_extra_zfs_pools();
+    }
 }
 
 extern "C" void unmount_rootfs(void)

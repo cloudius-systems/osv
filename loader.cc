@@ -83,7 +83,7 @@ void setup_tls(elf::init_table inittab)
 extern "C" {
     void premain();
     void vfs_init(void);
-    void mount_zfs_rootfs(bool);
+    void mount_rootfs(bool, std::string);
     void ramdisk_init(void);
 }
 
@@ -136,6 +136,7 @@ static std::vector<std::string> opt_ip;
 static std::string opt_defaultgw;
 static std::string opt_nameserver;
 static std::string opt_redirect;
+static std::string opt_rootfs = OSV_ROOT_FS;
 static std::chrono::nanoseconds boot_delay;
 bool opt_assign_net = false;
 bool opt_maxnic = false;
@@ -184,6 +185,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("nameserver", bpo::value<std::string>(), "set nameserver address")
         ("delay", bpo::value<float>()->default_value(0), "delay in seconds before boot")
         ("redirect", bpo::value<std::string>(), "redirect stdout and stderr to file")
+        ("rootfs", bpo::value<std::string>(), "change the rootfs type")
     ;
     bpo::variables_map vars;
     // don't allow --foo bar (require --foo=bar) so we can find the first non-option
@@ -365,11 +367,13 @@ void* do_main_thread(void *_main_args)
     boot_time.event("drivers loaded");
 
     if (opt_mount) {
-        zfsdev::zfsdev_init();
-        mount_zfs_rootfs(opt_pivot);
+        if (opt_rootfs == "zfs") {
+            zfsdev::zfsdev_init();
+        }
+        mount_rootfs(opt_pivot, opt_rootfs);
         bsd_shrinker_init();
     }
-    boot_time.event("ZFS mounted");
+    boot_time.event("FS mounted");
 
     bool has_if = false;
     osv::for_each_if([&has_if] (std::string if_name) {
