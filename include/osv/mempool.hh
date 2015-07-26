@@ -235,9 +235,9 @@ phys_ptr<T> make_phys_ptr(Args&&... args)
     return phys_ptr<T>(static_cast<T*>(ptr));
 }
 
-template <typename T, size_t align>
+template <typename T>
 inline
-phys_ptr<T[]> make_phys_array(size_t n)
+phys_ptr<T[]> make_phys_array(size_t n, size_t align)
 {
     // we have nowhere to store n, so we can't run any destructors
     static_assert(std::is_trivially_destructible<T>::value,
