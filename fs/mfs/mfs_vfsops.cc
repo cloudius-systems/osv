@@ -27,7 +27,6 @@
 #include <stdio.h>
 #include <sys/types.h>
 #include <osv/device.h>
-#include <osv/buf.h>
 #include <osv/debug.h>
 
 static int mfs_mount(struct mount *mp, const char *dev, int flags, const void *data);
@@ -49,16 +48,15 @@ struct vfsops mfs_vfsops = {
 
 static int
 mfs_mount(struct mount *mp, const char *dev, int flags, const void *data) {
-    struct device *device;
-    struct buf *bh = NULL;;
-    struct mfs_super_block *mfs = NULL;
-    struct mfs_super_block *ret = NULL;
-    struct mfs_inode *root_inode = NULL;
+    struct device          *device;
+    struct mfs_buf         *bh    = NULL;;
+    struct mfs             *mfs   = NULL;
+    struct mfs_super_block *sb    = NULL;
+    struct mfs_cache       *cache = NULL;
+    struct mfs_inode *root_inode  = NULL;
     int error = -1;
 
     print("[mfs] Mounting %s\n", dev);
-
-    print("[mfs] mfs_mount called:\n");
     print("[mfs]    dev = %s\n", dev);
     print("[mfs]    flags = %d\n", flags);
 
@@ -68,83 +66,68 @@ mfs_mount(struct mount *mp, const char *dev, int flags, const void *data) {
         return error;
     }
 
-    // kprintf("[mfs] Successfully opened %s\n", dev);
+    cache = new mfs_cache(2048); //1mb cache
 
-    // kprintf("[mfs] Trying to read from device...\n");
-
-    error = bread(device, MFS_SUPERBLOCK_BLOCK, &bh);
-
+    error = cache->read(device, MFS_SUPERBLOCK_BLOCK, &bh);
     if (error) {
         kprintf("[mfs] Error reading mfs superblock\n");
+        delete cache;
         return error;
     }
 
-    mfs = (struct mfs_super_block*) bh->b_data;
+    sb = new mfs_super_block;
+    memcpy(sb, bh->data, sizeof(struct mfs_super_block));
+    cache->release(bh);
 
     // kprintf("[mfs] super block: %p\n", mfs);
 
-    if (mfs) {
-        if (mfs->magic != MFS_MAGIC) {
-            print("[mfs] Error magics do not match!\n");
-            print("[mfs] Expecting %016llX but got %016llX\n", MFS_MAGIC, mfs->magic);
-            brelse(bh);
-            return -1; // TODO: Proper error code
-        }
-        print("[mfs] Got superblock version: 0x%016llX\n", mfs->version);
-        print("[mfs] Got magic:              0x%016llX\n", mfs->magic);
-        print("[mfs] Got block size:         0x%016llX\n", mfs->block_size);
-        print("[mfs] Got inode block:        0x%016llX\n", mfs->inodes_block);
-        
-        ret = new mfs_super_block; // No need for kernel memory
-        ret->version      = mfs->version;
-        ret->magic        = mfs->magic;
-        ret->block_size   = mfs->block_size;
-        ret->inodes_block = mfs->inodes_block;
-
-        // Save a reference to our superblock
-        mp->m_data = ret;
-        mp->m_dev = device;
-        // mp->m_fsid = mfs->magic;
-    } else {
-        brelse(bh);
-        return -1;
+    if (sb->magic != MFS_MAGIC) {
+        print("[mfs] Error magics do not match!\n");
+        print("[mfs] Expecting %016llX but got %016llX\n", MFS_MAGIC, sb->magic);
+        delete cache;
+        return -1; // TODO: Proper error code
     }
+    print("[mfs] Got superblock version: 0x%016llX\n", sb->version);
+    print("[mfs] Got magic:              0x%016llX\n", sb->magic);
+    print("[mfs] Got block size:         0x%016llX\n", sb->block_size);
+    print("[mfs] Got inode block:        0x%016llX\n", sb->inodes_block);
+    
+    mfs = new struct mfs;
+    
+    mfs->sb    = sb;
+    mfs->cache = cache;
 
-    brelse(bh);
+    // Save a reference to our superblock
+    mp->m_data = mfs;
+    mp->m_dev = device;
 
-
-    root_inode = mfs_get_inode(ret, device, MFS_ROOT_INODE_NUMBER);
+    root_inode = mfs_get_inode(mfs, device, MFS_ROOT_INODE_NUMBER);
 
     mfs_set_vnode(mp->m_root->d_vnode, root_inode);
-
-    // kprintf("[mfs] leaving mfs_mount\n");
 
     return 0;
 }
 
 static int mfs_sync(struct mount *mp) {
-    // kprintf("[mfs] mfs_sync called: TODO\n");
     return 0;
 }
 
 static int mfs_statfs(struct mount *mp, struct statfs *statp) {
-    // kprintf("[mfs] mfs_statfs called\n");
-    struct mfs_super_block *mfs = (struct mfs_super_block *)mp->m_data;
+    struct mfs             *mfs = (struct mfs*)mp->m_data;
+    struct mfs_super_block *sb  = mfs->sb;;
 
-    statp->f_bsize = mfs->block_size;
+    statp->f_bsize = sb->block_size;
 
     // Total blocks, unknown...
-    statp->f_blocks = mfs->inodes_block;
+    statp->f_blocks = sb->inodes_block;
     // Read only. 0 blocks free
     statp->f_bfree = 0;
     statp->f_bavail = 0;
 
     statp->f_ffree = 0;
-    statp->f_files = mfs->inodes_block; //Needs to be inode count
+    statp->f_files = sb->inodes_block; //Needs to be inode count
 
     statp->f_namelen = MFS_FILENAME_MAXLEN;
-
-    // statp->f_fsid = mfs->magic; /* File system identifier */
 
     return 0;
 }

@@ -1673,7 +1673,8 @@ fs +=	ramfs/ramfs_vfsops.o \
 
 fs +=   mfs/mfs_vfsops.o \
         mfs/mfs_inode.o  \
-        mfs/mfs_vnops.o
+        mfs/mfs_vnops.o  \
+        mfs/mfs_cache.o
 
 fs +=	devfs/devfs_vnops.o \
 	devfs/device.o

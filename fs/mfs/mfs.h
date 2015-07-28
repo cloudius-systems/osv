@@ -31,6 +31,8 @@
 #include <osv/dentry.h>
 #include <osv/prex.h>
 
+#include "mfs_cache.h"
+
 #define MFS_VERSION            1
 #define MFS_MAGIC              0xDEADBEEF
 #define MFS_FILENAME_MAXLEN    63
@@ -97,8 +99,13 @@ struct mfs_dir_record {
     uint64_t inode_no;
 };
 
-struct mfs_inode *mfs_get_inode(mfs_super_block *sb, struct device *dev, uint64_t inode_no);
+struct mfs_inode *mfs_get_inode(struct mfs *mfs, struct device *dev, uint64_t inode_no);
 void              mfs_set_vnode(struct vnode* vnode, struct mfs_inode *inode);
+
+struct mfs {
+     struct mfs_super_block *sb;
+     struct mfs_cache       *cache;
+};
 
 #endif
 

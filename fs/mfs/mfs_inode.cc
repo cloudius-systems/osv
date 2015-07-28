@@ -31,33 +31,31 @@
 #include <osv/buf.h>
 #include <osv/debug.h>
 
-struct mfs_inode *mfs_get_inode(struct mfs_super_block *sb, struct device *dev, uint64_t inode_no) {
-	struct mfs_inode *inode = NULL;
-	struct mfs_inode *rv   = NULL;
-	struct buf *bh = NULL;
-	uint64_t i = inode_no - 1;
-	int error = -1;
-	uint64_t inode_block = sb->inodes_block;
-	uint64_t inode_offset = 0;
+struct mfs_inode *mfs_get_inode(struct mfs *mfs, struct device *dev, uint64_t inode_no) {
+    struct mfs_super_block *sb    = mfs->sb;
+    struct mfs_cache       *cache = mfs->cache;
+    struct mfs_inode       *inode = NULL;
+    struct mfs_inode       *rv    = NULL;
+    struct mfs_buf         *bh    = NULL;
+    
+    uint64_t i            = inode_no - 1;
+    int      error        = -1;
+    uint64_t inode_block  = sb->inodes_block;
+    uint64_t inode_offset = 0;
 
-	inode_block += MFS_INODE_BLOCK(sb->block_size, i);
+    inode_block += MFS_INODE_BLOCK(sb->block_size, i);
+    inode_offset = MFS_INODE_OFFSET(sb->block_size, i);
 
-	print("[mfs] looking for inode %llu in block %llu\n", inode_no, inode_block);
+    print("[mfs] looking for inode %llu in block %llu\n", inode_no, inode_block);
 
-	error = bread(dev, inode_block, &bh);
-	if (error) {
+    error = cache->read(dev, inode_block, &bh);
+    if (error) {
         kprintf("[mfs] Error reading block [%llu]\n", inode_block);
+        cache->release(bh);
         return NULL;
     }
 
-    inode_offset = MFS_INODE_OFFSET(sb->block_size, i);
-
-    print("[mfs] using offset: %llu\n", inode_offset);
-
-    inode = (struct mfs_inode *)bh->b_data;
-
-    print("[mfs] got some inodes: %p\n", inode);
-
+    inode = (struct mfs_inode *)bh->data;
     inode += inode_offset;
 
     print("[mfs] got inode_no = %llu\n", inode->inode_no);
@@ -67,7 +65,7 @@ struct mfs_inode *mfs_get_inode(struct mfs_super_block *sb, struct device *dev, 
     rv = new mfs_inode;
     memcpy(rv, inode, sizeof(struct mfs_inode));
 
-    brelse(bh);
+    cache->release(bh);
 
     return rv;
 }
@@ -93,7 +91,4 @@ void mfs_set_vnode(struct vnode* vnode, struct mfs_inode *inode) {
     vnode->v_mode = inode->mode;
     vnode->v_size = size;
 }
-
-
-
 
