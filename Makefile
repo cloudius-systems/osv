@@ -398,7 +398,7 @@ $(out)/boot.bin: arch/x64/boot16.ld $(out)/arch/x64/boot16.o
 
 image-size = $(shell stat --printf %s $(out)/lzloader.elf)
 
-$(out)/loader.img: $(out)/boot.bin $(out)/lzloader.elf $(out)/mkfs.mfs
+$(out)/loader.img: $(out)/boot.bin $(out)/lzloader.elf
 	$(call quiet, dd if=$(out)/boot.bin of=$@ > /dev/null 2>&1, DD loader.img boot.bin)
 	$(call quiet, dd if=$(out)/lzloader.elf of=$@ conv=notrunc seek=128 > /dev/null 2>&1, \
 		DD loader.img lzloader.elf)
@@ -1822,9 +1822,6 @@ $(out)/gen-ctype-data: gen-ctype-data.cc
 
 ################################################################################
 
-# Build mkfs.mfs so we don't have to use the system one
-$(out)/mkfs.mfs: fs/mfs/mkmfs.c
-	$(call quiet, $(HOST_CXX) -o $@ $^, HOST_CXX $@)
 
 
 

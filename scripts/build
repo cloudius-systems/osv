@@ -117,15 +117,16 @@ cp loader.img bare.raw
 
 if [ "$rootfs" = "mfs" ]
 then
-    rm -rf mfs mfs.blk
-    mkdir mfs
-    $SRC/scripts/mklocalfs.py -o mfs -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
-    ./mkfs.mfs mfs mfs.blk
-    mfs_size=`stat --printf %s mfs.blk`
+    rm -rf mfs.img
+    echo "Generating mfs.img"
+    $SRC/scripts/gen-mfs-img.py -o mfs.img -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
+    mfs_size=`stat --printf %s mfs.img`
     img_size=$((mfs_start + mfs_size))
     $SRC/scripts/imgedit.py setpartition bare.raw 2 $mfs_start $mfs_size
     qemu-img resize bare.raw ${img_size}b 2>&1
-    dd if=mfs.blk of=bare.raw obs=${mfs_start} seek=1
+    echo "Merging mfs.img in to bare.raw"
+    dd if=mfs.img of=bare.raw obs=${mfs_start} seek=1 >/dev/null 2>&1
+    echo "Creating usr.img"
     qemu-img convert -f raw -O qcow2 bare.raw usr.img
     $SRC/scripts/imgedit.py setargs usr.img "`cat cmdline`"
 fi
