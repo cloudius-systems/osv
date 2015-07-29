@@ -66,6 +66,8 @@
 #define MFS_FILE_PERMISSIONS S_IFREG | MFS_PERMISSIONS
 #define MFS_DIR_PERMISSIONS S_IFDIR | MFS_PERMISSIONS
 
+#define MFS_CACHE_SIZE 1024
+
 #if 0
 #define print(...) kprintf(__VA_ARGS__)
 #else

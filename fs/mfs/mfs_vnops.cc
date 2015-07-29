@@ -116,7 +116,6 @@ static int mfs_read(struct vnode *vnode, struct file* fp, struct uio *uio, int i
         error = cache->read(device, block, &bh);
         if (error) {
             kprintf("[mfs] Error reading block [%llu]\n", block);
-            cache->release(bh);
             return 0;
         }
 
@@ -184,7 +183,6 @@ static int mfs_readdir(struct vnode *vnode, struct file *fp, struct dirent *dir)
         error = cache->read(device, block, &bh);
         if (error) {
             kprintf("[mfs] Error reading block [%llu]\n", block);
-            cache->release(bh);
             mutex_unlock(&mfs_lock);
             return ENOENT;
         }
@@ -232,7 +230,6 @@ static int mfs_lookup(struct vnode *vnode, char *name, struct vnode **vpp) {
         error = cache->read(device, block, &bh);
         if (error) {
             kprintf("[mfs] Error reading block [%llu]\n", block);
-            cache->release(bh);
             mutex_unlock(&mfs_lock);
             return ENOENT;
         }

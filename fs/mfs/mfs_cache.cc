@@ -42,11 +42,12 @@ int mfs_cache::read(struct device *device, uint64_t blkid, mfs_buf **bh) {
         struct buf *buf = NULL;
         int error = bread(device, blkid, &buf);
         if (error) {
+            cache_lock.unlock();
             queue.destroy(qnode);
             *bh = NULL;
             return error;
         }
-        memcpy(qnode->get()->data, buf->b_data, MFS_CACHE_SIZE);
+        memcpy(qnode->get()->data, buf->b_data, MFS_BUFFER_SIZE);
         brelse(buf);
     }
 

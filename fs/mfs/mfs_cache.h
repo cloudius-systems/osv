@@ -32,7 +32,7 @@
 #include <sys/types.h>
 #include <osv/device.h>
 
-#define MFS_CACHE_SIZE 1024
+#define MFS_BUFFER_SIZE 512
 
 struct mfs_buf {
     void *data;
@@ -41,15 +41,19 @@ struct mfs_buf {
 class mfs_node {
 public:
     inline mfs_node () {
-        bh.data = malloc(MFS_CACHE_SIZE);
+        bh.data = malloc(MFS_BUFFER_SIZE);
     };
+
+    inline ~mfs_node () {
+        free(bh.data);
+    }
 
     inline struct mfs_buf *get() {
         return &bh;
     }
 
-    mfs_node *prev = NULL;
-    mfs_node *next = NULL;
+    mfs_node *prev = nullptr;
+    mfs_node *next = nullptr;
     uint64_t blkid = 0;
 
 private:
@@ -59,6 +63,14 @@ private:
 class mfs_queue {
 public:
     inline mfs_queue(int capacity): capacity(capacity) {
+    }
+
+    inline ~mfs_queue() {
+        while (head != nullptr) {
+            mfs_node *temp = head;
+            head = head->next;
+            delete temp;
+        }
     }
 
     void moveToHead(mfs_node *node);
@@ -79,8 +91,8 @@ public:
 private:
     int capacity;
     int size = 0;
-    mfs_node *head = NULL;
-    mfs_node *tail = NULL;
+    mfs_node *head = nullptr;
+    mfs_node *tail = nullptr;
 };
 
 class mfs_cache {

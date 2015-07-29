@@ -66,7 +66,7 @@ mfs_mount(struct mount *mp, const char *dev, int flags, const void *data) {
         return error;
     }
 
-    cache = new mfs_cache(2048); //1mb cache
+    cache = new mfs_cache(MFS_CACHE_SIZE);
 
     error = cache->read(device, MFS_SUPERBLOCK_BLOCK, &bh);
     if (error) {
