@@ -11,15 +11,16 @@ except ImportError:
 
 OSV_BLOCK_SIZE = 512
 
-DIR_MODE = int('0x4000', 16)
-REG_MODE = int('0x8000', 16)
+DIR_MODE  = int('0x4000', 16)
+REG_MODE  = int('0x8000', 16)
+LINK_MODE = int('0xA000', 16)
 
 block = 0
 
 class SuperBlock(Structure):
     _fields_ = [
-        ('version', c_ulonglong),
         ('magic', c_ulonglong),
+        ('version', c_ulonglong),
         ('block_size', c_ulonglong),
         ('inodes_block', c_ulonglong)
     ]
@@ -37,6 +38,11 @@ class Record(Structure):
     _fields_ = [
         ('filename', c_char * 64),
         ('inode_no', c_ulonglong)
+    ]
+
+class Link(Structure):
+    _fields_ = [
+        ('path', c_char * OSV_BLOCK_SIZE)
     ]
 
 
@@ -64,6 +70,16 @@ def write_initial_superblock(fp):
     global block
     pad(fp, OSV_BLOCK_SIZE) # superblock is empty at first
     block += 1
+
+
+def writelink(fp, link):
+    global block
+    length = len(link)
+    l = Link()
+    l.path = link
+    fp.write(l)
+    # There is no need to pad because Link consumes exact 1 block
+    block += 1 # Max length is 512 - 1
 
 
 def writefile(fp, path):
@@ -107,6 +123,7 @@ def writeArray(fp, vals, size):
     if c != 0:
         pad(fp, OSV_BLOCK_SIZE - (c * size))
 
+
 def writedir(fp, manifest):
     global block
     records = []
@@ -133,9 +150,13 @@ def writedir(fp, manifest):
             inode.count = count
             inode.data_block_number = block_no
         else: # file
-            inode.mode = REG_MODE
             inode.data_block_number = block
-            inode.count = writefile(fp, val)
+            if val.startswith('->'):
+                inode.mode = LINK_MODE
+                writelink(fp, val[2:])
+            else:
+                inode.mode = REG_MODE
+                inode.count = writefile(fp, val)
 
 
     block_no = block
@@ -235,24 +256,26 @@ def parseManifest(manifest):
     file_dict = {}
 
     for name, hostname in files:
-        if hostname.startswith('->'): # Ignore links for the time being
-            pass
-        else:
+        if os.path.isdir(hostname):
             print "Adding %s" % name
-            if os.path.isdir(hostname):
-                p = file_dict
-                for token in name.split('/'):
+            p = file_dict
+            for token in name.split('/'):
+                p = p.setdefault(token, {})
+        else:
+            if hostname.startswith('->'):
+                if len(hostname) - 2 > OSV_BLOCK_SIZE - 1:
+                    print "%s is too long, max length is %d" % (hostname[2:], OSV_BLOCK_SIZE - 1)
+                    continue
+            print "Adding %s" % name
+            dirname = os.path.dirname(name)
+            basename = os.path.basename(name)
+            p = file_dict
+            if dirname == '/':
+                p = p.setdefault('', {})
+            else:
+                for token in dirname.split('/'):
                     p = p.setdefault(token, {})
-            elif os.path.isfile(hostname):
-                dirname = os.path.dirname(name)
-                basename = os.path.basename(name)
-                p = file_dict
-                if dirname == '/':
-                    p = p.setdefault('', {})
-                else:
-                    for token in dirname.split('/'):
-                        p = p.setdefault(token, {})
-                p[basename] = hostname
+            p[basename] = hostname
 
     return file_dict
 

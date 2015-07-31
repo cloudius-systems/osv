@@ -2208,9 +2208,10 @@ static void import_extra_zfs_pools(void)
     }
 }
 
-extern "C" void mount_rootfs(bool pivot_root, std::string rootfs)
+extern "C" void mount_rootfs(bool pivot_root)
 {
     int ret;
+    bool is_zfs = false;
 
     if (mkdir("/zfs", 0755) < 0)
         kprintf("failed to create /zfs, error = %s\n", strerror(errno));
@@ -2219,9 +2220,14 @@ extern "C" void mount_rootfs(bool pivot_root, std::string rootfs)
     if (ret)
         kprintf("failed to unmount /dev, error = %s\n", strerror(ret));
 
-    kprintf("VFS: Using %s as the root file system", rootfs.c_str());
+    // We attempt to mount as MFS, if that returns an error code we try ZFS.
+    // We still try to mount on /zfs so there is only one mount point
+    ret = sys_mount("/dev/vblk0.1", "/zfs", "mfs", 0, 0);
+    if (ret) {
+        ret = sys_mount("/dev/vblk0.1", "/zfs", "zfs", 0, (void *)"osv/zfs");
+        is_zfs = true;
+    }
 
-    ret = sys_mount("/dev/vblk0.1", "/zfs", rootfs.c_str(), 0, (void *)"osv/zfs");
     if (ret)
         kprintf("failed to mount /zfs, error = %s\n", strerror(ret));
 
@@ -2255,7 +2261,7 @@ extern "C" void mount_rootfs(bool pivot_root, std::string rootfs)
         }
     }
     endmntent(ent);
-    if (rootfs == "zfs") {
+    if (is_zfs) {
         import_extra_zfs_pools();
     }
 }

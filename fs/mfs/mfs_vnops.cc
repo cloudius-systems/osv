@@ -21,6 +21,8 @@
  * distribution.
  * 
  * DM-0002621
+ *
+ * Based on https://github.com/jdroot/mfs
  */
 
 #include <sys/stat.h>
@@ -38,13 +40,10 @@
 #include <osv/mount.h>
 #include <osv/debug.h>
 
-#include <osv/buf.h>
 #include <sys/types.h>
 #include <osv/device.h>
 
-#include "mfs.h"
-
-static mutex_t mfs_lock = MUTEX_INITIALIZER;
+#include "mfs.hh"
 
 // Used by extern declaration in fs/vfs/vfs_conf.cc
 int mfs_init(void) {
@@ -70,14 +69,42 @@ static size_t min(size_t a, size_t b) {
     return a;
 }
 
+// FIXME: The current link implementation is very wasteful as far as disk
+// space goes. It leaves 512 - path length bytes un-used. For a base OSv
+// image this is not a big deal, because it has exactly 1 link, but if
+// an image is created that uses many links, it could start to be a large,
+// waste of space. I think the least intrusive way to add more is to write
+// links sequentially (with \0 as the last character) and store their
+// data_block_number and offset in the corresponding inode. This makes
+// the generation script a little bit more complex.
+static int mfs_readlink(struct vnode *vnode, struct uio *uio) {
+    struct mfs             *mfs    = (struct mfs*) vnode->v_mount->m_data;
+    struct mfs_inode       *inode  = (struct mfs_inode*)vnode->v_data;
+    struct device          *device = vnode->v_mount->m_dev;
+    struct buf             *bh     = nullptr;
+    char                   *data   = nullptr;
+
+    int error = -1;
+
+    error = mfs_cache_read(mfs, device, inode->data_block_number, &bh);
+    if (error) {
+        kprintf("[mfs] Error reading link from inode->data_block_number\n");
+        return error;
+    }
+
+    data = (char *)bh->b_data;
+    error = uiomove(data, strlen(data) + 1, uio);
+    mfs_cache_release(mfs, bh);
+    return error;
+}
+
 static int mfs_read(struct vnode *vnode, struct file* fp, struct uio *uio, int ioflag) {
     struct mfs             *mfs    = (struct mfs*) vnode->v_mount->m_data;
     struct mfs_super_block *sb     = mfs->sb;
-           mfs_cache       *cache  = mfs->cache;
     struct mfs_inode       *inode  = (struct mfs_inode*)vnode->v_data;
     struct device          *device = vnode->v_mount->m_dev;
-    struct mfs_buf         *bh     = NULL;
-    char                   *data   = NULL;
+    struct buf             *bh     = nullptr;
+    char                   *data   = nullptr;
 
     size_t   len    =  0;
     int      rv     =  0;
@@ -113,15 +140,15 @@ static int mfs_read(struct vnode *vnode, struct file* fp, struct uio *uio, int i
         // Force the read to fit inside a block
         len = min(sb->block_size - offset, read_amt);
 
-        error = cache->read(device, block, &bh);
+        error = mfs_cache_read(mfs, device, block, &bh);
         if (error) {
             kprintf("[mfs] Error reading block [%llu]\n", block);
             return 0;
         }
 
-        data = (char *)bh->data;
+        data = (char *)bh->b_data;
         rv = uiomove(data + offset, len, uio);
-        cache->release(bh);
+        mfs_cache_release(mfs, bh);
 
         // Move on to the next block
         // Set offset to 0 to make sure we start the start of the next block
@@ -139,17 +166,14 @@ static int mfs_readdir(struct vnode *vnode, struct file *fp, struct dirent *dir)
     struct mfs             *mfs    = (struct mfs*)vnode->v_mount->m_data;
     struct mfs_inode       *inode  = (struct mfs_inode*)vnode->v_data;
     struct mfs_super_block *sb     = mfs->sb;
-    mfs_cache              *cache  = mfs->cache;
     struct device          *device = vnode->v_mount->m_dev;
-    struct mfs_dir_record  *record = NULL;
-    struct mfs_buf         *bh     = NULL;
+    struct mfs_dir_record  *record = nullptr;
+    struct buf             *bh     = nullptr;
     
     int      error  = -1;
     uint64_t index  =  0;
     uint64_t block  =  inode->data_block_number;
     uint64_t offset =  0;
-    
-    mutex_lock(&mfs_lock);
     
     if (fp->f_offset == 0) {
         dir->d_type = DT_DIR;
@@ -161,12 +185,11 @@ static int mfs_readdir(struct vnode *vnode, struct file *fp, struct dirent *dir)
         
         index = fp->f_offset - 2;
         if (index >= inode->dir_children_count) {
-            mutex_unlock(&mfs_lock);
             return ENOENT;
         }
     
         block  += MFS_RECORD_BLOCK(sb->block_size, index);
-        offset  = index % (sb->block_size / sizeof(struct mfs_dir_record));
+        offset  = MFS_RECORD_OFFSET(sb->block_size, index);
 
         print("[mfs] readdir block: %llu\n", block);
         print("[mfs] readdir offset: %llu\n", offset);
@@ -180,26 +203,23 @@ static int mfs_readdir(struct vnode *vnode, struct file *fp, struct dirent *dir)
         dir->d_fileno = fp->f_offset;
 
 
-        error = cache->read(device, block, &bh);
+        error = mfs_cache_read(mfs, device, block, &bh);
         if (error) {
             kprintf("[mfs] Error reading block [%llu]\n", block);
-            mutex_unlock(&mfs_lock);
             return ENOENT;
         }
 
-        record = (struct mfs_dir_record*)bh->data;
+        record = (struct mfs_dir_record*)bh->b_data;
         record += offset;
 
         // Set the name
         strlcpy((char *)&dir->d_name, record->filename, sizeof(dir->d_name));
         dir->d_ino = record->inode_no;
 
-        cache->release(bh);
+        mfs_cache_release(mfs, bh);
     }
 
     fp->f_offset++;
-
-    mutex_unlock(&mfs_lock);
 
     return 0;
 }
@@ -208,12 +228,11 @@ static int mfs_lookup(struct vnode *vnode, char *name, struct vnode **vpp) {
     struct mfs             *mfs     = (struct mfs*)vnode->v_mount->m_data;
     struct mfs_inode       *inode   = (struct mfs_inode*)vnode->v_data;
     struct mfs_super_block *sb      = mfs->sb;
-    mfs_cache              *cache   = mfs->cache;
     struct device          *device  = vnode->v_mount->m_dev;
-    struct mfs_inode       *r_inode = NULL;
-    struct mfs_dir_record  *records = NULL;
-    struct mfs_buf         *bh      = NULL;
-    struct vnode           *vp      = NULL;
+    struct mfs_inode       *r_inode = nullptr;
+    struct mfs_dir_record  *records = nullptr;
+    struct buf             *bh      = nullptr;
+    struct vnode           *vp      = nullptr;
 
     int      error  = -1;
     uint64_t i      =  0;
@@ -224,17 +243,14 @@ static int mfs_lookup(struct vnode *vnode, char *name, struct vnode **vpp) {
         return ENOENT;
     }
 
-    mutex_lock(&mfs_lock);
-
-    while (r_inode == NULL) {
-        error = cache->read(device, block, &bh);
+    while (r_inode == nullptr) {
+        error = mfs_cache_read(mfs, device, block, &bh);
         if (error) {
             kprintf("[mfs] Error reading block [%llu]\n", block);
-            mutex_unlock(&mfs_lock);
             return ENOENT;
         }
 
-        records = (struct mfs_dir_record *)bh->data;
+        records = (struct mfs_dir_record *)bh->b_data;
         for (i = 0; i < MFS_RECORDS_PER_BLOCK(sb->block_size); i++) {
             if (strcmp(name, records[i].filename) == 0) {
                 // Found!
@@ -248,11 +264,10 @@ static int mfs_lookup(struct vnode *vnode, char *name, struct vnode **vpp) {
             }
         }
 
-        cache->release(bh);
+        mfs_cache_release(mfs, bh);
 
         // If we looked at every entry and still havnt found it
-        if (c >= inode->dir_children_count && r_inode == NULL) {
-            mutex_unlock(&mfs_lock);
+        if (c >= inode->dir_children_count && r_inode == nullptr) {
             return ENOENT;
         } else {
             // Move on to the next block!
@@ -266,22 +281,19 @@ static int mfs_lookup(struct vnode *vnode, char *name, struct vnode **vpp) {
         print("[mfs] found vp in cache!\n");
         // Found in cache?
         *vpp = vp;
-        mutex_unlock(&mfs_lock);
         return 0;
     }
 
     print("[mfs] got vp: %p\n", vp);
 
     if (!vp) {
-        mutex_unlock(&mfs_lock);
+        delete r_inode;
         return ENOMEM;
     }
 
     mfs_set_vnode(vp, r_inode);
 
     *vpp = vp;
-
-    mutex_unlock(&mfs_lock);
 
     return 0;
 }
@@ -304,7 +316,6 @@ static int mfs_getattr(struct vnode *vnode, struct vattr *attr) {
     return 0;
 }
 
-
 #define mfs_seek        ((vnop_seek_t)vop_nullop)
 #define mfs_ioctl        ((vnop_ioctl_t)vop_nullop)
 #define mfs_inactive    ((vnop_inactive_t)vop_nullop)
@@ -313,26 +324,25 @@ static int mfs_getattr(struct vnode *vnode, struct vattr *attr) {
 #define mfs_arc            ((vnop_cache_t) nullptr)
 #define mfs_fallocate    ((vnop_fallocate_t)vop_nullop)
 #define mfs_fsync        ((vnop_fsync_t)vop_nullop)
-#define mfs_readlink    ((vnop_readlink_t)vop_nullop)
 #define mfs_symlink        ((vnop_symlink_t)vop_nullop)
 
 struct vnops mfs_vnops = {
     mfs_open,       /* open */
     mfs_close,      /* close */
     mfs_read,       /* read */
-    NULL,           /* write - not impelemented */
+    nullptr,           /* write - not impelemented */
     mfs_seek,       /* seek */
     mfs_ioctl,      /* ioctl */
     mfs_fsync,      /* fsync */
     mfs_readdir,    /* readdir */
     mfs_lookup,     /* lookup */
-    NULL,           /* create - not impelemented */
-    NULL,           /* remove - not impelemented */
-    NULL,           /* rename - not impelemented */
-    NULL,           /* mkdir - not impelemented */
-    NULL,           /* rmdir - not impelemented */
+    nullptr,        /* create - not impelemented */
+    nullptr,        /* remove - not impelemented */
+    nullptr,        /* rename - not impelemented */
+    nullptr,        /* mkdir - not impelemented */
+    nullptr,        /* rmdir - not impelemented */
     mfs_getattr,    /* getattr */
-    NULL,           /* setattr - not impelemented */
+    nullptr,        /* setattr - not impelemented */
     mfs_inactive,   /* inactive */
     mfs_truncate,   /* truncate */
     mfs_link,       /* link */

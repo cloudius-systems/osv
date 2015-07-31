@@ -21,9 +21,11 @@
  * distribution.
  * 
  * DM-0002621
+ *
+ * Based on https://github.com/jdroot/mfs
  */
  
-#include "mfs.h"
+#include "mfs.hh"
 #include <stdio.h>
 #include <sys/types.h>
 #include <osv/device.h>
@@ -49,16 +51,11 @@ struct vfsops mfs_vfsops = {
 static int
 mfs_mount(struct mount *mp, const char *dev, int flags, const void *data) {
     struct device          *device;
-    struct mfs_buf         *bh    = NULL;;
-    struct mfs             *mfs   = NULL;
-    struct mfs_super_block *sb    = NULL;
-    struct mfs_cache       *cache = NULL;
-    struct mfs_inode *root_inode  = NULL;
+    struct buf             *bh    = nullptr;
+    struct mfs             *mfs   = new struct mfs;
+    struct mfs_super_block *sb    = nullptr;
+    struct mfs_inode *root_inode  = nullptr;
     int error = -1;
-
-    print("[mfs] Mounting %s\n", dev);
-    print("[mfs]    dev = %s\n", dev);
-    print("[mfs]    flags = %d\n", flags);
 
     error = device_open(dev + 5, DO_RDWR, &device);
     if (error) {
@@ -66,36 +63,46 @@ mfs_mount(struct mount *mp, const char *dev, int flags, const void *data) {
         return error;
     }
 
-    cache = new mfs_cache(MFS_CACHE_SIZE);
 
-    error = cache->read(device, MFS_SUPERBLOCK_BLOCK, &bh);
+    error = mfs_cache_read(mfs, device, MFS_SUPERBLOCK_BLOCK, &bh);
     if (error) {
         kprintf("[mfs] Error reading mfs superblock\n");
-        delete cache;
+        device_close(device);
+        delete mfs;
         return error;
     }
 
-    sb = new mfs_super_block;
-    memcpy(sb, bh->data, sizeof(struct mfs_super_block));
-    cache->release(bh);
-
-    // kprintf("[mfs] super block: %p\n", mfs);
-
+    // We see if the file system is MFS, if not, return error and close everything
+    sb = (struct mfs_super_block*)bh->b_data;
     if (sb->magic != MFS_MAGIC) {
         print("[mfs] Error magics do not match!\n");
         print("[mfs] Expecting %016llX but got %016llX\n", MFS_MAGIC, sb->magic);
-        delete cache;
+        mfs_cache_release(mfs, bh);
+        device_close(device);
+        delete mfs;
         return -1; // TODO: Proper error code
     }
+
+    if (sb->version != MFS_VERSION) {
+        kprintf("[mfs] Found mfs volume but incompatible version!\n");
+        kprintf("[mfs] Expecting %llu but found %llu\n", MFS_VERSION, sb->version);
+        mfs_cache_release(mfs, bh);
+        device_close(device);
+        delete mfs;
+        return -1;
+    }
+
     print("[mfs] Got superblock version: 0x%016llX\n", sb->version);
     print("[mfs] Got magic:              0x%016llX\n", sb->magic);
     print("[mfs] Got block size:         0x%016llX\n", sb->block_size);
     print("[mfs] Got inode block:        0x%016llX\n", sb->inodes_block);
-    
-    mfs = new struct mfs;
+
+    // Since we have found MFS, we can copy the superblock now
+    sb = new mfs_super_block;
+    memcpy(sb, bh->b_data, MFS_SUPERBLOCK_SIZE);
+    mfs_cache_release(mfs, bh);
     
     mfs->sb    = sb;
-    mfs->cache = cache;
 
     // Save a reference to our superblock
     mp->m_data = mfs;
@@ -114,7 +121,7 @@ static int mfs_sync(struct mount *mp) {
 
 static int mfs_statfs(struct mount *mp, struct statfs *statp) {
     struct mfs             *mfs = (struct mfs*)mp->m_data;
-    struct mfs_super_block *sb  = mfs->sb;;
+    struct mfs_super_block *sb  = mfs->sb;
 
     statp->f_bsize = sb->block_size;
 
@@ -134,6 +141,13 @@ static int mfs_statfs(struct mount *mp, struct statfs *statp) {
 
 static int
 mfs_unmount(struct mount *mp, int flags) {
-    // kprintf("[mfs] mfs_umount called: %d\n", flags);
+    struct mfs             *mfs   = (struct mfs*)mp->m_data;
+    struct mfs_super_block *sb    = mfs->sb;
+    struct device          *dev   = mp->m_dev;
+
+    device_close(dev);
+    delete sb;
+    delete mfs;
+    
     return 0;
 }

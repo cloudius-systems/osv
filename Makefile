@@ -27,11 +27,6 @@ ifdef modules
 $(info "make modules=..." deprecated. Please use "scripts/build modules=...".)
 endif
 
-# Set rootfs to zfs by default
-ifndef rootfs
-rootfs=zfs
-endif
-
 # Ugly hack to support the old "make ... image=..." image building syntax, and
 # pass it into scripts/build. We should eventually get rid of this, and turn
 # the above deprecated messages into errors.
@@ -298,7 +293,7 @@ tracing-flags = $(tracing-flags-$(conf-tracing))
 
 gcc-opt-Og := $(call compiler-flag, -Og, -Og, compiler/empty.cc)
 
-CXXFLAGS = -std=gnu++11 $(COMMON) -DOSV_ROOT_FS=\"$(rootfs)\"
+CXXFLAGS = -std=gnu++11 $(COMMON)
 CFLAGS = -std=gnu99 $(COMMON)
 
 # should be limited to files under libc/ eventually
@@ -1671,13 +1666,13 @@ fs +=	vfs/main.o \
 fs +=	ramfs/ramfs_vfsops.o \
 	ramfs/ramfs_vnops.o
 
-fs +=   mfs/mfs_vfsops.o \
-        mfs/mfs_inode.o  \
-        mfs/mfs_vnops.o  \
-        mfs/mfs_cache.o
-
 fs +=	devfs/devfs_vnops.o \
 	devfs/device.o
+
+fs += mfs/mfs_vfsops.o \
+      mfs/mfs_vnops.o  \
+      mfs/mfs_inode.o  \
+      mfs/mfs_cache.o
 
 fs +=	procfs/procfs_vnops.o
 
