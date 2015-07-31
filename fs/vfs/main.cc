@@ -2190,6 +2190,7 @@ static void import_extra_zfs_pools(void)
 {
     struct stat st;
     int ret;
+
     // The file '/etc/mnttab' is a LibZFS requirement and will not
     // exist during cpiod phase. The functionality provided by this
     // function isn't needed during that phase, so let's skip it.
@@ -2208,7 +2209,7 @@ static void import_extra_zfs_pools(void)
     }
 }
 
-extern "C" void mount_rootfs(bool pivot_root)
+extern "C" void mount_zfs_rootfs(bool pivot_root)
 {
     int ret;
     bool is_zfs = false;

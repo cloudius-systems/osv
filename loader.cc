@@ -83,7 +83,7 @@ void setup_tls(elf::init_table inittab)
 extern "C" {
     void premain();
     void vfs_init(void);
-    void mount_rootfs(bool);
+    void mount_zfs_rootfs(bool);
     void ramdisk_init(void);
 }
 
