@@ -366,7 +366,7 @@ void* do_main_thread(void *_main_args)
 
     if (opt_mount) {
         zfsdev::zfsdev_init();
-        mount_rootfs(opt_pivot);
+        mount_zfs_rootfs(opt_pivot);
         bsd_shrinker_init();
     }
     boot_time.event("ZFS mounted");

@@ -56,7 +56,7 @@ OUT=build/`readlink build/last`
 # Look for arguments that look like "name=value", and set them in an
 # assoative array "vars".
 declare -A vars
-vars[rootfs]="zfs"
+rootfs=${vars[rootfs]-zfs}
 j_arg=
 for i
 do
@@ -97,9 +97,8 @@ glibcbase=${vars[glibcbase]-$SRC/external/$arch/glibc.bin}
 miscbase=${vars[miscbase]-$SRC/external/$arch/misc.bin}
 
 loader_size=`stat --printf %s $OUT/loader.img`
-zfs_start=$(($loader_size+2097151 & ~2097151))
-mfs_start=$zfs_start
-zfs_size=$(($fs_size - $zfs_start))
+kernel_end=$(($loader_size+2097151 & ~2097151))
+zfs_size=$(($fs_size - $kernel_end))
 
 
 case $OUT in
@@ -118,23 +117,19 @@ cp loader.img bare.raw
 if [ "$rootfs" = "mfs" ]
 then
     rm -rf mfs.img
-    echo "Generating mfs.img"
     $SRC/scripts/gen-mfs-img.py -o mfs.img -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
     mfs_size=`stat --printf %s mfs.img`
-    img_size=$((mfs_start + mfs_size))
-    $SRC/scripts/imgedit.py setpartition bare.raw 2 $mfs_start $mfs_size
+    img_size=$((kernel_end + mfs_size))
+    $SRC/scripts/imgedit.py setpartition bare.raw 2 $kernel_end $mfs_size
     qemu-img resize bare.raw ${img_size}b 2>&1
-    echo "Merging mfs.img in to bare.raw"
-    dd if=mfs.img of=bare.raw obs=${mfs_start} seek=1 >/dev/null 2>&1
-    echo "Creating usr.img"
+    dd if=mfs.img of=bare.raw obs=${kernel_end} seek=1 >/dev/null 2>&1
     qemu-img convert -f raw -O qcow2 bare.raw usr.img
-    $SRC/scripts/imgedit.py setargs usr.img "`cat cmdline`"
 fi
 
 if [ "$rootfs" = "zfs" ]
 then
 
-    $SRC/scripts/imgedit.py setpartition bare.raw 2 $zfs_start $zfs_size
+    $SRC/scripts/imgedit.py setpartition bare.raw 2 $kernel_end $zfs_size
 
     qemu-img convert -f raw -O qcow2 bare.raw usr.img
     qemu-img resize usr.img ${fs_size}b >/dev/null 2>&1
@@ -150,8 +145,9 @@ then
     $SRC/scripts/mkzfs.py -o usr.img -d usr.img.d -m bootfs.manifest
 
     $SRC/scripts/upload_manifest.py -o usr.img -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
-    $SRC/scripts/imgedit.py setargs usr.img `cat cmdline`
 fi
+
+$SRC/scripts/imgedit.py setargs usr.img `cat cmdline`
 
 # Support "build check"
 for i
