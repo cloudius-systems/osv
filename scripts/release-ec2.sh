@@ -162,6 +162,7 @@ import_osv_volume() {
  ec2-import-volume $OSV_VOLUME \
                                  -f raw \
                                  -b $OSV_BUCKET \
+                                 --region $AWS_DEFAULT_REGION \
                                  -z `get_availability_zone` \
                                  $EC2_CREDENTIALS | tee /dev/tty | ec2_response_value IMPORTVOLUME TaskId
 }
@@ -266,8 +267,8 @@ while true; do
        fi
     fi
 
-    echo_progress Creating bucket $OSV_BUCKET
-    aws s3api create-bucket --bucket $OSV_BUCKET
+    echo_progress Creating bucket $OSV_BUCKET in $AWS_DEFAULT_REGION
+    aws s3api create-bucket --bucket $OSV_BUCKET --create-bucket-configuration LocationConstraint=$AWS_DEFAULT_REGION
 
     if test x"$?" != x"0"; then
         handle_error Failed to create S3 bucket.
