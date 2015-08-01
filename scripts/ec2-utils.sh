@@ -26,18 +26,18 @@ ec2_response_value() {
 
 get_volume_conversion_status() {
  local TASKID=$1
- ec2-describe-conversion-tasks $TASKID | tee /dev/tty | ec2_response_value IMPORTVOLUME Status
+ ec2-describe-conversion-tasks $TASKID --region $AWS_DEFAULT_REGION | tee /dev/tty | ec2_response_value IMPORTVOLUME Status
 }
 
 get_created_volume_id() {
  local TASKID=$1
- ec2-describe-conversion-tasks $TASKID | tee /dev/tty | ec2_response_value DISKIMAGE VolumeId
+ ec2-describe-conversion-tasks $TASKID --region $AWS_DEFAULT_REGION | tee /dev/tty | ec2_response_value DISKIMAGE VolumeId
 }
 
 rename_object() {
  local OBJID=$1
  local OBJNAME=$2
- ec2-create-tags $OBJID --tag Name="$OBJNAME"
+ ec2-create-tags $OBJID --tag Name="$OBJNAME" --region $AWS_DEFAULT_REGION
 }
 
 tag_object() {
@@ -46,7 +46,7 @@ tag_object() {
  local TAGVAL=$3
  shift 3
 
- ec2-create-tags $OBJID --tag $TAGNAME=$TAGVAL $*
+ ec2-create-tags $OBJID --tag $TAGNAME=$TAGVAL $* --region $AWS_DEFAULT_REGION
 }
 
 wait_import_completion() {
@@ -194,7 +194,7 @@ start_instances() {
  ec2-start-instances $*
 }
 stop_instance_forcibly() {
- ec2-stop-instances $1 --force
+ ec2-stop-instances $1 --force --region $AWS_DEFAULT_REGION
 }
 
 create_ami_by_instance() {
