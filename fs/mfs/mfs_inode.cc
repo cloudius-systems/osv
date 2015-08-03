@@ -8,8 +8,8 @@
  * LIMITATION, THE WARRANTIES OF MERCHANTABILITY, FITNESS FOR A PARTICULAR
  * PURPOSE, AND NON-INFRINGEMENT OF PROPRIETARY RIGHTS.
  *
- * Released under a modified BSD license. For full terms, please see the
- * license file in this folder or contact permission@sei.cmu.edu.
+ * Released under a modified BSD license. For full terms, please see mfs.txt in
+ * the licenses folder or contact permission@sei.cmu.edu.
  *
  * DM-0002621
  *
