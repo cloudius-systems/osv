@@ -37,7 +37,7 @@ get_created_volume_id() {
 rename_object() {
  local OBJID=$1
  local OBJNAME=$2
- ec2-create-tags $OBJID --tag Name="$OBJNAME" --region $AWS_DEFAULT_REGION
+ ec2-create-tags $OBJID --region $AWS_DEFAULT_REGION --tag Name="$OBJNAME"
 }
 
 tag_object() {
@@ -46,7 +46,7 @@ tag_object() {
  local TAGVAL=$3
  shift 3
 
- ec2-create-tags $OBJID --tag $TAGNAME=$TAGVAL $* --region $AWS_DEFAULT_REGION
+ ec2-create-tags $OBJID --region $AWS_DEFAULT_REGION --tag $TAGNAME=$TAGVAL $*
 }
 
 wait_import_completion() {
