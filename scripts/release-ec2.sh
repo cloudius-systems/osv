@@ -193,7 +193,7 @@ launch_template_instance() {
  local TEMPLATE_AMI_ID=$1
  local TEMPLATE_INSTANCE_TYPE=$2
 
- ec2-run-instances $TEMPLATE_AMI_ID --availability-zone `get_availability_zone` \
+ ec2-run-instances $TEMPLATE_AMI_ID --region $AWS_DEFAULT_REGION --availability-zone `get_availability_zone` \
                                                   --instance-type $TEMPLATE_INSTANCE_TYPE \
                                                   $PLACEMENT \
                                                   | tee /dev/tty | ec2_response_value INSTANCE INSTANCE
@@ -202,7 +202,7 @@ launch_template_instance() {
 get_availability_zone() {
 
  if test x"$OSV_AVAILABILITY_ZONE" = x""; then
-     OSV_AVAILABILITY_ZONE=`ec2-describe-availability-zones | ec2_response_value AVAILABILITYZONE AVAILABILITYZONE | head -1`
+     OSV_AVAILABILITY_ZONE=`ec2-describe-availability-zones --region $AWS_DEFAULT_REGION | ec2_response_value AVAILABILITYZONE AVAILABILITYZONE | head -1`
  fi
 
  echo $OSV_AVAILABILITY_ZONE
