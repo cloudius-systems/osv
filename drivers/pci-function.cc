@@ -741,7 +741,7 @@ namespace pci {
 
         u16 ctrl = msi_get_control();
         ctrl &= ~PCIR_MSI_CTRL_ME;
-        msix_set_control(ctrl);
+        msi_set_control(ctrl);
 
         _msi_enabled = false;
     }
