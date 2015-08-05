@@ -49,7 +49,7 @@ namespace pci {
             bar * pbar = new bar(this, pos);
             add_bar(idx++, pbar);
 
-            pos += pbar->is_64() ? 8 : 4;
+            pos += pbar->is_64() ? idx++, 8 : 4;
         }
 
         return true;
