@@ -195,7 +195,7 @@ namespace pci {
         _header_type = pci_readb(PCI_CFG_HEADER_TYPE);
         _base_class_code = pci_readb(PCI_CFG_CLASS_CODE0);
         _sub_class_code = pci_readb(PCI_CFG_CLASS_CODE1);
-        _lower_class_code = pci_readb(PCI_CFG_CLASS_CODE2);
+        _programming_interface = pci_readb(PCI_CFG_CLASS_CODE2);
 
         // Parse capabilities
         bool parse_ok = parse_pci_capabilities();
@@ -306,6 +306,11 @@ namespace pci {
     u8 function::get_sub_class_code()
     {
         return _sub_class_code;
+    }
+
+    u8 function::get_programming_interface()
+    {
+        return _programming_interface;
     }
 
     bool function::is_device()
