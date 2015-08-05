@@ -116,28 +116,28 @@ namespace pci {
 
     u32 bar::readl(u32 offset)
     {
-        if (is_pio()) {
-            return inl(_addr_lo + offset);
-        } else {
+        if (_is_mmio) {
             return mmio_getl(_addr_mmio + offset);
+        } else {
+            return inl(_addr_lo + offset);
         }
     }
 
     u16 bar::readw(u32 offset)
     {
-        if (is_pio()) {
-            return inw(_addr_lo + offset);
-        } else {
+        if (_is_mmio) {
             return mmio_getw(_addr_mmio + offset);
+        } else {
+            return inw(_addr_lo + offset);
         }
     }
 
     u8 bar::readb(u32 offset)
     {
-        if (is_pio()) {
-            return inb(_addr_lo + offset);
-        } else {
+        if (_is_mmio) {
             return mmio_getb(_addr_mmio + offset);
+        } else {
+            return inb(_addr_lo + offset);
         }
     }
 
@@ -152,28 +152,28 @@ namespace pci {
 
     void bar::writel(u32 offset, u32 val)
     {
-        if (is_pio()) {
-            outl(val, _addr_lo + offset);
+        if (_is_mmio) {
+            mmio_setl(_addr_mmio + offset, val);
         } else {
-            return mmio_setl(_addr_mmio + offset, val);
+            outl(val, _addr_lo + offset);
         }
     }
 
     void bar::writew(u32 offset, u16 val)
     {
-        if (is_pio()) {
-            outw(val, _addr_lo + offset);
+        if (_is_mmio) {
+            mmio_setw(_addr_mmio + offset, val);
         } else {
-            return mmio_setw(_addr_mmio + offset, val);
+            outw(val, _addr_lo + offset);
         }
     }
 
     void bar::writeb(u32 offset, u8 val)
     {
-        if (is_pio()) {
-            outb(val, _addr_lo + offset);
+        if (_is_mmio) {
+            mmio_setb(_addr_mmio + offset, val);
         } else {
-            return mmio_setb(_addr_mmio + offset, val);
+            outb(val, _addr_lo + offset);
         }
     }
 
