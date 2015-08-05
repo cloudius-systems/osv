@@ -855,12 +855,13 @@ namespace pci {
             (u16)_bus, (u16)_device, (u16)_func, _vendor_id, _device_id);
 
         // PCI BARs
-        int bar_idx = 1;
-        bar *bar = get_bar(bar_idx);
-        while (bar != nullptr) {
-            pci_d("    bar[%d]: %sbits addr=%x size=%x", bar_idx,
-                (bar->is_64()?"64":"32"), bar->get_addr64(), bar->get_size());
-            bar = get_bar(++bar_idx);
+        for (int bar_idx = 1; bar_idx <= 6; bar_idx++) {
+            bar *bar = get_bar(bar_idx);
+            if (bar) {
+                pci_d("    bar[%d]: %sbits addr=%p size=%x",
+                    bar_idx, (bar->is_64() ? "64" : "32"),
+                    bar->get_addr64(), bar->get_size());
+            }
         }
 
         pci_d("    IRQ = %d", (u16)get_interrupt_line());
