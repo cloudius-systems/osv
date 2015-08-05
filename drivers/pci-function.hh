@@ -76,9 +76,11 @@ namespace pci {
         mmioaddr_t get_mmio();
 
         // Access the pio or mmio bar
+        u64 readq(u32 offset);
         u32 readl(u32 offset);
         u16 readw(u32 offset);
         u8 readb(u32 offset);
+        void writeq(u32 offset, u64 val);
         void writel(u32 offset, u32 val);
         void writew(u32 offset, u16 val);
         void writeb(u32 offset, u8 val);

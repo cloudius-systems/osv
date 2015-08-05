@@ -105,6 +105,15 @@ namespace pci {
         return _addr_mmio;
     }
 
+    u64 bar::readq(u32 offset)
+    {
+        if (_is_mmio) {
+            return mmio_getq(_addr_mmio + offset);
+        } else {
+            abort("64 bit read attempt from PIO area");
+        }
+    }
+
     u32 bar::readl(u32 offset)
     {
         if (is_pio()) {
@@ -129,6 +138,15 @@ namespace pci {
             return inb(_addr_lo + offset);
         } else {
             return mmio_getb(_addr_mmio + offset);
+        }
+    }
+
+    void bar::writeq(u32 offset, u64 val)
+    {
+        if (_is_mmio) {
+            mmio_setq(_addr_mmio + offset, val);
+        } else {
+            abort("64 bit write attempt to PIO area");
         }
     }
 
