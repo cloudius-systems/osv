@@ -1,10 +1,6 @@
 #!/usr/bin/python
 
 import os, optparse, io, subprocess
-try:
-    import configparser
-except ImportError:
-    import ConfigParser as configparser
 import upload_manifest
 
 make_option = optparse.make_option
@@ -31,9 +27,7 @@ depends = io.StringIO()
 if options.depends:
     depends = open(options.depends, 'w')
 
-manifest = configparser.SafeConfigParser()
-manifest.optionxform = str # avoid lowercasing
-manifest.read(options.manifest)
+manifest = upload_manifest.read_manifest(options.manifest)
 
 depends.write(u'%s: \\\n' % (options.output,))
 

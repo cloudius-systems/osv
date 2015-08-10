@@ -1,10 +1,6 @@
 #!/usr/bin/python
 
-import os, optparse, io, subprocess, socket, threading, stat, sys
-try:
-    import configparser
-except ImportError:
-    import ConfigParser as configparser
+import os, optparse, io, subprocess, socket, threading, stat, sys, re, string
 
 try:
     import StringIO
@@ -58,12 +54,23 @@ def unsymlink(f):
     except Exception:
         return f
 
-def upload(osv, manifest, depends):
-    files = dict([(f, manifest.get('manifest', f, vars=defines))
-                  for f in manifest.options('manifest')])
+# Reads the manifest and returns it as a list of pairs (guestpath, hostpath).
+def read_manifest(fn):
+    ret = []
+    comment = re.compile("^[ \t]*(|#.*|\[manifest])$")
+    with open(fn, 'r') as f:
+        for line in f:
+            line = line.rstrip();
+            if comment.match(line): continue
+            components = string.split(line, ": ", 2)
+            guestpath = components[0].strip();
+            hostpath = components[1].strip()
+            ret.append((guestpath, hostpath))
+    return ret
 
-    files = list(expand(files.items()))
-    files = [(x, unsymlink(y)) for (x, y) in files]
+def upload(osv, manifest, depends):
+    files = list(expand(manifest))
+    files = [(x, unsymlink(y % defines)) for (x, y) in files]
 
     # Wait for the guest to come up and tell us it's listening
     while True:
@@ -181,9 +188,7 @@ def main():
     depends = StringIO()
     if options.depends:
         depends = file(options.depends, 'w')
-    manifest = configparser.SafeConfigParser()
-    manifest.optionxform = str # avoid lowercasing
-    manifest.read(options.manifest)
+    manifest = read_manifest(options.manifest)
 
     depends.write('%s: \\\n' % (options.output,))
 
