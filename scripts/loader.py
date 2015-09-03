@@ -160,6 +160,30 @@ class LogTrace(gdb.Command):
 
 LogTrace()
 
+# Check if given Field has member field called name, i.e., whether
+# using field[name] would work.
+def has_field(field, name):
+    for x in field.type.fields():
+        if x.is_base_class and has_field(x, name):
+            return True
+        if x.name == name:
+            return True
+
+def intrusive_set_root_node(v):
+    if has_field(v, 'parent_'):
+        return v['parent_']
+    elif has_field(v, 'holder'):
+        return v['holder']['root']['parent_']
+    else:
+        return v['tree_']['data_']['node_plus_pred_']['header_plus_size_']['header_']['parent_']
+
+def intrusive_list_root_node(v):
+    a = v['data_']['root_plus_size_']
+    if has_field(a, 'm_header'):
+        return a['m_header']
+    else:
+        return a['root_']
+
 #
 # free_page_ranges generator, use pattern:
 # for range in free_page_ranges():
@@ -184,14 +208,13 @@ def free_page_ranges():
                 yield x
 
     fpr = gdb.lookup_global_symbol('memory::free_page_ranges').value()
-    p = fpr['_free_huge']['tree_']['data_']['node_plus_pred_']
-    node = p['header_plus_size_']['header_']['parent_']
+    node = intrusive_set_root_node(fpr['_free_huge'])
     for x in free_page_ranges_tree(node):
         yield x
 
     for i in range(0, 16):
         free_list = fpr['_free'][i]
-        node = free_list['data_']['root_plus_size_']['root_']
+        node = intrusive_list_root_node(free_list)
         first_addr = node.cast(gdb.lookup_type('void').pointer())
 
         if first_addr == free_list.address:
@@ -211,8 +234,7 @@ def free_page_ranges():
 def vma_list(node=None):
     if node == None:
         fpr = gdb.lookup_global_symbol('mmu::vma_list').value()
-        p = fpr['tree_']['data_']['node_plus_pred_']
-        node = p['header_plus_size_']['header_']['parent_']
+        node = intrusive_set_root_node(fpr)
 
     if node:
         offset = gdb.parse_and_eval("(int)&(('mmu::vma'*)0)->_vma_list_hook")
@@ -720,7 +742,7 @@ class intrusive_list:
     def __init__(self, list_ref):
         list_type = list_ref.type.strip_typedefs()
         self.node_type = list_type.template_argument(0)
-        self.root = list_ref['data_']['root_plus_size_']['root_']
+        self.root = intrusive_list_root_node(list_ref)
 
         member_hook = get_template_arg_with_prefix(list_type, "boost::intrusive::member_hook")
         if member_hook:
