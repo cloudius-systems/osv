@@ -13,6 +13,7 @@
 #include "libc.hh"
 #include <osv/clock.hh>
 #include <osv/sched.hh>
+#include "pthread.hh"
 
 u64 convert(const timespec& ts)
 {

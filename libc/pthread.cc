@@ -31,6 +31,8 @@
 #include <osv/spinlock.h>
 #include <osv/rwlock.h>
 
+#include "pthread.hh"
+
 namespace pthread_private {
 
     const unsigned tsd_nkeys = PTHREAD_KEYS_MAX;
