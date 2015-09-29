@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import os, optparse, io, subprocess, socket, threading, stat, sys, re, string
+import os, optparse, io, subprocess, socket, threading, stat, sys, re
 
 try:
     import StringIO
@@ -62,7 +62,7 @@ def read_manifest(fn):
         for line in f:
             line = line.rstrip();
             if comment.match(line): continue
-            components = string.split(line, ": ", 2)
+            components = line.split(": ", 2)
             guestpath = components[0].strip();
             hostpath = components[1].strip()
             ret.append((guestpath, hostpath))
