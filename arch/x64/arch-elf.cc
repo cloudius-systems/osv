@@ -60,7 +60,7 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
     case R_X86_64_NONE:
         break;
     case R_X86_64_COPY: {
-        symbol_module sm = symbol(sym);
+        symbol_module sm = symbol_other(sym);
         memcpy(addr, sm.relocated_addr(), sm.size());
         break;
     }

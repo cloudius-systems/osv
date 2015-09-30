@@ -559,6 +559,33 @@ symbol_module object::symbol(unsigned idx)
     return ret;
 }
 
+// symbol_other(idx) is similar to symbol(idx), except that the symbol is not
+// looked up in the object itself, just in the other objects.
+symbol_module object::symbol_other(unsigned idx)
+{
+    auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
+    assert(dynamic_val(DT_SYMENT) == sizeof(Elf64_Sym));
+    auto sym = &symtab[idx];
+    auto nameidx = sym->st_name;
+    auto name = dynamic_ptr<const char>(DT_STRTAB) + nameidx;
+    symbol_module ret(nullptr,nullptr);
+    _prog.with_modules([&](const elf::program::modules_list &ml) {
+        for (auto module : ml.objects) {
+            if (module == this)
+                continue; // do not match this module
+            if (auto sym = module->lookup_symbol(name)) {
+                ret = symbol_module(sym, module);
+                break;
+            }
+        }
+    });
+    if (!ret.symbol) {
+        abort("%s: failed looking up symbol %s in other objects\n",
+                pathname().c_str(), demangle(name).c_str());
+    }
+    return ret;
+}
+
 void object::relocate_rela()
 {
     auto rela = dynamic_ptr<Elf64_Rela>(DT_RELA);

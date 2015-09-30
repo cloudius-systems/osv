@@ -369,6 +369,7 @@ private:
     Elf64_Dyn& dynamic_tag(unsigned tag);
     Elf64_Dyn* _dynamic_tag(unsigned tag);
     symbol_module symbol(unsigned idx);
+    symbol_module symbol_other(unsigned idx);
     Elf64_Xword symbol_tls_module(unsigned idx);
     void relocate_rela();
     void relocate_pltgot();
