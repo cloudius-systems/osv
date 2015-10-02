@@ -786,32 +786,64 @@ bool contains(uintptr_t start, uintptr_t end, vma& y)
     return y.start() >= start && y.end() <= end;
 }
 
-// compare object for searching the vma list
-// defines a partial ordering: if a range intersects a vma,
-// it is considered equal, if it is completely before it is less
-// than the vma, if it is completely after it is after the vma.
-//
-// this partial ordering is compatible with vma_list_type.
+// So that we don't need to create a vma (with size, permission and alot of
+// other irrelevant data) just to find an address in the vma list, we have
+// the following addr_compare, which compares exactly like vma_compare does,
+// except that it takes a bare uintptr_t instead of a vma.
 class addr_compare {
 public:
-    bool operator()(const vma& x, addr_range y) const { return x.end() <= y.start(); }
-    bool operator()(addr_range x, const vma& y) const { return x.end() <= y.start(); }
+    bool operator()(const vma& x, uintptr_t y) const { return x.start() < y; }
+    bool operator()(uintptr_t x, const vma& y) const { return x < y.start(); }
 };
-// Find the list of vmas which intersect a given address range. Since the
-// vmas are sorted in vma_list, the result is a consecutive sub-list of vma_list,
-// [first, second), between the first returned iterator (inclusive), and the second
-// returned iterator (not inclusive).
+
+// Find the single (if any) vma which contains the given address.
+// The complexity is logarithmic in the number of vmas in vma_list.
+static inline vma_list_type::iterator
+find_intersecting_vma(uintptr_t addr) {
+    auto vma = vma_list.lower_bound(addr, addr_compare());
+    if (vma->start() == addr) {
+        return vma;
+    }
+    // Otherwise, vma->start() > addr, so we need to check the previous vma
+    --vma;
+    if (addr >= vma->start() && addr < vma->end()) {
+        return vma;
+    } else {
+        return vma_list.end();
+    }
+}
+
+// Find the list of vmas which intersect a given address range. Because the
+// vmas are sorted in vma_list, the result is a consecutive slice of vma_list,
+// [first, second), between the first returned iterator (inclusive), and the
+// second returned iterator (not inclusive).
+// The complexity is logarithmic in the number of vmas in vma_list.
 static inline std::pair<vma_list_type::iterator, vma_list_type::iterator>
 find_intersecting_vmas(const addr_range& r)
 {
-    return vma_list.equal_range(r, addr_compare());
+    if (r.end() <= r.start()) { // empty range, so nothing matches
+        return {vma_list.end(), vma_list.end()};
+    }
+    auto start = vma_list.lower_bound(r.start(), addr_compare());
+    if (start->start() > r.start()) {
+        // The previous vma might also intersect with our range if it ends
+        // after our range's start.
+        auto prev = std::prev(start);
+        if (prev->end() > r.start()) {
+            start = prev;
+        }
+    }
+    // If the start vma is actually beyond the end of the search range,
+    // there is no intersection.
+    if (start->start() >= r.end()) {
+        return {vma_list.end(), vma_list.end()};
+    }
+    // end is the first vma starting >= r.end(), so any previous vma (after
+    // start) surely started < r.end() so is part of the intersection.
+    auto end = vma_list.lower_bound(r.end(), addr_compare());
+    return {start, end};
 }
 
-// Find the single (if any) vma which contains the given address.
-static inline vma_list_type::iterator
-find_intersecting_vma(uintptr_t addr) {
-    return vma_list.find(addr_range(addr, addr+1), addr_compare());
-}
 
 /**
  * Change virtual memory range protection
