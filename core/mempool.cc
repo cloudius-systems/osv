@@ -1779,6 +1779,15 @@ void *aligned_alloc(size_t alignment, size_t size)
     return ret;
 }
 
+// memalign() is an older variant of aligned_alloc(), which does not require
+// that size be a multiple of alignment.
+// memalign() is considered to be an obsolete SunOS-ism, but Linux's glibc
+// supports it, and some applications still use it.
+void *memalign(size_t alignment, size_t size)
+{
+    return aligned_alloc(alignment, size);
+}
+
 namespace memory {
 
 void enable_debug_allocator()
