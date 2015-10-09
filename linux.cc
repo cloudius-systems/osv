@@ -163,6 +163,12 @@ static int sched_getaffinity_syscall(
         return ret;
 }
 
+// Only void* return value of mmap is type casted, as syscall returns long.
+long long_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+    return (long) mmap(addr, length, prot, flags, fd, offset);
+}
+#define __NR_long_mmap __NR_mmap
+
 
 #define SYSCALL0(fn) case (__NR_##fn): return fn()
 
@@ -275,6 +281,7 @@ long syscall(long number, ...)
     SYSCALL4(accept4, int, struct sockaddr *, socklen_t *, int);
     SYSCALL5(get_mempolicy, int *, unsigned long *, unsigned long, void *, int);
     SYSCALL3(sched_getaffinity_syscall, pid_t, unsigned, unsigned long *);
+    SYSCALL6(long_mmap, void *, size_t, int, int, int, off_t);
     SYSCALL2(munmap, void *, size_t);
     }
 
