@@ -21,6 +21,7 @@
 #include <sys/eventfd.h>
 #include <sys/socket.h>
 #include <sys/utsname.h>
+#include <sys/mman.h>
 
 #include <unordered_map>
 
@@ -274,6 +275,7 @@ long syscall(long number, ...)
     SYSCALL4(accept4, int, struct sockaddr *, socklen_t *, int);
     SYSCALL5(get_mempolicy, int *, unsigned long *, unsigned long, void *, int);
     SYSCALL3(sched_getaffinity_syscall, pid_t, unsigned, unsigned long *);
+    SYSCALL2(munmap, void *, size_t);
     }
 
     abort("syscall(): unimplemented system call %d. Aborting.\n", number);
