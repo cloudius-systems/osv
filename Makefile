@@ -410,7 +410,7 @@ $(out)/fastlz/fastlz.o:
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -m32 -fno-instrument-functions -o $@ -c fastlz/fastlz.cc, CXX fastlz/fastlz.cc)
 
-$(out)/fastlz/lz: fastlz/fastlz.cc fastlz/lz.cc
+$(out)/fastlz/lz: fastlz/fastlz.cc fastlz/lz.cc | generated-headers
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -o $@ $(filter %.cc, $^), CXX $@)
 
@@ -418,7 +418,8 @@ $(out)/loader-stripped.elf.lz.o: $(out)/loader-stripped.elf $(out)/fastlz/lz
 	$(call quiet, $(out)/fastlz/lz $(out)/loader-stripped.elf, LZ loader-stripped.elf)
 	$(call quiet, cd $(out); objcopy -B i386 -I binary -O elf32-i386 loader-stripped.elf.lz loader-stripped.elf.lz.o, OBJCOPY loader-stripped.elf.lz -> loader-stripped.elf.lz.o)
 
-$(out)/fastlz/lzloader.o: fastlz/lzloader.cc
+$(out)/fastlz/lzloader.o: fastlz/lzloader.cc | generated-headers
+	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -m32 -fno-instrument-functions -o $@ -c fastlz/lzloader.cc, CXX $<)
 
 $(out)/lzloader.elf: $(out)/loader-stripped.elf.lz.o $(out)/fastlz/lzloader.o arch/x64/lzloader.ld \
@@ -1893,11 +1894,11 @@ $(libzfs-objects): CFLAGS += -Wno-switch -D__va_list=__builtin_va_list '-DTEXT_D
 			-D_OPENSOLARIS_SYS_UIO_H_
 
 # Note: zfs_prop.c and zprop_common.c are also used by the kernel, thus the manual targets.
-$(out)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/zfs_prop.o: bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_prop.c
+$(out)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/zfs_prop.o: bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_prop.c | generated-headers
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $<, CC $<)
 
-$(out)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/zprop_common.o: bsd/sys/cddl/contrib/opensolaris/common/zfs/zprop_common.c
+$(out)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/zprop_common.o: bsd/sys/cddl/contrib/opensolaris/common/zfs/zprop_common.c | generated-headers
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $<, CC $<)
 
