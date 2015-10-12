@@ -74,7 +74,9 @@ do
 		value=${i#*=}
 		vars[$name]=$value;;
 	-j)
-		j_arg=$i
+		# module.py's command line parser has trouble of parsing a
+		# "-j" option without a value. Help it with a fake value "-".
+		j_arg="-j-"
 		# make allows the "-j" option to be separated from the number by a
 		# space (e.g., "-j 4"), but since this number is optional, we will
 		# need to also check the next argument, whether it is a number.
