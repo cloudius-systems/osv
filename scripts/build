@@ -53,15 +53,32 @@ fi
 OUT=build/`readlink build/last`
 
 # Look for arguments that look like "name=value", and set them in an
-# assoative array "vars".
+# assoative array "vars". Also look for the "-j ..." parallelism option,
+# which we want to pass to the module's Makefile as well.
 declare -A vars
 j_arg=
+checknumber=
 for i
 do
+	if test -n "$checknumber"
+	then
+		checknumber=
+		case $i in
+		[0-9]*)
+			j_arg="-j$i"
+			continue;;
+		esac
+	fi
 	case $i in
 	*=*)	name=${i%%=*}
 		value=${i#*=}
 		vars[$name]=$value;;
+	-j)
+		j_arg=$i
+		# make allows the "-j" option to be separated from the number by a
+		# space (e.g., "-j 4"), but since this number is optional, we will
+		# need to also check the next argument, whether it is a number.
+		checknumber=yes;;
 	-j*)	j_arg=$i;;
 	check)	# "build check" is a shortcut for
 		# "build image=tests; scripts/test.py"
