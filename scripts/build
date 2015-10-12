@@ -97,6 +97,7 @@ fs_size=$((fs_size - (fs_size & 511)))
 
 SRC=`pwd`
 arch=`expr $OUT : '.*\.\(.*\)'`
+mode=`expr $OUT : '.*/\(.*\)\..*'`
 
 # Set "modules" according to the image= or modules= paramters, or some
 # defaults (with same rules as in our old makefile)
@@ -121,7 +122,7 @@ case $OUT in
 *)	OSV_BUILD_PATH=`pwd`/$OUT;;
 esac
 
-jdkbase=$jdkbase ARCH=$arch OSV_BASE=$SRC OSV_BUILD_PATH=$OSV_BUILD_PATH scripts/module.py $j_arg build -c $modules
+jdkbase=$jdkbase ARCH=$arch mode=$mode OSV_BASE=$SRC OSV_BUILD_PATH=$OSV_BUILD_PATH scripts/module.py $j_arg build -c $modules
 
 # The python scripts called below assume the current directory is $OUT (as was
 # the case in our old build.mk).
