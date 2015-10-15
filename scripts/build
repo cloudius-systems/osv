@@ -129,7 +129,7 @@ jdkbase=$jdkbase ARCH=$arch mode=$mode OSV_BASE=$SRC OSV_BUILD_PATH=$OSV_BUILD_P
 cd $OUT
 
 cp loader.img bare.raw
-$SRC/scripts/imgedit.py setpartition bare.raw 2 $zfs_start $zfs_size
+$SRC/scripts/imgedit.py setpartition "-f raw bare.raw" 2 $zfs_start $zfs_size
 
 qemu-img convert -f raw -O qcow2 bare.raw usr.img
 qemu-img resize usr.img ${fs_size}b >/dev/null 2>&1

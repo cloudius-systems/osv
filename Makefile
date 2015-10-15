@@ -397,8 +397,8 @@ $(out)/loader.img: $(out)/boot.bin $(out)/lzloader.elf
 	$(call quiet, dd if=$(out)/boot.bin of=$@ > /dev/null 2>&1, DD loader.img boot.bin)
 	$(call quiet, dd if=$(out)/lzloader.elf of=$@ conv=notrunc seek=128 > /dev/null 2>&1, \
 		DD loader.img lzloader.elf)
-	$(call quiet, scripts/imgedit.py setsize $@ $(image-size), IMGEDIT $@)
-	$(call quiet, scripts/imgedit.py setargs $@ $(cmdline), IMGEDIT $@)
+	$(call quiet, scripts/imgedit.py setsize "-f raw $@" $(image-size), IMGEDIT $@)
+	$(call quiet, scripts/imgedit.py setargs "-f raw $@" $(cmdline), IMGEDIT $@)
 
 $(out)/loader.bin: $(out)/arch/x64/boot32.o arch/x64/loader32.ld
 	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
