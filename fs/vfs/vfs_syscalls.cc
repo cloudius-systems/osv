@@ -982,8 +982,10 @@ sys_unlink(char *path)
 	}
 
 	vn_lock(ddp->d_vnode);
-	if ((error = vn_access(ddp->d_vnode, VWRITE)) != 0)
+	if ((error = vn_access(ddp->d_vnode, VWRITE)) != 0) {
+	    vn_unlock(ddp->d_vnode);
 	    goto out;
+	}
 	error = VOP_REMOVE(ddp->d_vnode, vp, name);
 	vn_unlock(ddp->d_vnode);
 
