@@ -701,9 +701,6 @@ sys_rename(char *src, char *dest)
 		goto err1;
 	}
 
-	if ((error = vn_access(vp1, VWRITE)) != 0)
-		goto err1;
-
 	ts = false;
 	if (has_trailing(dest, '/') == true) {
 		if (strlen(dest) != 1) {
@@ -779,6 +776,12 @@ sys_rename(char *src, char *dest)
 
 	dvp2 = ddp2->d_vnode;
 	vn_lock(dvp2);
+
+	/* Source and destination directions should be writable) */
+	if ((error = vn_access(dvp1, VWRITE)) != 0)
+	    goto err3;
+	if ((error = vn_access(dvp2, VWRITE)) != 0)
+	    goto err3;
 
 	/* The source and dest must be same file system */
 	if (dvp1->v_mount != dvp2->v_mount) {

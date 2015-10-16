@@ -479,3 +479,19 @@ BOOST_AUTO_TEST_CASE(test_renaming_with_empty_paths_fails)
 	assert_rename_fails("", dir, {ENOENT});
 	assert_rename_fails(dir, "", {ENOENT});
 }
+
+BOOST_AUTO_TEST_CASE(test_renaming_unwritable_file)
+{
+    // It should be perfectly fine to rename an unwritable file - it is the
+    // permissions of the parent directory, not the file itself, which matter.
+    TempDir dir;
+    fs::path src = dir / "sub1";
+    fs::path dst = dir / "sub2";
+    prepare_file(src);
+    BOOST_CHECK_MESSAGE(chmod(src.c_str(), 0) ==  0, "Remove permissions on old");
+    assert_renames(src, dst);
+    BOOST_CHECK_MESSAGE(chmod(dst.c_str(), 777) ==  0, "Give permissions on new");
+    check_file(dst);
+    BOOST_CHECK_MESSAGE(!fs::exists(src), "Old file should not exist");
+    BOOST_CHECK_MESSAGE(fs::remove(dst), "Sould be possible to remove new file");
+}
