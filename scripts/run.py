@@ -84,10 +84,10 @@ def is_direct_io_supported(path):
 
 def start_osv_qemu(options):
 
-    if options.unsafe_cache:
-        cache = 'unsafe'
+    if options.unsafe_cache or not is_direct_io_supported(options.image_file):
+        aio = 'cache=unsafe,aio=threads'
     else:
-        cache = 'none' if is_direct_io_supported(options.image_file) else 'unsafe'
+        aio = 'cache=none,aio=native'
 
     args = [
         "-m", options.memsize,
@@ -111,12 +111,12 @@ def start_osv_qemu(options):
     if options.sata:
         args += [
         "-machine", "q35",
-        "-drive", "file=%s,if=none,id=hd0,media=disk,aio=native,cache=%s" % (options.image_file, cache),
+        "-drive", "file=%s,if=none,id=hd0,media=disk,%s" % (options.image_file, aio),
         "-device", "ide-hd,drive=hd0,id=idehd0,bus=ide.0"]
     elif options.scsi:
         args += [
         "-device", "virtio-scsi-pci,id=scsi0",
-        "-drive", "file=%s,if=none,id=hd0,media=disk,aio=native,cache=%s" % (options.image_file, cache),
+        "-drive", "file=%s,if=none,id=hd0,media=disk,%s" % (options.image_file, aio),
         "-device", "scsi-hd,bus=scsi0.0,drive=hd0,scsi-id=1,lun=0,bootindex=0"]
     elif options.ide:
         args += [
@@ -124,7 +124,7 @@ def start_osv_qemu(options):
     else:
         args += [
         "-device", "virtio-blk-pci,id=blk0,bootindex=0,drive=hd0,scsi=off",
-        "-drive", "file=%s,if=none,id=hd0,aio=native,cache=%s" % (options.image_file, cache)]
+        "-drive", "file=%s,if=none,id=hd0,%s" % (options.image_file, aio)]
 
     if options.no_shutdown:
         args += ["-no-reboot", "-no-shutdown"]
