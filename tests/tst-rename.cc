@@ -5,6 +5,9 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+// This test can be run on either OSv or Linux. To compile for Linux, use
+// c++ -std=c++11 -DBOOST_TEST_DYN_LINK tst-rename.cc -lboost_unit_test_framework -lboost_filesystem -lboost_system
+
 #define BOOST_TEST_MODULE tst-rename
 
 #include <boost/filesystem.hpp>
@@ -13,7 +16,6 @@
 #include <boost/test/unit_test.hpp>
 
 #include "tst-fs.hh"
-#include <osv/debug.hh>
 
 #include <sys/types.h>
 #include <fcntl.h>
@@ -407,8 +409,8 @@ BOOST_AUTO_TEST_CASE(test_renaming_directory_to_nonexisting_file_ending_with_sla
 BOOST_AUTO_TEST_CASE(test_renaming_root)
 {
 	TempDir dir;
-	assert_rename_fails("/", dir, {EBUSY, EINVAL});
-	assert_rename_fails(dir, "/", {EBUSY, EINVAL, EEXIST});
+	assert_rename_fails("/", dir, {EBUSY, EINVAL, EXDEV});
+	assert_rename_fails(dir, "/", {EBUSY, EINVAL, EEXIST, EXDEV});
 }
 
 BOOST_AUTO_TEST_CASE(test_renaming_to_self_succeeds)
@@ -465,12 +467,12 @@ BOOST_AUTO_TEST_CASE(test_renaming_with_last_coponent_as_dot_or_dot_dot_shall_fa
 	assert_rename_fails(dir2 / "./",  empty_dir, {EBUSY, EINVAL});
 	assert_rename_fails(dir2 / ".//",  empty_dir, {EBUSY, EINVAL});
 
-	assert_rename_fails(fs::path("."), empty_dir, {EBUSY, EINVAL});
-	assert_rename_fails(fs::path("./"), empty_dir, {EBUSY, EINVAL});
-	assert_rename_fails(fs::path(".//"), empty_dir, {EBUSY, EINVAL});
-	assert_rename_fails(fs::path(".."), empty_dir, {EBUSY, EINVAL});
-	assert_rename_fails(fs::path("../"), empty_dir, {EBUSY, EINVAL});
-	assert_rename_fails(fs::path("..//"), empty_dir, {EBUSY, EINVAL});
+	assert_rename_fails(fs::path("."), empty_dir, {EBUSY, EINVAL, EXDEV});
+	assert_rename_fails(fs::path("./"), empty_dir, {EBUSY, EINVAL, EXDEV});
+	assert_rename_fails(fs::path(".//"), empty_dir, {EBUSY, EINVAL, EXDEV});
+	assert_rename_fails(fs::path(".."), empty_dir, {EBUSY, EINVAL, EXDEV});
+	assert_rename_fails(fs::path("../"), empty_dir, {EBUSY, EINVAL, EXDEV});
+	assert_rename_fails(fs::path("..//"), empty_dir, {EBUSY, EINVAL, EXDEV});
 }
 
 BOOST_AUTO_TEST_CASE(test_renaming_with_empty_paths_fails)
