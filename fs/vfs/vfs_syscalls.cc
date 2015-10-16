@@ -970,8 +970,6 @@ sys_unlink(char *path)
 
 	vp = dp->d_vnode;
 	vn_lock(vp);
-	if ((error = vn_access(vp, VWRITE)) != 0)
-		goto out;
 	if (vp->v_type == VDIR) {
 	    // Posix specifies that we should return EPERM here, but Linux
 	    // actually returns EISDIR.
@@ -984,6 +982,8 @@ sys_unlink(char *path)
 	}
 
 	vn_lock(ddp->d_vnode);
+	if ((error = vn_access(ddp->d_vnode, VWRITE)) != 0)
+	    goto out;
 	error = VOP_REMOVE(ddp->d_vnode, vp, name);
 	vn_unlock(ddp->d_vnode);
 

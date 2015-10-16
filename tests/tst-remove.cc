@@ -51,6 +51,12 @@ int main(int argc, char **argv)
     // unlink() directory returns EISDIR on Linux (not EPERM as in Posix)
     expect(mkdir("/tmp/tst-remove/d", 0777), 0);
     expect_errno(unlink("/tmp/tst-remove/d"), EISDIR);
+    // unlink() of an unwriteable file should succeed (it the permissions
+    // of the parent directory which might matter, not those of the file
+    // itself).
+    expect(mknod("/tmp/tst-remove/f", 0777|S_IFREG, 0), 0);
+    expect(chmod("/tmp/tst-remove/f", 0), 0);
+    expect(unlink("/tmp/tst-remove/f"), 0);
 
     /********* test rmdir() ***************/
     // rmdir() of a non-empty directory returns ENOTEMPTY on Linux
