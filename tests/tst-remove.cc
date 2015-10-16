@@ -5,16 +5,20 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+// This test can be run on either OSv or Linux. To compile for Linux, use
+// c++ -std=c++11 tests/tst-remove.cc
+
 #include <sys/stat.h>
 #include <sys/types.h>
 #include <dirent.h>
 #include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
+#include <errno.h>
 
-#include <osv/debug.hh>
+#include <iostream>
 
-int tests = 0, fails = 0;
+static int tests = 0, fails = 0;
 
 #define expect(actual, expected) do_expect(actual, expected, #actual, #expected, __FILE__, __LINE__)
 template<typename T>
@@ -23,11 +27,13 @@ bool do_expect(T actual, T expected, const char *actuals, const char *expecteds,
     ++tests;
     if (actual != expected) {
         fails++;
-        debug("FAIL: %s:%d:  For %s expected %s, saw %s.\n", file, line, actuals, expecteds, actual);
+        std::cout << "FAIL: " << file << ":" << line << ": For " << actuals <<
+                ", expected " << expecteds << ", saw " << actual << ".\n";
         return false;
     }
     return true;
 }
+
 
 #define expect_errno(call, experrno) ( \
         do_expect(call, -1, #call, "-1", __FILE__, __LINE__) && \
@@ -82,6 +88,6 @@ int main(int argc, char **argv)
     expect(rmdir("/tmp/tst-remove"), 0);
 
 
-    debug("SUMMARY: %d tests, %d failures\n", tests, fails);
+    std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";
     return fails == 0 ? 0 : 1;
 }
