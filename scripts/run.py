@@ -402,6 +402,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='run')
     parser.add_argument("-d", "--debug", action="store_true",
                         help="start debug version")
+    parser.add_argument("-r", "--release", action="store_true",
+                        help="start release version")
     parser.add_argument("-w", "--wait", action="store_true",
                         help="don't start OSv till otherwise specified, e.g. through the QEMU monitor or a remote gdb")
     parser.add_argument("-i", "--image", action="store", default=None, metavar="IMAGE",
@@ -474,8 +476,10 @@ if __name__ == "__main__":
     parser.add_argument("--gdb", action="store", default="1234",
                         help="specify gdb port number")
     cmdargs = parser.parse_args()
-    cmdargs.opt_path = "debug" if cmdargs.debug else "release"
+    cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
+    if not os.path.exists(cmdargs.image_file):
+        raise Exception('Image file %s does not exist.' % cmdargs.image_file)
 
     if cmdargs.hypervisor == "auto":
         cmdargs.hypervisor = choose_hypervisor(cmdargs.networking)
