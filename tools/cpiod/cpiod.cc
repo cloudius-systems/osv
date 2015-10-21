@@ -70,6 +70,7 @@ public:
     }
     virtual void add_symlink(string oldpath, string newpath, mode_t mode) override {
         cout << "Link " << newpath << " to " << oldpath << " ...\n";
+        newpath = _prefix + newpath;
         auto pos = newpath.rfind('/');
         if (pos != newpath.npos) {
             make_directories(newpath.substr(0, pos));

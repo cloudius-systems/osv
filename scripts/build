@@ -133,16 +133,6 @@ $SRC/scripts/imgedit.py setpartition "-f raw bare.raw" 2 $zfs_start $zfs_size
 
 qemu-img convert -f raw -O qcow2 bare.raw usr.img
 qemu-img resize usr.img ${fs_size}b >/dev/null 2>&1
-# TODO: This "bootfs.manifest" is a misonmer... It doesn't really set the
-# bootfs (this was done by the makefile) and will just be written to the
-# zfs. But it's kind of redundant that mkzfs.py uploads things to zfs, when
-# the upload_manifest.py call does this below. We should just drop this
-# upload part from mkzfs.py....
-# Moreover, it's redundant that module.py above created a bootfs.manifest which
-# includes bootfs.manifest.skel even if the module asked for nothing in
-# bootfs.manifest - why do we need those things (like cpiod.so)
-# in every image's ZFS? For capstan?
-$SRC/scripts/mkzfs.py -o usr.img -d usr.img.d -m bootfs.manifest
 
 $SRC/scripts/upload_manifest.py -o usr.img -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
 $SRC/scripts/imgedit.py setargs usr.img `cat cmdline`
