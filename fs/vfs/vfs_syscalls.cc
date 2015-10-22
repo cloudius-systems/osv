@@ -820,7 +820,6 @@ sys_symlink(const char *oldpath, const char *newpath)
 	char		*op = up_op.get();
 	std::unique_ptr<char []> up_np (new char[PATH_MAX]);
 	char		*np = up_np.get();
-	struct dentry	*olddp;
 	struct dentry	*newdp;
 	struct dentry	*newdirdp;
 	char		*name;
@@ -832,7 +831,6 @@ sys_symlink(const char *oldpath, const char *newpath)
 	DPRINTF(VFSDB_SYSCALL, ("sys_link: oldpath=%s newpath=%s\n",
 				oldpath, newpath));
 
-	olddp		= nullptr;
 	newdp		= nullptr;
 	newdirdp	= nullptr;
 
@@ -873,10 +871,6 @@ out:
 	if (newdirdp != nullptr) {
 		vn_unlock(newdirdp->d_vnode);
 		drele(newdirdp);
-	}
-
-	if (olddp != nullptr) {
-		drele(olddp);
 	}
 
 	return (error);
