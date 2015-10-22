@@ -3426,6 +3426,8 @@ top:
 
 	dmu_tx_commit(tx);
 
+	zfs_zinactive(zp);
+
 	zfs_dirent_unlock(dl);
 
 	if (zfsvfs->z_os->os_sync == ZFS_SYNC_ALWAYS)
