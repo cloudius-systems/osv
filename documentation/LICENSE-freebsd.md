@@ -1,18 +1,19 @@
-The compilation of software known as FreeBSD is distributed under the
-following terms:
+**The compilation of software known as FreeBSD is distributed under the
+following terms:**
 
-Copyright (c) 1992-2012 The FreeBSD Project. All rights reserved.
+Copyright © 1992-2012 The FreeBSD Project. All rights reserved.
 
 Redistribution and use in source and binary forms, with or without
 modification, are permitted provided that the following conditions
 are met:
+
 1. Redistributions of source code must retain the above copyright
    notice, this list of conditions and the following disclaimer.
 2. Redistributions in binary form must reproduce the above copyright
    notice, this list of conditions and the following disclaimer in the
    documentation and/or other materials provided with the distribution.
 
-THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS ``AS IS'' AND
+**THIS SOFTWARE IS PROVIDED BY THE AUTHOR AND CONTRIBUTORS "AS IS" AND
 ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
 ARE DISCLAIMED.  IN NO EVENT SHALL THE AUTHOR OR CONTRIBUTORS BE LIABLE
@@ -24,8 +25,8 @@ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
 OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 SUCH DAMAGE.
 
-The 4.4BSD and 4.4BSD-Lite software is distributed under the following
-terms:
+**The 4.4BSD and 4.4BSD-Lite software is distributed under the following
+terms:**
 
 All of the documentation and software included in the 4.4BSD and 4.4BSD-Lite
 Releases is copyrighted by The Regents of the University of California.
@@ -43,13 +44,15 @@ are met:
    documentation and/or other materials provided with the distribution.
 3. All advertising materials mentioning features or use of this software
    must display the following acknowledgement:
+   
 This product includes software developed by the University of
 California, Berkeley and its contributors.
+
 4. Neither the name of the University nor the names of its contributors
    may be used to endorse or promote products derived from this software
    without specific prior written permission.
 
-THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS ``AS IS'' AND
+THIS SOFTWARE IS PROVIDED BY THE REGENTS AND CONTRIBUTORS "AS IS" AND
 ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
 IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE
 ARE DISCLAIMED.  IN NO EVENT SHALL THE REGENTS OR CONTRIBUTORS BE LIABLE
@@ -61,10 +64,10 @@ LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY
 OUT OF THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF
 SUCH DAMAGE.
 
-NOTE: The copyright of UC Berkeley's Berkeley Software Distribution ("BSD")
+**NOTE: The copyright of UC Berkeley's Berkeley Software Distribution ("BSD")
 source has been updated.  The copyright addendum may be found at
-ftp://ftp.cs.berkeley.edu/pub/4bsd/README.Impt.License.Change and is
-included below.
+[ftp://ftp.cs.berkeley.edu/pub/4bsd/README.Impt.License.Change](ftp://ftp.cs.berkeley.edu/pub/4bsd/README.Impt.License.Change) and is
+included below.**
 
 July 22, 1999
 
