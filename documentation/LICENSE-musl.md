@@ -26,7 +26,7 @@ authored by third parties. Complete details on the copyright status of
 all code included in musl follows below:
 
 * The TRE regular expression implementation (src/regex/reg* and
-src/regex/tre*) is Copyright © 2001-2008 Ville Laurikari and licensed
+src/regex/tre*) is copyright © 2001-2008 Ville Laurikari and licensed
 under a 2-clause BSD license (license text in the source files). The
 included version has been heavily modified by Rich Felker in 2012, in
 the interests of size, simplicity, and namespace cleanliness.
@@ -36,24 +36,22 @@ the interests of size, simplicity, and namespace cleanliness.
   * Copyright © 2003-2011 David Schultz or
   * Copyright © 2003-2009 Steven G. Kargl or
   * Copyright © 2003-2009 Bruce D. Evans or
-  * Copyright © 2008 Stephen L. Moshier
-and labelled as such. All have been licensed under extremely
-permissive terms. See the comments in the individual files for
-details.
+  * Copyright © 2008 Stephen L. Moshier and labelled as such. 
+  * All have been licensed under extremely permissive terms. See the comments in the individual files for details.
 
 * The implementation of DES for crypt (src/misc/crypt_des.c) is
 Copyright © 1994 David Burren. It is licensed under a BSD license.
 
-* The implementation of blowfish crypt (src/misc/crypt_blowfish.c) was
+* The implementation of Blowfish crypt (src/misc/crypt_blowfish.c) was
 originally written by Solar Designer and placed into the public
 domain. The code also comes with a fallback permissive license for use
 in jurisdictions that may not recognize the public domain.
 
-* The smoothsort implementation (src/stdlib/qsort.c) is Copyright © 2011
+* The Smoothsort implementation (src/stdlib/qsort.c) is copyright © 2011
 Valentin Ochs and is licensed under an MIT-style license.
 
-* The BSD PRNG implementation (src/prng/random.c) and XSI search API
-(src/search/*.c) functions are Copyright © 2011 Szabolcs Nagy and
+* The BSD PRNG implementation (src/prng/random.c) and XSI Search API
+(src/search/*.c) functions are copyright © 2011 Szabolcs Nagy and
 licensed under following terms: "Permission to use, copy, modify,
 and/or distribute this code for any purpose with or without fee is
 hereby granted. There is no warranty."
@@ -72,12 +70,12 @@ integration. It is licensed under the standard MIT terms.
 and later supplemented and integrated by John Spencer. It is licensed
 under the standard MIT terms.
 
-* The ARM memcpy code is Copyright © 2008 The Android Open Source
+* The ARM memcpy code is copyright © 2008 The Android Open Source
 Project and is licensed under a two-clause BSD license. It was taken
 from Bionic libc, used on Android.
 
 * All other files which have no copyright comments are original works
-Copyright © 2005-2013 Rich Felker, the main author of this library.
+copyright © 2005-2013 Rich Felker, the main author of this library.
 The decision to exclude such comments is intentional, as it should be
 possible to carry around the complete source code on tiny storage
 media. All public header files (include/* and arch/*/bits/*) should be
