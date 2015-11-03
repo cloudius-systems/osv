@@ -4,14 +4,21 @@ Devices and Drivers in OSv
 1. Devices
 
   1. The most abstract data type of a device is hw_device (drivers/device.hh). Each device (PCI and non PCI) must implement 3 basic functions by means of inheritance:
+    
     i. `device_id get_id(void)    // device_id identifies a device by a vendor_id/device_id pair`
+    
     ii. `void print(void)         // implements a debug print function`
+    
     iii. `void reset(void)        // brings the device to it's initial state`
 
   2. hw_device is managed by a global device_manager, implemented as a singleton. device_manager implements these functions:
+    
     i. `bool register_device(hw_device* dev);`
+    
     ii. `hw_device* get_device(hw_device_id id);`
+    
     iii. `void list_devices(void);`
+    
     iv. `void for_each_device(std::function<void (hw_device*)> func);`
     
   3. Internally, device_manager saves the hw_device(s) into a dictionary, keyed by device_id, so it performs:
