@@ -61,5 +61,5 @@ $(OUTDIR)/%.o	: %.cc
 
 clean		:
 		$(call quiet, $(RM) $(TARGET), CLEAN)
-		$(call very-quiet, $(RM) -rf $(OUTDIR/*.o)
-		$(call very-quiet, $(RM) -rf $(OUTDIR/*.d)
+		$(call very-quiet, $(RM) -rf $(OUTDIR/*.o))
+		$(call very-quiet, $(RM) -rf $(OUTDIR/*.d))
