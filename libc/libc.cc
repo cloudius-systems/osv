@@ -74,6 +74,15 @@ int getrlimit(int resource, struct rlimit *rlim)
     case RLIMIT_RSS:
         set(RLIM_INFINITY);
         break;
+    case RLIMIT_CPU:
+    case RLIMIT_FSIZE:
+    case RLIMIT_MEMLOCK:
+    case RLIMIT_MSGQUEUE:
+        set(RLIM_INFINITY);
+        break;
+    case RLIMIT_NICE:
+        set(0);
+        break;
     default:
         abort("getrlimit(): resource %d not supported. aborting.\n", resource);
     }
