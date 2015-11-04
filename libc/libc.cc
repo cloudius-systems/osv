@@ -75,8 +75,7 @@ int getrlimit(int resource, struct rlimit *rlim)
         set(RLIM_INFINITY);
         break;
     default:
-        kprintf("getrlimit: resource %d not supported\n", resource);
-        abort();
+        abort("getrlimit(): resource %d not supported. aborting.\n", resource);
     }
     return 0;
 }
