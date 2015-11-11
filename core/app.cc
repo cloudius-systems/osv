@@ -355,6 +355,36 @@ std::string application::get_command()
     return _command;
 }
 
+// For simplicity, we will not reuse bits in the bitmap, since no destructor is
+// assigned to the program. In that case, a simple counter would do. But coding
+// this way is easy, and make this future extension simple.
+constexpr int max_namespaces = 32;
+std::bitset<max_namespaces> namespaces(1);
+
+void application::new_program()
+{
+    unsigned long i = 0;
+
+    for (i = 0; i < max_namespaces; ++i) {
+        if (!namespaces.test(i)) {
+            namespaces.set(i);
+            break;
+        }
+    }
+
+    if (i == max_namespaces) {
+        return;
+    }
+
+    void *addr = reinterpret_cast<void *>(elf::program_base) + ((i + 1) << 33);
+    _program.reset(new elf::program(addr));
+}
+
+elf::program *application::program() {
+    return _program.get();
+}
+
+
 namespace this_application {
 
 void on_termination_request(std::function<void()> callback)

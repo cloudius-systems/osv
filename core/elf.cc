@@ -6,6 +6,7 @@
  */
 
 #include <osv/elf.hh>
+#include <osv/app.hh>
 #include <osv/mmu.hh>
 #include <boost/format.hpp>
 #include <exception>
@@ -1017,14 +1018,19 @@ void object::init_static_tls()
 
 program* s_program;
 
+void create_main_program()
+{
+    assert(!s_program);
+    s_program = new elf::program();
+}
+
 program::program(void* addr)
     : _next_alloc(addr)
 {
-    assert(!s_program);
-    s_program = this;
     _core = make_shared<memory_image>(*this, (void*)ELF_IMAGE_START);
     assert(_core->module_index() == core_module_index);
     _core->load_segments();
+    set_search_path({"/", "/usr/lib"});
     // Our kernel already supplies the features of a bunch of traditional
     // shared libraries:
     static const auto supplied_modules = {
@@ -1310,6 +1316,12 @@ object *program::object_containing_addr(const void *addr)
 
 program* get_program()
 {
+    auto app = osv::application::get_current();
+
+    if (app && app->program()) {
+        return app->program();
+    }
+
     return s_program;
 }
 

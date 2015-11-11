@@ -145,7 +145,10 @@ public:
 
     std::shared_ptr<application_runtime> runtime() const { return _runtime; }
     std::shared_ptr<elf::object> lib() const { return _lib; }
+
+    elf::program *program();
 private:
+    void new_program();
     shared_app_t get_shared() {
         return shared_from_this();
     }
@@ -160,6 +163,7 @@ private:
     using main_func_t = int(int, char**);
 
     pthread_t _thread;
+    std::unique_ptr<elf::program> _program; // namespace program
     std::vector<std::string> _args;
     std::string _command;
     int _return_code;

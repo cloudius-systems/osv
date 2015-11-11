@@ -596,8 +596,10 @@ private:
     friend class object;
 };
 
+void create_main_program();
+
 /**
- * Get the single elf::program instance
+ * Get the current elf::program instance
  */
 program* get_program();
 

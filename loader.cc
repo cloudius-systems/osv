@@ -528,8 +528,8 @@ void main_cont(int ac, char** av)
 
     debug("Firmware vendor: %s\n", osv::firmware_vendor().c_str());
 
-    new elf::program();
-    elf::get_program()->set_search_path({"/", "/usr/lib"});
+    elf::create_main_program();
+
     std::vector<std::vector<std::string> > cmds;
 
     std::tie(ac, av) = parse_options(ac, av);
