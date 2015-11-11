@@ -129,12 +129,17 @@ std::shared_ptr<osv::application> run(std::string path,
  *                         <TT>return_code == nulltr</TT>, main()'s return
  *                         code is ignored.
  *
+ * \param[in] new_program if true a new elf::program will be started to create
+ *                         a new namespace.
+ *
  * @throws osv::launch_error When application could not be launched
  *
  * \return \c shared pointer to the application
  */
 std::shared_ptr<osv::application> run(std::string path,
-                                    std::vector<std::string> args, int* return_code);
+                                    std::vector<std::string> args,
+                                    int* return_code,
+                                    bool new_program = false);
 
 /**@}*/
 

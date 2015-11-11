@@ -84,15 +84,20 @@ public:
      *
      * \param command command to execute
      * \param args Parameters which will be passed to program's main().
+     * \param new_program true if a new elf namespace must be started
      * \throw launch_error
      */
-    static shared_app_t run(const std::string& command, const std::vector<std::string>& args);
+    static shared_app_t run(const std::string& command,
+                            const std::vector<std::string>& args,
+                            bool new_program = false);
 
     static void join_all() {
         apps.join();
     }
 
-    application(const std::string& command, const std::vector<std::string>& args);
+    application(const std::string& command,
+                const std::vector<std::string>& args,
+                bool new_program = false);
 
     ~application();
 

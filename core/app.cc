@@ -120,9 +120,11 @@ shared_app_t application::run(const std::vector<std::string>& args)
     return run(args[0], args);
 }
 
-shared_app_t application::run(const std::string& command, const std::vector<std::string>& args)
+shared_app_t application::run(const std::string& command,
+                              const std::vector<std::string>& args,
+                              bool new_program)
 {
-    auto app = std::make_shared<application>(command, args);
+    auto app = std::make_shared<application>(command, args, new_program);
     app->start();
     apps.push(app);
     return app;
@@ -132,7 +134,9 @@ void run(const std::vector<std::string>& args) {
     application::run(args);
 }
 
-application::application(const std::string& command, const std::vector<std::string>& args)
+application::application(const std::string& command,
+                         const std::vector<std::string>& args,
+                         bool new_program)
     : _args(args)
     , _command(command)
     , _termination_requested(false)
@@ -141,7 +145,14 @@ application::application(const std::string& command, const std::vector<std::stri
     , _terminated(false)
 {
     try {
-        _lib = elf::get_program()->get_library(_command);
+        if (new_program) {
+            this->new_program();
+            _lib = _program->get_library(_command);
+        } else {
+            // Do it in a separate branch because elf::get_program() would not
+            // have found us yet in the previous branch.
+            _lib = elf::get_program()->get_library(_command);
+        }
     } catch(const std::exception &e) {
         throw launch_error(e.what());
     }
