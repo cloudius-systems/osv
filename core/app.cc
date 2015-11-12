@@ -374,21 +374,21 @@ std::bitset<max_namespaces> namespaces(1);
 
 void application::new_program()
 {
-    unsigned long i = 0;
-
-    for (i = 0; i < max_namespaces; ++i) {
+    for (unsigned long i = 0; i < max_namespaces; ++i) {
         if (!namespaces.test(i)) {
             namespaces.set(i);
-            break;
+            // This currently limits the size of the executable and shared
+            // libraries in each "program" to 1<<33 bytes, i.e., 8 GB.
+            // This should hopefully be more than enough; It is not a
+            // limit on the amount of memory this program can allocate -
+            // just a limit on the code size.
+            void *addr =
+	        reinterpret_cast<void *>(elf::program_base) + ((i + 1) << 33);
+           _program.reset(new elf::program(addr));
+           return;
         }
     }
-
-    if (i == max_namespaces) {
-        return;
-    }
-
-    void *addr = reinterpret_cast<void *>(elf::program_base) + ((i + 1) << 33);
-    _program.reset(new elf::program(addr));
+    abort("application::new_program() out of namespaces.\n");
 }
 
 elf::program *application::program() {
