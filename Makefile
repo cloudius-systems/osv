@@ -900,6 +900,8 @@ objects += core/libaio.o
 #include $(src)/libc/build.mk:
 libc =
 musl =
+environ_libc =
+environ_musl =
 
 ifeq ($(arch),x64)
 musl_arch = x86_64
@@ -960,6 +962,14 @@ libc += env/secure_getenv.o
 musl += env/putenv.o
 musl += env/setenv.o
 musl += env/unsetenv.o
+
+environ_libc += env/__environ.c
+environ_musl += env/clearenv.c
+environ_musl += env/getenv.c
+environ_libc += env/secure_getenv.c
+environ_musl += env/putenv.c
+environ_musl += env/setenv.c
+environ_musl += env/unsetenv.c
 
 musl += ctype/__ctype_b_loc.o
 
@@ -1770,8 +1780,15 @@ $(out)/loader.elf: $(out)/arch/$(arch)/boot.o arch/$(arch)/loader.ld $(out)/load
 
 $(out)/bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__'
 
+environ_sources = $(addprefix libc/, $(environ_libc))
+environ_sources += $(addprefix musl/src/, $(environ_musl))
+
+$(out)/libenviron.so: $(environ_sources)
+	$(makedir)
+	 $(call quiet, $(CC) $(CFLAGS) -shared -o $(out)/libenviron.so $^, LINK libenviron.so)
+
 $(out)/bootfs.bin: scripts/mkbootfs.py bootfs.manifest.skel $(tools:%=$(out)/%) \
-		$(out)/zpool.so $(out)/zfs.so
+		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so
 	$(call quiet, olddir=`pwd`; cd $(out); $$olddir/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m $$olddir/bootfs.manifest.skel \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase), MKBOOTFS $@)
@@ -1790,7 +1807,6 @@ $(out)/tools/cpiod/cpiod.so: $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.
 $(out)/tools/libtools.so: $(out)/tools/route/route_info.o $(out)/tools/ifconfig/network_interface.o
 	$(makedir)
 	 $(call quiet, $(CC) $(CFLAGS) -shared -o $(out)/tools/libtools.so $^, LINK libtools.so)
-
 
 ################################################################################
 # The dependencies on header files are automatically generated only after the
