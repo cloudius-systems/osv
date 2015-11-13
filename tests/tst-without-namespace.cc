@@ -43,5 +43,7 @@ int main(int argc, char **argv)
 
     test_environment_sharing();
 
+    run_merging_environment_test(false);
+
     return 0;
 }

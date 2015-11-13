@@ -43,5 +43,7 @@ int main(int argc, char **argv)
 
     test_namespaces_environment_isolation();
 
+    run_merging_environment_test(true);
+
     return 0;
 }

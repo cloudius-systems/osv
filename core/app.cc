@@ -121,10 +121,11 @@ shared_app_t application::run(const std::vector<std::string>& args)
 }
 
 shared_app_t application::run(const std::string& command,
-                              const std::vector<std::string>& args,
-                              bool new_program)
+                      const std::vector<std::string>& args,
+                      bool new_program,
+                      const std::unordered_map<std::string, std::string> *env)
 {
-    auto app = std::make_shared<application>(command, args, new_program);
+    auto app = std::make_shared<application>(command, args, new_program, env);
     app->start();
     apps.push(app);
     return app;
@@ -135,8 +136,9 @@ void run(const std::vector<std::string>& args) {
 }
 
 application::application(const std::string& command,
-                         const std::vector<std::string>& args,
-                         bool new_program)
+                     const std::vector<std::string>& args,
+                     bool new_program,
+                     const std::unordered_map<std::string, std::string> *env)
     : _args(args)
     , _command(command)
     , _termination_requested(false)
@@ -145,15 +147,20 @@ application::application(const std::string& command,
     , _terminated(false)
 {
     try {
+        elf::program *current_program;
+
         if (new_program) {
             this->new_program();
             clone_osv_environ();
-            _lib = _program->get_library(_command);
+            current_program = _program.get();
         } else {
             // Do it in a separate branch because elf::get_program() would not
             // have found us yet in the previous branch.
-            _lib = elf::get_program()->get_library(_command);
+            current_program = elf::get_program();
         }
+
+        merge_in_environ(new_program, env);
+        _lib = current_program->get_library(_command);
     } catch(const std::exception &e) {
         throw launch_error(e.what());
     }
@@ -415,6 +422,37 @@ void application::clone_osv_environ()
         // putenv simply assign the char * we have to duplicate it.
         // FIXME: this will leak memory when the application is destroyed.
         putenv(strdup(environ[i]));
+    }
+}
+
+void application::set_environ(const std::string &key, const std::string &value,
+                              bool new_program)
+{
+    // create a pointer to OSv's libc setenv()
+    auto my_setenv = setenv;
+
+    if (new_program) {
+        // If we are starting a new program use the libenviron.so's setenv()
+        my_setenv =
+            _libenviron->lookup<int (const char *, const char *, int)>("setenv");
+    }
+
+    // We do not need to strdup() since the libc will malloc() for us
+    // Note that we merge in the existing environment variables by
+    // using setenv() merge parameter.
+    // FIXME: This will leak at application exit.
+    my_setenv(key.c_str(), value.c_str(), 1);
+}
+
+void application::merge_in_environ(bool new_program,
+        const std::unordered_map<std::string, std::string> *env)
+{
+    if (!env) {
+        return;
+    }
+
+    for (auto &iter: *env) {
+        set_environ(iter.first, iter.second, new_program);
     }
 }
 

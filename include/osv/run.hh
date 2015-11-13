@@ -132,14 +132,18 @@ std::shared_ptr<osv::application> run(std::string path,
  * \param[in] new_program if true a new elf::program will be started to create
  *                         a new namespace.
  *
+ * \param[in] env          an pointer to an unordered_map which content will be
+ *                         merged in the current environment
+ *
  * @throws osv::launch_error When application could not be launched
  *
  * \return \c shared pointer to the application
  */
 std::shared_ptr<osv::application> run(std::string path,
-                                    std::vector<std::string> args,
-                                    int* return_code,
-                                    bool new_program = false);
+            std::vector<std::string> args,
+            int* return_code,
+            bool new_program = false,
+            const std::unordered_map<std::string, std::string> *env = nullptr);
 
 /**@}*/
 

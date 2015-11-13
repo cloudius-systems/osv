@@ -19,6 +19,8 @@
 #include <osv/mutex.h>
 #include <osv/elf.hh>
 #include <list>
+#include <unordered_map>
+#include <string>
 
 extern "C" void __libc_start_main(int(*)(int, char**), int, char**, void(*)(),
     void(*)(), void(*)(), void*);
@@ -85,19 +87,22 @@ public:
      * \param command command to execute
      * \param args Parameters which will be passed to program's main().
      * \param new_program true if a new elf namespace must be started
+     * \param env pointer to an unordered_map than will be merged in current env
      * \throw launch_error
      */
     static shared_app_t run(const std::string& command,
-                            const std::vector<std::string>& args,
-                            bool new_program = false);
+            const std::vector<std::string>& args,
+            bool new_program = false,
+            const std::unordered_map<std::string, std::string> *env = nullptr);
 
     static void join_all() {
         apps.join();
     }
 
     application(const std::string& command,
-                const std::vector<std::string>& args,
-                bool new_program = false);
+            const std::vector<std::string>& args,
+            bool new_program = false,
+            const std::unordered_map<std::string, std::string> *env = nullptr);
 
     ~application();
 
@@ -155,6 +160,10 @@ public:
 private:
     void new_program();
     void clone_osv_environ();
+    void set_environ(const std::string &key, const std::string &value,
+                     bool new_program);
+    void merge_in_environ(bool new_program = false,
+        const std::unordered_map<std::string, std::string> *env = nullptr);
     shared_app_t get_shared() {
         return shared_from_this();
     }
