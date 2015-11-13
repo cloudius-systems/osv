@@ -147,6 +147,7 @@ application::application(const std::string& command,
     try {
         if (new_program) {
             this->new_program();
+            clone_osv_environ();
             _lib = _program->get_library(_command);
         } else {
             // Do it in a separate branch because elf::get_program() would not
@@ -395,6 +396,27 @@ elf::program *application::program() {
     return _program.get();
 }
 
+
+void application::clone_osv_environ()
+{
+    _libenviron = _program->get_library("libenviron.so");
+    if (!_libenviron) {
+        abort("could not load libenviron.so\n");
+        return;
+    }
+
+    if (!environ) {
+        return;
+    }
+
+    auto putenv = _libenviron->lookup<int (const char *)>("putenv");
+
+    for (int i=0; environ[i] ; i++) {
+        // putenv simply assign the char * we have to duplicate it.
+        // FIXME: this will leak memory when the application is destroyed.
+        putenv(strdup(environ[i]));
+    }
+}
 
 namespace this_application {
 

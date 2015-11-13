@@ -154,6 +154,7 @@ public:
     elf::program *program();
 private:
     void new_program();
+    void clone_osv_environ();
     shared_app_t get_shared() {
         return shared_from_this();
     }
@@ -175,6 +176,7 @@ private:
     bool _termination_requested;
     mutex _termination_mutex;
     std::shared_ptr<elf::object> _lib;
+    std::shared_ptr<elf::object> _libenviron;
     main_func_t* _main;
     void (*_entry_point)();
     static app_registry apps;
