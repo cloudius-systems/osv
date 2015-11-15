@@ -4,7 +4,9 @@
 
 #include <osv/run.hh>
 
-void run_namespace()
+#include "env-common.inc"
+
+void test_variables_isolation()
 {
     std::vector<std::string> args;
     std::shared_ptr<osv::application> app;
@@ -17,12 +19,29 @@ void run_namespace()
 
 }
 
-int main(int argc, char **argv)
+void run_variables_isolation_tests()
 {
-    std::thread first = std::thread(run_namespace);
+    std::thread first = std::thread(test_variables_isolation);
     std::this_thread::sleep_for(std::chrono::seconds(1));
-    std::thread second = std::thread(run_namespace);
+    std::thread second = std::thread(test_variables_isolation);
     first.join();
     second.join();
+}
+
+void test_namespaces_environment_isolation()
+{
+    std::thread t = std::thread(run_environment_payload, true);
+    t.join();
+
+    char *value = getenv("FOO");
+    assert(!value);
+}
+
+int main(int argc, char **argv)
+{
+    run_variables_isolation_tests();
+
+    test_namespaces_environment_isolation();
+
     return 0;
 }

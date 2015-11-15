@@ -80,7 +80,8 @@ tests := tst-pthread.so tst-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-zfs-mount.so tst-regex.so tst-tcp-siocoutq.so \
 	libtls.so tst-tls.so tst-select-timeout.so tst-faccessat.so \
 	tst-fstatat.so misc-reboot.so tst-fcntl.so payload-namespace.so \
-	tst-namespace.so tst-without-namespace.so
+	tst-namespace.so tst-without-namespace.so payload-env.so \
+	testrunner.so
 
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
