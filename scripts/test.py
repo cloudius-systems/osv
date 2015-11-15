@@ -12,7 +12,10 @@ import tests.test_tracing
 from operator import attrgetter
 from tests.testing import *
 
-blacklist = [
+os.environ["LC_ALL"]="C"
+os.environ["LANG"]="C"
+
+blacklist= [
     "tst-dns-resolver.so",
 ]
 
