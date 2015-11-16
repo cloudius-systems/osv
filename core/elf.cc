@@ -1316,7 +1316,7 @@ object *program::object_containing_addr(const void *addr)
 
 program* get_program()
 {
-    auto app = osv::application::get_current();
+    auto app = sched::thread::current_app();
 
     if (app && app->program()) {
         return app->program();

@@ -43,6 +43,7 @@ namespace elf {
 
 namespace osv {
 
+class application;
 struct application_runtime;
 
 }
@@ -482,6 +483,7 @@ public:
     std::shared_ptr<osv::application_runtime> app_runtime() {
         return _app_runtime;
     }
+    static osv::application *current_app();
     bool migratable() const { return _migration_lock_counter == 0; }
     /**
      * Return thread's numeric id
