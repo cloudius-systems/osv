@@ -25,6 +25,7 @@
 #include <boost/algorithm/string.hpp>
 #include <boost/regex.hpp>
 #include <boost/algorithm/string/replace.hpp>
+#include <sys/stat.h>
 
 namespace httpserver {
 
@@ -378,6 +379,15 @@ class post_file_handler : public handler_base {
     }
 };
 
+
+void set_permissions(std::string &path, mode_t &permission)
+{
+    int ret = chmod(path.c_str(), permission);
+    if (ret == -1) {
+        throw bad_param_exception("Failed to chmod() file " + path);
+    }
+}
+
 class put_file_handler : public handler_base {
     virtual void handle(const std::string& path, parameters* params,
                         const http::server::request& req, http::server::reply& rep)
@@ -396,12 +406,11 @@ class put_file_handler : public handler_base {
         case ns_putFile::op::MKDIRS:
             try {
                 boost::filesystem::create_directories(full_path);
-                boost::filesystem::permissions(full_path,
-                                               static_cast<boost::filesystem::perms>(permission));
             } catch (const boost::filesystem::filesystem_error& e) {
                 throw bad_param_exception(
                     string("Failed creating directory ") + e.what());
             }
+            set_permissions(full_path, permission);
             break;
         case ns_putFile::op::RENAME:
             if (destination == "") {
@@ -413,6 +422,7 @@ class put_file_handler : public handler_base {
                 throw bad_param_exception(
                     string("Failed renaming ") + strerror(errno));
             }
+            set_permissions(destination, permission);
             break;
         case ns_putFile::op::COPY:
             if (destination == "") {
@@ -420,6 +430,7 @@ class put_file_handler : public handler_base {
                     "Missing mandatory parameters: destination");
             }
             copy(full_path, destination);
+            set_permissions(destination, permission);
             break;
         case ns_putFile::op::WRITE:
         {
@@ -428,6 +439,7 @@ class put_file_handler : public handler_base {
             ofstream f;
             f.exceptions ( std::ifstream::failbit | std::ifstream::badbit );
             f.open(full_path,flags);
+            set_permissions(full_path, permission);
             f << req.get_query_param("content");
             f.close();
         }
