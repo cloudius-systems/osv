@@ -22,7 +22,7 @@ standard_ec2_post_install = ['pip install awscli &&'
 
 class Fedora(object):
     name = 'Fedora'
-    install = 'yum -y install'
+    install = 'yum --best -y install'
     packages = ['gcc-c++', 'gcc-c++-aarch64-linux-gnu', 'git', 'gdb', 'qemu-img',
                 'qemu-system-x86', 'libvirt', 'maven',
                 'ant', 'autoconf', 'automake', 'boost-static', 'genromfs', 'libtool',
@@ -63,7 +63,14 @@ class Fedora(object):
         ec2_post_install = None
         version = '22'
 
-    versions = [Fedora_19, Fedora_20, Fedora_21, Fedora_22]
+    class Fedora_23(object):
+        packages = ['java-1.8.0-openjdk']
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '23'
+
+    versions = [Fedora_19, Fedora_20, Fedora_21, Fedora_22, Fedora_23]
 
 class RHELbased(Fedora):
     name = ['Scientific Linux', 'NauLinux', 'CentOS Linux',
