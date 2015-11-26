@@ -120,7 +120,7 @@ struct vfsops {
 };
 
 typedef int (*vfsop_mount_t)(struct mount *, const char *, int, const void *);
-typedef int (*vfsop_umount_t)(struct mount *);
+typedef int (*vfsop_umount_t)(struct mount *, int flags);
 typedef int (*vfsop_sync_t)(struct mount *);
 typedef int (*vfsop_vget_t)(struct mount *, struct vnode *);
 typedef int (*vfsop_statfs_t)(struct mount *, struct statfs *);
