@@ -100,8 +100,8 @@ class Debian(object):
 
     versions = [debian]
 
-class Ubuntu(object):
-    name = 'Ubuntu'
+class Ubuntubased(object):
+    name = ['Ubuntu', 'LinuxMint']
     install = 'apt-get -y install'
     packages = ['build-essential', 'libboost-all-dev', 'genromfs', 'autoconf',
                 'libtool', 'openjdk-7-jdk', 'ant', 'qemu-utils', 'maven',
@@ -113,13 +113,6 @@ class Ubuntu(object):
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
 
-    class Ubuntu_14_04(object):
-        packages = []
-        ec2_packages = ['ec2-api-tools', 'awscli']
-        test_packages = []
-        ec2_post_install = None
-        version = '14.04'
-
     class Ubuntu_13_10(object):
         packages = []
         ec2_packages = []
@@ -127,12 +120,50 @@ class Ubuntu(object):
         ec2_post_install = standard_ec2_post_install
         version = '13.10'
 
-    versions = [Ubuntu_14_04, Ubuntu_13_10]
+    class Ubuntu_14_04(object):
+        packages = []
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '14.04'
+
+    class LinuxMint_16(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = standard_ec2_post_install
+        version = '16'
+    
+    class LinuxMint_17(object):
+        packages = []
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '17'    
+
+    class LinuxMint_17_1(object):
+        packages = []
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '17.1'    
+
+    class LinuxMint_17_2(object):
+        packages = []
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '17.2'	
+
+    versions = [
+                Ubuntu_13_10, Ubuntu_14_04,
+                LinuxMint_16, LinuxMint_17, LinuxMint_17_1, LinuxMint_17_2
+                ]
 
 distros = [
            Debian(),
            Fedora(),
-           Ubuntu(),
+           Ubuntubased(),
            RHELbased()
            ]
 
