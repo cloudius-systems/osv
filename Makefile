@@ -82,7 +82,7 @@ include conf/$(arch).mk
 CROSS_PREFIX ?= $(if $(filter-out $(arch), $(host_arch)), $(arch)-linux-gnu-)
 CXX=$(CROSS_PREFIX)g++
 CC=$(CROSS_PREFIX)gcc
-LD=$(CROSS_PREFIX)ld
+LD=$(CROSS_PREFIX)ld.bfd
 STRIP=$(CROSS_PREFIX)strip
 OBJCOPY=$(CROSS_PREFIX)objcopy
 
