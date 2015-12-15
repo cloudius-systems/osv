@@ -606,10 +606,9 @@ extern "C" int signalfd(int fd, const sigset_t *mask, int flags)
 extern "C" int sigwaitinfo(const sigset_t *__restrict mask,
                            siginfo_t *__restrict si)
 {
-    sigset_t my_mask = *mask;
     int signo;
 
-    int ret = sigwait(&my_mask, &signo);
+    int ret = sigwait(mask, &signo);
 
     if (si) {
         memset(si, 0, sizeof(*si));
