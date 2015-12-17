@@ -397,6 +397,9 @@ tools += tools/uush/uush.so
 tools += tools/uush/ls.so
 tools += tools/uush/mkdir.so
 
+tools += tools/mount/mount-nfs.so
+tools += tools/mount/umount.so
+
 # TODO: we only need this libtools for the httpserver module... Better
 # move it to its own module, it shouldn't be in the OSv core...
 tools += tools/libtools.so

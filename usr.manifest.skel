@@ -6,6 +6,8 @@
 /zfs.so: zfs.so
 /tools/mkfs.so: tools/mkfs/mkfs.so
 /tools/cpiod.so: tools/cpiod/cpiod.so
+/tools/mount-nfs.so: tools/mount/mount-nfs.so
+/tools/umount.so: tools/mount/umount.so
 /usr/lib/libgcc_s.so.1: %(gccbase)s/lib64/libgcc_s.so.1
 /usr/lib/&/libboost_filesystem.so.1.55.0: %(miscbase)s/usr/lib64/&
 /usr/lib/&/libboost_regex.so.1.55.0: %(miscbase)s/usr/lib64/&
