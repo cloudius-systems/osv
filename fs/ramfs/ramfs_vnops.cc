@@ -47,7 +47,6 @@
 
 #include "ramfs.h"
 
-
 static mutex_t ramfs_lock = MUTEX_INITIALIZER;
 static uint64_t inode_count = 1; /* inode 0 is reserved to root */
 
@@ -300,15 +299,18 @@ ramfs_read(struct vnode *vp, struct file *fp, struct uio *uio, int ioflag)
 	struct ramfs_node *np = (ramfs_node*)vp->v_data;
 	size_t len;
 
-	if (vp->v_type == VDIR)
-		return EISDIR;
-	if (vp->v_type != VREG)
-		return EINVAL;
-	if (uio->uio_offset < 0)
-		return EINVAL;
-
-	if (uio->uio_resid == 0)
+    if (vp->v_type == VDIR) {
+        return EISDIR;
+    }
+    if (vp->v_type != VREG) {
+        return EINVAL;
+    }
+    if (uio->uio_offset < 0) {
+        return EINVAL;
+    }
+	if (uio->uio_resid == 0) {
 		return 0;
+	}
 
 	if (uio->uio_offset >= (off_t)vp->v_size)
 		return 0;
@@ -326,15 +328,18 @@ ramfs_write(struct vnode *vp, struct uio *uio, int ioflag)
 {
 	struct ramfs_node *np = (ramfs_node*)vp->v_data;
 
-	if (vp->v_type == VDIR)
-		return EISDIR;
-	if (vp->v_type != VREG)
-		return EINVAL;
-	if (uio->uio_offset < 0)
-		return EINVAL;
-
-	if (uio->uio_resid == 0)
+    if (vp->v_type == VDIR) {
+        return EISDIR;
+    }
+    if (vp->v_type != VREG) {
+        return EINVAL;
+    }
+    if (uio->uio_offset < 0) {
+        return EINVAL;
+    }
+	if (uio->uio_resid == 0) {
 		return 0;
+	}
 
 	if (ioflag & IO_APPEND)
 		uio->uio_offset = np->rn_size;

@@ -1775,7 +1775,12 @@ boost-libs := $(boost-lib-dir)/libboost_program_options$(boost-mt).a \
 
 ifeq ($(nfs), true)
 	nfs-lib = $(out)/libnfs.a
+	nfs_o = nfs.o nfs_vfsops.o nfs_vnops.o
+else
+	nfs_o = nfs_null_vfsops.o
 endif
+
+objects += $(addprefix fs/nfs/, $(nfs_o))
 
 # ld has a known bug (https://sourceware.org/bugzilla/show_bug.cgi?id=6468)
 # where if the executable doesn't use shared libraries, its .dynamic section
