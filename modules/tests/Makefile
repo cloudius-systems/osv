@@ -1,4 +1,4 @@
-module: usr.manifest
+module: usr.manifest build_all_tests
 
 # Paths set by scripts/build
 src := $(OSV_BASE)
@@ -142,8 +142,11 @@ $(solaris-tests:%=$(out)/tests/%): COMMON+= \
 
 all_tests := $(tests:%=tests/%)
 
+build_all_tests: $(all_tests:%=$(out)/%)
+.PHONY: build_all_tests
+
 # Automatically generate usr.manifest which includes all tests.
-usr.manifest: $(all_tests:%=$(out)/%) $(lastword $(MAKEFILE_LIST)) usr.manifest.skel
+usr.manifest: $(lastword $(MAKEFILE_LIST)) usr.manifest.skel
 	@echo "  generating modules/tests/usr.manifest"
 	@cat $@.skel > $@
 	@echo $(all_tests) | tr ' ' '\n' | awk '{print "/" $$0 ": ./" $$0}' >> $@
