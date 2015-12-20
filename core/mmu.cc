@@ -650,6 +650,64 @@ public:
     bool tlb_flush_needed(void) {return do_flush;}
 };
 
+template <typename T, account_opt Account = account_opt::no>
+class dirty_cleaner : public vma_operation<allocate_intermediate_opt::no, skip_empty_opt::yes, Account> {
+private:
+    bool do_flush;
+    T handler;
+public:
+    dirty_cleaner(T handler) : do_flush(false), handler(handler) {}
+
+    template<int N>
+    bool page(hw_ptep<N> ptep, uintptr_t offset) {
+        pt_element<N> pte = ptep.read();
+        if (!pte.dirty()) {
+            return true;
+        }
+        do_flush |= true;
+        pte.set_dirty(false);
+        ptep.write(pte);
+        handler(ptep.read().addr(), offset, pt_level_traits<N>::size::value);
+        return true;
+    }
+
+    bool tlb_flush_needed(void) {return do_flush;}
+    void finalize() {
+        handler.finalize();
+    }
+};
+
+class dirty_page_sync {
+    friend dirty_cleaner<dirty_page_sync, account_opt::yes>;
+    friend file_vma;
+private:
+    file *_file;
+    f_offset _offset;
+    uint64_t _size;
+    struct elm {
+        iovec iov;
+        off_t offset;
+    };
+    std::stack<elm> queue;
+    dirty_page_sync(file *file, f_offset offset, uint64_t size) : _file(file), _offset(offset), _size(size) {}
+    void operator()(phys addr, uintptr_t offset, size_t size) {
+        off_t off = _offset + offset;
+        size_t len = std::min(size, _size - off);
+        queue.push(elm{{phys_to_virt(addr), len}, off});
+    }
+    void finalize() {
+        while(!queue.empty()) {
+            elm w = queue.top();
+            uio data{&w.iov, 1, w.offset, ssize_t(w.iov.iov_len), UIO_WRITE};
+            int error = _file->write(&data, FOF_OFFSET);
+            if (error) {
+                throw make_error(error);
+            }
+            queue.pop();
+        }
+    }
+};
+
 class virt_to_phys_map :
         public page_table_operation<allocate_intermediate_opt::no, skip_empty_opt::yes,
         descend_opt::yes, once_opt::yes, split_opt::no> {
@@ -1664,6 +1722,24 @@ error file_vma::sync(uintptr_t start, uintptr_t end)
 {
     if (!has_flags(mmap_shared))
         return make_error(ENOMEM);
+
+    // Called when ZFS arc cache is not present.
+    if (_page_ops && dynamic_cast<map_file_page_read *>(_page_ops)) {
+        start = std::max(start, _range.start());
+        end = std::min(end, _range.end());
+        uintptr_t size = end - start;
+
+        dirty_page_sync sync(_file.get(), _offset, ::size(_file));
+        error err = no_error();
+        try {
+            if (operate_range(dirty_cleaner<dirty_page_sync, account_opt::yes>(sync), (void*)start, size) != 0) {
+                err = make_error(sys_fsync(_file.get()));
+            }
+        } catch (error e) {
+            err = e;
+        }
+        return err;
+    }
 
     try {
         _file->sync(_offset + start - _range.start(), _offset + end - _range.start());
