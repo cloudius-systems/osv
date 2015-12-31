@@ -337,7 +337,12 @@ long sysconf(int name)
     }
 }
 
-long pathconf(const char *, int)
+long pathconf(const char *, int name)
+{
+    return fpathconf(-1, name);
+}
+
+long fpathconf(int, int)
 {
     WARN_STUBBED();
     return -1;
