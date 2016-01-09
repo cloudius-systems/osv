@@ -5,9 +5,6 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <osv/debug.hh>
-
-
 #define BOOST_TEST_MODULE tst-rcu-hashtable
 
 #include <boost/test/unit_test.hpp>
@@ -135,7 +132,7 @@ void do_reads(osv::rcu_hashtable<test_element>& ht,
                 auto lower_bound = std::max(before.insertions_lower_bound - after.removals_upper_bound, 0);
                 if (lower_bound > 0) {
                     DROP_LOCK(osv::rcu_read_lock) {
-                        debug("before: %s\nafter: %s\n", before, after);
+                        std::cerr << "before: " << before << "\nafter: " << after << "\n";
                     }
                 }
                 assert(lower_bound == 0);
@@ -144,7 +141,7 @@ void do_reads(osv::rcu_hashtable<test_element>& ht,
                 auto upper_bound = after.insertions_upper_bound - before.removals_lower_bound;
                 if (upper_bound < 1) {
                     DROP_LOCK(osv::rcu_read_lock) {
-                        debug("before: %s\nafter: %s\n", before, after);
+                        std::cerr << "before: " << before << "\nafter: " << after << "\n";
                     }
                 }
                 assert(upper_bound >= 1);

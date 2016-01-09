@@ -8,7 +8,6 @@
 #define BOOST_TEST_MODULE tst-vfs
 
 #include <osv/sched.hh>
-#include <osv/debug.hh>
 #include "tst-fs.hh"
 
 #include <sys/types.h>
@@ -54,7 +53,7 @@ extern "C" {
 
 BOOST_AUTO_TEST_CASE(test_dentry_hierarchy)
 {
-    debug("Running dentry hierarchy tests\n");
+    std::cerr << "Running dentry hierarchy tests\n";
 
     char path[] = "/tests/tst-vfs.so";
     struct dentry *dp;
@@ -70,15 +69,15 @@ BOOST_AUTO_TEST_CASE(test_dentry_hierarchy)
 
     drele(dp);
 
-    debug("dentry hierarchy tests succeeded\n");
+    std::cerr << "dentry hierarchy tests succeeded\n";
 }
 
 BOOST_AUTO_TEST_CASE(test_concurrent_file_operations)
 {
-    debug("Running concurrent file operation tests\n");
+    std::cerr << "Running concurrent file operation tests\n";
 
     constexpr int N = 10;
-    debug("test1, with %d threads\n", N);
+    std::cerr << "test1, with " << N << " threads\n";
     sched::thread *threads[N];
     for (int i = 0; i < N; i++) {
             threads[i] = new sched::thread([] {
@@ -96,5 +95,5 @@ BOOST_AUTO_TEST_CASE(test_concurrent_file_operations)
         delete threads[i];
     }
 
-    debug("concurrent file operation tests succeeded\n");
+    std::cerr << "concurrent file operation tests succeeded\n";
 }

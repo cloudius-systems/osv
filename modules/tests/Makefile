@@ -110,6 +110,8 @@ BOOSTLIBS=$(src)/external/$(ARCH)/misc.bin/usr/lib64
 $(boost-tests:%=$(out)/tests/%): LIBS += \
 	 $(BOOSTLIBS)/libboost_unit_test_framework.so \
 	 $(BOOSTLIBS)/libboost_filesystem.so
+$(boost-tests:%=$(out)/tests/%): CXXFLAGS += -D_GLIBCXX_USE_CXX11_ABI=0 \
+	-isystem $(src)/external/$(ARCH)/misc.bin/usr/include
 
 tests += $(boost-tests)
 
