@@ -72,6 +72,7 @@ def scan_errors(s):
         "Exception was caught while running",
         "at org.junit.runner.JUnitCore.main",
         "ContextFailedException",
+	"\[backtrace\]",
     ]
     for pattern in patterns:
         if re.findall(pattern, s):
@@ -171,7 +172,7 @@ class SupervisedProcess:
         return self.has_errors or self.process.returncode
 
 def run_command_in_guest(command, **kwargs):
-    return Guest(["-s", "-e", command], **kwargs)
+    return Guest(["-s", "-e", "--power-off-on-abort " + command], **kwargs)
 
 class Guest(SupervisedProcess):
     def __init__(self, args, forward=[], hold_with_poweroff=False, show_output_on_error=True):
