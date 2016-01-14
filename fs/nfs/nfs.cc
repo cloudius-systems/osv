@@ -80,14 +80,3 @@ struct mount_context *get_mount_context(struct mount *mp, int &err_no)
 
     return _map[mount_point].get();
 }
-
-struct nfs_context *get_nfs_context(struct vnode *node,
-                                                  int &err_no)
-{
-    return get_mount_context(node->v_mount, err_no)->nfs();
-}
-
-struct nfsdir *get_dir_handle(struct vnode *node)
-{
-    return static_cast<struct nfsdir *>(node->v_data);
-}

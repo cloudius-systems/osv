@@ -38,14 +38,6 @@ static int nfs_op_mount(struct mount *mp, const char *dev, int flags,
         return err_no;
     }
 
-    struct nfsdir *handle = nullptr;
-    int ret = nfs_opendir(ctx->nfs(), "/", &handle);
-    if (ret) {
-        return -ret;
-    }
-
-    mp->m_root->d_vnode->v_data = handle;
-
     return 0;
 }
 
@@ -63,19 +55,6 @@ static int nfs_op_unmount(struct mount *mp, int flags)
     if (mp->m_count > 1) {
         return EBUSY;
     }
-
-    auto vnode = mp->m_root->d_vnode;
-
-    int err_no;
-    auto nfs = get_nfs_context(vnode, err_no);
-
-    if (err_no) {
-        return err_no;
-    }
-
-    auto handle = get_dir_handle(vnode);
-    nfs_closedir(nfs, handle);
-    vnode->v_data = nullptr;
 
     return 0;
 }
