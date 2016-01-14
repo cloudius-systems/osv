@@ -59,10 +59,6 @@ int nfs_op_open(struct file *fp)
         return err_no;
     }
 
-    if (path == "/") {
-        return 0;
-    }
-
     int type = vp->v_type;
 
     // It's a directory or a file.
