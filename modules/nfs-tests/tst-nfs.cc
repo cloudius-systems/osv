@@ -227,6 +227,24 @@ void test_readdir(std::string mount_point, std::string path)
     assert(!ret);
 }
 
+// make sure the mount() command openned a nfs lib directory handle
+// for /mount_point
+void test_root_readdir(std::string mount_point)
+{
+    std::string full_path = mount_point;
+
+    // open the directory and list the name of the files in it
+    auto dir = opendir(full_path.c_str());
+    assert(dir);
+
+    while (readdir(dir)) {
+    }
+
+    // close the directory
+    int ret = closedir(dir);
+    assert(!ret);
+}
+
 void test_fsx(std::string mount_point, std::string path)
 {
     std::string full_path = mount_point + "/" + path;
@@ -309,6 +327,8 @@ int main(int argc, char **argv)
     test_write_read(mount_point, "tintin");
 
     test_readdir(mount_point, "castafiore");
+
+    test_root_readdir(mount_point);
 
     test_fsx(mount_point, "sanzo");
 
