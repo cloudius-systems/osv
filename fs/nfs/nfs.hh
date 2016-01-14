@@ -63,4 +63,9 @@ struct mount_point *get_mount_point(struct mount *mp);
 
 struct mount_context *get_mount_context(struct mount *mp, int &err_no);
 
+struct nfs_context *get_nfs_context(struct vnode *node,
+                                                  int &err_no);
+
+struct nfsdir *get_dir_handle(struct vnode *node);
+
 #endif

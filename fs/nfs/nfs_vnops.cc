@@ -14,22 +14,10 @@
 
 #include "nfs.hh"
 
-static inline struct nfs_context *get_nfs_context(struct vnode *node,
-                                                  int &err_no)
-{
-    return get_mount_context(node->v_mount, err_no)->nfs();
-}
-
 static inline struct nfsfh *get_handle(struct vnode *node)
 {
     return static_cast<struct nfsfh *>(node->v_data);
 }
-
-static inline struct nfsdir *get_dir_handle(struct vnode *node)
-{
-    return static_cast<struct nfsdir *>(node->v_data);
-}
-
 
 static const char *get_node_name(struct vnode *node)
 {
