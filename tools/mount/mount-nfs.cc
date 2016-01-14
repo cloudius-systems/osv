@@ -27,7 +27,7 @@ int main(int argc, char **argv)
     int ret = mount(url.c_str(), mount_point.c_str(), "nfs", 0, nullptr);
     if (ret) {
         int my_errno = errno;
-        std::cout << "Error: " << strerror(my_errno) << "(" << my_errno << ")"
+        std::cout << "Error in mount(): " << strerror(my_errno) << "(" << my_errno << ")"
                   << std::endl;
         return(1);
     }
