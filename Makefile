@@ -1814,7 +1814,7 @@ environ_sources += $(addprefix musl/src/, $(environ_musl))
 
 $(out)/libenviron.so: $(environ_sources)
 	$(makedir)
-	 $(call quiet, $(CC) $(CFLAGS) -shared -o $(out)/libenviron.so $^, LINK libenviron.so)
+	 $(call quiet, $(CC) $(CFLAGS) -shared -o $(out)/libenviron.so $(environ_sources), CC libenviron.so)
 
 $(out)/bootfs.bin: scripts/mkbootfs.py bootfs.manifest.skel $(tools:%=$(out)/%) \
 		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so
