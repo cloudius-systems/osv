@@ -263,6 +263,8 @@ def start_osv_xen(options):
        net_device_options = "bridge=%s" % options.bridge
        if options.mac:
           net_device_options += ",mac=%s" % options.mac
+       if options.script:
+           net_device_options += ",script=%s" % options.script
        args += ["vif=['%s']" % (net_device_options)]
 
     # Using xm would allow us to get away with creating the file, but it comes
@@ -475,6 +477,8 @@ if __name__ == "__main__":
                         help="disable gdb")
     parser.add_argument("--gdb", action="store", default="1234",
                         help="specify gdb port number")
+    parser.add_argument("--script", action="store",
+                        help="XEN define configuration script for vif")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
