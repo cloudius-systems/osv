@@ -34,7 +34,6 @@ TRACEPOINT(trace_elf_unload, "%s", const char *);
 TRACEPOINT(trace_elf_lookup, "%s", const char *);
 TRACEPOINT(trace_elf_lookup_addr, "%p", const void *);
 
-using namespace std;
 using namespace boost::range;
 
 namespace {
@@ -1027,7 +1026,7 @@ void create_main_program()
 program::program(void* addr)
     : _next_alloc(addr)
 {
-    _core = make_shared<memory_image>(*this, (void*)ELF_IMAGE_START);
+    _core = std::make_shared<memory_image>(*this, (void*)ELF_IMAGE_START);
     assert(_core->module_index() == core_module_index);
     _core->load_segments();
     set_search_path({"/", "/usr/lib"});
@@ -1425,7 +1424,7 @@ ulong program::register_dtv(object* obj)
     SCOPE_LOCK(_module_index_list_mutex);
     auto list = _module_index_list_rcu.read_by_owner();
     if (!list) {
-        _module_index_list_rcu.assign(new vector<object*>({obj}));
+        _module_index_list_rcu.assign(new std::vector<object*>({obj}));
         return 0;
     }
     auto i = find(*list, nullptr);
@@ -1433,7 +1432,7 @@ ulong program::register_dtv(object* obj)
         *i = obj;
         return i - list->begin();
     } else {
-        auto newlist = new vector<object*>(*list);
+        auto newlist = new std::vector<object*>(*list);
         newlist->push_back(obj);
         _module_index_list_rcu.assign(newlist);
         osv::rcu_dispose(list);
