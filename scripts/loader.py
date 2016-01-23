@@ -627,10 +627,7 @@ class osv_syms(gdb.Command):
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
         syminfo_resolver.clear_cache()
-        p = gdb.lookup_global_symbol('elf::program::s_objs').value()
-        p = p.dereference().address
-        while p.dereference():
-            obj = p.dereference().dereference()
+        for obj in read_vector(gdb.lookup_global_symbol('elf::program::s_objs').value()):
             base = to_int(obj['_base'])
             obj_path = obj['_pathname']['_M_dataplus']['_M_p'].string()
             path = translate(obj_path)
@@ -639,7 +636,6 @@ class osv_syms(gdb.Command):
             else:
                 print(path, hex(base))
                 load_elf(path, base)
-            p += 1
 
 class osv_load_elf(gdb.Command):
     def __init__(self):

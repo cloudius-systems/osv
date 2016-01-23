@@ -591,7 +591,7 @@ private:
     std::vector <object*> _modules_to_delete;
 
     // debugger interface
-    static object* s_objs[100];
+    static std::vector<object*> s_objs;
 
     friend elf::file::~file();
     friend class object;

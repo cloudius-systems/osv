@@ -1227,28 +1227,18 @@ void program::remove_object(object *ef)
     module_delete_enable();
 }
 
-object* program::s_objs[100];
+std::vector<object*> program::s_objs;
 
 void program::add_debugger_obj(object* obj)
 {
-    auto p = s_objs;
-    while (*p) {
-        ++p;
-    }
-    *p = obj;
+    s_objs.push_back(obj);
 }
 
 void program::del_debugger_obj(object* obj)
 {
-    auto p = s_objs;
-    while (*p && *p != obj) {
-        ++p;
-    }
-    if (!*p) {
-        return;
-    }
-    while ((p[0] = p[1]) != nullptr) {
-        ++p;
+    auto it = std::find(s_objs.begin(), s_objs.end(), obj);
+    if (it != s_objs.end()) {
+        s_objs.erase(it);
     }
 }
 
