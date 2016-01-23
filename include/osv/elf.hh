@@ -592,6 +592,7 @@ private:
 
     // debugger interface
     static std::vector<object*> s_objs;
+    static mutex s_objs_mutex;
 
     friend elf::file::~file();
     friend class object;

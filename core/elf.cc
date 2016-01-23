@@ -1227,14 +1227,17 @@ void program::remove_object(object *ef)
 }
 
 std::vector<object*> program::s_objs;
+mutex program::s_objs_mutex;
 
 void program::add_debugger_obj(object* obj)
 {
+    SCOPE_LOCK(s_objs_mutex);
     s_objs.push_back(obj);
 }
 
 void program::del_debugger_obj(object* obj)
 {
+    SCOPE_LOCK(s_objs_mutex);
     auto it = std::find(s_objs.begin(), s_objs.end(), obj);
     if (it != s_objs.end()) {
         s_objs.erase(it);
