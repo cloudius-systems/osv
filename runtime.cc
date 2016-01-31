@@ -246,13 +246,14 @@ int getpid()
 //    WCTDEF(digit), WCTDEF(graph), WCTDEF(lower), WCTDEF(print),
 //    WCTDEF(punct), WCTDEF(space), WCTDEF(upper), WCTDEF(xdigit),
 
-static unsigned short c_locale_array[384] = {
 #include "ctype-data.h"
-};
 
 static struct __locale_struct c_locale = {
     { }, // __locales_data
     c_locale_array + 128, // __ctype_b
+    c_tolower_array + 128, // __ctype_tolower
+    c_toupper_array + 128, // __ctype_toupper
+    { }, // __names
 };
 
 locale_t __c_locale_ptr = &c_locale;
