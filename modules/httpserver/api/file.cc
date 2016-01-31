@@ -211,7 +211,8 @@ class get_file_handler : public file_interaction_handler {
         struct group gr;
         struct group *result;
         char buf[512];
-        if (getgrgid_r(buffer.st_gid, &gr, buf, 512, &result) == 0) {
+        if (getgrgid_r(buffer.st_gid, &gr, buf, 512, &result) == 0
+            && result) {
             res.group = gr.gr_name;
         }
         struct passwd pwd;
