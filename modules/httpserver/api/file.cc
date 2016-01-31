@@ -217,7 +217,8 @@ class get_file_handler : public file_interaction_handler {
         }
         struct passwd pwd;
         struct passwd *pwdRes;
-        if (getpwuid_r(buffer.st_uid, &pwd, buf, 512, &pwdRes) == 0) {
+        if (getpwuid_r(buffer.st_uid, &pwd, buf, 512, &pwdRes) == 0
+            && pwdRes) {
             res.owner = pwd.pw_name;
         }
         sprintf(buf, "%o", buffer.st_mode & 0777);
