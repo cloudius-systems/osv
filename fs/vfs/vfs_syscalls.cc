@@ -214,7 +214,10 @@ sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 	error = VOP_OPEN(vp, fp);
 	if (error) {
 		vn_unlock(vp);
-		fdrop(fp);
+		// Note direct delete of fp instead of fdrop(fp). fp was never
+		// returned so cannot be in use, and because it wasn't opened
+		// it cannot be close()ed.
+		delete fp;
 		return error;
 	}
 	vn_unlock(vp);
