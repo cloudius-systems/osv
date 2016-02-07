@@ -304,7 +304,14 @@ void connection::do_read()
 
 void connection::on_complete_multiplart()
 {
-    multipart.close();
+    try {
+        multipart.close();
+    } catch(const std::exception& _e) {
+        std::string e(_e.what());
+
+        std::cerr << e << std::endl;
+        reply_ = reply::stock_reply(reply::internal_server_error, &e);
+    }
     do_write();
 }
 
