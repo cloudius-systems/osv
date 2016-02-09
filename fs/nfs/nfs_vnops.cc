@@ -505,13 +505,12 @@ static int nfs_op_truncate(struct vnode *vp, off_t length)
 {
     int err_no;
     auto nfs = get_nfs_context(vp, err_no);
-    auto handle = get_handle(vp);
 
     if (err_no) {
         return err_no;
     }
 
-    int ret = nfs_ftruncate(nfs, handle, length);
+    int ret = nfs_truncate(nfs, get_node_name(vp), length);
     if (ret) {
         return -ret;
     }

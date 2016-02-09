@@ -288,6 +288,23 @@ void test_threaded(std::string mount_point, std::string path)
     t3.join();
 }
 
+void test_trunc(std::string mount_point, std::string path)
+{
+    std::string full_path = mount_point + "/" + path;
+    const char data[4096] = { 0 };
+
+    std::ofstream f;
+    f.open (full_path, std::ofstream::out | std::ofstream::app);
+    f << "fooo";
+    f.flush();
+    f.close();
+
+    auto ff = fopen(full_path.c_str(), "w");
+    assert(ff);
+    fwrite(data, sizeof(data), 1, ff);
+    assert(0 == fclose(ff));
+}
+
 int main(int argc, char **argv)
 {
     po::options_description desc("Allowed options");
@@ -356,6 +373,8 @@ int main(int argc, char **argv)
     test_readdir(mount_point, "castafiore");
 
     test_root_readdir(mount_point);
+
+    test_trunc(mount_point, "alan");
 
     test_threaded(mount_point, "zut");
 
