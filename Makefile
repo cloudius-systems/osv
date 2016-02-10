@@ -780,7 +780,6 @@ drivers += drivers/line-discipline.o
 drivers += drivers/clock.o
 drivers += drivers/clock-common.o
 drivers += drivers/clockevent.o
-drivers += drivers/ramdisk.o
 drivers += core/elf.o
 drivers += java/jvm/jvm_balloon.o
 drivers += java/jvm/java_api.o
