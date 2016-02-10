@@ -358,8 +358,7 @@ static int nfs_op_create(struct vnode *dvp, char *name, mode_t mode)
         return -ret;
     }
 
-    dvp->v_data = handle;
-    return 0;
+    return -nfs_close(nfs, handle);
 }
 
 static int nfs_op_remove(struct vnode *dvp, struct vnode *vp, char *name)
