@@ -86,7 +86,7 @@ class Debian(object):
                 'libmaven-shade-plugin-java', 'tcpdump', 'gdb', 'gawk',
                 'gnutls-bin', 'openssl', 'python-requests', 'python-dpkt',
                 'qemu-system-x86', 'qemu-utils', 'lib32stdc++-4.9-dev',
-                'p11-kit', 'libssl-dev', 'libedit-dev']
+                'p11-kit', 'libssl-dev', 'libedit-dev', 'libncurses5-dev']
     ec2_packages = standard_ec2_packages
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
