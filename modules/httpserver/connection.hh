@@ -91,8 +91,7 @@ private:
     connection_function func[CLOSED + 1] = { };
     void set_original_file(request& req, const std::string val);
 
-    // return true on succes
-    bool open_tmp_file(request& req);
+    void open_tmp_file(request& req);
 
     void set_mode(reading_mode m)
     {

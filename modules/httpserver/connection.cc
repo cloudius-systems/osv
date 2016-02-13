@@ -96,7 +96,7 @@ void multipart_parser::set_original_file(request& req, const std::string val)
     req.headers.back().value = orig_fname;
 }
 
-bool multipart_parser::open_tmp_file(request& req)
+void multipart_parser::open_tmp_file(request& req)
 {
     use_file = true;
     req.headers.push_back(header());
@@ -105,9 +105,9 @@ bool multipart_parser::open_tmp_file(request& req)
     upload_file.open(name, std::ios::binary | std::ios::out);
     if (!upload_file.is_open() || upload_file.bad()) {
         std::cerr << "failed opening file for output " << name << std::endl;
-        return false;
+        throw message_handling_exception(
+            "Failed opening temporary file for output");
     }
-    return true;
 }
 
 void multipart_parser::set_in_message(const buffer_type::pointer& bg,
@@ -139,9 +139,7 @@ request_parser::result_type multipart_parser::parse(request& req,
                     != std::string::npos) {
                 set_original_file(req, cur);
                 if (use_file) {
-                    if (!open_tmp_file(req)) {
-                        return request_parser::bad;
-                    }
+                    open_tmp_file(req);
                 }
                 set_mode(WAIT_EMPTY);
                 empty_lines = 0;
