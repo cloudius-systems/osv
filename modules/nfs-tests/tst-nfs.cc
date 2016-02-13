@@ -9,6 +9,7 @@
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <thread>
 
 #include <boost/program_options.hpp>
 
@@ -261,6 +262,49 @@ void test_fsx(std::string mount_point, std::string path)
     assert(!ret);
 }
 
+void stress_thread(std::string path)
+{
+    std::ofstream f;
+    assert(f);
+
+    for (auto j = 0; j < 10000; j++) {
+        f.open (path, std::ofstream::out | std::ofstream::app);
+        f << "fooo";
+        f.flush();
+        f.close();
+    }
+}
+
+void test_threaded(std::string mount_point, std::string path)
+{
+    std::string full_path = mount_point + "/" + path;
+
+    std::thread t1(stress_thread, full_path);
+    std::thread t2(stress_thread, full_path);
+    std::thread t3(stress_thread, full_path);
+
+    t1.join();
+    t2.join();
+    t3.join();
+}
+
+void test_trunc(std::string mount_point, std::string path)
+{
+    std::string full_path = mount_point + "/" + path;
+    const char data[4096] = { 0 };
+
+    std::ofstream f;
+    f.open (full_path, std::ofstream::out | std::ofstream::app);
+    f << "fooo";
+    f.flush();
+    f.close();
+
+    auto ff = fopen(full_path.c_str(), "w");
+    assert(ff);
+    fwrite(data, sizeof(data), 1, ff);
+    assert(0 == fclose(ff));
+}
+
 int main(int argc, char **argv)
 {
     po::options_description desc("Allowed options");
@@ -329,6 +373,10 @@ int main(int argc, char **argv)
     test_readdir(mount_point, "castafiore");
 
     test_root_readdir(mount_point);
+
+    test_trunc(mount_point, "alan");
+
+    test_threaded(mount_point, "zut");
 
     test_fsx(mount_point, "sanzo");
 

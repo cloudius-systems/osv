@@ -52,7 +52,7 @@ $(out)/%.o: $(src)/%.c
 $(out)/%.so: $(out)/%.o
 	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $< $(LIBS), LD $*.so)
 
-tests := tst-pthread.so tst-ramdisk.so tst-vblk.so tst-bsd-evh.so \
+tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	misc-bsd-callout.so tst-bsd-kthread.so tst-bsd-taskqueue.so \
 	tst-fpu.so tst-preempt.so tst-tracepoint.so tst-hub.so \
 	misc-console.so misc-leak.so misc-readbench.so misc-mmap-anon-perf.so \

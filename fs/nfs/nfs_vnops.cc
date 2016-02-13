@@ -46,6 +46,7 @@ static inline std::string mkpath(struct vnode *node, const char *name)
     return path + "/" + name;
 }
 
+
 int nfs_op_open(struct file *fp)
 {
     struct vnode *vp = file_dentry(fp)->d_vnode;
@@ -59,17 +60,42 @@ int nfs_op_open(struct file *fp)
         return err_no;
     }
 
+    // already opened reuse the nfs handle
+    if (vp->v_data) {
+        return 0;
+    }
+
     int type = vp->v_type;
+
+    // clear read write flags
+    flags &= ~(O_RDONLY | O_WRONLY | O_RDWR);
+
+    // check our rights
+    bool read  = !vn_access(vp, VREAD);
+    bool write = !vn_access(vp, VWRITE);
+
+    // Set updated flags
+    if (read && write) {
+        flags |= O_RDWR;
+    } else if (read) {
+        flags |= O_RDONLY;
+    } else if (write) {
+        flags |= O_WRONLY;
+    }
 
     // It's a directory or a file.
     if (type == VDIR) {
         struct nfsdir *handle = nullptr;
         ret = nfs_opendir(nfs, path.c_str(), &handle);
-        vp->v_data = handle;
+        if (!ret) {
+            vp->v_data = handle;
+        }
     } else if (type == VREG) {
         struct nfsfh *handle = nullptr;
         ret = nfs_open(nfs, path.c_str(), flags, &handle);
-        vp->v_data = handle;
+        if (!ret) {
+            vp->v_data = handle;
+        }
     } else {
         return EIO;
     }
@@ -83,26 +109,7 @@ int nfs_op_open(struct file *fp)
 
 int nfs_op_close(struct vnode *dvp, struct file *file)
 {
-    int err_no;
-    auto nfs = get_nfs_context(dvp, err_no);
-    int type = dvp->v_type;
-    int ret = 0;
-
-    if (err_no) {
-        return err_no;
-    }
-
-    if (type == VDIR) {
-        auto handle = get_dir_handle(dvp);
-        nfs_closedir(nfs, handle);
-    } else if (type == VREG) {
-        auto handle = get_handle(dvp);
-        ret = nfs_close(nfs, handle);
-    } else {
-        return EIO;
-    }
-
-    return -ret;
+    return 0;
 }
 
 static int nfs_op_read(struct vnode *vp, struct file *fp, struct uio *uio,
@@ -322,6 +329,7 @@ static int nfs_op_lookup(struct vnode *dvp, char *p, struct vnode **vpp)
     vp->v_mode = mode;
     vp->v_size = st.nfs_size;
     vp->v_mount = dvp->v_mount;
+    vp->v_data = nullptr;
 
     *vpp = vp;
 
@@ -350,8 +358,7 @@ static int nfs_op_create(struct vnode *dvp, char *name, mode_t mode)
         return -ret;
     }
 
-    dvp->v_data = handle;
-    return 0;
+    return -nfs_close(nfs, handle);
 }
 
 static int nfs_op_remove(struct vnode *dvp, struct vnode *vp, char *name)
@@ -497,13 +504,12 @@ static int nfs_op_truncate(struct vnode *vp, off_t length)
 {
     int err_no;
     auto nfs = get_nfs_context(vp, err_no);
-    auto handle = get_handle(vp);
 
     if (err_no) {
         return err_no;
     }
 
-    int ret = nfs_ftruncate(nfs, handle, length);
+    int ret = nfs_truncate(nfs, get_node_name(vp), length);
     if (ret) {
         return -ret;
     }
@@ -550,8 +556,33 @@ static int nfs_op_symlink(struct vnode *dvp, char *l, char *t)
     return -nfs_symlink(nfs, target.c_str(), link.c_str());
 }
 
-static  int nfs_op_inactive(struct vnode *)
+
+static  int nfs_op_inactive(struct vnode *dvp)
 {
+    if (!dvp->v_data) {
+        return 0;
+    }
+
+    int err_no;
+    auto nfs = get_nfs_context(dvp, err_no);
+    int type = dvp->v_type;
+
+    if (err_no) {
+        return 0;
+    }
+
+    if (type == VDIR) {
+        auto handle = get_dir_handle(dvp);
+        nfs_closedir(nfs, handle);
+    } else if (type == VREG) {
+        auto handle = get_handle(dvp);
+        nfs_close(nfs, handle);
+    } else {
+        return 0;
+    }
+
+    dvp->v_data = nullptr;
+
     return 0;
 }
 

@@ -84,7 +84,6 @@ extern "C" {
     void premain();
     void vfs_init(void);
     void mount_zfs_rootfs(bool);
-    void ramdisk_init(void);
 }
 
 void premain()
@@ -568,7 +567,7 @@ void main_cont(int ac, char** av)
 
     vfs_init();
     boot_time.event("VFS initialized");
-    ramdisk_init();
+    //ramdisk_init();
 
     net_init();
     boot_time.event("Network initialized");
