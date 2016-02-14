@@ -104,7 +104,6 @@ void multipart_parser::open_tmp_file(request& req)
     req.headers.back().value = name;
     upload_file.open(name, std::ios::binary | std::ios::out);
     if (!upload_file.is_open() || upload_file.bad()) {
-        std::cerr << "failed opening file for output " << name << std::endl;
         throw message_handling_exception(
             "Failed opening temporary file for output");
     }
@@ -254,8 +253,7 @@ void connection::do_read()
                          request_, buffer_.data(), buffer_.data() +
                          bytes_transferred);
             auto result = std::get<0>(r);
-            if (result == request_parser::good)
-            {
+            if (result == request_parser::good) {
                 if (set_content_type()) {
                     if (request_.is_multi_part()) {
                         auto bg = std::get<1>(r);
@@ -282,28 +280,16 @@ void connection::do_read()
                 }
 
                 do_write();
-            }
-            else if (result == request_parser::bad)
-            {
+            } else if (result == request_parser::bad) {
                 reply_ = reply::stock_reply(reply::bad_request);
                 do_write();
-            }
-            else
-            {
+            } else {
                 do_read();
             }
-        }
-        else if (ec != boost::asio::error::operation_aborted)
-        {
+        } else if (ec != boost::asio::error::operation_aborted) {
             connection_manager_.stop(shared_from_this());
         }
     });
-}
-
-void connection::on_complete_multiplart()
-{
-    multipart.close();
-    do_write();
 }
 
 void connection::do_read_mp()
@@ -315,17 +301,24 @@ void connection::do_read_mp()
     {
         if (!ec)
         {
-            auto bg = buffer_.data();
-            auto end = bg + bytes_transferred;
-            auto result = multipart.parse(request_, bg,end);
-            if (result == request_parser::bad)
-            {
-                reply_ = reply::stock_reply(reply::bad_request);
+            try {
+                auto bg = buffer_.data();
+                auto end = bg + bytes_transferred;
+                auto result = multipart.parse(request_, bg,end);
+                if (result == request_parser::bad) {
+                    reply_ = reply::stock_reply(reply::bad_request);
+                    do_write();
+                } else if (result == request_parser::good) {
+                    multipart.close();
+                    do_write();
+                } else {
+                    do_read_mp();
+                }
+            } catch(const std::exception &_e) {
+                std::string e(_e.what());
+
+                reply_ = reply::stock_reply(reply::internal_server_error, &e);
                 do_write();
-            } else if (result == request_parser::good) {
-                on_complete_multiplart();
-            } else {
-                do_read_mp();
             }
         } else {
             std::cerr << " error while reading " << ec.message() << std::endl;
@@ -353,17 +346,24 @@ void connection::upload()
 {
     delayed_reply = true;
 
-    if (multipart.parse_in_message(request_) == request_parser::bad) {
-        reply_ = reply::stock_reply(reply::bad_request);
-        do_write();
-    } else {
-        if (multipart.is_done()) {
-            on_complete_multiplart();
+    try {
+        if (multipart.parse_in_message(request_) == request_parser::bad) {
+            reply_ = reply::stock_reply(reply::bad_request);
+            do_write();
         } else {
-            do_read_mp();
+            if (multipart.is_done()) {
+                multipart.close();
+                do_write();
+            } else {
+                do_read_mp();
+            }
         }
-    }
+    } catch(const std::exception &_e) {
+        std::string e(_e.what());
 
+        reply_ = reply::stock_reply(reply::internal_server_error, &e);
+        do_write();
+    }
 }
 
 } // namespace server

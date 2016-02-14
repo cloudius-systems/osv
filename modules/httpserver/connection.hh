@@ -201,12 +201,6 @@ private:
      */
     bool set_content_type();
 
-
-    /**
-     * handle complete of multipart read.
-     */
-    void on_complete_multiplart();
-
     /**
      * Transport for the connection.
      *

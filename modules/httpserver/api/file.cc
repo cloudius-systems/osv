@@ -370,7 +370,10 @@ class post_file_handler : public handler_base {
         http::server::connection_function when_done =
             [full_path, tmp_file](http::server::connection& conn)
         {
-            rename(tmp_file.c_str(), full_path.c_str());
+            if (rename(tmp_file.c_str(), full_path.c_str()) != 0) {
+                throw bad_param_exception(
+                    string("Failed renaming ") + strerror(errno));
+            }
         };
         req.connection_ptr->get_multipart_parser().set_call_back(
             http::server::multipart_parser::CLOSED, when_done);
