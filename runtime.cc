@@ -174,11 +174,14 @@ int __cxa_finalize(void *dso)
         debug("__cxa_finalize() running kernel's destructors not supported\n");
         return 0;
     }
-    SCOPE_LOCK(destructors_mutex);
-    for (auto d : boost::adaptors::reverse(destructors[dso])) {
+    std::vector<std::pair<destructor_t,void*>> my_destructors;
+    WITH_LOCK(destructors_mutex) {
+        my_destructors = std::move(destructors[dso]);
+        destructors.erase(dso);
+    }
+    for (auto d : boost::adaptors::reverse(my_destructors)) {
         d.first(d.second);
     }
-    destructors.erase(dso);
     return 0;
 }
 }
