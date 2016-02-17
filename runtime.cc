@@ -114,10 +114,8 @@ void abort(const char *fmt, ...)
 
     debug_early(msg);
     // backtrace requires threads to be available, and also
-    // ELF s_program to be initialized. Since s_program happens
-    // later, this check is enough to ensure a minimal fallback
-    // functionality even early on.
-    if (elf::get_program() != nullptr) {
+    // ELF s_program to be initialized.
+    if (sched::thread::current() && elf::get_program() != nullptr) {
         print_backtrace();
     } else {
         debug_early("Halting.\n");
