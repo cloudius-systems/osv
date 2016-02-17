@@ -181,7 +181,9 @@ void __attribute__((constructor(init_prio::hpet))) hpet_init()
         auto st = AcpiGetTable(hpet_sig, 0, &hpet_header);
         // If we don't have a paravirtual clock, nor an HPET clock, we currently
         // have no chance of running.
-        assert(st == AE_OK);
+        if (st != AE_OK) {
+            abort("Neither paravirtual clock nor HPET is available.\n");
+        }
         auto h = get_parent_from_member(hpet_header, &ACPI_TABLE_HPET::Header);
         auto hpet_address = h->Address;
 
