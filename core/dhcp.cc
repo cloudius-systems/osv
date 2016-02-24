@@ -660,6 +660,15 @@ namespace dhcp {
 
     void dhcp_worker::queue_packet(struct mbuf* m)
     {
+        if (!_dhcp_thread) {
+            /*
+            With staticaly assigned IP, dhcp_worker::init() isn't called,
+            and (injected) packets can/should be ignored.
+            */
+            dhcp_w("Ignoring inbound packet");
+            return;
+        }
+
         WITH_LOCK (_lock) {
             _rx_packets.push_front(m);
         }
