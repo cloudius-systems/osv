@@ -1070,6 +1070,10 @@ void thread::stop_wait()
         return;
     }
     preempt_enable();
+    if (old_status == status::terminated) {
+        // We raced with thread::unsafe_stop() and lost
+        cpu::schedule();
+    }
     while (st.load() == status::waking || st.load() == status::sending_lock) {
         cpu::schedule();
     }
