@@ -19,7 +19,6 @@ console_multiplexer::console_multiplexer(const termios *tio, console_driver *ear
     : _tio(tio)
     , _early_driver(early_driver)
 {
-    _drivers_writer =  [=](const char * str, size_t len) { this->drivers_write(str, len); };
 }
 
 void console_multiplexer::driver_add(console_driver *driver)
@@ -34,6 +33,7 @@ void console_multiplexer::start()
     for (auto driver : _drivers) {
         driver->start([=] { _ldisc->read_poll(driver); });
     }
+    _drivers_writer =  [=](const char * str, size_t len) { this->drivers_write(str, len); };
     _started = true;
 }
 
