@@ -914,6 +914,7 @@ objects += core/async.o
 objects += core/net_trace.o
 objects += core/app.o
 objects += core/libaio.o
+objects += core/osv_execve.o
 
 #include $(src)/libc/build.mk:
 libc =
