@@ -22,6 +22,7 @@ namespace {
 
 int main(int ac, char **av)
 {
+    std::cout << "static unsigned short c_locale_array[384] = {\n";
     for (int i = -128; i < 256; ++i) {
 	std::cout << "0";
 	DO(alnum);
@@ -39,4 +40,15 @@ int main(int ac, char **av)
 	DO(xdigit);
 	std::cout << ",\n";
     }
+    std::cout << "};\n";
+    std::cout << "static int c_toupper_array[384] = {\n";
+    for (int i = -128; i < 256; ++i) {
+        std::cout << toupper(i) << ",\n";
+    }
+    std::cout << "};\n";
+    std::cout << "static int c_tolower_array[384] = {\n";
+    for (int i = -128; i < 256; ++i) {
+        std::cout << tolower(i) << ",\n";
+    }
+    std::cout << "};\n";
 }

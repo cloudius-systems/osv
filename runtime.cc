@@ -114,10 +114,8 @@ void abort(const char *fmt, ...)
 
     debug_early(msg);
     // backtrace requires threads to be available, and also
-    // ELF s_program to be initialized. Since s_program happens
-    // later, this check is enough to ensure a minimal fallback
-    // functionality even early on.
-    if (elf::get_program() != nullptr) {
+    // ELF s_program to be initialized.
+    if (sched::thread::current() && elf::get_program() != nullptr) {
         print_backtrace();
     } else {
         debug_early("Halting.\n");
@@ -156,12 +154,14 @@ void __assert_fail(const char *expr, const char *file, unsigned int line, const 
 // nor does __cxa_finalize(0) need to work.
 typedef void (*destructor_t)(void *);
 static std::map<void *, std::vector<std::pair<destructor_t,void*>>> destructors;
+static mutex destructors_mutex;
 namespace __cxxabiv1 {
 int __cxa_atexit(destructor_t destructor, void *arg, void *dso)
 {
     // As explained above, don't remember the kernel's own destructors.
     if (dso == &__dso_handle)
         return 0;
+    SCOPE_LOCK(destructors_mutex);
     destructors[dso].push_back(std::make_pair(destructor, arg));
     return 0;
 }
@@ -172,10 +172,14 @@ int __cxa_finalize(void *dso)
         debug("__cxa_finalize() running kernel's destructors not supported\n");
         return 0;
     }
-    for (auto d : boost::adaptors::reverse(destructors[dso])) {
+    std::vector<std::pair<destructor_t,void*>> my_destructors;
+    WITH_LOCK(destructors_mutex) {
+        my_destructors = std::move(destructors[dso]);
+        destructors.erase(dso);
+    }
+    for (auto d : boost::adaptors::reverse(my_destructors)) {
         d.first(d.second);
     }
-    destructors.erase(dso);
     return 0;
 }
 }
@@ -246,13 +250,14 @@ int getpid()
 //    WCTDEF(digit), WCTDEF(graph), WCTDEF(lower), WCTDEF(print),
 //    WCTDEF(punct), WCTDEF(space), WCTDEF(upper), WCTDEF(xdigit),
 
-static unsigned short c_locale_array[384] = {
 #include "ctype-data.h"
-};
 
 static struct __locale_struct c_locale = {
     { }, // __locales_data
     c_locale_array + 128, // __ctype_b
+    c_tolower_array + 128, // __ctype_tolower
+    c_toupper_array + 128, // __ctype_toupper
+    { }, // __names
 };
 
 locale_t __c_locale_ptr = &c_locale;

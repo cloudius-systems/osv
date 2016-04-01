@@ -60,6 +60,25 @@ int main(int ac, char** av)
     is >> s;
     report(s == "word1", "s should be \"word1\"");
 
+    // In the past, while the C functions toupper() and tolower() worked,
+    // the C++ std::toupper() and std::tolower() taking the default locale
+    // would crash. This also caused issue #715.
+    report(toupper('B') == 'B', "C toupper");
+    report(toupper('3') == '3', "C toupper");
+    report(toupper('[') == '[', "C toupper");
+    report(toupper('m') == 'M', "C toupper");
+    report(tolower('B') == 'b', "C tolower");
+    report(tolower('3') == '3', "C tolower");
+    report(tolower('[') == '[', "C tolower");
+    report(tolower('m') == 'm', "C tolower");
+    report(std::toupper('B', loc) == 'B', "std::toupper with default locale");
+    report(std::toupper('3', loc) == '3', "std::toupper with default locale");
+    report(std::toupper('[', loc) == '[', "std::toupper with default locale");
+    report(std::toupper('m', loc) == 'M', "std::toupper with default locale");
+    report(std::tolower('B', loc) == 'b', "std::tolower with default locale");
+    report(std::tolower('3', loc) == '3', "std::tolower with default locale");
+    report(std::tolower('[', loc) == '[', "std::tolower with default locale");
+    report(std::tolower('m', loc) == 'm', "std::tolower with default locale");
 
     std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";
     return !!fails;

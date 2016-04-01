@@ -168,7 +168,7 @@ void LineDiscipline::read_poll(console_driver *driver)
     }
 }
 void LineDiscipline::write(const char *str, size_t len,
-    std::function<void(const char *str, size_t len)> writer)
+    std::function<void(const char *str, size_t len)>& writer)
 {
     while (len-- > 0) {
         if ((*str == '\n') &&

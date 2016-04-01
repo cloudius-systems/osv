@@ -52,7 +52,7 @@ $(out)/%.o: $(src)/%.c
 $(out)/%.so: $(out)/%.o
 	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $< $(LIBS), LD $*.so)
 
-tests := tst-pthread.so tst-ramdisk.so tst-vblk.so tst-bsd-evh.so \
+tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	misc-bsd-callout.so tst-bsd-kthread.so tst-bsd-taskqueue.so \
 	tst-fpu.so tst-preempt.so tst-tracepoint.so tst-hub.so \
 	misc-console.so misc-leak.so misc-readbench.so misc-mmap-anon-perf.so \
@@ -81,7 +81,7 @@ tests := tst-pthread.so tst-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	libtls.so tst-tls.so tst-select-timeout.so tst-faccessat.so \
 	tst-fstatat.so misc-reboot.so tst-fcntl.so payload-namespace.so \
 	tst-namespace.so tst-without-namespace.so payload-env.so \
-	payload-merge-env.so
+	payload-merge-env.so misc-execve.so misc-execve-payload.so
 
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 

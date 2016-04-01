@@ -780,7 +780,6 @@ drivers += drivers/line-discipline.o
 drivers += drivers/clock.o
 drivers += drivers/clock-common.o
 drivers += drivers/clockevent.o
-drivers += drivers/ramdisk.o
 drivers += core/elf.o
 drivers += java/jvm/jvm_balloon.o
 drivers += java/jvm/java_api.o
@@ -915,6 +914,7 @@ objects += core/async.o
 objects += core/net_trace.o
 objects += core/app.o
 objects += core/libaio.o
+objects += core/osv_execve.o
 
 #include $(src)/libc/build.mk:
 libc =

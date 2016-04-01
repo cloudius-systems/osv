@@ -33,6 +33,7 @@ void console_multiplexer::start()
     for (auto driver : _drivers) {
         driver->start([=] { _ldisc->read_poll(driver); });
     }
+    _drivers_writer =  [=](const char * str, size_t len) { this->drivers_write(str, len); };
     _started = true;
 }
 
@@ -67,8 +68,7 @@ void console_multiplexer::write_ll(const char *str, size_t len)
             _early_driver->flush();
         }
     } else {
-        _ldisc->write(str, len,
-            [&] (const char *str, size_t len) { drivers_write(str, len); });
+        _ldisc->write(str, len, _drivers_writer);
         drivers_flush();
     }
 }
