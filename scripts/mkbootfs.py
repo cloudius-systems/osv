@@ -6,50 +6,10 @@ try:
 except ImportError:
     import ConfigParser as configparser
 
-make_option = optparse.make_option
-
 defines = {}
 def add_var(option, opt, value, parser):
     var, val = value.split('=')
     defines[var] = val
-
-opt = optparse.OptionParser(option_list=[
-        make_option('-o',
-                    dest='output',
-                    help='write to FILE',
-                    metavar='FILE'),
-        make_option('-d',
-                    dest='depends',
-                    help='write dependencies to FILE',
-                    metavar='FILE',
-                    default=None),
-        make_option('-m',
-                    dest='manifest',
-                    help='read manifest from FILE',
-                    metavar='FILE'),
-        make_option('-D',
-                    type='string',
-                    help='define VAR=DATA',
-                    metavar='VAR=DATA',
-                    action='callback',
-                    callback=add_var),
-])
-
-(options, args) = opt.parse_args()
-
-metadata_size = 128
-depends = io.StringIO()
-if options.depends:
-    depends = open(options.depends, 'w')
-out = open(options.output, 'wb')
-manifest = configparser.SafeConfigParser()
-manifest.optionxform = str # avoid lowercasing
-manifest.read(options.manifest)
-
-depends.write(u'%s: \\\n' % (options.output,))
-
-files = dict([(f, manifest.get('manifest', f, vars=defines))
-              for f in manifest.options('manifest')])
 
 def expand(items):
     for name, hostname in items:
@@ -83,24 +43,72 @@ def unsymlink(f):
     except Exception:
         return f
 
-files = list(expand(files.items()))
-files = [(x, unsymlink(y)) for (x, y) in files]
+def read_manifest(fn):
+    manifest = configparser.SafeConfigParser()
+    manifest.optionxform = str # avoid lowercasing
+    manifest.read(fn)
 
-pos = (len(files) + 1) * metadata_size
+    files = dict([(f, manifest.get('manifest', f, vars=defines))
+                  for f in manifest.options('manifest')])
+    return files
 
-for name, hostname in files:
-    size = os.stat(hostname).st_size
-    metadata = struct.pack('QQ112s', size, pos, name.encode())
-    out.write(metadata)
-    pos += size
-    depends.write(u'\t%s \\\n' % (hostname,))
+def main():
+    make_option = optparse.make_option
 
-out.write(struct.pack('128s', b''))
+    opt = optparse.OptionParser(option_list=[
+            make_option('-o',
+                        dest='output',
+                        help='write to FILE',
+                        metavar='FILE'),
+            make_option('-d',
+                        dest='depends',
+                        help='write dependencies to FILE',
+                        metavar='FILE',
+                        default=None),
+            make_option('-m',
+                        dest='manifest',
+                        help='read manifest from FILE',
+                        metavar='FILE'),
+            make_option('-D',
+                        type='string',
+                        help='define VAR=DATA',
+                        metavar='VAR=DATA',
+                        action='callback',
+                        callback=add_var),
+    ])
 
-for name, hostname in files:
-    out.write(open(hostname, 'rb').read())
+    (options, args) = opt.parse_args()
 
-depends.write(u'\n\n')
+    metadata_size = 128
+    depends = io.StringIO()
+    if options.depends:
+        depends = open(options.depends, 'w')
+    out = open(options.output, 'wb')
+    
+    depends.write(u'%s: \\\n' % (options.output,))
 
-out.close()
-depends.close()
+    files = read_manifest(options.manifest)
+    files = list(expand(files.items()))
+    files = [(x, unsymlink(y)) for (x, y) in files]
+
+    pos = (len(files) + 1) * metadata_size
+
+    for name, hostname in files:
+        size = os.stat(hostname).st_size
+        metadata = struct.pack('QQ112s', size, pos, name.encode())
+        out.write(metadata)
+        pos += size
+        depends.write(u'\t%s \\\n' % (hostname,))
+
+    out.write(struct.pack('128s', b''))
+
+    for name, hostname in files:
+        out.write(open(hostname, 'rb').read())
+
+    depends.write(u'\n\n')
+
+    out.close()
+    depends.close()
+
+if __name__ == "__main__":
+    main()
