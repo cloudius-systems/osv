@@ -465,6 +465,7 @@ $(out)/lzloader.elf: $(out)/loader-stripped.elf.lz.o $(out)/fastlz/lzloader.o ar
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
 		-T arch/x64/lzloader.ld \
 		$(filter %.o, $^), LINK lzloader.elf)
+	$(call quiet, truncate -s %32768 $@, ALIGN $@)
 
 acpi-defines = -DACPI_MACHINE_WIDTH=64 -DACPI_USE_LOCAL_CACHE
 
