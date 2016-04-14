@@ -48,6 +48,7 @@ struct osv_multiboot_info_type {
     struct multiboot_info_type mb;
     u32 tsc_init, tsc_init_hi;
     u32 tsc_disk_done, tsc_disk_done_hi;
+    u8 disk_err;
 } __attribute__((packed));
 
 struct e820ent {
@@ -214,6 +215,10 @@ static inline void disable_pic()
 
 void arch_init_premain()
 {
+    auto omb = *osv_multiboot_info;
+    if (omb.disk_err)
+	debug_early_u64("Error reading disk (real mode): ", static_cast<u64>(omb.disk_err));
+
     disable_pic();
 }
 

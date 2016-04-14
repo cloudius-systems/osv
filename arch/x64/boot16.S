@@ -20,6 +20,7 @@ mb_tsc1_lo = (mb_info + 88)
 mb_tsc1_hi = (mb_info + 88 + 4)
 mb_tsc_disk_lo = (mb_info + 88 + 8)
 mb_tsc_disk_hi = (mb_info + 88 + 12)
+mb_disk_err = (mb_info + 88 + 16)
 mb_cmdline = (mb_info + 16)
 mb_mmap_len = (mb_info + 44)
 mb_mmap_addr = (mb_info + 48)
@@ -87,7 +88,7 @@ read_disk:
     mov $0x42, %ah
     mov $0x80, %dl
     int $0x13
-    jc done_disk # in case of errors, we don't really know what to do.
+    jc read_error # Notify the kernel about read errors
 
     cli
     lgdtw gdt
@@ -121,6 +122,9 @@ read_disk:
     addl $(0x8000 / 0x200), lba
     decw count32
     jnz read_disk
+    jmp done_disk
+read_error:
+    mov %ah, mb_disk_err
 done_disk:
     rdtsc
     mov %eax, mb_tsc_disk_lo
