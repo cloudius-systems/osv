@@ -1817,9 +1817,20 @@ $(out)/libenviron.so: $(environ_sources)
 	$(makedir)
 	 $(call quiet, $(CC) $(CFLAGS) -shared -o $(out)/libenviron.so $(environ_sources), CC libenviron.so)
 
-$(out)/bootfs.bin: scripts/mkbootfs.py bootfs.manifest.skel $(tools:%=$(out)/%) \
+bootfs_manifest ?= bootfs.manifest.skel
+
+# If parameter "bootfs_manifest" has been changed since the last make,
+# bootfs.bin requires rebuilding
+bootfs_manifest_dep = $(out)/bootfs_manifest.last
+.PHONY: phony
+$(bootfs_manifest_dep): phony
+	@if [ '$(shell cat $(bootfs_manifest_dep) 2>&1)' != '$(bootfs_manifest)' ]; then \
+		echo -n $(bootfs_manifest) > $(bootfs_manifest_dep) ; \
+	fi
+
+$(out)/bootfs.bin: scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep) $(tools:%=$(out)/%) \
 		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so
-	$(call quiet, olddir=`pwd`; cd $(out); $$olddir/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m $$olddir/bootfs.manifest.skel \
+	$(call quiet, olddir=`pwd`; cd $(out); $$olddir/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m $$olddir/$(bootfs_manifest) \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase), MKBOOTFS $@)
 
