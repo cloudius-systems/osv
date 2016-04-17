@@ -10,7 +10,9 @@ trap 'echo "$0 failed: $BASH_COMMAND" >&2; exit $?' ERR
 # allows our Makefile to forward "make image=..." requests to to us
 # without running into an infinite loop when we call "make".
 MAKEFLAGS=${MAKEFLAGS/ image=/ zzz=}
+MAKEFLAGS=${MAKEFLAGS/#image=/zzz=}
 MAKEFLAGS=${MAKEFLAGS/ modules=/ zzz=}
+MAKEFLAGS=${MAKEFLAGS/#modules=/zzz=}
 unset image modules
 
 # Pass to "make" all the given args except "image=..." or "module=..."
