@@ -23,6 +23,14 @@ static std::unordered_map<const void*, int> shmmap;
 
 void *shmat(int shmid, const void *shmaddr, int shmflg)
 {
+    // dup() the segment's file descriptor, to create another reference to
+    // the underlying shared memory segment, so that after an IPC_RMID the
+    // segment will survive until the last attachment is detached.
+    shmid = dup(shmid);
+    if (shmid < 0) {
+        return MAP_FAILED;
+    }
+
     fileref f(fileref_from_fd(shmid));
     void *addr;
     try {
@@ -30,6 +38,7 @@ void *shmat(int shmid, const void *shmaddr, int shmflg)
                 (shmflg & SHM_RDONLY) ? mmu::perm_read : mmu::perm_rw, f, 0);
     } catch (error err) {
         err.to_libc(); // sets errno
+        close(shmid); // close the duplicate we created above
         return MAP_FAILED;
     }
     WITH_LOCK(shm_lock) {
@@ -60,6 +69,10 @@ int shmdt(const void *shmaddr)
     }
     fileref f(fileref_from_fd(fd));
     mmu::munmap(shmaddr, ::size(f));
+    // Close fd. It is a dup(), so the actual underlying shared memory
+    // segment will not be destroyed until the other duplicates are closed
+    // (i.e., IPC_RMID is used, and other attachments are detached).
+    close(fd);
     return 0;
 }
 
