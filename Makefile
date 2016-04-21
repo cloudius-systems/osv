@@ -231,10 +231,10 @@ local-includes =
 INCLUDES = $(local-includes) -Iarch/$(arch) -I. -Iinclude  -Iarch/common
 INCLUDES += -isystem include/glibc-compat
 
-glibcbase = external/$(arch)/glibc.bin
-gccbase = external/$(arch)/gcc.bin
-miscbase = external/$(arch)/misc.bin
-jdkbase := $(shell find external/$(arch)/openjdk.bin/usr/lib/jvm \
+glibcbase = $(CURDIR)/external/$(arch)/glibc.bin
+gccbase = $(CURDIR)/external/$(arch)/gcc.bin
+miscbase = $(CURDIR)/external/$(arch)/misc.bin
+jdkbase := $(shell find $(CURDIR)/external/$(arch)/openjdk.bin/usr/lib/jvm \
                          -maxdepth 1 -type d -name 'java*')
 
 
