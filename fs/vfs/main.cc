@@ -2117,16 +2117,22 @@ void unpack_bootfs(void)
 
     for (i = 0; md[i].name[0]; i++) {
         int ret;
+        char *p;
 
         // mkdir() directories needed for this path name, as necessary
         char tmp[BOOTFS_PATH_MAX];
         strncpy(tmp, md[i].name, BOOTFS_PATH_MAX);
-        for (char *p = tmp; *p; ++p) {
+        for (p = tmp; *p; ++p) {
             if (*p == '/') {
                 *p = '\0';
                 mkdir(tmp, 0666);  // silently ignore errors and existing dirs
                 *p = '/';
             }
+        }
+
+        if (*(p-1) == '/' && md[i].size == 0) {
+            // This is directory record. Nothing else to do
+            continue;
         }
 
         fd = creat(md[i].name, 0666);

@@ -94,7 +94,13 @@ def main():
     pos = (len(files) + 1) * metadata_size
 
     for name, hostname in files:
-        size = os.stat(hostname).st_size
+        if os.path.isdir(hostname):
+            size = 0;
+            if not name.endswith("/"):
+                name += "/"
+        else:
+            size = os.stat(hostname).st_size
+
         metadata = struct.pack('QQ112s', size, pos, name.encode())
         out.write(metadata)
         pos += size
@@ -103,6 +109,8 @@ def main():
     out.write(struct.pack('128s', b''))
 
     for name, hostname in files:
+        if os.path.isdir(hostname):
+            continue
         out.write(open(hostname, 'rb').read())
 
     depends.write(u'\n\n')
