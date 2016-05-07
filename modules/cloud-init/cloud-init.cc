@@ -51,11 +51,6 @@ static std::string get_url(const std::string& server, const std::string& path,
     return c.text();
 }
 
-static string get_user_data() {
-    auto& ds = get_data_source();
-    return ds.get_user_data();
-}
-
 void include_module::load_file(const std::string& path)
 {
     if (!mark(path)) {
@@ -202,7 +197,16 @@ void osvinit::load_from_cloud(bool ignore_missing_source)
 
     std::string user_data;
     try {
-        user_data = get_user_data();
+        auto& ds = get_data_source();
+
+        std::string hostname = ds.external_hostname();
+        if (hostname.length() > 0) {
+            // Set the hostname from given data source, if it exists.
+            sethostname(hostname.c_str(), hostname.length());
+        }
+
+        // Load user data.
+        user_data = ds.get_user_data();
     } catch (const std::runtime_error& e) {
         if (ignore_missing_source) {
             return;
