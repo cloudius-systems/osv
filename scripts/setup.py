@@ -29,7 +29,7 @@ class Fedora(object):
                 'flex', 'bison', 'maven-shade-plugin', 'python-dpkt', 'tcpdump', 'gdb',
                 'gnutls-utils', 'openssl', 'python-requests', 'p11-kit', 'patch', 'wget',
                 'unzip', 'ncurses', 'ncurses-devel', 'libstdc++-static', 'openssl-libs',
-                'openssl-devel', 'libedit-devel'
+                'openssl-devel', 'libedit-devel', 'yaml-cpp-devel'
                 ]
     ec2_packages = standard_ec2_packages
     test_packages = ['openssl-devel']
@@ -63,7 +63,14 @@ class Fedora(object):
         ec2_post_install = None
         version = '22'
 
-    versions = [Fedora_19, Fedora_20, Fedora_21, Fedora_22]
+    class Fedora_23(object):
+        packages = ['java-1.8.0-openjdk']
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '23'
+
+    versions = [Fedora_19, Fedora_20, Fedora_21, Fedora_22, Fedora_23]
 
 class RHELbased(Fedora):
     name = ['Scientific Linux', 'NauLinux', 'CentOS Linux',
@@ -108,7 +115,7 @@ class Ubuntu(object):
                 'libmaven-shade-plugin-java', 'python-dpkt', 'tcpdump', 'gdb', 'qemu-system-x86',
                 'gawk', 'gnutls-bin', 'openssl', 'python-requests', 'p11-kit', 'g++-multilib',
                 'libssl-dev', 'libedit-dev', 'curl', 'libvirt-bin',
-                'libncurses5-dev'
+                'libncurses5-dev', 'libyaml-cpp'
                 ]
     ec2_packages = standard_ec2_packages
     test_packages = ['libssl-dev', 'zip']
