@@ -110,6 +110,11 @@ void read_partition_table(struct device *dev)
 	bread(dev, 0, &bp);
 
 	sched_lock();
+	// A real partition table (MBR) ends in the two bytes 0x55, 0xAA (see
+	// arch/x64/boot16.S on where we put those on the OSv image). If we
+	// don't find those, this is an unpartitioned disk.
+	if (((unsigned char*)bp->b_data)[510] == 0x55 &&
+	    ((unsigned char*)bp->b_data)[511] == 0xAA)
 	for (offset = 0x1be, index = 0; offset < 0x1fe; offset += 0x10, index++) {
 		char dev_name[MAXDEVNAME];
 		struct device *new_dev;
