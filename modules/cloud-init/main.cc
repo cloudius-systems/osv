@@ -20,6 +20,57 @@ using namespace std;
 using namespace init;
 namespace po = boost::program_options;
 
+// config_disk() checks whether we have a second disk (/dev/vblk1) which
+// holds nothing but a configuration file, and if there is, it copies the
+// configuration to the given file.
+// Currently, the configuration disk must be in a trivial format generated
+// by scripts/file2img: A magic header, then the length of the file (in
+// decimal), followed by the content.
+// config_disk() returns true if it has successfully read the configuration
+// into the requested file.
+static bool config_disk(const char* outfile) {
+    int fd = open("/dev/vblk1", O_RDONLY);
+    if (fd < 0) {
+        return false;
+    }
+    char data[512];
+    ssize_t r = read(fd, data, sizeof(data));
+    static const char* magic = "!file_in_image\n";
+    ssize_t magic_len = strlen(magic);
+    if (r < magic_len || strncmp(data, magic, magic_len)) {
+        close(fd);
+        return false;
+    }
+    debug("cloud-init: found configuration in /dev/vblk1\n");
+    int out = open(outfile, O_WRONLY|O_CREAT, 0777);
+    if (out < 0) {
+        debug("cloud-init: failed to copy configuration to %s\n", outfile);
+        close(fd);
+        return false;
+    }
+    unsigned offset = magic_len;
+    while (offset < r && data[offset] != '\n')
+        offset++;
+    offset++; // skip the \n too
+    ssize_t filelen = atoi(data + magic_len);
+    while (filelen) {
+        int len = std::min(filelen, r - offset);
+        if (len <= 0) {
+            debug("cloud-init: unexpected end of image\n", outfile);
+            close(fd);
+            close(out);
+            return false;
+        }
+        write(out, data + offset, len);
+        filelen -= len;
+        offset = 0;
+        r = read(fd, data, sizeof(data));
+    }
+    close(fd);
+    close(out);
+    return true;
+}
+
 int main(int argc, char* argv[])
 {
     try {
@@ -58,6 +109,8 @@ int main(int argc, char* argv[])
             init.load_url(config["server"].as<std::string>(),
                 config["url"].as<std::string>(),
                 config["port"].as<std::string>());
+        } else if(config_disk("/tmp/config.yaml")) {
+            init.load_file("/tmp/config.yaml");
         } else {
             init.load_from_cloud();
         }
