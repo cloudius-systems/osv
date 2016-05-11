@@ -1199,7 +1199,6 @@ void program::remove_object(object *ef)
     // are completed before we delete the module
     osv::rcu_flush();
 
-    ef->unload_needed();
     del_debugger_obj(ef);
     // Note that if we race with get_library() of the same library, we may
     // find in _files a new copy of the same library, and mustn't remove it.
@@ -1215,6 +1214,8 @@ void program::remove_object(object *ef)
     new_modules->subs++;
     _modules_rcu.assign(new_modules.release());
     osv::rcu_dispose(old_modules);
+
+    ef->unload_needed();
 
     // We want to unload and delete ef, but need to delay that until no
     // concurrent dl_iterate_phdr() is still using the modules it got from
