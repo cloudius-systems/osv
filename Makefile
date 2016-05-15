@@ -20,21 +20,22 @@
 # isn't, for historical reasons, so we need to turn it on explicitly...
 .DELETE_ON_ERROR:
 ###########################################################################
+# Backward-compatibility hack to support the old "make ... image=..." image
+# building syntax, and pass it into scripts/build. We should eventually drop
+# this support and turn the deprecated messages into errors.
 ifdef image
 #$(error Please use scripts/build to build images)
 $(info "make image=..." deprecated. Please use "scripts/build image=...".)
+default_target:
+	./scripts/build image=$(image)
 endif
 ifdef modules
 #$(error Please use scripts/build to build images)
 $(info "make modules=..." deprecated. Please use "scripts/build modules=...".)
+default_target:
+	./scripts/build modules=$(modules)
 endif
-
-# Ugly hack to support the old "make ... image=..." image building syntax, and
-# pass it into scripts/build. We should eventually get rid of this, and turn
-# the above deprecated messages into errors.
-ugly_backward_compatibility_hack: all
-	@test -n "$(image)" &&  ./scripts/build image=$(image) || :
-	@test -n "$(modules)" &&  ./scripts/build modules=$(modules) || :
+.PHONY: default_target
 
 ###########################################################################
 
