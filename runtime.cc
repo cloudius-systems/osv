@@ -211,11 +211,13 @@ NO_SYS(int execvp(const char *, char *const []));
 
 int mlockall(int flags)
 {
+    WARN_STUBBED();
     return 0;
 }
 
 int munlockall(void)
 {
+    WARN_STUBBED();
     return 0;
 }
 
