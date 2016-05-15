@@ -221,6 +221,18 @@ int munlockall(void)
     return 0;
 }
 
+int mlock(const void*, size_t)
+{
+    WARN_STUBBED();
+    return 0;
+}
+
+int munlock(const void*, size_t)
+{
+    WARN_STUBBED();
+    return 0;
+}
+
 int posix_fadvise(int fd, off_t offset, off_t len, int advice)
 {
     switch (advice) {
