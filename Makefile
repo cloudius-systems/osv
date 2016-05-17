@@ -23,17 +23,19 @@
 # Backward-compatibility hack to support the old "make ... image=..." image
 # building syntax, and pass it into scripts/build. We should eventually drop
 # this support and turn the deprecated messages into errors.
+compat_args=$(if $(usrskel), usrskel=$(usrskel),)
+compat_args+=$(if $(fs), fs=$(fs),)
 ifdef image
 #$(error Please use scripts/build to build images)
 $(info "make image=..." deprecated. Please use "scripts/build image=...".)
 default_target:
-	./scripts/build image=$(image)
+	./scripts/build image=$(image) $(compat_args)
 endif
 ifdef modules
 #$(error Please use scripts/build to build images)
 $(info "make modules=..." deprecated. Please use "scripts/build modules=...".)
 default_target:
-	./scripts/build modules=$(modules)
+	./scripts/build modules=$(modules) $(compat_args)
 endif
 .PHONY: default_target
 
@@ -1681,12 +1683,12 @@ musl += crypt/crypt_sha512.o
 
 #include $(src)/fs/build.mk:
 
-fs :=
+fs_objs :=
 
-fs +=	fs.o \
+fs_objs += fs.o \
 	unsupported.o
 
-fs +=	vfs/main.o \
+fs_objs += vfs/main.o \
 	vfs/kern_descrip.o \
 	vfs/kern_physio.o \
 	vfs/subr_uio.o \
@@ -1701,15 +1703,15 @@ fs +=	vfs/main.o \
 	vfs/vfs_fops.o \
 	vfs/vfs_dentry.o
 
-fs +=	ramfs/ramfs_vfsops.o \
+fs_objs += ramfs/ramfs_vfsops.o \
 	ramfs/ramfs_vnops.o
 
-fs +=	devfs/devfs_vnops.o \
+fs_objs += devfs/devfs_vnops.o \
 	devfs/device.o
 
-fs +=	procfs/procfs_vnops.o
+fs_objs += procfs/procfs_vnops.o
 
-objects += $(addprefix fs/, $(fs))
+objects += $(addprefix fs/, $(fs_objs))
 objects += $(addprefix libc/, $(libc))
 objects += $(addprefix musl/src/, $(musl))
 
