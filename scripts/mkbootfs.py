@@ -94,6 +94,9 @@ def main():
     pos = (len(files) + 1) * metadata_size
 
     for name, hostname in files:
+        if hostname.startswith("->"):
+            raise Exception("Symlinks in bootfs are not supported")
+
         if os.path.isdir(hostname):
             size = 0;
             if not name.endswith("/"):

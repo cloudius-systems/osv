@@ -1,0 +1,15 @@
+[manifest]
+/libenviron.so: libenviron.so
+/tools/mount-nfs.so: tools/mount/mount-nfs.so
+/tools/umount.so: tools/mount/umount.so
+/usr/lib/libgcc_s.so.1: %(gccbase)s/lib64/libgcc_s.so.1
+/usr/lib/&/libboost_filesystem.so.1.55.0: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libboost_regex.so.1.55.0: %(miscbase)s/usr/lib64/&
+/&/etc/hosts: ../../static/&
+
+# TODO: symlinks are not supported by ramfs
+#/etc/mnttab: ->/proc/mounts
+/&/etc/fstab: ../../static/&
+/dev: ../../static
+/proc: ../../static
+/tmp: ../../static

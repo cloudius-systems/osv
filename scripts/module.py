@@ -49,15 +49,20 @@ def append_manifest(file_path, dst_file, variables={}):
             if line != '[manifest]':
                 dst_file.write(expand(line + '\n', variables))
 
-def generate_manifests(modules, basic_apps):
+def generate_manifests(modules, basic_apps, usrskel='default'):
     for manifest_type in ["usr", "bootfs"]:
         manifest_name = "%s.manifest" % manifest_type
         print("Preparing %s" % manifest_name)
 
+        manifest_skel = "%s.skel" % manifest_name
+        if manifest_type == "usr" and usrskel != "default":
+            manifest_skel = usrskel
+
         with open(os.path.join(resolve.get_build_path(), manifest_name), "w") as manifest:
             manifest.write('[manifest]\n')
 
-            append_manifest(os.path.join(resolve.get_osv_base(), "%s.skel" % manifest_name), manifest)
+            if manifest_skel != 'none':
+                append_manifest(os.path.join(resolve.get_osv_base(), manifest_skel), manifest)
 
             for module in modules:
                 module_manifest = os.path.join(module.local_path, manifest_name)
@@ -200,7 +205,7 @@ def build(args):
     make_modules(modules, args)
 
     apps_to_run = get_basic_apps(run_list)
-    generate_manifests(modules, apps_to_run)
+    generate_manifests(modules, apps_to_run, args.usrskel)
     generate_cmdline(apps_to_run)
 
 def clean(args):
@@ -231,6 +236,8 @@ if __name__ == "__main__":
     build_cmd = subparsers.add_parser("build", help="Build modules")
     build_cmd.add_argument("-c", "--image-config", action="store", default="default",
                         help="image configuration name. Looked up in " + image_configs_dir)
+    build_cmd.add_argument("--usrskel", action="store", default="default",
+                        help="override default usr.manifest.skel")
     build_cmd.set_defaults(func=build)
 
     clean_cmd = subparsers.add_parser("clean", help="Clean modules")
