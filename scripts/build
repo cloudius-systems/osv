@@ -17,21 +17,30 @@ unset image modules
 
 # Pass to "make" all the given args except "image=..." or "module=..."
 declare -a args
+# Make is going to be invoked twice. At the first run ("stage1") we
+# build all possible dependencies any app or module might require. At
+# the second - the loader.elf is linked and the loader.img is
+# produced.  In the case of "make clean", the first invocation (and
+# the only one) is used for cleaning up the kernel.
+stage1_args="stage1"
 for i
 do
 	case $i in
 	image=*|modules=*|check) ;;
+	clean)
+		stage1_args=clean ;;
 	*)	# yuck... Is there a prettier way to append to array?
 		args[${#args[@]}]="$i" ;;
 	esac
 done
-make "${args[@]}" | tee build.out
+
+make "${args[@]}" ${stage1_args} | tee build.out
 # check exit status of make
 status=${PIPESTATUS[0]}
 if [ $status -ne 0 ]
 then
-    echo "make failed. Exiting from build script"
-    exit $status
+	echo "make failed. Exiting from build script"
+	exit $status
 fi
 
 for i
@@ -47,9 +56,9 @@ done
 
 # Find out where "make" decided to put its compilation results. We'll
 # put the images in the same place.
-if test ! -L build/last -o ! -f build/last/loader.img
+if test ! -L build/last -o ! -f build/last/loader.o
 then
-	echo "'make' did not leave expected results" >&2
+	echo "'make stage1' did not leave expected results" >&2
 	exit 2
 fi
 OUT=build/`readlink build/last`
@@ -115,16 +124,30 @@ gccbase=${vars[gccbase]-$SRC/external/$arch/gcc.bin}
 glibcbase=${vars[glibcbase]-$SRC/external/$arch/glibc.bin}
 miscbase=${vars[miscbase]-$SRC/external/$arch/misc.bin}
 
-loader_size=`stat --printf %s $OUT/loader.img`
-zfs_start=$(($loader_size+2097151 & ~2097151))
-zfs_size=$(($fs_size - $zfs_start))
-
 case $OUT in
 /*)	OSV_BUILD_PATH=$OUT;;
 *)	OSV_BUILD_PATH=`pwd`/$OUT;;
 esac
 
 jdkbase=$jdkbase ARCH=$arch mode=$mode OSV_BASE=$SRC OSV_BUILD_PATH=$OSV_BUILD_PATH scripts/module.py $j_arg build -c $modules
+make "${args[@]}" | tee -a build.out
+# check exit status of make
+status=${PIPESTATUS[0]}
+if [ $status -ne 0 ]
+then
+	echo "make failed. Exiting from build script"
+	exit $status
+fi
+
+if test ! -f build/last/loader.img
+then
+	echo "'make' did not leave expected results" >&2
+	exit 2
+fi
+
+loader_size=`stat --printf %s $OUT/loader.img`
+zfs_start=$(($loader_size+2097151 & ~2097151))
+zfs_size=$(($fs_size - $zfs_start))
 
 # The python scripts called below assume the current directory is $OUT (as was
 # the case in our old build.mk).

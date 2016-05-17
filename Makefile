@@ -138,10 +138,13 @@ java-targets := $(out)/java/jvm/java.so $(out)/java/jni/balloon.so $(out)/java/j
         $(out)/java/jni/stty.so $(out)/java/jni/tracepoint.so $(out)/java/jni/power.so $(out)/java/jni/monitor.so
 endif
 
-all: $(out)/loader.img $(java-targets)
+all: $(out)/loader.img $(java-targets) links
+.PHONY: all
+
+links:
 	$(call very-quiet, ln -nsf $(notdir $(out)) $(outlink))
 	$(call very-quiet, ln -nsf $(notdir $(out)) $(outlink2))
-.PHONY: all
+.PHONY: links
 
 check:
 	./scripts/build check
@@ -1793,7 +1796,11 @@ objects += $(addprefix fs/nfs/, $(nfs_o))
 $(out)/dummy-shlib.so: $(out)/dummy-shlib.o
 	$(call quiet, $(CXX) -nodefaultlibs -shared $(gcc-sysroot) -o $@ $^, LINK $@)
 
-$(out)/loader.elf: $(out)/arch/$(arch)/boot.o arch/$(arch)/loader.ld $(out)/loader.o $(out)/runtime.o $(drivers:%=$(out)/%) $(objects:%=$(out)/%) $(out)/bootfs.o $(out)/dummy-shlib.so $(nfs-lib)
+stage1_targets = $(out)/arch/$(arch)/boot.o $(out)/loader.o $(out)/runtime.o $(drivers:%=$(out)/%) $(objects:%=$(out)/%) $(out)/dummy-shlib.so $(nfs-lib)
+stage1: $(stage1_targets) links
+.PHONY: stage1
+
+$(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o
 	$(call quiet, $(LD) -o $@ --defsym=OSV_KERNEL_BASE=$(kernel_base) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
 	    $(^:%.ld=-T %.ld) \
