@@ -92,8 +92,8 @@ int osv_execve(const char *path, char *const argv[], char *const envp[],
     // will start app at path in new OSv thread, without replacing current binary.
     debugf_execve("OSv osv_execve:%d path=%s argv=%p envp=%p thread_id=%p %d notification_fd=%d\n",
         __LINE__, path, argv, envp, thread_id, thread_id? *thread_id: -1, notification_fd);
-    debugf_execve("OSv osv_execve:%d   argv[0]=%p %s\n", __LINE__, argv, argv[0]);
-    debugf_execve("OSv osv_execve:%d   envp[0]=%p %s\n", __LINE__, envp, envp[0]);
+    debugf_execve("OSv osv_execve:%d   argv[0]=%p %s\n", __LINE__, argv, argv? argv[0]:NULL);
+    debugf_execve("OSv osv_execve:%d   envp[0]=%p %s\n", __LINE__, envp, envp? envp[0]:NULL);
 
     if (thread_id) {
         *thread_id = 0;
