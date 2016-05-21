@@ -388,25 +388,12 @@ tools := tools/mkfs/mkfs.so tools/cpiod/cpiod.so
 
 $(out)/tools/%.o: COMMON += -fPIC
 
-# TODO: The "ifconfig" and "lsroute" programs are only needed for the mgmt
-# module... Better move it out of the OSv core...
-tools += tools/ifconfig/ifconfig.so
-tools += tools/route/lsroute.so
-$(out)/tools/route/lsroute.so: EXTRA_LIBS = -L$(out)/tools/ -ltools
-$(out)/tools/route/lsroute.so: $(out)/tools/libtools.so
-$(out)/tools/ifconfig/ifconfig.so: EXTRA_LIBS = -L$(out)/tools/ -ltools
-$(out)/tools/ifconfig/ifconfig.so: $(out)/tools/libtools.so
-
 tools += tools/uush/uush.so
 tools += tools/uush/ls.so
 tools += tools/uush/mkdir.so
 
 tools += tools/mount/mount-nfs.so
 tools += tools/mount/umount.so
-
-# TODO: we only need this libtools for the httpserver module... Better
-# move it to its own module, it shouldn't be in the OSv core...
-tools += tools/libtools.so
 
 ifeq ($(arch),aarch64)
 # note that the bootfs.manifest entry for the uush image
@@ -1851,10 +1838,6 @@ $(out)/tools/mkfs/mkfs.so: $(out)/tools/mkfs/mkfs.o $(out)/libzfs.so
 $(out)/tools/cpiod/cpiod.so: $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o $(out)/libzfs.so
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -o $@ $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o -L$(out) -lzfs, LINK cpiod.so)
-
-$(out)/tools/libtools.so: $(out)/tools/route/route_info.o $(out)/tools/ifconfig/network_interface.o
-	$(makedir)
-	 $(call quiet, $(CC) $(CFLAGS) -shared -o $(out)/tools/libtools.so $^, LINK libtools.so)
 
 ################################################################################
 # The dependencies on header files are automatically generated only after the

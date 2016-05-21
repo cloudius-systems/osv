@@ -32,7 +32,7 @@ STUB_CPP_FILES := $(wildcard stub/*.cc)
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 STUB_FILES := $(addprefix obj/,$(STUB_CPP_FILES:.cc=.o))
 
-DYN_LIBS = -lpthread -ldl -L$(OSV_BUILD_PATH)/tools -ltools $(boost-libs) -lyaml-cpp
+DYN_LIBS = -lpthread -ldl -L../libtools -ltools $(boost-libs) -lyaml-cpp
 
 ifeq ($(use_host),y)
 	DYN_LIBS += -lssl -lcrypto
