@@ -5,7 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#ifndef PTHRAD_HH_
+#ifndef PTHREAD_HH_
 #define PTHREAD_HH_
 
 #ifdef __cplusplus

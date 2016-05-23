@@ -39,6 +39,7 @@ namespace pthread_private {
 
     __thread void* tsd[tsd_nkeys];
     __thread pthread_t current_pthread;
+    __thread int cancel_state = PTHREAD_CANCEL_ENABLE;
 
     __attribute__ ((init_priority ((int)init_prio::pthread))) mutex tsd_key_mutex;
     __attribute__ ((init_priority ((int)init_prio::pthread))) std::vector<bool>
@@ -75,7 +76,6 @@ namespace pthread_private {
         pthread_t to_libc();
         int join(void** retval);
         void* _retval;
-        // must be initialized last
         sched::thread _thread;
     private:
         sched::thread::stack_info allocate_stack(thread_attr attr);
@@ -662,9 +662,20 @@ int pthread_attr_getscope(pthread_attr_t *attr, int *scope)
     return 0;
 }
 
+// Set cancelability state of current thread.
+// For spec, please refer
+// http://pubs.opengroup.org/onlinepubs/9699919799/functions/pthread_setcancelstate.html
 int pthread_setcancelstate(int state, int *oldstate)
 {
-    WARN_STUBBED();
+    if (state != PTHREAD_CANCEL_ENABLE &&
+        state != PTHREAD_CANCEL_DISABLE) {
+        return EINVAL;
+    }
+    if (oldstate) {
+        // Gather current cancel state, if requested.
+        (*oldstate) = cancel_state;
+    }
+    cancel_state = state;
     return 0;
 }
 
