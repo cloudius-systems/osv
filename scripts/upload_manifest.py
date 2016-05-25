@@ -69,8 +69,9 @@ def read_manifest(fn):
     return ret
 
 def upload(osv, manifest, depends):
+    manifest = [(x, y % defines) for (x, y) in manifest]
     files = list(expand(manifest))
-    files = [(x, unsymlink(y % defines)) for (x, y) in files]
+    files = [(x, unsymlink(y)) for (x, y) in files]
 
     # Wait for the guest to come up and tell us it's listening
     while True:
