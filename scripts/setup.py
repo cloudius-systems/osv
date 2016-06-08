@@ -22,7 +22,7 @@ standard_ec2_post_install = ['pip install awscli &&'
 
 class Fedora(object):
     name = 'Fedora'
-    install = 'yum -y install'
+    install = 'yum --best -y install'
     packages = ['gcc-c++', 'gcc-c++-aarch64-linux-gnu', 'git', 'gdb', 'qemu-img',
                 'qemu-system-x86', 'libvirt', 'maven',
                 'ant', 'autoconf', 'automake', 'boost-static', 'genromfs', 'libtool',
