@@ -1317,7 +1317,7 @@ def dump_trace(out_func):
     tp_fn_exit = lookup_tp('gdb_trace_function_exit')
 
     for trace in all_traces():
-        thread = trace.thread.id
+        thread = trace.thread.ptr
         time = trace.time
         cpu = trace.cpu
         tp = trace.tp
