@@ -10,7 +10,6 @@ $build cloudius/osv-base          httpserver,cloud-init                 "OSv bas
 $build cloudius/osv-openjdk       java,httpserver,cloud-init            "OpenJDK 7/OSv base image for developers"
 $build cloudius/osv-openjdk8      openjdk8-fedora,httpserver,cloud-init "OpenJDK 8/OSv base image for developers"
 $build cloudius/osv-node          node,httpserver,cloud-init            "Node/OSv"
-$build cloudius/osv-crash         mgmt,httpserver,cloud-init            "OSv/CRaSH shell for developers"
 
 # Appliances:
 

@@ -11,7 +11,6 @@ from collections import defaultdict
 arch = 'x64'
 build_dir = os.path.dirname(gdb.current_objfile().filename)
 osv_dir = os.path.abspath(os.path.join(build_dir, '../..'))
-mgmt_dir = os.path.join(osv_dir, 'mgmt')
 apps_dir = os.path.join(osv_dir, 'apps')
 external = os.path.join(osv_dir, 'external', arch)
 modules = os.path.join(osv_dir, 'modules')
@@ -120,7 +119,7 @@ def syminfo(addr):
 def translate(path):
     '''given a path, try to find it on the host OS'''
     name = os.path.basename(path)
-    for top in [build_dir, mgmt_dir, external, modules, apps_dir, '/zfs']:
+    for top in [build_dir, external, modules, apps_dir, '/zfs']:
         for root, dirs, files in os.walk(top):
             if name in files:
                 return os.path.join(root, name)
