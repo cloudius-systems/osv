@@ -127,14 +127,17 @@ def translate(path):
     return None
 
 class Connect(gdb.Command):
-    '''Connect to a local kvm instance at port :1234'''
+    '''Connect to a local kvm instance at given port (default :1234)'''
     def __init__(self):
         gdb.Command.__init__(self,
                              'connect',
                              gdb.COMMAND_NONE,
                              gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
-        gdb.execute('target remote :1234')
+        port = 1234
+        if arg:
+            port = int(arg.split()[0])
+        gdb.execute('target remote :%d' % port)
         global status_enum
         status_enum.running = gdb.parse_and_eval('sched::thread::status::running')
         status_enum.waiting = gdb.parse_and_eval('sched::thread::status::waiting')
