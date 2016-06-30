@@ -971,7 +971,7 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpusetsize,
 int sched_setaffinity(pid_t pid, size_t cpusetsize,
         cpu_set_t *cpuset)
 {
-    if (pid != 0) {
+    if (pid != 0 && (unsigned int)pid != sched::thread::current()->id()) {
         WARN_STUBBED();
         return EINVAL;
     }
@@ -1029,7 +1029,7 @@ int pthread_attr_getaffinity_np(const pthread_attr_t *attr, size_t cpusetsize,
 int sched_getaffinity(pid_t pid, size_t cpusetsize,
         cpu_set_t *cpuset)
 {
-    if (pid != 0) {
+    if (pid != 0 && (unsigned int)pid != sched::thread::current()->id()) {
         WARN_STUBBED();
         return EINVAL;
     }
