@@ -642,11 +642,12 @@ void thread::stack_info::default_deleter(thread::stack_info si)
     free(si.begin);
 }
 
-mutex thread_map_mutex;
-// An unordered_set would be simpler, but it hashes using the address of the thread
-// as the key. And if we already have the thread's address, there is no point in
-// hashing it. So we use unordered_map and use the thread id as the key.
-std::unordered_map<unsigned long, thread *> thread_map
+// thread_map is used for a list of all threads, but also as a map from
+// numeric (4-byte) threads ids to the thread object, to support Linux
+// functions which take numeric thread ids.
+static mutex thread_map_mutex;
+using id_type = std::result_of<decltype(&thread::id)(thread)>::type;
+static std::unordered_map<id_type, thread *> thread_map
     __attribute__((init_priority((int)init_prio::threadlist)));
 
 static thread_runtime::duration total_app_time_exited(0);
