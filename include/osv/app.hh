@@ -200,6 +200,11 @@ private:
     friend struct application_runtime;
 };
 
+/*
+Execute f on all threads which belong to same app as t1 does.
+*/
+void with_all_app_threads(std::function<void(sched::thread &)> f, sched::thread& th1);
+
 }
 
 #endif /* _KERNEL */

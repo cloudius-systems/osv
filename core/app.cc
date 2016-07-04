@@ -456,6 +456,14 @@ void application::merge_in_environ(bool new_program,
     }
 }
 
+void with_all_app_threads(std::function<void(sched::thread &)> f, sched::thread& th1) {
+    sched::with_all_threads([&](sched::thread &th2) {
+        if (th2.app_runtime() == th1.app_runtime()) {
+            f(th2);
+        }
+    });
+}
+
 namespace this_application {
 
 void on_termination_request(std::function<void()> callback)
