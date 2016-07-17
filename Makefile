@@ -1482,6 +1482,7 @@ musl += stdio/vwprintf.o
 musl += stdio/vwscanf.o
 musl += stdio/wprintf.o
 musl += stdio/wscanf.o
+libc += stdio/printf-hooks.o
 
 musl += stdlib/abs.o
 musl += stdlib/atof.o
