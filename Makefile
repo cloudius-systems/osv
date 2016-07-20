@@ -465,7 +465,7 @@ acpi-defines = -DACPI_MACHINE_WIDTH=64 -DACPI_USE_LOCAL_CACHE
 acpi-source := $(shell find external/$(arch)/acpica/source/components -type f -name '*.c')
 acpi = $(patsubst %.c, %.o, $(acpi-source))
 
-$(acpi:%=$(out)/%): CFLAGS += -fno-strict-aliasing -Wno-strict-aliasing
+$(acpi:%=$(out)/%): CFLAGS += -fno-strict-aliasing
 
 endif # x64
 
@@ -492,8 +492,15 @@ $(out)/loader.img: $(out)/preboot.bin $(out)/loader-stripped.elf
 
 endif # aarch64
 
-$(out)/bsd/sys/crypto/sha2/sha2.o: CFLAGS+=-Wno-strict-aliasing
-$(out)/bsd/sys/crypto/rijndael/rijndael-api-fst.o: CFLAGS+=-Wno-strict-aliasing
+$(out)/bsd/sys/crypto/rijndael/rijndael-api-fst.o: COMMON+=-fno-strict-aliasing
+$(out)/bsd/sys/crypto/sha2/sha2.o: COMMON+=-fno-strict-aliasing
+$(out)/bsd/sys/net/route.o: COMMON+=-fno-strict-aliasing
+$(out)/bsd/sys/net/rtsock.o: COMMON+=-fno-strict-aliasing
+$(out)/bsd/sys/net/in.o: COMMON+=-fno-strict-aliasing
+$(out)/bsd/sys/net/if.o: COMMON+=-fno-strict-aliasing
+$(out)/bsd/sys/netinet/in_rmx.o: COMMON+=-fno-strict-aliasing
+$(out)/bsd/sys/netinet/ip_input.o: COMMON+=-fno-strict-aliasing
+$(out)/bsd/sys/netinet/in.o: COMMON+=-fno-strict-aliasing
 
 bsd  = bsd/init.o
 bsd += bsd/net.o
@@ -744,7 +751,7 @@ $(zfs:%=$(out)/%): CFLAGS+= \
 	-Ibsd/sys/cddl/contrib/opensolaris/common/zfs
 
 $(solaris:%=$(out)/%): CFLAGS+= \
-	-Wno-strict-aliasing \
+	-fno-strict-aliasing \
 	-Wno-unknown-pragmas \
 	-Wno-unused-variable \
 	-Wno-switch \
