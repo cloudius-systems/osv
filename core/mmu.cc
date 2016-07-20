@@ -28,6 +28,7 @@
 #include "dump.hh"
 #include <osv/rcu.hh>
 #include <osv/rwlock.h>
+#include <numeric>
 
 extern void* elf_start;
 extern size_t elf_size;

@@ -20,6 +20,7 @@
 #include <osv/prio.hh>
 #include <osv/elf.hh>
 #include <stdlib.h>
+#include <math.h>
 #include <unordered_map>
 #include <osv/wait_record.hh>
 #include <osv/preempt-lock.hh>
