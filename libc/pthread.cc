@@ -149,6 +149,8 @@ namespace pthread_private {
 
     pthread* pthread::from_libc(pthread_t p)
     {
+        static_assert(sizeof(pthread_t) == sizeof(pthread*),
+            "pthread_t is not the same size as pthread*");
         return reinterpret_cast<pthread*>(p);
     }
 
