@@ -16,18 +16,6 @@ namespace bitsets {
 static constexpr int ulong_bits = std::numeric_limits<unsigned long>::digits;
 
 /**
- * Returns the number of leading zeros in value's binary representation.
- *
- * If value == 0 the result is undefied. If T is signed and value is negative
- * the result is undefined.
- *
- * The highest value that can be returned is std::numeric_limits<T>::digits - 1,
- * which is returned when value == 1.
- */
-template<typename T>
-static inline size_t count_leading_zeros(T value);
-
-/**
  * Returns the number of trailing zeros in value's binary representation.
  *
  * If value == 0 the result is undefied. If T is signed and value is negative
@@ -35,29 +23,20 @@ static inline size_t count_leading_zeros(T value);
  *
  * The highest value that can be returned is std::numeric_limits<T>::digits - 1.
  */
-template<typename T>
-static inline size_t count_trailing_zeros(T value);
-
-template<>
-size_t count_leading_zeros<unsigned long>(unsigned long value)
+static inline size_t count_leading_zeros(unsigned long value)
 {
     return __builtin_clzl(value);
 }
-
-template<>
-size_t count_leading_zeros<long>(long value)
+static inline size_t count_leading_zeros(long value)
 {
     return __builtin_clzl((unsigned long)value) - 1;
 }
-
-template<>
-size_t count_trailing_zeros<unsigned long>(unsigned long value)
+static inline size_t count_trailing_zeros(unsigned long value)
 {
     return __builtin_ctzl(value);
 }
 
-template<>
-size_t count_trailing_zeros<long>(long value)
+static inline size_t count_trailing_zeros(long value)
 {
     return __builtin_ctzl((unsigned long)value);
 }
