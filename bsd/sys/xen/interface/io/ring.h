@@ -48,7 +48,7 @@ typedef unsigned int RING_IDX;
  * The amount of space reserved in the shared ring for accounting information.
  */
 #define __RING_HEADER_SIZE(_s) \
-    ((intptr_t)(_s)->ring - (intptr_t)(_s))
+    ((intptr_t)&((_s)->ring) - (intptr_t)(_s))
 
 /*
  * Calculate size of a shared ring, given the total available space for the
