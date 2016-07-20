@@ -8,7 +8,8 @@
 #ifndef PRIO_HH_
 #define  PRIO_HH_
 
-enum class init_prio : int {
+namespace init_prio {
+enum {
     dtb = 101,
     console,
     sort,
@@ -32,5 +33,6 @@ enum class init_prio : int {
     malloc_pools,
     idt,
 };
+}
 
 #endif
