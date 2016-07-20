@@ -502,6 +502,8 @@ $(out)/bsd/sys/netinet/in_rmx.o: COMMON+=-fno-strict-aliasing
 $(out)/bsd/sys/netinet/ip_input.o: COMMON+=-fno-strict-aliasing
 $(out)/bsd/sys/netinet/in.o: COMMON+=-fno-strict-aliasing
 
+$(out)/bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/metaslab.o: COMMON+=-Wno-tautological-compare
+
 bsd  = bsd/init.o
 bsd += bsd/net.o
 bsd += bsd/$(arch)/machine/in_cksum.o
