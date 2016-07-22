@@ -261,6 +261,14 @@ INCLUDES += -isystem $(libfdt_base)
 endif
 
 INCLUDES += $(boost-includes)
+ifeq ($(gcc_include_env), host)
+# Starting in Gcc 6, the standard C++ header files (which we do not change)
+# must precede in the include path the C header files (which we replace).
+# This is explained in https://gcc.gnu.org/bugzilla/show_bug.cgi?id=70722.
+# So we are forced to list here (before include/api) the system's default
+# C++ include directories, though they are already in the default search path.
+INCLUDES += $(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^ .*c\+\+/ {print "-isystem" $$0}')
+endif
 INCLUDES += -isystem include/api
 INCLUDES += -isystem include/api/$(arch)
 ifeq ($(gcc_include_env), external)
