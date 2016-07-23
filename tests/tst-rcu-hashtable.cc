@@ -14,6 +14,7 @@
 #include <iostream>
 #include <osv/printf.hh>
 #include <osv/sched.hh>
+#include <random>
 
 struct test_element {
     test_element(unsigned val) : _val(val), _state(state::initialized) {
