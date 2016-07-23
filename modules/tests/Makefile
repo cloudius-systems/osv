@@ -23,6 +23,7 @@ autodepend = -MD -MT $@ -MP
 
 INCLUDES = -I$(src)/arch/$(ARCH) -I$(src) -I$(src)/include \
 	-I$(src)/arch/common -isystem $(src)/include/glibc-compat \
+	$(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^ .*c\+\+/ {print "-isystem" $$0}') \
 	-isystem $(src)/include/api -isystem $(src)/include/api/$(ARCH) \
 	-isystem $(out)/gen/include
 
