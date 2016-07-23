@@ -1,4 +1,5 @@
-INCLUDES 	= -isystem $(miscbase)/usr/include
+INCLUDES	= $(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^ .*c\+\+/ {print "-isystem" $$0}')
+INCLUDES 	+= -isystem $(miscbase)/usr/include
 INCLUDES 	+= -I../../include -I. -I../../java -I../../arch/$(ARCH) -I../..
 INCLUDES 	+= -I$(jdkbase)/include -I$(jdkbase)/include/linux
 
