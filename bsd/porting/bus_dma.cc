@@ -48,11 +48,11 @@ bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 		   bus_size_t maxsegsz, int flags, bus_dma_lock_t *lockfunc,
 		   void *lockfuncarg, bus_dma_tag_t *dmat)
 {
-    assert(lockfunc != NULL);
+	assert(lockfunc != NULL);
 
 	bus_dma_tag_t newtag = new struct bus_dma_tag;
-    if (!newtag)
-        return -ENOMEM;
+	if (!newtag)
+		return -ENOMEM;
 
 	newtag->alignment = alignment;
 	newtag->maxsize = maxsize;
@@ -63,8 +63,8 @@ bus_dma_tag_create(bus_dma_tag_t parent, bus_size_t alignment,
 	newtag->lockfuncarg = lockfuncarg;
 	newtag->segments = NULL;
 
-    *dmat = newtag;
-    return 0;
+	*dmat = newtag;
+	return 0;
 }
 
 int
