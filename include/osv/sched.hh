@@ -630,6 +630,13 @@ private:
     std::unique_ptr<detached_state> _detached_state;
     attr _attr;
     int _migration_lock_counter;
+    // _migration_lock_counter being set may be temporary, but if _pinned
+    // is true, it was permanently incremented by 1 by sched::thread::pin().
+    // In the future, we should replace this boolean _pinned by a bitmask
+    // of allowed cpus for this thread (for full support of
+    // sched_setaffinity()), and the load balancer should consult this bitmask
+    // to decide to which cpus a thread may migrate.
+    bool _pinned;
     arch_thread _arch;
     unsigned int _id;
     std::atomic<bool> _interrupted;

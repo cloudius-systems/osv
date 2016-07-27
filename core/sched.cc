@@ -483,18 +483,20 @@ unsigned cpu::load()
 void thread::pin(cpu *target_cpu)
 {
     thread &t = *current();
-    // We want to wake this thread on the target CPU, but can't do this while
-    // it is still running on this CPU. So we need a different thread to
-    // complete the wakeup. We could re-used an existing thread (e.g., the
-    // load balancer thread) but a "good-enough" dirty solution is to
-    // temporarily create a new ad-hoc thread, "wakeme"
-    if (!t._migration_lock_counter) {
+    if (!t._pinned) {
+        // _pinned comes with a +1 increase to _migration_counter.
         migrate_disable();
+        t._pinned = true;
     }
     cpu *source_cpu = cpu::current();
     if (source_cpu == target_cpu) {
         return;
     }
+    // We want to wake this thread on the target CPU, but can't do this while
+    // it is still running on this CPU. So we need a different thread to
+    // complete the wakeup. We could re-used an existing thread (e.g., the
+    // load balancer thread) but a "good-enough" dirty solution is to
+    // temporarily create a new ad-hoc thread, "wakeme".
     bool do_wakeme = false;
     thread wakeme([&] () {
         wait_until([&] { return do_wakeme; });
@@ -765,6 +767,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
     , _detached_state(new detached_state(this))
     , _attr(attr)
     , _migration_lock_counter(0)
+    , _pinned(false)
     , _id(0)
     , _cleanup([this] { delete this; })
     , _app(app)
@@ -832,6 +835,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
 
     if (_attr._pinned_cpu) {
         ++_migration_lock_counter;
+        _pinned = true;
     }
 
     if (main) {
