@@ -1472,8 +1472,10 @@ size_t kernel_tls_size()
 
 void thread_runtime::export_runtime()
 {
-    _Rtt /= cpu::current()->c;;
-    _renormalize_count = -1; // special signal to update_after_sleep()
+    if (_renormalize_count != -1) {
+        _Rtt /= cpu::current()->c;;
+        _renormalize_count = -1; // special signal to update_after_sleep()
+    }
 }
 
 void thread_runtime::update_after_sleep()
