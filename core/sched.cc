@@ -443,6 +443,9 @@ void cpu::handle_incoming_wakeups()
                     // Special case of current thread being woken before
                     // having a chance to be scheduled out.
                     t._detached_state->st.store(thread::status::running);
+                } else if (t.tcpu() != this) {
+                    // Thread was woken on the wrong cpu. Can be a side-effect
+                    // of sched::thread::pin(thread*, cpu*). Do nothing.
                 } else {
                     t._detached_state->st.store(thread::status::queued);
                     // Make sure the CPU-local runtime measure is suitably
