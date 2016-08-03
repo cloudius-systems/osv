@@ -505,6 +505,7 @@ public:
     }
     static osv::application *current_app();
     bool migratable() const { return _migration_lock_counter == 0; }
+    bool pinned() const { return _pinned; }
     /**
      * Return thread's numeric id
      *
