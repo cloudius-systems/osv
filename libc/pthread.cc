@@ -949,7 +949,7 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpusetsize,
         // Having a cpuset with no CPUs in it is invalid.
         return EINVAL;
     } else if (count == 1) {
-        for (size_t i = 0; i < __CPU_SETSIZE; i++) {
+        for (size_t i = 0; i < cpusetsize * 8; i++) {
             if (CPU_ISSET(i, cpuset)) {
                 if (i < sched::cpus.size()) {
                     sched::thread::pin(t, sched::cpus[i]);
