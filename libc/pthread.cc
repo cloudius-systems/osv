@@ -998,26 +998,57 @@ int sched_setaffinity(pid_t pid, size_t cpusetsize,
     return 0;
 }
 
-int pthread_getaffinity_np(const pthread_t thread, size_t cpusetsize,
+static int getaffinity(const sched::thread *t, size_t cpusetsize,
         cpu_set_t *cpuset)
 {
     if (sched::cpus.size() > cpusetsize * 8) {
         // not enough room in cpuset
         return EINVAL;
     }
-    sched::thread &t = pthread::from_libc(thread)->_thread;
     // Currently OSv does not have a real notion of a list of allowable
     // CPUs for a thread, as Linux does, but we have the notion of pinning
     // the thread to a single CPU. Note that if the CPU is only temporarily
     // bound to a CPU with a migration_lock (e.g., while accessing a per-cpu
     // variable), it is not considered pinned.
     memset(cpuset, 0, cpusetsize);
-    if (!t.pinned()) {
+    if (!t->pinned()) {
         for (unsigned i = 0; i < sched::cpus.size(); i++) {
             CPU_SET(i, cpuset);
         }
     } else {
-        CPU_SET(t.tcpu()->id, cpuset);
+        CPU_SET(t->tcpu()->id, cpuset);
+    }
+    return 0;
+}
+
+int pthread_getaffinity_np(const pthread_t thread, size_t cpusetsize,
+        cpu_set_t *cpuset)
+{
+    const sched::thread *t = &pthread::from_libc(thread)->_thread;
+    return getaffinity(t, cpusetsize, cpuset);
+}
+
+int sched_getaffinity(pid_t pid, size_t cpusetsize,
+        cpu_set_t *cpuset)
+{
+    sched::thread *t;
+    if (pid == 0) {
+        t = sched::thread::current();
+    } else {
+        t = sched::thread::find_by_id(pid);
+        if (!t) {
+            errno = ESRCH;
+            return -1;
+        }
+        // TODO: After the thread was found, if it exits the code below
+        // may crash. Perhaps we should have a version of find_by_id(),
+        // with_thread_by_id(pid, func), which holds thread_map_mutex while
+        // func runs.
+    }
+    int err = getaffinity(t, cpusetsize, cpuset);
+    if (err) {
+        errno = err;
+        return -1;
     }
     return 0;
 }
@@ -1041,14 +1072,4 @@ int pthread_attr_getaffinity_np(const pthread_attr_t *attr, size_t cpusetsize,
     memcpy(cpuset, a->cpuset, sizeof(cpu_set_t));
 
     return 0;
-}
-
-int sched_getaffinity(pid_t pid, size_t cpusetsize,
-        cpu_set_t *cpuset)
-{
-    if (pid != 0 && (unsigned int)pid != sched::thread::current()->id()) {
-        WARN_STUBBED();
-        return EINVAL;
-    }
-    return pthread_getaffinity_np(pthread_self(), cpusetsize, cpuset);
 }
