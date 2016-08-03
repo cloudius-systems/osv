@@ -940,10 +940,9 @@ int pthread_attr_setaffinity_np(pthread_attr_t *attr, size_t cpusetsize,
     return 0;
 }
 
-int pthread_setaffinity_np(pthread_t thread, size_t cpusetsize,
+static int setaffinity(sched::thread* t, size_t cpusetsize,
         const cpu_set_t *cpuset)
 {
-    sched::thread *t = &pthread::from_libc(thread)->_thread;
     int count = CPU_COUNT(cpuset);
     if (count == 0) {
         // Having a cpuset with no CPUs in it is invalid.
@@ -967,14 +966,36 @@ int pthread_setaffinity_np(pthread_t thread, size_t cpusetsize,
     return 0;
 }
 
+int pthread_setaffinity_np(pthread_t thread, size_t cpusetsize,
+        const cpu_set_t *cpuset)
+{
+    sched::thread *t = &pthread::from_libc(thread)->_thread;
+    return setaffinity(t, cpusetsize, cpuset);
+}
+
 int sched_setaffinity(pid_t pid, size_t cpusetsize,
         cpu_set_t *cpuset)
 {
-    if (pid != 0 && (unsigned int)pid != sched::thread::current()->id()) {
-        WARN_STUBBED();
-        return EINVAL;
+    sched::thread *t;
+    if (pid == 0) {
+        t = sched::thread::current();
+    } else {
+        t = sched::thread::find_by_id(pid);
+        if (!t) {
+            errno = ESRCH;
+            return -1;
+        }
+        // TODO: After the thread was found, if it exits the code below
+        // may crash. Perhaps we should have a version of find_by_id(),
+        // with_thread_by_id(pid, func), which holds thread_map_mutex while
+        // func runs.
     }
-    return pthread_setaffinity_np(pthread_self(), cpusetsize, cpuset);
+    int err = setaffinity(t, cpusetsize, cpuset);
+    if (err) {
+        errno = err;
+        return -1;
+    }
+    return 0;
 }
 
 int pthread_getaffinity_np(const pthread_t thread, size_t cpusetsize,
