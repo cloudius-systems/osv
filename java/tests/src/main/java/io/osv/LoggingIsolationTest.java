@@ -7,7 +7,9 @@ import java.io.File;
 import java.io.IOException;
 import java.util.concurrent.CyclicBarrier;
 
-import static io.osv.TestIsolateLaunching.runIsolate;
+import io.osv.isolated.Context;
+
+import static io.osv.TestLaunching.runIsolate;
 import static org.apache.commons.io.FileUtils.forceDeleteOnExit;
 import static org.apache.commons.io.FileUtils.readLines;
 import static org.fest.assertions.Assertions.assertThat;

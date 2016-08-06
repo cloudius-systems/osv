@@ -1,4 +1,4 @@
-package io.osv;
+package io.osv.isolated;
 
 /*
  * Copyright (C) 2013-2014 Cloudius Systems, Ltd.
@@ -7,7 +7,9 @@ package io.osv;
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-public class RunJava {
+import io.osv.MainClassNotFoundException;
+
+public class RunIsolatedJvmApp {
 	private static native void onVMStop();
 
 	static {
@@ -32,7 +34,7 @@ public class RunJava {
         }
 
         try {
-            ContextIsolator.getInstance().runSync(args);
+            IsolatedJvmApp.getInstance().runSync(args);
         } catch (IllegalArgumentException ex) {
             System.err.println("RunJava: " + ex.getMessage());
         } catch (ContextFailedException ex) {

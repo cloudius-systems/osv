@@ -73,6 +73,7 @@ def scan_errors(s):
         "at org.junit.runner.JUnitCore.main",
         "ContextFailedException",
 	"\[backtrace\]",
+        "Failed to load object",
     ]
     for pattern in patterns:
         if re.findall(pattern, s):

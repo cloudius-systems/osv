@@ -1,8 +1,5 @@
 package tests;
 
-import io.osv.isolated.IsolatedJvmApp;
-
-import java.util.concurrent.CyclicBarrier;
 import java.util.logging.FileHandler;
 import java.util.logging.Level;
 import java.util.logging.Logger;
@@ -14,10 +11,8 @@ import java.util.logging.SimpleFormatter;
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
  */
-public class LoggingProcess {
+public class NonIsolatedLoggingProcess {
     public static void main(String[] args) throws Throwable {
-        CyclicBarrier barrier = (CyclicBarrier) IsolatedJvmApp.getInstance().receive();
-
         String logFileName = args[0];
         String loggerName = args[1];
         Level level = Level.parse(args[2]);
@@ -29,8 +24,6 @@ public class LoggingProcess {
         logger.addHandler(handler);
 
         logger.setLevel(level);
-
-        barrier.await();
 
         logger.info(message);
         logger.warning(message);

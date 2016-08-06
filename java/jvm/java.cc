@@ -30,7 +30,11 @@ extern size_t jvm_heap_size;
 // parameters.
 
 #define JVM_PATH        "/usr/lib/jvm/jre/lib/amd64/server/libjvm.so"
-#define RUNJAVA         "io/osv/RunJava"    // separated by slashes, not dots
+#if defined(RUN_JAVA_NON_ISOLATED)
+#define RUNJAVA         "io/osv/nonisolated/RunNonIsolatedJvmApp"    // separated by slashes, not dots
+#else
+#define RUNJAVA         "io/osv/isolated/RunIsolatedJvmApp"    // separated by slashes, not dots
+#endif
 
 JavaVMOption mkoption(const char* s)
 {
@@ -96,6 +100,8 @@ static void on_vm_stop(JNIEnv *env, jclass clz) {
 
 static int java_main(int argc, char **argv)
 {
+    std::cout << "java.so: Starting JVM app using: " << RUNJAVA << "\n";
+
     auto prog = elf::get_program();
     // The JVM library remains loaded as long as jvm_so is in scope.
     auto jvm_so = prog->get_library(JVM_PATH);
@@ -108,8 +114,11 @@ static int java_main(int argc, char **argv)
 
     std::vector<JavaVMOption> options;
     options.push_back(mkoption("-Djava.class.path=/dev/null"));
-    options.push_back(mkoption("-Djava.system.class.loader=io.osv.OsvSystemClassLoader"));
+#if !defined(RUN_JAVA_NON_ISOLATED)
+    std::cout << "java.so: Setting Java system classloader and logging manager to the isolated ones" << "\n";
+    options.push_back(mkoption("-Djava.system.class.loader=io.osv.isolated.OsvSystemClassLoader"));
     options.push_back(mkoption("-Djava.util.logging.manager=io.osv.jul.IsolatingLogManager"));
+#endif
     options.push_back(mkoption("-Dosv.version=" + osv::version()));
 
     {

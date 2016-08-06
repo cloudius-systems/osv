@@ -5,6 +5,10 @@ import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 
+import io.osv.isolated.Context;
+import io.osv.isolated.IsolatedJvmApp;
+import io.osv.nonisolated.NonIsolatedJvmApp;
+
 import static java.util.Arrays.asList;
 import static org.fest.assertions.Assertions.assertThat;
 
@@ -14,13 +18,27 @@ import static org.fest.assertions.Assertions.assertThat;
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
  */
-public class TestIsolateLaunching {
+public class TestLaunching {
 
     public static Context runIsolate(Class<?> clazz, String... programArgs) throws Throwable {
         return runIsolate(clazz, Collections.<String>emptyList(), programArgs);
     }
 
     public static Context runIsolate(Class<?> clazz, List<String> args, String... programArgs) throws Throwable {
+        List<String> allArgs = testJarAndPrepareArgs(clazz, args, programArgs);
+        return IsolatedJvmApp.getInstance().run(allArgs.toArray(new String[allArgs.size()]));
+    }
+
+    public static Thread runWithoutIsolation(Class<?> clazz, String... programArgs) throws Throwable {
+        return runWithoutIsolation(clazz, Collections.<String>emptyList(), programArgs);
+    }
+
+    public static Thread runWithoutIsolation(Class<?> clazz, List<String> args, String... programArgs) throws Throwable {
+        List<String> allArgs = testJarAndPrepareArgs(clazz, args, programArgs);
+        return NonIsolatedJvmApp.getInstance().run(allArgs.toArray(new String[allArgs.size()]));
+    }
+
+    private static List<String> testJarAndPrepareArgs(Class<?> clazz, List<String> args, String... programArgs) {
         String jarPath = System.getProperty("isolates.jar");
         assertThat(jarPath).isNotEmpty();
         assertThat(new File(jarPath)).exists();
@@ -32,7 +50,6 @@ public class TestIsolateLaunching {
         allArgs.add(clazz.getName());
         allArgs.addAll(asList(programArgs));
 
-        return ContextIsolator.getInstance().run(allArgs.toArray(new String[allArgs.size()]));
+        return allArgs;
     }
-
 }

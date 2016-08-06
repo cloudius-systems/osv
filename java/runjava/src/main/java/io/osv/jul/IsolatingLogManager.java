@@ -1,7 +1,7 @@
 package io.osv.jul;
 
-import io.osv.Context;
-import io.osv.ContextIsolator;
+import io.osv.isolated.Context;
+import io.osv.isolated.IsolatedJvmApp;
 
 import java.beans.PropertyChangeListener;
 import java.io.IOException;
@@ -19,7 +19,7 @@ import java.util.logging.Logger;
 @SuppressWarnings("UnusedDeclaration")
 public class IsolatingLogManager extends LogManager {
     private LogManager getDelegate() {
-        Context context = ContextIsolator.getInstance().getContext();
+        Context context = IsolatedJvmApp.getInstance().getContext();
         return context.getLogManagerWrapper().getManager();
     }
 

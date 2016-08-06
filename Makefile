@@ -136,7 +136,8 @@ very-quiet = $(if $V, $1, @$1)
 ifeq ($(arch),aarch64)
 java-targets :=
 else
-java-targets := $(out)/java/jvm/java.so $(out)/java/jni/balloon.so $(out)/java/jni/elf-loader.so $(out)/java/jni/networking.so \
+java-targets := $(out)/java/jvm/java.so $(out)/java/jvm/java_non_isolated.so \
+	$(out)/java/jni/balloon.so $(out)/java/jni/elf-loader.so $(out)/java/jni/networking.so \
         $(out)/java/jni/stty.so $(out)/java/jni/tracepoint.so $(out)/java/jni/power.so $(out)/java/jni/monitor.so
 endif
 
@@ -375,6 +376,10 @@ $(out)/%.o: %.cc | generated-headers
 $(out)/%.o: %.c | generated-headers
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $<, CC $*.c)
+
+$(out)/java/jvm/java_non_isolated.o: java/jvm/java.cc | generated-headers
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -DRUN_JAVA_NON_ISOLATED -o $@ -c java/jvm/java.cc, CXX $<)
 
 $(out)/%.o: %.S
 	$(makedir)

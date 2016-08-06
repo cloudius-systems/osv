@@ -1,6 +1,6 @@
 package tests;
 
-import io.osv.ContextIsolator;
+import io.osv.isolated.IsolatedJvmApp;
 
 import java.util.concurrent.CyclicBarrier;
 
@@ -17,7 +17,7 @@ public class PropertyReader {
         String property = args[0];
         String expectedValue = args[1];
 
-        CyclicBarrier barrier = (CyclicBarrier) ContextIsolator.getInstance().receive();
+        CyclicBarrier barrier = (CyclicBarrier) IsolatedJvmApp.getInstance().receive();
         barrier.await();
 
         assertEquals(expectedValue, System.getProperty(property));

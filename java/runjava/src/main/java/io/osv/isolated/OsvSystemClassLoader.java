@@ -1,4 +1,4 @@
-package io.osv;
+package io.osv.isolated;
 
 /*
  * Copyright (C) 2013 Cloudius Systems, Ltd.
@@ -54,7 +54,7 @@ public class OsvSystemClassLoader extends ClassLoader {
     }
 
     private Context getContext() {
-        return ContextIsolator.getInstance().getContext();
+        return IsolatedJvmApp.getInstance().getContext();
     }
 
     private ClassLoader getDelegate() {

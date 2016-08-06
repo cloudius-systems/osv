@@ -1,6 +1,6 @@
 package tests;
 
-import io.osv.ContextIsolator;
+import io.osv.isolated.IsolatedJvmApp;
 
 import java.util.concurrent.CyclicBarrier;
 
@@ -14,7 +14,7 @@ import static org.junit.Assert.assertEquals;
  */
 public class PropertySetter {
     public static void main(String[] args) throws Exception {
-        CyclicBarrier barrier = (CyclicBarrier) ContextIsolator.getInstance().receive();
+        CyclicBarrier barrier = (CyclicBarrier) IsolatedJvmApp.getInstance().receive();
         String property = args[0];
         String value = args[1];
 

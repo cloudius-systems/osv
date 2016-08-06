@@ -1,6 +1,6 @@
 package io.osv.jul;
 
-import io.osv.Context;
+import io.osv.isolated.Context;
 import io.osv.util.LazilyInitialized;
 import net.sf.cglib.proxy.Enhancer;
 import net.sf.cglib.proxy.MethodInterceptor;
