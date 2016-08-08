@@ -764,7 +764,7 @@ void thread::stack_info::default_deleter(thread::stack_info si)
 // functions which take numeric thread ids.
 static mutex thread_map_mutex;
 using id_type = std::result_of<decltype(&thread::id)(thread)>::type;
-static std::unordered_map<id_type, thread *> thread_map
+std::unordered_map<id_type, thread *> thread_map
     __attribute__((init_priority((int)init_prio::threadlist)));
 
 static thread_runtime::duration total_app_time_exited(0);

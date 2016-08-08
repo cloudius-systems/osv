@@ -195,6 +195,6 @@ do
 	case $i in
 	check)	set -x
 		cd $SRC
-		./scripts/test.py
+		exec ./scripts/test.py
 	esac
 done

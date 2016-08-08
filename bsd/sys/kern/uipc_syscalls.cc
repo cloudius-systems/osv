@@ -584,8 +584,11 @@ kern_recvit(int s, struct msghdr *mp, struct mbuf **controlp, ssize_t* bytes)
 		return (error);
 	so = (socket*)file_data(fp);
 
-	auio.uio_iov = mp->msg_iov;
-	auio.uio_iovcnt = mp->msg_iovlen;
+	// Create a local copy of the user's iovec - sorecieve() is going to change it!
+	std::vector<iovec> uio_iov(mp->msg_iov, mp->msg_iov + mp->msg_iovlen);
+
+	auio.uio_iov = uio_iov.data();
+	auio.uio_iovcnt = uio_iov.size();
 	auio.uio_rw = UIO_READ;
 	auio.uio_offset = 0;			/* XXX */
 	auio.uio_resid = 0;
