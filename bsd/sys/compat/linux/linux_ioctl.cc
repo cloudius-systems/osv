@@ -81,7 +81,7 @@ linux_ifconf(struct bsd_ifconf *ifc_p)
         return (0);
     }
 
-    if (ifc_p->ifc_len <= 0) {
+    if (ifc_p->ifc_len < 0) {
         return (EINVAL);
     }
 
