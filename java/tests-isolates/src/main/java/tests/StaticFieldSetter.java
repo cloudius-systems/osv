@@ -1,6 +1,6 @@
 package tests;
 
-import io.osv.ContextIsolator;
+import io.osv.isolated.IsolatedJvm;
 
 import java.util.concurrent.BrokenBarrierException;
 import java.util.concurrent.CyclicBarrier;
@@ -26,7 +26,7 @@ public class StaticFieldSetter {
 
     public static class Party {
         public static void main(String[] args) throws InterruptedException, BrokenBarrierException {
-            CyclicBarrier barrier = (CyclicBarrier) ContextIsolator.getInstance().receive();
+            CyclicBarrier barrier = (CyclicBarrier) IsolatedJvm.getInstance().receive();
 
             String value = args[0];
             staticField = value;

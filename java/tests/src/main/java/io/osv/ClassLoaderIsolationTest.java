@@ -5,7 +5,10 @@ import tests.*;
 
 import java.util.concurrent.CyclicBarrier;
 
-import static io.osv.TestIsolateLaunching.runIsolate;
+import io.osv.isolated.Context;
+import io.osv.isolated.ContextFailedException;
+
+import static io.osv.TestLaunching.runIsolate;
 import static org.junit.Assert.*;
 
 /*

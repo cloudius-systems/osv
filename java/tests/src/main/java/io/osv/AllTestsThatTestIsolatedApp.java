@@ -17,5 +17,5 @@ import org.junit.runners.Suite;
         PropertyIsolationTest.class,
         OsvApiTest.class
 })
-public class AllTests {
+public class AllTestsThatTestIsolatedApp {
 }

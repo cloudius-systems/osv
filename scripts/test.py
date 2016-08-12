@@ -22,8 +22,10 @@ blacklist= [
 ]
 
 add_tests([
-    SingleCommandTest('java', '/java.so -cp /tests/java/tests.jar:/tests/java/isolates.jar \
-        -Disolates.jar=/tests/java/isolates.jar org.junit.runner.JUnitCore io.osv.AllTests'),
+    SingleCommandTest('java_isolated', '/java.so -cp /tests/java/tests.jar:/tests/java/isolates.jar \
+        -Disolates.jar=/tests/java/isolates.jar org.junit.runner.JUnitCore io.osv.AllTestsThatTestIsolatedApp'),
+    SingleCommandTest('java_non_isolated', '/java_non_isolated.so -cp /tests/java/tests.jar:/tests/java/isolates.jar \
+        -Disolates.jar=/tests/java/isolates.jar org.junit.runner.JUnitCore io.osv.AllTestsThatTestNonIsolatedApp'),
     SingleCommandTest('java-perms', '/java.so -cp /tests/java/tests.jar io.osv.TestDomainPermissions'),
 ])
 

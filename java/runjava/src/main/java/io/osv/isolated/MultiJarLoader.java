@@ -1,4 +1,4 @@
-package io.osv;
+package io.osv.isolated;
 
 import java.io.BufferedReader;
 import java.io.File;
@@ -110,7 +110,7 @@ public class MultiJarLoader {
         @Override
         public void run() {
             try {
-                ContextIsolator.getInstance().runSync(args.split("\\s+"));
+                IsolatedJvm.getInstance().runSync(args.split("\\s+"));
             } catch (Throwable e) {
                 System.err.println("Exception was caught while running " + args
                         + " exception: " + e);

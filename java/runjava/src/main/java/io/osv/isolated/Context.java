@@ -1,4 +1,4 @@
-package io.osv;
+package io.osv.isolated;
 
 import io.osv.jul.LogManagerWrapper;
 import io.osv.util.LazilyInitialized;
