@@ -943,7 +943,7 @@ int pthread_attr_setaffinity_np(pthread_attr_t *attr, size_t cpusetsize,
 static int setaffinity(sched::thread* t, size_t cpusetsize,
         const cpu_set_t *cpuset)
 {
-    int count = CPU_COUNT(cpuset);
+    int count = CPU_COUNT_S(cpusetsize, cpuset);
     if (count == 0) {
         // Having a cpuset with no CPUs in it is invalid.
         return EINVAL;
