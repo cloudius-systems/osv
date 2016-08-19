@@ -42,7 +42,7 @@ class test(Test):
     def run(self):
         self.f()
 
-def scan_errors(s):
+def scan_errors(s,scan_for_failed_to_load_object_error=True):
     if not s:
         return False
     patterns = [
@@ -59,29 +59,33 @@ def scan_errors(s):
         # A test should indicate it's status by a return value only:
         #   0              - on success
         #   non-zero value - on failure
-        # The below messages are printed by the OSv and are promissed to be
+        # The below messages are printed by the OSv and are promised to be
         # supported in the future.
         "Assertion failed",
         "Aborted",
-	"Error",
-	"\[BUG\]",
-	"Failed looking up symbol",
-	"Failure",
+	    "Error",
+	    "\[BUG\]",
+	    "Failed looking up symbol",
+	    "Failure",
         "program exited with status",
         r"program tests/(.*?) returned",
         "Exception was caught while running",
         "at org.junit.runner.JUnitCore.main",
         "ContextFailedException",
-	"\[backtrace\]",
-        "Failed to load object",
+        "AppThreadTerminatedWithUncaughtException",
+	    "\[backtrace\]"
     ]
+
+    if scan_for_failed_to_load_object_error:
+        patterns = patterns + ["Failed to load object"]
+
     for pattern in patterns:
         if re.findall(pattern, s):
             return True
     return False
 
 class SupervisedProcess:
-    def __init__(self, args, show_output=False, show_output_on_error=True):
+    def __init__(self, args, show_output=False, show_output_on_error=True, scan_for_failed_to_load_object_error=True):
         self.process = subprocess.Popen(args, stdout=subprocess.PIPE)
         self.cv = threading.Condition()
         self.lines = []
@@ -92,12 +96,13 @@ class SupervisedProcess:
 
         self.output_collector_thread = threading.Thread(target=self._output_collector)
         self.output_collector_thread.start()
+        self.scan_for_failed_to_load_object_error = scan_for_failed_to_load_object_error
 
     def _output_collector(self):
         def append_line(line):
             self.cv.acquire()
 
-            if not self.has_errors and scan_errors(line):
+            if not self.has_errors and scan_errors(line,self.scan_for_failed_to_load_object_error):
                 self.has_errors = True
                 if self.show_output_on_error and not self.show_output:
                     sys.stdout.write(self.output)
@@ -176,7 +181,9 @@ def run_command_in_guest(command, **kwargs):
     return Guest(["-s", "-e", "--power-off-on-abort " + command], **kwargs)
 
 class Guest(SupervisedProcess):
-    def __init__(self, args, forward=[], hold_with_poweroff=False, show_output_on_error=True):
+    def __init__(self, args, forward=[], hold_with_poweroff=False, show_output_on_error=True,
+                 scan_for_failed_to_load_object_error=True):
+
         run_script = os.path.join(osv_base, "scripts/run.py")
 
         if hold_with_poweroff:
@@ -192,7 +199,8 @@ class Guest(SupervisedProcess):
 
         SupervisedProcess.__init__(self, [run_script] + args,
             show_output=_verbose_output,
-            show_output_on_error=show_output_on_error)
+            show_output_on_error=show_output_on_error,
+            scan_for_failed_to_load_object_error=scan_for_failed_to_load_object_error)
 
     def kill(self):
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
