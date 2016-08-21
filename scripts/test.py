@@ -33,7 +33,21 @@ class TestRunnerTest(SingleCommandTest):
     def __init__(self, name):
         super(TestRunnerTest, self).__init__(name, '/tests/%s' % name)
 
-test_files = set(glob.glob('build/release/tests/tst-*.so')) - set(glob.glob('build/release/tests/*-stripped.so'))
+# Not all files in build/release/tests/tst-*.so may be on the test image
+# (e.g., some may have actually remain there from old builds) - so lets take
+# the list of tests actually in the image form the image's manifest file.
+test_files = []
+is_comment = re.compile("^[ \t]*(|#.*|\[manifest])$")
+is_test = re.compile("^/tests/tst-.*.so")
+with open('modules/tests/usr.manifest', 'r') as f:
+    for line in f:
+        line = line.rstrip();
+        if is_comment.match(line): continue;
+        components = line.split(": ", 2);
+        guestpath = components[0].strip();
+        hostpath = components[1].strip()
+        if is_test.match(guestpath):
+            test_files.append(guestpath);
 add_tests((TestRunnerTest(os.path.basename(x)) for x in test_files))
 
 def run_test(test):
