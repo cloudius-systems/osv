@@ -18,7 +18,8 @@ static int thread_run_app_in_namespace(std::string filename,
                                     const std::vector<std::string> args,
                                     const std::unordered_map<std::string, std::string> envp,
                                     long* thread_id,
-                                    int notification_fd)
+                                    int notification_fd,
+                                    sched::thread* parent)
 {
     int ret;
     const bool new_program = true; // run in new ELF namespace
@@ -26,7 +27,7 @@ static int thread_run_app_in_namespace(std::string filename,
 
     debugf_execve("thread_run_app_in_namespace... tid=%ld\n", tid);
     if (thread_id) {
-        *thread_id = tid;
+        parent->wake_with([&] { *thread_id = tid; });
     }
 
     // An additional new thread is created by osv::run and caller is blocked
@@ -114,9 +115,13 @@ int osv_execve(const char *path, char *const argv[], char *const envp[],
 
     std::thread th = std::thread(thread_run_app_in_namespace,
         std::move(filename), std::move(args), std::move(envp_map),
-        thread_id, notification_fd);
+        thread_id, notification_fd, sched::thread::current());
     // detach from thread so that no join needes to be called.
     th.detach();
+    // If need to set thread_id, wait until the newly created thread sets it
+    if (thread_id) {
+        sched::thread::wait_until([&] { return *thread_id != 0; });
+    }
 
     return 0;
 }
