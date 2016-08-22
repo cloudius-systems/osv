@@ -8,8 +8,7 @@ std::shared_ptr<osv::application> run(std::string path,
                      bool new_program,
                      const std::unordered_map<std::string, std::string> *env)
 {
-    auto app = osv::application::run(path, args, new_program, env);
-    app->join();
+    auto app = osv::application::run_and_join(path, args, new_program, env);
     if (return_code) {
         *return_code = app->get_return_code();
     }

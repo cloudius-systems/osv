@@ -135,6 +135,16 @@ void run(const std::vector<std::string>& args) {
     application::run(args);
 }
 
+shared_app_t application::run_and_join(const std::string& command,
+                      const std::vector<std::string>& args,
+                      bool new_program,
+                      const std::unordered_map<std::string, std::string> *env)
+{
+    auto app = std::make_shared<application>(command, args, new_program, env);
+    app->start_and_join();
+    return app;
+}
+
 application::application(const std::string& command,
                      const std::vector<std::string>& args,
                      bool new_program,
@@ -223,6 +233,25 @@ int application::join()
 
     trace_app_join_ret(_return_code);
     return _return_code;
+}
+
+void application::start_and_join()
+{
+    // We start the new application code in the current thread. We temporarily
+    // change the app_runtime pointer of this thread, while keeping the old
+    // pointer saved and restoring it when the new application ends (keeping
+    // the shared pointer also keeps the calling application alive).
+    auto current_app = sched::thread::current()->app_runtime();
+    sched::thread::current()->set_app_runtime(runtime());
+    _thread = pthread_self(); // may be null if the caller is not a pthread.
+    main();
+    sched::thread::current()->set_app_runtime(current_app);
+    current_app.reset();
+    _joiner = sched::thread::current();
+    _runtime.reset();
+    sched::thread::wait_until([&] { return _terminated.load(); });
+    _termination_request_callbacks.clear();
+    _lib.reset();
 }
 
 TRACEPOINT(trace_app_main, "app=%p, cmd=%s", application*, const char*);
