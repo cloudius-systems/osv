@@ -241,12 +241,14 @@ void application::start_and_join()
     // change the app_runtime pointer of this thread, while keeping the old
     // pointer saved and restoring it when the new application ends (keeping
     // the shared pointer also keeps the calling application alive).
-    auto current_app = sched::thread::current()->app_runtime();
+    auto original_app = sched::thread::current()->app_runtime();
     sched::thread::current()->set_app_runtime(runtime());
+    auto original_name = sched::thread::current()->name();
     _thread = pthread_self(); // may be null if the caller is not a pthread.
     main();
-    sched::thread::current()->set_app_runtime(current_app);
-    current_app.reset();
+    sched::thread::current()->set_name(original_name);
+    sched::thread::current()->set_app_runtime(original_app);
+    original_app.reset();
     _joiner = sched::thread::current();
     _runtime.reset();
     sched::thread::wait_until([&] { return _terminated.load(); });
