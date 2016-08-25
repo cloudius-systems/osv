@@ -16,6 +16,7 @@
 #include <errno.h>
 #include <algorithm>
 #include <boost/range/algorithm/transform.hpp>
+#include <osv/wait_record.hh>
 
 using namespace boost::range;
 
@@ -138,10 +139,11 @@ void run(const std::vector<std::string>& args) {
 shared_app_t application::run_and_join(const std::string& command,
                       const std::vector<std::string>& args,
                       bool new_program,
-                      const std::unordered_map<std::string, std::string> *env)
+                      const std::unordered_map<std::string, std::string> *env,
+                      waiter* setup_waiter)
 {
     auto app = std::make_shared<application>(command, args, new_program, env);
-    app->start_and_join();
+    app->start_and_join(setup_waiter);
     return app;
 }
 
@@ -235,7 +237,7 @@ int application::join()
     return _return_code;
 }
 
-void application::start_and_join()
+void application::start_and_join(waiter* setup_waiter)
 {
     // We start the new application code in the current thread. We temporarily
     // change the app_runtime pointer of this thread, while keeping the old
@@ -244,6 +246,9 @@ void application::start_and_join()
     auto original_app = sched::thread::current()->app_runtime();
     sched::thread::current()->set_app_runtime(runtime());
     auto original_name = sched::thread::current()->name();
+    if (setup_waiter) {
+        setup_waiter->wake();
+    }
     _thread = pthread_self(); // may be null if the caller is not a pthread.
     main();
     sched::thread::current()->set_name(original_name);

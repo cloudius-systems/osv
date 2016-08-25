@@ -25,6 +25,8 @@
 extern "C" void __libc_start_main(int(*)(int, char**), int, char**, void(*)(),
     void(*)(), void(*)(), void*);
 
+class waiter;
+
 namespace osv {
 
 class application;
@@ -131,7 +133,8 @@ public:
     static shared_app_t run_and_join(const std::string& command,
             const std::vector<std::string>& args,
             bool new_program = false,
-            const std::unordered_map<std::string, std::string> *env = nullptr);
+            const std::unordered_map<std::string, std::string> *env = nullptr,
+            waiter* setup_waiter = nullptr);
 
     /**
      * Installs a termination callback which will be called when
@@ -188,7 +191,7 @@ private:
         return shared_from_this();
     }
     void start();
-    void start_and_join();
+    void start_and_join(waiter* setup_waiter);
     void main();
     void run_main(std::string path, int argc, char** argv);
     void run_main();

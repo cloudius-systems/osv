@@ -2,6 +2,7 @@
 #include <osv/debug.hh>
 #include <osv/condvar.h>
 #include <osv/osv_execve.h>
+#include <osv/wait_record.hh>
 #include <thread>
 
 /* Record thread state changes (termination) by storing exit status into a map.
@@ -19,19 +20,16 @@ static int thread_run_app_in_namespace(std::string filename,
                                     const std::unordered_map<std::string, std::string> envp,
                                     long* thread_id,
                                     int notification_fd,
-                                    sched::thread* parent)
+                                    waiter* parent_waiter)
 {
-    int ret;
     const bool new_program = true; // run in new ELF namespace
     long tid = gettid(); // sched::thread::current()->id();
 
     debugf_execve("thread_run_app_in_namespace... tid=%ld\n", tid);
-    if (thread_id) {
-        parent->wake_with([&] { *thread_id = tid; });
-    }
+    *thread_id = tid;
 
-    // An additional new thread is created by osv::run and caller is blocked
-    osv::run(filename, args, &ret, new_program, &envp);
+    auto app = osv::application::run_and_join(filename, args, new_program, &envp, parent_waiter);
+    auto ret = app->get_return_code();
     debugf_execve("thread_run_app_in_namespace ret = %d tid=%ld\n", ret, tid);
 
     WITH_LOCK(exec_mutex) {
@@ -113,14 +111,17 @@ int osv_execve(const char *path, char *const argv[], char *const envp[],
     std::vector<std::string> args = argv_to_array(argv);
     std::unordered_map<std::string, std::string> envp_map = envp_to_map(envp);
 
+    waiter w(sched::thread::current());
+    // If need to set thread_id, wait until the newly created thread sets it
+    // and also sets the new app_runtime on this thread.
+    waiter* wp = thread_id ? &w : nullptr;
     std::thread th = std::thread(thread_run_app_in_namespace,
         std::move(filename), std::move(args), std::move(envp_map),
-        thread_id, notification_fd, sched::thread::current());
+        thread_id, notification_fd, wp);
     // detach from thread so that no join needes to be called.
     th.detach();
-    // If need to set thread_id, wait until the newly created thread sets it
-    if (thread_id) {
-        sched::thread::wait_until([&] { return *thread_id != 0; });
+    if (wp) {
+        wp->wait();
     }
 
     return 0;
