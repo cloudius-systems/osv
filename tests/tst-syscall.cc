@@ -5,11 +5,13 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <sys/types.h>
+#include <syscall.h>
 #include <unistd.h>
 #include <errno.h>
 
 #include <iostream>
+
+extern "C" long gettid();
 
 static int tests = 0, fails = 0;
 
@@ -33,8 +35,11 @@ bool do_expect(T actual, T expected, const char *actuals, const char *expecteds,
 
 int main(int argc, char **argv)
 {
-    unsigned long syscall_nr = 186; // gettid()
-    pid_t tid = 0;
+    // Test that the x86 SYSCALL instruction works, and produces the same
+    // results as the syscall() function (with expected differences in how
+    // errors are returned).
+    unsigned long syscall_nr = __NR_gettid;
+    long tid = 0;
 
     asm ("movq %1, %%rax\n"
          "syscall\n"
@@ -44,6 +49,8 @@ int main(int argc, char **argv)
          : "rax", "rdi");
 
     std::cout << "got tid=" << tid << std::endl;
+    expect(tid >= 0, true);
+    expect(tid, gettid());
 
     // test that unknown system call results in a ENOSYS (see issue #757)
     expect_errno_l(syscall(999), ENOSYS);
