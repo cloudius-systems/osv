@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <sys/types.h>
 #include <unistd.h>
 #include <errno.h>
 
@@ -32,6 +33,18 @@ bool do_expect(T actual, T expected, const char *actuals, const char *expecteds,
 
 int main(int argc, char **argv)
 {
+    unsigned long syscall_nr = 186; // gettid()
+    pid_t tid = 0;
+
+    asm ("movq %1, %%rax\n"
+         "syscall\n"
+	 "movq %%rax, %0\n"
+         : "=m" (tid)
+         : "m" (syscall_nr)
+         : "rax", "rdi");
+
+    std::cout << "got tid=" << tid << std::endl;
+
     // test that unknown system call results in a ENOSYS (see issue #757)
     expect_errno_l(syscall(999), ENOSYS);
 
