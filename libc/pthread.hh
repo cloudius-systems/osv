@@ -20,6 +20,10 @@ extern "C" {
 
 #ifdef __cplusplus
 }
+
+namespace pthread_private {
+void run_tsd_dtors();
+}
 #endif
 
 #endif /* PTHREAD_HH_ */

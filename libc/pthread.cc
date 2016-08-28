@@ -41,27 +41,41 @@ namespace pthread_private {
     __thread pthread_t current_pthread;
     __thread int cancel_state = PTHREAD_CANCEL_ENABLE;
 
+    // NOTE: currently, the list of keys and destructor for each is global,
+    // not per shared object or ELF namespace. So if a shared object uses
+    // pthread_key_create() but doesn't call pthread_key_delete() before
+    // exiting, the key will be leaked. This is relatively harmless (beyond
+    // running out of keys) unless the shared object is unloaded before the
+    // thread exits and the destructors are run.
+    // As a *hack* you can call run_tsd_dtors() before unloading the object,
+    // but this will run all dtors, not just those belonging to the unloaded
+    // object, so this is only useful on a thread especially created for
+    // running the object.
     __attribute__ ((init_priority ((int)init_prio::pthread))) mutex tsd_key_mutex;
     __attribute__ ((init_priority ((int)init_prio::pthread))) std::vector<bool>
                                           tsd_used_keys(tsd_nkeys);
     __attribute__ ((init_priority ((int)init_prio::pthread)))
                   std::vector<void (*)(void*)> tsd_dtor(tsd_nkeys);
 
+    void run_tsd_dtors() {
+        bool done = false;
+        for (unsigned iter = 0; !done && iter < PTHREAD_DESTRUCTOR_ITERATIONS; ++iter) {
+            done = true;
+            for (unsigned i = 0; i < tsd_nkeys; ++i) {
+                if (tsd[i] && tsd_dtor[i]) {
+                    void *val = tsd[i];
+                    tsd[i] = nullptr;
+                    tsd_dtor[i](val);
+                    done = false;
+                }
+            }
+        }
+    }
+
     void __attribute__((constructor)) pthread_register_tsd_dtor_notifier()
     {
         sched::thread::register_exit_notifier([] {
-            bool done = false;
-            for (unsigned iter = 0; !done && iter < PTHREAD_DESTRUCTOR_ITERATIONS; ++iter) {
-                done = true;
-                for (unsigned i = 0; i < tsd_nkeys; ++i) {
-                    if (tsd[i] && tsd_dtor[i]) {
-                        void *val = tsd[i];
-                        tsd[i] = nullptr;
-                        tsd_dtor[i](val);
-                        done = false;
-                    }
-                }
-            }
+            run_tsd_dtors();
         });
     }
 

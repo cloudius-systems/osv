@@ -17,6 +17,7 @@
 #include <algorithm>
 #include <boost/range/algorithm/transform.hpp>
 #include <osv/wait_record.hh>
+#include "libc/pthread.hh"
 
 using namespace boost::range;
 
@@ -251,6 +252,14 @@ void application::start_and_join(waiter* setup_waiter)
     }
     _thread = pthread_self(); // may be null if the caller is not a pthread.
     main();
+    // FIXME: run_tsd_dtors() is a hack - If the new program registered a
+    // destructor via pthread_key_create() and this thread keeps living with
+    // data for this key, the destructor function, part of the new program,
+    // may be called after the program is unloaded - and crash. Let's run
+    // the destructors now. This is wrong if the calling program has its own
+    // thread-local data. It is fine if the thread was created specially for
+    // running start_and_join (or run_and_join() or osv::run()).
+    pthread_private::run_tsd_dtors();
     sched::thread::current()->set_name(original_name);
     sched::thread::current()->set_app_runtime(original_app);
     original_app.reset();
