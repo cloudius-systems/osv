@@ -58,6 +58,9 @@ enum class msr : uint32_t {
 
     IA32_APIC_BASE = 0x0000001b,
     IA32_EFER = 0xc0000080,
+    IA32_STAR = 0xc0000081,
+    IA32_LSTAR = 0xc0000082,
+    IA32_FMASK = 0xc0000084,
     IA32_FS_BASE = 0xc0000100,
 
     KVM_WALL_CLOCK = 0x11,

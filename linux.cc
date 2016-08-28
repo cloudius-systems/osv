@@ -291,3 +291,16 @@ long syscall(long number, ...)
     return -1;
 }
 long __syscall(long number, ...)  __attribute__((alias("syscall")));
+
+extern "C" long syscall_wrapper(long number, ...)
+{
+    int errno_backup = errno;
+    // syscall and function return value are in rax
+    auto ret = syscall(number);
+    int result = -errno;
+    errno = errno_backup;
+    if (ret < 0 && ret >= -4096) {
+	return result;
+    }
+    return ret;
+}
