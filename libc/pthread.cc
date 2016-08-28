@@ -261,8 +261,19 @@ extern "C" {
 
 int pthread_key_delete(pthread_key_t key)
 {
-    WARN_STUBBED();
-    return EINVAL;
+    std::lock_guard<mutex> guard(tsd_key_mutex);
+    if (key < 0 || key >= (int)tsd_used_keys.size() || !tsd_used_keys[key]) {
+        return EINVAL;
+    }
+    tsd_dtor[key] = nullptr;
+    // TODO: Currently, we keep tsd_used_keys[key] at true so the key will
+    // not be reused. Since pthread_key_delete cannot get rid of existing
+    // data, reusing the key may causes us to later call a new destructor
+    // for old unrelated data. The cost of not reusing keys is that we can
+    // run out of them if many keys are created and deleted (e.g., a shared
+    // object is loaded and unloaded)..
+    //tsd_used_keys[key] = false;
+    return 0;
 }
 
 void* pthread_getspecific(pthread_key_t key)
