@@ -224,8 +224,8 @@ static const int CS_SELECTOR_SHIFT = 3;
 // syscall shift
 static const int IA_32_STAR_SYSCALL_SHIFT = 32;
 
-static void setup_syscall()
-{
+namespace processor {
+void init_syscall() {
     unsigned long cs = gdt_cs;
     processor::wrmsr(msr::IA32_STAR,  (cs << CS_SELECTOR_SHIFT) << IA_32_STAR_SYSCALL_SHIFT);
     // lstar is where syscall set rip so we set it to syscall_entry
@@ -236,6 +236,7 @@ static void setup_syscall()
     processor::wrmsr(msr::IA32_FMASK, 0);
     processor::wrmsr(msr::IA32_EFER,  processor::rdmsr(msr::IA32_EFER) | IA32_EFER_SCE);
 }
+}
 
 void arch_init_premain()
 {
@@ -244,7 +245,6 @@ void arch_init_premain()
 	debug_early_u64("Error reading disk (real mode): ", static_cast<u64>(omb.disk_err));
 
     disable_pic();
-    setup_syscall();
 }
 
 #include "drivers/driver.hh"

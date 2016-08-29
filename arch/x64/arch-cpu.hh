@@ -174,6 +174,8 @@ inline void arch_cpu::init_on_cpu()
     // We can't trust the FPU and the MXCSR to be always initialized to default values.
     // In at least one particular version of Xen it is not, leading to SIMD exceptions.
     processor::init_fpu();
+
+    processor::init_syscall();
 }
 
 struct exception_guard {
