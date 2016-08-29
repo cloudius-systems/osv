@@ -276,7 +276,7 @@ extern "C" {
 int pthread_key_delete(pthread_key_t key)
 {
     std::lock_guard<mutex> guard(tsd_key_mutex);
-    if (key < 0 || key >= (int)tsd_used_keys.size() || !tsd_used_keys[key]) {
+    if (key < 0 || key >= tsd_used_keys.size() || !tsd_used_keys[key]) {
         return EINVAL;
     }
     tsd_dtor[key] = nullptr;
