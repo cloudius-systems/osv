@@ -166,6 +166,10 @@ syscall_entry:
         .cfi_startproc simple
 	# There is no ring transition and rflags are left unchanged.
 
+    # Skip the "red zone" allowed by the AMD64 ABI (the caller used a
+    # SYSCALL instruction and doesn't know he called a function):
+    subq $128, %rsp
+
     # We need to save and restore the caller's %rbp anyway, so let's also
     # set it up properly for old-style frame-pointer backtracing to work
     # (e.g., backtrace_safe()). Also need to push the return address before
@@ -278,6 +282,8 @@ syscall_entry:
 
     popq %rbp
     popq %rcx
+
+    addq $128, %rsp    # undo red-zone skip
 
 	# jump to rcx where the syscall instruction put rip
 	# (sysret would leave rxc cloberred so we have nothing to do to restore it)
