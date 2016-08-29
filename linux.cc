@@ -292,6 +292,11 @@ int rt_sigaction(int sig, const struct k_sigaction * act, struct k_sigaction * o
     return ret;
 }
 
+int rt_sigprocmask(int how, sigset_t * nset, sigset_t * oset, size_t sigsetsize)
+{
+    return sigprocmask(how, nset, oset);
+}
+
 long syscall(long number, ...)
 {
     switch (number) {
@@ -313,6 +318,7 @@ long syscall(long number, ...)
     SYSCALL6(long_mmap, void *, size_t, int, int, int, off_t);
     SYSCALL2(munmap, void *, size_t);
     SYSCALL4(rt_sigaction, int, const struct k_sigaction *, struct k_sigaction *, size_t);
+    SYSCALL4(rt_sigprocmask, int, sigset_t *, sigset_t *, size_t);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
