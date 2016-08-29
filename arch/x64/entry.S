@@ -173,6 +173,23 @@ syscall_entry:
     # Skip the "red zone" allowed by the AMD64 ABI (the caller used a
     # SYSCALL instruction and doesn't know he called a function):
     subq $128, %rsp
+
+    # Align the stack to 16 bytes. We align it now because of limitations of
+    # the CFI language, but need to ensure it is still aligned before we call
+    # syscall_wrapper(), so must ensure that the number of pushes below are
+    # even.
+    # An additional complication is that we need to restore %rsp later without
+    # knowing how it was previously aligned. In the following trick, without
+    # using an additional register, the two pushes leave the stack with the
+    # same alignment it had originally, and a copy of the original %rsp at
+    # (%rsp) and 8(%rsp). The andq then aligns the stack - if it was already
+    # 16 byte aligned nothing changes, if it was 8 byte aligned then it
+    # subtracts 8 from %rsp, meaning that the original %rsp is now at 8(%rsp)
+    # and 16(%rsp). In both cases we can restore it below from 8(%rsp).
+    pushq %rsp
+    pushq (%rsp)
+    andq $-16, %rsp
+
     .cfi_def_cfa %rsp, 0
 
     # We need to save and restore the caller's %rbp anyway, so let's also
@@ -218,29 +235,15 @@ syscall_entry:
     # syscall number from rax as first argument
     movq %rax, %rdi
 
-    # align stack to 16 bytes, as required by the ABI.
-    # Counting the pushes above is not enough because we don't know what was
-    # the stack alignment initially (syscall is not a function call so it can
-    # be called with any stack alignment). An additional complication is that
-    # we need to restore %rsp later without knowing how it was previously
-    # aligned. In the following trick, not using an additional register, the
-    # two pushes leave the stack with the same alignment it had originally,
-    # and a copy of the original %rsp at (%rsp) and 8(%rsp). The andq then
-    # aligns the stack - if it was already 16 byte aligned nothing changes, if
-    # it was 8 byte aligned then it subtracts 8 from %rsp, meaning that the
-    # original %rsp is now at 8(%rsp) and 16(%rsp). In both cases we can
-    # restore it from 8(%rsp).
-    pushq %rsp
-    pushq (%rsp)
-    .cfi_adjust_cfa_offset 16
-    andq $-0x10, %rsp
-    .cfi_rel_offset %rsp, 8
+    # Because we pushed an odd number of 8 bytes after aligning the stack
+    # we need to realign it to 16 bytes:
+    subq $8, %rsp
+    .cfi_adjust_cfa_offset 8
 
     callq syscall_wrapper
 
-    movq 8(%rsp), %rsp
-    .cfi_adjust_cfa_offset -16
-
+    addq $8, %rsp
+    .cfi_adjust_cfa_offset -8
     popq_cfi %r9
     # in Linux user and kernel return value are in rax so we have nothing to do for return values
 
@@ -260,6 +263,7 @@ syscall_entry:
     popq_cfi %rbp
     popq_cfi %rcx
 
+    movq 8(%rsp), %rsp # undo alignment (as explained above)
     addq $128, %rsp    # undo red-zone skip
 
     # jump to rcx where the syscall instruction put rip
