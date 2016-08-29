@@ -17,6 +17,7 @@
 #include <syscall.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <signal.h>
 #include <time.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
@@ -25,6 +26,8 @@
 #include <sys/mman.h>
 
 #include <unordered_map>
+
+#include <musl/src/internal/ksigaction.h>
 
 extern "C" long gettid()
 {
@@ -263,6 +266,31 @@ long long_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t off
         return fn(arg1, arg2, arg3, arg4, arg5, arg6);          \
         } while (0)
 
+int rt_sigaction(int sig, const struct k_sigaction * act, struct k_sigaction * oact, size_t sigsetsize)
+{
+    struct sigaction libc_act, libc_oact, *libc_act_p = nullptr;
+    memset(&libc_act, 0, sizeof(libc_act));
+    memset(&libc_oact, 0, sizeof(libc_act));
+
+    if (act) {
+        libc_act.sa_handler = act->handler;
+        libc_act.sa_flags = act->flags & ~SA_RESTORER;
+        libc_act.sa_restorer = nullptr;
+        memcpy(&libc_act.sa_mask, &act->mask, sizeof(libc_act.sa_mask));
+        libc_act_p = &libc_act;
+    }
+
+    int ret = sigaction(sig, libc_act_p, &libc_oact);
+
+    if (oact) {
+        oact->handler = libc_oact.sa_handler;
+        oact->flags = libc_oact.sa_flags;
+        oact->restorer = nullptr;
+        memcpy(oact->mask, &libc_oact.sa_mask, sizeof(oact->mask));
+    }
+
+    return ret;
+}
 
 long syscall(long number, ...)
 {
@@ -284,6 +312,7 @@ long syscall(long number, ...)
     SYSCALL3(sched_getaffinity_syscall, pid_t, unsigned, unsigned long *);
     SYSCALL6(long_mmap, void *, size_t, int, int, int, off_t);
     SYSCALL2(munmap, void *, size_t);
+    SYSCALL4(rt_sigaction, int, const struct k_sigaction *, struct k_sigaction *, size_t);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
