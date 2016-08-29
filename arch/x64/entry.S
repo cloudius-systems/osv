@@ -255,3 +255,4 @@ syscall_entry:
 	# (sysret would leave rxc cloberred so we have nothing to do to restore it)
 	jmpq *%rcx
 	.cfi_endproc
+.size syscall_entry, .-syscall_entry
