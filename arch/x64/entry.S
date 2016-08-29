@@ -162,9 +162,13 @@ call_signal_handler_thunk:
 .align 16
 .global syscall_entry
 syscall_entry:
-        .type syscall_entry, @function
-        .cfi_startproc simple
-	# There is no ring transition and rflags are left unchanged.
+    .type syscall_entry, @function
+    .cfi_startproc simple
+    # There is no ring transition and rflags are left unchanged.
+
+    # Skip the "red zone" allowed by the AMD64 ABI (the caller used a
+    # SYSCALL instruction and doesn't know he called a function):
+    subq $128, %rsp
 
     # Skip the "red zone" allowed by the AMD64 ABI (the caller used a
     # SYSCALL instruction and doesn't know he called a function):
@@ -177,68 +181,68 @@ syscall_entry:
     pushq %rcx
     pushq %rbp
     movq %rsp, %rbp
-	#
-	# From http://stackoverflow.com/questions/2535989/what-are-the-calling-conventions-for-unix-linux-system-calls-on-x86-64:
-	# "User-level applications use as integer registers for passing the sequence %rdi, %rsi, %rdx, %rcx, %r8 and %r9. The kernel interface uses %rdi, %rsi, %rdx, %r10, %r8 and %r9"
+    #
+    # From http://stackoverflow.com/questions/2535989/what-are-the-calling-conventions-for-unix-linux-system-calls-on-x86-64:
+    # "User-level applications use as integer registers for passing the sequence %rdi, %rsi, %rdx, %rcx, %r8 and %r9. The kernel interface uses %rdi, %rsi, %rdx, %r10, %r8 and %r9"
 
-        # FIXME: fpu
-	# build the stack frame by hand
-	pushq %rsp
-	subq $8, %rsp # rip was saved in rcx by the syscall instruction
-	pushq %rax
-	pushq %rbx
-	pushq %rcx # contains rip before syscall instruction
-	pushq %rdx
-	pushq %rsi
-	pushq %rdi
-	pushq %r8
-	pushq %r9
-	pushq %r10
-	pushq %r11 # contains rflags before syscall instruction
-	pushq %r12
-	pushq %r13
-	pushq %r14
-	pushq %r15
+    # FIXME: fpu
+    # build the stack frame by hand
+    pushq %rsp
+    subq $8, %rsp # rip was saved in rcx by the syscall instruction
+    pushq %rax
+    pushq %rbx
+    pushq %rcx # contains rip before syscall instruction
+    pushq %rdx
+    pushq %rsi
+    pushq %rdi
+    pushq %r8
+    pushq %r9
+    pushq %r10
+    pushq %r11 # contains rflags before syscall instruction
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
 
-        # stack contains a signal_frame
-        .cfi_signal_frame
-        .cfi_def_cfa %rsp, 0
+    # stack contains a signal_frame
+    .cfi_signal_frame
+    .cfi_def_cfa %rsp, 0
 	.cfi_register rip,rcx # rcx took previous rip value
 	.cfi_register rflags,r11 # r11 took previous rflags value
 	.cfi_undefined rcx # was overwritten with rip by the syscall instruction
 	.cfi_undefined r11 # was overwritten with rflags by the syscall instruction
-        .cfi_offset %r15, 0x00
-        .cfi_offset %r14, 0x08
-        .cfi_offset %r13, 0x10
-        .cfi_offset %r12, 0x18
-        .cfi_offset %r11, 0x20
-        .cfi_offset %r10, 0x28
-        .cfi_offset %r9, 0x30
-        .cfi_offset %r8, 0x38
-        .cfi_offset %rbp, 0x40
-        .cfi_offset %rdi, 0x48
-        .cfi_offset %rsi, 0x50
-        .cfi_offset %rdx, 0x58
-        .cfi_offset %rcx, 0x60
-        .cfi_offset %rbx, 0x68
-        .cfi_offset %rax, 0x70
-        .cfi_offset %rip, 0x80
-        .cfi_offset %rsp, 0x98
+    .cfi_offset %r15, 0x00
+    .cfi_offset %r14, 0x08
+    .cfi_offset %r13, 0x10
+    .cfi_offset %r12, 0x18
+    .cfi_offset %r11, 0x20
+    .cfi_offset %r10, 0x28
+    .cfi_offset %r9, 0x30
+    .cfi_offset %r8, 0x38
+    .cfi_offset %rbp, 0x40
+    .cfi_offset %rdi, 0x48
+    .cfi_offset %rsi, 0x50
+    .cfi_offset %rdx, 0x58
+    .cfi_offset %rcx, 0x60
+    .cfi_offset %rbx, 0x68
+    .cfi_offset %rax, 0x70
+    .cfi_offset %rip, 0x80
+    .cfi_offset %rsp, 0x98
 
-	# The kernel interface use r10 as fourth argument while the user interface use rcx
-	# so overwrite rcx with r10
-	movq %r10, %rcx
+    # The kernel interface use r10 as fourth argument while the user interface use rcx
+    # so overwrite rcx with r10
+    movq %r10, %rcx
 
-	# prepare function call parameter: r9 is on the stack since it's the seventh param
-	# because we shift existing params by one to make room for syscall number
-	pushq %r9
-	movq %r8, %r9
-	movq %rcx, %r8
-	movq %rdx, %rcx
-	movq %rsi, %rdx
-	movq %rdi, %rsi
-	# syscall number from rax as first argument
-	movq %rax, %rdi
+    # prepare function call parameter: r9 is on the stack since it's the seventh param
+    # because we shift existing params by one to make room for syscall number
+    pushq %r9
+    movq %r8, %r9
+    movq %rcx, %r8
+    movq %rdx, %rcx
+    movq %rsi, %rdx
+    movq %rdi, %rsi
+    # syscall number from rax as first argument
+    movq %rax, %rdi
 
     # align stack to 16 bytes, as required by the ABI.
     # Counting the pushes above is not enough because we don't know what was
@@ -256,37 +260,37 @@ syscall_entry:
     pushq (%rsp)
     andq $-0x10, %rsp
 
-	callq syscall_wrapper
+    callq syscall_wrapper
 
     movq 8(%rsp), %rsp
 
-	popq %r9
-	# in Linux user and kernel return value are in rax so we have nothing to do for return values
+    popq %r9
+    # in Linux user and kernel return value are in rax so we have nothing to do for return values
 
-	popq %r15
-	popq %r14
-	popq %r13
-	popq %r12
-	popq %r11
-	popq %r10
-	popq %r9
-	popq %r8
-	popq %rdi
-	popq %rsi
-	popq %rdx
-	popq %rcx
-	popq %rbx
-        addq $8, %rsp  # skip rax emplacement (return value is in rax)
-        addq $8, %rsp  # rip emplacement (rip cannot be popped)
-	popq %rsp
+    popq %r15
+    popq %r14
+    popq %r13
+    popq %r12
+    popq %r11
+    popq %r10
+    popq %r9
+    popq %r8
+    popq %rdi
+    popq %rsi
+    popq %rdx
+    popq %rcx
+    popq %rbx
+    addq $8, %rsp  # skip rax emplacement (return value is in rax)
+    addq $8, %rsp  # rip emplacement (rip cannot be popped)
+    popq %rsp
 
     popq %rbp
     popq %rcx
 
     addq $128, %rsp    # undo red-zone skip
 
-	# jump to rcx where the syscall instruction put rip
-	# (sysret would leave rxc cloberred so we have nothing to do to restore it)
-	jmpq *%rcx
-	.cfi_endproc
+    # jump to rcx where the syscall instruction put rip
+    # (sysret would leave rxc cloberred so we have nothing to do to restore it)
+    jmpq *%rcx
+   .cfi_endproc
 .size syscall_entry, .-syscall_entry
