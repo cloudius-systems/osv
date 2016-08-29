@@ -166,6 +166,13 @@ syscall_entry:
         .cfi_startproc simple
 	# There is no ring transition and rflags are left unchanged.
 
+    # We need to save and restore the caller's %rbp anyway, so let's also
+    # set it up properly for old-style frame-pointer backtracing to work
+    # (e.g., backtrace_safe()). Also need to push the return address before
+    # the rbp to get a normal frame. Our return address is in rcx.
+    pushq %rcx
+    pushq %rbp
+    movq %rsp, %rbp
 	#
 	# From http://stackoverflow.com/questions/2535989/what-are-the-calling-conventions-for-unix-linux-system-calls-on-x86-64:
 	# "User-level applications use as integer registers for passing the sequence %rdi, %rsi, %rdx, %rcx, %r8 and %r9. The kernel interface uses %rdi, %rsi, %rdx, %r10, %r8 and %r9"
@@ -229,7 +236,25 @@ syscall_entry:
 	# syscall number from rax as first argument
 	movq %rax, %rdi
 
+    # align stack to 16 bytes, as required by the ABI.
+    # Counting the pushes above is not enough because we don't know what was
+    # the stack alignment initially (syscall is not a function call so it can
+    # be called with any stack alignment). An additional complication is that
+    # we need to restore %rsp later without knowing how it was previously
+    # aligned. In the following trick, not using an additional register, the
+    # two pushes leave the stack with the same alignment it had originally,
+    # and a copy of the original %rsp at (%rsp) and 8(%rsp). The andq then
+    # aligns the stack - if it was already 16 byte aligned nothing changes, if
+    # it was 8 byte aligned then it subtracts 8 from %rsp, meaning that the
+    # original %rsp is now at 8(%rsp) and 16(%rsp). In both cases we can
+    # restore it from 8(%rsp).
+    pushq %rsp
+    pushq (%rsp)
+    andq $-0x10, %rsp
+
 	callq syscall_wrapper
+
+    movq 8(%rsp), %rsp
 
 	popq %r9
 	# in Linux user and kernel return value are in rax so we have nothing to do for return values
@@ -250,6 +275,9 @@ syscall_entry:
         addq $8, %rsp  # skip rax emplacement (return value is in rax)
         addq $8, %rsp  # rip emplacement (rip cannot be popped)
 	popq %rsp
+
+    popq %rbp
+    popq %rcx
 
 	# jump to rcx where the syscall instruction put rip
 	# (sysret would leave rxc cloberred so we have nothing to do to restore it)
