@@ -199,9 +199,21 @@ syscall_entry:
     pushq_cfi %rcx
     .cfi_rel_offset %rip, 0
     pushq_cfi %rbp
-    movq %rsp, %rbp
+
+    # Push on the stack the caller's %rsp, before any of our modifications.
+    # We do this just so we can refer to it with CFI and help gdb's DWARF
+    # stack unwinding. This saving not otherwise needed for correct operation
+    # (we anyway restore it below by undoing all our modifications).
+    movq 24(%rsp), %rbp
+    addq $128, %rbp
+    pushq %rbp
+    .cfi_adjust_cfa_offset 8
     .cfi_rel_offset %rsp, 0
-    #
+
+    # Set rbp (frame pointer, for old-style backtracing) to the %rsp before
+    # the above extra push
+    leaq 8(%rsp), %rbp
+
     # From http://stackoverflow.com/questions/2535989/what-are-the-calling-conventions-for-unix-linux-system-calls-on-x86-64:
     # "User-level applications use as integer registers for passing the sequence %rdi, %rsi, %rdx, %rcx, %r8 and %r9. The kernel interface uses %rdi, %rsi, %rdx, %r10, %r8 and %r9"
 
@@ -235,15 +247,11 @@ syscall_entry:
     # syscall number from rax as first argument
     movq %rax, %rdi
 
-    # Because we pushed an odd number of 8 bytes after aligning the stack
-    # we need to realign it to 16 bytes:
-    subq $8, %rsp
-    .cfi_adjust_cfa_offset 8
+    # Because we pushed an even number of 8 bytes after aligning the stack,
+    # it is still 16-byte aligned and we don't need to adjust it here.
 
     callq syscall_wrapper
 
-    addq $8, %rsp
-    .cfi_adjust_cfa_offset -8
     popq_cfi %r9
     # in Linux user and kernel return value are in rax so we have nothing to do for return values
 
@@ -259,6 +267,10 @@ syscall_entry:
     popq_cfi %rsi
     popq_cfi %rdx
     popq_cfi %rbx
+
+    # skip the caller's %rsp we pushed just for CFI's sake
+    addq $8, %rsp
+    .cfi_adjust_cfa_offset -8
 
     popq_cfi %rbp
     popq_cfi %rcx
