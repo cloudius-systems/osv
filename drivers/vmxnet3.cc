@@ -538,7 +538,7 @@ int vmxnet3_txqueue::try_xmit_one_locked(void *req)
 
 int vmxnet3_txqueue::try_xmit_one_locked(vmxnet3_req *req)
 {
-    auto count = req->count;
+    auto count = req->count + 1;
     if (_avail < count) {
         gc();
         if (_avail < count)
@@ -827,6 +827,17 @@ void vmxnet3_rxqueue::receive()
         }
 
         if (rxcd->layout->eop && rxcd->layout->error) {
+            discard(rid, idx);
+            goto next;
+        }
+
+        /* Check and handle SOP/EOP state errors */
+        if (rxcd->layout->sop && _m_currpkt_head) {
+            m_freem(_m_currpkt_head);
+            _m_currpkt_head = _m_currpkt_tail = nullptr;
+            stats.rx_drops++;
+        } else if (!rxcd->layout->sop && !_m_currpkt_head) {
+            stats.rx_drops++;
             discard(rid, idx);
             goto next;
         }
