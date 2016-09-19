@@ -164,7 +164,7 @@ BOOST_AUTO_TEST_CASE(test_rcu_hashtable) {
             std::vector<std::unique_ptr<sched::thread>> reader_threads;
             std::atomic<bool> running = { true };
             for (size_t i = 0; i < nr_threads; ++i) {
-                reader_threads.emplace_back(new sched::thread([&] {
+                reader_threads.emplace_back(sched::thread::make([&] {
                     do_reads(ht, range, running, status);
                 }));
             }

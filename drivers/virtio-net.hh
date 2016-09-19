@@ -302,10 +302,10 @@ private:
     /* Single Rx queue object */
     struct rxq {
         rxq(vring* vq, std::function<void ()> poll_func)
-            : vqueue(vq), poll_task(poll_func, sched::thread::attr().
-                                    name("virtio-net-rx")) {};
+            : vqueue(vq), poll_task(sched::thread::make(poll_func, sched::thread::attr().
+                                    name("virtio-net-rx"))) {};
         vring* vqueue;
-        sched::thread  poll_task;
+        std::unique_ptr<sched::thread> poll_task;
         struct rxq_stats stats = { 0 };
 
         void update_wakeup_stats(const u64 wakeup_packets) {

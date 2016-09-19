@@ -45,7 +45,7 @@ private:
     void set_generation(uint64_t generation);
 private:
     static std::atomic<uint64_t> next_generation;
-    sched::thread _t;
+    std::unique_ptr<sched::thread> _t;
     std::atomic<uint64_t> _generation = { 0 };
     std::atomic<uint64_t> _request = { 0 };
     std::atomic<bool> _requested { false };
@@ -64,10 +64,10 @@ sched::cpu::notifier cpu_notifier([] {
 });
 
 cpu_quiescent_state_thread::cpu_quiescent_state_thread(sched::cpu* cpu)
-    : _t([=] { work(); }, sched::thread::attr().pin(cpu).name(osv::sprintf("rcu%d", cpu->id)))
+    : _t(sched::thread::make([=] { work(); }, sched::thread::attr().pin(cpu).name(osv::sprintf("rcu%d", cpu->id))))
 {
-    (*percpu_quiescent_state_thread).reset(_t);
-    _t.start();
+    (*percpu_quiescent_state_thread).reset(*_t);
+    _t->start();
 }
 
 void cpu_quiescent_state_thread::request(uint64_t generation)
@@ -76,7 +76,7 @@ void cpu_quiescent_state_thread::request(uint64_t generation)
     while (generation > r && !_request.compare_exchange_weak(r, generation, std::memory_order_relaxed)) {
         // nothing to do
     }
-    _t.wake();
+    _t->wake();
 }
 
 bool cpu_quiescent_state_thread::check(uint64_t generation)
@@ -91,7 +91,7 @@ void cpu_quiescent_state_thread::set_generation(uint64_t generation)
     for (auto cqst : cpu_quiescent_state_threads) {
         if (cqst != this &&
                 cqst->_requested.load(std::memory_order_relaxed)) {
-            cqst->_t.wake();
+            cqst->_t->wake();
         }
     }
 }
@@ -238,14 +238,14 @@ void rcu_flush()
 {
     semaphore s{0};
     for (auto c : sched::cpus) {
-        sched::thread t([&] {
+        std::unique_ptr<sched::thread> t(sched::thread::make([&] {
             rcu_defer([&] { s.post(); });
             // rcu_defer() might not wake the cleanup thread until enough deferred
             // callbacks have accumulated, so wake it up now.
             percpu_quiescent_state_thread->wake();
-        }, sched::thread::attr().pin(c));
-        t.start();
-        t.join();
+        }, sched::thread::attr().pin(c)));
+        t->start();
+        t->join();
     }
     s.wait(sched::cpus.size());
 }

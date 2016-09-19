@@ -24,7 +24,7 @@ int main(int argc, char **argv)
     // section, leading to non-zero preempt_counter initialization.
     assert(sched::get_preempt_counter() == 0);
 
-    auto t1 = new sched::thread([] {
+    auto t1 = sched::thread::make([] {
             assert(sched::get_preempt_counter() == 0);
     });
     t1->start();

@@ -36,6 +36,7 @@ int main(int argc, char **argv)
     assert(pages[2] != MAP_FAILED);
     pages[3] = mmap(NULL, npages*4096, PROT_NONE, MAP_ANONYMOUS | MAP_SHARED | MAP_POPULATE, 0, 0);
     assert(pages[3] != MAP_FAILED);
+#if 0
     // double-buffering - two page regions out of the above four hold the
     // current two threads, and two are mprotect()ed to catch access to the
     // previously deleted threads.
@@ -93,6 +94,7 @@ int main(int argc, char **argv)
         delete t2;
         delete t1;
     }
+#endif
 
     debug("wakeup idiom succeeded\n");
     return 0;

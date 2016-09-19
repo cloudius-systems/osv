@@ -131,7 +131,7 @@ void port::setup()
     // Register the per-port irq thread
     std::string name("ahci-port");
     name += std::to_string(_pnr);
-    _irq_thread = new sched::thread([this] { this->req_done(); },
+    _irq_thread = sched::thread::make([this] { this->req_done(); },
             sched::thread::attr().name(name));
     _irq_thread->start();
 }

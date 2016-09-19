@@ -214,7 +214,7 @@ public:
             _all_cpuqs.push_back(_cpuq.for_cpu(c)->get());
 
             _worker.for_cpu(c)->me =
-                new sched::thread([this] { poll_until(); },
+                sched::thread::make([this] { poll_until(); },
                                sched::thread::attr().pin(c).
                                name(worker_name_base + std::to_string(c->id)));
             _worker.for_cpu(c)->me->

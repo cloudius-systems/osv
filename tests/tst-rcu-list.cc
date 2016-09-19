@@ -91,7 +91,7 @@ BOOST_AUTO_TEST_CASE(test_rcu_list) {
         osv::rcu_list<test_element> list;
         std::vector<std::unique_ptr<sched::thread>> readers;
         for (int i = 0; i < 20; ++i) {
-            readers.emplace_back(new sched::thread([&] { do_reads(list, running, sem); }));
+            readers.emplace_back(sched::thread::make([&] { do_reads(list, running, sem); }));
             readers.back()->start();
         }
         do_writes(list, 1000000);

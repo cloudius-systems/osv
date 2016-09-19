@@ -93,12 +93,12 @@ TRACEPOINT(trace_async_worker_fire_ret, "");
 class async_worker {
 public:
     async_worker(sched::cpu* cpu)
-        : _thread(std::bind(&async_worker::run, this),
-            sched::thread::attr().pin(cpu).name(osv::sprintf("async_worker%d", cpu->id)))
-        , _timer(_thread)
+        : _thread(sched::thread::make(std::bind(&async_worker::run, this),
+            sched::thread::attr().pin(cpu).name(osv::sprintf("async_worker%d", cpu->id))))
+        , _timer(*_thread)
         , _cpu(cpu)
     {
-        _thread.start();
+        _thread->start();
     }
 
     void insert(percpu_timer_task& task)
@@ -143,7 +143,7 @@ public:
 
         WITH_LOCK(preempt_lock) {
             if (_queue.empty()) {
-                _thread.wake();
+                _thread->wake();
             }
             _queue.push_back(*task);
         }
@@ -239,7 +239,7 @@ private:
 
     lockfree::unordered_queue_mpsc<percpu_timer_task> released_timer_tasks;
 
-    sched::thread _thread;
+    std::unique_ptr<sched::thread> _thread;
     sched::timer _timer;
     sched::cpu* _cpu;
 };

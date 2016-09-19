@@ -559,10 +559,10 @@ static class access_scanner {
     static constexpr double _min_cpu = 0.1;
     static constexpr unsigned _freq = 1000;
     double _cpu = _min_cpu;
-    sched::thread _thread;
+    std::unique_ptr<sched::thread> _thread;
 public:
-    access_scanner() : _thread(std::bind(&access_scanner::run, this), sched::thread::attr().name("page-access-scanner")) {
-        _thread.start();
+    access_scanner() : _thread(sched::thread::make(std::bind(&access_scanner::run, this), sched::thread::attr().name("page-access-scanner"))) {
+        _thread->start();
     }
 
 private:

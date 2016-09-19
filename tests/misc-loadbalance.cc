@@ -116,7 +116,7 @@ void concurrent_loops_priority(int looplen, double secs)
     auto start = std::chrono::system_clock::now();
     std::vector<sched::thread*> threads;
     for (int i = 0; i < 3; i++) {
-        auto t = new sched::thread([=]() {
+        auto t = sched::thread::make([=]() {
             double d = loop(looplen / (i == 0 ? 1 : 2));
             std::cout << "thread " << i << ": " << d << " [x" << (d/secs) << "]\n";
         });

@@ -399,8 +399,20 @@ public:
         terminated,
     };
 
+    // New threads must be created by the sched::make() function, which
+    // creates the thread structure on the heap. The constructor is made
+    // private so that thread objects *cannot* be created on the stack.
+    // Stacks might be mmap'ed, and the scheduler might not see an up-to-date
+    // view of the application's page table (see issue #790).
+    template <typename... Args>
+    static thread* make(Args&&... args) {
+        return new thread(std::forward<Args>(args)...);
+    }
+private:
     explicit thread(std::function<void ()> func, attr attributes = attr(),
             bool main = false, bool app = false);
+
+public:
     ~thread();
     void start();
     template <class Pred>

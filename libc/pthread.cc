@@ -90,7 +90,7 @@ namespace pthread_private {
         pthread_t to_libc();
         int join(void** retval);
         void* _retval;
-        sched::thread _thread;
+        std::unique_ptr<sched::thread> _thread;
     private:
         sched::thread::stack_info allocate_stack(thread_attr attr);
         static void free_stack(sched::thread::stack_info si);
@@ -109,18 +109,18 @@ namespace pthread_private {
 
     pthread::pthread(void *(*start)(void *arg), void *arg, sigset_t sigset,
                      const thread_attr* attr)
-            : _thread([=] {
+            : _thread(sched::thread::make([=] {
                 current_pthread = to_libc();
                 sigprocmask(SIG_SETMASK, &sigset, nullptr);
                 _retval = start(arg);
-            }, attributes(attr ? *attr : thread_attr()), false, true)
+            }, attributes(attr ? *attr : thread_attr()), false, true))
     {
-        _thread.set_cleanup([=] { delete this; });
+        _thread->set_cleanup([=] { delete this; });
     }
 
     void pthread::start()
     {
-        _thread.start();
+        _thread->start();
     }
 
     sched::thread::attr pthread::attributes(thread_attr attr)
@@ -154,7 +154,7 @@ namespace pthread_private {
 
     int pthread::join(void** retval)
     {
-        _thread.join();
+        _thread->join();
         if (retval) {
             *retval = _retval;
         }
@@ -310,7 +310,7 @@ int pthread_getcpuclockid(pthread_t thread, clockid_t *clock_id)
 {
     if (clock_id) {
         pthread *p = pthread::from_libc(thread);
-        auto id = p->_thread.id();
+        auto id = p->_thread->id();
         *clock_id = id + _OSV_CLOCK_SLOTS;
     }
     return 0;
@@ -611,8 +611,8 @@ int pthread_getattr_np(pthread_t thread, pthread_attr_t *attr)
 {
     auto t = pthread::from_libc(thread);
     auto a = new (attr) thread_attr;
-    a->stack_begin = t->_thread.get_stack_info().begin;
-    a->stack_size = t->_thread.get_stack_info().size;
+    a->stack_begin = t->_thread->get_stack_info().begin;
+    a->stack_size = t->_thread->get_stack_info().size;
     return 0;
 }
 
@@ -799,7 +799,7 @@ int pthread_cancel(pthread_t thread)
 int pthread_detach(pthread_t thread)
 {
     pthread* p = pthread::from_libc(thread);
-    p->_thread.detach();
+    p->_thread->detach();
     return 0;
 }
 
@@ -895,7 +895,7 @@ void pthread_exit(void *retval)
 {
     auto t = pthread::from_libc(current_pthread);
     t->_retval = retval;
-    t->_thread.exit();
+    t->_thread->exit();
 }
 
 int sched_get_priority_max(int policy)
@@ -941,7 +941,7 @@ int pthread_setname_np(pthread_t p, const char* name)
     if (strlen(name) > 16) {
         return ERANGE;
     }
-    pthread::from_libc(p)->_thread.set_name(name);
+    pthread::from_libc(p)->_thread->set_name(name);
     return 0;
 }
 
@@ -994,7 +994,7 @@ static int setaffinity(sched::thread* t, size_t cpusetsize,
 int pthread_setaffinity_np(pthread_t thread, size_t cpusetsize,
         const cpu_set_t *cpuset)
 {
-    sched::thread *t = &pthread::from_libc(thread)->_thread;
+    sched::thread *t = &*pthread::from_libc(thread)->_thread;
     return setaffinity(t, cpusetsize, cpuset);
 }
 
@@ -1049,7 +1049,7 @@ static int getaffinity(const sched::thread *t, size_t cpusetsize,
 int pthread_getaffinity_np(const pthread_t thread, size_t cpusetsize,
         cpu_set_t *cpuset)
 {
-    const sched::thread *t = &pthread::from_libc(thread)->_thread;
+    const sched::thread *t = &*pthread::from_libc(thread)->_thread;
     return getaffinity(t, cpusetsize, cpuset);
 }
 

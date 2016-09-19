@@ -933,7 +933,7 @@ void reclaimer_waiters::wait(size_t bytes)
     sched::thread *curr = sched::thread::current();
 
     // Wait for whom?
-    if (curr == &reclaimer_thread._thread) {
+    if (curr == reclaimer_thread._thread.get()) {
         oom();
      }
 
@@ -949,10 +949,10 @@ void reclaimer_waiters::wait(size_t bytes)
 }
 
 reclaimer::reclaimer()
-    : _oom_blocked(), _thread([&] { _do_reclaim(); }, sched::thread::attr().detached().name("reclaimer").stack(mmu::page_size))
+    : _oom_blocked(), _thread(sched::thread::make([&] { _do_reclaim(); }, sched::thread::attr().detached().name("reclaimer").stack(mmu::page_size)))
 {
-    osv_reclaimer_thread = reinterpret_cast<unsigned char *>(&_thread);
-    _thread.start();
+    osv_reclaimer_thread = reinterpret_cast<unsigned char *>(_thread.get());
+    _thread->start();
 }
 
 bool reclaimer::_can_shrink()
@@ -1076,10 +1076,10 @@ namespace page_pool {
 // nr_cpus threads are created to help filling the L1-pool.
 struct l1 {
     l1(sched::cpu* cpu)
-        : _fill_thread([] { fill_thread(); },
-            sched::thread::attr().pin(cpu).name(osv::sprintf("page_pool_l1_%d", cpu->id)))
+        : _fill_thread(sched::thread::make([] { fill_thread(); },
+            sched::thread::attr().pin(cpu).name(osv::sprintf("page_pool_l1_%d", cpu->id))))
     {
-        _fill_thread.start();
+        _fill_thread->start();
     }
 
     static void* alloc_page()
@@ -1102,7 +1102,7 @@ struct l1 {
     void* pop() { return _pages[--nr]; }
     void push(void* page) { _pages[nr++] = page; }
     void* top() { return _pages[nr - 1]; }
-    void wake_thread() { _fill_thread.wake(); }
+    void wake_thread() { _fill_thread->wake(); }
     static void fill_thread();
     static void refill();
     static void unfill();
@@ -1113,7 +1113,7 @@ struct l1 {
     size_t nr = 0;
 
 private:
-    sched::thread _fill_thread;
+    std::unique_ptr<sched::thread> _fill_thread;
     void* _pages[max];
 };
 
@@ -1146,9 +1146,9 @@ public:
         , _watermark_lo(_max * 1 / 4)
         , _watermark_hi(_max * 3 / 4)
         , _stack(_max)
-        , _fill_thread([=] { fill_thread(); }, sched::thread::attr().name("page_pool_l2"))
+        , _fill_thread(sched::thread::make([=] { fill_thread(); }, sched::thread::attr().name("page_pool_l2")))
     {
-       _fill_thread.start();
+       _fill_thread->start();
     }
 
     page_batch* alloc_page_batch(l1& pbuf)
@@ -1180,7 +1180,7 @@ public:
     page_batch* try_alloc_page_batch()
     {
         if (get_nr() < _watermark_lo) {
-            _fill_thread.wake();
+            _fill_thread->wake();
         }
         page_batch* pb;
         if (!_stack.pop(pb)) {
@@ -1193,7 +1193,7 @@ public:
     bool try_free_page_batch(page_batch* pb)
     {
         if (get_nr() > _watermark_hi) {
-            _fill_thread.wake();
+            _fill_thread->wake();
         }
         if (!_stack.push(pb)) {
             return false;
@@ -1216,7 +1216,7 @@ private:
     size_t _watermark_lo;
     size_t _watermark_hi;
     boost::lockfree::stack<page_batch*, boost::lockfree::fixed_sized<true>> _stack;
-    sched::thread _fill_thread;
+    std::unique_ptr<sched::thread> _fill_thread;
 };
 
 PERCPU(l1*, percpu_l1);

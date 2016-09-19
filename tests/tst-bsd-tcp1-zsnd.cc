@@ -225,10 +225,10 @@ public:
         _client_result = 0;
         _server_result = 0;
 
-        sched::thread *srv = new sched::thread([&] {
+        sched::thread *srv = sched::thread::make([&] {
             _server_result = tcp_server();
         });
-        sched::thread *cli = new sched::thread([&] {
+        sched::thread *cli = sched::thread::make([&] {
             _client_result = tcp_client();
         });
 

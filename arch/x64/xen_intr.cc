@@ -106,7 +106,7 @@ void xen_irq::do_irq()
 
 void xen_irq::_cpu_init(sched::cpu *c)
 {
-    *(_thread.for_cpu(c)) = new sched::thread([this] { xen_irq::do_irq(); },
+    *(_thread.for_cpu(c)) = sched::thread::make([this] { xen_irq::do_irq(); },
             sched::thread::attr().pin(c).name(osv::sprintf("xenirq%d", c->id)));
     (*(_thread.for_cpu(c)))->start();
 }

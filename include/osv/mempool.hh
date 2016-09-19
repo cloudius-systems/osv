@@ -166,7 +166,7 @@ private:
 
     reclaimer_waiters _oom_blocked; // Callers are blocked due to lack of memory
     condvar _blocked;     // The reclaimer itself is blocked waiting for pressure condition
-    sched::thread _thread;
+    std::unique_ptr<sched::thread> _thread;
 
     std::vector<shrinker *> _shrinkers;
     mutex _shrinkers_mutex;

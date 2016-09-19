@@ -80,7 +80,7 @@ BOOST_AUTO_TEST_CASE(test_concurrent_file_operations)
     std::cerr << "test1, with " << N << " threads\n";
     sched::thread *threads[N];
     for (int i = 0; i < N; i++) {
-            threads[i] = new sched::thread([] {
+            threads[i] = sched::thread::make([] {
                     struct stat buf;
                     for (int j = 0; j < 1000; j++) {
                         BOOST_REQUIRE(stat("/tests/tst-vfs.so", &buf)==0);

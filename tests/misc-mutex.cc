@@ -137,7 +137,7 @@ static void test(int N, long len, bool pinned, threadfunc<T> f)
     T m;
     sched::thread *threads[N];
     for(int i = 0; i < N; i++) {
-        threads[i]= new sched::thread([i, len, &m, &shared, f] {
+        threads[i]= sched::thread::make([i, len, &m, &shared, f] {
             f(i, &m, len, &shared);
         }, pinned ? sched::thread::attr().pin(sched::cpus[i]) : sched::thread::attr());
     }

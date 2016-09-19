@@ -37,7 +37,7 @@ public:
     tcp_hash_connection(int fd): _fd(fd) {
         dbg("server: creating thread to handle connection...");
 
-        _conn = new sched::thread([&] { handle_connection(); },
+        _conn = sched::thread::make([&] { handle_connection(); },
                 sched::thread::attr().detached());
         _conn->start();
     }

@@ -34,7 +34,7 @@ public:
     void add(Func func)
     {
         assert(next_core < sched::cpus.size());
-        threads.push_back(new sched::thread(func, sched::thread::attr().pin(sched::cpus[next_core++])));
+        threads.push_back(sched::thread::make(func, sched::thread::attr().pin(sched::cpus[next_core++])));
     }
 
     void start()

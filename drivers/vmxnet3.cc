@@ -232,7 +232,7 @@ void vmxnet3_rxqueue::init(struct ifnet* ifn, pci::bar *bar0)
     rxc.gen = init_gen;
     rxc.clear_descs();
 
-    task.start();
+    task->start();
 }
 
 void vmxnet3_rxqueue::discard(int rid, int idx)
@@ -362,7 +362,7 @@ void vmxnet3::allocate_interrupts()
 {
     _msi.easy_register({
         { 0, [] {}, nullptr },
-        { 1, [] {}, &_rxq[0].task }
+        { 1, [] {}, _rxq[0].task.get() }
     });
     _txq[0].set_intr_idx(0);
     _rxq[0].set_intr_idx(1);

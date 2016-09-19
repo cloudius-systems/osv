@@ -220,7 +220,7 @@ private:
 class vmxnet3_rxqueue : public vmxnet3_rxq_shared {
 public:
     explicit vmxnet3_rxqueue()
-    : task([this] { receive_work(); }, sched::thread::attr().name("vmxnet3-receive")) {};
+    : task(sched::thread::make([this] { receive_work(); }, sched::thread::attr().name("vmxnet3-receive"))) {};
     void init(struct ifnet* ifn, pci::bar *bar0);
     void set_intr_idx(unsigned idx) { layout->intr_idx = static_cast<u8>(idx); }
     void enable_interrupt();
@@ -235,7 +235,7 @@ public:
         u64 rx_bh_wakeups; /* number of timer Rx BH has been woken up */
         wakeup_stats rx_wakeup_stats;
     } stats = { 0 };
-    sched::thread task;
+    std::unique_ptr<sched::thread> task;
 
 private:
     void receive_work();

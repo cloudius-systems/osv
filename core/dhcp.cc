@@ -603,7 +603,7 @@ namespace dhcp {
         IFNET_RUNLOCK();
 
         // Create the worker thread
-        _dhcp_thread = new sched::thread([&] { dhcp_worker_fn(); });
+        _dhcp_thread = sched::thread::make([&] { dhcp_worker_fn(); });
         _dhcp_thread->set_name("dhcp");
         _dhcp_thread->start();
 

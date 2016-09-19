@@ -227,7 +227,7 @@ pvscsi::pvscsi(pci::device& pci_dev)
     setup();
 
     //register the single irq callback for the block
-    sched::thread* t = new sched::thread([this] { this->req_done(); },
+    sched::thread* t = sched::thread::make([this] { this->req_done(); },
             sched::thread::attr().name("vmw-pvscsi"));
     t->start();
     if (pci_dev.is_msix() || pci_dev.is_msi()) {

@@ -135,7 +135,7 @@ public:
 private:
     mutex _mtx;
     std::list<thread*> _zombies;
-    thread _thread;
+    std::unique_ptr<thread> _thread;
 };
 
 cpu::cpu(unsigned _id)
@@ -162,7 +162,7 @@ void cpu::init_idle_thread()
 {
     running_since = osv::clock::uptime::now();
     std::string name = osv::sprintf("idle%d", id);
-    idle_thread = new thread([this] { idle(); }, thread::attr().pin(this).name(name));
+    idle_thread = thread::make([this] { idle(); }, thread::attr().pin(this).name(name));
     idle_thread->set_priority(thread::priority_idle);
 }
 
@@ -503,11 +503,11 @@ void thread::pin(cpu *target_cpu)
     // load balancer thread) but a "good-enough" dirty solution is to
     // temporarily create a new ad-hoc thread, "wakeme".
     bool do_wakeme = false;
-    thread wakeme([&] () {
+    std::unique_ptr<thread> wakeme(thread::make([&] () {
         wait_until([&] { return do_wakeme; });
         t.wake();
-    }, sched::thread::attr().pin(source_cpu));
-    wakeme.start();
+    }, sched::thread::attr().pin(source_cpu)));
+    wakeme->start();
     WITH_LOCK(irq_lock) {
         trace_sched_migrate(&t, target_cpu->id);
         t.stat_migrations.incr();
@@ -520,7 +520,7 @@ void thread::pin(cpu *target_cpu)
         t._detached_state->st.store(thread::status::waiting);
         // Note that wakeme is on the same CPU, and irq is disabled,
         // so it will not actually run until we stop running.
-        wakeme.wake_with([&] { do_wakeme = true; });
+        wakeme->wake_with([&] { do_wakeme = true; });
         source_cpu->reschedule_from_interrupt();
     }
     // wakeme will be implicitly join()ed here.
@@ -537,7 +537,7 @@ void thread::pin(thread *t, cpu *target_cpu)
     // where the target thread is currently running. We start here a new
     // helper thread to follow the target thread's CPU. We could have also
     // re-used an existing thread (e.g., the load balancer thread).
-    thread helper([&] {
+    std::unique_ptr<thread> helper(thread::make([&] {
         WITH_LOCK(irq_lock) {
             // This thread started on the same CPU as t, but by now t might
             // have moved. If that happened, we need to move too.
@@ -627,9 +627,9 @@ void thread::pin(thread *t, cpu *target_cpu)
                 return;
             }
         }
-    }, sched::thread::attr().pin(t->tcpu()));
-    helper.start();
-    helper.join();
+    }, sched::thread::attr().pin(t->tcpu())));
+    helper->start();
+    helper->join();
 }
 
 void cpu::load_balance()
@@ -1504,9 +1504,9 @@ bool operator<(const timer_base& t1, const timer_base& t2)
 }
 
 thread::reaper::reaper()
-    : _mtx{}, _zombies{}, _thread([=] { reap(); })
+    : _mtx{}, _zombies{}, _thread(thread::make([=] { reap(); }))
 {
-    _thread.start();
+    _thread->start();
 }
 
 void thread::reaper::reap()
@@ -1529,7 +1529,7 @@ void thread::reaper::add_zombie(thread* z)
     assert(z->_attr._detached);
     WITH_LOCK(_mtx) {
         _zombies.push_back(z);
-        _thread.wake();
+        _thread->wake();
     }
 }
 

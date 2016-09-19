@@ -712,7 +712,7 @@ trace::create_trace_dump()
     // during the extraction (disable preemption, just like trace write)
     unsigned i = 0;
     for (auto & cpu : sched::cpus) {
-        sched::thread t([&, i]() {
+        std::unique_ptr<sched::thread> t(sched::thread::make([&, i]() {
             arch::irq_flag_notrace irq;
             irq.save();
             arch::irq_disable_notrace();
@@ -720,9 +720,9 @@ trace::create_trace_dump()
             copies.emplace_back(*tbp);
             irq.restore();
             signal.post();
-        }, sched::thread::attr().pin(cpu));
-        t.start();
-        t.join();
+        }, sched::thread::attr().pin(cpu)));
+        t->start();
+        t->join();
         ++i;
     }
     // Redundant. But just to verify.

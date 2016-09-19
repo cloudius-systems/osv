@@ -36,7 +36,7 @@ int main(int argc, char **argv)
     debug("test2\n");
     mutex m;
     int res=0;
-    sched::thread *t1 = new sched::thread([&cond,&m,&res] {
+    sched::thread *t1 = sched::thread::make([&cond,&m,&res] {
         m.lock();
         while (res==0) {
             cond.wait(&m);
@@ -44,7 +44,7 @@ int main(int argc, char **argv)
         res = 2;
         m.unlock();
     });
-    sched::thread *t2 = new sched::thread([&cond,&m,&res] {
+    sched::thread *t2 = sched::thread::make([&cond,&m,&res] {
         m.lock();
         res = 1;
         m.unlock();
@@ -69,7 +69,7 @@ int main(int argc, char **argv)
     condvar done = CONDVAR_INITIALIZER;
     sched::thread *threads[N];
     for (int i = 0; i < N; i++) {
-            threads[i] = new sched::thread([&cond, &m, &ready, &done] {
+            threads[i] = sched::thread::make([&cond, &m, &ready, &done] {
                 m.lock();
                 ready++;
                 //debug("ready %d\n",ready);
@@ -97,7 +97,7 @@ int main(int argc, char **argv)
                 done.wake_one();
             });
     }
-    t1 = new sched::thread([&cond, &m, &ready, &done] {
+    t1 = sched::thread::make([&cond, &m, &ready, &done] {
         m.lock();
         while (ready < N) {
             done.wait(&m);
@@ -160,7 +160,7 @@ int main(int argc, char **argv)
     sched::thread *threads2[nthreads];
     std::atomic<u64> time(0);
     for(unsigned int i = 0; i < nthreads; i++) {
-        threads2[i]= new sched::thread([iterations, &cv, &time] {
+        threads2[i]= sched::thread::make([iterations, &cv, &time] {
             auto start = std::chrono::high_resolution_clock::now();
             for (int j = 0; j < iterations; j++) {
                 cv.wake_all();
