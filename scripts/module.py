@@ -28,7 +28,7 @@ class jvm(api.basic_app):
         for app in self.apps:
             jvm_args.extend(app.get_jvm_args())
 
-        return ['java.so'] + jvm_args + ['io.osv.MultiJarLoader', '-mains', self.multimain_manifest]
+        return ['java.so'] + jvm_args + ['io.osv.isolated.MultiJarLoader', '-mains', self.multimain_manifest]
 
     def add(self, app):
         self.apps.append(app)
