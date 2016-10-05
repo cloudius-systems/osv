@@ -162,7 +162,6 @@ def start_osv_qemu(options):
 
     if options.api:
         args += ["-redir", "tcp:8000::8000"]
-    args += ["-redir", "tcp:2222::22"]
 
     for rule in options.forward:
         args += ['-redir', rule]
