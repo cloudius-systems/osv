@@ -13,21 +13,21 @@ import static io.osv.RunJvmAppHelper.runSync;
 import static io.osv.RunJvmAppHelper.JvmFactory;
 
 public class RunNonIsolatedJvmApp {
-	private static native void onVMStop();
+    private static native void onVMStop();
 
-	static {
-		Runtime.getRuntime().addShutdownHook(new Thread() {
-			public void run() {
-				onVMStop();
-			}
-		});
-	}
+    static {
+        Runtime.getRuntime().addShutdownHook(new Thread() {
+            public void run() {
+                onVMStop();
+            }
+        });
+    }
 
     public static void main(String[] args) {
         runSync(new JvmFactory() {
             public Jvm getJvm() {
                 return NonIsolatedJvm.getInstance();
             }
-        },args);
+        }, args);
     }
 }

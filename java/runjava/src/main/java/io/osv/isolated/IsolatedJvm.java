@@ -89,7 +89,7 @@ public class IsolatedJvm extends Jvm<Context> {
     }
 
     protected Context run(ClassLoader classLoader, final String classpath, final String mainClass,
-                        final String[] args, final Properties properties) {
+                          final String[] args, final Properties properties) {
         Properties contextProperties = new Properties();
         contextProperties.putAll(commonSystemProperties);
         contextProperties.putAll(properties);

@@ -12,8 +12,7 @@ import static org.fest.assertions.Assertions.assertThat;
  */
 public class OsvApiTest {
     @Test
-    public void testOSvVersionIsSet()
-    {
+    public void testOSvVersionIsSet() {
         assertThat(System.getProperty("osv.version"))
                 .isNotEmpty()
                 .matches("v\\d+\\.\\d+([-a-z0-9]+)?");

@@ -12,12 +12,11 @@ import java.util.concurrent.Callable;
 /**
  * This class provides thread-safe lazy initialization facility with
  * semantics similar to static class initialization.
- *
+ * <p>
  * Allows to obtain not-yet-initialized object from the thread which performs the initialization.
  * Creation and initialization may be performed only once.
- *
+ * <p>
  * If initialization or construction fails, all subsequent attempts to get that object will fail with that cause.
- *
  */
 public final class LazilyInitialized<T> {
     public interface Initializer<T> {

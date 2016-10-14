@@ -33,11 +33,11 @@ public class LoggingWithoutIsolationTest {
         //
         // Rethrow any exception that may have been raised and led to the thread terminating
         final Throwable exception = NonIsolatedJvm.getInstance().getThrownExceptionIfAny();
-        if( null != exception)
+        if (null != exception)
             throw exception;
 
         final List<String> logLines = readLines(log);
-        for( String line : logLines)
+        for (String line : logLines)
             System.out.println(line);
 
         assertThat(logLines)

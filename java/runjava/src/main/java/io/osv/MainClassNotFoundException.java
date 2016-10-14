@@ -12,7 +12,7 @@ public class MainClassNotFoundException extends Exception {
     private String mainClassName;
 
     public MainClassNotFoundException(String mainClass) {
-	mainClassName = mainClass;
+        mainClassName = mainClass;
     }
 
     public String getClassName() {

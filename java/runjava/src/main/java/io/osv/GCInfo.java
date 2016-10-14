@@ -8,13 +8,11 @@ package io.osv;
 
 
 /**
- * 
  * A helper class that holds Garbage collection information
- *
  */
 public class GCInfo {
-	long count;
-	long time;
-	String name;
-	String[] pools;
+    long count;
+    long time;
+    String name;
+    String[] pools;
 }

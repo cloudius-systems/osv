@@ -24,7 +24,8 @@ public class NonIsolatedJvm extends Jvm<Thread> {
         return instance;
     }
 
-    private NonIsolatedJvm() {}
+    private NonIsolatedJvm() {
+    }
 
     @Override
     protected Thread run(ClassLoader classLoader, final String classpath, final String mainClass, final String[] args, final Properties properties) {
@@ -32,20 +33,20 @@ public class NonIsolatedJvm extends Jvm<Thread> {
         Thread thread = new Thread() {
             @Override
             public void run() {
-            System.setProperty("java.class.path", classpath);
+                System.setProperty("java.class.path", classpath);
 
-            for(Map.Entry<?,?> property : properties.entrySet())
-                System.setProperty(property.getKey().toString(),property.getValue().toString()); //TODO Check for null
+                for (Map.Entry<?, ?> property : properties.entrySet())
+                    System.setProperty(property.getKey().toString(), property.getValue().toString()); //TODO Check for null
 
-            try {
-                runMain(loadClass(mainClass), args);
-            } catch (InterruptedException e) {
-                Thread.currentThread().interrupt();
-            } catch (MainClassNotFoundException e) {
-                thrownException.set(e);
-            } catch (Throwable e) {
-                getUncaughtExceptionHandler().uncaughtException(this, e);
-            }
+                try {
+                    runMain(loadClass(mainClass), args);
+                } catch (InterruptedException e) {
+                    Thread.currentThread().interrupt();
+                } catch (MainClassNotFoundException e) {
+                    thrownException.set(e);
+                } catch (Throwable e) {
+                    getUncaughtExceptionHandler().uncaughtException(this, e);
+                }
             }
         };
 
@@ -82,5 +83,7 @@ public class NonIsolatedJvm extends Jvm<Thread> {
         return Thread.currentThread().getContextClassLoader();
     }
 
-    public Throwable getThrownExceptionIfAny() { return thrownException.get(); }
+    public Throwable getThrownExceptionIfAny() {
+        return thrownException.get();
+    }
 }

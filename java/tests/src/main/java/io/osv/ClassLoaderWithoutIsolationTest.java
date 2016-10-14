@@ -25,7 +25,7 @@ public class ClassLoaderWithoutIsolationTest {
         //
         // Rethrow any exception that may have been raised and led to the thread terminating
         final Throwable exception = NonIsolatedJvm.getInstance().getThrownExceptionIfAny();
-        if( null != exception)
+        if (null != exception)
             throw exception;
         //
         // There is one class instance of StaticFieldSetter loaded as there is no isolation
@@ -50,14 +50,12 @@ public class ClassLoaderWithoutIsolationTest {
         //
         // Rethrow any exception that may have been raised and led to the thread terminating
         final Throwable exception = NonIsolatedJvm.getInstance().getThrownExceptionIfAny();
-        if( null != exception && exception instanceof NoSuchFieldException) {
+        if (null != exception && exception instanceof NoSuchFieldException) {
             // It is what is expected as there is no isolation between child and parent classloader the class loaded
             // by parent classloader from tests.jar which is a first jar in the classpath
-        }
-        else if( null != exception) {
+        } else if (null != exception) {
             throw exception;
-        }
-        else {
+        } else {
             throw new AssertionError("The field should be also absent in child context");
         }
     }
@@ -69,7 +67,7 @@ public class ClassLoaderWithoutIsolationTest {
         //
         // Rethrow any exception that may have been raised and led to the thread terminating
         final Throwable exception = NonIsolatedJvm.getInstance().getThrownExceptionIfAny();
-        if( null != exception)
+        if (null != exception)
             throw exception;
         //
         // As there is no isolation between child and parent classloader the class loaded

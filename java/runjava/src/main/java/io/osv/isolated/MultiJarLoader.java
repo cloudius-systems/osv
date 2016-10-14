@@ -73,8 +73,8 @@ public class MultiJarLoader {
      *
      * @param line a line from the file
      * @return true if this is an executable line, comments and empty lines are
-     *         ignored. sleep with a number in millisecond is supported, and
-     *         would put the main thread into sleep
+     * ignored. sleep with a number in millisecond is supported, and
+     * would put the main thread into sleep
      */
     private static boolean isExec(String line) {
         if (line.equals("") || line.startsWith("#")) {

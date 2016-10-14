@@ -9,36 +9,36 @@ package io.osv;
  */
 public class RunJvmAppHelper {
 
-   public interface JvmFactory {
-       Jvm getJvm();
-   }
+    public interface JvmFactory {
+        Jvm getJvm();
+    }
 
-   static public void runSync(JvmFactory jvmFactory, String[] args) {
+    static public void runSync(JvmFactory jvmFactory, String[] args) {
 
-       if (args.length > 0 && args[0].equals("-version")) {
-           System.err.println("java version \"" +
-                   System.getProperty("java.version") + "\"");
-           System.err.println(System.getProperty("java.runtime.name") +
-                   " (" + System.getProperty("java.runtime.version") +
-                   ")");
-           System.err.println(System.getProperty("java.vm.name") +
-                   " (build " + System.getProperty("java.vm.version") +
-                   ", " + System.getProperty("java.vm.info") + ")");
-           return;
-       }
+        if (args.length > 0 && args[0].equals("-version")) {
+            System.err.println("java version \"" +
+                    System.getProperty("java.version") + "\"");
+            System.err.println(System.getProperty("java.runtime.name") +
+                    " (" + System.getProperty("java.runtime.version") +
+                    ")");
+            System.err.println(System.getProperty("java.vm.name") +
+                    " (build " + System.getProperty("java.vm.version") +
+                    ", " + System.getProperty("java.vm.info") + ")");
+            return;
+        }
 
-       try {
-           jvmFactory.getJvm().runSync(args);
-       } catch (IllegalArgumentException ex) {
-           System.err.println("RunJava: " + ex.getMessage());
-       } catch (AppThreadTerminatedWithUncaughtException ex) {
-           if (ex.getCause() instanceof MainClassNotFoundException) {
-               System.err.println("Error: Could not find or load main class " + ((MainClassNotFoundException) ex.getCause()).getClassName());
-           } else {
-               ex.printStackTrace();
-           }
-       } catch (Throwable ex) {
-           ex.printStackTrace();
-       }
-   }
+        try {
+            jvmFactory.getJvm().runSync(args);
+        } catch (IllegalArgumentException ex) {
+            System.err.println("RunJava: " + ex.getMessage());
+        } catch (AppThreadTerminatedWithUncaughtException ex) {
+            if (ex.getCause() instanceof MainClassNotFoundException) {
+                System.err.println("Error: Could not find or load main class " + ((MainClassNotFoundException) ex.getCause()).getClassName());
+            } else {
+                ex.printStackTrace();
+            }
+        } catch (Throwable ex) {
+            ex.printStackTrace();
+        }
+    }
 }
