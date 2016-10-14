@@ -8,7 +8,7 @@ import argparse
 from functools import reduce
 from osv.modules import api, resolve, filemap
 
-class jvm(api.basic_app):
+class isolated_jvm(api.basic_app):
     multimain_manifest = '/etc/javamains'
     apps = []
 
@@ -32,6 +32,21 @@ class jvm(api.basic_app):
 
     def add(self, app):
         self.apps.append(app)
+
+    def has_any_app(self):
+        return self.apps
+
+class non_isolated_jvm(api.basic_app):
+    app = None
+
+    def get_launcher_args(self):
+        return ['java.so'] + self.app.get_jvm_args() + self.app.get_multimain_lines()
+
+    def add(self, app):
+        self.app = app
+
+    def has_any_app(self):
+        return self.app
 
 def expand(text, variables):
     def resolve(m):
@@ -117,7 +132,11 @@ def flatten_list(elememnts):
 
 def get_basic_apps(apps):
     basic_apps = []
-    _jvm = jvm()
+    java = resolve.require('java')
+    if hasattr(java,'non_isolated_jvm') and java.non_isolated_jvm:
+        _jvm = non_isolated_jvm()
+    else:
+        _jvm = isolated_jvm()
 
     for app in flatten_list(apps):
         if isinstance(app, api.basic_app):
@@ -127,7 +146,7 @@ def get_basic_apps(apps):
         else:
             raise Exception("Unknown app type: " + str(app))
 
-    if _jvm.apps:
+    if _jvm.has_any_app():
         basic_apps.append(_jvm)
 
     return basic_apps

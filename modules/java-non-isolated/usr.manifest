@@ -1,0 +1,21 @@
+#
+# Copyright (C) 2013-2014 Cloudius Systems, Ltd.
+#
+# This work is open source software, licensed under the terms of the
+# BSD license as described in the LICENSE file in the top-level directory.
+#
+
+[manifest]
+/usr/lib/&/libexpat.so.1: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libjpeg.so.62: %(miscbase)s/usr/lib64/&
+/usr/lib/jni/balloon.so: java/jni/balloon.so
+/usr/lib/jni/monitor.so: java/jni/monitor.so
+/usr/lib/&/jni/elf-loader.so: java/&
+/usr/lib/&/jni/networking.so: java/&
+/usr/lib/&/jni/stty.so: java/&
+/usr/lib/&/jni/tracepoint.so: java/&
+/usr/lib/&/jni/power.so: java/&
+/java.so: java/jvm/java_non_isolated.so
+/usr/lib/libosv.so: libosv.so
+/usr/lib/jvm/java/jre/lib/ext/runjava.jar: ${OSV_BASE}/java/runjava/target/runjava.jar
+/java/cloudius.jar: ${OSV_BASE}/java/cloudius/target/cloudius.jar
