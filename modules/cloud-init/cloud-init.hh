@@ -120,6 +120,20 @@ private:
     std::thread t;
 };
 
+class mount_module : public config_module {
+public:
+    virtual void handle(const YAML::Node& node) override;
+
+    virtual std::string get_label() override
+    {
+        return "mounts";
+    }
+private:
+
+    void do_api(http::server::request& api);
+    void yaml_to_request(const YAML::Node& node, http::server::request& req);
+};
+
 }
 
 #endif /* OSVINIT_HH_ */

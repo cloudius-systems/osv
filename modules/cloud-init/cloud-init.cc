@@ -168,6 +168,63 @@ void script_module::wait()
     }
 }
 
+/*
+Mount NFS mountpoint specified via cloud-init.
+
+Cloud-init config snippet:
+mounts:
+ - [ nfs://192.168.122.1/ggg, /ggg, auto, uid=0 ]
+
+This results in running command
+/tools/mount-nfs.so nfs://192.168.122.1/ggg/?uid=0 /ggg
+*/
+void mount_module::yaml_to_request(const YAML::Node& node, http::server::request& req)
+{
+    std::string method = "PUT";
+    std::string nfs_server = node[0].as<string>();
+    std::string mount_point = node[1].as<string>();
+    // node[2] is "auto" flag - we ignore it
+    std::string options = "";
+    if (node.size() >= 4) {
+        options = node[3].as<string>();
+    }
+
+    http::server::header param;
+    param.name = "command";
+    param.value = "/tools/mount-nfs.so";
+    param.value += " " + nfs_server;
+    if (options.size() > 0) {
+        param.value += "/?" + options;
+    }
+    param.value += " " + mount_point;
+    req.query_parameters.push_back(param);
+    //fprintf(stderr, "MNT: param name='%s' value='%s'", param.name.c_str(), param.value.c_str());
+    req.method = method;
+    req.uri = "/app";
+}
+
+void mount_module::do_api(http::server::request& req)
+{
+    http::server::reply rep;
+
+    httpserver::global_server::get_routes().handle(req.uri, req, rep);
+
+    if (rep.status != 200) {
+        throw osvinit_exception(rep.content);
+    }
+}
+
+void mount_module::handle(const YAML::Node& doc)
+{
+    for (auto& node : doc) {
+        http::server::request req;
+        yaml_to_request(node, req);
+        if (!req.uri.empty()) {
+            do_api(req);
+        }
+    }
+}
+
 void osvinit::add_module(std::shared_ptr<config_module> module)
 {
     _modules[module->get_label()] = module;

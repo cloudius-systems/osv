@@ -97,6 +97,7 @@ int main(int argc, char* argv[])
         osvinit init(config.count("skip-error") > 0, config.count("force-probe") > 0);
         auto scripts = make_shared<script_module>();
         init.add_module(scripts);
+        init.add_module(make_shared<mount_module>());
         init.add_module(make_shared<files_module>());
         init.add_module(make_shared<server_module>());
         init.add_module(make_shared<include_module>(init));
