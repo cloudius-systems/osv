@@ -1,5 +1,7 @@
 package io.osv;
 
+import io.osv.util.ClassDiagnostics;
+
 /*
  * Copyright (C) 2016 Waldemar Kozaczuk
  * Copyright (C) 2013-2016 Cloudius Systems, Ltd.
@@ -25,6 +27,13 @@ public class RunJvmAppHelper {
                     " (build " + System.getProperty("java.vm.version") +
                     ", " + System.getProperty("java.vm.info") + ")");
             return;
+        }
+
+        if(ClassDiagnostics.showDiagnostics(args)) {
+            System.out.println("Arguments:");
+            for(String arg:args) {
+                System.out.println("\t[" + arg + "]");
+            }
         }
 
         try {

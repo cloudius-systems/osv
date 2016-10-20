@@ -1,9 +1,16 @@
 package io.osv.isolated;
 
+import io.osv.util.ClassDiagnostics;
+
 import java.io.BufferedReader;
 import java.io.File;
 import java.io.FileReader;
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
+
+import static io.osv.util.ClassDiagnostics.JAVA_DIAGNOSTICS_PROPERTY_NAME;
 
 /**
  * MultiJarLoader load multiple jars with their main and command line when using
@@ -21,18 +28,19 @@ public class MultiJarLoader {
      *             - mains /usr/mgmt/myfile.txt
      */
     public static void main(String[] args) {
+        final boolean showDiagnostics = ClassDiagnostics.showDiagnostics(args);
         for (int i = 0; i < args.length; i++) {
             if (args[i].equals("-mains")) {
                 if (i + 1 >= args.length) {
                     System.err.println("No file specified for load from file");
                 }
-                runFromFile(args[i + 1]);
+                runFromFile(args[i + 1],showDiagnostics);
                 return;
             }
         }
         System.err
                 .println("No load file was specified, using default /usr/mgmt/javamains, use -mains to overide");
-        runFromFile("/usr/mgmt/javamains");
+        runFromFile("/usr/mgmt/javamains",showDiagnostics);
     }
 
     /**
@@ -41,8 +49,8 @@ public class MultiJarLoader {
      *
      * @param fileName the file name to read from
      */
-    private static void runFromFile(String fileName) {
-        FileReader fr = null;
+    private static void runFromFile(String fileName,boolean showDiagnostics) {
+        FileReader fr;
         try {
             File f = new File(fileName);
             fr = new FileReader(f);
@@ -51,14 +59,14 @@ public class MultiJarLoader {
                     + " with exception " + e);
             return;
         }
-        BufferedReader reader = new BufferedReader(fr);
-        String line;
-        try {
+
+        try(final BufferedReader reader = new BufferedReader(fr)) {
+            String line;
             while ((line = reader.readLine()) != null) {
-                String trimedLine = line.trim();
-                if (isExec(trimedLine)) {
-                    RunOnThread thrd = new RunOnThread(trimedLine);
-                    thrd.start();
+                String trimmedLine = line.trim();
+                if (isExec(trimmedLine)) {
+                    final RunOnThread thread = new RunOnThread(trimmedLine,showDiagnostics);
+                    thread.start();
                 }
             }
         } catch (IOException e) {
@@ -102,15 +110,24 @@ public class MultiJarLoader {
      */
     private static class RunOnThread extends Thread {
         private String args;
+        private boolean showDiagnostics;
 
-        public RunOnThread(String args) {
+        RunOnThread(String args,boolean showDiagnostics) {
             this.args = args;
+            this.showDiagnostics = showDiagnostics;
         }
 
         @Override
         public void run() {
             try {
-                IsolatedJvm.getInstance().runSync(args.split("\\s+"));
+                final List<String> argumentsList = new ArrayList<>();
+                if(showDiagnostics) {
+                    argumentsList.add("-D" + JAVA_DIAGNOSTICS_PROPERTY_NAME);
+                }
+                argumentsList.addAll(Arrays.asList(args.split("\\s+")));
+
+                final String[] argumentsArray = argumentsList.toArray(new String[] {});
+                IsolatedJvm.getInstance().runSync(argumentsArray);
             } catch (Throwable e) {
                 System.err.println("Exception was caught while running " + args
                         + " exception: " + e);

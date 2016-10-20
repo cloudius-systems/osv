@@ -4,6 +4,9 @@ import io.osv.AppThreadTerminatedWithUncaughtException;
 import io.osv.Jvm;
 import io.osv.MainClassNotFoundException;
 
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.util.List;
 import java.util.Properties;
 import java.util.Map;
 import java.util.concurrent.atomic.AtomicReference;
@@ -18,7 +21,9 @@ public class NonIsolatedJvm extends Jvm<Thread> {
 
     private static final NonIsolatedJvm instance = new NonIsolatedJvm();
 
-    private AtomicReference<Throwable> thrownException = new AtomicReference<>();
+    private final AtomicReference<Throwable> thrownException = new AtomicReference<>();
+
+    private final NonIsolatingOsvSystemClassLoader osvSystemClassLoader = getOsvClassLoader();
 
     public static NonIsolatedJvm getInstance() {
         return instance;
@@ -27,8 +32,7 @@ public class NonIsolatedJvm extends Jvm<Thread> {
     private NonIsolatedJvm() {
     }
 
-    @Override
-    protected Thread run(ClassLoader classLoader, final String classpath, final String mainClass, final String[] args, final Properties properties) {
+    private Thread run(final String classpath, final String mainClass, final String[] args, final Properties properties) {
         thrownException.set(null);
         Thread thread = new Thread() {
             @Override
@@ -56,9 +60,14 @@ public class NonIsolatedJvm extends Jvm<Thread> {
                 thrownException.set(e);
             }
         });
-        thread.setContextClassLoader(classLoader);
         thread.start();
         return thread;
+    }
+
+    protected Thread runClass(String mainClass, String[] args, Iterable<String> classpath, Properties properties) throws MalformedURLException {
+        final List<URL> appUrls = toUrls(classpath);
+        osvSystemClassLoader.addURLs(appUrls);
+        return run(joinClassPath(classpath), mainClass, args, properties);
     }
 
     public void runSync(String... args) throws Throwable {
@@ -78,12 +87,16 @@ public class NonIsolatedJvm extends Jvm<Thread> {
         }
     }
 
-    @Override
-    protected ClassLoader getParentClassLoader() {
-        return Thread.currentThread().getContextClassLoader();
+    private NonIsolatingOsvSystemClassLoader getOsvClassLoader() {
+        ClassLoader systemClassLoader = ClassLoader.getSystemClassLoader();
+        if (!(systemClassLoader instanceof NonIsolatingOsvSystemClassLoader)) {
+            throw new AssertionError("System class loader should be an instance of "
+                    + NonIsolatingOsvSystemClassLoader.class.getName() + " but is "
+                    + systemClassLoader.getClass().getName());
+        }
+
+        return (NonIsolatingOsvSystemClassLoader) systemClassLoader;
     }
 
-    public Throwable getThrownExceptionIfAny() {
-        return thrownException.get();
-    }
+    public Throwable getThrownExceptionIfAny() { return thrownException.get(); }
 }

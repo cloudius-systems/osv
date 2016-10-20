@@ -29,11 +29,13 @@ extern size_t jvm_heap_size;
 // sets up the class path, and runs the jar or class specified in these
 // parameters.
 
-#define JVM_PATH        "/usr/lib/jvm/jre/lib/amd64/server/libjvm.so"
+#define JVM_PATH         "/usr/lib/jvm/jre/lib/amd64/server/libjvm.so"
+#define RUNJAVA_JAR_PATH "/java/runjava.jar"
+
 #if defined(RUN_JAVA_NON_ISOLATED)
-#define RUNJAVA         "io/osv/nonisolated/RunNonIsolatedJvmApp"    // separated by slashes, not dots
+#define RUNJAVA          "io/osv/nonisolated/RunNonIsolatedJvmApp"    // separated by slashes, not dots
 #else
-#define RUNJAVA         "io/osv/isolated/RunIsolatedJvmApp"    // separated by slashes, not dots
+#define RUNJAVA          "io/osv/isolated/RunIsolatedJvmApp"    // separated by slashes, not dots
 #endif
 
 JavaVMOption mkoption(const char* s)
@@ -113,12 +115,17 @@ static int java_main(int argc, char **argv)
     JNI_GetDefaultJavaVMInitArgs(&vm_args);
 
     std::vector<JavaVMOption> options;
-    options.push_back(mkoption("-Djava.class.path=/dev/null"));
-#if !defined(RUN_JAVA_NON_ISOLATED)
-    std::cout << "java.so: Setting Java system classloader and logging manager to the isolated ones" << "\n";
-    options.push_back(mkoption("-Djava.system.class.loader=io.osv.isolated.OsvSystemClassLoader"));
+    options.push_back(mkoption("-Djava.class.path=%s", RUNJAVA_JAR_PATH));
+
+#if defined(RUN_JAVA_NON_ISOLATED)
+    std::cout << "java.so: Setting Java system classloader to NonIsolatingOsvSystemClassLoader" << "\n";
+    options.push_back(mkoption("-Djava.system.class.loader=io.osv.nonisolated.NonIsolatingOsvSystemClassLoader"));
+#else
+    std::cout << "java.so: Setting Java system classloader to IsolatingOsvSystemClassLoader and logging manager to IsolatingLogManager" << "\n";
+    options.push_back(mkoption("-Djava.system.class.loader=io.osv.isolated.IsolatingOsvSystemClassLoader"));
     options.push_back(mkoption("-Djava.util.logging.manager=io.osv.jul.IsolatingLogManager"));
 #endif
+
     options.push_back(mkoption("-Dosv.version=" + osv::version()));
 
     {

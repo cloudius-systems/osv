@@ -6,9 +6,19 @@ import io.osv.jul.IsolatingLogManager;
 import net.sf.cglib.proxy.Dispatcher;
 import net.sf.cglib.proxy.Enhancer;
 
+import java.io.FilePermission;
 import java.lang.reflect.Field;
+import java.lang.reflect.ReflectPermission;
+import java.net.MalformedURLException;
+import java.net.URL;
+import java.net.URLClassLoader;
+import java.security.CodeSource;
+import java.security.PermissionCollection;
+import java.util.List;
 import java.util.Properties;
+import java.util.PropertyPermission;
 import java.util.logging.LogManager;
+import java.util.logging.LoggingPermission;
 
 /*
  * Copyright (C) 2016 Waldemar Kozaczuk
@@ -88,8 +98,8 @@ public class IsolatedJvm extends Jvm<Context> {
         return currentContext.get();
     }
 
-    protected Context run(ClassLoader classLoader, final String classpath, final String mainClass,
-                          final String[] args, final Properties properties) {
+    private Context run(ClassLoader classLoader, final String classpath, final String mainClass,
+                        final String[] args, final Properties properties) {
         Properties contextProperties = new Properties();
         contextProperties.putAll(commonSystemProperties);
         contextProperties.putAll(properties);
@@ -126,7 +136,18 @@ public class IsolatedJvm extends Jvm<Context> {
         return context;
     }
 
-    protected ClassLoader getParentClassLoader() {
+    protected Context runClass(String mainClass, String[] args, Iterable<String> classpath, Properties properties) throws MalformedURLException {
+        ClassLoader appClassLoader = createAppClassLoader(classpath, getParentClassLoader());
+        return run(appClassLoader, joinClassPath(classpath), mainClass, args, properties);
+    }
+
+    private ClassLoader createAppClassLoader(Iterable<String> classpath, ClassLoader parent) throws MalformedURLException {
+        List<URL> urls = toUrls(classpath);
+        URL[] urlArray = urls.toArray(new URL[urls.size()]);
+        return new AppClassLoader(urlArray, parent);
+    }
+
+    private ClassLoader getParentClassLoader() {
         return parentClassLoaderForIsolates;
     }
 
@@ -143,18 +164,38 @@ public class IsolatedJvm extends Jvm<Context> {
         }
     }
 
-    private OsvSystemClassLoader getOsvClassLoader() {
+    private IsolatingOsvSystemClassLoader getOsvClassLoader() {
         ClassLoader systemClassLoader = ClassLoader.getSystemClassLoader();
-        if (!(systemClassLoader instanceof OsvSystemClassLoader)) {
+        if (!(systemClassLoader instanceof IsolatingOsvSystemClassLoader)) {
             throw new AssertionError("System class loader should be an instance of "
-                    + OsvSystemClassLoader.class.getName() + " but is "
+                    + IsolatingOsvSystemClassLoader.class.getName() + " but is "
                     + systemClassLoader.getClass().getName());
         }
 
-        return (OsvSystemClassLoader) systemClassLoader;
+        return (IsolatingOsvSystemClassLoader) systemClassLoader;
     }
 
     public Object receive() throws InterruptedException {
         return getContext().takeMessage();
+    }
+
+
+    private static class AppClassLoader extends URLClassLoader {
+        AppClassLoader(URL[] urlArray, ClassLoader parent) {
+            super(urlArray, parent);
+        }
+
+        @Override
+        protected PermissionCollection getPermissions(CodeSource codesource) {
+            PermissionCollection permissions = super.getPermissions(codesource);
+            permissions.add(new FilePermission("/java/runjava.jar", "read"));
+            permissions.add(new RuntimePermission("exitVM"));
+            permissions.add(new RuntimePermission("shutdownHooks"));
+            permissions.add(new RuntimePermission("setContextClassLoader"));
+            permissions.add(new ReflectPermission("suppressAccessChecks"));
+            permissions.add(new LoggingPermission("control",null));
+            permissions.add(new PropertyPermission("java.util.logging.config.*", "read"));
+            return permissions;
+        }
     }
 }

@@ -1,15 +1,13 @@
 package io.osv;
 
+import io.osv.util.ClassDiagnostics;
+
 import java.io.File;
 import java.io.FileNotFoundException;
-import java.io.FilePermission;
 import java.lang.reflect.InvocationTargetException;
 import java.lang.reflect.Method;
 import java.net.MalformedURLException;
 import java.net.URL;
-import java.net.URLClassLoader;
-import java.security.CodeSource;
-import java.security.PermissionCollection;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Properties;
@@ -84,23 +82,9 @@ public abstract class Jvm<T> {
         }
     }
 
-    private T runClass(String mainClass, String[] args, Iterable<String> classpath, Properties properties) throws MalformedURLException {
-        ClassLoader appClassLoader = createAppClassLoader(classpath, getParentClassLoader());
-        return run(appClassLoader, joinClassPath(classpath), mainClass, args, properties);
-    }
+    protected abstract T runClass(String mainClass, String[] args, Iterable<String> classpath, Properties properties) throws MalformedURLException;
 
-    protected abstract T run(ClassLoader classLoader, final String classpath, final String mainClass,
-                             final String[] args, final Properties properties);
-
-    protected abstract ClassLoader getParentClassLoader();
-
-    private ClassLoader createAppClassLoader(Iterable<String> classpath, ClassLoader parent) throws MalformedURLException {
-        List<URL> urls = toUrls(classpath);
-        URL[] urlArray = urls.toArray(new URL[urls.size()]);
-        return new AppClassLoader(urlArray, parent);
-    }
-
-    private List<URL> toUrls(Iterable<String> classpath) throws MalformedURLException {
+    protected List<URL> toUrls(Iterable<String> classpath) throws MalformedURLException {
         ArrayList<URL> urls = new ArrayList<>();
         for (String path : classpath) {
             urls.add(toUrl(path));
@@ -108,7 +92,28 @@ public abstract class Jvm<T> {
         return urls;
     }
 
+    protected String joinClassPath(Iterable<String> classpath) {
+        StringBuilder sb = new StringBuilder();
+        boolean first = true;
+        for (String path : classpath) {
+            if (!first) {
+                sb.append(":");
+            }
+            first = false;
+            sb.append(path);
+        }
+        return sb.toString();
+    }
+
     protected void runMain(Class<?> klass, String[] args) throws Throwable {
+
+        if(ClassDiagnostics.showDiagnostics(args)) {
+            System.out.println("Classpath: " + System.getProperty("java.class.path"));
+            System.out.println("------ Main class information --------");
+            System.out.println("Classloader: " + ClassDiagnostics.showClassLoaderHierarchy(klass,false));
+            System.out.println("Security: " + ClassDiagnostics.showClassSecurity(klass));
+        }
+
         Method main = klass.getMethod("main", String[].class);
         try {
             main.invoke(null, new Object[]{args});
@@ -123,19 +128,6 @@ public abstract class Jvm<T> {
         } catch (ClassNotFoundException ex) {
             throw new MainClassNotFoundException(name);
         }
-    }
-
-    private String joinClassPath(Iterable<String> classpath) {
-        StringBuilder sb = new StringBuilder();
-        boolean first = true;
-        for (String path : classpath) {
-            if (!first) {
-                sb.append(":");
-            }
-            first = false;
-            sb.append(path);
-        }
-        return sb.toString();
     }
 
     private URL toUrl(String path) throws MalformedURLException {
@@ -175,19 +167,5 @@ public abstract class Jvm<T> {
             ret.add(component);
         }
         return ret;
-    }
-
-    private static class AppClassLoader extends URLClassLoader {
-        public AppClassLoader(URL[] urlArray, ClassLoader parent) {
-            super(urlArray, parent);
-        }
-
-        @Override
-        protected PermissionCollection getPermissions(CodeSource codesource) {
-            PermissionCollection permissions = super.getPermissions(codesource);
-            permissions.add(new FilePermission("/usr/lib/jvm/jre/lib/ext/runjava.jar", "read"));
-            permissions.add(new RuntimePermission("exitVM"));
-            return permissions;
-        }
     }
 }

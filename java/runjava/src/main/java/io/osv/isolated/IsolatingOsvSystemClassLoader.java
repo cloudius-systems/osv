@@ -14,7 +14,7 @@ import java.lang.reflect.Method;
 import java.net.URL;
 import java.util.Enumeration;
 
-public class OsvSystemClassLoader extends ClassLoader {
+public class IsolatingOsvSystemClassLoader extends ClassLoader {
     private final ClassLoader defaultSystemClassLoader;
 
     static {
@@ -31,7 +31,7 @@ public class OsvSystemClassLoader extends ClassLoader {
     private final Method findLibrary;
     private final Method findResources;
 
-    public OsvSystemClassLoader(ClassLoader defaultSystemClassLoader) throws NoSuchMethodException {
+    public IsolatingOsvSystemClassLoader(ClassLoader defaultSystemClassLoader) throws NoSuchMethodException {
         super(defaultSystemClassLoader);
         this.defaultSystemClassLoader = defaultSystemClassLoader;
 

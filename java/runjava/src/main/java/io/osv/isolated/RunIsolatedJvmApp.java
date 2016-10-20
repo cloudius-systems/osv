@@ -9,6 +9,7 @@ package io.osv.isolated;
  */
 
 import io.osv.Jvm;
+import io.osv.util.ClassDiagnostics;
 
 import static io.osv.RunJvmAppHelper.runSync;
 import static io.osv.RunJvmAppHelper.JvmFactory;
@@ -25,6 +26,12 @@ public class RunIsolatedJvmApp {
     }
 
     public static void main(String[] args) {
+        if(ClassDiagnostics.showDiagnostics(args)) {
+            System.out.println("------ Run Java class information --------");
+            System.out.println("Classloader: " + ClassDiagnostics.showClassLoaderHierarchy(RunIsolatedJvmApp.class,false));
+            System.out.println("Security: " + ClassDiagnostics.showClassSecurity(RunIsolatedJvmApp.class));
+        }
+
         runSync(new JvmFactory() {
             public Jvm getJvm() {
                 return IsolatedJvm.getInstance();

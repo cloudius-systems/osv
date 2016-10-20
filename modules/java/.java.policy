@@ -1,0 +1,3 @@
+grant codeBase "file:/java/runjava.jar" {
+        permission java.security.AllPermission;
+};
