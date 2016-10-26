@@ -11,10 +11,13 @@
 #include <arpa/inet.h> /* inet_pton */
 #include <unistd.h>
 #include <sys/ioctl.h>
+#include <netpacket/packet.h>
+#include <net/if_arp.h>
 
 typedef union {
 	struct sockaddr_in6 v6;
 	struct sockaddr_in v4;
+	struct sockaddr_ll hw;
 } soa;
 
 typedef struct ifaddrs_storage {
@@ -124,15 +127,70 @@ int allocate_and_add_ifaddrs(stor **list, stor **head, struct if_nameindex *ii)
 	return i;
 }
 
+int fill_mac_addrs(int sock, stor *list, struct if_nameindex *ii)
+{
+	stor *head;
+	size_t i;
+
+	for(head = list, i = 0;
+	    head; head = (stor*)(head->next)) {
+		struct sockaddr_ll *hw_addr = (struct sockaddr_ll *) &head->addr;
+		head->ifa.ifa_addr = (struct sockaddr*) &head->addr;
+		struct ifreq req;
+		int ret;
+
+		if (!ii[i].if_name) {
+			continue;
+		}
+
+		/* zero the ifreq structure */
+		memset(&req, 0, sizeof(req));
+
+		/* fill in the interface name */
+		strlcpy(req.ifr_name, ii[i].if_name, IFNAMSIZ);
+
+		/* Get the hardware address */
+		ret = ioctl(sock, SIOCGIFHWADDR, &req);
+		if (ret == -1) {
+			return ret;
+		}
+
+		/* Fill address, index, type, length, familly */
+		memcpy(hw_addr->sll_addr, req.ifr_hwaddr.sa_data, IFHWADDRLEN);
+		hw_addr->sll_ifindex  = ii[i].if_index;
+		hw_addr->sll_hatype = ARPHRD_ETHER;
+		hw_addr->sll_halen  = IFHWADDRLEN;
+		hw_addr->sll_family = AF_PACKET;
+
+		/* Get and fill the address flags */
+		ret = ioctl(sock, SIOCGIFFLAGS, &req);
+		if (ret == - 1) {
+			return ret;
+		}
+		head->ifa.ifa_flags = req.ifr_flags;
+		i++;
+	}
+
+	return 0;
+}
+
 int getifaddrs(struct ifaddrs **ifap)
 {
 	stor *list = 0, *head = 0;
 	struct if_nameindex* ii = if_nameindex();
 	if(!ii) return -1;
+	int addr_count;
 	size_t i;
-	if (!allocate_and_add_ifaddrs(&list, &head, ii)) {
-		if_freenameindex(ii);
-		goto err2;
+	// allocate and add to the list twice the number of
+	// interface of ifaddr storage in order to have enough
+	// for MAC HW addresses that require their own location.
+	for (i = 0; i < 2; i++) {
+		addr_count =
+			allocate_and_add_ifaddrs(&list, &head, ii);
+		if (!addr_count) {
+			if_freenameindex(ii);
+			goto err2;
+		}
 	}
 	if_freenameindex(ii);
 
@@ -142,7 +200,9 @@ int getifaddrs(struct ifaddrs **ifap)
 	struct ifconf conf = {.ifc_len = sizeof reqs, .ifc_req = reqs};
 	if(-1 == ioctl(sock, SIOCGIFCONF, &conf)) goto err;
 	size_t reqitems = conf.ifc_len / sizeof(struct ifreq);
-	for(head = list; head; head = (stor*)head->next) {
+	int j;
+	// loop and fill the INET addrs
+	for(head = list, j = 0; head && j < addr_count; head = (stor*)head->next, j++) {
 		for(i = 0; i < reqitems; i++) {
 			// get SIOCGIFADDR of active interfaces.
 			if(!strcmp(reqs[i].ifr_name, head->name)) {
@@ -172,6 +232,9 @@ int getifaddrs(struct ifaddrs **ifap)
 			}
 			head->ifa.ifa_ifu.ifu_dstaddr = (struct sockaddr*) &head->dst;
 		}
+	}
+	if (-1 == fill_mac_addrs(sock, head, ii)) {
+		goto err;
 	}
 	close(sock);
 	void* last = 0;
