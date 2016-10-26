@@ -1354,7 +1354,7 @@ musl += network/getservbyname_r.o
 musl += network/getservbyname.o
 musl += network/getservbyport_r.o
 musl += network/getservbyport.o
-musl += network/getifaddrs.o
+libc += network/getifaddrs.o
 libc += network/if_nameindex.o
 musl += network/if_freenameindex.o
 
