@@ -112,18 +112,27 @@ static void dealwithipv6(stor **list, stor** head)
 	fclose(f);
 }
 
+int allocate_and_add_ifaddrs(stor **list, stor **head, struct if_nameindex *ii)
+{
+	size_t i;
+	for(i = 0; ii[i].if_index || ii[i].if_name; i++) {
+		stor* curr = list_add(list, head, ii[i].if_name);
+		if(!curr) {
+			return 0;
+		}
+	}
+	return i;
+}
+
 int getifaddrs(struct ifaddrs **ifap)
 {
 	stor *list = 0, *head = 0;
 	struct if_nameindex* ii = if_nameindex();
 	if(!ii) return -1;
 	size_t i;
-	for(i = 0; ii[i].if_index || ii[i].if_name; i++) {
-		stor* curr = list_add(&list, &head, ii[i].if_name);
-		if(!curr) {
-			if_freenameindex(ii);
-			goto err2;
-		}
+	if (!allocate_and_add_ifaddrs(&list, &head, ii)) {
+		if_freenameindex(ii);
+		goto err2;
 	}
 	if_freenameindex(ii);
 
