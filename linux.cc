@@ -311,6 +311,10 @@ static int sys_exit(int ret)
 
 long syscall(long number, ...)
 {
+    // Save FPU state and restore it at the end of this function
+    sched::fpu_lock fpu;
+    SCOPE_LOCK(fpu);
+
     switch (number) {
     SYSCALL2(open, const char *, int);
     SYSCALL3(read, int, char *, size_t);

@@ -217,7 +217,6 @@ syscall_entry:
     # From http://stackoverflow.com/questions/2535989/what-are-the-calling-conventions-for-unix-linux-system-calls-on-x86-64:
     # "User-level applications use as integer registers for passing the sequence %rdi, %rsi, %rdx, %rcx, %r8 and %r9. The kernel interface uses %rdi, %rsi, %rdx, %r10, %r8 and %r9"
 
-    # FIXME: fpu
     pushq_cfi %rbx
     pushq_cfi %rdx
     pushq_cfi %rsi
@@ -250,6 +249,7 @@ syscall_entry:
     # Because we pushed an even number of 8 bytes after aligning the stack,
     # it is still 16-byte aligned and we don't need to adjust it here.
 
+    # FPU save/restore is done inside the wrapper
     callq syscall_wrapper
 
     popq_cfi %r9
