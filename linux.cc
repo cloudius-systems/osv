@@ -24,6 +24,10 @@
 #include <sys/socket.h>
 #include <sys/utsname.h>
 #include <sys/mman.h>
+#include <stdlib.h>
+#include <signal.h>
+#include <sys/select.h>
+#include <sys/mman.h>
 
 #include <unordered_map>
 
@@ -297,9 +301,19 @@ int rt_sigprocmask(int how, sigset_t * nset, sigset_t * oset, size_t sigsetsize)
     return sigprocmask(how, nset, oset);
 }
 
+#define __NR_sys_exit __NR_exit
+
+static int sys_exit(int ret)
+{
+    exit(ret);
+    return 0;
+}
+
 long syscall(long number, ...)
 {
     switch (number) {
+    SYSCALL2(open, const char *, int);
+    SYSCALL3(read, int, char *, size_t);
     SYSCALL1(uname, struct utsname *);
     SYSCALL3(write, int, const void *, size_t);
     SYSCALL0(gettid);
@@ -319,6 +333,12 @@ long syscall(long number, ...)
     SYSCALL2(munmap, void *, size_t);
     SYSCALL4(rt_sigaction, int, const struct k_sigaction *, struct k_sigaction *, size_t);
     SYSCALL4(rt_sigprocmask, int, sigset_t *, sigset_t *, size_t);
+    SYSCALL1(sys_exit, int);
+    SYSCALL2(sigaltstack, const stack_t *, stack_t *);
+    SYSCALL5(select, int, fd_set *, fd_set *, fd_set *, struct timeval *);
+    SYSCALL3(madvise, void *, size_t, int);
+    SYSCALL0(sched_yield);
+    SYSCALL3(mincore, void *, size_t, unsigned char *);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
