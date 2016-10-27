@@ -276,7 +276,15 @@ syscall_entry:
     popq_cfi %rcx
 
     movq 8(%rsp), %rsp # undo alignment (as explained above)
-    addq $128, %rsp    # undo red-zone skip
+
+    # restore rflags
+    # push the rflag state syscall saved in r11 to the stack
+    pushq %r11
+    # pop the stack value in flag register
+    popfq
+
+    #undo red-zone skip without altering restored flags
+    lea 128(%rsp), %rsp
 
     # jump to rcx where the syscall instruction put rip
     # (sysret would leave rxc cloberred so we have nothing to do to restore it)
