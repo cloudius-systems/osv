@@ -66,6 +66,7 @@ namespace dhcp {
         DHCP_OPTION_SUBNET_MASK = 1,
         DHCP_OPTION_ROUTER = 3,
         DHCP_OPTION_DOMAIN_NAME_SERVERS = 6,
+        DHCP_OPTION_HOSTNAME = 12,
         DHCP_OPTION_INTERFACE_MTU = 26,
         DHCP_OPTION_BROADCAST_ADDRESS = 28,
         DHCP_OPTION_REQUESTED_ADDRESS = 50,
@@ -146,6 +147,7 @@ namespace dhcp {
         int get_renewal_time_sec() { return _renewal_time_sec; }
         int get_rebind_time_sec() { return _rebind_time_sec; }
         std::vector<route_type>& get_routes() { return _routes; }
+        std::string get_hostname() { return _hostname; }
 
     private:
 
@@ -183,6 +185,7 @@ namespace dhcp {
         u32 _rebind_time_sec;
         u16 _mtu;
         std::vector<route_type> _routes;
+        std::string _hostname;
     };
 
     ///////////////////////////////////////////////////////////////////////////

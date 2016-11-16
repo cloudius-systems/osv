@@ -41,7 +41,8 @@ u8 requested_options[] = {
     dhcp::DHCP_OPTION_ROUTER,
     dhcp::DHCP_OPTION_DOMAIN_NAME_SERVERS,
     dhcp::DHCP_OPTION_INTERFACE_MTU,
-    dhcp::DHCP_OPTION_BROADCAST_ADDRESS
+    dhcp::DHCP_OPTION_BROADCAST_ADDRESS,
+    dhcp::DHCP_OPTION_HOSTNAME
 };
 
 // Returns whether we hooked the packet
@@ -220,6 +221,10 @@ namespace dhcp {
         ip::address_v4::bytes_type requested_ip = yip.to_bytes();
         options = add_option(options, DHCP_OPTION_MESSAGE_TYPE, 1, DHCP_MT_REQUEST);
         options = add_option(options, DHCP_OPTION_DHCP_SERVER, 4, (u8*)&dhcp_server_ip);
+        char hostname[256];
+        if (0 == gethostname(hostname, sizeof(hostname))) {
+            options = add_option(options, DHCP_OPTION_HOSTNAME, strlen(hostname), (u8*)hostname);
+        }
         options = add_option(options, DHCP_OPTION_REQUESTED_ADDRESS, 4, (u8*)&requested_ip);
         options = add_option(options, DHCP_OPTION_PARAMETER_REQUEST_LIST,
             sizeof(requested_options), requested_options);
@@ -351,6 +356,13 @@ namespace dhcp {
                     options += 4; op_len -= 4;
                     _routes.emplace_back(ip::address_v4(ntohl(net)), ip::address_v4(u32(((1ull<<mask)-1) << (32-mask))), ip::address_v4(bytes));
                 }
+                break;
+            case DHCP_OPTION_HOSTNAME:
+                char hostname[256];
+                memcpy(hostname, options, op_len);
+                hostname[op_len] = '\0'; // terminating null
+                dhcp_i( "DHCP received hostname: %s\n", hostname);
+                _hostname = hostname;
                 break;
             default:
                 break;
@@ -556,6 +568,7 @@ namespace dhcp {
             });
 
             osv::set_dns_config(dm.get_dns_ips(), std::vector<std::string>());
+            sethostname(dm.get_hostname().c_str(), dm.get_hostname().size());
             // TODO: setup lease
         } else if (dm.get_message_type() == DHCP_MT_NAK) {
             // from RFC 2131 section 3.1.5
