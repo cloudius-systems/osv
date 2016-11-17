@@ -568,7 +568,9 @@ namespace dhcp {
             });
 
             osv::set_dns_config(dm.get_dns_ips(), std::vector<std::string>());
-            sethostname(dm.get_hostname().c_str(), dm.get_hostname().size());
+            if (dm.get_hostname().size()) {
+	        sethostname(dm.get_hostname().c_str(), dm.get_hostname().size());
+            }
             // TODO: setup lease
         } else if (dm.get_message_type() == DHCP_MT_NAK) {
             // from RFC 2131 section 3.1.5
