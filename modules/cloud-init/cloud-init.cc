@@ -225,6 +225,15 @@ void mount_module::handle(const YAML::Node& doc)
     }
 }
 
+void hostname_module::handle(const YAML::Node& doc)
+{
+    auto hostname = doc.as<string>();
+    debug("cloudinit hostname: %s\n", hostname.c_str());
+    if (hostname.size()) {
+        sethostname(hostname.c_str(), hostname.size());
+    }
+}
+
 void osvinit::add_module(std::shared_ptr<config_module> module)
 {
     _modules[module->get_label()] = module;

@@ -1,3 +1,10 @@
 #open httpserver for input
 run:
     - GET: /os/version
+
+# mount NFS export example
+#mounts:
+# - [ nfs://192.168.122.1/ggg, /ggg, auto, uid=0 ]
+
+# set hostname example
+#hostname: uber-vm

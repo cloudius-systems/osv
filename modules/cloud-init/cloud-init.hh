@@ -134,6 +134,16 @@ private:
     void yaml_to_request(const YAML::Node& node, http::server::request& req);
 };
 
+class hostname_module : public config_module {
+public:
+    virtual void handle(const YAML::Node& node) override;
+
+    virtual std::string get_label() override
+    {
+        return "hostname";
+    }
+};
+
 }
 
 #endif /* OSVINIT_HH_ */
