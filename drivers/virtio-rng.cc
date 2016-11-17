@@ -60,9 +60,10 @@ rng::~rng()
 size_t rng::get_random_bytes(char* buf, size_t size)
 {
     WITH_LOCK(_mtx) {
-        _consumer.wait_until(_mtx, [&] {
-            return _entropy.size() > 0;
-        });
+        // Note that _entropy.size() might be 0 if we didn't get any entropy
+        // from the host, in which case we'll return 0 bytes. This is fine,
+        // the caller (random_kthread()) will consume whatever entropy it
+        // gets, wait a bit, and later try again.
         auto len = std::min(_entropy.size(), size);
         copy_n(_entropy.begin(), len, buf);
         _entropy.erase(_entropy.begin(), _entropy.begin() + len);
