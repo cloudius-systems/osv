@@ -45,6 +45,8 @@ u8 requested_options[] = {
     dhcp::DHCP_OPTION_HOSTNAME
 };
 
+const ip::address_v4 ipv4_zero = ip::address_v4::address_v4::from_string("0.0.0.0");
+
 // Returns whether we hooked the packet
 int dhcp_hook_rx(struct mbuf* m)
 {
@@ -65,6 +67,12 @@ void dhcp_start(bool wait)
 {
     // Initialize the global DHCP worker
     net_dhcp_worker.init(wait);
+}
+
+// Send DHCP release, for example at shutdown.
+void dhcp_release()
+{
+    net_dhcp_worker.release();
 }
 
 namespace dhcp {
@@ -228,6 +236,42 @@ namespace dhcp {
         options = add_option(options, DHCP_OPTION_REQUESTED_ADDRESS, 4, (u8*)&requested_ip);
         options = add_option(options, DHCP_OPTION_PARAMETER_REQUEST_LIST,
             sizeof(requested_options), requested_options);
+        *options++ = DHCP_OPTION_END;
+
+        dhcp_len += options - options_start;
+        build_udp_ip_headers(dhcp_len);
+    }
+
+    void dhcp_mbuf::compose_release(struct ifnet* ifp,
+                                    ip::address_v4 yip,
+                                    ip::address_v4 sip)
+    {
+        size_t dhcp_len = sizeof(struct dhcp_packet);
+        struct dhcp_packet* pkt = pdhcp();
+        *pkt = {};
+
+        // Header
+        pkt->op = BOOTREQUEST;
+        pkt->htype = HTYPE_ETHERNET;
+        pkt->hlen = ETHER_ADDR_LEN;
+        pkt->hops = 0;
+        // Linux dhclient also uses new xid for release.
+        pkt->xid = rand();
+        pkt->secs = 0;
+        pkt->flags = 0;
+        memcpy(pkt->chaddr, IF_LLADDR(ifp), ETHER_ADDR_LEN);
+        ulong yip_n = htonl(yip.to_ulong());
+        ulong sip_n = htonl(sip.to_ulong());
+        memcpy(&pkt->ciaddr.s_addr, &yip_n, 4);
+
+        // Options
+        u8* options_start = reinterpret_cast<u8*>(pkt+1);
+        u8* options = options_start;
+        memcpy(options, dhcp_options_magic, 4);
+        options += 4;
+
+        options = add_option(options, DHCP_OPTION_MESSAGE_TYPE, 1, DHCP_MT_RELEASE);
+        options = add_option(options, DHCP_OPTION_DHCP_SERVER, 4, reinterpret_cast<u8*>(&sip_n));
         *options++ = DHCP_OPTION_END;
 
         dhcp_len += options - options_start;
@@ -450,6 +494,7 @@ namespace dhcp {
     {
         _sock = new dhcp_socket(ifp);
         _xid = 0;
+        _client_addr = _server_addr = ipv4_zero;
     }
 
     dhcp_interface_state::~dhcp_interface_state()
@@ -470,7 +515,24 @@ namespace dhcp {
 
         // Save transaction id & send
         _xid = dm.get_xid();
+        _client_addr = _server_addr = ipv4_zero;
         _sock->dhcp_send(dm);
+    }
+
+    void dhcp_interface_state::release()
+    {
+        // Update state
+        _state = DHCP_INIT;
+
+        // Compose a dhcp release packet
+        dhcp_mbuf dm(false);
+        dm.compose_release(_ifp, _client_addr, _server_addr);
+
+        // Save transaction id & send
+        _xid = dm.get_xid();
+        _sock->dhcp_send(dm);
+        // no reply/ack is expected, after send we just forget all old state
+        _client_addr = _server_addr = ipv4_zero;
     }
 
     void dhcp_interface_state::process_packet(struct mbuf* m)
@@ -523,6 +585,8 @@ namespace dhcp {
         if (dm.get_message_type() == DHCP_MT_ACK) {
             dhcp_i("Server acknowledged IP for interface %s", _ifp->if_xname);
             _state = DHCP_ACKNOWLEDGE;
+            _client_addr = dm.get_your_ip();
+            _server_addr = dm.get_dhcp_server_ip();
 
             // TODO: check that the IP address is not responding with ARP
             // RFC2131 section 3.1.5
@@ -577,6 +641,7 @@ namespace dhcp {
             // "If the client receives a DHCPNAK message, the client restarts the
             // configuration process."
             _state = DHCP_INIT;
+            _client_addr = _server_addr = ipv4_zero;
             discover();
         }
         // FIXME: retry on timeout and restart DORA sequence if it timeout a
@@ -639,6 +704,15 @@ namespace dhcp {
                 sched::thread::wait_until([&]{ return _have_ip || t.expired(); });
             }
         } while (!_have_ip && wait);
+    }
+
+    void dhcp_worker::release()
+    {
+        for (auto &it: _universe) {
+            it.second->release();
+        }
+        // Wait a bit, so hopefully UDP release packets will be actually put on wire.
+        usleep(1000);
     }
 
     void dhcp_worker::dhcp_worker_fn()

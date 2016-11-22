@@ -22,7 +22,10 @@
 #include <boost/asio/ip/address.hpp>
 #include <boost/asio/ip/address_v4.hpp>
 
-extern "C" void dhcp_start(bool wait);
+extern "C" {
+void dhcp_start(bool wait);
+void dhcp_release();
+}
 
 namespace dhcp {
 
@@ -126,6 +129,9 @@ namespace dhcp {
                              u32 xid,
                              boost::asio::ip::address_v4 yip,
                              boost::asio::ip::address_v4 sip);
+        void compose_release(struct ifnet* ifp,
+                             boost::asio::ip::address_v4 yip,
+                             boost::asio::ip::address_v4 sip);
 
         /* Decode packet */
         bool is_valid_dhcp();
@@ -218,6 +224,7 @@ namespace dhcp {
         ~dhcp_interface_state();
 
         void discover();
+        void release();
         void process_packet(struct mbuf*);
         void state_discover(dhcp_mbuf &dm);
         void state_request(dhcp_mbuf &dm);
@@ -228,6 +235,8 @@ namespace dhcp {
         state _state;
         struct ifnet* _ifp;
         dhcp_socket* _sock;
+        boost::asio::ip::address_v4 _client_addr;
+        boost::asio::ip::address_v4 _server_addr;
 
         // Transaction id
         u32 _xid;
@@ -242,6 +251,7 @@ namespace dhcp {
 
         // Initializing a state per interface, sends discover packets
         void init(bool wait);
+        void release();
 
         void dhcp_worker_fn();
         void queue_packet(struct mbuf* m);

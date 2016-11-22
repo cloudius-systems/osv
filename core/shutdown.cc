@@ -2,6 +2,7 @@
 #include <osv/power.hh>
 #include <osv/debug.hh>
 #include <osv/sched.hh>
+#include <osv/dhcp.hh>
 
 extern void vfs_exit(void);
 
@@ -9,6 +10,8 @@ namespace osv {
 
 void shutdown()
 {
+    dhcp_release();
+
     // The vfs_exit() call below will forcibly unmount the filesystem. If any
     // thread is executing code mapped from a file, these threads may crash if
     // they happen to run between the call to vfs_exit() and the call to
