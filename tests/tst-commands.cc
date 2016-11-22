@@ -353,6 +353,168 @@ static bool test_runscript_multiple_with_args_quotes()
     return true;
 }
 
+static bool test_runscript_multiple_commands_per_line()
+{
+    std::ofstream of1("/myscript", std::ios::out | std::ios::binary);
+    of1 << "/prog1; /prog2";
+    of1.close();
+
+    std::vector<std::vector<std::string> > result;
+    std::vector<std::string> cmd = { "/prog1", "/prog2" };
+    bool ok;
+
+    result = osv::parse_command_line(
+        std::string("runscript \"/myscript\""),
+        ok);
+
+    if (!ok) {
+        return false;
+    }
+
+    if (result.size() != 2) {
+        return false;
+    }
+
+    if (result[0].size() != 2) {
+        return false;
+    }
+
+    if (result[1].size() != 2) {
+        return false;
+    }
+
+    for (size_t i = 0; i < result.size(); i++) {
+        if (result[i][0] != cmd[i]) {
+            return false;
+        }
+    }
+
+    return true;
+}
+
+static bool test_runscript_multiple_commands_per_line_with_args()
+{
+    std::ofstream of1("/myscript", std::ios::out | std::ios::binary);
+    of1 << "/prog1 pp1a ; /prog2 pp2a pp2b";
+    of1.close();
+
+    std::vector<std::vector<std::string> > result;
+    std::vector<std::string> cmd = { "/prog1", "/prog2" };
+    bool ok;
+
+    result = osv::parse_command_line(
+        std::string("runscript \"/myscript\""),
+        ok);
+
+    if (!ok) {
+        return false;
+    }
+
+    if (result.size() != 2) {
+        return false;
+    }
+
+    if (result[0].size() != 3) {
+        return false;
+    }
+
+    if (result[1].size() != 4) {
+        return false;
+    }
+
+    for (size_t i = 0; i < result.size(); i++) {
+        if (result[i][0] != cmd[i]) {
+            return false;
+        }
+    }
+
+    if (result[0][1] != std::string("pp1a")) {
+        return false;
+    }
+
+    if (result[1][1] != std::string("pp2a")) {
+        return false;
+    }
+    if (result[1][2] != std::string("pp2b")) {
+        return false;
+    }
+
+    return true;
+}
+
+static bool test_runscript_multiple_commands_per_line_with_args_quotes()
+{
+    std::ofstream of1("/myscript", std::ios::out | std::ios::binary);
+    of1 << "/prog1 pp1a ; /prog2 pp2a pp2b; /prog3 pp3a \"pp3b1 pp3b2\" \"pp3c1;pp3c2\" \"pp3d\" \" ;; --onx -fon;x \\t\"; ";
+    of1.close();
+
+    std::vector<std::vector<std::string> > result;
+    std::vector<std::string> cmd = { "/prog1", "/prog2", "/prog3" };
+    bool ok;
+
+    result = osv::parse_command_line(
+        std::string("runscript \"/myscript\""),
+        ok);
+
+    if (!ok) {
+        return false;
+    }
+
+    if (result.size() != 3) {
+        return false;
+    }
+
+    if (result[0].size() != 3) {
+        return false;
+    }
+
+    if (result[1].size() != 4) {
+        return false;
+    }
+
+    if (result[2].size() != 7) {
+        return false;
+    }
+
+    for (size_t i = 0; i < result.size(); i++) {
+        if (result[i][0] != cmd[i]) {
+            return false;
+        }
+    }
+
+    if (result[0][1] != std::string("pp1a")) {
+        return false;
+    }
+
+    if (result[1][1] != std::string("pp2a")) {
+        return false;
+    }
+    if (result[1][2] != std::string("pp2b")) {
+        return false;
+    }
+
+    if (result[2][1] != std::string("pp3a")) {
+        return false;
+    }
+    if (result[2][2] != std::string("pp3b1 pp3b2")) {
+        return false;
+    }
+    if (result[2][3] != std::string("pp3c1;pp3c2")) {
+        return false;
+    }
+    if (result[2][4] != std::string("pp3d")) {
+        return false;
+    }
+    if (result[2][5] != std::string(" ;; --onx -fon;x \t")) {
+        return false;
+    }
+    if (result[2][6] != std::string(";")) {
+        return false;
+    }
+
+    return true;
+}
+
 int main(int argc, char *argv[])
 {
     report(test_parse_simplest(), "simplest command line");
@@ -369,6 +531,12 @@ int main(int argc, char *argv[])
            "cpiod upload and haproxy launch");
     report(test_runscript_multiple_with_args_quotes(),
            "runscript multiple with args and quotes");
+    report(test_runscript_multiple_commands_per_line(),
+           "runscript multiple commands per line");
+    report(test_runscript_multiple_commands_per_line_with_args(),
+           "runscript multiple commands per line with args");
+    report(test_runscript_multiple_commands_per_line_with_args_quotes(),
+           "runscript multiple commands per line with args and quotes");
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);
     return 0;
 }

@@ -85,16 +85,23 @@ parse_command_line_min(const std::string line, bool &ok)
 
 /*
 If cmd starts with "runcript file", read content of file and
-update cmd with the content.
+return vector of all programs to be run.
+File can contain multiple commands per line.
 ok flag is set to false on parse error, and left unchanged otherwise.
+
+If cmd doesn't start with runscript, then vector with size 0 is returned.
 */
-void runscript_expand(std::vector<std::string>& cmd, bool &ok)
+std::vector<std::vector<std::string>> runscript_expand(const std::vector<std::string>& cmd, bool &ok)
 {
+    std::vector<std::vector<std::string> > result;
     if (cmd[0] == "runscript") {
-        if (cmd.size()<2) {
-            puts("Failed expanding runscript - filename missing.");
+        /*
+        The cmd vector ends with additional ";" or "\0" element.
+        */
+        if (cmd.size() != 3 && cmd[2].c_str()[0] != 0x00) {
+            puts("Failed expanding runscript - filename missing or extra parameters present.");
             ok = false;
-            return;
+            return result;
         }
         auto fn = cmd[1];
 
@@ -102,24 +109,22 @@ void runscript_expand(std::vector<std::string>& cmd, bool &ok)
         std::string line;
         // only first line up to \n is used.
         getline(in, line);
-        std::vector<std::vector<std::string> > result;
         bool ok2;
         result = parse_command_line_min(line, ok2);
         debug("runscript expand fn='%s' line='%s'\n", fn.c_str(), line.c_str());
         if (ok2 == false) {
             printf("Failed expanding runscript file='%s' line='%s'.\n", fn.c_str(), line.c_str());
+            result.clear();
             ok = false;
         }
-        else {
-            cmd = result[0];
-        }
     }
+    return result;
 }
 
 std::vector<std::vector<std::string>>
 parse_command_line(const std::string line,  bool &ok)
 {
-    std::vector<std::vector<std::string> > result;
+    std::vector<std::vector<std::string> > result, result2;
     result = parse_command_line_min(line, ok);
 
     /*
@@ -127,8 +132,18 @@ parse_command_line(const std::string line,  bool &ok)
     execute from the given file.
     */
     std::vector<std::vector<std::string>>::iterator cmd_iter;
-    for (cmd_iter=result.begin(); ok && cmd_iter!=result.end(); cmd_iter++) {
-        runscript_expand(*cmd_iter, ok);
+    for (cmd_iter=result.begin(); ok && cmd_iter!=result.end(); ) {
+        result2 = runscript_expand(*cmd_iter, ok);
+        if (result2.size() > 0) {
+            cmd_iter = result.erase(cmd_iter);
+            int pos;
+            pos = cmd_iter - result.begin();
+            result.insert(cmd_iter, result2.begin(), result2.end());
+            cmd_iter = result.begin() + pos + result2.size();
+        }
+        else {
+            cmd_iter++;
+        }
     }
 
     return result;
