@@ -7,6 +7,8 @@
  */
 
 #include <iterator>
+#include <fstream>
+#include <osv/debug.hh>
 
 #include <boost/config/warning_disable.hpp>
 #include <boost/spirit/include/qi.hpp>
@@ -65,7 +67,7 @@ struct commands : qi::grammar<sciter,
 };
 
 std::vector<std::vector<std::string> >
-parse_command_line(const std::string line, bool &ok)
+parse_command_line_min(const std::string line, bool &ok)
 {
     std::vector<std::vector<std::string> > result;
 
@@ -77,6 +79,57 @@ parse_command_line(const std::string line, bool &ok)
                       g,
                       space,
                       result);
+
+    return result;
+}
+
+/*
+If cmd starts with "runcript file", read content of file and
+update cmd with the content.
+ok flag is set to false on parse error, and left unchanged otherwise.
+*/
+void runscript_expand(std::vector<std::string>& cmd, bool &ok)
+{
+    if (cmd[0] == "runscript") {
+        if (cmd.size()<2) {
+            puts("Failed expanding runscript - filename missing.");
+            ok = false;
+            return;
+        }
+        auto fn = cmd[1];
+
+        std::ifstream in(fn);
+        std::string line;
+        // only first line up to \n is used.
+        getline(in, line);
+        std::vector<std::vector<std::string> > result;
+        bool ok2;
+        result = parse_command_line_min(line, ok2);
+        debug("runscript expand fn='%s' line='%s'\n", fn.c_str(), line.c_str());
+        if (ok2 == false) {
+            printf("Failed expanding runscript file='%s' line='%s'.\n", fn.c_str(), line.c_str());
+            ok = false;
+        }
+        else {
+            cmd = result[0];
+        }
+    }
+}
+
+std::vector<std::vector<std::string>>
+parse_command_line(const std::string line,  bool &ok)
+{
+    std::vector<std::vector<std::string> > result;
+    result = parse_command_line_min(line, ok);
+
+    /*
+    If command starts with runscript, we need to read actual command to
+    execute from the given file.
+    */
+    std::vector<std::vector<std::string>>::iterator cmd_iter;
+    for (cmd_iter=result.begin(); ok && cmd_iter!=result.end(); cmd_iter++) {
+        runscript_expand(*cmd_iter, ok);
+    }
 
     return result;
 }
