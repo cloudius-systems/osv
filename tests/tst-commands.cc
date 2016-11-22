@@ -515,6 +515,116 @@ static bool test_runscript_multiple_commands_per_line_with_args_quotes()
     return true;
 }
 
+static bool test_runscript_multiline()
+{
+    std::ofstream of1("/myscript", std::ios::out | std::ios::binary);
+    of1 << "/prog1\n";
+    of1 << "/prog2 \n";
+    of1 << "  /prog3;  \n";
+    of1 << "  /prog4 ;  \n";
+    of1 << "  \n";
+    of1 << "\n";
+    of1 << "  ;  \n";
+    of1 << " ; \n";
+    of1.close();
+
+    std::vector<std::vector<std::string> > result;
+    std::vector<std::string> cmd = { "/prog1", "/prog2", "/prog3", "/prog4" };
+    size_t expected_size[] = {2, 2, 2, 2};
+    bool ok;
+
+
+    result = osv::parse_command_line(
+        std::string("runscript \"/myscript\";  "),
+        ok);
+
+    if (!ok) {
+        return false;
+    }
+
+    if (result.size() != 4) {
+        return false;
+    }
+
+    for (size_t i = 0; i < result.size(); i++) {
+        if (result[i].size() != expected_size[i]) {
+            return false;
+        }
+        if (result[i][0] != cmd[i]) {
+            return false;
+        }
+    }
+    return true;
+}
+
+static bool test_runscript_multiline_multiple_commands_per_line_with_args_quotes()
+{
+    std::ofstream of1("/myscript", std::ios::out | std::ios::binary);
+    of1 << "/prog1 pp1a pp1b\n";
+    of1 << "\t/prog2 pp2a \"pp2b1 pp2b2\" pp2c ; \n";
+    of1 << "  /prog3 pp3a pp3b \"pp3c1 pp3c2\";  /prog4 \"pp4a1 pp4a2\";  \n";
+    of1.close();
+
+    std::vector<std::vector<std::string> > result;
+    std::vector<std::string> cmd = { "/prog1", "/prog2", "/prog3", "/prog4" };
+    size_t expected_size[] = {4, 5, 5, 3};
+    bool ok;
+
+    result = osv::parse_command_line(
+        std::string("runscript \"/myscript\";  "),
+        ok);
+
+    if (!ok) {
+        return false;
+    }
+
+    if (result.size() != 4) {
+        return false;
+    }
+
+    for (size_t i = 0; i < result.size(); i++) {
+        if (result[i].size() != expected_size[i]) {
+            return false;
+        }
+        if (result[i][0] != cmd[i]) {
+            return false;
+        }
+    }
+
+    if (result[0][1] != std::string("pp1a")) {
+        return false;
+    }
+    if (result[0][2] != std::string("pp1b")) {
+        return false;
+    }
+
+    if (result[1][1] != std::string("pp2a")) {
+        return false;
+    }
+    if (result[1][2] != std::string("pp2b1 pp2b2")) {
+        return false;
+    }
+    if (result[1][3] != std::string("pp2c")) {
+        return false;
+    }
+
+    if (result[2][1] != std::string("pp3a")) {
+        return false;
+    }
+    if (result[2][2] != std::string("pp3b")) {
+        return false;
+    }
+    if (result[2][3] != std::string("pp3c1 pp3c2")) {
+        return false;
+    }
+
+    if (result[3][1] != std::string("pp4a1 pp4a2")) {
+        return false;
+    }
+
+    return true;
+}
+
 int main(int argc, char *argv[])
 {
     report(test_parse_simplest(), "simplest command line");
@@ -537,6 +647,10 @@ int main(int argc, char *argv[])
            "runscript multiple commands per line with args");
     report(test_runscript_multiple_commands_per_line_with_args_quotes(),
            "runscript multiple commands per line with args and quotes");
+    report(test_runscript_multiline(),
+           "runscript multiple lines");
+    report(test_runscript_multiline_multiple_commands_per_line_with_args_quotes(),
+           "runscript multiple lines, multiple commands per line, with args and quotes");
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);
     return 0;
 }
