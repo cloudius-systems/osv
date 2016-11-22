@@ -9,6 +9,7 @@
 #include <cstdio>
 
 #include <osv/commands.hh>
+#include <fstream>
 
 static int tests = 0, fails = 0;
 
@@ -283,7 +284,6 @@ static bool test_cpiod_haproxy()
 
     for (size_t i = 0; i < result.size(); i++) {
         if (result[i][0] != cmd[i]) {
-        return false;
             return false;
         }
     }
@@ -293,6 +293,60 @@ static bool test_cpiod_haproxy()
     }
 
     if (result[1][2] != std::string("/usr/haproxy.conf")) {
+        return false;
+    }
+
+    return true;
+}
+
+static bool test_runscript_multiple_with_args_quotes()
+{
+    // Script without \n at the end
+    std::ofstream of1("/zpool-list", std::ios::out | std::ios::binary);
+    of1 << "/zpool.so list";
+    of1.close();
+    // Script with \n at the end
+    std::ofstream of2("/myprog-prm");
+    of2 << "/myprog.so prm1 \"prm2a prm2b\" prm3\n";
+    of2.close();
+
+    std::vector<std::vector<std::string> > result;
+    std::vector<std::string> cmd = { "/zpool.so", "/myprog.so" };
+    bool ok;
+
+    result = osv::parse_command_line(
+        std::string("runscript \"/zpool-list\"; runscript /myprog-prm  "),
+        ok);
+
+    if (!ok) {
+        return false;
+    }
+
+    if (result.size() != 2) {
+        return false;
+    }
+
+    if (result[0].size() != 3) {
+        return false;
+    }
+
+    if (result[1].size() != 5) {
+        return false;
+    }
+
+    for (size_t i = 0; i < result.size(); i++) {
+        if (result[i][0] != cmd[i]) {
+            return false;
+        }
+    }
+
+    if (result[1][1] != std::string("prm1")) {
+        return false;
+    }
+    if (result[1][2] != std::string("prm2a prm2b")) {
+        return false;
+    }
+    if (result[1][3] != std::string("prm3")) {
         return false;
     }
 
@@ -313,6 +367,8 @@ int main(int argc, char *argv[])
            "simple multiple commands with quotes");
     report(test_cpiod_haproxy(),
            "cpiod upload and haproxy launch");
+    report(test_runscript_multiple_with_args_quotes(),
+           "runscript multiple with args and quotes");
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);
     return 0;
 }
