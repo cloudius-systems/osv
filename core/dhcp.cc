@@ -197,7 +197,7 @@ namespace dhcp {
         *options++ = DHCP_OPTION_END;
 
         dhcp_len += options - options_start;
-        build_udp_ip_headers(dhcp_len);
+        build_udp_ip_headers(dhcp_len, INADDR_ANY, INADDR_BROADCAST);
     }
 
     void dhcp_mbuf::compose_request(struct ifnet* ifp,
@@ -239,7 +239,7 @@ namespace dhcp {
         *options++ = DHCP_OPTION_END;
 
         dhcp_len += options - options_start;
-        build_udp_ip_headers(dhcp_len);
+        build_udp_ip_headers(dhcp_len, INADDR_ANY, INADDR_BROADCAST);
     }
 
     void dhcp_mbuf::compose_release(struct ifnet* ifp,
@@ -275,7 +275,7 @@ namespace dhcp {
         *options++ = DHCP_OPTION_END;
 
         dhcp_len += options - options_start;
-        build_udp_ip_headers(dhcp_len);
+        build_udp_ip_headers(dhcp_len, yip_n, sip_n);
     }
 
     u32 dhcp_mbuf::get_xid()
@@ -456,7 +456,7 @@ namespace dhcp {
         return pos + 2 + len;
     }
 
-    void dhcp_mbuf::build_udp_ip_headers(size_t dhcp_len)
+    void dhcp_mbuf::build_udp_ip_headers(size_t dhcp_len, in_addr_t src_addr, in_addr_t dest_addr)
     {
         struct ip* ip = pip();
         struct udphdr* udp = pudp();
@@ -473,8 +473,8 @@ namespace dhcp {
         ip->ip_ttl = 128;
         ip->ip_p = IPPROTO_UDP;
         ip->ip_sum = 0;
-        ip->ip_src.s_addr = INADDR_ANY;
-        ip->ip_dst.s_addr = INADDR_BROADCAST;
+        ip->ip_src.s_addr = src_addr;
+        ip->ip_dst.s_addr = dest_addr;
         ip->ip_sum = in_cksum(_m, min_ip_len);
 
         // UDP

@@ -168,7 +168,7 @@ namespace dhcp {
         u8* add_option(u8* pos, u8 type, u8 len, u8 data); // memset
 
         // Packet assembly
-        void build_udp_ip_headers(size_t dhcp_len);
+        void build_udp_ip_headers(size_t dhcp_len, in_addr_t src_addr, in_addr_t dest_addr);
 
         // mbuf related
         void allocate_mbuf();
