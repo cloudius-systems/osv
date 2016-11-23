@@ -66,13 +66,20 @@ int dhcp_hook_rx(struct mbuf* m)
 void dhcp_start(bool wait)
 {
     // Initialize the global DHCP worker
-    net_dhcp_worker.init(wait);
+    net_dhcp_worker.init();
+    net_dhcp_worker.start(wait);
 }
 
 // Send DHCP release, for example at shutdown.
 void dhcp_release()
 {
     net_dhcp_worker.release();
+}
+
+void dhcp_restart(bool wait)
+{
+    net_dhcp_worker.release();
+    net_dhcp_worker.start(wait);
 }
 
 namespace dhcp {
@@ -504,8 +511,6 @@ namespace dhcp {
 
     void dhcp_interface_state::discover()
     {
-        // FIXME: send release packet in case the interface has an address
-
         // Update state
         _state = DHCP_DISCOVER;
 
@@ -665,11 +670,9 @@ namespace dhcp {
         // FIXME: free packets and states
     }
 
-    void dhcp_worker::init(bool wait)
+    void dhcp_worker::init()
     {
         struct ifnet *ifp = nullptr;
-
-        // FIXME: clear routing table (use case run dhclient 2nd time)
 
         // Allocate a state for each interface
         IFNET_RLOCK();
@@ -686,7 +689,11 @@ namespace dhcp {
         _dhcp_thread = sched::thread::make([&] { dhcp_worker_fn(); });
         _dhcp_thread->set_name("dhcp");
         _dhcp_thread->start();
+    }
 
+    void dhcp_worker::start(bool wait)
+    {
+        // FIXME: clear routing table (use case run dhclient 2nd time)
         do {
             // Send discover packets!
             for (auto &it: _universe) {
@@ -711,6 +718,7 @@ namespace dhcp {
         for (auto &it: _universe) {
             it.second->release();
         }
+        _have_ip = false;
         // Wait a bit, so hopefully UDP release packets will be actually put on wire.
         usleep(1000);
     }

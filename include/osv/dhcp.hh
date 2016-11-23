@@ -25,6 +25,7 @@
 extern "C" {
 void dhcp_start(bool wait);
 void dhcp_release();
+void dhcp_restart(bool wait);
 }
 
 namespace dhcp {
@@ -249,8 +250,11 @@ namespace dhcp {
         dhcp_worker();
         ~dhcp_worker();
 
-        // Initializing a state per interface, sends discover packets
-        void init(bool wait);
+        // Initializing a state per interface
+        void init();
+        // Send discover packets
+        void start(bool wait);
+        // Send release packet for all DHCP IPs.
         void release();
 
         void dhcp_worker_fn();
