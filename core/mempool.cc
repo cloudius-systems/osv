@@ -528,6 +528,12 @@ void reclaimer::wait_for_minimum_memory()
 // memory, there is very little hope and we would might as well give up.
 void reclaimer::wait_for_memory(size_t mem)
 {
+    // If we're asked for an impossibly large allocation, abort now instead of
+    // the reclaimer thread aborting later. By aborting here, the application
+    // bug will be easier for the user to debug. An allocation larger than RAM
+    // can never be satisfied, because OSv doesn't do swapping.
+    if (mem > memory::stats::total())
+        abort("Unreasonable allocation attempt, larger than memory. Aborting.");
     trace_memory_wait(mem);
     _oom_blocked.wait(mem);
 }
