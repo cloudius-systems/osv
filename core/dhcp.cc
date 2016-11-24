@@ -26,11 +26,7 @@
 #include <osv/debug.hh>
 #include <osv/dhcp.hh>
 #include <osv/clock.hh>
-
-namespace osv {
-void set_dns_config(std::vector<boost::asio::ip::address> nameservers,
-                    std::vector<std::string> search_domains);
-}
+#include <libc/network/__dns.hh>
 
 using namespace boost::asio;
 
@@ -538,6 +534,9 @@ namespace dhcp {
         _sock->dhcp_send(dm);
         // IP and routes have to be removed
         osv::stop_if(_ifp->if_xname, _client_addr.to_string().c_str());
+        // Here we assume that all DNS resolvers were added by this iface.
+        // This might not be true if we have more than one iface.
+        osv::set_dns_config({}, {});
         // no reply/ack is expected, after send we just forget all old state
         _client_addr = _server_addr = ipv4_zero;
     }
