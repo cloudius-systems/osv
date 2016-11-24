@@ -117,6 +117,44 @@ out:
     return (error);
 }
 
+int stop_if(std::string if_name, std::string ip_addr)
+{
+    int error, success;
+    struct in_aliasreq ifra;
+    struct bsd_sockaddr_in* addr      = &ifra.ifra_addr;
+    struct ifnet* ifp;
+
+    if ((if_name.empty()) || (ip_addr.empty())) {
+        return (EINVAL);
+    }
+
+    bzero(&ifra, sizeof(struct in_aliasreq));
+
+    /* IF Name */
+    strncpy(ifra.ifra_name, if_name.c_str(), IFNAMSIZ);
+    ifp = ifunit_ref(if_name.c_str());
+    if (!ifp) {
+        return (ENOENT);
+    }
+
+    // todo check for null
+
+    /* IP Address */
+    success = inet_aton(ip_addr.c_str(), &addr->sin_addr);
+    if (!success) {
+        error = EINVAL;
+        goto out;
+    }
+    addr->sin_family = AF_INET;
+    addr->sin_len = sizeof(struct bsd_sockaddr_in);
+
+    error = in_control(NULL, SIOCDIFADDR, (caddr_t)&ifra, ifp, NULL);
+
+out:
+    if_rele(ifp);
+    return (error);
+}
+
 int ifup(std::string if_name)
 {
     int error;

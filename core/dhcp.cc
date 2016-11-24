@@ -536,6 +536,8 @@ namespace dhcp {
         // Save transaction id & send
         _xid = dm.get_xid();
         _sock->dhcp_send(dm);
+        // IP and routes have to be removed
+        osv::stop_if(_ifp->if_xname, _client_addr.to_string().c_str());
         // no reply/ack is expected, after send we just forget all old state
         _client_addr = _server_addr = ipv4_zero;
     }
