@@ -99,6 +99,8 @@ int shmget(key_t key, size_t size, int shmflg)
                 fdesc f(fref);
                 fd = f.release();
                 shmkeys.emplace(key, fd);
+            } else if (s == shmkeys.end()) {
+                return libc_error(ENOENT);
             } else if ((shmflg & (IPC_CREAT | IPC_EXCL)) == (IPC_CREAT | IPC_EXCL)) {
                 return libc_error(EEXIST);
             } else {
