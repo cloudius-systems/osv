@@ -195,38 +195,46 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
     sigset_t sigset;
     sigprocmask(SIG_SETMASK, nullptr, &sigset);
 
+    thread_attr tmp;
+    cpu_set_t tmp_cpuset;
     if (attr != nullptr) {
-        thread_attr tmp(*from_libc(attr));
-        if (tmp.cpuset != nullptr) {
-            // We have a CPU set. If we have only one bit set in the set, we
-            // pin it to the corresponding CPU. If the set exists, but has no
-            // CPUs set, we do nothing. Otherwise, warn the user, and do
-            // nothing.
-            int count = CPU_COUNT(tmp.cpuset);
-            if (count == 0) {
-                // Having a cpuset with no CPUs in it is invalid.
-                return EINVAL;
-            } else if (count == 1) {
-                for (size_t i = 0; i < __CPU_SETSIZE; i++) {
-                    if (CPU_ISSET(i, tmp.cpuset)) {
-                        if (i < sched::cpus.size()) {
-                            tmp.cpu = sched::cpus[i];
-                            break;
-                        } else {
-                            return EINVAL;
-                        }
-                    }
-                }
-            } else {
-                printf("Warning: OSv only supports cpu_set_t with at most one "
-                       "CPU set.\n The cpu_set_t provided will be ignored.\n");
-            }
-        }
-        t = new pthread(start_routine, arg, sigset, &tmp);
-    } else {
-        t = new pthread(start_routine, arg, sigset, from_libc(attr));
+        tmp = *from_libc(attr);
     }
 
+    if (tmp.cpuset == nullptr) {
+        // Parent thread CPU pinning should be inherited if CPU pinning
+        // was not explicitly set from input attr.
+        tmp.cpuset = &tmp_cpuset;
+        sched_getaffinity(0, sizeof(*tmp.cpuset), tmp.cpuset);
+    }
+
+    // We have a CPU set. If we have only one bit set in the set, we
+    // pin it to the corresponding CPU. If the set exists, but has no
+    // CPUs set, we do nothing. Otherwise, warn the user, and do
+    // nothing.
+    int count = CPU_COUNT(tmp.cpuset);
+    if (count == 0) {
+        // Having a cpuset with no CPUs in it is invalid.
+        return EINVAL;
+    } else if (count == 1) {
+        for (size_t i = 0; i < __CPU_SETSIZE; i++) {
+            if (CPU_ISSET(i, tmp.cpuset)) {
+                if (i < sched::cpus.size()) {
+                    tmp.cpu = sched::cpus[i];
+                    break;
+                } else {
+                    return EINVAL;
+                }
+            }
+        }
+    } else if (count == (int)sched::cpus.size()) {
+        // start unpinned
+    } else {
+        printf("Warning: OSv only supports cpu_set_t with at most one "
+               "CPU set.\n The cpu_set_t provided will be ignored.\n");
+    }
+
+    t = new pthread(start_routine, arg, sigset, &tmp);
     *thread = t->to_libc();
     t->start();
     return 0;
