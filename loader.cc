@@ -586,7 +586,16 @@ void main_cont(int ac, char** av)
     pthread_t pthread;
     // run the payload in a pthread, so pthread_self() etc. work
     std::tuple<int,char**> main_args = std::make_tuple(ac,av);
-    pthread_create(&pthread, nullptr, do_main_thread, (void *) &main_args);
+    // start do_main_thread unpinned (== pinned to all cpus)
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    for (size_t ii=0; ii<sched::cpus.size(); ii++) {
+        CPU_SET(ii, &cpuset);
+    }
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setaffinity_np(&attr, sizeof(cpuset), &cpuset);
+    pthread_create(&pthread, &attr, do_main_thread, (void *) &main_args);
     void* retval;
     pthread_join(pthread, &retval);
 
