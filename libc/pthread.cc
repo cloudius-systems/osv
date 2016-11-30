@@ -28,7 +28,6 @@
 #include <osv/lazy_indirect.hh>
 
 #include <api/time.h>
-#include <osv/spinlock.h>
 #include <osv/rwlock.h>
 
 #include "pthread.hh"
@@ -316,16 +315,24 @@ int pthread_getcpuclockid(pthread_t thread, clockid_t *clock_id)
     return 0;
 }
 
-// pthread_spinlock_t and spinlock_t aren't really the same type. But since
-// spinlock_t is a boolean and pthread_spinlock_t is defined to be an integer,
-// just casting it like this is fine. As long as we are never operating more
-// than sizeof(int) at a time, we should be fine.
+// Note that for pthread_spin_lock() we cannot use the implementation
+// from <osv/spinlock.h> because it disables preemption, which is
+// inappropriate for application code, and also unnecessary (the kernel
+// version needs to defend against a deadlock when one of the lock holders
+// disables preemption - but an application cannot disable preemption).
+// So we repeat similar code here.
+inline bool* from_libc(pthread_spinlock_t* a) {
+    static_assert(sizeof(bool) <= sizeof(pthread_spinlock_t),
+                  "pthread_spinlock_t cannot hold a bool");
+    return reinterpret_cast<bool*>(a);
+}
+
 int pthread_spin_init(pthread_spinlock_t *lock, int pshared)
 {
-    static_assert(sizeof(spinlock_t) <= sizeof(pthread_spinlock_t),
-                  "OSv spinlock type doesn't match pthread's");
-    // PTHREAD_PROCESS_SHARED and PTHREAD_PROCESS_PRIVATE are the same while we have a single process.
-    spinlock_init(reinterpret_cast<spinlock_t *>(lock));
+    // PTHREAD_PROCESS_SHARED and PTHREAD_PROCESS_PRIVATE are the same while
+    // we have a single process.
+    bool* b = from_libc(lock);
+    *b = false;
     return 0;
 }
 
@@ -336,13 +343,20 @@ int pthread_spin_destroy(pthread_spinlock_t *lock)
 
 int pthread_spin_lock(pthread_spinlock_t *lock)
 {
-    spin_lock(reinterpret_cast<spinlock_t *>(lock));
+    bool* b = from_libc(lock);
+    while (__sync_lock_test_and_set(b, 1)) {
+        while (*b) {
+            barrier();
+            // FIXME: use "PAUSE" instruction here
+        }
+    }
     return 0; // We can't really do deadlock detection
 }
 
 int pthread_spin_trylock(pthread_spinlock_t *lock)
 {
-    if (!spin_trylock(reinterpret_cast<spinlock_t *>(lock))) {
+    bool* b = from_libc(lock);
+    if (__sync_lock_test_and_set(b, 1)) {
         return EBUSY;
     }
     return 0;
@@ -350,7 +364,8 @@ int pthread_spin_trylock(pthread_spinlock_t *lock)
 
 int pthread_spin_unlock(pthread_spinlock_t *lock)
 {
-    spin_unlock(reinterpret_cast<spinlock_t *>(lock));
+    bool* b = from_libc(lock);
+    __sync_lock_release(b, 0);
     return 0;
 }
 
