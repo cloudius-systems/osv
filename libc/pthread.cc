@@ -430,7 +430,7 @@ int pthread_mutex_lock(pthread_mutex_t *m)
 int pthread_mutex_trylock(pthread_mutex_t *m)
 {
     if (!from_libc(m)->try_lock()) {
-        return -EBUSY;
+        return EBUSY;
     }
     return 0;
 }
