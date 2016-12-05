@@ -2039,6 +2039,21 @@ int sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
         offset = lseek(in_fd, 0, SEEK_CUR);
     }
 
+    // Constrain count to the extent of the file...
+    struct stat st;
+    if (fstat(in_fd, &st) < 0) {
+        return -1;
+    } else {
+        if (offset >= st.st_size) {
+            return 0;
+        } else if ((offset + count) >= st.st_size) {
+            count = st.st_size - offset;
+            if (count == 0) {
+                return 0;
+            }
+        }
+    }
+
     size_t bytes_to_mmap = count + (offset % mmu::page_size);
     off_t offset_for_mmap =  align_down(offset, (off_t)mmu::page_size);
 

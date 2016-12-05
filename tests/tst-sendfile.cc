@@ -163,6 +163,22 @@ int test_sendfile_on_socket(off_t *offset, size_t count)
     return listener_result == 0 ? ret : -1;
 }
 
+int test_extents(int testfile_readfd, size_t offset, size_t count)
+{
+    const char *out_file = "testdata_sendfile_output";
+    off_t off;
+    int write_fd = open(out_file, O_RDWR | O_TRUNC | O_CREAT, S_IRWXU);
+    if (write_fd == -1) {
+        printf("\topen() failed with error message = %s\n",strerror(errno));
+        return -1;
+    }
+    lseek(testfile_readfd, 0 , SEEK_CUR);
+    off = offset;
+    int ret  = sendfile(write_fd, testfile_readfd, &off, count);
+    close(write_fd);
+    return ret;
+}
+
 int main()
 {
     int ret;
@@ -200,11 +216,21 @@ int main()
                 report(test_functions[i](offset_p[j], count_array[k]) == count_array[k], message.c_str());
             }
             offset = 0;
-           report(lseek(testfile_readfd, 0, SEEK_SET) == 0, "set readfd to beginning of file");
+            report(lseek(testfile_readfd, 0, SEEK_SET) == 0, "set readfd to beginning of file");
             report(test_functions[i](offset_p[j], size_test_file) == size_test_file, "copy entire file");
             printf("\n\n");
         }
     }
+
+    // Test extents...
+    report(lseek(testfile_readfd, 0, SEEK_SET) == 0, "set readfd to beginning of file");
+    report(test_extents(testfile_readfd, 0, size_test_file + 1) == size_test_file, "file size extent");
+    report(lseek(testfile_readfd, 0, SEEK_SET) == 0, "set readfd to beginning of file");
+    report(test_extents(testfile_readfd, 10, size_test_file) == (size_test_file - 10), "file size extent with offset");
+    report(lseek(testfile_readfd, 0, SEEK_SET) == 0, "set readfd to beginning of file");
+    report(test_extents(testfile_readfd, size_test_file - 1, 1) == 1, "file size extent with offset (tail)");
+    report(lseek(testfile_readfd, 0, SEEK_SET) == 0, "set readfd to beginning of file");
+    report(test_extents(testfile_readfd, size_test_file, 1) == 0, "file size extent with offset (tail, no bytes)");
 
     /* force sendfile to fail in rest of test cases */
     ret = sendfile(100, testfile_readfd, NULL, 10);
