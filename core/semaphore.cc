@@ -48,7 +48,13 @@ bool semaphore::wait(unsigned units, sched::timer* tmr)
 
     // if wr.owner, it's a timeout - post() didn't wake us and didn't decrease
     // the semaphore's value for us. Note we are holding the mutex, so there
-    // can be no race with post().
+    // can be no race with post(). To clean up we should remove the
+    // wait record (local variable) that we just pushed onto _waiters
+    // (via push_back)
+    if (wr.owner) {
+       _waiters.erase(_waiters.iterator_to(wr));
+    }
+
     return !wr.owner;
  }
 

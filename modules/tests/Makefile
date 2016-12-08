@@ -84,7 +84,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-namespace.so tst-without-namespace.so payload-env.so \
 	payload-merge-env.so misc-execve.so misc-execve-payload.so misc-mutex2.so \
 	tst-pthread-setcancelstate.so tst-syscall.so tst-pin.so tst-run.so \
-	tst-ifaddrs.so tst-pthread-affinity-inherit.so
+	tst-ifaddrs.so tst-pthread-affinity-inherit.so tst-sem-timed-wait.so
 
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
