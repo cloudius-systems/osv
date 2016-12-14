@@ -15,6 +15,7 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <stdarg.h>
 
 static int tests = 0, fails = 0;
 
@@ -30,6 +31,27 @@ static void report(bool ok, std::string msg)
 // some builtin. So we need to use this variable
 const char *format = "%s";
 
+
+std::string print(const char* fmt, ...){
+    int size = 512;
+    char* buffer = 0;
+    buffer = new char[size];
+    va_list vl;
+    va_start(vl, fmt);
+    int nsize = vsnprintf(buffer, size, fmt, vl);
+    if(size<=nsize){ //fail delete buffer and try again
+        delete[] buffer;
+        buffer = 0;
+        buffer = new char[nsize+1]; //+1 for /0
+        nsize = vsnprintf(buffer, size, fmt, vl);
+    }
+    std::string ret(buffer);
+    va_end(vl);
+    delete[] buffer;
+    return ret;
+}
+
+
 int main(int ac, char** av)
 {
     // Test that when snprintf is given a >32-bit length, including -1,
@@ -44,5 +66,17 @@ int main(int ac, char** av)
     report(snprintf(dest2, 1ULL<<40, format, source) == 5, "snprintf with n=2^40");
     report(strcmp(source, dest2) == 0, "strcmp that result");
 
+    // Posix states that the "L" prefix is for long double, and "ll" is
+    // for long long int, but in Linux glibc these are actually synonyms,
+    // and either can be used
+    // Test that the L format prefix, for "long double", works
+    long double d = 123.456;
+    long long int i = 123456;
+    report(print("%Lf", d) == "123.456000", "Lf");
+    report(print("%llf", d) == "123.456000", "llf");
+    report(print("%Ld", i) == "123456", "Ld");
+    report(print("%lld", i) == "123456", "lld");
+
     std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";
+    return (fails != 0);
 }

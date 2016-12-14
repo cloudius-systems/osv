@@ -91,6 +91,10 @@ static const unsigned char states[]['z'-'A'+1] = {
 		S('o') = ULLONG, S('u') = ULLONG,
 		S('x') = ULLONG, S('X') = ULLONG,
 		S('n') = PTR,
+		// unlike Posix, glibc also allows ll prefix for long double,
+		// same as L prefix:
+		S('e') = LDBL, S('f') = LDBL, S('g') = LDBL, S('a') = LDBL,
+		S('E') = LDBL, S('F') = LDBL, S('G') = LDBL, S('A') = LDBL,
 	}, { /* 3: h-prefixed */
 		S('d') = SHORT, S('i') = SHORT,
 		S('o') = USHORT, S('u') = USHORT,
@@ -106,6 +110,11 @@ static const unsigned char states[]['z'-'A'+1] = {
 		S('e') = LDBL, S('f') = LDBL, S('g') = LDBL, S('a') = LDBL,
 		S('E') = LDBL, S('F') = LDBL, S('G') = LDBL, S('A') = LDBL,
 		S('n') = PTR,
+		// unlike Posix, glibc also allows L prefix for long long int,
+		// same as ll prefix:
+		S('d') = LLONG, S('i') = LLONG,
+		S('o') = ULLONG, S('u') = ULLONG,
+		S('x') = ULLONG, S('X') = ULLONG,
 	}, { /* 6: z- or t-prefixed (assumed to be same size) */
 		S('d') = PDIFF, S('i') = PDIFF,
 		S('o') = SIZET, S('u') = SIZET,
