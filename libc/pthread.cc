@@ -968,6 +968,13 @@ int pthread_setname_np(pthread_t p, const char* name)
     return 0;
 }
 
+int pthread_getname_np(pthread_t p, char* name, size_t namelen)
+{
+  strncpy(name, pthread::from_libc(p)->_thread->name().c_str(), namelen);
+  name[namelen-1] = 0;
+  return 0;
+}
+
 int pthread_attr_setaffinity_np(pthread_attr_t *attr, size_t cpusetsize,
         const cpu_set_t *cpuset)
 {
