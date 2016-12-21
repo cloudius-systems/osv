@@ -1,0 +1,46 @@
+
+INCLUDES = -I$(src)/arch/$(arch) -I$(src) -I$(src)/include -I$(src)/arch/common
+INCLUDES += -I$(src)/include/glibc-compat
+INCLUDES += -isystem $(src)/external/$(arch)/acpica/source/include
+INCLUDES += $(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^ .*c\+\+/ {print "-isystem" $$0}')
+INCLUDES += -isystem $(src)/include/api
+INCLUDES += -isystem $(src)/include/api/$(arch)
+INCLUDES += -I$(src)/build/$(mode)/gen/include -isystem $(miscbase)/usr/include 
+INCLUDES += -I$(src)/java 
+INCLUDES += -I$(jdkbase)/include -I$(jdkbase)/include/linux
+
+autodepend = -MD -MT $@ -MP
+COMMON_FLAGS  = -g -Wall -fPIC $(INCLUDES) -O2 $(autodepend) -DCONF_debug_memory=0 -D_KERNEL
+CXXFLAGS  = -std=c++11 $(COMMON_FLAGS)
+CFLAGS = -std=gnu99 $(COMMON_FLAGS)
+#CXXFLAGS  = -g -Wall -std=c++11 -fPIC $(INCLUDES) -O2 $(autodepend) $(configuration) 
+src = $(shell readlink -f ../..)
+
+RM := /bin/rm
+
+ifndef arch
+	arch = x64
+endif
+
+ifndef mode
+	mode = release
+endif
+
+miscbase = $(src)/external/$(arch)/misc.bin
+
+configuration-defines = conf-preempt conf-debug_memory conf-logger_debug
+
+configuration = $(foreach cf,$(configuration-defines), \
+                      -D$(cf:conf-%=CONF_%)=$($(cf)))
+
+quiet = $(if $V, $1, @echo " $2"; $1)
+very-quiet = $(if $V, $1, @$1)
+
+obj/%.o: %.cc | init
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -MMD  -o $@ $<, CXX $@)
+
+obj/%.o: %.c | init
+	$(call quiet, $(CC) $(CFLAGS) -c -MMD  -o $@ $<, CC $@)
+
+%.so: %.o
+	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $^, LINK $@)

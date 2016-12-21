@@ -132,7 +132,7 @@ def flatten_list(elememnts):
 
 def get_basic_apps(apps):
     basic_apps = []
-    java = resolve.require('java')
+    java = resolve.require('java-base')
     if hasattr(java,'non_isolated_jvm') and java.non_isolated_jvm:
         _jvm = non_isolated_jvm()
     else:
@@ -202,6 +202,9 @@ def build(args):
                 api.require_running(name, a[1])
             else:
                 api.require_running(name)
+
+        # Add moduless thare are implictly required if others are present
+        resolve.resolve_required_modules_if_other_is_present()
 
     modules = resolve.get_required_modules()
     modules_to_run = resolve.get_modules_to_run()

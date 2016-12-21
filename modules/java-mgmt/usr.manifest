@@ -1,0 +1,8 @@
+[manifest]
+/usr/lib/jni/balloon.so: ${MODULE_DIR}/obj/jni/balloon.so
+/usr/lib/jni/elf-loader.so: ${MODULE_DIR}/obj/jni/elf-loader.so
+/usr/lib/jni/networking.so: ${MODULE_DIR}/obj/jni/networking.so
+/usr/lib/jni/stty.so: ${MODULE_DIR}/obj/jni/stty.so
+/usr/lib/jni/tracepoint.so: ${MODULE_DIR}/obj/jni/stty.so
+/usr/lib/jni/power.so: ${MODULE_DIR}/obj/jni/power.so
+/java/cloudius.jar: ${MODULE_DIR}/cloudius/target/cloudius.jar

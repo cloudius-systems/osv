@@ -5,18 +5,18 @@ include $(SRC)/modules/java-base/common.gmk
 ifeq ($(arch),aarch64)
 java-targets :=
 else
-java-targets := obj/java_non_isolated.so
+java-targets := obj/java.so
 endif
 
-obj/java_non_isolated.o: $(SRC)/modules/java-base/java.cc | init
-	$(call quiet, $(CXX) $(CXXFLAGS) -DRUN_JAVA_NON_ISOLATED -o $@ -c $(SRC)/modules/java-base/java.cc -MMD, CXX $@)
+obj/java.o: $(SRC)/modules/java-base/java.cc | init
+	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ -c $(SRC)/modules/java-base/java.cc -MMD, CXX $@)
 
 init:
 	@echo "  MKDIRS"
 	$(call very-quiet, mkdir -p obj)
 
 module: $(java-targets)
-	cd $(SRC)/modules/java-base && mvn --projects :runjava-common,:runjava-non-isolated package -DskipTests=true
+	cd $(SRC)/modules/java-base && mvn --projects :runjava-common,:runjava-isolated  package -DskipTests=true
 
 clean:
 	cd $(SRC)/modules/java-base && mvn clean

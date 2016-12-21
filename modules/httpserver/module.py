@@ -17,6 +17,11 @@ api.require('openssl')
 api.require('libtools')
 api.require('libyaml')
 
+# only require next 3 modules if java (jre) is included in the list of modules
+api.require_if_other_module_present('josvsym','java')
+api.require_if_other_module_present('httpserver-jolokia-plugin','java')
+api.require_if_other_module_present('httpserver-jvm-plugin','java')
+
 # httpserver will run regardless of an explicit command line
 # passed with "run.py -e".
 daemon = api.run_on_init(_exe + ' &!')

@@ -131,17 +131,7 @@ endif
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
 
-# TODO: These java-targets shouldn't be compiled here, but rather in modules/java/Makefile.
-# The problem is that getting the right compilation lines there is hard :-(
-ifeq ($(arch),aarch64)
-java-targets :=
-else
-java-targets := $(out)/java/jvm/java.so $(out)/java/jvm/java_non_isolated.so \
-	$(out)/java/jni/balloon.so $(out)/java/jni/elf-loader.so $(out)/java/jni/networking.so \
-        $(out)/java/jni/stty.so $(out)/java/jni/tracepoint.so $(out)/java/jni/power.so $(out)/java/jni/monitor.so
-endif
-
-all: $(out)/loader.img $(java-targets) links
+all: $(out)/loader.img links
 .PHONY: all
 
 links:
@@ -376,10 +366,6 @@ $(out)/%.o: %.cc | generated-headers
 $(out)/%.o: %.c | generated-headers
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $<, CC $*.c)
-
-$(out)/java/jvm/java_non_isolated.o: java/jvm/java.cc | generated-headers
-	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLAGS) -DRUN_JAVA_NON_ISOLATED -o $@ -c java/jvm/java.cc, CXX $<)
 
 $(out)/%.o: %.S
 	$(makedir)

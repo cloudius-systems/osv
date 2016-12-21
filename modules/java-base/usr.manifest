@@ -6,6 +6,7 @@
 #
 
 [manifest]
-/java.so: ${MODULE_DIR}/obj/java_non_isolated.so
-/java/runjava-non-isolated.jar: ${OSV_BASE}/modules/java-base/runjava-non-isolated/target/runjava-non-isolated.jar
-/.java.policy: ${MODULE_DIR}/.java.policy
+/usr/lib/&/libexpat.so.1: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libjpeg.so.62: %(miscbase)s/usr/lib64/&
+/usr/lib/jni/monitor.so: ${MODULE_DIR}/obj/jni/monitor.so
+/usr/lib/libosv.so: libosv.so
