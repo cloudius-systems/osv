@@ -58,6 +58,18 @@ public:
         std::unique_lock<std::mutex> l(_mutex);
         return _condvar.wait_for(l, duration, [&] () -> bool { return is_released(); });
     }
+
+    // Useful if latches are being used as a primitive for implementing
+    // pthread_barrier_t so threads can wait on a barrier multiple times
+    // (over multiple rounds). There should be no other threads calling
+    // count_down or await when we're resetting. The caller needs to use
+    // external locking to avoid disaster (having a thread concurrently
+    // in count_down or await and one concurrently in reset). Without
+    // external locking resetting the latch is unsafe.
+    void unsafe_reset(int count)
+    {
+        _count.store(count, std::memory_order_relaxed);
+    }
 };
 
 class thread_barrier
