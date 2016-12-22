@@ -4,11 +4,8 @@ include $(SRC)/modules/java-base/common.gmk
 ifeq ($(arch),aarch64)
 java-targets :=
 else
-java-targets := obj/java.so obj/java_non_isolated.so
+java-targets := obj/java_non_isolated.so
 endif
-
-obj/java.o: $(SRC)/modules/java-base/java.cc | init
-	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ -c $(SRC)/modules/java-base/java.cc -MMD, CXX $@)
 
 obj/java_non_isolated.o: $(SRC)/modules/java-base/java.cc | init
 	$(call quiet, $(CXX) $(CXXFLAGS) -DRUN_JAVA_NON_ISOLATED -o $@ -c $(SRC)/modules/java-base/java.cc -MMD, CXX $@)

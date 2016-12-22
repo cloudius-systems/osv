@@ -6,8 +6,6 @@
 #
 
 [manifest]
-/java.so: ${OSV_BASE}/modules/java-tests/obj/java.so
-/java/runjava-isolated.jar: ${OSV_BASE}/modules/java-base/runjava-isolated/target/runjava-isolated.jar
 /java_non_isolated.so: ${OSV_BASE}/modules/java-tests/obj/java_non_isolated.so
 /java/runjava-non-isolated.jar: ${OSV_BASE}/modules/java-base/runjava-non-isolated/target/runjava-non-isolated.jar
 /.java.policy: ${OSV_BASE}/modules/java-tests/.java.policy
