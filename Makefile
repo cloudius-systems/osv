@@ -88,7 +88,7 @@ CROSS_PREFIX ?= $(if $(filter-out $(arch), $(host_arch)), $(arch)-linux-gnu-)
 CXX=$(CROSS_PREFIX)g++
 CC=$(CROSS_PREFIX)gcc
 LD=$(CROSS_PREFIX)ld.bfd
-STRIP=$(CROSS_PREFIX)strip
+export STRIP=$(CROSS_PREFIX)strip
 OBJCOPY=$(CROSS_PREFIX)objcopy
 
 # Our makefile puts all compilation results in a single directory, $(out),

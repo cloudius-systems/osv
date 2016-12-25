@@ -66,7 +66,7 @@ def strip_file(filename):
         if not os.path.exists(stripped_filename) \
                 or (os.path.getmtime(stripped_filename) < \
                     os.path.getmtime(filename)):
-            subprocess.call(["strip", "-o", stripped_filename, filename])
+            subprocess.call([os.getenv("STRIP", "strip"), "-o", stripped_filename, filename])
     return stripped_filename
 
 def main():
