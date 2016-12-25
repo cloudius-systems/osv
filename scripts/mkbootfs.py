@@ -1,6 +1,6 @@
 #!/usr/bin/python
 
-import os, struct, optparse, io
+import os, struct, optparse, io, subprocess
 try:
     import configparser
 except ImportError:
@@ -52,6 +52,23 @@ def read_manifest(fn):
                   for f in manifest.options('manifest')])
     return files
 
+def to_strip(filename):
+    ff = os.path.abspath(filename)
+    osvdir = os.path.abspath('../..')
+    return ff.startswith(os.getcwd()) or \
+        ff.startswith(osvdir + "/modules") or \
+        ff.startswith(osvdir + "/apps")
+
+def strip_file(filename):
+    stripped_filename = filename
+    if filename.endswith(".so") and to_strip(filename):
+        stripped_filename = filename[:-3] + "-stripped.so"
+        if not os.path.exists(stripped_filename) \
+                or (os.path.getmtime(stripped_filename) < \
+                    os.path.getmtime(filename)):
+            subprocess.call(["strip", "-o", stripped_filename, filename])
+    return stripped_filename
+
 def main():
     make_option = optparse.make_option
 
@@ -90,6 +107,8 @@ def main():
     files = read_manifest(options.manifest)
     files = list(expand(files.items()))
     files = [(x, unsymlink(y)) for (x, y) in files]
+    files = [(x, y) for (x, y) in files if not x.endswith("-stripped.so")]
+    files = [(x, strip_file(y)) for (x, y) in files]
 
     pos = (len(files) + 1) * metadata_size
 
