@@ -118,10 +118,16 @@ def upload(osv, manifest, depends):
                 + cpio_field(0, 8)                # check
                 + filename + b'\0')
 
+    def to_strip(filename):
+        ff = os.path.abspath(filename);
+        osvdir = os.path.abspath('../..');
+        return ff.startswith(os.getcwd()) or \
+            ff.startswith(osvdir + "/modules") or \
+            ff.startswith(osvdir + "/apps")
+
     def strip_file(filename):
         stripped_filename = filename
-        if filename.endswith(".so") and \
-                (filename[0] != "/" or filename.startswith(os.getcwd())):
+        if filename.endswith(".so") and to_strip(filename):
             stripped_filename = filename[:-3] + "-stripped.so"
             if not os.path.exists(stripped_filename) \
                     or (os.path.getmtime(stripped_filename) < \
@@ -138,6 +144,8 @@ def upload(osv, manifest, depends):
             cpio_send(link.encode())
         else:
             depends.write('\t%s \\\n' % (hostname,))
+            if hostname.endswith("-stripped.so"):
+                continue
             hostname = strip_file(hostname)
             if os.path.islink(hostname):
                 perm = os.lstat(hostname).st_mode & 0o777
