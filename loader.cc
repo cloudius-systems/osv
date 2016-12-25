@@ -495,6 +495,7 @@ void* do_main_thread(void *_main_args)
     // empty otherwise, to run in this thread. '&!' is the same as '&', but
     // doesn't wait for the thread to finish before exiting OSv.
     std::vector<shared_app_t> detached;
+    std::vector<shared_app_t> bg;
     for (auto &it : commands) {
         std::vector<std::string> newvec(it.begin(), std::prev(it.end()));
         auto suffix = it.back();
@@ -505,11 +506,17 @@ void* do_main_thread(void *_main_args)
                 detached.push_back(app);
             } else if (!background) {
                 app->join();
+            } else {
+                bg.push_back(app);
             }
         } catch (const launch_error& e) {
             std::cerr << e.what() << ". Powering off.\n";
             osv::poweroff();
         }
+    }
+
+    for (auto app : bg) {
+        app->join();
     }
 
     for (auto app : detached) {
