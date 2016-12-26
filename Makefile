@@ -84,7 +84,7 @@ ifeq (,$(wildcard conf/$(arch).mk))
 endif
 include conf/$(arch).mk
 
-CROSS_PREFIX ?= $(if $(filter-out $(arch), $(host_arch)), $(arch)-linux-gnu-)
+CROSS_PREFIX ?= $(if $(filter-out $(arch),$(host_arch)),$(arch)-linux-gnu-)
 CXX=$(CROSS_PREFIX)g++
 CC=$(CROSS_PREFIX)gcc
 LD=$(CROSS_PREFIX)ld.bfd
