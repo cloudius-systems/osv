@@ -37,6 +37,7 @@ public:
 
     /* false->non-shareable true->Inner Shareable */
     inline void set_share(bool v) {
+        auto& x=pt_element_common<N>::x;
         x &= ~(3ul << 8);
         if (v)
             x |= (3ul << 8);
@@ -44,12 +45,11 @@ public:
 
     // mair_el1 register defines values for each 8 indexes. See boot.S
     inline void set_attridx(unsigned char c) {
+        auto& x=pt_element_common<N>::x;
         assert(c <= 7);
         x &= ~(7ul << 2);
         x |= (c << 2);
     }
-private:
-    using pt_element_common<N>::x;
 };
 
 
