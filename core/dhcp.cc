@@ -72,10 +72,9 @@ void dhcp_release()
     net_dhcp_worker.release();
 }
 
-void dhcp_restart(bool wait)
+void dhcp_renew(bool wait)
 {
-    net_dhcp_worker.release();
-    net_dhcp_worker.start(wait);
+    net_dhcp_worker.renew(wait);
 }
 
 namespace dhcp {
@@ -221,6 +220,9 @@ namespace dhcp {
         pkt->secs = 0;
         pkt->flags = 0;
         memcpy(pkt->chaddr, IF_LLADDR(ifp), ETHER_ADDR_LEN);
+        ulong yip_n = htonl(yip.to_ulong());
+        ulong sip_n = htonl(sip.to_ulong());
+        memcpy(&pkt->ciaddr.s_addr, &yip_n, 4);
 
         // Options
         u8* options_start = reinterpret_cast<u8*>(pkt+1);
@@ -242,7 +244,7 @@ namespace dhcp {
         *options++ = DHCP_OPTION_END;
 
         dhcp_len += options - options_start;
-        build_udp_ip_headers(dhcp_len, INADDR_ANY, INADDR_BROADCAST);
+        build_udp_ip_headers(dhcp_len, yip_n, sip_n);
     }
 
     void dhcp_mbuf::compose_release(struct ifnet* ifp,
@@ -541,6 +543,22 @@ namespace dhcp {
         _client_addr = _server_addr = ipv4_zero;
     }
 
+    void dhcp_interface_state::renew()
+    {
+        // Update state
+        _state = DHCP_REQUEST;
+
+        // Compose a dhcp request packet
+        dhcp_mbuf dm(false);
+        _xid = rand();
+        dm.compose_request(_ifp,
+                           _xid,
+                           _client_addr, _server_addr);
+
+        // Send
+        _sock->dhcp_send(dm);
+    }
+
     void dhcp_interface_state::process_packet(struct mbuf* m)
     {
         dhcp_mbuf dm(true, m);
@@ -692,13 +710,14 @@ namespace dhcp {
         _dhcp_thread->start();
     }
 
-    void dhcp_worker::start(bool wait)
+    void dhcp_worker::_send_and_wait(bool wait, dhcp_interface_state_send_packet iface_func)
     {
-        // FIXME: clear routing table (use case run dhclient 2nd time)
+        // When doing renew, we still have IP, but want to reuse the flag.
+        _have_ip = false;
         do {
-            // Send discover packets!
+            // Send discover or renew packets!
             for (auto &it: _universe) {
-                it.second->discover();
+                (it.second->*iface_func)();
             }
 
             if (wait) {
@@ -714,6 +733,12 @@ namespace dhcp {
         } while (!_have_ip && wait);
     }
 
+    void dhcp_worker::start(bool wait)
+    {
+        // FIXME: clear routing table (use case run dhclient 2nd time)
+        _send_and_wait(wait, &dhcp_interface_state::discover);
+    }
+
     void dhcp_worker::release()
     {
         for (auto &it: _universe) {
@@ -722,6 +747,11 @@ namespace dhcp {
         _have_ip = false;
         // Wait a bit, so hopefully UDP release packets will be actually put on wire.
         usleep(1000);
+    }
+
+    void dhcp_worker::renew(bool wait)
+    {
+        _send_and_wait(wait, &dhcp_interface_state::renew);
     }
 
     void dhcp_worker::dhcp_worker_fn()

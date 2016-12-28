@@ -17,17 +17,17 @@
 #include <osv/hypervisor.hh>
 
 // we cannot include osv/dhcp.hh, hence direct declaration.
-extern "C" void dhcp_restart(bool wait);
+extern "C" void dhcp_renew(bool wait);
 
 // Set the hostname to given string.
 // If hostname changes, try to propagate the change to DHCP server too.
-void set_hostname_restart_dhcp(std::string hostname) {
+void set_hostname_renew_dhcp(std::string hostname) {
     if (hostname.length() > 0) {
         char old_hostname[256] = "";
         gethostname(old_hostname, sizeof(old_hostname));
         sethostname(hostname.c_str(), hostname.length());
         if (hostname != old_hostname) {
-            dhcp_restart(true);
+            dhcp_renew(true);
         }
     }
 }
@@ -245,7 +245,7 @@ void hostname_module::handle(const YAML::Node& doc)
 {
     auto hostname = doc.as<string>();
     debug("cloudinit hostname: %s\n", hostname.c_str());
-    set_hostname_restart_dhcp(hostname);
+    set_hostname_renew_dhcp(hostname);
 }
 
 void osvinit::add_module(std::shared_ptr<config_module> module)
@@ -280,7 +280,7 @@ void osvinit::load_from_cloud(bool ignore_missing_source)
         auto& ds = get_data_source();
 
         // Set the hostname from given data source, if it exists.
-        set_hostname_restart_dhcp(ds.external_hostname());
+        set_hostname_renew_dhcp(ds.external_hostname());
 
         // Load user data.
         user_data = ds.get_user_data();
