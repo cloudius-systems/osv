@@ -16,7 +16,7 @@ std::shared_ptr<osv::application> run(std::string path,
 }
 
 std::shared_ptr<osv::application> run(std::string path,
-                                 int argc, char** argv, int *return_code)
+                                 int argc, const char* const* argv, int *return_code)
 {
     std::vector<std::string> args;
     for (int i = 0; i < argc; i++) {

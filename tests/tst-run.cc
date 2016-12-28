@@ -31,7 +31,7 @@ int main(int ac, char** av)
     }
 
     // See that I can run myself (with a special argument to stop the recursion)
-    char *child_args[] = {"/tests/tst-run.so", ""};
+    const char *child_args[] = {"/tests/tst-run.so", ""};
     int ret;
     bool b = (bool)osv::run("/tests/tst-run.so", 2, child_args, &ret);
     report(b == true, "Run myself");

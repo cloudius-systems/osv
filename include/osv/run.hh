@@ -78,7 +78,7 @@ namespace osv {
  * \return \c shared pointer to the application
  */
 std::shared_ptr<osv::application> run(std::string path,
-                                      int argc, char** argv, int *return_code);
+                                      int argc, const char* const* argv, int *return_code);
 
 /**
  * Run the given executable.
