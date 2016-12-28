@@ -1652,6 +1652,7 @@ musl += regex/tre-mem.o
 $(out)/musl/src/regex/tre-mem.o: CFLAGS += -UNDEBUG
 
 libc += pthread.o
+libc += pthread_barrier.o
 libc += libc.o
 libc += dlfcn.o
 libc += time.o
