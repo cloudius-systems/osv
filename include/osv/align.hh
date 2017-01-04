@@ -25,6 +25,13 @@ T align_up(T n, T alignment)
     return align_down(n + alignment - 1, alignment);
 }
 
+template <typename T>
+inline
+bool align_check(T n, T alignment)
+{
+    return align_down(n, alignment) == n;
+}
+
 template <class T>
 inline
 T* align_down(T* ptr, size_t alignment)
@@ -43,4 +50,11 @@ T* align_up(T* ptr, size_t alignment)
     return reinterpret_cast<T*>(n);
 }
 
+template <class T>
+inline
+bool align_check(T* ptr, size_t alignment)
+{
+    auto n = reinterpret_cast<uintptr_t>(ptr);
+    return align_down(n, alignment) == n;
+}
 #endif
