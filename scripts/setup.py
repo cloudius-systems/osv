@@ -39,6 +39,7 @@ class Fedora(object):
         packages = ['java-1.7.0-openjdk', 'python-requests']
         ec2_packages = []
         test_packages = []
+        preinstall = []
         ec2_post_install = None
         version = '19'
 
@@ -46,6 +47,7 @@ class Fedora(object):
         packages = ['java-1.7.0-openjdk', 'python-requests']
         ec2_packages = []
         test_packages = []
+        preinstall = []
         ec2_post_install = None
         version = '20'
 
@@ -53,6 +55,7 @@ class Fedora(object):
         packages = ['java-1.7.0-openjdk', 'python-requests']
         ec2_packages = []
         test_packages = []
+        preinstall = []
         ec2_post_install = None
         version = '21'
 
@@ -60,6 +63,7 @@ class Fedora(object):
         packages = ['java-1.8.0-openjdk', 'python-requests']
         ec2_packages = []
         test_packages = []
+        preinstall = []
         ec2_post_install = None
         version = '22'
 
@@ -67,6 +71,7 @@ class Fedora(object):
         packages = ['java-1.8.0-openjdk', 'python2-requests']
         ec2_packages = []
         test_packages = []
+        preinstall = []
         ec2_post_install = None
         version = '23'
 
@@ -87,6 +92,7 @@ class RHELbased(Fedora):
         packages = []
         ec2_packages = []
         test_packages = []
+        preinstall = []
         ec2_post_install = None
         version = '7.0'
 
@@ -109,6 +115,7 @@ class Debian(object):
         packages = []
         ec2_packages = []
         test_packages = []
+        preinstall = []
         ec2_post_install = None
         version = 'jessie/sid'
 
@@ -128,10 +135,20 @@ class Ubuntu(object):
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
 
+    class Ubuntu_16_04(object):
+        packages = []
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        preinstall = ['add-apt-repository -y ppa:openjdk-r/ppa &&'
+                      'apt-get update']
+        ec2_post_install = None
+        version = '16.04'
+
     class Ubuntu_15_04(object):
         packages = []
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
+        preinstall = []
         ec2_post_install = None
         version = '15.04'
 
@@ -139,6 +156,7 @@ class Ubuntu(object):
         packages = []
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
+        preinstall = []
         ec2_post_install = None
         version = '14.04'
 
@@ -146,10 +164,11 @@ class Ubuntu(object):
         packages = []
         ec2_packages = []
         test_packages = []
+        preinstall = []
         ec2_post_install = standard_ec2_post_install
         version = '13.10'
 
-    versions = [Ubuntu_15_04, Ubuntu_14_04, Ubuntu_13_10]
+    versions = [Ubuntu_16_04, Ubuntu_15_04, Ubuntu_14_04, Ubuntu_13_10]
 
 distros = [
            Debian(),
@@ -183,6 +202,11 @@ for distro in distros:
                     pkg += distro.ec2_packages + dver.ec2_packages
                 if cmdargs.test:
                     pkg += distro.test_packages + dver.test_packages
+
+                # call before installing
+                if dver.preinstall:
+                    subprocess.check_call(dver.preinstall, shell=True)
+
                 subprocess.check_call(distro.install + ' ' + str.join(' ', pkg), shell=True)
                 if cmdargs.ec2:
                     if distro.ec2_post_install:
