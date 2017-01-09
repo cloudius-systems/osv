@@ -118,7 +118,7 @@ class Ubuntu(object):
     name = 'Ubuntu'
     install = 'apt-get -y install'
     packages = ['build-essential', 'libboost-all-dev', 'genromfs', 'autoconf',
-                'libtool', 'openjdk-7-jdk', 'ant', 'qemu-utils', 'maven',
+                'libtool', 'openjdk-8-jdk', 'ant', 'qemu-utils', 'maven',
                 'libmaven-shade-plugin-java', 'python-dpkt', 'tcpdump', 'gdb', 'qemu-system-x86',
                 'gawk', 'gnutls-bin', 'openssl', 'python-requests', 'p11-kit', 'g++-multilib',
                 'libssl-dev', 'libedit-dev', 'curl', 'libvirt-bin',
@@ -127,6 +127,13 @@ class Ubuntu(object):
     ec2_packages = standard_ec2_packages
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
+
+    class Ubuntu_16_10(object):
+        packages = []
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '16.10'
 
     class Ubuntu_15_04(object):
         packages = []
@@ -149,7 +156,7 @@ class Ubuntu(object):
         ec2_post_install = standard_ec2_post_install
         version = '13.10'
 
-    versions = [Ubuntu_15_04, Ubuntu_14_04, Ubuntu_13_10]
+    versions = [Ubuntu_16_10, Ubuntu_15_04, Ubuntu_14_04, Ubuntu_13_10]
 
 distros = [
            Debian(),
