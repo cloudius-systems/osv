@@ -625,6 +625,56 @@ static bool test_runscript_multiline_multiple_commands_per_line_with_args_quotes
     return true;
 }
 
+static bool test_runscript_with_env()
+{
+    std::ofstream of1("/myscript", std::ios::out | std::ios::binary);
+    of1 << "--env=ASDF=ttrt /prog1 pp1a pp1b\n";
+    of1.close();
+
+    std::vector<std::vector<std::string> > result;
+    std::vector<std::string> cmd = { "/prog1" };
+    size_t expected_size[] = {4};
+    bool ok;
+
+    if (NULL != getenv("ASDF")) {
+        return false;
+    }
+
+    result = osv::parse_command_line(
+        std::string("runscript \"/myscript\";  "),
+        ok);
+
+    if (!ok) {
+        return false;
+    }
+
+    if (result.size() != 1) {
+        return false;
+    }
+
+    for (size_t i = 0; i < result.size(); i++) {
+        if (result[i].size() != expected_size[i]) {
+            return false;
+        }
+        if (result[i][0] != cmd[i]) {
+            return false;
+        }
+    }
+
+    if (result[0][1] != std::string("pp1a")) {
+        return false;
+    }
+    if (result[0][2] != std::string("pp1b")) {
+        return false;
+    }
+
+    if (std::string("ttrt") != getenv("ASDF")) {
+        return false;
+    }
+
+    return true;
+}
+
 int main(int argc, char *argv[])
 {
     report(test_parse_simplest(), "simplest command line");
@@ -651,6 +701,8 @@ int main(int argc, char *argv[])
            "runscript multiple lines");
     report(test_runscript_multiline_multiple_commands_per_line_with_args_quotes(),
            "runscript multiple lines, multiple commands per line, with args and quotes");
+    report(test_runscript_with_env(),
+           "runscript with --env");
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);
     return 0;
 }

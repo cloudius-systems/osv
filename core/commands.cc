@@ -12,6 +12,8 @@
 
 #include <boost/config/warning_disable.hpp>
 #include <boost/spirit/include/qi.hpp>
+#include <boost/program_options.hpp>
+#include <osv/power.hh>
 #include <osv/commands.hh>
 #include <osv/align.hh>
 #include <sys/types.h>
@@ -90,6 +92,65 @@ parse_command_line_min(const std::string line, bool &ok)
 }
 
 /*
+In each runscript line, first N args starting with - are options.
+Parse options and remove them from result.
+
+Options are applied immediately, just as in loader.cc parse_options().
+So if two scripts set the same environment variable, then the last one wins.
+Applying all options before running any command is also safer than trying to
+apply options for each script at script execution (second script would modify
+environment setup by the first script, causing a race).
+*/
+static void runscript_process_options(std::vector<std::vector<std::string> >& result) {
+    namespace bpo = boost::program_options;
+    namespace bpos = boost::program_options::command_line_style;
+    // don't allow --foo bar (require --foo=bar) so we can find the first non-option
+    // argument
+    int style = bpos::unix_style & ~(bpos::long_allow_next | bpos::short_allow_next);
+    bpo::options_description desc("OSv runscript options");
+    desc.add_options()
+        ("env", bpo::value<std::vector<std::string>>(), "set Unix-like environment variable (putenv())");
+
+    for (size_t ii=0; ii<result.size(); ii++) {
+        auto cmd = result[ii];
+        bpo::variables_map vars;
+
+        std::vector<const char*> args = { "dummy-string" };
+        // due to https://svn.boost.org/trac/boost/ticket/6991, we can't terminate
+        // command line parsing on the executable name, so we need to look for it
+        // ourselves
+        auto ac = cmd.size();
+        auto av = std::vector<const char*>();
+        av.reserve(ac);
+        for (auto& prm: cmd) {
+            av.push_back(prm.c_str());
+        }
+        auto nr_options = std::find_if(av.data(), av.data() + ac,
+                                       [](const char* arg) { return arg[0] != '-'; }) - av.data();
+        std::copy(av.data(), av.data() + nr_options, std::back_inserter(args));
+
+        try {
+            bpo::store(bpo::parse_command_line(args.size(), args.data(), desc, style), vars);
+        } catch(std::exception &e) {
+            std::cout << e.what() << '\n';
+            std::cout << desc << '\n';
+            osv::poweroff();
+        }
+        bpo::notify(vars);
+
+        if (vars.count("env")) {
+            for (auto t : vars["env"].as<std::vector<std::string>>()) {
+                debug("Setting in environment: %s\n", t);
+                putenv(strdup(t.c_str()));
+            }
+        }
+
+        cmd.erase(cmd.begin(), cmd.begin() + nr_options);
+        result[ii] = cmd;
+    }
+}
+
+/*
 If cmd starts with "runcript file", read content of file and
 return vector of all programs to be run.
 File can contain multiple commands per line.
@@ -125,6 +186,8 @@ std::vector<std::vector<std::string>> runscript_expand(const std::vector<std::st
                 ok = false;
                 return result2;
             }
+            // process and remove options from command
+            runscript_process_options(result3);
             result2.insert(result2.end(), result3.begin(), result3.end());
             line_num++;
         }
