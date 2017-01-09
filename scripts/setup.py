@@ -115,7 +115,7 @@ class Debian(object):
     versions = [debian]
 
 class Ubuntu(object):
-    name = 'Ubuntu'
+    name = ['Ubuntu', 'LinuxMint']
     install = 'apt-get -y install'
     packages = ['build-essential', 'libboost-all-dev', 'genromfs', 'autoconf',
                 'libtool', 'openjdk-7-jdk', 'ant', 'qemu-utils', 'maven',
@@ -127,6 +127,13 @@ class Ubuntu(object):
     ec2_packages = standard_ec2_packages
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
+
+    class LinuxMint_17_2(object):
+        packages = []
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '17.2'
 
     class Ubuntu_15_04(object):
         packages = []
@@ -149,7 +156,7 @@ class Ubuntu(object):
         ec2_post_install = standard_ec2_post_install
         version = '13.10'
 
-    versions = [Ubuntu_15_04, Ubuntu_14_04, Ubuntu_13_10]
+    versions = [Ubuntu_15_04, Ubuntu_14_04, Ubuntu_13_10, LinuxMint_17_2]
 
 distros = [
            Debian(),
