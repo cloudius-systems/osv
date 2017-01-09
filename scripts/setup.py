@@ -128,28 +128,28 @@ class Ubuntu(object):
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
 
-    class Ubuntu_15_04(object):
+    class Ubuntu_15(object):
         packages = []
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
-        version = '15.04'
+        version = '15'
 
-    class Ubuntu_14_04(object):
+    class Ubuntu_14(object):
         packages = []
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
-        version = '14.04'
+        version = '14'
 
-    class Ubuntu_13_10(object):
+    class Ubuntu_13(object):
         packages = []
         ec2_packages = []
         test_packages = []
         ec2_post_install = standard_ec2_post_install
-        version = '13.10'
+        version = '13'
 
-    versions = [Ubuntu_15_04, Ubuntu_14_04, Ubuntu_13_10]
+    versions = [Ubuntu_15, Ubuntu_14, Ubuntu_13]
 
 distros = [
            Debian(),
