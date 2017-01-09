@@ -189,7 +189,7 @@ Mount NFS mountpoint specified via cloud-init.
 
 Cloud-init config snippet:
 mounts:
- - [ nfs://192.168.122.1/ggg, /ggg, auto, uid=0 ]
+ - [ "192.168.122.1:/ggg", /ggg, "nfs", "uid=1000,gid=1000", "0", "0" ]
 
 This results in running command
 /tools/mount-nfs.so nfs://192.168.122.1/ggg/?uid=0 /ggg
@@ -197,13 +197,24 @@ This results in running command
 void mount_module::yaml_to_request(const YAML::Node& node, http::server::request& req)
 {
     std::string method = "PUT";
-    std::string nfs_server = node[0].as<string>();
+    std::string srv_hostname_dir = node[0].as<string>();
     std::string mount_point = node[1].as<string>();
-    // node[2] is "auto" flag - we ignore it
+    std::string type = node[2].as<string>();
     std::string options = "";
     if (node.size() >= 4) {
         options = node[3].as<string>();
     }
+    // node[4] and [5] are ignored.
+
+    if (type != "nfs") {
+        fprintf(stderr, "Ignoring unsupported filesystem type %s\n", type.c_str());
+        return;
+    }
+
+    auto pos = srv_hostname_dir.find_first_of(":");
+    auto srv_hostname = srv_hostname_dir.substr(0, pos);
+    auto srv_dir = srv_hostname_dir.substr(pos+1, srv_hostname_dir.size());
+    auto nfs_server = type + "://" + srv_hostname + srv_dir;
 
     http::server::header param;
     param.name = "command";

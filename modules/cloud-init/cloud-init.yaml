@@ -4,7 +4,7 @@ run:
 
 # mount NFS export example
 #mounts:
-# - [ nfs://192.168.122.1/ggg, /ggg, auto, uid=0 ]
+# - [ "192.168.122.1:/ggg", /ggg, "nfs", "uid=1000,gid=1000", "0", "0" ]
 
 # set hostname example
 #hostname: uber-vm
