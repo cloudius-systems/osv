@@ -21,6 +21,10 @@ int feholdexcept(fenv_t *);
 int fesetenv(const fenv_t *);
 int feupdateenv(const fenv_t *);
 
+int feenableexcept(int);
+int fedisableexcept(int);
+int fegetexcept(void);
+
 #ifdef __cplusplus
 }
 #endif
