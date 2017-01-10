@@ -43,16 +43,9 @@ void build_signal_frame(exception_frame* ef,
 
 }
 
-static unsigned __thread signal_nesting;
-
 extern "C"
 void call_signal_handler(arch::signal_frame* frame)
 {
-    if (signal_nesting) {
-        // Note: nested signals are legal, but rarely used, so they usually
-        // indicate trouble
-        abort("nested signals");
-    }
     // The user's signal handler might use the FPU, so save its current state.
     // FIXME: this fpu saving is not necessary if the callers already save the
     // FPU state. Currently, only divide_error() is missing FPU saving, and
@@ -60,7 +53,6 @@ void call_signal_handler(arch::signal_frame* frame)
     // divide_error(), we can probably get rid of the fpu saving here.
     sched::fpu_lock fpu;
     SCOPE_LOCK(fpu);
-    ++signal_nesting;
     if (frame->sa.sa_flags & SA_SIGINFO) {
         ucontext_t uc = {};
         auto& regs = uc.uc_mcontext.gregs;
@@ -103,7 +95,6 @@ void call_signal_handler(arch::signal_frame* frame)
     } else {
         frame->sa.sa_handler(frame->si.si_signo);
     }
-    --signal_nesting;
 }
 
 
