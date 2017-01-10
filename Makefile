@@ -849,6 +849,7 @@ objects += arch/$(arch)/interrupt.o
 objects += arch/$(arch)/pci.o
 objects += arch/$(arch)/msi.o
 objects += arch/$(arch)/power.o
+objects += arch/$(arch)/feexcept.o
 
 $(out)/arch/x64/string-ssse3.o: CXXFLAGS += -mssse3
 
