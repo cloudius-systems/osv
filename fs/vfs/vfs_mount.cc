@@ -53,17 +53,15 @@
 #include <memory>
 #include <list>
 
-using namespace std;
-
 /*
  * List for VFS mount points.
  */
-static list<mount*> mount_list;
+static std::list<mount*> mount_list;
 
 /*
  * Global lock to access mount point.
  */
-static std::mutex mount_lock;
+static mutex mount_lock;
 
 /*
  * Lookup file system.
@@ -452,11 +450,11 @@ mount_desc to_mount_desc(mount* m)
     return ret;
 }
 
-vector<mount_desc>
+std::vector<mount_desc>
 current_mounts()
 {
     WITH_LOCK(mount_lock) {
-        vector<mount_desc> ret;
+        std::vector<mount_desc> ret;
         for (auto&& mp : mount_list) {
             ret.push_back(to_mount_desc(mp));
         }
