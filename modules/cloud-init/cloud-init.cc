@@ -11,6 +11,7 @@
 #include <memory>
 #include "client.hh"
 #include <boost/asio.hpp>
+#include <boost/algorithm/string/replace.hpp>
 #include "data-source.hh"
 #include <osv/debug.hh>
 #include <osv/firmware.hh>
@@ -219,11 +220,11 @@ void mount_module::yaml_to_request(const YAML::Node& node, http::server::request
     http::server::header param;
     param.name = "command";
     param.value = "/tools/mount-nfs.so";
-    param.value += " " + nfs_server;
+    param.value += " \"" + nfs_server;
     if (options.size() > 0) {
-        param.value += "/?" + options;
+        param.value += "/?" + boost::replace_all_copy(options, ",", "&");
     }
-    param.value += " " + mount_point;
+    param.value += "\" " + mount_point;
     req.query_parameters.push_back(param);
     //fprintf(stderr, "MNT: param name='%s' value='%s'", param.name.c_str(), param.value.c_str());
     req.method = method;
