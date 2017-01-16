@@ -118,7 +118,7 @@ class Ubuntu(object):
     name = 'Ubuntu'
     install = 'apt-get -y install'
     packages = ['build-essential', 'libboost-all-dev', 'genromfs', 'autoconf',
-                'libtool', 'openjdk-7-jdk', 'ant', 'qemu-utils', 'maven',
+                'libtool', 'ant', 'qemu-utils', 'maven',
                 'libmaven-shade-plugin-java', 'python-dpkt', 'tcpdump', 'gdb', 'qemu-system-x86',
                 'gawk', 'gnutls-bin', 'openssl', 'python-requests', 'p11-kit', 'g++-multilib',
                 'libssl-dev', 'libedit-dev', 'curl', 'libvirt-bin',
@@ -129,21 +129,21 @@ class Ubuntu(object):
     ec2_post_install = None
 
     class Ubuntu_15_04(object):
-        packages = []
+        packages = ['openjdk-7-jdk']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '15.04'
 
     class Ubuntu_14_04(object):
-        packages = []
+        packages = ['openjdk-7-jdk']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '14.04'
 
     class Ubuntu_13_10(object):
-        packages = []
+        packages = ['openjdk-7-jdk']
         ec2_packages = []
         test_packages = []
         ec2_post_install = standard_ec2_post_install
