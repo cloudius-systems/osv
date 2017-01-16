@@ -729,6 +729,7 @@ namespace dhcp {
                 t.set(3_s);
 
                 sched::thread::wait_until([&]{ return _have_ip || t.expired(); });
+                _waiter = nullptr;
             }
         } while (!_have_ip && wait);
     }
