@@ -30,6 +30,7 @@ struct mapping {
     { "txt",  "text/plain" },
     { "ico",  "image/x-icon" },
     { "bin",  "application/octet-stream" },
+    { "json",  "application/json" },
 };
 
 std::string extension_to_type(const std::string& extension)
