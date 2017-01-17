@@ -51,7 +51,10 @@ int main(int argc, char **argv)
     expect(sched::cpu::current(), sched::cpus[1]);
     sched::thread::pin(sched::cpus[0]);
     expect(sched::cpu::current(), sched::cpus[0]);
-
+    // check that we can unpin this thread
+    expect(sched::thread::current()->pinned(), true);
+    sched::thread::current()->unpin();
+    expect(sched::thread::current()->pinned(), false);
 
     // Check that we can pin a different thread.
     // In this test the thread will most likely be sleeping.
@@ -185,6 +188,10 @@ int main(int argc, char **argv)
     sched::thread::pin(&*t5, sched::cpus[1]);
     expect(t5->migratable(), false);
     expect(t5->tcpu(), sched::cpus[1]);
+    // also test unpin (only need to unpin once)
+    expect(t5->pinned(), true);
+    t5->unpin();
+    expect(t5->pinned(), false);
     WITH_LOCK (m5) {
         t5_pinned = true;
         c5.wake_all();

@@ -632,6 +632,42 @@ void thread::pin(thread *t, cpu *target_cpu)
     helper->join();
 }
 
+void thread::unpin()
+{
+    // Unpinning the current thread is straightforward. But to work on a
+    // different thread safely, without risking races with concurrent attempts
+    // to pin, unpin, or migrate the same thread, we need to run the actual
+    // unpinning code on the same CPU as the target thread.
+    if (this == current()) {
+        WITH_LOCK(preempt_lock) {
+            if (_pinned) {
+                _pinned = false;
+                 std::atomic_signal_fence(std::memory_order_release);
+                _migration_lock_counter--;
+            }
+        }
+        return;
+    }
+    std::unique_ptr<thread> helper(thread::make([this] {
+        WITH_LOCK(preempt_lock) {
+            // helper thread started on the same CPU as "this", but by now
+            // "this" might migrated. If that happened helper need to migrate.
+            while (sched::cpu::current() != this->tcpu()) {
+                DROP_LOCK(preempt_lock) {
+                    thread::pin(this->tcpu());
+                }
+            }
+            if (_pinned) {
+                _pinned = false;
+                 std::atomic_signal_fence(std::memory_order_release);
+                _migration_lock_counter--;
+            }
+        }
+    }, sched::thread::attr().pin(tcpu())));
+    helper->start();
+    helper->join();
+}
+
 void cpu::load_balance()
 {
     notifier::fire();

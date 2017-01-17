@@ -495,6 +495,13 @@ public:
      * method), this is a static function taking the thread as a parameter.
      */
     static void pin(thread *t, cpu *target_cpu);
+    /**
+     * Unpin the given thread.
+     *
+     * This undoes the operation of a previous pin() operation (if any), and
+     * allows the thread to be later migrated to any CPU.
+     */
+    void unpin();
 
 #ifdef __OSV_CORE__
     static inline thread* current() { return s_current; };
