@@ -29,7 +29,7 @@ extern "C" { int mkdirp(const char *d, mode_t mode); }
 
 static void make_directories(std::string path) {
     if (mkdirp(path.c_str(), 0755) < 0 && errno != EEXIST) {
-        throw std::system_error(errno, std::system_category(), "mkdir");
+        throw std::system_error(errno, std::system_category(), "mkdirp " + path);
     }
 }
 
@@ -50,13 +50,12 @@ static void change_mode(std::string path, mode_t mode) {
     }
 }
 
-
 class cpio_in_expand : public cpio_in {
 public:
     cpio_in_expand(std::string prefix): _prefix(prefix) {};
     virtual void add_file(string name, istream& is, mode_t mode) override {
         cout << "Adding " << name << "...\n";
-        name = _prefix + name;
+        name = add_prefix(name);
         make_directories(parent_path(name));
         ofstream os(name);
         os << is.rdbuf();
@@ -64,12 +63,13 @@ public:
     }
     virtual void add_dir(string name, mode_t mode) override {
         cout << "Adding " << name << "...\n";
-        name = _prefix + name;
+        name = add_prefix(name);
         make_directories(name);
         change_mode(name, mode);
     }
     virtual void add_symlink(string oldpath, string newpath, mode_t mode) override {
         cout << "Link " << newpath << " to " << oldpath << " ...\n";
+        newpath = add_prefix(newpath);
         auto pos = newpath.rfind('/');
         if (pos != newpath.npos) {
             make_directories(newpath.substr(0, pos));
@@ -82,6 +82,34 @@ public:
 
 private:
     std::string _prefix;
+    std::string add_prefix(std::string path) {
+        if (_prefix.empty()) {
+            return path;
+        }
+        path = _prefix + path;
+        // If if _prefix + path contains symbolic link to an absolute path,
+        // we need to add prefix to that link target as well.
+        char buf[1024];
+        std::vector<char> s(path.begin(), path.end());
+        for (unsigned i = 1; i < path.size(); ++i) {
+            if (s[i] != '/') {
+                continue;
+            }
+            s[i] = '\0';
+            int n = readlink(s.data(), buf, sizeof(buf) - 1);
+            s[i] = '/';
+            if (n >= 0 && buf[0] == '/') {
+                buf[n] = '\0';
+                path = _prefix + buf + "/" +
+                        std::string(s.begin() + i + 1, s.end());
+                s = std::vector<char>(path.begin(), path.end());
+                i = _prefix.size() + n;
+            } else if (n < 0 && errno != EINVAL) {
+                break;
+            }
+        }
+        return path;
+    }
 };
 
 int main(int ac, char** av)
@@ -125,7 +153,6 @@ int main(int ac, char** av)
         if (ret == -1) {
             fprintf(stderr, "umount /zfs/zfs failed, error = %s\n", strerror(errno));
         }
-
         ret = umount("/zfs");
         if (ret == -1) {
             fprintf(stderr, "umount /zfs failed, error = %s\n", strerror(errno));

@@ -1,2 +1,3 @@
-/usr/lib/&/libboost_unit_test_framework.so.1.54.0: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libboost_unit_test_framework.so.1.55.0: %(miscbase)s/usr/lib64/&
+/usr/lib/&/libboost_filesystem.so.1.55.0: %(miscbase)s/usr/lib64/&
 /testrunner.so: ./tests/testrunner.so

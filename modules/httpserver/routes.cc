@@ -5,6 +5,8 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <iostream>
+
 #include "routes.hh"
 #include "reply.hh"
 #include "json/json_path.hh"

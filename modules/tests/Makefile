@@ -1,4 +1,4 @@
-module: usr.manifest
+module: usr.manifest build_all_tests
 
 # Paths set by scripts/build
 src := $(OSV_BASE)
@@ -23,6 +23,7 @@ autodepend = -MD -MT $@ -MP
 
 INCLUDES = -I$(src)/arch/$(ARCH) -I$(src) -I$(src)/include \
 	-I$(src)/arch/common -isystem $(src)/include/glibc-compat \
+	$(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^ .*c\+\+/ {print "-isystem" $$0}') \
 	-isystem $(src)/include/api -isystem $(src)/include/api/$(ARCH) \
 	-isystem $(out)/gen/include
 
@@ -52,7 +53,7 @@ $(out)/%.o: $(src)/%.c
 $(out)/%.so: $(out)/%.o
 	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $< $(LIBS), LD $*.so)
 
-tests := tst-pthread.so tst-ramdisk.so tst-vblk.so tst-bsd-evh.so \
+tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	misc-bsd-callout.so tst-bsd-kthread.so tst-bsd-taskqueue.so \
 	tst-fpu.so tst-preempt.so tst-tracepoint.so tst-hub.so \
 	misc-console.so misc-leak.so misc-readbench.so misc-mmap-anon-perf.so \
@@ -78,7 +79,13 @@ tests := tst-pthread.so tst-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-sendfile.so misc-lock-perf.so tst-uio.so tst-printf.so \
 	tst-pthread-affinity.so tst-pthread-tsd.so tst-thread-local.so \
 	tst-zfs-mount.so tst-regex.so tst-tcp-siocoutq.so \
-	libtls.so tst-tls.so tst-select-timeout.so
+	libtls.so tst-tls.so tst-select-timeout.so tst-faccessat.so \
+	tst-fstatat.so misc-reboot.so tst-fcntl.so payload-namespace.so \
+	tst-namespace.so tst-without-namespace.so payload-env.so \
+	payload-merge-env.so misc-execve.so misc-execve-payload.so misc-mutex2.so \
+	tst-pthread-setcancelstate.so tst-syscall.so tst-pin.so tst-run.so \
+	tst-ifaddrs.so tst-pthread-affinity-inherit.so tst-sem-timed-wait.so \
+	tst-ttyname.so tst-pthread-barrier.so tst-feexcept.so
 
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
@@ -107,6 +114,8 @@ BOOSTLIBS=$(src)/external/$(ARCH)/misc.bin/usr/lib64
 $(boost-tests:%=$(out)/tests/%): LIBS += \
 	 $(BOOSTLIBS)/libboost_unit_test_framework.so \
 	 $(BOOSTLIBS)/libboost_filesystem.so
+$(boost-tests:%=$(out)/tests/%): CXXFLAGS += -D_GLIBCXX_USE_CXX11_ABI=0 \
+	-isystem $(src)/external/$(ARCH)/misc.bin/usr/include
 
 tests += $(boost-tests)
 
@@ -139,8 +148,11 @@ $(solaris-tests:%=$(out)/tests/%): COMMON+= \
 
 all_tests := $(tests:%=tests/%)
 
+build_all_tests: $(all_tests:%=$(out)/%)
+.PHONY: build_all_tests
+
 # Automatically generate usr.manifest which includes all tests.
-usr.manifest: $(all_tests:%=$(out)/%) $(lastword $(MAKEFILE_LIST))
+usr.manifest: $(lastword $(MAKEFILE_LIST)) usr.manifest.skel
 	@echo "  generating modules/tests/usr.manifest"
 	@cat $@.skel > $@
 	@echo $(all_tests) | tr ' ' '\n' | awk '{print "/" $$0 ": ./" $$0}' >> $@

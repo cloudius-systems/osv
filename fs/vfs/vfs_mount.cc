@@ -53,17 +53,15 @@
 #include <memory>
 #include <list>
 
-using namespace std;
-
 /*
  * List for VFS mount points.
  */
-static list<mount*> mount_list;
+static std::list<mount*> mount_list;
 
 /*
  * Global lock to access mount point.
  */
-static std::mutex mount_lock;
+static mutex mount_lock;
 
 /*
  * Lookup file system.
@@ -119,14 +117,22 @@ sys_mount(const char *dev, const char *dir, const char *fsname, int flags, const
     if (dev && strncmp(dev, "/dev/", 5) == 0)
         device_open(dev + 5, DO_RDWR, &device);
 
-    SCOPE_LOCK(mount_lock);
-
     /* Check if device or directory has already been mounted. */
-    for (auto&& mp : mount_list) {
-        if (!strcmp(mp->m_path, dir) ||
-            (device && mp->m_dev == device)) {
-            error = EBUSY;  /* Already mounted */
-            goto err1;
+    // We need to avoid the situation where after we already verified that
+    // the mount point is free, but before we actually add it to mount_list,
+    // another concurrent mount adds it. So we use a new mutex to ensure
+    // that only one sys_mount() runs at a time. We cannot reuse the existing
+    // mount_lock for this purpose: If we take mount_lock and then do
+    // lookups, this is lock order inversion and can result in deadlock.
+    static mutex sys_mount_lock;
+    SCOPE_LOCK(sys_mount_lock);
+    WITH_LOCK(mount_lock) {
+        for (auto&& mp : mount_list) {
+            if (!strcmp(mp->m_path, dir) ||
+                (device && mp->m_dev == device)) {
+                error = EBUSY;  /* Already mounted */
+                goto err1;
+            }
         }
     }
     /*
@@ -194,7 +200,9 @@ sys_mount(const char *dev, const char *dir, const char *fsname, int flags, const
     /*
      * Insert to mount list
      */
-    mount_list.push_back(mp);
+    WITH_LOCK(mount_lock) {
+        mount_list.push_back(mp);
+    }
 
     return 0;   /* success */
  err4:
@@ -452,11 +460,11 @@ mount_desc to_mount_desc(mount* m)
     return ret;
 }
 
-vector<mount_desc>
+std::vector<mount_desc>
 current_mounts()
 {
     WITH_LOCK(mount_lock) {
-        vector<mount_desc> ret;
+        std::vector<mount_desc> ret;
         for (auto&& mp : mount_list) {
             ret.push_back(to_mount_desc(mp));
         }

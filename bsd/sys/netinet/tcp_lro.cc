@@ -85,9 +85,10 @@ tcp_lro_init(struct lro_ctrl *lc)
 	for (i = 0; i < LRO_ENTRIES; i++) {
 		le = (struct lro_entry *)malloc(sizeof(*le));
 		if (le == NULL) {
-			if (i == 0)
+			if (i == 0) {
 				error = ENOMEM;
-				break;
+			}
+			break;
 		} else {
 			bzero(le, sizeof(*le));
 		}

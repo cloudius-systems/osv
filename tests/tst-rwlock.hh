@@ -133,7 +133,7 @@ public:
 
         // Test 1
         _test1_finished = false;
-        thread* t1 = new thread([&] { rwlock_test1(); });
+        thread* t1 = thread::make([&] { rwlock_test1(); });
         t1->start();
         _main->wait_until([&] { return (_test1_finished); });
         delete t1;
@@ -142,8 +142,8 @@ public:
         _test2_t1_finished = false;
         _test2_t2_finished = false;
         rw_init(&_test2_rwlock, "tst2");
-        thread* t2_1 = new thread([&] { rwlock_test2_t1(); });
-        thread* t2_2 = new thread([&] { rwlock_test2_t2(); });
+        thread* t2_1 = thread::make([&] { rwlock_test2_t1(); });
+        thread* t2_2 = thread::make([&] { rwlock_test2_t2(); });
         t2_1->start();
         t2_2->start();
         _main->wait_until([&] { return (_test2_t1_finished && _test2_t2_finished); });
@@ -152,7 +152,7 @@ public:
 
         // Test 3
         _test3_finished = false;
-        thread* t3 = new thread([&] { rwlock_test3(); });
+        thread* t3 = thread::make([&] { rwlock_test3(); });
         t3->start();
         _main->wait_until([&] { return (_test3_finished); });
         delete t3;

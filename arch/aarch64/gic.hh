@@ -10,7 +10,7 @@
 
 #include <osv/types.h>
 #include <osv/mmu-defs.hh>
-#include <osv/mutex.h>
+#include <osv/spinlock.h>
 
 /* This is GICv2. Revisit for v3 if/when needed. */
 namespace gic {
@@ -113,19 +113,15 @@ protected:
     mmu::phys base;
 };
 
-enum class sgi_target_list_filter : unsigned int {
+enum class sgi_filter : unsigned int {
     SGI_TARGET_LIST = 0,
     SGI_TARGET_ALL_BUT_SELF = 1,
     SGI_TARGET_SELF = 2,
-
-    SGI_TARGET_N
 };
 
 enum class irq_type : unsigned int {
     IRQ_TYPE_LEVEL = 0,
     IRQ_TYPE_EDGE = 1,
-
-    IRQ_TYPE_N
 };
 
 class gic_driver {
@@ -140,9 +136,10 @@ public:
 
     void set_irq_type(unsigned int id, irq_type type); /* set level or edge */
 
-    /* send software-generated interrupt to other cpus; vector is [0..15] */
-    void send_sgi(sgi_target_list_filter filter, unsigned char cpulist,
-                  unsigned int vector); /* NIY */
+    /* send software-generated interrupt to self, to another cpu,
+     * or to all cpus but self; vector must be [0..15]
+     */
+    void send_sgi(sgi_filter filter, int smp_idx, unsigned int vector);
 
     /* IAR: acknowledge irq, state pending=>active (or active/pending).
      * 31      ..     13 | 12     10 | 9            0 |
@@ -168,7 +165,7 @@ protected:
        Note that for uniprocessor we will have just a zero
        stored in cpu_targets[0] instead. */
     unsigned char cpu_targets[max_cpu_if];
-    mutex gic_lock;
+    spinlock_t gic_lock;
 };
 
 /* the gic driver class is created by the interrupt table class */

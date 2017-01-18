@@ -78,7 +78,7 @@ namespace osv {
  * \return \c shared pointer to the application
  */
 std::shared_ptr<osv::application> run(std::string path,
-                                      int argc, char** argv, int *return_code);
+                                      int argc, const char* const* argv, int *return_code);
 
 /**
  * Run the given executable.
@@ -129,12 +129,21 @@ std::shared_ptr<osv::application> run(std::string path,
  *                         <TT>return_code == nulltr</TT>, main()'s return
  *                         code is ignored.
  *
+ * \param[in] new_program if true a new elf::program will be started to create
+ *                         a new namespace.
+ *
+ * \param[in] env          an pointer to an unordered_map which content will be
+ *                         merged in the current environment
+ *
  * @throws osv::launch_error When application could not be launched
  *
  * \return \c shared pointer to the application
  */
 std::shared_ptr<osv::application> run(std::string path,
-                                    std::vector<std::string> args, int* return_code);
+            std::vector<std::string> args,
+            int* return_code,
+            bool new_program = false,
+            const std::unordered_map<std::string, std::string> *env = nullptr);
 
 /**@}*/
 

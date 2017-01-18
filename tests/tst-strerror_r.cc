@@ -26,7 +26,7 @@ void report(bool ok, string msg)
 
 int main(int ac, char** av)
 {
-    error_code ec(EACCES, system_category());
+    boost::system::error_code ec(EACCES, boost::system::system_category());
     auto ok = ec.message() == "Permission denied";
     report(ok, "strerror_r() called from a _GNU_SOURCE binary");
     std::cout << "Test complete (" << failures << "/" << tests << " failures)\n";

@@ -114,8 +114,8 @@ static void stop_on_current()
     }
 }
 
-static inter_processor_interrupt start_sampler_ipi{[] { start_on_current(); }};
-static inter_processor_interrupt stop_sampler_ipi{[] { stop_on_current(); }};
+static inter_processor_interrupt start_sampler_ipi { IPI_SAMPLER_START, [] { start_on_current(); }};
+static inter_processor_interrupt stop_sampler_ipi { IPI_SAMPLER_STOP, [] { stop_on_current(); }};
 
 template<typename Duration>
 static long to_nanoseconds(Duration duration)

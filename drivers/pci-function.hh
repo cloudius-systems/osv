@@ -28,27 +28,28 @@ namespace pci {
 
         enum pci_bar_encoding_masks {
             // mmio, pio
-            PCI_BAR_MEMORY_INDICATOR_MASK     = (1 << 0),
+            PCI_BAR_MEMORY_INDICATOR_MASK   = (1 << 0),
             // 32bit, 64bit
-            PCI_BAR_MEM_ADDR_SPACE_MASK        = (1 << 1) | (1 << 2),
-            PCI_BAR_PREFETCHABLE_MASK        = (1 << 3),
+            PCI_BAR_MEM_ADDR_SPACE_MASK     = (1 << 1) | (1 << 2),
+            PCI_BAR_PREFETCHABLE_MASK       = (1 << 3),
             PCI_BAR_MEM_ADDR_LO_MASK        = 0xFFFFFFF0,
-            PCI_BAR_PIO_ADDR_MASK            = 0xFFFFFFFC,
+            PCI_BAR_PIO_ADDR_MASK           = 0xFFFFFFFC,
         };
 
         enum pci_bar_type_indicator {
-            PCI_BAR_MMIO                 = 0x00,
+            PCI_BAR_MMIO                = 0x00,
             PCI_BAR_PIO                 = 0x01
         };
 
         enum pci_bar_prefetchable {
             PCI_BAR_NON_PREFETCHABLE    = 0x00,
-            PCI_BAR_PREFETCHABLE        = 0x01
+            PCI_BAR_PREFETCHABLE        = 0x08
         };
 
         enum pci_bar_address_space {
-            PCI_BAR_32BIT_ADDRESS        = 0x00,
-            PCI_BAR_64BIT_ADDRESS        = 0x01
+            PCI_BAR_32BIT_ADDRESS       = 0x00,
+            PCI_BAR_32BIT_BELOW_1MB     = 0x02,
+            PCI_BAR_64BIT_ADDRESS       = 0x04
         };
 
         // pos is the offset within the configuration space
@@ -75,9 +76,11 @@ namespace pci {
         mmioaddr_t get_mmio();
 
         // Access the pio or mmio bar
+        u64 readq(u32 offset);
         u32 readl(u32 offset);
         u16 readw(u32 offset);
         u8 readb(u32 offset);
+        void writeq(u32 offset, u64 val);
         void writel(u32 offset, u32 val);
         void writew(u32 offset, u16 val);
         void writeb(u32 offset, u8 val);
@@ -235,8 +238,15 @@ namespace pci {
         };
 
         enum pci_sub_class_codes {
+            PCI_SUB_CLASS_STORAGE_SCSI      = 0x00,
             PCI_SUB_CLASS_STORAGE_IDE       = 0x01,
+            PCI_SUB_CLASS_STORAGE_FLOPPY    = 0x02,
+            PCI_SUB_CLASS_STORAGE_IPI       = 0x03,
+            PCI_SUB_CLASS_STORAGE_RAID      = 0x04,
+            PCI_SUB_CLASS_STORAGE_ATA       = 0x05,
             PCI_SUB_CLASS_STORAGE_AHCI      = 0x06,
+            PCI_SUB_CLASS_STORAGE_SAS       = 0x07,
+            PCI_SUB_CLASS_STORAGE_NVMC      = 0x08,
         };
 
         function(u8 bus, u8 device, u8 func);
@@ -261,6 +271,7 @@ namespace pci {
 
         u8 get_base_class_code();
         u8 get_sub_class_code();
+        u8 get_programming_interface();
 
         // Type
         bool is_device();
@@ -377,7 +388,7 @@ namespace pci {
         u8 _header_type;
         u8 _base_class_code;
         u8 _sub_class_code;
-        u8 _lower_class_code;
+        u8 _programming_interface;
 
         // Index -> PCI Bar
         std::map<int, bar *> _bars;

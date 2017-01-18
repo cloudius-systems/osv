@@ -11,7 +11,6 @@
 #include <cassert>
 #include <cstdint>
 #include <new>
-#include <thread>
 #include <boost/utility.hpp>
 #include <string.h>
 #include <lockfree/unordered-queue-mpsc.hh>
@@ -32,7 +31,7 @@
 #include <osv/shrinker.h>
 #include <osv/defer.hh>
 #include <osv/dbg-alloc.hh>
-#include "java/jvm_balloon.hh"
+#include "java/jvm/jvm_balloon.hh"
 #include <boost/dynamic_bitset.hpp>
 #include <boost/lockfree/stack.hpp>
 #include <boost/lockfree/policies.hpp>
@@ -529,6 +528,12 @@ void reclaimer::wait_for_minimum_memory()
 // memory, there is very little hope and we would might as well give up.
 void reclaimer::wait_for_memory(size_t mem)
 {
+    // If we're asked for an impossibly large allocation, abort now instead of
+    // the reclaimer thread aborting later. By aborting here, the application
+    // bug will be easier for the user to debug. An allocation larger than RAM
+    // can never be satisfied, because OSv doesn't do swapping.
+    if (mem > memory::stats::total())
+        abort("Unreasonable allocation attempt, larger than memory. Aborting.");
     trace_memory_wait(mem);
     _oom_blocked.wait(mem);
 }
@@ -934,7 +939,7 @@ void reclaimer_waiters::wait(size_t bytes)
     sched::thread *curr = sched::thread::current();
 
     // Wait for whom?
-    if (curr == &reclaimer_thread._thread) {
+    if (curr == reclaimer_thread._thread.get()) {
         oom();
      }
 
@@ -950,10 +955,10 @@ void reclaimer_waiters::wait(size_t bytes)
 }
 
 reclaimer::reclaimer()
-    : _oom_blocked(), _thread([&] { _do_reclaim(); }, sched::thread::attr().detached().name("reclaimer").stack(mmu::page_size))
+    : _oom_blocked(), _thread(sched::thread::make([&] { _do_reclaim(); }, sched::thread::attr().detached().name("reclaimer").stack(mmu::page_size)))
 {
-    osv_reclaimer_thread = reinterpret_cast<unsigned char *>(&_thread);
-    _thread.start();
+    osv_reclaimer_thread = reinterpret_cast<unsigned char *>(_thread.get());
+    _thread->start();
 }
 
 bool reclaimer::_can_shrink()
@@ -1077,10 +1082,10 @@ namespace page_pool {
 // nr_cpus threads are created to help filling the L1-pool.
 struct l1 {
     l1(sched::cpu* cpu)
-        : _fill_thread([] { fill_thread(); },
-            sched::thread::attr().pin(cpu).name(osv::sprintf("page_pool_l1_%d", cpu->id)))
+        : _fill_thread(sched::thread::make([] { fill_thread(); },
+            sched::thread::attr().pin(cpu).name(osv::sprintf("page_pool_l1_%d", cpu->id))))
     {
-        _fill_thread.start();
+        _fill_thread->start();
     }
 
     static void* alloc_page()
@@ -1100,10 +1105,18 @@ struct l1 {
     }
     static void* alloc_page_local();
     static bool free_page_local(void* v);
-    void* pop() { return _pages[--nr]; }
-    void push(void* page) { _pages[nr++] = page; }
+    void* pop()
+    {
+        assert(nr);
+        return _pages[--nr];
+    }
+    void push(void* page)
+    {
+        assert(nr < 512);
+        _pages[nr++] = page;
+    }
     void* top() { return _pages[nr - 1]; }
-    void wake_thread() { _fill_thread.wake(); }
+    void wake_thread() { _fill_thread->wake(); }
     static void fill_thread();
     static void refill();
     static void unfill();
@@ -1114,7 +1127,7 @@ struct l1 {
     size_t nr = 0;
 
 private:
-    sched::thread _fill_thread;
+    std::unique_ptr<sched::thread> _fill_thread;
     void* _pages[max];
 };
 
@@ -1147,17 +1160,15 @@ public:
         , _watermark_lo(_max * 1 / 4)
         , _watermark_hi(_max * 3 / 4)
         , _stack(_max)
-        , _fill_thread([=] { fill_thread(); }, sched::thread::attr().name("page_pool_l2"))
+        , _fill_thread(sched::thread::make([=] { fill_thread(); }, sched::thread::attr().name("page_pool_l2")))
     {
-       _fill_thread.start();
+       _fill_thread->start();
     }
 
-    page_batch* alloc_page_batch(l1& pbuf)
+    page_batch* alloc_page_batch()
     {
         page_batch* pb;
-        while (!(pb = try_alloc_page_batch()) &&
-                // Check again since someone else might change pbuf.nr when we sleep
-                (pbuf.nr + page_batch::nr_pages < pbuf.max / 2)) {
+        while (!(pb = try_alloc_page_batch())) {
             WITH_LOCK(migration_lock) {
                 DROP_LOCK(preempt_lock) {
                     refill();
@@ -1181,7 +1192,7 @@ public:
     page_batch* try_alloc_page_batch()
     {
         if (get_nr() < _watermark_lo) {
-            _fill_thread.wake();
+            _fill_thread->wake();
         }
         page_batch* pb;
         if (!_stack.pop(pb)) {
@@ -1194,7 +1205,7 @@ public:
     bool try_free_page_batch(page_batch* pb)
     {
         if (get_nr() > _watermark_hi) {
-            _fill_thread.wake();
+            _fill_thread->wake();
         }
         if (!_stack.push(pb)) {
             return false;
@@ -1217,7 +1228,7 @@ private:
     size_t _watermark_lo;
     size_t _watermark_hi;
     boost::lockfree::stack<page_batch*, boost::lockfree::fixed_sized<true>> _stack;
-    sched::thread _fill_thread;
+    std::unique_ptr<sched::thread> _fill_thread;
 };
 
 PERCPU(l1*, percpu_l1);
@@ -1248,10 +1259,14 @@ void l1::fill_thread()
                 }
         });
         if (pbuf.nr < pbuf.watermark_lo) {
-            refill();
+            while (pbuf.nr + page_batch::nr_pages < pbuf.max / 2) {
+                refill();
+            }
         }
         if (pbuf.nr > pbuf.watermark_hi) {
-            unfill();
+            while (pbuf.nr > page_batch::nr_pages + pbuf.max / 2) {
+                unfill();
+            }
         }
     }
 }
@@ -1260,11 +1275,18 @@ void l1::refill()
 {
     SCOPE_LOCK(preempt_lock);
     auto& pbuf = get_l1();
-    while (pbuf.nr + page_batch::nr_pages < pbuf.max / 2) {
-        auto* pb = global_l2.alloc_page_batch(pbuf);
+    if (pbuf.nr + page_batch::nr_pages < pbuf.max / 2) {
+        auto* pb = global_l2.alloc_page_batch();
         if (pb) {
-            for (auto& page : pb->pages) {
-                pbuf.push(page);
+            // Other threads might have filled the array while we waited for
+            // the page batch.  Make sure there is enough room to add the pages
+            // we just acquired, otherwise return them.
+            if (pbuf.nr + page_batch::nr_pages <= pbuf.max) {
+                for (auto& page : pb->pages) {
+                    pbuf.push(page);
+                }
+            } else {
+                global_l2.free_page_batch(pb);
             }
         }
     }
@@ -1274,7 +1296,7 @@ void l1::unfill()
 {
     SCOPE_LOCK(preempt_lock);
     auto& pbuf = get_l1();
-    while (pbuf.nr > page_batch::nr_pages + pbuf.max / 2) {
+    if (pbuf.nr > page_batch::nr_pages + pbuf.max / 2) {
         auto* pb = static_cast<page_batch*>(pbuf.top());
         for (size_t i = 0 ; i < page_batch::nr_pages; i++) {
             pb->pages[i] = pbuf.pop();
@@ -1777,6 +1799,15 @@ void *aligned_alloc(size_t alignment, size_t size)
         return NULL;
     }
     return ret;
+}
+
+// memalign() is an older variant of aligned_alloc(), which does not require
+// that size be a multiple of alignment.
+// memalign() is considered to be an obsolete SunOS-ism, but Linux's glibc
+// supports it, and some applications still use it.
+void *memalign(size_t alignment, size_t size)
+{
+    return aligned_alloc(alignment, size);
 }
 
 namespace memory {

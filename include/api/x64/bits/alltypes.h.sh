@@ -82,9 +82,9 @@ TYPEDEF unsigned int uid_t;
 TYPEDEF unsigned int gid_t;
 TYPEDEF int key_t;
 
-TYPEDEF struct __pthread * pthread_t;
+TYPEDEF unsigned long pthread_t;
 TYPEDEF int pthread_once_t;
-TYPEDEF int pthread_key_t;
+TYPEDEF unsigned int pthread_key_t;
 TYPEDEF int pthread_spinlock_t;
 
 TYPEDEF struct { union { int __i[14]; size_t __s[7]; } __u; } pthread_attr_t;

@@ -1,0 +1,11 @@
+#
+# Copyright (C) 2013-2014 Cloudius Systems, Ltd.
+#
+# This work is open source software, licensed under the terms of the
+# BSD license as described in the LICENSE file in the top-level directory.
+#
+
+[manifest]
+/java.so: ${MODULE_DIR}/obj/java_non_isolated.so
+/java/runjava-non-isolated.jar: ${OSV_BASE}/modules/java-base/runjava-non-isolated/target/runjava-non-isolated.jar
+/.java.policy: ${MODULE_DIR}/.java.policy

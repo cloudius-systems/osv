@@ -76,18 +76,6 @@ public:
     boost::intrusive::set_member_hook<> _vma_list_hook;
 };
 
-// compare object for searching the vma list
-// defines a partial ordering: if a range intersects a vma,
-// it is considered equal, if it is completely before it is less
-// than the vma, if it is completely after it is after the vma.
-//
-// this partial ordering is compatible with vma_list_type.
-class vma::addr_compare {
-public:
-    bool operator()(const vma& x, addr_range y) const { return x.end() <= y.start(); }
-    bool operator()(addr_range x, const vma& y) const { return x.end() <= y.start(); }
-};
-
 class anon_vma : public vma {
 public:
     anon_vma(addr_range range, unsigned perm, unsigned flags);

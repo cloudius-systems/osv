@@ -48,15 +48,15 @@ BOOST_AUTO_TEST_CASE(test_waitqueue_1)
     mutex mtx;
     int counter = 0;
     WITH_LOCK(mtx) {
-        sched::thread waker([&] {
+        std::unique_ptr<sched::thread> waker(sched::thread::make([&] {
             WITH_LOCK(mtx) {
                 ++counter;
                 wq.wake_one(mtx);
             }
-        });
-        waker.start();
+        }));
+        waker->start();
         wq.wait(mtx);
-        waker.join();
+        waker->join();
     }
     BOOST_REQUIRE(counter == 1);
 }
@@ -69,14 +69,14 @@ BOOST_AUTO_TEST_CASE(test_waitqueue_2)
     sched::timer tmr(*sched::thread::current());
     WITH_LOCK(mtx) {
         tmr.set(500_ms);
-        sched::thread waker([&] {
+        std::unique_ptr<sched::thread> waker(sched::thread::make([&] {
             sched::thread::sleep(1_s);
             WITH_LOCK(mtx) {
                 ++counter;
                 wq.wake_one(mtx);
             }
-        });
-        waker.start();
+        }));
+        waker->start();
         // timer wait
         sched::thread::wait_for(mtx, wq, tmr);
         BOOST_REQUIRE(tmr.expired());
@@ -89,7 +89,7 @@ BOOST_AUTO_TEST_CASE(test_waitqueue_2)
         tmr.cancel();
         sched::thread::wait_for(mtx, wq, tmr);
         BOOST_REQUIRE(counter == 1);
-        waker.join();
+        waker->join();
     }
 }
 
@@ -97,19 +97,19 @@ BOOST_AUTO_TEST_CASE(test_wait_for_predicate)
 {
     std::atomic<bool> x = { false };
     auto sleeper = sched::thread::current();
-    sched::thread waker([&] {
+    std::unique_ptr<sched::thread> waker(sched::thread::make([&] {
         sched::thread::sleep(1_s);
         x.store(true);
         sleeper->wake();
-    });
-    waker.start();
+    }));
+    waker->start();
     // send some spurious wakeups for fun
-    sched::thread false_waker([&] {
+    std::unique_ptr<sched::thread> false_waker(sched::thread::make([&] {
         for (auto i = 0; i < 100; ++i) {
             sched::thread::sleep(100_ms);
             sleeper->wake();
         }
-    });
+    }));
     sched::timer tmr(*sched::thread::current());
     tmr.set(500_ms);
     sched::thread::wait_for(tmr, [&] { return x.load(); });
@@ -119,8 +119,8 @@ BOOST_AUTO_TEST_CASE(test_wait_for_predicate)
     sched::thread::wait_for(tmr, [&] { return x.load(); });
     BOOST_REQUIRE(!tmr.expired());
     BOOST_REQUIRE(x.load());
-    waker.join();
-    false_waker.join();
+    waker->join();
+    false_waker->join();
 }
 
 OSV_ELF_MLOCK_OBJECT();

@@ -22,7 +22,11 @@
 #include <boost/asio/ip/address.hpp>
 #include <boost/asio/ip/address_v4.hpp>
 
-extern "C" void dhcp_start(bool wait);
+extern "C" {
+void dhcp_start(bool wait);
+void dhcp_release();
+void dhcp_renew(bool wait);
+}
 
 namespace dhcp {
 
@@ -66,6 +70,7 @@ namespace dhcp {
         DHCP_OPTION_SUBNET_MASK = 1,
         DHCP_OPTION_ROUTER = 3,
         DHCP_OPTION_DOMAIN_NAME_SERVERS = 6,
+        DHCP_OPTION_HOSTNAME = 12,
         DHCP_OPTION_INTERFACE_MTU = 26,
         DHCP_OPTION_BROADCAST_ADDRESS = 28,
         DHCP_OPTION_REQUESTED_ADDRESS = 50,
@@ -125,6 +130,9 @@ namespace dhcp {
                              u32 xid,
                              boost::asio::ip::address_v4 yip,
                              boost::asio::ip::address_v4 sip);
+        void compose_release(struct ifnet* ifp,
+                             boost::asio::ip::address_v4 yip,
+                             boost::asio::ip::address_v4 sip);
 
         /* Decode packet */
         bool is_valid_dhcp();
@@ -146,6 +154,7 @@ namespace dhcp {
         int get_renewal_time_sec() { return _renewal_time_sec; }
         int get_rebind_time_sec() { return _rebind_time_sec; }
         std::vector<route_type>& get_routes() { return _routes; }
+        std::string get_hostname() { return _hostname; }
 
     private:
 
@@ -160,7 +169,7 @@ namespace dhcp {
         u8* add_option(u8* pos, u8 type, u8 len, u8 data); // memset
 
         // Packet assembly
-        void build_udp_ip_headers(size_t dhcp_len);
+        void build_udp_ip_headers(size_t dhcp_len, in_addr_t src_addr, in_addr_t dest_addr);
 
         // mbuf related
         void allocate_mbuf();
@@ -183,6 +192,7 @@ namespace dhcp {
         u32 _rebind_time_sec;
         u16 _mtu;
         std::vector<route_type> _routes;
+        std::string _hostname;
     };
 
     ///////////////////////////////////////////////////////////////////////////
@@ -215,6 +225,8 @@ namespace dhcp {
         ~dhcp_interface_state();
 
         void discover();
+        void release();
+        void renew();
         void process_packet(struct mbuf*);
         void state_discover(dhcp_mbuf &dm);
         void state_request(dhcp_mbuf &dm);
@@ -225,10 +237,14 @@ namespace dhcp {
         state _state;
         struct ifnet* _ifp;
         dhcp_socket* _sock;
+        boost::asio::ip::address_v4 _client_addr;
+        boost::asio::ip::address_v4 _server_addr;
 
         // Transaction id
         u32 _xid;
     };
+    // typedef for discover/renew functions
+    typedef void (dhcp_interface_state::*dhcp_interface_state_send_packet) (void);
 
     ///////////////////////////////////////////////////////////////////////////
 
@@ -237,8 +253,13 @@ namespace dhcp {
         dhcp_worker();
         ~dhcp_worker();
 
-        // Initializing a state per interface, sends discover packets
-        void init(bool wait);
+        // Initializing a state per interface
+        void init();
+        // Send discover packets
+        void start(bool wait);
+        // Send release packet for all DHCP IPs.
+        void release();
+        void renew(bool wait);
 
         void dhcp_worker_fn();
         void queue_packet(struct mbuf* m);
@@ -253,6 +274,7 @@ namespace dhcp {
         // Wait for IP
         bool _have_ip;
         sched::thread * _waiter;
+        void _send_and_wait(bool wait, dhcp_interface_state_send_packet iface_func);
     };
 
 } // namespace dhcp

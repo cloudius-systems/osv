@@ -43,9 +43,9 @@ enum class apicreg {
 };
 
 enum class apiclvt {
-    timer = apicreg::LVTT,
-    lint0 = apicreg::LVT0,
-    lint1 = apicreg::LVT1,
+    timer = static_cast<int>(apicreg::LVTT),
+    lint0 = static_cast<int>(apicreg::LVT0),
+    lint1 = static_cast<int>(apicreg::LVT1),
 };
 
 enum msi_data_fields {

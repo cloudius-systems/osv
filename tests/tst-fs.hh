@@ -14,10 +14,10 @@
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/filesystem/fstream.hpp>
-
-#include <osv/debug.hh>
+#include <boost/format.hpp>
 
 namespace fs = boost::filesystem;
+typedef boost::format fmt;
 
 class TempDir : public fs::path
 {

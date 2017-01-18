@@ -8,6 +8,7 @@
 .text
 .align 16
 .globl start_elf
+.type start_elf , "function"
 start_elf:
         /* elf program start address */
         /* input: x3=elf header x4=cmdline x5=dtb */
@@ -18,7 +19,9 @@ start_elf:
         bl      validate_el // check that we are at EL1 or die
         bl      init_stack
         bl      zero_bss    // initialize bss contents to 0
-        bl      init_boot_cpu
+        bl      init_cpu
+        bl      init_boot_pt
+        bl      init_mmu
 
         adrp    x1, elf_header              // store elf header address
         str     x3, [x1, #:lo12:elf_header]
@@ -28,7 +31,6 @@ start_elf:
         str     x5, [x1, #:lo12:dtb]
 
         mov     x29, xzr
-        mov     x30, xzr
         bl      premain
 
         adrp    x3, __argc
@@ -66,7 +68,8 @@ zero_bss_loop:
         cmp     x0, x1
         b.lo    zero_bss_loop
         ret
-init_boot_cpu:
+
+init_cpu:
         ic      iallu
         tlbi    vmalle1
         dsb     sy
@@ -107,10 +110,21 @@ init_boot_cpu:
         ldr     x0, =0x15b5103510
         msr     tcr_el1, x0
         isb
+        ret
 
-        /* turn mmu on */
+init_boot_pt:
         adrp    x0, ident_pt_l4_ttbr0
         adrp    x1, ident_pt_l4_ttbr1
+        ret
+
+init_secondary_pt:
+        adrp    x1, smpboot_ttbr0
+        ldr     x0, [x1], #8
+        ldr     x1, [x1]
+        ret
+
+        /* call with x0, x1 containing ttbr0, ttbr1 to set */
+init_mmu:
         msr     ttbr0_el1, x0
         msr     ttbr1_el1, x1
         isb
@@ -130,6 +144,39 @@ init_boot_cpu:
         isb
 
         ret
+
+.align 16
+.globl start_secondary_cpu
+.type  start_secondary_cpu , "function"
+start_secondary_cpu:
+        adrp    x0, exception_vectors
+        msr     vbar_el1, x0
+        isb
+
+        bl      init_cpu
+        bl      init_secondary_pt
+        bl      init_mmu
+
+        ldr     x0, =smp_stack_free    /* ptr */
+        ldr     x1, [x0]               /* old value */
+        ldr     x2, [x1, #4096]        /* new value */
+        dmb     ish
+1:
+        ldxr    x3, [x0]
+        cmp     x3, x1
+        b.ne    2f
+        stxr    w4, x2, [x0]
+        cbnz    w4, 1b
+2:
+        dmb     ish
+        mov     x0, #1     // select SP_ELx
+        msr     spsel, x0
+        isb
+        add     x1, x1, #4096
+        mov     sp, x1
+        mov     x29, xzr
+        bl      smp_main
+        bl      halt
 
 .align 12
 ident_pt_l4_ttbr0:
@@ -157,7 +204,7 @@ ident_pt_l2_1_ttbr0:
         .quad offset + (index << 21) + 0x411
         index = index + 1
         .endr
-
+.align 12
 ident_pt_l4_ttbr1:
         .rept 512
         .quad 0
@@ -168,6 +215,19 @@ ident_pt_l4_ttbr1:
 init_stack_bottom = .
 . = . + 4096*4
 init_stack_top = .
+
+.globl smp_stack_free
+.type smp_stack_free , "object"
+smp_stack_free: .quad 0
+
+.globl smpboot_ttbr0
+.type smpboot_ttbr0 , "object"
+.globl smpboot_ttbr1
+.type smpboot_ttbr1 , "object"
+
+.align 12
+smpboot_ttbr0:  .quad 0
+smpboot_ttbr1:  .quad 0
 
 /* hmm should we provide an interrupt stack?
 . = . + 4096*10

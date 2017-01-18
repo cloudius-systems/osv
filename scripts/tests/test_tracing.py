@@ -6,7 +6,7 @@ import subprocess
 def tracing_smoke_test():
     path = '/this/path/does/not/exist'
     guest = Guest(['--trace=vfs_*,net_packet*,sched_wait*', '--trace-backtrace', '-e', path],
-        hold_with_poweroff=True, show_output_on_error=False)
+        hold_with_poweroff=True, show_output_on_error=False, scan_for_failed_to_load_object_error=False)
     try:
         wait_for_line(guest, 'Failed to load object: %s. Powering off.' % path)
 

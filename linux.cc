@@ -12,17 +12,26 @@
 #include <osv/sched.hh>
 #include <osv/mutex.h>
 #include <osv/waitqueue.hh>
+#include <osv/stubbing.hh>
 
 #include <syscall.h>
 #include <stdarg.h>
 #include <errno.h>
+#include <signal.h>
 #include <time.h>
 #include <sys/epoll.h>
 #include <sys/eventfd.h>
 #include <sys/socket.h>
 #include <sys/utsname.h>
+#include <sys/mman.h>
+#include <stdlib.h>
+#include <signal.h>
+#include <sys/select.h>
+#include <sys/mman.h>
 
 #include <unordered_map>
+
+#include <musl/src/internal/ksigaction.h>
 
 extern "C" long gettid()
 {
@@ -103,6 +112,72 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
     }
 }
 
+// We're not supposed to export the get_mempolicy() function, as this
+// function is not part of glibc (which OSv emulates), but part of a
+// separate library libnuma, which the user can simply load. libnuma's
+// implementation of get_mempolicy() calls syscall(__NR_get_mempolicy,...),
+// so this is what we need to expose, below.
+
+#define MPOL_DEFAULT 0
+#define MPOL_F_NODE         (1<<0)
+#define MPOL_F_ADDR         (1<<1)
+#define MPOL_F_MEMS_ALLOWED (1<<2)
+
+static long get_mempolicy(int *policy, unsigned long *nmask,
+        unsigned long maxnode, void *addr, int flags)
+{
+    // As OSv has no support for NUMA nodes, we do here the minimum possible,
+    // which is basically to return the same policy (MPOL_DEFAULT) and list
+    // of nodes (just node 0) no matter if the caller asked for the default
+    // policy, the allowed policy, or the policy for a specific address.
+    if ((flags & MPOL_F_NODE)) {
+        *policy = 0; // in this case, store a node id, not a policy
+        return 0;
+    }
+    if (policy) {
+        *policy = MPOL_DEFAULT;
+    }
+    if (nmask) {
+        if (maxnode < 1) {
+            errno = EINVAL;
+            return -1;
+        }
+        nmask[0] |= 1;
+    }
+    return 0;
+}
+
+
+// As explained in the sched_getaffinity(2) manual page, the interface of the
+// sched_getaffinity() function is slightly different than that of the actual
+// system call we need to implement here.
+#define __NR_sched_getaffinity_syscall __NR_sched_getaffinity
+static int sched_getaffinity_syscall(
+        pid_t pid, unsigned len, unsigned long *mask)
+{
+        int ret = sched_getaffinity(
+                pid, len, reinterpret_cast<cpu_set_t *>(mask));
+        if (ret == 0) {
+            // The Linux system call doesn't zero the entire len bytes of the
+            // given mask - it only sets up to the configured maximum number of
+            // CPUs (e.g., 64) and returns the amount of bytes it set at mask.
+            // We don't have this limitation (our sched_getaffinity() does zero
+            // the whole len), but some user code (e.g., libnuma's
+            // set_numa_max_cpu()) expect a reasonably low number to be
+            // returned, even when len is unrealistically high, so let's
+            // return a lower length too.
+            ret = std::min(len, sched::max_cpus / 8);
+        }
+        return ret;
+}
+
+// Only void* return value of mmap is type casted, as syscall returns long.
+long long_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
+    return (long) mmap(addr, length, prot, flags, fd, offset);
+}
+#define __NR_long_mmap __NR_mmap
+
+
 #define SYSCALL0(fn) case (__NR_##fn): return fn()
 
 #define SYSCALL1(fn, __t1)                  \
@@ -157,6 +232,24 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
         return fn(arg1, arg2, arg3, arg4);      \
         } while (0)
 
+#define SYSCALL5(fn, __t1, __t2, __t3, __t4, __t5)    \
+        case (__NR_##fn): do {                  \
+        va_list args;                           \
+        __t1 arg1;                              \
+        __t2 arg2;                              \
+        __t3 arg3;                              \
+        __t4 arg4;                              \
+        __t5 arg5;                              \
+        va_start(args, number);                 \
+        arg1 = va_arg(args, __t1);              \
+        arg2 = va_arg(args, __t2);              \
+        arg3 = va_arg(args, __t3);              \
+        arg4 = va_arg(args, __t4);              \
+        arg5 = va_arg(args, __t5);              \
+        va_end(args);                           \
+        return fn(arg1, arg2, arg3, arg4, arg5);\
+        } while (0)
+
 #define SYSCALL6(fn, __t1, __t2, __t3, __t4, __t5, __t6)        \
         case (__NR_##fn): do {                                  \
         va_list args;                                           \
@@ -177,10 +270,54 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
         return fn(arg1, arg2, arg3, arg4, arg5, arg6);          \
         } while (0)
 
+int rt_sigaction(int sig, const struct k_sigaction * act, struct k_sigaction * oact, size_t sigsetsize)
+{
+    struct sigaction libc_act, libc_oact, *libc_act_p = nullptr;
+    memset(&libc_act, 0, sizeof(libc_act));
+    memset(&libc_oact, 0, sizeof(libc_act));
+
+    if (act) {
+        libc_act.sa_handler = act->handler;
+        libc_act.sa_flags = act->flags & ~SA_RESTORER;
+        libc_act.sa_restorer = nullptr;
+        memcpy(&libc_act.sa_mask, &act->mask, sizeof(libc_act.sa_mask));
+        libc_act_p = &libc_act;
+    }
+
+    int ret = sigaction(sig, libc_act_p, &libc_oact);
+
+    if (oact) {
+        oact->handler = libc_oact.sa_handler;
+        oact->flags = libc_oact.sa_flags;
+        oact->restorer = nullptr;
+        memcpy(oact->mask, &libc_oact.sa_mask, sizeof(oact->mask));
+    }
+
+    return ret;
+}
+
+int rt_sigprocmask(int how, sigset_t * nset, sigset_t * oset, size_t sigsetsize)
+{
+    return sigprocmask(how, nset, oset);
+}
+
+#define __NR_sys_exit __NR_exit
+
+static int sys_exit(int ret)
+{
+    exit(ret);
+    return 0;
+}
 
 long syscall(long number, ...)
 {
+    // Save FPU state and restore it at the end of this function
+    sched::fpu_lock fpu;
+    SCOPE_LOCK(fpu);
+
     switch (number) {
+    SYSCALL2(open, const char *, int);
+    SYSCALL3(read, int, char *, size_t);
     SYSCALL1(uname, struct utsname *);
     SYSCALL3(write, int, const void *, size_t);
     SYSCALL0(gettid);
@@ -194,8 +331,35 @@ long syscall(long number, ...)
     SYSCALL4(epoll_ctl, int, int, int, struct epoll_event *);
     SYSCALL4(epoll_wait, int, struct epoll_event *, int, int);
     SYSCALL4(accept4, int, struct sockaddr *, socklen_t *, int);
+    SYSCALL5(get_mempolicy, int *, unsigned long *, unsigned long, void *, int);
+    SYSCALL3(sched_getaffinity_syscall, pid_t, unsigned, unsigned long *);
+    SYSCALL6(long_mmap, void *, size_t, int, int, int, off_t);
+    SYSCALL2(munmap, void *, size_t);
+    SYSCALL4(rt_sigaction, int, const struct k_sigaction *, struct k_sigaction *, size_t);
+    SYSCALL4(rt_sigprocmask, int, sigset_t *, sigset_t *, size_t);
+    SYSCALL1(sys_exit, int);
+    SYSCALL2(sigaltstack, const stack_t *, stack_t *);
+    SYSCALL5(select, int, fd_set *, fd_set *, fd_set *, struct timeval *);
+    SYSCALL3(madvise, void *, size_t, int);
+    SYSCALL0(sched_yield);
+    SYSCALL3(mincore, void *, size_t, unsigned char *);
     }
 
-    abort("syscall(): unimplemented system call %d. Aborting.\n", number);
+    debug_always("syscall(): unimplemented system call %d\n", number);
+    errno = ENOSYS;
+    return -1;
 }
 long __syscall(long number, ...)  __attribute__((alias("syscall")));
+
+extern "C" long syscall_wrapper(long number, ...)
+{
+    int errno_backup = errno;
+    // syscall and function return value are in rax
+    auto ret = syscall(number);
+    int result = -errno;
+    errno = errno_backup;
+    if (ret < 0 && ret >= -4096) {
+	return result;
+    }
+    return ret;
+}

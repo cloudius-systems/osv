@@ -75,7 +75,7 @@ int main(int ac, char **av)
     debug("starting fpu test\n");
     std::atomic<int> tests{}, fails{};
     for (unsigned i = 0; i < nr_threads; ++i) {
-        auto t = new sched::thread([&] {
+        auto t = sched::thread::make([&] {
             if (!test()) {
                 ++fails;
             }
@@ -95,9 +95,9 @@ int main(int ac, char **av)
             tests++;
             sched::thread *t;
             if (i % 2) {
-                t = new sched::thread([&] { fails += callee_saved_zero(yield); }, sched::thread::attr().pin(sched::cpus[0]));
+                t = sched::thread::make([&] { fails += callee_saved_zero(yield); }, sched::thread::attr().pin(sched::cpus[0]));
             } else {
-                t = new sched::thread([&] { fails += callee_saved_nearest(yield); }, sched::thread::attr().pin(sched::cpus[0]));
+                t = sched::thread::make([&] { fails += callee_saved_nearest(yield); }, sched::thread::attr().pin(sched::cpus[0]));
             }
             threads.push_back(t);
             t->start();

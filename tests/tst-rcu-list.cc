@@ -18,7 +18,6 @@
 #include <osv/semaphore.hh>
 #include <random>
 #include <osv/elf.hh>
-#include <osv/debug.hh>
 
 struct test_element {
     static constexpr int magic = 0x12345678;
@@ -92,7 +91,7 @@ BOOST_AUTO_TEST_CASE(test_rcu_list) {
         osv::rcu_list<test_element> list;
         std::vector<std::unique_ptr<sched::thread>> readers;
         for (int i = 0; i < 20; ++i) {
-            readers.emplace_back(new sched::thread([&] { do_reads(list, running, sem); }));
+            readers.emplace_back(sched::thread::make([&] { do_reads(list, running, sem); }));
             readers.back()->start();
         }
         do_writes(list, 1000000);
@@ -104,9 +103,9 @@ BOOST_AUTO_TEST_CASE(test_rcu_list) {
     }
     // force test_element deferred destructors to run
     osv::rcu_flush();
-    debug("ctors:        %10d\n", test_element::ctors.load());
-    debug("dtors:        %10d\n", test_element::dtors.load());
-    debug("miscompares:  %10d\n", test_element::miscompares.load());
+    std::cerr << "ctors: " << test_element::ctors.load() << "\n";
+    std::cerr << "dtors: " << test_element::dtors.load() << "\n";
+    std::cerr << "miscompares: " << test_element::miscompares.load() << "\n";
     BOOST_REQUIRE(test_element::miscompares.load(std::memory_order_relaxed) == 0);
     BOOST_REQUIRE(test_element::ctors.load(std::memory_order_relaxed) == test_element::dtors.load(std::memory_order_relaxed));
 }

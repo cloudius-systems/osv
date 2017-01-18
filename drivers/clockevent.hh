@@ -24,13 +24,9 @@ public:
     virtual void setup_on_cpu() = 0;
     // set() is cpu-local: each processor has its own timer
     virtual void set(std::chrono::nanoseconds time) = 0;
-    // Can be used on a std::chrono::time_point of a clock which supports
-    // the now() method. For example osv::clock::uptime::time_point.
-    template<class timepoint>
-    inline void set(timepoint time) {
-        auto now = timepoint::clock::now();
-        using namespace std::chrono;
-        set(duration_cast<nanoseconds>(time - now));
+    template<class Rep, class Period>
+    inline void set(std::chrono::duration<Rep, Period> dur) {
+        set(std::chrono::duration_cast<std::chrono::nanoseconds>(dur));
     }
     void set_callback(clock_event_callback* callback);
     clock_event_callback* callback() const;

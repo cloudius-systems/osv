@@ -142,7 +142,7 @@ private:
         }
         explicit hack_thread(std::function<void(void)> handler)
                 : _handler(handler) {
-            _thread = std::unique_ptr<sched::thread>(new sched::thread([&] {
+            _thread = std::unique_ptr<sched::thread>(sched::thread::make([&] {
                 while (!_stop.load(std::memory_order_relaxed)) {
                     wait();
                     _handler();

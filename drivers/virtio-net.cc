@@ -233,7 +233,7 @@ net::net(pci::device& dev)
       _rxq(get_virt_queue(0), [this] { this->receiver(); }),
       _txq(this, get_virt_queue(1))
 {
-    sched::thread* poll_task = &_rxq.poll_task;
+    sched::thread* poll_task = _rxq.poll_task.get();
 
     poll_task->set_priority(sched::thread::priority_infinity);
 

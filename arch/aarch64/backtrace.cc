@@ -22,9 +22,7 @@ int backtrace_safe(void** pc, int nr)
 
     int i = 0;
     while (i < nr
-#ifndef AARCH64_PORT_STUB
            && fp
-#endif /* !AARCH64_PORT_STUB */
            && safe_load(&fp->next, next)
            && safe_load(&fp->pc, pc[i])) {
         fp = next;

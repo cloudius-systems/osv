@@ -179,6 +179,17 @@ unsigned interrupt_descriptor_table::register_handler(std::function<void ()> pos
     return register_interrupt_handler([] { return true; }, [] { processor::apic->eoi(); }, post_eoi);
 }
 
+void interrupt_descriptor_table::register_interrupt(inter_processor_interrupt *interrupt)
+{
+    unsigned v = register_handler(interrupt->get_handler());
+    interrupt->set_vector(v);
+}
+
+void interrupt_descriptor_table::unregister_interrupt(inter_processor_interrupt *interrupt)
+{
+    unregister_handler(interrupt->get_vector());
+}
+
 void interrupt_descriptor_table::register_interrupt(gsi_edge_interrupt *interrupt)
 {
     unsigned v = register_handler(interrupt->get_handler());
@@ -277,6 +288,18 @@ void divide_error(exception_frame *ef)
     osv::generate_signal(si, ef);
 }
 
+extern "C" void simd_exception(exception_frame *ef)
+{
+    sched::exception_guard g;
+    siginfo_t si;
+    si.si_signo = SIGFPE;
+    // FIXME: set si_code to one of FPE_FLTDIV, FPE_FLTOVF, FPE_FLTUND,
+    // FPE_FLTRES, FPE_FLTINV or FPE_FLTSUB according to the exception
+    // information in MXCSR. It is not a bitmask. See sigaction(2).
+    si.si_code = 0;
+    osv::generate_signal(si, ef);
+}
+
 extern "C" void nmi(exception_frame* ef)
 {
     while (true) {
@@ -315,4 +338,3 @@ DUMMY_HANDLER(stack_fault)
 DUMMY_HANDLER(math_fault)
 DUMMY_HANDLER(alignment_check)
 DUMMY_HANDLER(machine_check)
-DUMMY_HANDLER(simd_exception)

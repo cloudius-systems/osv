@@ -4,20 +4,21 @@ import gdb
 import re
 import os, os.path
 import heapq
+import fnmatch
 from glob import glob
 from collections import defaultdict
 
 arch = 'x64'
 build_dir = os.path.dirname(gdb.current_objfile().filename)
 osv_dir = os.path.abspath(os.path.join(build_dir, '../..'))
-mgmt_dir = os.path.join(osv_dir, 'mgmt')
 apps_dir = os.path.join(osv_dir, 'apps')
 external = os.path.join(osv_dir, 'external', arch)
 modules = os.path.join(osv_dir, 'modules')
 
 sys.path.append(os.path.join(osv_dir, 'scripts'))
 
-from osv.trace import Trace,Thread,TracePoint,BacktraceFormatter,format_time
+from osv.trace import (Trace, Thread, TracePoint, BacktraceFormatter,
+                       format_time)
 from osv import trace, debug
 
 virtio_driver_type = gdb.lookup_type('virtio::virtio_driver')
@@ -81,13 +82,13 @@ class syminfo_resolver(object):
         sal = gdb.find_pc_line(addr)
         filename = None
         line = None
-        try :
+        try:
             # prefer (filename:line),
             filename = sal.symtab.filename
             line = sal.line
-        except :
+        except:
             # but if can't get it, at least give the name of the object
-            if not infosym.startswith("No symbol matches") :
+            if not infosym.startswith("No symbol matches"):
                 filename = infosym[infosym.rfind("/")+1:].rstrip()
 
         if filename and filename.startswith('../../'):
@@ -118,21 +119,24 @@ def syminfo(addr):
 def translate(path):
     '''given a path, try to find it on the host OS'''
     name = os.path.basename(path)
-    for top in [build_dir, mgmt_dir, external, modules, apps_dir, '/zfs']:
+    for top in [build_dir, external, modules, apps_dir, '/zfs']:
         for root, dirs, files in os.walk(top):
             if name in files:
                 return os.path.join(root, name)
     return None
 
 class Connect(gdb.Command):
-    '''Connect to a local kvm instance at port :1234'''
+    '''Connect to a local kvm instance at given port (default :1234)'''
     def __init__(self):
         gdb.Command.__init__(self,
                              'connect',
                              gdb.COMMAND_NONE,
                              gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
-        gdb.execute('target remote :1234')
+        port = 1234
+        if arg:
+            port = int(arg.split()[0])
+        gdb.execute('target remote :%d' % port)
         global status_enum
         status_enum.running = gdb.parse_and_eval('sched::thread::status::running')
         status_enum.waiting = gdb.parse_and_eval('sched::thread::status::waiting')
@@ -158,6 +162,30 @@ class LogTrace(gdb.Command):
 
 LogTrace()
 
+# Check if given Field has member field called name, i.e., whether
+# using field[name] would work.
+def has_field(field, name):
+    for x in field.type.fields():
+        if x.is_base_class and has_field(x, name):
+            return True
+        if x.name == name:
+            return True
+
+def intrusive_set_root_node(v):
+    if has_field(v, 'parent_'):
+        return v['parent_']
+    elif has_field(v, 'holder'):
+        return v['holder']['root']['parent_']
+    else:
+        return v['tree_']['data_']['node_plus_pred_']['header_plus_size_']['header_']['parent_']
+
+def intrusive_list_root_node(v):
+    a = v['data_']['root_plus_size_']
+    if has_field(a, 'm_header'):
+        return a['m_header']
+    else:
+        return a['root_']
+
 #
 # free_page_ranges generator, use pattern:
 # for range in free_page_ranges():
@@ -182,14 +210,13 @@ def free_page_ranges():
                 yield x
 
     fpr = gdb.lookup_global_symbol('memory::free_page_ranges').value()
-    p = fpr['_free_huge']['tree_']['data_']['node_plus_pred_']
-    node = p['header_plus_size_']['header_']['parent_']
+    node = intrusive_set_root_node(fpr['_free_huge'])
     for x in free_page_ranges_tree(node):
         yield x
 
     for i in range(0, 16):
         free_list = fpr['_free'][i]
-        node = free_list['data_']['root_plus_size_']['root_']
+        node = intrusive_list_root_node(free_list)
         first_addr = node.cast(gdb.lookup_type('void').pointer())
 
         if first_addr == free_list.address:
@@ -206,11 +233,10 @@ def free_page_ranges():
             if addr == first_addr:
                 break
 
-def vma_list(node = None):
+def vma_list(node=None):
     if node == None:
         fpr = gdb.lookup_global_symbol('mmu::vma_list').value()
-        p = fpr['tree_']['data_']['node_plus_pred_']
-        node = p['header_plus_size_']['header_']['parent_']
+        node = intrusive_set_root_node(fpr)
 
     if node:
         offset = gdb.parse_and_eval("(int)&(('mmu::vma'*)0)->_vma_list_hook")
@@ -248,8 +274,8 @@ class osv_memory(gdb.Command):
         mmapmem = 0
         for vma in vma_list():
             start = ulong(vma['_range']['_start'])
-            end   = ulong(vma['_range']['_end'])
-            size  = ulong(end - start)
+            end = ulong(vma['_range']['_end'])
+            size = ulong(end - start)
             mmapmem += size
 
         memsize = gdb.parse_and_eval('memory::phys_mem_size')
@@ -538,10 +564,10 @@ class osv_mmap(gdb.Command):
     def invoke(self, arg, from_tty):
         for vma in vma_list():
             start = ulong(vma['_range']['_start'])
-            end   = ulong(vma['_range']['_end'])
-            flags =  flagstr(ulong(vma['_flags']))
-            perm =  permstr(ulong(vma['_perm']))
-            size  = '{:<16}'.format('[%s kB]' % (ulong(end - start)/1024))
+            end = ulong(vma['_range']['_end'])
+            flags = flagstr(ulong(vma['_flags']))
+            perm = permstr(ulong(vma['_perm']))
+            size = '{:<16}'.format('[%s kB]' % (ulong(end - start)/1024))
 
             if 'F' in flags:
                 file_vma = vma.cast(gdb.lookup_type('mmu::file_vma').pointer())
@@ -567,11 +593,11 @@ class osv_vma_find(gdb.Command):
             for vma in vmas:
                 vma_addr = ulong(vma)
                 start = ulong(vma['_range']['_start'])
-                end   = ulong(vma['_range']['_end'])
+                end = ulong(vma['_range']['_end'])
                 if start <= addr and end > addr:
-                    flags =  flagstr(ulong(vma['_flags']))
-                    perm =  permstr(ulong(vma['_perm']))
-                    size  = '{:<16}'.format('[%s kB]' % (ulong(end - start)/1024))
+                    flags = flagstr(ulong(vma['_flags']))
+                    perm = permstr(ulong(vma['_perm']))
+                    size = '{:<16}'.format('[%s kB]' % (ulong(end - start)/1024))
                     print('0x%016x -> vma 0x%016x' % (addr, vma_addr))
                     print('0x%016x 0x%016x %s flags=%s perm=%s' % (start, end, size, flags, perm))
                     break
@@ -603,10 +629,7 @@ class osv_syms(gdb.Command):
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
         syminfo_resolver.clear_cache()
-        p = gdb.lookup_global_symbol('elf::program::s_objs').value()
-        p = p.dereference().address
-        while p.dereference():
-            obj = p.dereference().dereference()
+        for obj in read_vector(gdb.lookup_global_symbol('elf::program::s_objs').value()):
             base = to_int(obj['_base'])
             obj_path = obj['_pathname']['_M_dataplus']['_M_p'].string()
             path = translate(obj_path)
@@ -615,7 +638,6 @@ class osv_syms(gdb.Command):
             else:
                 print(path, hex(base))
                 load_elf(path, base)
-            p += 1
 
 class osv_load_elf(gdb.Command):
     def __init__(self):
@@ -718,7 +740,7 @@ class intrusive_list:
     def __init__(self, list_ref):
         list_type = list_ref.type.strip_typedefs()
         self.node_type = list_type.template_argument(0)
-        self.root = list_ref['data_']['root_plus_size_']['root_']
+        self.root = intrusive_list_root_node(list_ref)
 
         member_hook = get_template_arg_with_prefix(list_type, "boost::intrusive::member_hook")
         if member_hook:
@@ -1012,12 +1034,31 @@ def continue_handler(event):
 gdb.events.cont.connect(continue_handler)
 
 def setup_libstdcxx():
-    gcc = external + '/gcc.bin'
-    sys.path += [gcc + '/usr/share/gdb/auto-load/usr/lib64',
-                 glob(gcc + '/usr/share/gcc-*/python')[0],
-                 ]
-    main = glob(gcc + '/usr/share/gdb/auto-load/usr/lib64/libstdc++.so.*.py')[0]
-    exec(compile(open(main).read(), main, 'exec'))
+    # A libstdc++ installation is normally acommpanied by a python script
+    # like /usr/share/gdb/auto-load/usr/lib64/libstdc++.so.6.0.20-gdb.py
+    # to be loaded into gdb and helps pretty-print various STL types in gdb.
+    # Normally, this script is automatically loaded by gdb when the
+    # "libstdc++.so.6.0.20" shared object is loaded into the debugger.
+    # But because OSv is statically linked, we miss that auto-loading, so we
+    #  need to look for, and run, this script explicitly.
+    sys.path += [glob('/usr/share/gcc-*/python')[0]]
+    for base, dirnames, filenames in os.walk(gdb.PYTHONDIR + '/../auto-load'):
+        for filename in fnmatch.filter(filenames, 'libstdc++.so.*-gdb.py'):
+            script = os.path.join(base, filename)
+            exec(compile(open(script).read(), script, 'exec'))
+            return
+    # The following commented code is similar, but takes the python script
+    # from external/ instead of the one installed on the system. This might
+    # be useful if "make build_env=external" was used. However, there's a
+    # snag - the Python script we have in external/ might not be compatible
+    # with the version of Python installed on the system (there's right now
+    # a transition between Python 2 and Python 3 making things difficult).
+    #gcc = external + '/gcc.bin'
+    #sys.path += [gcc + '/usr/share/gdb/auto-load/usr/lib64',
+    #             glob(gcc + '/usr/share/gcc-*/python')[0],
+    #             ]
+    #main = glob(gcc + '/usr/share/gdb/auto-load/usr/lib64/libstdc++.so.*.py')[0]
+    #exec(compile(open(main).read(), main, 'exec'))
 
 def sig_to_string(sig):
     '''Convert a tracepoing signature to a string'''
@@ -1036,7 +1077,7 @@ class concat(object):
 
     def __getitem__(self, index):
         if isinstance(index, slice):
-            l  = len(self.view1)
+            l = len(self.view1)
             if index.start >= l:
                 return self.view2.__getitem__(slice(index.start - l, index.stop - l, index.step))
             if index.stop > l:
@@ -1069,7 +1110,7 @@ def all_traces():
         precpu_base = ulong(cpu.obj['percpu_base'])
         trace_buffer = gdb.parse_and_eval('(trace_buf *)0x%x' % (precpu_base + trace_buffer_offset))
         trace_log_base_ptr = trace_buffer['_base']
-        trace_log_base  = unique_ptr_get(trace_log_base_ptr)
+        trace_log_base = unique_ptr_get(trace_log_base_ptr)
         last = ulong(trace_buffer['_last'])
         max_trace = ulong(trace_buffer['_size'])
 
@@ -1174,24 +1215,24 @@ def show_leak():
     allocations = tracker['allocations']
     # Build a list of allocations to be sorted lexicographically by call chain
     # and summarize allocations with the same call chain:
-    percent='   '
+    percent = '   '
     gdb.write('Fetching data from qemu/osv: %s' % percent)
     gdb.flush()
     allocs = []
-    for i in range(size_allocations) :
+    for i in range(size_allocations):
         newpercent = '%2d%%' % round(100.0*i/(size_allocations-1))
-        if newpercent != percent :
+        if newpercent != percent:
             percent = newpercent
             gdb.write('\b\b\b%s' % newpercent)
             gdb.flush()
         a = allocations[i]
         addr = ulong(a['addr'])
-        if addr == 0 :
+        if addr == 0:
             continue
         nbacktrace = to_int(a['nbacktrace'])
         backtrace = a['backtrace']
         callchain = []
-        for j in range(nbacktrace) :
+        for j in range(nbacktrace):
             callchain.append(ulong(backtrace[nbacktrace-1-j]))
         allocs.append((i, callchain))
     gdb.write('\n')
@@ -1216,7 +1257,7 @@ def show_leak():
     cur_last_seq = -1
     cur_max_size = -1
     cur_min_size = -1
-    for k, alloc in enumerate(allocs) :
+    for k, alloc in enumerate(allocs):
         i = alloc[0]
         callchain = alloc[1]
         seq = ulong(allocations[i]['seq'])
@@ -1225,27 +1266,27 @@ def show_leak():
         cur_n += 1
         cur_total_size += size
         cur_total_seq += seq
-        if cur_first_seq<0 or seq<cur_first_seq :
+        if cur_first_seq < 0 or seq < cur_first_seq:
             cur_first_seq = seq
-        if cur_last_seq<0 or seq>cur_last_seq :
+        if cur_last_seq < 0 or seq > cur_last_seq:
             cur_last_seq = seq
-        if cur_min_size<0 or size<cur_min_size :
+        if cur_min_size < 0 or size < cur_min_size:
             cur_min_size = size
-        if cur_max_size<0 or size>cur_max_size :
+        if cur_max_size < 0 or size > cur_max_size:
             cur_max_size = size
         # If the next entry has the same call chain, just continue summing
-        if k!=len(allocs)-1 and callchain==allocs[k+1][1] :
+        if k != len(allocs) - 1 and callchain == allocs[k+1][1]:
             continue
         # We're done with a bunch of allocations with same call chain:
-        r = Record(bytes = cur_total_size,
-                   allocations = cur_n,
-                   minsize = cur_min_size,
-                   maxsize = cur_max_size,
-                   avgsize = cur_total_size/cur_n,
-                   minbirth = cur_first_seq,
-                   maxbirth = cur_last_seq,
-                   avgbirth = cur_total_seq/cur_n,
-                   callchain = callchain)
+        r = Record(bytes=cur_total_size,
+                   allocations=cur_n,
+                   minsize=cur_min_size,
+                   maxsize=cur_max_size,
+                   avgsize=cur_total_size/cur_n,
+                   minbirth=cur_first_seq,
+                   maxbirth=cur_last_seq,
+                   avgbirth=cur_total_seq/cur_n,
+                   callchain=callchain)
         records.append(r)
         cur_n = 0
         cur_total_size = 0
@@ -1261,16 +1302,16 @@ def show_leak():
 
     gdb.write('\nAllocations still in memory at this time (seq=%d):\n\n' %
               tracker['current_seq'])
-    for r in records :
+    for r in records:
         gdb.write('Found %d bytes in %d allocations [size ' % (r.bytes, r.allocations))
-        if r.minsize != r.maxsize :
+        if r.minsize != r.maxsize:
             gdb.write('%d/%.1f/%d' % (r.minsize, r.avgsize, r.maxsize))
-        else :
+        else:
             gdb.write('%d' % r.minsize)
         gdb.write(', birth ')
-        if r.minbirth != r.maxbirth :
+        if r.minbirth != r.maxbirth:
             gdb.write('%d/%.1f/%d' % (r.minbirth, r.avgbirth, r.maxbirth))
-        else :
+        else:
             gdb.write('%d' % r.minbirth)
         gdb.write(']\nfrom:\n')
         for f in reversed(r.callchain):
@@ -1378,7 +1419,7 @@ class osv_pagetable_walk(gdb.Command):
             level -= 1
             ptep = pte + pt_index(addr, level) * 8
 
-def runqueue(cpuid, node = None):
+def runqueue(cpuid, node=None):
     if node == None:
         cpus = gdb.lookup_global_symbol('sched::cpus').value()
         cpu = cpus['_M_impl']['_M_start'][cpuid]
@@ -1405,7 +1446,7 @@ class osv_runqueue(gdb.Command):
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
         ncpus = to_int(gdb.parse_and_eval('sched::cpus._M_impl._M_finish - sched::cpus._M_impl._M_start'))
-        for cpu in range(ncpus) :
+        for cpu in range(ncpus):
             gdb.write("CPU %d:\n" % cpu)
             for thread in runqueue(cpu):
                 print('%d 0x%x %g' % (thread['_id'], ulong(thread), thread['_runtime']['_Rtt']))

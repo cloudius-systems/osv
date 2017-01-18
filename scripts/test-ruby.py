@@ -15,11 +15,11 @@ blacklist = [
 
 class TestRunnerTest(SingleCommandTest):
     def __init__(self, name):
-        super(TestRunnerTest, self).__init__(name, '--nohalt --cwd=/tests/%s /ruby.so /tests/%s' % (os.path.dirname(name), name) )
+        super(TestRunnerTest, self).__init__(name, '--nohalt --cwd=/tests/%s /ruby.so /tests/%s' % (os.path.dirname(name), name))
 
 test_files = set(glob.glob('apps/ruby/upstream/ruby/test/*/*.rb'))
 test_files |= set(glob.glob('apps/ruby/upstream/ruby/test/*.rb'))
-add_tests((TestRunnerTest(os.path.relpath(x,'apps/ruby/upstream/ruby/test/')) for x in test_files))
+add_tests((TestRunnerTest(os.path.relpath(x, 'apps/ruby/upstream/ruby/test/')) for x in test_files))
 failed_test = 0
 
 def run_test(test):

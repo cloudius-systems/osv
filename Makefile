@@ -4,6 +4,8 @@
 # This work is open source software, licensed under the terms of the
 # BSD license as described in the LICENSE file in the top-level directory.
 
+# The nfs=true flag will build in the NFS client filesystem support
+
 # Delete the builtin make rules, as if "make -r" was used.
 .SUFFIXES:
 
@@ -18,21 +20,24 @@
 # isn't, for historical reasons, so we need to turn it on explicitly...
 .DELETE_ON_ERROR:
 ###########################################################################
+# Backward-compatibility hack to support the old "make ... image=..." image
+# building syntax, and pass it into scripts/build. We should eventually drop
+# this support and turn the deprecated messages into errors.
+compat_args=$(if $(usrskel), usrskel=$(usrskel),)
+compat_args+=$(if $(fs), fs=$(fs),)
 ifdef image
 #$(error Please use scripts/build to build images)
 $(info "make image=..." deprecated. Please use "scripts/build image=...".)
+default_target:
+	./scripts/build image=$(image) $(compat_args)
 endif
 ifdef modules
 #$(error Please use scripts/build to build images)
 $(info "make modules=..." deprecated. Please use "scripts/build modules=...".)
+default_target:
+	./scripts/build modules=$(modules) $(compat_args)
 endif
-
-# Ugly hack to support the old "make ... image=..." image building syntax, and
-# pass it into scripts/build. We should eventually get rid of this, and turn
-# the above deprecated messages into errors.
-ugly_backward_compatibility_hack: all
-	@test -n "$(image)" &&  ./scripts/build image=$(image) || :
-	@test -n "$(modules)" &&  ./scripts/build modules=$(modules) || :
+.PHONY: default_target
 
 ###########################################################################
 
@@ -79,11 +84,11 @@ ifeq (,$(wildcard conf/$(arch).mk))
 endif
 include conf/$(arch).mk
 
-CROSS_PREFIX ?= $(if $(filter-out $(arch), $(host_arch)), $(arch)-linux-gnu-)
+CROSS_PREFIX ?= $(if $(filter-out $(arch),$(host_arch)),$(arch)-linux-gnu-)
 CXX=$(CROSS_PREFIX)g++
 CC=$(CROSS_PREFIX)gcc
-LD=$(CROSS_PREFIX)ld
-STRIP=$(CROSS_PREFIX)strip
+LD=$(CROSS_PREFIX)ld.bfd
+export STRIP=$(CROSS_PREFIX)strip
 OBJCOPY=$(CROSS_PREFIX)objcopy
 
 # Our makefile puts all compilation results in a single directory, $(out),
@@ -102,6 +107,22 @@ endif
 
 ###########################################################################
 
+# We need some external git modules to have been downloaded, because the
+# default "make" depends on the following directories:
+#   musl/ -  for some of the header files (symbolic links in include/api) and
+#            some of the source files ($(musl) below).
+#   external/x64/acpica - for the ACPICA library (see $(acpi) below).
+#   external/x64/openjdk.bin - for $(java-targets) below.
+# Additional submodules are need when certain make parameters are used.
+ifeq (,$(wildcard musl/include))
+    $(error Missing musl/ directory. Please run "git submodule update --init --recursive")
+endif
+ifeq (,$(wildcard external/x64/acpica/source))
+    $(error Missing external/x64/acpica/ directory. Please run "git submodule update --init --recursive")
+endif
+ifeq (,$(wildcard external/x64/openjdk.bin/usr))
+    $(error Missing external/x64/openjdk.bin/ directory. Please run "git submodule update --init --recursive")
+endif
 
 # This makefile wraps all commands with the $(quiet) or $(very-quiet) macros
 # so that instead of half-a-screen-long command lines we short summaries
@@ -110,28 +131,37 @@ endif
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
 
-# TODO: These java-targets shouldn't be compiled here, but rather in modules/java/Makefile.
-# The problem is that getting the right compilation lines there is hard :-(
-ifeq ($(arch),aarch64)
-java-targets :=
-else
-java-targets := $(out)/java/java.so $(out)/java/jni/balloon.so $(out)/java/jni/elf-loader.so $(out)/java/jni/networking.so \
-        $(out)/java/jni/stty.so $(out)/java/jni/tracepoint.so $(out)/java/jni/power.so $(out)/java/jni/monitor.so
-endif
+all: $(out)/loader.img links
+.PHONY: all
 
-all: $(out)/loader.img $(java-targets)
+links:
 	$(call very-quiet, ln -nsf $(notdir $(out)) $(outlink))
 	$(call very-quiet, ln -nsf $(notdir $(out)) $(outlink2))
-.PHONY: all
+.PHONY: links
 
 check:
 	./scripts/build check
 .PHONY: check
 
+libnfs-path = external/fs/libnfs/
+
+$(out)/libnfs.a:
+	cd $(libnfs-path) && \
+	$(call quiet, ./bootstrap) && \
+	$(call quiet, ./configure --enable-shared=no --enable-static=yes --enable-silent-rules) && \
+	$(call quiet, make)
+	$(call quiet, cp -a $(libnfs-path)/lib/.libs/libnfs.a $(out)/libnfs.a)
+
+clean-libnfs:
+	if [ -f $(out)/libnfs.a ] ; then \
+	cd $(libnfs-path) && \
+	make distclean; \
+	fi
+
 # Remember that "make clean" needs the same parameters that set $(out) in
 # the first place, so to clean the output of "make mode=debug" you need to
 # do "make mode=debug clean".
-clean:
+clean: clean-libnfs
 	rm -rf $(out)
 	rm -f $(outlink) $(outlink2)
 .PHONY: clean
@@ -185,10 +215,12 @@ ifeq ($(build_env), host)
     gcc_lib_env ?= host
     cxx_lib_env ?= host
     gcc_include_env ?= host
+    boost_env ?= host
 else
     gcc_lib_env ?= external
     cxx_lib_env ?= external
     gcc_include_env ?= external
+    boost_env ?= external
 endif
 
 
@@ -196,17 +228,16 @@ local-includes =
 INCLUDES = $(local-includes) -Iarch/$(arch) -I. -Iinclude  -Iarch/common
 INCLUDES += -isystem include/glibc-compat
 
-glibcbase = external/$(arch)/glibc.bin
-gccbase = external/$(arch)/gcc.bin
-miscbase = external/$(arch)/misc.bin
-jdkbase := $(shell find external/$(arch)/openjdk.bin/usr/lib/jvm \
+glibcbase = $(CURDIR)/external/$(arch)/glibc.bin
+gccbase = $(CURDIR)/external/$(arch)/gcc.bin
+miscbase = $(CURDIR)/external/$(arch)/misc.bin
+jdkbase := $(shell find $(CURDIR)/external/$(arch)/openjdk.bin/usr/lib/jvm \
                          -maxdepth 1 -type d -name 'java*')
 
-gcc-inc-base := $(dir $(shell find $(gccbase)/ -name vector | grep -v -e debug/vector$$ -e profile/vector$$))
-gcc-inc-base2 := $(dir $(shell find $(gccbase)/ -name unwind.h))
-gcc-inc-base3 := $(dir $(shell dirname `find $(gccbase)/ -name c++config.h | grep -v /32/`))
 
 ifeq ($(gcc_include_env), external)
+  gcc-inc-base := $(dir $(shell find $(gccbase)/ -name vector | grep -v -e debug/vector$$ -e profile/vector$$))
+  gcc-inc-base3 := $(dir $(shell dirname `find $(gccbase)/ -name c++config.h | grep -v /32/`))
   INCLUDES += -isystem $(gcc-inc-base)
   INCLUDES += -isystem $(gcc-inc-base3)
 endif
@@ -220,10 +251,19 @@ libfdt_base = external/$(arch)/libfdt
 INCLUDES += -isystem $(libfdt_base)
 endif
 
-INCLUDES += -isystem $(miscbase)/usr/include
+INCLUDES += $(boost-includes)
+ifeq ($(gcc_include_env), host)
+# Starting in Gcc 6, the standard C++ header files (which we do not change)
+# must precede in the include path the C header files (which we replace).
+# This is explained in https://gcc.gnu.org/bugzilla/show_bug.cgi?id=70722.
+# So we are forced to list here (before include/api) the system's default
+# C++ include directories, though they are already in the default search path.
+INCLUDES += $(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^ .*c\+\+/ {print "-isystem" $$0}')
+endif
 INCLUDES += -isystem include/api
 INCLUDES += -isystem include/api/$(arch)
 ifeq ($(gcc_include_env), external)
+  gcc-inc-base2 := $(dir $(shell find $(gccbase)/ -name unwind.h))
   # must be after include/api, since it includes some libc-style headers:
   INCLUDES += -isystem $(gcc-inc-base2)
 endif
@@ -280,7 +320,9 @@ COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -
 	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) $(gcc-sysroot) \
 	$(configuration) -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207" -DARCH_STRING=$(ARCH_STR) $(EXTRA_FLAGS)
 ifeq ($(gcc_include_env), external)
+ifeq ($(boost_env), external)
   COMMON += -nostdinc
+endif
 endif
 
 tracing-flags-0 =
@@ -347,22 +389,12 @@ tools := tools/mkfs/mkfs.so tools/cpiod/cpiod.so
 
 $(out)/tools/%.o: COMMON += -fPIC
 
-# TODO: The "ifconfig" and "lsroute" programs are only needed for the mgmt
-# module... Better move it out of the OSv core...
-tools += tools/ifconfig/ifconfig.so
-tools += tools/route/lsroute.so
-$(out)/tools/route/lsroute.so: EXTRA_LIBS = -L$(out)/tools/ -ltools
-$(out)/tools/route/lsroute.so: $(out)/tools/libtools.so
-$(out)/tools/ifconfig/ifconfig.so: EXTRA_LIBS = -L$(out)/tools/ -ltools
-$(out)/tools/ifconfig/ifconfig.so: $(out)/tools/libtools.so
-
 tools += tools/uush/uush.so
 tools += tools/uush/ls.so
 tools += tools/uush/mkdir.so
 
-# TODO: we only need this libtools for the httpserver module... Better
-# move it to its own module, it shouldn't be in the OSv core...
-tools += tools/libtools.so
+tools += tools/mount/mount-nfs.so
+tools += tools/mount/umount.so
 
 ifeq ($(arch),aarch64)
 # note that the bootfs.manifest entry for the uush image
@@ -393,8 +425,8 @@ $(out)/loader.img: $(out)/boot.bin $(out)/lzloader.elf
 	$(call quiet, dd if=$(out)/boot.bin of=$@ > /dev/null 2>&1, DD loader.img boot.bin)
 	$(call quiet, dd if=$(out)/lzloader.elf of=$@ conv=notrunc seek=128 > /dev/null 2>&1, \
 		DD loader.img lzloader.elf)
-	$(call quiet, scripts/imgedit.py setsize $@ $(image-size), IMGEDIT $@)
-	$(call quiet, scripts/imgedit.py setargs $@ $(cmdline), IMGEDIT $@)
+	$(call quiet, scripts/imgedit.py setsize "-f raw $@" $(image-size), IMGEDIT $@)
+	$(call quiet, scripts/imgedit.py setargs "-f raw $@" $(cmdline), IMGEDIT $@)
 
 $(out)/loader.bin: $(out)/arch/x64/boot32.o arch/x64/loader32.ld
 	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
@@ -406,7 +438,7 @@ $(out)/fastlz/fastlz.o:
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -m32 -fno-instrument-functions -o $@ -c fastlz/fastlz.cc, CXX fastlz/fastlz.cc)
 
-$(out)/fastlz/lz: fastlz/fastlz.cc fastlz/lz.cc
+$(out)/fastlz/lz: fastlz/fastlz.cc fastlz/lz.cc | generated-headers
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -o $@ $(filter %.cc, $^), CXX $@)
 
@@ -414,7 +446,8 @@ $(out)/loader-stripped.elf.lz.o: $(out)/loader-stripped.elf $(out)/fastlz/lz
 	$(call quiet, $(out)/fastlz/lz $(out)/loader-stripped.elf, LZ loader-stripped.elf)
 	$(call quiet, cd $(out); objcopy -B i386 -I binary -O elf32-i386 loader-stripped.elf.lz loader-stripped.elf.lz.o, OBJCOPY loader-stripped.elf.lz -> loader-stripped.elf.lz.o)
 
-$(out)/fastlz/lzloader.o: fastlz/lzloader.cc
+$(out)/fastlz/lzloader.o: fastlz/lzloader.cc | generated-headers
+	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -m32 -fno-instrument-functions -o $@ -c fastlz/lzloader.cc, CXX $<)
 
 $(out)/lzloader.elf: $(out)/loader-stripped.elf.lz.o $(out)/fastlz/lzloader.o arch/x64/lzloader.ld \
@@ -424,13 +457,14 @@ $(out)/lzloader.elf: $(out)/loader-stripped.elf.lz.o $(out)/fastlz/lzloader.o ar
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
 		-T arch/x64/lzloader.ld \
 		$(filter %.o, $^), LINK lzloader.elf)
+	$(call quiet, truncate -s %32768 $@, ALIGN lzloader.elf)
 
 acpi-defines = -DACPI_MACHINE_WIDTH=64 -DACPI_USE_LOCAL_CACHE
 
 acpi-source := $(shell find external/$(arch)/acpica/source/components -type f -name '*.c')
 acpi = $(patsubst %.c, %.o, $(acpi-source))
 
-$(acpi:%=$(out)/%): CFLAGS += -fno-strict-aliasing -Wno-strict-aliasing
+$(acpi:%=$(out)/%): CFLAGS += -fno-strict-aliasing
 
 endif # x64
 
@@ -457,9 +491,17 @@ $(out)/loader.img: $(out)/preboot.bin $(out)/loader-stripped.elf
 
 endif # aarch64
 
-$(out)/bsd/sys/crypto/sha2/sha2.o: CFLAGS+=-Wno-strict-aliasing
-$(out)/bsd/sys/crypto/rijndael/rijndael-api-fst.o: CFLAGS+=-Wno-strict-aliasing
+$(out)/bsd/sys/crypto/rijndael/rijndael-api-fst.o: COMMON+=-fno-strict-aliasing
+$(out)/bsd/sys/crypto/sha2/sha2.o: COMMON+=-fno-strict-aliasing
+$(out)/bsd/sys/net/route.o: COMMON+=-fno-strict-aliasing
+$(out)/bsd/sys/net/rtsock.o: COMMON+=-fno-strict-aliasing
+$(out)/bsd/sys/net/in.o: COMMON+=-fno-strict-aliasing
+$(out)/bsd/sys/net/if.o: COMMON+=-fno-strict-aliasing
+$(out)/bsd/sys/netinet/in_rmx.o: COMMON+=-fno-strict-aliasing
+$(out)/bsd/sys/netinet/ip_input.o: COMMON+=-fno-strict-aliasing
+$(out)/bsd/sys/netinet/in.o: COMMON+=-fno-strict-aliasing
 
+$(out)/bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/metaslab.o: COMMON+=-Wno-tautological-compare
 
 bsd  = bsd/init.o
 bsd += bsd/net.o
@@ -705,11 +747,12 @@ solaris += $(zfs)
 
 $(zfs:%=$(out)/%): CFLAGS+= \
 	-DBUILDING_ZFS \
+	-Wno-array-bounds \
 	-Ibsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs \
 	-Ibsd/sys/cddl/contrib/opensolaris/common/zfs
 
 $(solaris:%=$(out)/%): CFLAGS+= \
-	-Wno-strict-aliasing \
+	-fno-strict-aliasing \
 	-Wno-unknown-pragmas \
 	-Wno-unused-variable \
 	-Wno-switch \
@@ -739,11 +782,10 @@ drivers += drivers/line-discipline.o
 drivers += drivers/clock.o
 drivers += drivers/clock-common.o
 drivers += drivers/clockevent.o
-drivers += drivers/ramdisk.o
 drivers += core/elf.o
-drivers += java/jvm_balloon.o
-drivers += java/java_api.o
-drivers += java/jni_helpers.o
+drivers += java/jvm/jvm_balloon.o
+drivers += java/jvm/java_api.o
+drivers += java/jvm/jni_helpers.o
 drivers += drivers/random.o
 drivers += drivers/zfs.o
 drivers += drivers/null.o
@@ -787,7 +829,6 @@ drivers += drivers/virtio-blk.o
 drivers += drivers/virtio-net.o
 endif # aarch64
 
-objects := bootfs.o
 objects += arch/$(arch)/arch-trace.o
 objects += arch/$(arch)/arch-setup.o
 objects += arch/$(arch)/signal.o
@@ -807,10 +848,13 @@ objects += arch/$(arch)/hypervisor.o
 objects += arch/$(arch)/interrupt.o
 objects += arch/$(arch)/pci.o
 objects += arch/$(arch)/msi.o
+objects += arch/$(arch)/power.o
+objects += arch/$(arch)/feexcept.o
 
 $(out)/arch/x64/string-ssse3.o: CXXFLAGS += -mssse3
 
 ifeq ($(arch),aarch64)
+objects += arch/$(arch)/psci.o
 objects += arch/$(arch)/arm-clock.o
 objects += arch/$(arch)/gic.o
 objects += arch/$(arch)/arch-dtb.o
@@ -872,10 +916,14 @@ objects += core/async.o
 objects += core/net_trace.o
 objects += core/app.o
 objects += core/libaio.o
+objects += core/osv_execve.o
+objects += core/osv_c_wrappers.o
 
 #include $(src)/libc/build.mk:
 libc =
 musl =
+environ_libc =
+environ_musl =
 
 ifeq ($(arch),x64)
 musl_arch = x86_64
@@ -936,6 +984,14 @@ libc += env/secure_getenv.o
 musl += env/putenv.o
 musl += env/setenv.o
 musl += env/unsetenv.o
+
+environ_libc += env/__environ.c
+environ_musl += env/clearenv.c
+environ_musl += env/getenv.c
+environ_libc += env/secure_getenv.c
+environ_musl += env/putenv.c
+environ_musl += env/setenv.c
+environ_musl += env/unsetenv.c
 
 musl += ctype/__ctype_b_loc.o
 
@@ -1236,6 +1292,7 @@ libc += misc/backtrace.o
 libc += misc/uname.o
 libc += misc/lockf.o
 libc += misc/mntent.o
+musl += misc/nftw.o
 libc += misc/__longjmp_chk.o
 
 musl += multibyte/btowc.o
@@ -1284,8 +1341,9 @@ libc += network/h_errno.o
 musl += network/getservbyname_r.o
 musl += network/getservbyname.o
 musl += network/getservbyport_r.o
-musl += network/getifaddrs.o
-musl += network/if_nameindex.o
+musl += network/getservbyport.o
+libc += network/getifaddrs.o
+libc += network/if_nameindex.o
 musl += network/if_freenameindex.o
 
 musl += prng/rand.o
@@ -1419,7 +1477,7 @@ musl += stdio/ungetc.o
 musl += stdio/ungetwc.o
 musl += stdio/vasprintf.o
 libc += stdio/vdprintf.o
-musl += stdio/vfprintf.o
+libc += stdio/vfprintf.o
 libc += stdio/vfscanf.o
 musl += stdio/vfwprintf.o
 libc += stdio/vfwscanf.o
@@ -1434,6 +1492,7 @@ musl += stdio/vwprintf.o
 musl += stdio/vwscanf.o
 musl += stdio/wprintf.o
 musl += stdio/wscanf.o
+libc += stdio/printf-hooks.o
 
 musl += stdlib/abs.o
 musl += stdlib/atof.o
@@ -1580,6 +1639,8 @@ libc += unistd/getpgrp.o
 libc += unistd/getppid.o
 libc += unistd/getsid.o
 libc += unistd/setsid.o
+libc += unistd/ttyname_r.o
+libc += unistd/ttyname.o
 
 musl += regex/fnmatch.o
 musl += regex/glob.o
@@ -1592,6 +1653,7 @@ musl += regex/tre-mem.o
 $(out)/musl/src/regex/tre-mem.o: CFLAGS += -UNDEBUG
 
 libc += pthread.o
+libc += pthread_barrier.o
 libc += libc.o
 libc += dlfcn.o
 libc += time.o
@@ -1613,6 +1675,8 @@ libc += __read_chk.o
 libc += syslog.o
 libc += cxa_thread_atexit.o
 libc += cpu_set.o
+libc += malloc_hooks.o
+libc += mallopt.o
 
 libc += linux/makedev.o
 
@@ -1633,12 +1697,12 @@ musl += crypt/crypt_sha512.o
 
 #include $(src)/fs/build.mk:
 
-fs :=
+fs_objs :=
 
-fs +=	fs.o \
+fs_objs += fs.o \
 	unsupported.o
 
-fs +=	vfs/main.o \
+fs_objs += vfs/main.o \
 	vfs/kern_descrip.o \
 	vfs/kern_physio.o \
 	vfs/subr_uio.o \
@@ -1653,15 +1717,15 @@ fs +=	vfs/main.o \
 	vfs/vfs_fops.o \
 	vfs/vfs_dentry.o
 
-fs +=	ramfs/ramfs_vfsops.o \
+fs_objs += ramfs/ramfs_vfsops.o \
 	ramfs/ramfs_vnops.o
 
-fs +=	devfs/devfs_vnops.o \
+fs_objs += devfs/devfs_vnops.o \
 	devfs/device.o
 
-fs +=	procfs/procfs_vnops.o
+fs_objs += procfs/procfs_vnops.o
 
-objects += $(addprefix fs/, $(fs))
+objects += $(addprefix fs/, $(fs_objs))
 objects += $(addprefix libc/, $(libc))
 objects += $(addprefix musl/src/, $(musl))
 
@@ -1695,14 +1759,38 @@ else
     libgcc_eh.a := $(shell find $(gccbase)/ -name libgcc_eh.a |  grep -v /32/)
 endif
 
-boost-lib-dir := $(firstword $(dir $(shell find $(miscbase)/ -name libboost_system*.a)))
-
-# link with -mt if present, else the base version (and hope it is multithreaded)
-
-boost-mt := $(if $(filter %-mt.a, $(wildcard $(boost-lib-dir)/*.a)),-mt)
+ifeq ($(boost_env), host)
+    # link with -mt if present, else the base version (and hope it is multithreaded)
+    boost-mt := -mt
+    boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system$(boost-mt).a))
+    ifeq ($(filter /%,$(boost-lib-dir)),)
+        boost-mt :=
+        boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system$(boost-mt).a))
+        ifeq ($(filter /%,$(boost-lib-dir)),)
+            $(error Error: libboost_system.a needs to be installed.)
+        endif
+    endif
+    # When boost_env=host, we won't use "-nostdinc", so the build machine's
+    # header files will be used normally. So we don't need to add anything
+    # special for Boost.
+    boost-includes =
+else
+    boost-lib-dir := $(firstword $(dir $(shell find $(miscbase)/ -name libboost_system*.a)))
+    boost-mt := $(if $(filter %-mt.a, $(wildcard $(boost-lib-dir)/*.a)),-mt)
+    boost-includes = -isystem $(miscbase)/usr/include
+endif
 
 boost-libs := $(boost-lib-dir)/libboost_program_options$(boost-mt).a \
               $(boost-lib-dir)/libboost_system$(boost-mt).a
+
+ifeq ($(nfs), true)
+	nfs-lib = $(out)/libnfs.a
+	nfs_o = nfs.o nfs_vfsops.o nfs_vnops.o
+else
+	nfs_o = nfs_null_vfsops.o
+endif
+
+objects += $(addprefix fs/nfs/, $(nfs_o))
 
 # ld has a known bug (https://sourceware.org/bugzilla/show_bug.cgi?id=6468)
 # where if the executable doesn't use shared libraries, its .dynamic section
@@ -1711,10 +1799,14 @@ boost-libs := $(boost-lib-dir)/libboost_program_options$(boost-mt).a \
 $(out)/dummy-shlib.so: $(out)/dummy-shlib.o
 	$(call quiet, $(CXX) -nodefaultlibs -shared $(gcc-sysroot) -o $@ $^, LINK $@)
 
-$(out)/loader.elf: $(out)/arch/$(arch)/boot.o arch/$(arch)/loader.ld $(out)/loader.o $(out)/runtime.o $(drivers:%=$(out)/%) $(objects:%=$(out)/%) $(out)/bootfs.bin $(out)/dummy-shlib.so
+stage1_targets = $(out)/arch/$(arch)/boot.o $(out)/loader.o $(out)/runtime.o $(drivers:%=$(out)/%) $(objects:%=$(out)/%) $(out)/dummy-shlib.so $(nfs-lib)
+stage1: $(stage1_targets) links
+.PHONY: stage1
+
+$(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o
 	$(call quiet, $(LD) -o $@ --defsym=OSV_KERNEL_BASE=$(kernel_base) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
-	    $(filter-out %.bin, $(^:%.ld=-T %.ld)) \
+	    $(^:%.ld=-T %.ld) \
 	    --whole-archive \
 	      $(libstdc++.a) $(libgcc.a) $(libgcc_eh.a) \
 	      $(boost-libs) \
@@ -1728,9 +1820,27 @@ $(out)/loader.elf: $(out)/arch/$(arch)/boot.o arch/$(arch)/loader.ld $(out)/load
 
 $(out)/bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__'
 
-$(out)/bootfs.bin: scripts/mkbootfs.py bootfs.manifest.skel $(tools:%=$(out)/%) \
-		$(out)/zpool.so $(out)/zfs.so
-	$(call quiet, olddir=`pwd`; cd $(out); $$olddir/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m $$olddir/bootfs.manifest.skel \
+environ_sources = $(addprefix libc/, $(environ_libc))
+environ_sources += $(addprefix musl/src/, $(environ_musl))
+
+$(out)/libenviron.so: $(environ_sources)
+	$(makedir)
+	 $(call quiet, $(CC) $(CFLAGS) -shared -o $(out)/libenviron.so $(environ_sources), CC libenviron.so)
+
+bootfs_manifest ?= bootfs.manifest.skel
+
+# If parameter "bootfs_manifest" has been changed since the last make,
+# bootfs.bin requires rebuilding
+bootfs_manifest_dep = $(out)/bootfs_manifest.last
+.PHONY: phony
+$(bootfs_manifest_dep): phony
+	@if [ '$(shell cat $(bootfs_manifest_dep) 2>&1)' != '$(bootfs_manifest)' ]; then \
+		echo -n $(bootfs_manifest) > $(bootfs_manifest_dep) ; \
+	fi
+
+$(out)/bootfs.bin: scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep) $(tools:%=$(out)/%) \
+		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so
+	$(call quiet, olddir=`pwd`; cd $(out); $$olddir/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m $$olddir/$(bootfs_manifest) \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase), MKBOOTFS $@)
 
@@ -1744,11 +1854,6 @@ $(out)/tools/mkfs/mkfs.so: $(out)/tools/mkfs/mkfs.o $(out)/libzfs.so
 $(out)/tools/cpiod/cpiod.so: $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o $(out)/libzfs.so
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -o $@ $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o -L$(out) -lzfs, LINK cpiod.so)
-
-$(out)/tools/libtools.so: $(out)/tools/route/route_info.o $(out)/tools/ifconfig/network_interface.o
-	$(makedir)
-	 $(call quiet, $(CC) $(CFLAGS) -shared -o $(out)/tools/libtools.so $^, LINK libtools.so)
-
 
 ################################################################################
 # The dependencies on header files are automatically generated only after the
@@ -1868,11 +1973,11 @@ $(libzfs-objects): CFLAGS += -Wno-switch -D__va_list=__builtin_va_list '-DTEXT_D
 			-D_OPENSOLARIS_SYS_UIO_H_
 
 # Note: zfs_prop.c and zprop_common.c are also used by the kernel, thus the manual targets.
-$(out)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/zfs_prop.o: bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_prop.c
+$(out)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/zfs_prop.o: bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_prop.c | generated-headers
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $<, CC $<)
 
-$(out)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/zprop_common.o: bsd/sys/cddl/contrib/opensolaris/common/zfs/zprop_common.c
+$(out)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/zprop_common.o: bsd/sys/cddl/contrib/opensolaris/common/zfs/zprop_common.c | generated-headers
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $<, CC $<)
 

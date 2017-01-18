@@ -580,6 +580,59 @@ int fstat(int fd, struct stat *st)
 
 LFS64(fstat);
 
+extern "C"
+int __fxstatat(int ver, int dirfd, const char *pathname, struct stat *st,
+        int flags)
+{
+    if (flags & AT_SYMLINK_NOFOLLOW) {
+        UNIMPLEMENTED("fstatat() with AT_SYMLINK_NOFOLLOW");
+    }
+
+    if (pathname[0] == '/' || dirfd == AT_FDCWD) {
+        return stat(pathname, st);
+    }
+    // If AT_EMPTY_PATH and pathname is an empty string, fstatat() operates on
+    // dirfd itself, and in that case it doesn't have to be a directory.
+    if ((flags & AT_EMPTY_PATH) && !pathname[0]) {
+        return fstat(dirfd, st);
+    }
+
+    struct file *fp;
+    int error = fget(dirfd, &fp);
+    if (error) {
+        errno = error;
+        return -1;
+    }
+
+    struct vnode *vp = fp->f_dentry->d_vnode;
+    vn_lock(vp);
+
+    std::unique_ptr<char []> up (new char[PATH_MAX]);
+    char *p = up.get();
+    /* build absolute path */
+    strlcpy(p, fp->f_dentry->d_mount->m_path, PATH_MAX);
+    strlcat(p, fp->f_dentry->d_path, PATH_MAX);
+    strlcat(p, "/", PATH_MAX);
+    strlcat(p, pathname, PATH_MAX);
+
+    error = stat(p, st);
+
+    vn_unlock(vp);
+    fdrop(fp);
+
+    return error;
+}
+
+LFS64(__fxstatat);
+
+extern "C"
+int fstatat(int dirfd, const char *path, struct stat *st, int flags)
+{
+    return __fxstatat(1, dirfd, path, st, flags);
+}
+
+LFS64(fstatat);
+
 extern "C" int flock(int fd, int operation)
 {
     if (!fileref_from_fd(fd)) {
@@ -1370,8 +1423,7 @@ int dup2(int oldfd, int newfd)
 /*
  * The file control system call.
  */
-#define SETFL (O_APPEND | O_NONBLOCK | O_ASYNC)
-#define SETFL_IGNORED (O_RDONLY | O_WRONLY | O_RDWR | O_CREAT | O_EXCL | O_NOCTTY | O_TRUNC)
+#define SETFL (O_APPEND | O_ASYNC | O_DIRECT | O_NOATIME | O_NONBLOCK)
 
 TRACEPOINT(trace_vfs_fcntl, "%d %d 0x%x", int, int, int);
 TRACEPOINT(trace_vfs_fcntl_ret, "\"%s\"", int);
@@ -1389,6 +1441,13 @@ int fcntl(int fd, int cmd, int arg)
     if (error)
         goto out_errno;
 
+    // An important note about our handling of FD_CLOEXEC / O_CLOEXEC:
+    // close-on-exec shouldn't have been a file flag (fp->f_flags) - it is a
+    // file descriptor flag, meaning that that two dup()ed file descriptors
+    // could have different values for FD_CLOEXEC. Our current implementation
+    // *wrongly* makes close-on-exec an f_flag (using the bit O_CLOEXEC).
+    // There is little practical difference, though, because this flag is
+    // ignored in OSv anyway, as it doesn't support exec().
     switch (cmd) {
     case F_DUPFD:
         error = _fdalloc(fp, &ret, arg);
@@ -1396,22 +1455,21 @@ int fcntl(int fd, int cmd, int arg)
             goto out_errno;
         break;
     case F_GETFD:
-        ret = fp->f_flags & FD_CLOEXEC;
+        ret = (fp->f_flags & O_CLOEXEC) ? FD_CLOEXEC : 0;
         break;
     case F_SETFD:
         FD_LOCK(fp);
-        fp->f_flags = (fp->f_flags & ~FD_CLOEXEC) |
-                (arg & FD_CLOEXEC);
+        fp->f_flags = (fp->f_flags & ~O_CLOEXEC) |
+                ((arg & FD_CLOEXEC) ? O_CLOEXEC : 0);
         FD_UNLOCK(fp);
         break;
     case F_GETFL:
-        ret = oflags(fp->f_flags);
+        // As explained above, the O_CLOEXEC should have been in f_flags,
+        // and shouldn't be returned. Linux always returns 0100000 ("the
+        // flag formerly known as O_LARGEFILE) so let's do it too.
+        ret = (oflags(fp->f_flags) & ~O_CLOEXEC) | 0100000;
         break;
     case F_SETFL:
-        /* Ignore flags */
-        arg &= ~SETFL_IGNORED;
-
-        assert((arg & ~SETFL) == 0);
         FD_LOCK(fp);
         fp->f_flags = fflags((oflags(fp->f_flags) & ~SETFL) |
                 (arg & SETFL));
@@ -1479,6 +1537,43 @@ int access(const char *pathname, int mode)
     errno = error;
     trace_vfs_access_err(error);
     return -1;
+}
+
+int faccessat(int dirfd, const char *pathname, int mode, int flags)
+{
+    if (flags & AT_SYMLINK_NOFOLLOW) {
+        UNIMPLEMENTED("faccessat() with AT_SYMLINK_NOFOLLOW");
+    }
+
+    if (pathname[0] == '/' || dirfd == AT_FDCWD) {
+        return access(pathname, mode);
+    }
+
+    struct file *fp;
+    int error = fget(dirfd, &fp);
+    if (error) {
+        errno = error;
+        return -1;
+    }
+
+    struct vnode *vp = fp->f_dentry->d_vnode;
+    vn_lock(vp);
+
+    std::unique_ptr<char []> up (new char[PATH_MAX]);
+    char *p = up.get();
+
+    /* build absolute path */
+    strlcpy(p, fp->f_dentry->d_mount->m_path, PATH_MAX);
+    strlcat(p, fp->f_dentry->d_path, PATH_MAX);
+    strlcat(p, "/", PATH_MAX);
+    strlcat(p, pathname, PATH_MAX);
+
+    error = access(p, mode);
+
+    vn_unlock(vp);
+    fdrop(fp);
+
+    return error;
 }
 
 extern "C" 
@@ -1944,6 +2039,21 @@ int sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
         offset = lseek(in_fd, 0, SEEK_CUR);
     }
 
+    // Constrain count to the extent of the file...
+    struct stat st;
+    if (fstat(in_fd, &st) < 0) {
+        return -1;
+    } else {
+        if (offset >= st.st_size) {
+            return 0;
+        } else if ((offset + count) >= st.st_size) {
+            count = st.st_size - offset;
+            if (count == 0) {
+                return 0;
+            }
+        }
+    }
+
     size_t bytes_to_mmap = count + (offset % mmu::page_size);
     off_t offset_for_mmap =  align_down(offset, (off_t)mmu::page_size);
 
@@ -2022,16 +2132,22 @@ void unpack_bootfs(void)
 
     for (i = 0; md[i].name[0]; i++) {
         int ret;
+        char *p;
 
         // mkdir() directories needed for this path name, as necessary
         char tmp[BOOTFS_PATH_MAX];
         strncpy(tmp, md[i].name, BOOTFS_PATH_MAX);
-        for (char *p = tmp; *p; ++p) {
+        for (p = tmp; *p; ++p) {
             if (*p == '/') {
                 *p = '\0';
                 mkdir(tmp, 0666);  // silently ignore errors and existing dirs
                 *p = '/';
             }
+        }
+
+        if (*(p-1) == '/' && md[i].size == 0) {
+            // This is directory record. Nothing else to do
+            continue;
         }
 
         fd = creat(md[i].name, 0666);

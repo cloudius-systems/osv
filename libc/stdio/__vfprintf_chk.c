@@ -34,6 +34,16 @@ int __vasprintf_chk (char **__ptr, int __flag, const char *__fmt,
     return vasprintf(__ptr, __fmt, __arg);
 }
 
+int __asprintf_chk (char **ptr, int flag, const char *fmt, ...)
+{
+    va_list args;
+    int ret;
+    va_start(args, fmt);
+    ret = __vasprintf_chk(ptr, flag, fmt, args);
+    va_end(args);
+    return ret;
+}
+
 int __sprintf_chk(char *s, int flags, size_t slen, const char *format, ...)
 {
     va_list args;

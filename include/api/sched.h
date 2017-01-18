@@ -83,6 +83,8 @@ typedef	struct {
 	__cpu_mask	__bits[_NCPUWORDS];
 } cpu_set_t;
 
+int __sched_cpucount (size_t __setsize, const cpu_set_t *__setp);
+
 inline static void CPU_ZERO(cpu_set_t *cpuset) {
     size_t i;
     for (i = 0; i < _NCPUWORDS; i++) {
@@ -118,14 +120,8 @@ inline static int CPU_ISSET(size_t n, const cpu_set_t *cpuset) {
     return (cpuset->__bits[__cpuset_word(n)] & __cpuset_mask(n)) != 0;
 }
 
-inline static int CPU_COUNT(const cpu_set_t *cpuset) {
-    size_t i;
-    int count = 0;
-    for (i = 0; i < _NCPUWORDS; i++) {
-        count += __builtin_popcountl(cpuset->__bits[i]);
-    }
-    return count;
-}
+#define CPU_COUNT_S(setsize, cpuset) __sched_cpucount(setsize, cpuset)
+#define CPU_COUNT(cpuset) __sched_cpucount(_NCPUWORDS*sizeof (__cpu_mask), cpuset)
 
 inline static size_t CPU_ALLOC_SIZE(size_t count) {
     return ((count + __NCPUBITS - 1) / __NCPUBITS) * sizeof (__cpu_mask);

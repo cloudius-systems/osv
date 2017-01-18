@@ -17,6 +17,7 @@
 
 class gsi_edge_interrupt;
 class gsi_level_interrupt;
+class inter_processor_interrupt;
 
 struct exception_frame {
     ulong r15;
@@ -59,6 +60,8 @@ class interrupt_descriptor_table {
 public:
     interrupt_descriptor_table();
     void load_on_cpu();
+    void register_interrupt(inter_processor_interrupt *interrupt);
+    void unregister_interrupt(inter_processor_interrupt *interrupt);
     void register_interrupt(gsi_edge_interrupt *interrupt);
     void unregister_interrupt(gsi_edge_interrupt *interrupt);
     void register_interrupt(gsi_level_interrupt *interrupt);

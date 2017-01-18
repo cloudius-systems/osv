@@ -1,7 +1,5 @@
-
-INCLUDES = -isystem $(miscbase)/usr/include -I$(src)/build/$(mode)/gen/include
-INCLUDES += -I../../include -I. -I../../java -I../../arch/$(ARCH) -I../..
-INCLUDES += -I$(jdkbase)/include -I$(jdkbase)/include/linux
+INCLUDES = -I. -I../../include -I../../arch/$(ARCH) -I../.. \
+	-I../../build/$(mode)/gen/include
 
 # compiler flags:
 #  -g    adds debugging information to the executable file
@@ -23,9 +21,7 @@ ifndef OSV_BUILD_PATH
 endif
 miscbase = $(src)/external/$(ARCH)/misc.bin
 libs-dir = $(miscbase)/usr/lib64
-boost-libs := $(libs-dir)/libboost_system.so \
-              $(libs-dir)/libboost_filesystem.so \
-              $(libs-dir)/libboost_regex.so
+boost-libs := -lboost_system -lboost_filesystem -lboost_regex
 
 # the build target executable:
 TARGET = httpserver
@@ -36,8 +32,7 @@ STUB_CPP_FILES := $(wildcard stub/*.cc)
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 STUB_FILES := $(addprefix obj/,$(STUB_CPP_FILES:.cc=.o))
 
-STATIC_LIBS = $(libs-dir)/libboost_program_options.a
-DYN_LIBS = -lpthread -ldl -L$(OSV_BUILD_PATH)/tools -ltools -L$(libs-dir) -lyaml-cpp $(boost-libs)
+DYN_LIBS = -lpthread -ldl -L../libtools -ltools $(boost-libs) -lyaml-cpp
 
 ifeq ($(use_host),y)
 	DYN_LIBS += -lssl -lcrypto
@@ -74,6 +69,7 @@ $(TARGET): $(OBJ_FILES) $(STUB_FILES)
 
 lib$(TARGET).so: $(OBJ_FILES)
 	$(call quiet, $(CXX) $(CXXFLAGS) -shared $(STATIC_LIBS) -o $@ $^ $(DYN_LIBS), LINK $@)
+	ldd $@ | grep boost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/\1: \2/' > usr.manifest
 
 ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPS)

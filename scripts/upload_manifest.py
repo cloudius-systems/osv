@@ -1,10 +1,6 @@
 #!/usr/bin/python
 
-import os, optparse, io, subprocess, socket, threading, stat, sys
-try:
-    import configparser
-except ImportError:
-    import ConfigParser as configparser
+import os, optparse, io, subprocess, socket, threading, stat, sys, re
 
 try:
     import StringIO
@@ -58,11 +54,23 @@ def unsymlink(f):
     except Exception:
         return f
 
-def upload(osv, manifest, depends):
-    files = dict([(f, manifest.get('manifest', f, vars=defines))
-                  for f in manifest.options('manifest')])
+# Reads the manifest and returns it as a list of pairs (guestpath, hostpath).
+def read_manifest(fn):
+    ret = []
+    comment = re.compile("^[ \t]*(|#.*|\[manifest])$")
+    with open(fn, 'r') as f:
+        for line in f:
+            line = line.rstrip();
+            if comment.match(line): continue
+            components = line.split(": ", 2)
+            guestpath = components[0].strip();
+            hostpath = components[1].strip()
+            ret.append((guestpath, hostpath))
+    return ret
 
-    files = list(expand(files.items()))
+def upload(osv, manifest, depends):
+    manifest = [(x, y % defines) for (x, y) in manifest]
+    files = list(expand(manifest))
     files = [(x, unsymlink(y)) for (x, y) in files]
 
     # Wait for the guest to come up and tell us it's listening
@@ -110,10 +118,16 @@ def upload(osv, manifest, depends):
                 + cpio_field(0, 8)                # check
                 + filename + b'\0')
 
+    def to_strip(filename):
+        ff = os.path.abspath(filename);
+        osvdir = os.path.abspath('../..');
+        return ff.startswith(os.getcwd()) or \
+            ff.startswith(osvdir + "/modules") or \
+            ff.startswith(osvdir + "/apps")
+
     def strip_file(filename):
         stripped_filename = filename
-        if filename.endswith(".so") and \
-                (filename[0] != "/" or filename.startswith(os.getcwd())):
+        if filename.endswith(".so") and to_strip(filename):
             stripped_filename = filename[:-3] + "-stripped.so"
             if not os.path.exists(stripped_filename) \
                     or (os.path.getmtime(stripped_filename) < \
@@ -130,6 +144,8 @@ def upload(osv, manifest, depends):
             cpio_send(link.encode())
         else:
             depends.write('\t%s \\\n' % (hostname,))
+            if hostname.endswith("-stripped.so"):
+                continue
             hostname = strip_file(hostname)
             if os.path.islink(hostname):
                 perm = os.lstat(hostname).st_mode & 0o777
@@ -181,21 +197,15 @@ def main():
     depends = StringIO()
     if options.depends:
         depends = file(options.depends, 'w')
-    manifest = configparser.SafeConfigParser()
-    manifest.optionxform = str # avoid lowercasing
-    manifest.read(options.manifest)
+    manifest = read_manifest(options.manifest)
 
     depends.write('%s: \\\n' % (options.output,))
 
     image_path = os.path.abspath(options.output)
-    osv = subprocess.Popen('cd ../..; scripts/run.py --vnc none -m 512 -c1 -i %s -u -s -e "--norandom --noinit /tools/cpiod.so" --forward tcp:10000::10000' % image_path, shell=True, stdout=subprocess.PIPE)
+    osv = subprocess.Popen('cd ../..; scripts/run.py --vnc none -m 512 -c1 -i %s -u -s -e "--norandom --nomount --noinit /tools/mkfs.so; /tools/cpiod.so --prefix /zfs/zfs/; /zfs.so set compression=off osv" --forward tcp:10000::10000' % image_path, shell=True, stdout=subprocess.PIPE)
 
     upload(osv, manifest, depends)
 
-    osv.wait()
-
-    # Disable ZFS compression; it stops taking effect from this point on.
-    osv = subprocess.Popen('cd ../..; scripts/run.py -m 512 -c1 -i %s -u -s -e "--norandom --noinit /zfs.so set compression=off osv"' % image_path, shell=True, stdout=subprocess.PIPE)
     osv.wait()
 
     depends.write('\n\n')

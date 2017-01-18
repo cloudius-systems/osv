@@ -333,7 +333,7 @@ sub top_of_kernel_tree {
 	my @tree_check = (
 		"Makefile", "README.md", "arch", "bsd", "compiler",
 		"core", "documentation", "drivers",
-		"fs", "include", "mgmt", "modules",
+		"fs", "include", "modules",
 	);
 
 	foreach my $check (@tree_check) {

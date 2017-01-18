@@ -8,7 +8,7 @@ f = open(sys.argv[1])
 out = open(sys.argv[2], "w")
 version_str = sys.argv[3]
 
-asm_type = { "FUNC" : "function", "OBJECT" : "object" }
+asm_type = {"FUNC": "function", "OBJECT": "object"}
 
 version = """
 .pushsection .note.osv, "a", @note;
@@ -28,7 +28,7 @@ version = """
 
 for line in f.readlines():
     try:
-        value,tp,bnd,sym = elf.match(line).groups()
+        value, tp, bnd, sym = elf.match(line).groups()
         out.write("%s = 0x%s;\n"%(sym, value))
         print (".global %s\n.type %s,@%s"%(sym, sym, asm_type[tp]))
     except AttributeError:

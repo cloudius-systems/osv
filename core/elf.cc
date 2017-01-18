@@ -6,6 +6,7 @@
  */
 
 #include <osv/elf.hh>
+#include <osv/app.hh>
 #include <osv/mmu.hh>
 #include <boost/format.hpp>
 #include <exception>
@@ -33,7 +34,6 @@ TRACEPOINT(trace_elf_unload, "%s", const char *);
 TRACEPOINT(trace_elf_lookup, "%s", const char *);
 TRACEPOINT(trace_elf_lookup_addr, "%p", const void *);
 
-using namespace std;
 using namespace boost::range;
 
 namespace {
@@ -553,7 +553,35 @@ symbol_module object::symbol(unsigned idx)
         return symbol_module(sym, this);
     }
     if (!ret.symbol) {
-        abort("Failed looking up symbol %s\n", demangle(name).c_str());
+        abort("%s: failed looking up symbol %s\n",
+                pathname().c_str(), demangle(name).c_str());
+    }
+    return ret;
+}
+
+// symbol_other(idx) is similar to symbol(idx), except that the symbol is not
+// looked up in the object itself, just in the other objects.
+symbol_module object::symbol_other(unsigned idx)
+{
+    auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
+    assert(dynamic_val(DT_SYMENT) == sizeof(Elf64_Sym));
+    auto sym = &symtab[idx];
+    auto nameidx = sym->st_name;
+    auto name = dynamic_ptr<const char>(DT_STRTAB) + nameidx;
+    symbol_module ret(nullptr,nullptr);
+    _prog.with_modules([&](const elf::program::modules_list &ml) {
+        for (auto module : ml.objects) {
+            if (module == this)
+                continue; // do not match this module
+            if (auto sym = module->lookup_symbol(name)) {
+                ret = symbol_module(sym, module);
+                break;
+            }
+        }
+    });
+    if (!ret.symbol) {
+        abort("%s: failed looking up symbol %s in other objects\n",
+                pathname().c_str(), demangle(name).c_str());
     }
     return ret;
 }
@@ -989,14 +1017,19 @@ void object::init_static_tls()
 
 program* s_program;
 
+void create_main_program()
+{
+    assert(!s_program);
+    s_program = new elf::program();
+}
+
 program::program(void* addr)
     : _next_alloc(addr)
 {
-    assert(!s_program);
-    s_program = this;
-    _core = make_shared<memory_image>(*this, (void*)ELF_IMAGE_START);
+    _core = std::make_shared<memory_image>(*this, (void*)ELF_IMAGE_START);
     assert(_core->module_index() == core_module_index);
     _core->load_segments();
+    set_search_path({"/", "/usr/lib"});
     // Our kernel already supplies the features of a bunch of traditional
     // shared libraries:
     static const auto supplied_modules = {
@@ -1005,8 +1038,8 @@ program::program(void* addr)
           "libm.so.6",
 #ifdef __x86_64__
           "ld-linux-x86-64.so.2",
-          "libboost_system.so.1.54.0",
-          "libboost_program_options.so.1.54.0",
+          "libboost_system.so.1.55.0",
+          "libboost_program_options.so.1.55.0",
 #endif /* __x86_64__ */
 #ifdef __aarch64__
           "ld-linux-aarch64.so.1",
@@ -1166,7 +1199,6 @@ void program::remove_object(object *ef)
     // are completed before we delete the module
     osv::rcu_flush();
 
-    ef->unload_needed();
     del_debugger_obj(ef);
     // Note that if we race with get_library() of the same library, we may
     // find in _files a new copy of the same library, and mustn't remove it.
@@ -1183,6 +1215,8 @@ void program::remove_object(object *ef)
     _modules_rcu.assign(new_modules.release());
     osv::rcu_dispose(old_modules);
 
+    ef->unload_needed();
+
     // We want to unload and delete ef, but need to delay that until no
     // concurrent dl_iterate_phdr() is still using the modules it got from
     // modules_get().
@@ -1193,28 +1227,21 @@ void program::remove_object(object *ef)
     module_delete_enable();
 }
 
-object* program::s_objs[100];
+std::vector<object*> program::s_objs;
+mutex program::s_objs_mutex;
 
 void program::add_debugger_obj(object* obj)
 {
-    auto p = s_objs;
-    while (*p) {
-        ++p;
-    }
-    *p = obj;
+    SCOPE_LOCK(s_objs_mutex);
+    s_objs.push_back(obj);
 }
 
 void program::del_debugger_obj(object* obj)
 {
-    auto p = s_objs;
-    while (*p && *p != obj) {
-        ++p;
-    }
-    if (!*p) {
-        return;
-    }
-    while ((p[0] = p[1]) != nullptr) {
-        ++p;
+    SCOPE_LOCK(s_objs_mutex);
+    auto it = std::find(s_objs.begin(), s_objs.end(), obj);
+    if (it != s_objs.end()) {
+        s_objs.erase(it);
     }
 }
 
@@ -1282,6 +1309,12 @@ object *program::object_containing_addr(const void *addr)
 
 program* get_program()
 {
+    auto app = sched::thread::current_app();
+
+    if (app && app->program()) {
+        return app->program();
+    }
+
     return s_program;
 }
 
@@ -1395,7 +1428,7 @@ ulong program::register_dtv(object* obj)
     SCOPE_LOCK(_module_index_list_mutex);
     auto list = _module_index_list_rcu.read_by_owner();
     if (!list) {
-        _module_index_list_rcu.assign(new vector<object*>({obj}));
+        _module_index_list_rcu.assign(new std::vector<object*>({obj}));
         return 0;
     }
     auto i = find(*list, nullptr);
@@ -1403,7 +1436,7 @@ ulong program::register_dtv(object* obj)
         *i = obj;
         return i - list->begin();
     } else {
-        auto newlist = new vector<object*>(*list);
+        auto newlist = new std::vector<object*>(*list);
         newlist->push_back(obj);
         _module_index_list_rcu.assign(newlist);
         osv::rcu_dispose(list);

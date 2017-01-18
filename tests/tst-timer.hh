@@ -70,7 +70,7 @@ public:
     {
         debug("Starting stress test\n");
         for (int i=0; i<max_testers; i++) {
-            _testers[i] = new sched::thread([&] { this->stress_thread(); });
+            _testers[i] = sched::thread::make([&] { this->stress_thread(); });
             _testers[i]->start();
         }
 

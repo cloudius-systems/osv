@@ -26,11 +26,7 @@
 #include <osv/debug.hh>
 #include <osv/dhcp.hh>
 #include <osv/clock.hh>
-
-namespace osv {
-void set_dns_config(std::vector<boost::asio::ip::address> nameservers,
-                    std::vector<std::string> search_domains);
-}
+#include <libc/network/__dns.hh>
 
 using namespace boost::asio;
 
@@ -41,8 +37,11 @@ u8 requested_options[] = {
     dhcp::DHCP_OPTION_ROUTER,
     dhcp::DHCP_OPTION_DOMAIN_NAME_SERVERS,
     dhcp::DHCP_OPTION_INTERFACE_MTU,
-    dhcp::DHCP_OPTION_BROADCAST_ADDRESS
+    dhcp::DHCP_OPTION_BROADCAST_ADDRESS,
+    dhcp::DHCP_OPTION_HOSTNAME
 };
+
+const ip::address_v4 ipv4_zero = ip::address_v4::address_v4::from_string("0.0.0.0");
 
 // Returns whether we hooked the packet
 int dhcp_hook_rx(struct mbuf* m)
@@ -63,7 +62,19 @@ int dhcp_hook_rx(struct mbuf* m)
 void dhcp_start(bool wait)
 {
     // Initialize the global DHCP worker
-    net_dhcp_worker.init(wait);
+    net_dhcp_worker.init();
+    net_dhcp_worker.start(wait);
+}
+
+// Send DHCP release, for example at shutdown.
+void dhcp_release()
+{
+    net_dhcp_worker.release();
+}
+
+void dhcp_renew(bool wait)
+{
+    net_dhcp_worker.renew(wait);
 }
 
 namespace dhcp {
@@ -188,7 +199,7 @@ namespace dhcp {
         *options++ = DHCP_OPTION_END;
 
         dhcp_len += options - options_start;
-        build_udp_ip_headers(dhcp_len);
+        build_udp_ip_headers(dhcp_len, INADDR_ANY, INADDR_BROADCAST);
     }
 
     void dhcp_mbuf::compose_request(struct ifnet* ifp,
@@ -209,6 +220,9 @@ namespace dhcp {
         pkt->secs = 0;
         pkt->flags = 0;
         memcpy(pkt->chaddr, IF_LLADDR(ifp), ETHER_ADDR_LEN);
+        ulong yip_n = htonl(yip.to_ulong());
+        ulong sip_n = htonl(sip.to_ulong());
+        memcpy(&pkt->ciaddr.s_addr, &yip_n, 4);
 
         // Options
         u8* options_start = reinterpret_cast<u8*>(pkt+1);
@@ -220,13 +234,53 @@ namespace dhcp {
         ip::address_v4::bytes_type requested_ip = yip.to_bytes();
         options = add_option(options, DHCP_OPTION_MESSAGE_TYPE, 1, DHCP_MT_REQUEST);
         options = add_option(options, DHCP_OPTION_DHCP_SERVER, 4, (u8*)&dhcp_server_ip);
+        char hostname[256];
+        if (0 == gethostname(hostname, sizeof(hostname))) {
+            options = add_option(options, DHCP_OPTION_HOSTNAME, strlen(hostname), (u8*)hostname);
+        }
         options = add_option(options, DHCP_OPTION_REQUESTED_ADDRESS, 4, (u8*)&requested_ip);
         options = add_option(options, DHCP_OPTION_PARAMETER_REQUEST_LIST,
             sizeof(requested_options), requested_options);
         *options++ = DHCP_OPTION_END;
 
         dhcp_len += options - options_start;
-        build_udp_ip_headers(dhcp_len);
+        build_udp_ip_headers(dhcp_len, yip_n, sip_n);
+    }
+
+    void dhcp_mbuf::compose_release(struct ifnet* ifp,
+                                    ip::address_v4 yip,
+                                    ip::address_v4 sip)
+    {
+        size_t dhcp_len = sizeof(struct dhcp_packet);
+        struct dhcp_packet* pkt = pdhcp();
+        *pkt = {};
+
+        // Header
+        pkt->op = BOOTREQUEST;
+        pkt->htype = HTYPE_ETHERNET;
+        pkt->hlen = ETHER_ADDR_LEN;
+        pkt->hops = 0;
+        // Linux dhclient also uses new xid for release.
+        pkt->xid = rand();
+        pkt->secs = 0;
+        pkt->flags = 0;
+        memcpy(pkt->chaddr, IF_LLADDR(ifp), ETHER_ADDR_LEN);
+        ulong yip_n = htonl(yip.to_ulong());
+        ulong sip_n = htonl(sip.to_ulong());
+        memcpy(&pkt->ciaddr.s_addr, &yip_n, 4);
+
+        // Options
+        u8* options_start = reinterpret_cast<u8*>(pkt+1);
+        u8* options = options_start;
+        memcpy(options, dhcp_options_magic, 4);
+        options += 4;
+
+        options = add_option(options, DHCP_OPTION_MESSAGE_TYPE, 1, DHCP_MT_RELEASE);
+        options = add_option(options, DHCP_OPTION_DHCP_SERVER, 4, reinterpret_cast<u8*>(&sip_n));
+        *options++ = DHCP_OPTION_END;
+
+        dhcp_len += options - options_start;
+        build_udp_ip_headers(dhcp_len, yip_n, sip_n);
     }
 
     u32 dhcp_mbuf::get_xid()
@@ -352,6 +406,13 @@ namespace dhcp {
                     _routes.emplace_back(ip::address_v4(ntohl(net)), ip::address_v4(u32(((1ull<<mask)-1) << (32-mask))), ip::address_v4(bytes));
                 }
                 break;
+            case DHCP_OPTION_HOSTNAME:
+                char hostname[256];
+                memcpy(hostname, options, op_len);
+                hostname[op_len] = '\0'; // terminating null
+                dhcp_i( "DHCP received hostname: %s\n", hostname);
+                _hostname = hostname;
+                break;
             default:
                 break;
             }
@@ -400,7 +461,7 @@ namespace dhcp {
         return pos + 2 + len;
     }
 
-    void dhcp_mbuf::build_udp_ip_headers(size_t dhcp_len)
+    void dhcp_mbuf::build_udp_ip_headers(size_t dhcp_len, in_addr_t src_addr, in_addr_t dest_addr)
     {
         struct ip* ip = pip();
         struct udphdr* udp = pudp();
@@ -417,8 +478,8 @@ namespace dhcp {
         ip->ip_ttl = 128;
         ip->ip_p = IPPROTO_UDP;
         ip->ip_sum = 0;
-        ip->ip_src.s_addr = INADDR_ANY;
-        ip->ip_dst.s_addr = INADDR_BROADCAST;
+        ip->ip_src.s_addr = src_addr;
+        ip->ip_dst.s_addr = dest_addr;
         ip->ip_sum = in_cksum(_m, min_ip_len);
 
         // UDP
@@ -438,6 +499,7 @@ namespace dhcp {
     {
         _sock = new dhcp_socket(ifp);
         _xid = 0;
+        _client_addr = _server_addr = ipv4_zero;
     }
 
     dhcp_interface_state::~dhcp_interface_state()
@@ -447,8 +509,6 @@ namespace dhcp {
 
     void dhcp_interface_state::discover()
     {
-        // FIXME: send release packet in case the interface has an address
-
         // Update state
         _state = DHCP_DISCOVER;
 
@@ -458,6 +518,44 @@ namespace dhcp {
 
         // Save transaction id & send
         _xid = dm.get_xid();
+        _client_addr = _server_addr = ipv4_zero;
+        _sock->dhcp_send(dm);
+    }
+
+    void dhcp_interface_state::release()
+    {
+        // Update state
+        _state = DHCP_INIT;
+
+        // Compose a dhcp release packet
+        dhcp_mbuf dm(false);
+        dm.compose_release(_ifp, _client_addr, _server_addr);
+
+        // Save transaction id & send
+        _xid = dm.get_xid();
+        _sock->dhcp_send(dm);
+        // IP and routes have to be removed
+        osv::stop_if(_ifp->if_xname, _client_addr.to_string().c_str());
+        // Here we assume that all DNS resolvers were added by this iface.
+        // This might not be true if we have more than one iface.
+        osv::set_dns_config({}, {});
+        // no reply/ack is expected, after send we just forget all old state
+        _client_addr = _server_addr = ipv4_zero;
+    }
+
+    void dhcp_interface_state::renew()
+    {
+        // Update state
+        _state = DHCP_REQUEST;
+
+        // Compose a dhcp request packet
+        dhcp_mbuf dm(false);
+        _xid = rand();
+        dm.compose_request(_ifp,
+                           _xid,
+                           _client_addr, _server_addr);
+
+        // Send
         _sock->dhcp_send(dm);
     }
 
@@ -511,6 +609,8 @@ namespace dhcp {
         if (dm.get_message_type() == DHCP_MT_ACK) {
             dhcp_i("Server acknowledged IP for interface %s", _ifp->if_xname);
             _state = DHCP_ACKNOWLEDGE;
+            _client_addr = dm.get_your_ip();
+            _server_addr = dm.get_dhcp_server_ip();
 
             // TODO: check that the IP address is not responding with ARP
             // RFC2131 section 3.1.5
@@ -556,12 +656,16 @@ namespace dhcp {
             });
 
             osv::set_dns_config(dm.get_dns_ips(), std::vector<std::string>());
+            if (dm.get_hostname().size()) {
+	        sethostname(dm.get_hostname().c_str(), dm.get_hostname().size());
+            }
             // TODO: setup lease
         } else if (dm.get_message_type() == DHCP_MT_NAK) {
             // from RFC 2131 section 3.1.5
             // "If the client receives a DHCPNAK message, the client restarts the
             // configuration process."
             _state = DHCP_INIT;
+            _client_addr = _server_addr = ipv4_zero;
             discover();
         }
         // FIXME: retry on timeout and restart DORA sequence if it timeout a
@@ -585,11 +689,9 @@ namespace dhcp {
         // FIXME: free packets and states
     }
 
-    void dhcp_worker::init(bool wait)
+    void dhcp_worker::init()
     {
         struct ifnet *ifp = nullptr;
-
-        // FIXME: clear routing table (use case run dhclient 2nd time)
 
         // Allocate a state for each interface
         IFNET_RLOCK();
@@ -603,14 +705,19 @@ namespace dhcp {
         IFNET_RUNLOCK();
 
         // Create the worker thread
-        _dhcp_thread = new sched::thread([&] { dhcp_worker_fn(); });
+        _dhcp_thread = sched::thread::make([&] { dhcp_worker_fn(); });
         _dhcp_thread->set_name("dhcp");
         _dhcp_thread->start();
+    }
 
+    void dhcp_worker::_send_and_wait(bool wait, dhcp_interface_state_send_packet iface_func)
+    {
+        // When doing renew, we still have IP, but want to reuse the flag.
+        _have_ip = false;
         do {
-            // Send discover packets!
+            // Send discover or renew packets!
             for (auto &it: _universe) {
-                it.second->discover();
+                (it.second->*iface_func)();
             }
 
             if (wait) {
@@ -622,8 +729,30 @@ namespace dhcp {
                 t.set(3_s);
 
                 sched::thread::wait_until([&]{ return _have_ip || t.expired(); });
+                _waiter = nullptr;
             }
         } while (!_have_ip && wait);
+    }
+
+    void dhcp_worker::start(bool wait)
+    {
+        // FIXME: clear routing table (use case run dhclient 2nd time)
+        _send_and_wait(wait, &dhcp_interface_state::discover);
+    }
+
+    void dhcp_worker::release()
+    {
+        for (auto &it: _universe) {
+            it.second->release();
+        }
+        _have_ip = false;
+        // Wait a bit, so hopefully UDP release packets will be actually put on wire.
+        usleep(1000);
+    }
+
+    void dhcp_worker::renew(bool wait)
+    {
+        _send_and_wait(wait, &dhcp_interface_state::renew);
     }
 
     void dhcp_worker::dhcp_worker_fn()
@@ -660,6 +789,15 @@ namespace dhcp {
 
     void dhcp_worker::queue_packet(struct mbuf* m)
     {
+        if (!_dhcp_thread) {
+            /*
+            With staticaly assigned IP, dhcp_worker::init() isn't called,
+            and (injected) packets can/should be ignored.
+            */
+            dhcp_w("Ignoring inbound packet");
+            return;
+        }
+
         WITH_LOCK (_lock) {
             _rx_packets.push_front(m);
         }

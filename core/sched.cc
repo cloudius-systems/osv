@@ -13,17 +13,14 @@
 #include <osv/debug.hh>
 #include <osv/irqlock.hh>
 #include <osv/align.hh>
-
-#ifndef AARCH64_PORT_STUB
 #include <osv/interrupt.hh>
-#endif /* !AARCH64_PORT_STUB */
-
-#include "smp.hh"
+#include <smp.hh>
 #include "osv/trace.hh"
 #include <osv/percpu.hh>
 #include <osv/prio.hh>
 #include <osv/elf.hh>
 #include <stdlib.h>
+#include <math.h>
 #include <unordered_map>
 #include <osv/wait_record.hh>
 #include <osv/preempt-lock.hh>
@@ -77,9 +74,7 @@ bool __thread need_reschedule = false;
 
 elf::tls_data tls;
 
-#ifndef AARCH64_PORT_STUB
-inter_processor_interrupt wakeup_ipi{[] {}};
-#endif /* !AARCH64_PORT_STUB */
+inter_processor_interrupt wakeup_ipi{IPI_WAKEUP, [] {}};
 
 constexpr float cmax = 0x1P63;
 constexpr float cinitial = 0x1P-63;
@@ -140,7 +135,7 @@ public:
 private:
     mutex _mtx;
     std::list<thread*> _zombies;
-    thread _thread;
+    std::unique_ptr<thread> _thread;
 };
 
 cpu::cpu(unsigned _id)
@@ -167,7 +162,7 @@ void cpu::init_idle_thread()
 {
     running_since = osv::clock::uptime::now();
     std::string name = osv::sprintf("idle%d", id);
-    idle_thread = new thread([this] { idle(); }, thread::attr().pin(this).name(name));
+    idle_thread = thread::make([this] { idle(); }, thread::attr().pin(this).name(name));
     idle_thread->set_priority(thread::priority_idle);
 }
 
@@ -342,9 +337,15 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
         mmu::flush_tlb_local();
     }
     n->switch_to();
-    if (p->_detached_state->_cpu->terminating_thread) {
-        p->_detached_state->_cpu->terminating_thread->destroy();
-        p->_detached_state->_cpu->terminating_thread = nullptr;
+
+    // Note: after the call to n->switch_to(), we should no longer use any of
+    // the local variables, nor "this" object, because we just switched to n's
+    // stack and the values we can access now are those that existed in the
+    // reschedule call which scheduled n out, and will now be returning.
+    // So to get the current cpu, we must use cpu::current(), not "this".
+    if (cpu::current()->terminating_thread) {
+        cpu::current()->terminating_thread->destroy();
+        cpu::current()->terminating_thread = nullptr;
     }
 }
 
@@ -373,13 +374,11 @@ void cpu::idle_poll_end()
 
 void cpu::send_wakeup_ipi()
 {
-#ifndef AARCH64_PORT_STUB
     std::atomic_thread_fence(std::memory_order_seq_cst);
     if (!idle_poll.load(std::memory_order_relaxed) && runqueue.size() <= 1) {
         trace_sched_ipi(id);
         wakeup_ipi.send(this);
     }
-#endif /* !AARCH64_PORT_STUB */
 }
 
 void cpu::do_idle()
@@ -411,6 +410,11 @@ void start_early_threads();
 
 void cpu::idle()
 {
+    // The idle thread must not sleep, because the whole point is that the
+    // scheduler can always find at least one runnable thread.
+    // We set preempt_disable just to help us verify this.
+    preempt_disable();
+
     if (id == 0) {
         start_early_threads();
     }
@@ -439,6 +443,9 @@ void cpu::handle_incoming_wakeups()
                     // Special case of current thread being woken before
                     // having a chance to be scheduled out.
                     t._detached_state->st.store(thread::status::running);
+                } else if (t.tcpu() != this) {
+                    // Thread was woken on the wrong cpu. Can be a side-effect
+                    // of sched::thread::pin(thread*, cpu*). Do nothing.
                 } else {
                     t._detached_state->st.store(thread::status::queued);
                     // Make sure the CPU-local runtime measure is suitably
@@ -473,27 +480,34 @@ unsigned cpu::load()
     return runqueue.size();
 }
 
+// function to pin the *current* thread:
 void thread::pin(cpu *target_cpu)
 {
+    // Note that this code may proceed to migrate the current thread even if
+    // it was protected by a migrate_disable(). It is the thread's own fault
+    // for doing this to itself... The function to pin a different thread
+    // (below) waits for that different thread to leave migrate_disable().
     thread &t = *current();
-    // We want to wake this thread on the target CPU, but can't do this while
-    // it is still running on this CPU. So we need a different thread to
-    // complete the wakeup. We could re-used an existing thread (e.g., the
-    // load balancer thread) but a "good-enough" dirty solution is to
-    // temporarily create a new ad-hoc thread, "wakeme"
-    if (!t._migration_lock_counter) {
+    if (!t._pinned) {
+        // _pinned comes with a +1 increase to _migration_counter.
         migrate_disable();
+        t._pinned = true;
     }
     cpu *source_cpu = cpu::current();
     if (source_cpu == target_cpu) {
         return;
     }
+    // We want to wake this thread on the target CPU, but can't do this while
+    // it is still running on this CPU. So we need a different thread to
+    // complete the wakeup. We could re-used an existing thread (e.g., the
+    // load balancer thread) but a "good-enough" dirty solution is to
+    // temporarily create a new ad-hoc thread, "wakeme".
     bool do_wakeme = false;
-    thread wakeme([&] () {
+    std::unique_ptr<thread> wakeme(thread::make([&] () {
         wait_until([&] { return do_wakeme; });
         t.wake();
-    }, sched::thread::attr().pin(source_cpu));
-    wakeme.start();
+    }, sched::thread::attr().pin(source_cpu)));
+    wakeme->start();
     WITH_LOCK(irq_lock) {
         trace_sched_migrate(&t, target_cpu->id);
         t.stat_migrations.incr();
@@ -506,10 +520,116 @@ void thread::pin(cpu *target_cpu)
         t._detached_state->st.store(thread::status::waiting);
         // Note that wakeme is on the same CPU, and irq is disabled,
         // so it will not actually run until we stop running.
-        wakeme.wake_with([&] { do_wakeme = true; });
+        wakeme->wake_with([&] { do_wakeme = true; });
         source_cpu->reschedule_from_interrupt();
     }
     // wakeme will be implicitly join()ed here.
+}
+
+// function to pin another thread:
+void thread::pin(thread *t, cpu *target_cpu)
+{
+    if (t == current()) {
+        thread::pin(target_cpu);
+        return;
+    }
+    // To work on the target thread, we need to run code on the same CPU on
+    // where the target thread is currently running. We start here a new
+    // helper thread to follow the target thread's CPU. We could have also
+    // re-used an existing thread (e.g., the load balancer thread).
+    std::unique_ptr<thread> helper(thread::make([&] {
+        WITH_LOCK(irq_lock) {
+            // This thread started on the same CPU as t, but by now t might
+            // have moved. If that happened, we need to move too.
+            while (sched::cpu::current() != t->tcpu()) {
+                DROP_LOCK(irq_lock) {
+                    thread::pin(t->tcpu());
+                }
+            }
+            // At this point, t is not running and it belongs to this CPU, and
+            // we hold the irq lock, so we can mess with t's data structures.
+            if (t->_pinned) {
+                // The thread was already pin()ed, explaining 1 on
+                // _migration_lock_counter. Remove this pinning, so the code
+                // below can pin it again and not think a temporary
+                // migration_disable() is in force.
+                t->_migration_lock_counter--;
+            }
+            if (t->tcpu() == target_cpu) {
+                t->_migration_lock_counter++;
+                t->_pinned = true;
+                return;
+            }
+            // The target thread might be temporarily holding a migration lock
+            // and we must not migrate it in the middle of this. Currently we
+            // sleep a bit and retry, I don't know if there's a better way.
+            while(t->_migration_lock_counter) {
+                t->_migration_lock_counter++;
+                DROP_LOCK(irq_lock) {
+                    debug("sched::thread::pin() retrying\n");
+                    // we drop the irq lock but still hold migration lock on t
+                    // and also the helper thread is pinned, so when we get
+                    // the irq lock back, they will still be on same CPU.
+                    sched::thread::sleep(std::chrono::milliseconds(1));
+                }
+                t->_migration_lock_counter--;
+            }
+            t->_migration_lock_counter = 1;
+            t->_pinned = true;
+            // Racing with another CPU doing t->wake() is a complication.
+            // The biggest risk is that t will be woken up on the new (target)
+            // CPU, but read old values for some of its variables. Let's avoid
+            // this risk by pretending that the thread is already waking up.
+            // After this pretense we will have to really wake it up at the
+            // end (if not, we may lose a real wakeup!). That may be a
+            // spurious wakeup, but spurious wakeups are fine.
+            // Importantly, if the thread was already woken on this CPU before
+            // we moved it and woken it again, handle_incoming_wakeups() on
+            // this CPU will notice it doesn't belong to it and ignore it.
+            if (t->_detached_state->st.load(std::memory_order_relaxed)
+                    == status::waiting) {
+                t->_detached_state->st.store(status::waking);
+            }
+            switch (t->_detached_state->st.load(std::memory_order_relaxed)) {
+            case status::prestarted:
+            case status::sending_lock:
+            case status::waking:
+                trace_sched_migrate(t, target_cpu->id);
+                t->stat_migrations.incr();
+                t->suspend_timers();
+                t->_runtime.export_runtime();
+                t->_detached_state->_cpu = target_cpu;
+                t->remote_thread_local_var(::percpu_base) = target_cpu->percpu_base;
+                t->remote_thread_local_var(current_cpu) = target_cpu;
+                // May be a spurious wakeup, but that doesn't matter (see
+                // comment above).
+                if (t->_detached_state->st.load(std::memory_order_relaxed) == status::waking) {
+                    t->_detached_state->st.store(status::waiting);
+                    t->wake();
+                }
+                break;
+            case status::queued:
+                current_cpu->runqueue.erase(current_cpu->runqueue.iterator_to(*t));
+                trace_sched_migrate(t, target_cpu->id);
+                t->stat_migrations.incr();
+                t->suspend_timers();
+                t->_runtime.export_runtime();
+                t->_detached_state->_cpu = target_cpu;
+                t->remote_thread_local_var(::percpu_base) = target_cpu->percpu_base;
+                t->remote_thread_local_var(current_cpu) = target_cpu;
+                // pretend the thread was waiting, so we can wake it
+                t->_detached_state->st.store(status::waiting);
+                t->wake();
+                break;
+            default:
+                // Thread is in an unexpected state (for example, already
+                // terminated, or not started), and cannot be moved.
+                return;
+            }
+        }
+    }, sched::thread::attr().pin(t->tcpu())));
+    helper->start();
+    helper->join();
 }
 
 void cpu::load_balance()
@@ -639,11 +759,12 @@ void thread::stack_info::default_deleter(thread::stack_info si)
     free(si.begin);
 }
 
-mutex thread_map_mutex;
-// An unordered_set would be simpler, but it hashes using the address of the thread
-// as the key. And if we already have the thread's address, there is no point in
-// hashing it. So we use unordered_map and use the thread id as the key.
-std::unordered_map<unsigned long, thread *> thread_map
+// thread_map is used for a list of all threads, but also as a map from
+// numeric (4-byte) threads ids to the thread object, to support Linux
+// functions which take numeric thread ids.
+static mutex thread_map_mutex;
+using id_type = std::result_of<decltype(&thread::id)(thread)>::type;
+std::unordered_map<id_type, thread *> thread_map
     __attribute__((init_priority((int)init_prio::threadlist)));
 
 static thread_runtime::duration total_app_time_exited(0);
@@ -757,6 +878,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
     , _detached_state(new detached_state(this))
     , _attr(attr)
     , _migration_lock_counter(0)
+    , _pinned(false)
     , _id(0)
     , _cleanup([this] { delete this; })
     , _app(app)
@@ -824,6 +946,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
 
     if (_attr._pinned_cpu) {
         ++_migration_lock_counter;
+        _pinned = true;
     }
 
     if (main) {
@@ -863,6 +986,17 @@ static void run_exit_notifiers()
     }
 }
 
+// not in the header to avoid double inclusion between osv/app.hh and
+// osv/sched.hh
+osv::application *thread::current_app() {
+    auto cur = current();
+
+    if (!cur->_app_runtime) {
+        return nullptr;
+    }
+
+    return &(cur->_app_runtime->app);
+}
 
 thread::~thread()
 {
@@ -1056,6 +1190,10 @@ void thread::stop_wait()
         return;
     }
     preempt_enable();
+    if (old_status == status::terminated) {
+        // We raced with thread::unsafe_stop() and lost
+        cpu::schedule();
+    }
     while (st.load() == status::waking || st.load() == status::sending_lock) {
         cpu::schedule();
     }
@@ -1164,7 +1302,7 @@ void thread::timer_fired()
     wake();
 }
 
-unsigned int thread::id()
+unsigned int thread::id() const
 {
     return _id;
 }
@@ -1213,6 +1351,7 @@ timer_list::callback_dispatch::callback_dispatch()
 void timer_list::fired()
 {
     auto now = osv::clock::uptime::now();
+ again:
     _last = osv::clock::uptime::time_point::max();
     _list.expire(now);
     timer_base* timer;
@@ -1221,7 +1360,17 @@ void timer_list::fired()
         timer->expire();
     }
     if (!_list.empty()) {
-        rearm();
+        // We could have simply called rearm() here, but this would lead to
+        // recursion if the next timer has already expired in the time that
+        // passed above. Better iterate in that case, instead.
+        now = osv::clock::uptime::now();
+        auto t = _list.get_next_timeout();
+        if (t <= now) {
+            goto again;
+        } else {
+            _last = t;
+            clock_event->set(t - now);
+        }
     }
 }
 
@@ -1230,7 +1379,7 @@ void timer_list::rearm()
     auto t = _list.get_next_timeout();
     if (t < _last) {
         _last = t;
-        clock_event->set(t);
+        clock_event->set(t - osv::clock::uptime::now());
     }
 }
 
@@ -1355,9 +1504,9 @@ bool operator<(const timer_base& t1, const timer_base& t2)
 }
 
 thread::reaper::reaper()
-    : _mtx{}, _zombies{}, _thread([=] { reap(); })
+    : _mtx{}, _zombies{}, _thread(thread::make([=] { reap(); }))
 {
-    _thread.start();
+    _thread->start();
 }
 
 void thread::reaper::reap()
@@ -1380,7 +1529,7 @@ void thread::reaper::add_zombie(thread* z)
     assert(z->_attr._detached);
     WITH_LOCK(_mtx) {
         _zombies.push_back(z);
-        _thread.wake();
+        _thread->wake();
     }
 }
 
@@ -1393,18 +1542,22 @@ void init_detached_threads_reaper()
 
 void start_early_threads()
 {
-    WITH_LOCK(thread_map_mutex) {
-        for (auto th : thread_map) {
-            thread *t = th.second;
-            if (t == sched::thread::current()) {
-                continue;
-            }
-            t->remote_thread_local_var(s_current) = t;
-            thread::status expected = thread::status::prestarted;
-            if (t->_detached_state->st.compare_exchange_strong(expected,
+    // We're called from the idle thread, which must not sleep, hence this
+    // strange try_lock() loop instead of just a lock().
+    while (!thread_map_mutex.try_lock()) {
+        cpu::schedule();
+    }
+    SCOPE_ADOPT_LOCK(thread_map_mutex);
+    for (auto th : thread_map) {
+        thread *t = th.second;
+        if (t == sched::thread::current()) {
+            continue;
+        }
+        t->remote_thread_local_var(s_current) = t;
+        thread::status expected = thread::status::prestarted;
+        if (t->_detached_state->st.compare_exchange_strong(expected,
                 thread::status::unstarted, std::memory_order_relaxed)) {
-                t->start();
-            }
+            t->start();
         }
     }
 }
@@ -1434,8 +1587,10 @@ size_t kernel_tls_size()
 
 void thread_runtime::export_runtime()
 {
-    _Rtt /= cpu::current()->c;;
-    _renormalize_count = -1; // special signal to update_after_sleep()
+    if (_renormalize_count != -1) {
+        _Rtt /= cpu::current()->c;;
+        _renormalize_count = -1; // special signal to update_after_sleep()
+    }
 }
 
 void thread_runtime::update_after_sleep()

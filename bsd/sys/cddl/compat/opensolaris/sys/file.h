@@ -29,11 +29,12 @@
 #ifndef _OPENSOLARIS_SYS_FILE_H_
 #define	_OPENSOLARIS_SYS_FILE_H_
 
-#include <osv/file.h>
-
 #define	FKIOCTL	0x80000000	/* ioctl addresses are from kernel */
 
 #ifdef _KERNEL
+
+#include <osv/file.h>
+
 typedef	struct file	file_t;
 
 static __inline file_t *

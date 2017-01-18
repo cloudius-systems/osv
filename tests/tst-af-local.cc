@@ -36,13 +36,13 @@ int main(int ac, char** av)
     memcpy(msg, "snafu", 5);
     memset(reply, 0, 5);
     int r2;
-    sched::thread t1([&] {
+    std::unique_ptr<sched::thread> t1(sched::thread::make([&] {
         r2 = read(s[1], reply, 5);
-    });
-    t1.start();
+    }));
+    t1->start();
     sleep(1);
     r = write(s[0], msg, 5);
-    t1.join();
+    t1->join();
     report(r2 == 5 && memcmp(msg, reply, 5) == 0, "read before write");
 
     memcpy(msg, "fooba", 5);
@@ -60,17 +60,17 @@ int main(int ac, char** av)
 
     memcpy(msg, "smeg!", 5);
     memset(reply, 0, 5);
-    sched::thread t2([&] {
+    std::unique_ptr<sched::thread> t2(sched::thread::make([&] {
         poller.revents = 0;
         r2 = poll(&poller, 1, 5000);
         report(r2 == 1 && poller.revents == POLLIN, "waiting poll");
         r2 = read(s[1], reply, 5);
         report(r2 == 5 && memcmp(msg, reply, 5) == 0, "read after waiting poll");
-    });
-    t2.start();
+    }));
+    t2->start();
     sleep(1);
     r = write(s[0], msg, 5);
-    t2.join();
+    t2->join();
     report(r == 5, "write to polling socket");
 
     close(s[1]);

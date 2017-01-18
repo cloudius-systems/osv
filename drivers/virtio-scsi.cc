@@ -152,7 +152,7 @@ scsi::scsi(pci::device& dev)
     read_config();
 
     //register the single irq callback for the block
-    sched::thread* t = new sched::thread([this] { this->req_done(); },
+    sched::thread* t = sched::thread::make([this] { this->req_done(); },
             sched::thread::attr().name("virtio-scsi"));
     t->start();
     auto queue = get_virt_queue(VIRTIO_SCSI_QUEUE_REQ);

@@ -27,6 +27,12 @@ vdi)    OUTPUT=$DIR/osv.vdi
 raw)    OUTPUT=$DIR/osv.raw
         qemu-img convert -O raw $INPUT $OUTPUT
         echo "Created image: $OUTPUT";;
-*)      echo "Unsupported image type '$1'. Supported types: vmdk, vdi, raw." >&2
+qcow2-old)
+        # Classic qcow2 which can work on old versions of qemu which do not
+        # support the improved qcow2 v3.
+        OUTPUT=$DIR/osv.qcow2
+        qemu-img convert -O qcow2 -o compat=0.10 $INPUT $OUTPUT
+        echo "Created image: $OUTPUT";;
+*)      echo "Unsupported image type '$1'. Supported types: vmdk, vdi, raw, qcow2-old." >&2
         exit 1;;
 esac

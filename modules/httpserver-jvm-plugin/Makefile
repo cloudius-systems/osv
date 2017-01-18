@@ -39,7 +39,7 @@ CPP_FILES := $(JSON_CC_FILES) $(wildcard *.cc)
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 
 STATIC_LIBS = $(libs-dir)/libboost_program_options.a
-DYN_LIBS = -lpthread -ldl -L$(OSV_BUILD_PATH)/tools -ltools -L$(libs-dir) -lyaml-cpp $(boost-libs)
+DYN_LIBS = -lpthread -ldl -L../libtools -ltools -L$(libs-dir) -lyaml-cpp $(boost-libs)
 
 ifeq ($(use_host),y)
 	DYN_LIBS += -lssl -lcrypto

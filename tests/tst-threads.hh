@@ -55,8 +55,8 @@ public:
         test_threads_data tt;
         tt.main = sched::thread::current();
         tt.t1ok = tt.t2ok = true;
-        tt.t1 = new sched::thread([&] { test_thread_1(tt); });
-        tt.t2 = new sched::thread([&] { test_thread_2(tt); });
+        tt.t1 = sched::thread::make([&] { test_thread_1(tt); });
+        tt.t2 = sched::thread::make([&] { test_thread_2(tt); });
         tt.test_ctr = 0;
         tt.t1->start();
         tt.t2->start();

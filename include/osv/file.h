@@ -30,8 +30,6 @@
 #ifndef _OSV_FILE_H_
 #define _OSV_FILE_H_
 
-#ifdef _KERNEL
-
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -255,7 +253,5 @@ __END_DECLS
 int fget(int fd, struct file** fp);
 
 bool is_nonblock(struct file *f);
-
-#endif
 
 #endif /* !_OSV_FILE_H_ */

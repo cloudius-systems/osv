@@ -7,6 +7,7 @@ import collections
 _modules = collections.OrderedDict()
 _loading_modules = list()
 _modules_to_run = dict()
+_modules_to_be_added_if_other_module_present = dict()
 
 class Module(object):
     def __init__(self, name, config, properties):
@@ -117,6 +118,27 @@ def fetch_module(module_config, target_dir):
     if returncode:
         raise Exception("Command failed with exit code: %d" % returncode)
 
+def require_if_other_module_present(module_name,other_module_name):
+    list_of_modules = _modules_to_be_added_if_other_module_present.get(other_module_name,None)
+    if(list_of_modules):
+        list_of_modules.append(module_name)
+    else:
+        _modules_to_be_added_if_other_module_present[other_module_name] = [module_name]
+
+def resolve_required_modules_if_other_is_present():
+    required_module_names = set()
+    for module_name in _modules_to_be_added_if_other_module_present.keys():
+        # If module is present then add modules that should be required implictly
+        if( _modules.get(module_name)):
+            modules_to_be_added = _modules_to_be_added_if_other_module_present[module_name]
+            for required_module_name in modules_to_be_added:
+                if(not _modules.get(required_module_name)): # If required module is not in the list already
+                    print("Adding module '%s' because module '%s' is present" % (required_module_name, module_name))
+                    required_module_names.add(required_module_name)
+
+    for required_module_name in required_module_names:
+        require(required_module_name)
+
 def require(module_name):
     if module_name in _loading_modules:
         raise Exception("Recursive loading of '%s' module" % module_name)
@@ -152,7 +174,10 @@ def require(module_name):
     _modules[module_name] = module
     if hasattr(module, 'provides'):
         for name in getattr(module, 'provides'):
-            _modules[name] = module
+            if(_modules.get(name)):
+                raise Exception("There is more than one module included that provides: '%s'" % name )
+            else:
+                _modules[name] = module
     return module
 
 def require_running(module_name, run_config='*'):

@@ -8,6 +8,9 @@
 #include <osv/mutex.h>
 #include <osv/debug.hh>
 #include <osv/mmio.hh>
+#include <osv/irqlock.hh>
+
+#include "processor.hh"
 
 #include "gic.hh"
 
@@ -41,18 +44,6 @@ void gic_driver::init_cpu(int smp_idx)
         this->cpu_targets[smp_idx] = 0;
     }
 
-    /* disable all PPI interrupts */
-    this->gicd.write_reg_raw((u32)gicd_reg_irq1::GICD_ICENABLER, 0,
-                             0xffff0000);
-    /* enable all SGI interrupts */
-    this->gicd.write_reg_raw((u32)gicd_reg_irq1::GICD_ISENABLER, 0,
-                             0x0000ffff);
-    /* set priority on SGI/PPI (at least bits [7:4] must be implemented) */
-    for (int i = 0; i < 32; i += 4) {
-        this->gicd.write_reg_raw((u32)gicd_reg_irq8::GICD_IPRIORITYR, i,
-                                 0xc0c0c0c0);
-    }
-
     /* set priority mask register for CPU */
     for (int i = 0; i < 32; i += 4) {
         this->gicc.write_reg(gicc_reg::GICC_PMR, 0xf0);
@@ -70,6 +61,7 @@ void gic_driver::init_cpu(int smp_idx)
 void gic_driver::init_dist(int smp_idx)
 {
     debug_early_entry("gic_driver::init_dist()");
+    assert(smp_idx < max_cpu_if);
 
     /* disable first */
     unsigned int gicd_ctlr;
@@ -107,6 +99,17 @@ void gic_driver::init_dist(int smp_idx)
         this->gicd.write_reg_raw((u32)gicd_reg_irq1::GICD_ICENABLER, i / 8,
                                  0xffffffff);
 
+    /* disable all PPI interrupts */
+    this->gicd.write_reg_raw((u32)gicd_reg_irq1::GICD_ICENABLER, 0,
+                             0xffff0000);
+    /* enable all SGI interrupts */
+    this->gicd.write_reg_raw((u32)gicd_reg_irq1::GICD_ISENABLER, 0,
+                             0x0000ffff);
+    /* set priority on SGI/PPI (at least bits [7:4] must be implemented) */
+    for (int i = 0; i < 32; i += 4) {
+        this->gicd.write_reg_raw((u32)gicd_reg_irq8::GICD_IPRIORITYR, i,
+                                 0xc0c0c0c0);
+    }
     /* enable distributor interface */
     gicd_ctlr |= 1;
     this->gicd.write_reg(gicd_reg::GICD_CTLR, gicd_ctlr);
@@ -130,6 +133,38 @@ void gic_driver::set_irq_type(unsigned int id, irq_type type)
 {
     WITH_LOCK(gic_lock) {
         this->gicd.write_reg_grp(gicd_reg_irq2::GICD_ICFGR, id, (u32)type << 1);
+    }
+}
+
+/* send software-generated interrupt to other cpus; vector is [0..15]
+ * GICD_SGIR distributor register:
+ *
+ * 31        26 | 25  24 | 23          16 | 15    | 14       4 | 3     0
+ *   reserved   | filter |    cpulist     | NSATT |  reserved  |  INTID
+ */
+void gic_driver::send_sgi(sgi_filter filter, int smp_idx, unsigned int vector)
+{
+    u32 sgir = 0;
+    assert(smp_idx < max_cpu_if);
+    assert(vector <= 0x0f);
+    irq_save_lock_type irq_lock;
+
+    WITH_LOCK(irq_lock) {
+        WITH_LOCK(gic_lock) {
+            switch (filter) {
+            case sgi_filter::SGI_TARGET_LIST:
+                sgir = cpu_targets[smp_idx] << 16u;
+                break;
+            case sgi_filter::SGI_TARGET_ALL_BUT_SELF:
+                sgir = 1 << 24u;
+                break;
+            case sgi_filter::SGI_TARGET_SELF:
+                sgir = 2 << 24u;
+                break;
+            }
+            asm volatile ("dmb ishst");
+            this->gicd.write_reg(gicd_reg::GICD_SGIR, sgir | vector);
+        }
     }
 }
 

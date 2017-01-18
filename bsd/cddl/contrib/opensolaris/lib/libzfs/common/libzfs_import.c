@@ -1237,6 +1237,15 @@ zpool_find_import_impl(libzfs_handle_t *hdl, importargs_t *iarg)
 			if (name[0] == '.' &&
 			    (name[1] == 0 || (name[1] == '.' && name[2] == 0)))
 				continue;
+#ifdef __OSV__
+			/* In OSv, mount_zfs_roofs() always mounts /dev/vblk0.1
+			 * before calling zpool import, so this device is
+			 * already mounted, and trying to do it again while
+			 * it is already mounted is surprisingly slow.
+			 */
+			if (!strcmp(name, "vblk0.1"))
+				continue;
+#endif
 
 			slice = zfs_alloc(hdl, sizeof (rdsk_node_t));
 			slice->rn_name = zfs_strdup(hdl, name);

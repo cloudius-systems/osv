@@ -84,10 +84,10 @@ def is_direct_io_supported(path):
 
 def start_osv_qemu(options):
 
-    if options.unsafe_cache:
-        cache = 'unsafe'
+    if options.unsafe_cache or not is_direct_io_supported(options.image_file):
+        aio = 'cache=unsafe,aio=threads'
     else:
-        cache = 'none' if is_direct_io_supported(options.image_file) else 'unsafe'
+        aio = 'cache=none,aio=native'
 
     args = [
         "-m", options.memsize,
@@ -111,12 +111,12 @@ def start_osv_qemu(options):
     if options.sata:
         args += [
         "-machine", "q35",
-        "-drive", "file=%s,if=none,id=hd0,media=disk,aio=native,cache=%s" % (options.image_file, cache),
+        "-drive", "file=%s,if=none,id=hd0,media=disk,%s" % (options.image_file, aio),
         "-device", "ide-hd,drive=hd0,id=idehd0,bus=ide.0"]
     elif options.scsi:
         args += [
         "-device", "virtio-scsi-pci,id=scsi0",
-        "-drive", "file=%s,if=none,id=hd0,media=disk,aio=native,cache=%s" % (options.image_file, cache),
+        "-drive", "file=%s,if=none,id=hd0,media=disk,%s" % (options.image_file, aio),
         "-device", "scsi-hd,bus=scsi0.0,drive=hd0,scsi-id=1,lun=0,bootindex=0"]
     elif options.ide:
         args += [
@@ -124,7 +124,7 @@ def start_osv_qemu(options):
     else:
         args += [
         "-device", "virtio-blk-pci,id=blk0,bootindex=0,drive=hd0,scsi=off",
-        "-drive", "file=%s,if=none,id=hd0,aio=native,cache=%s" % (options.image_file, cache)]
+        "-drive", "file=%s,if=none,id=hd0,%s" % (options.image_file, aio)]
 
     if options.no_shutdown:
         args += ["-no-reboot", "-no-shutdown"]
@@ -162,7 +162,6 @@ def start_osv_qemu(options):
 
     if options.api:
         args += ["-redir", "tcp:8000::8000"]
-    args += ["-redir", "tcp:2222::22"]
 
     for rule in options.forward:
         args += ['-redir', rule]
@@ -263,6 +262,8 @@ def start_osv_xen(options):
        net_device_options = "bridge=%s" % options.bridge
        if options.mac:
           net_device_options += ",mac=%s" % options.mac
+       if options.script:
+           net_device_options += ",script=%s" % options.script
        args += ["vif=['%s']" % (net_device_options)]
 
     # Using xm would allow us to get away with creating the file, but it comes
@@ -402,6 +403,8 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='run')
     parser.add_argument("-d", "--debug", action="store_true",
                         help="start debug version")
+    parser.add_argument("-r", "--release", action="store_true",
+                        help="start release version")
     parser.add_argument("-w", "--wait", action="store_true",
                         help="don't start OSv till otherwise specified, e.g. through the QEMU monitor or a remote gdb")
     parser.add_argument("-i", "--image", action="store", default=None, metavar="IMAGE",
@@ -473,9 +476,13 @@ if __name__ == "__main__":
                         help="disable gdb")
     parser.add_argument("--gdb", action="store", default="1234",
                         help="specify gdb port number")
+    parser.add_argument("--script", action="store",
+                        help="XEN define configuration script for vif")
     cmdargs = parser.parse_args()
-    cmdargs.opt_path = "debug" if cmdargs.debug else "release"
+    cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
+    if not os.path.exists(cmdargs.image_file):
+        raise Exception('Image file %s does not exist.' % cmdargs.image_file)
 
     if cmdargs.hypervisor == "auto":
         cmdargs.hypervisor = choose_hypervisor(cmdargs.networking)

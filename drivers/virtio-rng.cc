@@ -39,13 +39,13 @@ namespace virtio {
 rng::rng(pci::device& pci_dev)
     : virtio_driver(pci_dev)
     , _irq(pci_dev, [&] { return ack_irq(); }, [&] { handle_irq(); })
-    , _thread([&] { worker(); }, sched::thread::attr().name("virtio-rng"))
+    , _thread(sched::thread::make([&] { worker(); }, sched::thread::attr().name("virtio-rng")))
 {
     _queue = get_virt_queue(0);
 
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
-    _thread.start();
+    _thread->start();
 
     s_hwrng = this;
     live_entropy_source_register(&vrng);
@@ -60,9 +60,10 @@ rng::~rng()
 size_t rng::get_random_bytes(char* buf, size_t size)
 {
     WITH_LOCK(_mtx) {
-        _consumer.wait_until(_mtx, [&] {
-            return _entropy.size() > 0;
-        });
+        // Note that _entropy.size() might be 0 if we didn't get any entropy
+        // from the host, in which case we'll return 0 bytes. This is fine,
+        // the caller (random_kthread()) will consume whatever entropy it
+        // gets, wait a bit, and later try again.
         auto len = std::min(_entropy.size(), size);
         copy_n(_entropy.begin(), len, buf);
         _entropy.erase(_entropy.begin(), _entropy.begin() + len);
@@ -73,7 +74,7 @@ size_t rng::get_random_bytes(char* buf, size_t size)
 
 void rng::handle_irq()
 {
-    _thread.wake();
+    _thread->wake();
 }
 
 bool rng::ack_irq()

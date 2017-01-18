@@ -101,7 +101,7 @@ void do_heap_test(bool quick)
     // triggers the race.
     for (int j = 0; j < 100; ++j) {
         sched::thread *t2 = nullptr;
-        sched::thread *t1 = new sched::thread([&]{
+        sched::thread *t1 = sched::thread::make([&]{
             // wait for the t2 object to exist (not necessarily run)
             sched::thread::wait_until([&] { return t2 != nullptr; });
             if (quick) {
@@ -111,7 +111,7 @@ void do_heap_test(bool quick)
             sched::thread::sleep(10_ms);
         }, sched::thread::attr().pin(sched::cpus[0]));
 
-        t2 = new sched::thread([&]{
+        t2 = sched::thread::make([&]{
             t1->wake();
         }, sched::thread::attr().pin(sched::cpus[1]));
 

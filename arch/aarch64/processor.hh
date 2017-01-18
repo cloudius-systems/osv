@@ -14,6 +14,8 @@
 namespace processor {
 
 constexpr unsigned daif_i = 1 << 7;
+/* mask away everything but affinity 3, aff 2 and aff 1 to identify cpus */
+constexpr u64 mpidr_mask = 0x000000ff00ffffffULL;
 
 inline void wfi()
 {
@@ -64,6 +66,13 @@ inline u64 read_ttbr1() {
 }
 inline void write_ttbr1(u64 val) {
     asm volatile("msr ttbr1_el1, %0; isb;" :: "r"(val) : "memory");
+}
+
+inline u64 read_mpidr()
+{
+    u64 mpidr;
+    asm volatile("mrs %0, mpidr_el1; isb;" : "=r" (mpidr));
+    return mpidr & mpidr_mask;
 }
 
 /* the user of ticks() just wants a high resolution counter.

@@ -516,7 +516,7 @@ rn_addmask(void *n_arg, int search, int skip)
 	for (cp = netmask + skip; (cp < cplim) && *(u_char *)cp == 0xff;)
 		cp++;
 	if (cp != cplim) {
-		static char normal_chars[] = {
+		static unsigned char normal_chars[] = {
 			0, 0x80, 0xc0, 0xe0, 0xf0, 0xf8, 0xfc, 0xfe, 0xff};
 
 		for (j = 0x80; (j & *cp) != 0; j >>= 1)

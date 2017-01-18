@@ -1,2 +1,2 @@
-/libtools.so: ./tools/libtools.so
+/libtools.so: ${MODULE_DIR}/libtools.so
 

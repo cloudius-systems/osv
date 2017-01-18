@@ -15,7 +15,7 @@
 #include "osv/mount.h"
 #include "libc/libc.hh"
 #include <safe-ptr.hh>
-#include <java/jvm_balloon.hh>
+#include <java/jvm/jvm_balloon.hh>
 
 TRACEPOINT(trace_memory_mmap, "addr=%p, length=%d, prot=%d, flags=%d, fd=%d, offset=%d", void *, size_t, int, int, int, off_t);
 TRACEPOINT(trace_memory_mmap_err, "%d", int);
@@ -85,8 +85,7 @@ int mprotect(void *addr, size_t len, int prot)
     // we don't support mprotecting() the linear map (e.g.., malloc() memory)
     // because that could leave the linear map a mess.
     if (reinterpret_cast<long>(addr) < 0) {
-        debug("mprotect() on linear map not supported\n");
-        abort();
+        abort("mprotect() on linear map not supported\n");
     }
 
     if (!mmu::is_page_aligned(addr) || !mmu::is_page_aligned(len)) {

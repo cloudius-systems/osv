@@ -8,7 +8,7 @@ import argparse
 from functools import reduce
 from osv.modules import api, resolve, filemap
 
-class jvm(api.basic_app):
+class isolated_jvm(api.basic_app):
     multimain_manifest = '/etc/javamains'
     apps = []
 
@@ -21,17 +21,32 @@ class jvm(api.basic_app):
             for app in self.apps:
                 mains.write('\n'.join(app.get_multimain_lines()) + '\n')
 
-        manifest.write('%s:%s\n' % (self.multimain_manifest, javamains_path))
+        manifest.write('%s: %s\n' % (self.multimain_manifest, javamains_path))
 
     def get_launcher_args(self):
         jvm_args = []
         for app in self.apps:
             jvm_args.extend(app.get_jvm_args())
 
-        return ['java.so'] + jvm_args + ['io.osv.MultiJarLoader', '-mains', self.multimain_manifest]
+        return ['java.so'] + jvm_args + ['io.osv.isolated.MultiJarLoader', '-mains', self.multimain_manifest]
 
     def add(self, app):
         self.apps.append(app)
+
+    def has_any_app(self):
+        return self.apps
+
+class non_isolated_jvm(api.basic_app):
+    app = None
+
+    def get_launcher_args(self):
+        return ['java.so'] + self.app.get_jvm_args() + self.app.get_multimain_lines()
+
+    def add(self, app):
+        self.app = app
+
+    def has_any_app(self):
+        return self.app
 
 def expand(text, variables):
     def resolve(m):
@@ -49,15 +64,20 @@ def append_manifest(file_path, dst_file, variables={}):
             if line != '[manifest]':
                 dst_file.write(expand(line + '\n', variables))
 
-def generate_manifests(modules, basic_apps):
+def generate_manifests(modules, basic_apps, usrskel='default'):
     for manifest_type in ["usr", "bootfs"]:
         manifest_name = "%s.manifest" % manifest_type
         print("Preparing %s" % manifest_name)
 
+        manifest_skel = "%s.skel" % manifest_name
+        if manifest_type == "usr" and usrskel != "default":
+            manifest_skel = usrskel
+
         with open(os.path.join(resolve.get_build_path(), manifest_name), "w") as manifest:
             manifest.write('[manifest]\n')
 
-            append_manifest(os.path.join(resolve.get_osv_base(), "%s.skel" % manifest_name), manifest)
+            if manifest_skel != 'none':
+                append_manifest(os.path.join(resolve.get_osv_base(), manifest_skel), manifest)
 
             for module in modules:
                 module_manifest = os.path.join(module.local_path, manifest_name)
@@ -90,6 +110,8 @@ def make_cmd(cmdline, j, jobserver):
     ret = 'make ' + cmdline
     if jobserver is not None:
         ret += ' -j --jobserver-fds=' + jobserver
+    elif j is '-':
+        ret += ' -j'
     elif j is not None:
         ret += ' -j' + j
     return ret
@@ -97,7 +119,7 @@ def make_cmd(cmdline, j, jobserver):
 def make_modules(modules, args):
     for module in modules:
         if os.path.exists(os.path.join(module.local_path, 'Makefile')):
-            if subprocess.call(make_cmd('module', j=args.j, jobserver = args.jobserver_fds),
+            if subprocess.call(make_cmd('module', j=args.j, jobserver=args.jobserver_fds),
                                shell=True, cwd=module.local_path):
                 raise Exception('make failed for ' + module.name)
 
@@ -110,7 +132,11 @@ def flatten_list(elememnts):
 
 def get_basic_apps(apps):
     basic_apps = []
-    _jvm = jvm()
+    java = resolve.require('java-base')
+    if hasattr(java,'non_isolated_jvm') and java.non_isolated_jvm:
+        _jvm = non_isolated_jvm()
+    else:
+        _jvm = isolated_jvm()
 
     for app in flatten_list(apps):
         if isinstance(app, api.basic_app):
@@ -120,7 +146,7 @@ def get_basic_apps(apps):
         else:
             raise Exception("Unknown app type: " + str(app))
 
-    if _jvm.apps:
+    if _jvm.has_any_app():
         basic_apps.append(_jvm)
 
     return basic_apps
@@ -161,7 +187,7 @@ def build(args):
         module_names = []
         config = resolve.read_config()
         if add_default and "default" in config:
-            module_names +=  config["default"]
+            module_names += config["default"]
         module_names += selected_modules
         module_names = [i for i in module_names if not i in disabled_modules]
         for missing in list(disabled_modules - set(module_names)):
@@ -176,6 +202,9 @@ def build(args):
                 api.require_running(name, a[1])
             else:
                 api.require_running(name)
+
+        # Add moduless thare are implictly required if others are present
+        resolve.resolve_required_modules_if_other_is_present()
 
     modules = resolve.get_required_modules()
     modules_to_run = resolve.get_modules_to_run()
@@ -198,7 +227,7 @@ def build(args):
     make_modules(modules, args)
 
     apps_to_run = get_basic_apps(run_list)
-    generate_manifests(modules, apps_to_run)
+    generate_manifests(modules, apps_to_run, args.usrskel)
     generate_cmdline(apps_to_run)
 
 def clean(args):
@@ -210,9 +239,9 @@ def clean(args):
         if os.path.exists(os.path.join(local_path, 'Makefile')):
             if not args.quiet:
                 print('Cleaning ' + local_path + ' ...')
-            if subprocess.call(make_cmd('-q clean', j = args.j, jobserver = args.jobserver_fds),
+            if subprocess.call(make_cmd('-q clean', j=args.j, jobserver=args.jobserver_fds),
                                shell=True, cwd=local_path, stderr=subprocess.PIPE, **extra_args) != 2:
-                if subprocess.call(make_cmd('clean', j = args.j, jobserver = args.jobserver_fds),
+                if subprocess.call(make_cmd('clean', j=args.j, jobserver=args.jobserver_fds),
                                    shell=True, cwd=local_path, **extra_args):
                     raise Exception('\'make clean\' failed in ' + local_path)
 
@@ -220,15 +249,17 @@ if __name__ == "__main__":
     image_configs_dir = resolve.get_images_dir()
 
     parser = argparse.ArgumentParser(prog='module.py')
-    parser.add_argument('--jobserver-fds', action = 'store', default = None,
-                        help = 'make -j support')
-    parser.add_argument('-j', action = 'store', default = None,
-                        help = 'make -j support')
+    parser.add_argument('--jobserver-fds', action='store', default=None,
+                        help='make -j support')
+    parser.add_argument('-j', action='store', default=None,
+                        help='make -j support')
     subparsers = parser.add_subparsers(help="Command")
 
     build_cmd = subparsers.add_parser("build", help="Build modules")
     build_cmd.add_argument("-c", "--image-config", action="store", default="default",
                         help="image configuration name. Looked up in " + image_configs_dir)
+    build_cmd.add_argument("--usrskel", action="store", default="default",
+                        help="override default usr.manifest.skel")
     build_cmd.set_defaults(func=build)
 
     clean_cmd = subparsers.add_parser("clean", help="Clean modules")

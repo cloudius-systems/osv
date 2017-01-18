@@ -19,6 +19,7 @@ namespace osv {
     int if_set_mtu(std::string if_name, u16 mtu);
     int start_if(std::string if_name, std::string ip_addr,
         std::string mask_addr);
+    int stop_if(std::string if_name, std::string ip_addr);
     int ifup(std::string if_name);
     std::string if_ip(std::string if_name);
 }

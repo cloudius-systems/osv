@@ -225,15 +225,15 @@ public:
         , _context(ctxt)
         , _stopped(false)
         , _counter(0)
-        , _thread([this] { process_interrupts(); })
-        , _intr(gsi, [this] { _counter.fetch_add(1); _thread.wake(); })
+        , _thread(sched::thread::make([this] { process_interrupts(); }))
+        , _intr(gsi, [this] { _counter.fetch_add(1); _thread->wake(); })
     {
-        _thread.start();
+        _thread->start();
     }
     ~acpi_interrupt() {
         _stopped.store(true);
-        _thread.wake();
-        _thread.join();
+        _thread->wake();
+        _thread->join();
     }
 private:
     void process_interrupts() {
@@ -253,7 +253,7 @@ private:
     void* _context;
     std::atomic<bool> _stopped;
     std::atomic<uint64_t> _counter;
-    sched::thread _thread;
+    std::unique_ptr<sched::thread> _thread;
     gsi_edge_interrupt _intr;
 };
 

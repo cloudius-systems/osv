@@ -247,3 +247,11 @@ realpath(const char * __restrict path, char * __restrict resolved)
 		resolved[resolved_len - 1] = '\0';
 	return (resolved);
 }
+
+char* __realpath_chk(const char * __restrict path, char * __restrict resolved, size_t resolved_len)
+{
+	if (resolved_len < PATH_MAX) {
+		abort();
+	}
+	return realpath(path, resolved);
+}

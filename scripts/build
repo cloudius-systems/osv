@@ -10,20 +10,38 @@ trap 'echo "$0 failed: $BASH_COMMAND" >&2; exit $?' ERR
 # allows our Makefile to forward "make image=..." requests to to us
 # without running into an infinite loop when we call "make".
 MAKEFLAGS=${MAKEFLAGS/ image=/ zzz=}
+MAKEFLAGS=${MAKEFLAGS/#image=/zzz=}
 MAKEFLAGS=${MAKEFLAGS/ modules=/ zzz=}
+MAKEFLAGS=${MAKEFLAGS/#modules=/zzz=}
 unset image modules
 
 # Pass to "make" all the given args except "image=..." or "module=..."
 declare -a args
+# Make is going to be invoked twice. At the first run ("stage1") we
+# build all possible dependencies any app or module might require. At
+# the second - the loader.elf is linked and the loader.img is
+# produced.  In the case of "make clean", the first invocation (and
+# the only one) is used for cleaning up the kernel.
+stage1_args="stage1"
 for i
 do
 	case $i in
-	image=*|modules=*|check) ;;
+	image=*|modules=*|fs=*|usrskel=*|check) ;;
+	clean)
+		stage1_args=clean ;;
 	*)	# yuck... Is there a prettier way to append to array?
 		args[${#args[@]}]="$i" ;;
 	esac
 done
-make "${args[@]}" | tee build.out
+
+make "${args[@]}" ${stage1_args} | tee build.out
+# check exit status of make
+status=${PIPESTATUS[0]}
+if [ $status -ne 0 ]
+then
+	echo "make failed. Exiting from build script"
+	exit $status
+fi
 
 for i
 do
@@ -38,23 +56,42 @@ done
 
 # Find out where "make" decided to put its compilation results. We'll
 # put the images in the same place.
-if test ! -L build/last -o ! -f build/last/loader.img
+if test ! -L build/last -o ! -f build/last/loader.o
 then
-	echo "'make' did not leave expected results" >&2
+	echo "'make stage1' did not leave expected results" >&2
 	exit 2
 fi
 OUT=build/`readlink build/last`
 
 # Look for arguments that look like "name=value", and set them in an
-# assoative array "vars".
+# assoative array "vars". Also look for the "-j ..." parallelism option,
+# which we want to pass to the module's Makefile as well.
 declare -A vars
 j_arg=
+checknumber=
 for i
 do
+	if test -n "$checknumber"
+	then
+		checknumber=
+		case $i in
+		[0-9]*)
+			j_arg="-j$i"
+			continue;;
+		esac
+	fi
 	case $i in
 	*=*)	name=${i%%=*}
 		value=${i#*=}
 		vars[$name]=$value;;
+	-j)
+		# module.py's command line parser has trouble of parsing a
+		# "-j" option without a value. Help it with a fake value "-".
+		j_arg="-j-"
+		# make allows the "-j" option to be separated from the number by a
+		# space (e.g., "-j 4"), but since this number is optional, we will
+		# need to also check the next argument, whether it is a number.
+		checknumber=yes;;
 	-j*)	j_arg=$i;;
 	check)	# "build check" is a shortcut for
 		# "build image=tests; scripts/test.py"
@@ -71,6 +108,7 @@ fs_size=$((fs_size - (fs_size & 511)))
 
 SRC=`pwd`
 arch=`expr $OUT : '.*\.\(.*\)'`
+mode=`expr $OUT : '.*/\(.*\)\..*'`
 
 # Set "modules" according to the image= or modules= paramters, or some
 # defaults (with same rules as in our old makefile)
@@ -86,38 +124,69 @@ gccbase=${vars[gccbase]-$SRC/external/$arch/gcc.bin}
 glibcbase=${vars[glibcbase]-$SRC/external/$arch/glibc.bin}
 miscbase=${vars[miscbase]-$SRC/external/$arch/misc.bin}
 
-loader_size=`stat --printf %s $OUT/loader.img`
-zfs_start=$(($loader_size+2097151 & ~2097151))
-zfs_size=$(($fs_size - $zfs_start))
-
 case $OUT in
 /*)	OSV_BUILD_PATH=$OUT;;
 *)	OSV_BUILD_PATH=`pwd`/$OUT;;
 esac
 
-jdkbase=$jdkbase ARCH=$arch OSV_BASE=$SRC OSV_BUILD_PATH=$OSV_BUILD_PATH scripts/module.py $j_arg build -c $modules
+# Default manifest
+manifest=$OUT/bootfs.manifest
+fs_type=${vars[fs]-zfs}
+usrskel_arg=
+case $fs_type in
+zfs)	;; # Nothing to change here. This is our default behavior
+ramfs)	manifest=$OUT/usr.manifest
+	usrskel_arg="--usrskel usr_nozfs.manifest.skel";;
+*)	echo "Unknown filesystem \"$fs_type\"" >&2
+	exit 2
+esac
+
+if test -n "${vars[usrskel]}"
+then
+	# Override default skel
+	usrskel_arg="--usrskel ${vars[usrskel]}"
+fi
+
+jdkbase=$jdkbase ARCH=$arch mode=$mode OSV_BASE=$SRC OSV_BUILD_PATH=$OSV_BUILD_PATH scripts/module.py $j_arg build -c $modules $usrskel_arg
+
+bootfs_manifest=$manifest make "${args[@]}" | tee -a build.out
+# check exit status of make
+status=${PIPESTATUS[0]}
+if [ $status -ne 0 ]
+then
+	echo "make failed. Exiting from build script"
+	exit $status
+fi
+
+if test ! -f build/last/loader.img
+then
+	echo "'make' did not leave expected results" >&2
+	exit 2
+fi
+
+loader_size=`stat --printf %s $OUT/loader.img`
+zfs_start=$(($loader_size+2097151 & ~2097151))
+zfs_size=$(($fs_size - $zfs_start))
 
 # The python scripts called below assume the current directory is $OUT (as was
 # the case in our old build.mk).
 cd $OUT
 
-cp loader.img bare.raw
-$SRC/scripts/imgedit.py setpartition bare.raw 2 $zfs_start $zfs_size
+case $fs_type in
+zfs)
+	cp loader.img bare.raw
+	$SRC/scripts/imgedit.py setpartition "-f raw bare.raw" 2 $zfs_start $zfs_size
 
-qemu-img convert -f raw -O qcow2 bare.raw usr.img
-qemu-img resize usr.img ${fs_size}b >/dev/null 2>&1
-# TODO: This "bootfs.manifest" is a misonmer... It doesn't really set the
-# bootfs (this was done by the makefile) and will just be written to the
-# zfs. But it's kind of redundant that mkzfs.py uploads things to zfs, when
-# the upload_manifest.py call does this below. We should just drop this
-# upload part from mkzfs.py....
-# Moreover, it's redundant that module.py above created a bootfs.manifest which
-# includes bootfs.manifest.skel even if the module asked for nothing in
-# bootfs.manifest - why do we need those things (like cpiod.so)
-# in every image's ZFS? For capstan?
-$SRC/scripts/mkzfs.py -o usr.img -d usr.img.d -m bootfs.manifest
+	qemu-img convert -f raw -O qcow2 bare.raw usr.img
+	qemu-img resize usr.img ${fs_size}b >/dev/null 2>&1
 
-$SRC/scripts/upload_manifest.py -o usr.img -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
+	$SRC/scripts/upload_manifest.py -o usr.img -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
+	;;
+ramfs)
+	qemu-img convert -f raw -O qcow2 loader.img usr.img
+	;;
+esac
+
 $SRC/scripts/imgedit.py setargs usr.img `cat cmdline`
 
 # Support "build check"
@@ -126,6 +195,6 @@ do
 	case $i in
 	check)	set -x
 		cd $SRC
-		./scripts/test.py
+		exec ./scripts/test.py
 	esac
 done

@@ -7,21 +7,21 @@
 
 # From openssl-libs
 /usr/lib/openssl/**: %(miscbase)s/usr/lib64/openssl/**
-/usr/lib/&/libssl.so.1.0.1h: %(miscbase)s/usr/lib64/&
+#/usr/lib/&/libssl.so.1.0.1k: %(miscbase)s/usr/lib64/&
 /usr/lib/&/libssl.so.10: %(miscbase)s/usr/lib64/&
-/usr/lib/&/libcrypto.so.1.0.1h: %(miscbase)s/usr/lib64/&
+#/usr/lib/&/libcrypto.so.1.0.1k: %(miscbase)s/usr/lib64/&
 /usr/lib/&/libcrypto.so.10: %(miscbase)s/usr/lib64/&
 
 # From libcom_err
 /usr/lib/&/libcom_err.so.2: %(miscbase)s/usr/lib64/&
-/usr/lib/&/libcom_err.so.2.1: %(miscbase)s/usr/lib64/&
+#/usr/lib/&/libcom_err.so.2.1: %(miscbase)s/usr/lib64/&
 
 # From krb5-libs
 /&/etc/krb5.conf: %(miscbase)s/&
 /usr/lib/&/libgssapi_krb5.so.2: %(miscbase)s/usr/lib64/&
 /usr/lib/&/libk5crypto.so.3: %(miscbase)s/usr/lib64/&
 /usr/lib/&/libkrb5.so.3: %(miscbase)s/usr/lib64/&
-/usr/lib/&/libkrb5.so.3.3: %(miscbase)s/usr/lib64/&
+#/usr/lib/&/libkrb5.so.3.3: %(miscbase)s/usr/lib64/&
 /usr/lib/&/libkrb5support.so.0: %(miscbase)s/usr/lib64/&
 
 # From libselinux

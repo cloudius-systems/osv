@@ -1,0 +1,13 @@
+[manifest]
+/libenviron.so: libenviron.so
+/tools/mount-nfs.so: tools/mount/mount-nfs.so
+/tools/umount.so: tools/mount/umount.so
+/usr/lib/libgcc_s.so.1: %(gccbase)s/lib64/libgcc_s.so.1
+/&/etc/hosts: ../../static/&
+
+# TODO: symlinks are not supported by ramfs
+#/etc/mnttab: ->/proc/mounts
+/&/etc/fstab: ../../static/&
+/dev: ../../static
+/proc: ../../static
+/tmp: ../../static

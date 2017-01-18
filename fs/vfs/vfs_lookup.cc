@@ -58,7 +58,7 @@ read_link(struct vnode *vp, char *buf, size_t bufsz, ssize_t *sz)
 }
 
 int
-namei_follow_link(struct dentry *dp, char *node, char *name, char *fp)
+namei_follow_link(struct dentry *dp, char *node, char *name, char *fp, size_t mountpoint_len)
 {
     std::unique_ptr<char []> link (new char[PATH_MAX]);
     std::unique_ptr<char []> t (new char[PATH_MAX]);
@@ -75,7 +75,7 @@ namei_follow_link(struct dentry *dp, char *node, char *name, char *fp)
     }
     lp[sz] = 0;
 
-    p = fp + strlen(node);
+    p = fp + mountpoint_len + strlen(node);
     c = strlen(node) - strlen(name) - 1;
     node[c] = 0;
 
@@ -84,6 +84,7 @@ namei_follow_link(struct dentry *dp, char *node, char *name, char *fp)
         strlcpy(fp, lp, PATH_MAX);
     } else {
         strlcpy(t.get(), p, PATH_MAX);
+        strlcpy(node, fp, mountpoint_len + c + 1);
         path_conv(node, lp, fp);
         strlcat(fp, t.get(), PATH_MAX);
     }
@@ -126,6 +127,7 @@ namei(const char *path, struct dentry **dpp)
         if (vfs_findroot(fp.get(), &mp, &p)) {
             return ENOTDIR;
         }
+        int mountpoint_len = p - fp.get() - 1;
         strlcpy(node, "/", sizeof(node));
         strlcat(node, p, sizeof(node));
         dp = dentry_lookup(mp, node);
@@ -198,7 +200,7 @@ namei(const char *path, struct dentry **dpp)
             ddp = dp;
 
             if (dp->d_vnode->v_type == VLNK) {
-                error = namei_follow_link(dp, node, name, fp.get());
+                error = namei_follow_link(dp, node, name, fp.get(), mountpoint_len);
                 if (error) {
                     drele(dp);
                     return (error);

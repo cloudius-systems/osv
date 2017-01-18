@@ -22,12 +22,13 @@
 #include <osv/error.h>
 #include <osv/trace.hh>
 #include <stack>
-#include "java/jvm_balloon.hh"
+#include "java/jvm/jvm_balloon.hh"
 #include <fs/fs.hh>
 #include <osv/file.h>
 #include "dump.hh"
 #include <osv/rcu.hh>
 #include <osv/rwlock.h>
+#include <numeric>
 
 extern void* elf_start;
 extern size_t elf_size;
@@ -650,6 +651,64 @@ public:
     bool tlb_flush_needed(void) {return do_flush;}
 };
 
+template <typename T, account_opt Account = account_opt::no>
+class dirty_cleaner : public vma_operation<allocate_intermediate_opt::no, skip_empty_opt::yes, Account> {
+private:
+    bool do_flush;
+    T handler;
+public:
+    dirty_cleaner(T handler) : do_flush(false), handler(handler) {}
+
+    template<int N>
+    bool page(hw_ptep<N> ptep, uintptr_t offset) {
+        pt_element<N> pte = ptep.read();
+        if (!pte.dirty()) {
+            return true;
+        }
+        do_flush |= true;
+        pte.set_dirty(false);
+        ptep.write(pte);
+        handler(ptep.read().addr(), offset, pt_level_traits<N>::size::value);
+        return true;
+    }
+
+    bool tlb_flush_needed(void) {return do_flush;}
+    void finalize() {
+        handler.finalize();
+    }
+};
+
+class dirty_page_sync {
+    friend dirty_cleaner<dirty_page_sync, account_opt::yes>;
+    friend file_vma;
+private:
+    file *_file;
+    f_offset _offset;
+    uint64_t _size;
+    struct elm {
+        iovec iov;
+        off_t offset;
+    };
+    std::stack<elm> queue;
+    dirty_page_sync(file *file, f_offset offset, uint64_t size) : _file(file), _offset(offset), _size(size) {}
+    void operator()(phys addr, uintptr_t offset, size_t size) {
+        off_t off = _offset + offset;
+        size_t len = std::min(size, _size - off);
+        queue.push(elm{{phys_to_virt(addr), len}, off});
+    }
+    void finalize() {
+        while(!queue.empty()) {
+            elm w = queue.top();
+            uio data{&w.iov, 1, w.offset, ssize_t(w.iov.iov_len), UIO_WRITE};
+            int error = _file->write(&data, FOF_OFFSET);
+            if (error) {
+                throw make_error(error);
+            }
+            queue.pop();
+        }
+    }
+};
+
 class virt_to_phys_map :
         public page_table_operation<allocate_intermediate_opt::no, skip_empty_opt::yes,
         descend_opt::yes, once_opt::yes, split_opt::no> {
@@ -786,6 +845,65 @@ bool contains(uintptr_t start, uintptr_t end, vma& y)
     return y.start() >= start && y.end() <= end;
 }
 
+// So that we don't need to create a vma (with size, permission and alot of
+// other irrelevant data) just to find an address in the vma list, we have
+// the following addr_compare, which compares exactly like vma_compare does,
+// except that it takes a bare uintptr_t instead of a vma.
+class addr_compare {
+public:
+    bool operator()(const vma& x, uintptr_t y) const { return x.start() < y; }
+    bool operator()(uintptr_t x, const vma& y) const { return x < y.start(); }
+};
+
+// Find the single (if any) vma which contains the given address.
+// The complexity is logarithmic in the number of vmas in vma_list.
+static inline vma_list_type::iterator
+find_intersecting_vma(uintptr_t addr) {
+    auto vma = vma_list.lower_bound(addr, addr_compare());
+    if (vma->start() == addr) {
+        return vma;
+    }
+    // Otherwise, vma->start() > addr, so we need to check the previous vma
+    --vma;
+    if (addr >= vma->start() && addr < vma->end()) {
+        return vma;
+    } else {
+        return vma_list.end();
+    }
+}
+
+// Find the list of vmas which intersect a given address range. Because the
+// vmas are sorted in vma_list, the result is a consecutive slice of vma_list,
+// [first, second), between the first returned iterator (inclusive), and the
+// second returned iterator (not inclusive).
+// The complexity is logarithmic in the number of vmas in vma_list.
+static inline std::pair<vma_list_type::iterator, vma_list_type::iterator>
+find_intersecting_vmas(const addr_range& r)
+{
+    if (r.end() <= r.start()) { // empty range, so nothing matches
+        return {vma_list.end(), vma_list.end()};
+    }
+    auto start = vma_list.lower_bound(r.start(), addr_compare());
+    if (start->start() > r.start()) {
+        // The previous vma might also intersect with our range if it ends
+        // after our range's start.
+        auto prev = std::prev(start);
+        if (prev->end() > r.start()) {
+            start = prev;
+        }
+    }
+    // If the start vma is actually beyond the end of the search range,
+    // there is no intersection.
+    if (start->start() >= r.end()) {
+        return {vma_list.end(), vma_list.end()};
+    }
+    // end is the first vma starting >= r.end(), so any previous vma (after
+    // start) surely started < r.end() so is part of the intersection.
+    auto end = vma_list.lower_bound(r.end(), addr_compare());
+    return {start, end};
+}
+
+
 /**
  * Change virtual memory range protection
  *
@@ -798,8 +916,7 @@ static error protect(const void *addr, size_t size, unsigned int perm)
 {
     uintptr_t start = reinterpret_cast<uintptr_t>(addr);
     uintptr_t end = start + size;
-    addr_range r(start, end);
-    auto range = vma_list.equal_range(r, vma::addr_compare());
+    auto range = find_intersecting_vmas(addr_range(start, end));
     for (auto i = range.first; i != range.second; ++i) {
         if (i->perm() == perm)
             continue;
@@ -849,8 +966,7 @@ uintptr_t find_hole(uintptr_t start, uintptr_t size)
 
 ulong evacuate(uintptr_t start, uintptr_t end)
 {
-    addr_range r(start, end);
-    auto range = vma_list.equal_range(r, vma::addr_compare());
+    auto range = find_intersecting_vmas(addr_range(start, end));
     ulong ret = 0;
     for (auto i = range.first; i != range.second; ++i) {
         i->split(end);
@@ -883,8 +999,7 @@ static error sync(const void* addr, size_t length, int flags)
     auto start = reinterpret_cast<uintptr_t>(addr);
     auto end = start+length;
     auto err = make_error(ENOMEM);
-    addr_range r(start, end);
-    auto range = vma_list.equal_range(r, vma::addr_compare());
+    auto range = find_intersecting_vmas(addr_range(start, end));
     for (auto i = range.first; i != range.second; ++i) {
         err = i->sync(std::max(start, i->start()), std::min(end, i->end()));
         if (err.bad()) {
@@ -1045,7 +1160,7 @@ static void depopulate(void* addr, size_t length)
 {
     length = align_up(length, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
-    auto range = vma_list.equal_range(addr_range(start, start + length), vma::addr_compare());
+    auto range = find_intersecting_vmas(addr_range(start, start + length));
     for (auto i = range.first; i != range.second; ++i) {
         i->operate_range(unpopulate<>(i->page_ops()), reinterpret_cast<void*>(start), std::min(length, i->size()));
         start += i->size();
@@ -1057,7 +1172,7 @@ static void nohugepage(void* addr, size_t length)
 {
     length = align_up(length, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
-    auto range = vma_list.equal_range(addr_range(start, start + length), vma::addr_compare());
+    auto range = find_intersecting_vmas(addr_range(start, start + length));
     for (auto i = range.first; i != range.second; ++i) {
         if (!i->has_flags(mmap_small)) {
             i->update_flags(mmap_small);
@@ -1150,9 +1265,8 @@ bool ismapped(const void *addr, size_t size)
 {
     uintptr_t start = (uintptr_t) addr;
     uintptr_t end = start + size;
-    addr_range r(start, end);
 
-    auto range = vma_list.equal_range(r, vma::addr_compare());
+    auto range = find_intersecting_vmas(addr_range(start, end));
     for (auto p = range.first; p != range.second; ++p) {
         if (p->start() > start)
             return false;
@@ -1219,7 +1333,7 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
     }
     addr = align_down(addr, mmu::page_size);
     WITH_LOCK(vma_list_mutex.for_read()) {
-        auto vma = vma_list.find(addr_range(addr, addr+1), vma::addr_compare());
+        auto vma = find_intersecting_vma(addr);
         if (vma == vma_list.end() || access_fault(*vma, ef->get_error())) {
             vm_sigsegv(addr, ef);
             trace_mmu_vm_fault_sigsegv(addr, ef->get_error(), "slow");
@@ -1479,7 +1593,8 @@ ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b)
     vma* v;
     WITH_LOCK(vma_list_mutex.for_read()) {
         u64 a = reinterpret_cast<u64>(addr);
-        v = &*vma_list.find(addr_range(a, a+1), vma::addr_compare());
+        v = &*find_intersecting_vma(a);
+
         // It has to be somewhere!
         assert(v != &*vma_list.end());
         assert(v->has_flags(mmap_jvm_heap) | v->has_flags(mmap_jvm_balloon));
@@ -1501,8 +1616,7 @@ ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b)
         // now the finishing code would have to deal with the case where the
         // bounds found in the vma are not the real bounds. We delete it right
         // away and avoid it altogether.
-        addr_range r(start, start + size);
-        auto range = vma_list.equal_range(r, vma::addr_compare());
+        auto range = find_intersecting_vmas(addr_range(start, start + size));
 
         for (auto i = range.first; i != range.second; ++i) {
             if (i->has_flags(mmap_jvm_balloon)) {
@@ -1609,6 +1723,24 @@ error file_vma::sync(uintptr_t start, uintptr_t end)
 {
     if (!has_flags(mmap_shared))
         return make_error(ENOMEM);
+
+    // Called when ZFS arc cache is not present.
+    if (_page_ops && dynamic_cast<map_file_page_read *>(_page_ops)) {
+        start = std::max(start, _range.start());
+        end = std::min(end, _range.end());
+        uintptr_t size = end - start;
+
+        dirty_page_sync sync(_file.get(), _offset, ::size(_file));
+        error err = no_error();
+        try {
+            if (operate_range(dirty_cleaner<dirty_page_sync, account_opt::yes>(sync), (void*)start, size) != 0) {
+                err = make_error(sys_fsync(_file.get()));
+            }
+        } catch (error e) {
+            err = e;
+        }
+        return err;
+    }
 
     try {
         _file->sync(_offset + start - _range.start(), _offset + end - _range.start());

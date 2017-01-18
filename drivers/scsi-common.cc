@@ -40,7 +40,7 @@ scsi_common_req::scsi_common_req(struct bio* bio, u16 _target, u16 _lun, u8 cmd)
            break;
         }
         case CDB_CMD_INQUIRY: {
-            auto c = reinterpret_cast<struct cdb_inquery *>(cdb);
+            auto c = reinterpret_cast<struct cdb_inquiry *>(cdb);
             cdb_len = sizeof(*c);
             memset(c, 0, cdb_len);
             c->command = CDB_CMD_INQUIRY;
@@ -101,7 +101,7 @@ int scsi_common::exec_synccache(u16 target, u16 lun, struct bio *bio, u8 cmd)
     return exec_cmd(bio);
 }
 
-void scsi_common::exec_inquery(u16 target, u16 lun)
+void scsi_common::exec_inquiry(u16 target, u16 lun)
 {
     struct bio *bio = alloc_bio();
     if (!bio)
@@ -119,7 +119,7 @@ void scsi_common::exec_inquery(u16 target, u16 lun)
 
     auto response = req->response;
     if (response != SCSI_OK)
-        throw std::runtime_error("Fail to exec_inquery");
+        throw std::runtime_error("Fail to exec_inquiry");
 
     delete req;
     delete data;
@@ -268,7 +268,7 @@ bool scsi_common::test_lun(u16 target, u16 lun)
 
     do {
         try {
-            exec_inquery(target, lun);
+            exec_inquiry(target, lun);
             exec_test_unit_ready(target, lun);
         } catch (std::runtime_error err) {
             nr++;

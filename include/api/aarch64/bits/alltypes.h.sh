@@ -83,7 +83,7 @@ TYPEDEF unsigned int uid_t;
 TYPEDEF unsigned int gid_t;
 TYPEDEF int key_t;
 
-TYPEDEF struct __pthread * pthread_t;
+TYPEDEF unsigned long pthread_t;
 TYPEDEF int pthread_once_t;
 TYPEDEF unsigned pthread_key_t;
 TYPEDEF int pthread_spinlock_t;

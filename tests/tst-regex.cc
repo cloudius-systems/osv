@@ -11,6 +11,7 @@
 
 #include <sys/types.h>
 #include <regex.h>
+#include <regex>
 
 static int tests = 0, fails = 0;
 
@@ -37,6 +38,10 @@ int main(int argc, char** argv)
     report(matches[0].rm_eo == 17, "first match end-offset");
     report(matches[1].rm_so == 11, "second match start-offset");
     report(matches[1].rm_eo == 16, "second match end-offset");
+
+    // Try that C++11's std::regex works. Issue #715 reported a crash when
+    // an std::regex is constructed. We don't test anything beyond that yet.
+    std::regex re(".*uid=([0-9]+).*");
 
     std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";
 }

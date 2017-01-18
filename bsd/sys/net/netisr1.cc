@@ -35,7 +35,7 @@ void netisr_osv_thread_wrapper(netisr_osv_handler_t handler, void* arg)
  * but we lay here the framework for per-cpu work */
 netisr_osv_cookie_t netisr_osv_start_thread(netisr_osv_handler_t handler, void* arg)
 {
-    sched::thread* t = new sched::thread([=] {
+    sched::thread* t = sched::thread::make([=] {
         netisr_osv_thread_wrapper(handler, arg);
     }, sched::thread::attr().name("netisr"));
     t->start();

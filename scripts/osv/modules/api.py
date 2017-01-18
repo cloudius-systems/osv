@@ -3,6 +3,7 @@ import os
 
 require = resolve.require
 require_running = resolve.require_running
+require_if_other_module_present = resolve.require_if_other_module_present
 
 class basic_app:
     def prepare_manifest(self, build_dir, manifest_type, manifest):

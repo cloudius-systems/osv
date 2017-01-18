@@ -19,9 +19,13 @@
 #include <osv/mutex.h>
 #include <osv/elf.hh>
 #include <list>
+#include <unordered_map>
+#include <string>
 
 extern "C" void __libc_start_main(int(*)(int, char**), int, char**, void(*)(),
     void(*)(), void(*)(), void*);
+
+class waiter;
 
 namespace osv {
 
@@ -84,15 +88,23 @@ public:
      *
      * \param command command to execute
      * \param args Parameters which will be passed to program's main().
+     * \param new_program true if a new elf namespace must be started
+     * \param env pointer to an unordered_map than will be merged in current env
      * \throw launch_error
      */
-    static shared_app_t run(const std::string& command, const std::vector<std::string>& args);
+    static shared_app_t run(const std::string& command,
+            const std::vector<std::string>& args,
+            bool new_program = false,
+            const std::unordered_map<std::string, std::string> *env = nullptr);
 
     static void join_all() {
         apps.join();
     }
 
-    application(const std::string& command, const std::vector<std::string>& args);
+    application(const std::string& command,
+            const std::vector<std::string>& args,
+            bool new_program = false,
+            const std::unordered_map<std::string, std::string> *env = nullptr);
 
     ~application();
 
@@ -102,6 +114,27 @@ public:
      * @return application's exit code.
      */
     int join();
+
+    /**
+     * Start a new application and wait for it to terminate.
+     *
+     * run_and_join() is like run() followed by join(), with one important
+     * difference: because run() returns control to the caller, it needs
+     * to run the program in a new thread. But run_and_join() waits for
+     * the program to finish, so it can run it in the current thread,
+     * without creating a new one.
+     *
+     * \param command command to execute
+     * \param args Parameters which will be passed to program's main().
+     * \param new_program true if a new elf namespace must be started
+     * \param env pointer to an unordered_map than will be merged in current env
+     * \throw launch_error
+     */
+    static shared_app_t run_and_join(const std::string& command,
+            const std::vector<std::string>& args,
+            bool new_program = false,
+            const std::unordered_map<std::string, std::string> *env = nullptr,
+            waiter* setup_waiter = nullptr);
 
     /**
      * Installs a termination callback which will be called when
@@ -145,11 +178,20 @@ public:
 
     std::shared_ptr<application_runtime> runtime() const { return _runtime; }
     std::shared_ptr<elf::object> lib() const { return _lib; }
+
+    elf::program *program();
 private:
+    void new_program();
+    void clone_osv_environ();
+    void set_environ(const std::string &key, const std::string &value,
+                     bool new_program);
+    void merge_in_environ(bool new_program = false,
+        const std::unordered_map<std::string, std::string> *env = nullptr);
     shared_app_t get_shared() {
         return shared_from_this();
     }
     void start();
+    void start_and_join(waiter* setup_waiter);
     void main();
     void run_main(std::string path, int argc, char** argv);
     void run_main();
@@ -160,12 +202,14 @@ private:
     using main_func_t = int(int, char**);
 
     pthread_t _thread;
+    std::unique_ptr<elf::program> _program; // namespace program
     std::vector<std::string> _args;
     std::string _command;
     int _return_code;
     bool _termination_requested;
     mutex _termination_mutex;
     std::shared_ptr<elf::object> _lib;
+    std::shared_ptr<elf::object> _libenviron;
     main_func_t* _main;
     void (*_entry_point)();
     static app_registry apps;
@@ -179,6 +223,11 @@ private:
     std::atomic<bool> _terminated;
     friend struct application_runtime;
 };
+
+/*
+Execute f on all threads which belong to same app as t1 does.
+*/
+void with_all_app_threads(std::function<void(sched::thread &)> f, sched::thread& th1);
 
 }
 

@@ -1,0 +1,15 @@
+#!/bin/sh
+#
+# This scripts create a trivial disk image file which contains a single
+# file $1. If this image is mounted as a disk, the guest can read the
+# content of this file in a fairly trivial manner.
+#
+# For simplicity, the image we create does not have any partitions, and
+# certainly not a file system. It just has the following content:
+#       !file_in_image\n        # a magic header
+#       1234\n                  # the size of the following file (ascii number)
+#       the content of the file...
+
+echo "!file_in_image"
+stat -c %s "$1"
+cat "$1"

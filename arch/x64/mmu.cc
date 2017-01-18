@@ -57,7 +57,7 @@ mutex tlb_flush_mutex;
 sched::thread_handle tlb_flush_waiter;
 std::atomic<int> tlb_flush_pendingconfirms;
 
-inter_processor_interrupt tlb_flush_ipi{[] {
+inter_processor_interrupt tlb_flush_ipi{IPI_TLB_FLUSH, [] {
         mmu::flush_tlb_local();
         if (tlb_flush_pendingconfirms.fetch_add(-1) == 1) {
             tlb_flush_waiter.wake();

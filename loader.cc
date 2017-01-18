@@ -16,6 +16,7 @@
 #include "arch-tls.hh"
 #include <osv/debug.hh>
 #include <osv/clock.hh>
+#include <osv/version.hh>
 
 #include "smp.hh"
 
@@ -83,7 +84,6 @@ extern "C" {
     void premain();
     void vfs_init(void);
     void mount_zfs_rootfs(bool);
-    void ramdisk_init(void);
 }
 
 void premain()
@@ -134,6 +134,7 @@ static bool opt_bootchart = false;
 static std::vector<std::string> opt_ip;
 static std::string opt_defaultgw;
 static std::string opt_nameserver;
+static std::string opt_redirect;
 static std::chrono::nanoseconds boot_delay;
 bool opt_assign_net = false;
 bool opt_maxnic = false;
@@ -181,6 +182,7 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         ("defaultgw", bpo::value<std::string>(), "set default gateway address")
         ("nameserver", bpo::value<std::string>(), "set nameserver address")
         ("delay", bpo::value<float>()->default_value(0), "delay in seconds before boot")
+        ("redirect", bpo::value<std::string>(), "redirect stdout and stderr to file")
     ;
     bpo::variables_map vars;
     // don't allow --foo bar (require --foo=bar) so we can find the first non-option
@@ -289,6 +291,10 @@ std::tuple<int, char**> parse_options(int ac, char** av)
         opt_nameserver = vars["nameserver"].as<std::string>();
     }
 
+    if (vars.count("redirect")) {
+        opt_redirect = vars["redirect"].as<std::string>();
+    }
+
     boot_delay = std::chrono::duration_cast<std::chrono::nanoseconds>(1_s * vars["delay"].as<float>());
 
     av += nr_options;
@@ -301,9 +307,6 @@ std::vector<std::vector<std::string> > prepare_commands(int ac, char** av)
 {
     if (ac == 0) {
         puts("This image has an empty command line. Nothing to run.");
-#ifdef AARCH64_PORT_STUB
-        abort(); // a good test for the backtrace code
-#endif
         osv::poweroff();
     }
     std::vector<std::vector<std::string> > commands;
@@ -438,6 +441,25 @@ void* do_main_thread(void *_main_args)
         boot_time.print_chart();
     }
 
+    if (!opt_redirect.empty()) {
+        // redirect stdout and stdin to the given file, instead of the console
+        // use ">>filename" to append, instead of replace, to a file.
+        bool append = (opt_redirect.substr(0, 2) == ">>");
+        auto fn = opt_redirect.substr(append ? 2 : 0);
+        int fd = open(fn.c_str(),
+                O_WRONLY | O_CREAT | (append ? 0 : O_TRUNC), 777);
+        if (fd < 0) {
+            perror("output redirection failed");
+        } else {
+            std::cout << (append ? "Appending" : "Writing") <<
+                    " stdout and stderr to " << fn << "\n";
+            close(1);
+            close(2);
+            dup(fd);
+            dup(fd);
+        }
+    }
+
     auto commands = prepare_commands(std::get<0>(*main_args), std::get<1>(*main_args));
 
     // Run command lines in /init/* before the manual command line
@@ -473,6 +495,7 @@ void* do_main_thread(void *_main_args)
     // empty otherwise, to run in this thread. '&!' is the same as '&', but
     // doesn't wait for the thread to finish before exiting OSv.
     std::vector<shared_app_t> detached;
+    std::vector<shared_app_t> bg;
     for (auto &it : commands) {
         std::vector<std::string> newvec(it.begin(), std::prev(it.end()));
         auto suffix = it.back();
@@ -483,11 +506,17 @@ void* do_main_thread(void *_main_args)
                 detached.push_back(app);
             } else if (!background) {
                 app->join();
+            } else {
+                bg.push_back(app);
             }
         } catch (const launch_error& e) {
             std::cerr << e.what() << ". Powering off.\n";
             osv::poweroff();
         }
+    }
+
+    for (auto app : bg) {
+        app->join();
     }
 
     for (auto app : detached) {
@@ -505,11 +534,13 @@ void main_cont(int ac, char** av)
 
     debug("Firmware vendor: %s\n", osv::firmware_vendor().c_str());
 
-    new elf::program();
-    elf::get_program()->set_search_path({"/", "/usr/lib"});
+    elf::create_main_program();
+
     std::vector<std::vector<std::string> > cmds;
 
     std::tie(ac, av) = parse_options(ac, av);
+
+    setenv("OSV_VERSION", osv::version().c_str(), 1);
 
     smp_launch();
     setenv("OSV_CPUS", std::to_string(sched::cpus.size()).c_str(), 1);
@@ -543,7 +574,7 @@ void main_cont(int ac, char** av)
 
     vfs_init();
     boot_time.event("VFS initialized");
-    ramdisk_init();
+    //ramdisk_init();
 
     net_init();
     boot_time.event("Network initialized");
@@ -562,7 +593,16 @@ void main_cont(int ac, char** av)
     pthread_t pthread;
     // run the payload in a pthread, so pthread_self() etc. work
     std::tuple<int,char**> main_args = std::make_tuple(ac,av);
-    pthread_create(&pthread, nullptr, do_main_thread, (void *) &main_args);
+    // start do_main_thread unpinned (== pinned to all cpus)
+    cpu_set_t cpuset;
+    CPU_ZERO(&cpuset);
+    for (size_t ii=0; ii<sched::cpus.size(); ii++) {
+        CPU_SET(ii, &cpuset);
+    }
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    pthread_attr_setaffinity_np(&attr, sizeof(cpuset), &cpuset);
+    pthread_create(&pthread, &attr, do_main_thread, (void *) &main_args);
     void* retval;
     pthread_join(pthread, &retval);
 

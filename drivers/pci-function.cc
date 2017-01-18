@@ -105,57 +105,75 @@ namespace pci {
         return _addr_mmio;
     }
 
+    u64 bar::readq(u32 offset)
+    {
+        if (_is_mmio) {
+            return mmio_getq(_addr_mmio + offset);
+        } else {
+            abort("64 bit read attempt from PIO area");
+        }
+    }
+
     u32 bar::readl(u32 offset)
     {
-        if (is_pio()) {
-            return inl(_addr_lo + offset);
-        } else {
+        if (_is_mmio) {
             return mmio_getl(_addr_mmio + offset);
+        } else {
+            return inl(_addr_lo + offset);
         }
     }
 
     u16 bar::readw(u32 offset)
     {
-        if (is_pio()) {
-            return inw(_addr_lo + offset);
-        } else {
+        if (_is_mmio) {
             return mmio_getw(_addr_mmio + offset);
+        } else {
+            return inw(_addr_lo + offset);
         }
     }
 
     u8 bar::readb(u32 offset)
     {
-        if (is_pio()) {
-            return inb(_addr_lo + offset);
-        } else {
+        if (_is_mmio) {
             return mmio_getb(_addr_mmio + offset);
+        } else {
+            return inb(_addr_lo + offset);
+        }
+    }
+
+    void bar::writeq(u32 offset, u64 val)
+    {
+        if (_is_mmio) {
+            mmio_setq(_addr_mmio + offset, val);
+        } else {
+            abort("64 bit write attempt to PIO area");
         }
     }
 
     void bar::writel(u32 offset, u32 val)
     {
-        if (is_pio()) {
-            outl(val, _addr_lo + offset);
+        if (_is_mmio) {
+            mmio_setl(_addr_mmio + offset, val);
         } else {
-            return mmio_setl(_addr_mmio + offset, val);
+            outl(val, _addr_lo + offset);
         }
     }
 
     void bar::writew(u32 offset, u16 val)
     {
-        if (is_pio()) {
-            outw(val, _addr_lo + offset);
+        if (_is_mmio) {
+            mmio_setw(_addr_mmio + offset, val);
         } else {
-            return mmio_setw(_addr_mmio + offset, val);
+            outw(val, _addr_lo + offset);
         }
     }
 
     void bar::writeb(u32 offset, u8 val)
     {
-        if (is_pio()) {
-            outb(val, _addr_lo + offset);
+        if (_is_mmio) {
+            mmio_setb(_addr_mmio + offset, val);
         } else {
-            return mmio_setb(_addr_mmio + offset, val);
+            outb(val, _addr_lo + offset);
         }
     }
 
@@ -195,7 +213,7 @@ namespace pci {
         _header_type = pci_readb(PCI_CFG_HEADER_TYPE);
         _base_class_code = pci_readb(PCI_CFG_CLASS_CODE0);
         _sub_class_code = pci_readb(PCI_CFG_CLASS_CODE1);
-        _lower_class_code = pci_readb(PCI_CFG_CLASS_CODE2);
+        _programming_interface = pci_readb(PCI_CFG_CLASS_CODE2);
 
         // Parse capabilities
         bool parse_ok = parse_pci_capabilities();
@@ -306,6 +324,11 @@ namespace pci {
     u8 function::get_sub_class_code()
     {
         return _sub_class_code;
+    }
+
+    u8 function::get_programming_interface()
+    {
+        return _programming_interface;
     }
 
     bool function::is_device()
@@ -718,7 +741,7 @@ namespace pci {
 
         u16 ctrl = msi_get_control();
         ctrl &= ~PCIR_MSI_CTRL_ME;
-        msix_set_control(ctrl);
+        msi_set_control(ctrl);
 
         _msi_enabled = false;
     }
@@ -832,12 +855,13 @@ namespace pci {
             (u16)_bus, (u16)_device, (u16)_func, _vendor_id, _device_id);
 
         // PCI BARs
-        int bar_idx = 1;
-        bar *bar = get_bar(bar_idx);
-        while (bar != nullptr) {
-            pci_d("    bar[%d]: %sbits addr=%x size=%x", bar_idx,
-                (bar->is_64()?"64":"32"), bar->get_addr64(), bar->get_size());
-            bar = get_bar(++bar_idx);
+        for (int bar_idx = 1; bar_idx <= 6; bar_idx++) {
+            bar *bar = get_bar(bar_idx);
+            if (bar) {
+                pci_d("    bar[%d]: %sbits addr=%p size=%x",
+                    bar_idx, (bar->is_64() ? "64" : "32"),
+                    bar->get_addr64(), bar->get_size());
+            }
         }
 
         pci_d("    IRQ = %d", (u16)get_interrupt_line());

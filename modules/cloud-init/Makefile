@@ -1,19 +1,11 @@
-miscbase = $(src)/external/$(arch)/misc.bin
-INCLUDES = -isystem $(miscbase)/usr/include
 INCLUDES += -I../../include -I.
 
-# compiler flags:
-#  -g    adds debugging information to the executable file
-#  -Wall turns on most, but not all, compiler warnings
 autodepend = -MD -MT $@ -MP
 CXXFLAGS  = -g -rdynamic -Wall -std=c++11 -fPIC $(INCLUDES) $(autodepend)
 src = ../..
 arch = x64
 
-boost-lib-dir = $(miscbase)/usr/lib64
-boost-libs := $(boost-lib-dir)/libboost_system.so \
-              $(boost-lib-dir)/libboost_filesystem.so
-
+boost-libs := -lboost_system -lboost_filesystem
 
 HTTPSERVER_DIR = ../../modules/httpserver
 INCLUDES += -I$(HTTPSERVER_DIR)
@@ -25,7 +17,7 @@ OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 DEPS := $(OBJ_FILES:.o=.d)
 
 STUB_HTTPSERVER_LIBS = $(HTTPSERVER_DIR)/httpserver-stub.so
-LIBS = -lpthread $(boost-libs) $(DEPEDNDS_LIBS) -lyaml-cpp -L$(HTTPSERVER_DIR)/ -lhttpserver -L$(boost-lib-dir)
+LIBS = -lpthread $(boost-libs) $(DEPEDNDS_LIBS) -lyaml-cpp -L$(HTTPSERVER_DIR)/ -lhttpserver
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)

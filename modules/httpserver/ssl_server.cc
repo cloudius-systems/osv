@@ -9,6 +9,7 @@
 
 #include "transport.hh"
 #include "ssl_server.hh"
+#include <openssl/ssl.h>
 
 namespace http {
 
@@ -113,7 +114,14 @@ static void set_client_CA_list(ssl::context& ctx, const std::string& cert_path)
 ssl::context make_ssl_context(const std::string& ca_cert_path,
     const std::string& cert_path, const std::string& key_path)
 {
-    ssl::context ctx(ssl::context::tlsv12);
+    /*
+    Acient boost versions (say 1.53 on centos 7.2) do not include TLS 1.2.
+    So we create SSL context with wrong sslv23, and then configure options
+    for TLS 1.2 with OpenSSL flags.
+    */
+    ssl::context ctx(ssl::context::sslv23);
+    long ssl_disallowed = SSL_OP_NO_SSLv2 | SSL_OP_NO_SSLv3 | SSL_OP_NO_TLSv1 | SSL_OP_NO_TLSv1_1;
+    SSL_CTX_set_options(ctx.native_handle(), ssl_disallowed);
 
     ctx.set_verify_mode(ssl::verify_peer | ssl::verify_fail_if_no_peer_cert);
     ctx.load_verify_file(ca_cert_path);

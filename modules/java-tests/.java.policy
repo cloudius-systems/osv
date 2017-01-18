@@ -1,0 +1,6 @@
+grant codeBase "file:/java/runjava-non-isolated.jar" {
+        permission java.security.AllPermission;
+};
+grant codeBase "file:/java/runjava-isolated.jar" {
+        permission java.security.AllPermission;
+};

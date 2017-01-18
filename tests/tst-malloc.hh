@@ -88,8 +88,8 @@ public:
     {
         test_locks t;
         t.die = t.free_finished = t.alloc_finished = false;
-        sched::thread* t1 = new sched::thread([&] { alloc_thread(t); });
-        sched::thread* t2 = new sched::thread([&] { free_thread(t); });
+        sched::thread* t1 = sched::thread::make([&] { alloc_thread(t); });
+        sched::thread* t2 = sched::thread::make([&] { free_thread(t); });
         t1->start();
         t2->start();
 

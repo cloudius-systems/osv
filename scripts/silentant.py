@@ -12,8 +12,8 @@ import sys, subprocess
 
 try:
     ant = subprocess.Popen(sys.argv[1:],
-                           stdout = subprocess.PIPE,
-                           stderr = subprocess.PIPE)
+                           stdout=subprocess.PIPE,
+                           stderr=subprocess.PIPE)
 except OSError:
     print("Apache Ant not found. Please install ant package.")
     sys.exit(1)

@@ -158,6 +158,20 @@ int main(void)
     printf("ts2 = %ld,%ld\n",ts2.tv_sec, ts2.tv_nsec);
     printf("ns = %ld\n",ns);
 
+    // Test that pthread_spin_unlock() doesn't crash when it is resolved for
+    // the first time while a spinlock is taken (see issue #814)
+    pthread_spinlock_t spin;
+    pthread_spin_init(&spin, PTHREAD_PROCESS_PRIVATE);
+    pthread_spin_lock(&spin);
+    pthread_spin_unlock(&spin);
+    pthread_spin_destroy(&spin);
+    // Moreover, the application may even sleep while holding a spinlock
+    pthread_spin_init(&spin, PTHREAD_PROCESS_PRIVATE);
+    pthread_spin_lock(&spin);
+    usleep(1000);
+    pthread_spin_unlock(&spin);
+    pthread_spin_destroy(&spin);
+
     printf("SUMMARY: %u tests / %u failures\n", tests_total, tests_failed);
     return tests_failed == 0 ? 0 : 1;
 }

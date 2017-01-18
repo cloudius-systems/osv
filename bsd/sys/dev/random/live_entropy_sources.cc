@@ -171,6 +171,9 @@ live_entropy_sources_feed(int rounds, event_proc_f entropy_processor)
 			/* FIXME: Whine loudly if this didn't work. */
 			n = les->rsource->read(buf, sizeof(buf));
 			n = MIN(n, HARVESTSIZE);
+			if (n == 0) {
+				continue;
+			}
 
 			event.somecounter = get_cyclecount();
 			event.size = n;

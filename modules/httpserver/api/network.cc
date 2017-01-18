@@ -6,8 +6,8 @@
  */
 #include "network.hh"
 #include "autogen/network.json.hh"
-#include "tools/route/route_info.hh"
-#include "tools/ifconfig/network_interface.hh"
+#include "../libtools/route_info.hh"
+#include "../libtools/network_interface.hh"
 #include "exception.hh"
 #include <vector>
 #include <osv/clock.hh>

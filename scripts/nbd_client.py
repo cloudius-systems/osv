@@ -24,7 +24,7 @@ class nbd_client(object):
     FLAG_HAS_FLAGS = (1 << 0)
     FLAG_SEND_FLUSH = (1 << 2)
 
-    def __init__(self, hostname, port = 10809):
+    def __init__(self, hostname, port=10809):
         self._flushed = True
         self._closed = True
         self._is_read = False

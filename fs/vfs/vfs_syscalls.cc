@@ -214,7 +214,10 @@ sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 	error = VOP_OPEN(vp, fp);
 	if (error) {
 		vn_unlock(vp);
-		fdrop(fp);
+		// Note direct delete of fp instead of fdrop(fp). fp was never
+		// returned so cannot be in use, and because it wasn't opened
+		// it cannot be close()ed.
+		delete fp;
 		return error;
 	}
 	vn_unlock(vp);
@@ -701,9 +704,6 @@ sys_rename(char *src, char *dest)
 		goto err1;
 	}
 
-	if ((error = vn_access(vp1, VWRITE)) != 0)
-		goto err1;
-
 	ts = false;
 	if (has_trailing(dest, '/') == true) {
 		if (strlen(dest) != 1) {
@@ -780,6 +780,12 @@ sys_rename(char *src, char *dest)
 	dvp2 = ddp2->d_vnode;
 	vn_lock(dvp2);
 
+	/* Source and destination directions should be writable) */
+	if ((error = vn_access(dvp1, VWRITE)) != 0)
+	    goto err3;
+	if ((error = vn_access(dvp2, VWRITE)) != 0)
+	    goto err3;
+
 	/* The source and dest must be same file system */
 	if (dvp1->v_mount != dvp2->v_mount) {
 		error = EXDEV;
@@ -817,7 +823,6 @@ sys_symlink(const char *oldpath, const char *newpath)
 	char		*op = up_op.get();
 	std::unique_ptr<char []> up_np (new char[PATH_MAX]);
 	char		*np = up_np.get();
-	struct dentry	*olddp;
 	struct dentry	*newdp;
 	struct dentry	*newdirdp;
 	char		*name;
@@ -829,7 +834,6 @@ sys_symlink(const char *oldpath, const char *newpath)
 	DPRINTF(VFSDB_SYSCALL, ("sys_link: oldpath=%s newpath=%s\n",
 				oldpath, newpath));
 
-	olddp		= nullptr;
 	newdp		= nullptr;
 	newdirdp	= nullptr;
 
@@ -870,10 +874,6 @@ out:
 	if (newdirdp != nullptr) {
 		vn_unlock(newdirdp->d_vnode);
 		drele(newdirdp);
-	}
-
-	if (olddp != nullptr) {
-		drele(olddp);
 	}
 
 	return (error);
@@ -967,8 +967,6 @@ sys_unlink(char *path)
 
 	vp = dp->d_vnode;
 	vn_lock(vp);
-	if ((error = vn_access(vp, VWRITE)) != 0)
-		goto out;
 	if (vp->v_type == VDIR) {
 	    // Posix specifies that we should return EPERM here, but Linux
 	    // actually returns EISDIR.
@@ -981,6 +979,10 @@ sys_unlink(char *path)
 	}
 
 	vn_lock(ddp->d_vnode);
+	if ((error = vn_access(ddp->d_vnode, VWRITE)) != 0) {
+	    vn_unlock(ddp->d_vnode);
+	    goto out;
+	}
 	error = VOP_REMOVE(ddp->d_vnode, vp, name);
 	vn_unlock(ddp->d_vnode);
 

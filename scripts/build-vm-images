@@ -6,9 +6,9 @@ build=./scripts/build-vm-img
 
 # Appliances:
 
-$build cloudius/osv           cli,httpserver,cloud-init,monitoring-agent               "OSv with shell for users"
-$build cloudius/osv-cassandra cassandra,httpserver,cloud-init,monitoring-agent         "Apache Cassandra/OSv"
-$build cloudius/osv-tomcat    tomcat,httpserver,cloud-init,monitoring-agent            "Apache Tomcat/OSv"
-$build cloudius/osv-iperf     iperf,httpserver,cloud-init,monitoring-agent             "iperf/OSv"
-$build cloudius/osv-memcached-opt osv-memcached,httpserver,cloud-init,monitoring-agent "OSv memcached server (optimized)"
-$build cloudius/osv-redis-memonly redis-memonly,httpserver,cloud-init,monitoring-agent "Redis (in-memory only)"
+$build cloudius/osv           cli,httpserver,cloud-init               "OSv with shell for users"
+$build cloudius/osv-cassandra cassandra,httpserver,cloud-init         "Apache Cassandra/OSv"
+$build cloudius/osv-tomcat    tomcat,httpserver,cloud-init            "Apache Tomcat/OSv"
+$build cloudius/osv-iperf     iperf,httpserver,cloud-init             "iperf/OSv"
+$build cloudius/osv-memcached-opt osv-memcached,httpserver,cloud-init "OSv memcached server (optimized)"
+$build cloudius/osv-redis-memonly redis-memonly,httpserver,cloud-init "Redis (in-memory only)"

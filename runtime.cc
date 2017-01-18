@@ -114,10 +114,8 @@ void abort(const char *fmt, ...)
 
     debug_early(msg);
     // backtrace requires threads to be available, and also
-    // ELF s_program to be initialized. Since s_program happens
-    // later, this check is enough to ensure a minimal fallback
-    // functionality even early on.
-    if (elf::get_program() != nullptr) {
+    // ELF s_program to be initialized.
+    if (sched::thread::current() && elf::get_program() != nullptr) {
         print_backtrace();
     } else {
         debug_early("Halting.\n");
@@ -156,12 +154,14 @@ void __assert_fail(const char *expr, const char *file, unsigned int line, const 
 // nor does __cxa_finalize(0) need to work.
 typedef void (*destructor_t)(void *);
 static std::map<void *, std::vector<std::pair<destructor_t,void*>>> destructors;
+static mutex destructors_mutex;
 namespace __cxxabiv1 {
 int __cxa_atexit(destructor_t destructor, void *arg, void *dso)
 {
     // As explained above, don't remember the kernel's own destructors.
     if (dso == &__dso_handle)
         return 0;
+    SCOPE_LOCK(destructors_mutex);
     destructors[dso].push_back(std::make_pair(destructor, arg));
     return 0;
 }
@@ -172,10 +172,14 @@ int __cxa_finalize(void *dso)
         debug("__cxa_finalize() running kernel's destructors not supported\n");
         return 0;
     }
-    for (auto d : boost::adaptors::reverse(destructors[dso])) {
+    std::vector<std::pair<destructor_t,void*>> my_destructors;
+    WITH_LOCK(destructors_mutex) {
+        my_destructors = std::move(destructors[dso]);
+        destructors.erase(dso);
+    }
+    for (auto d : boost::adaptors::reverse(my_destructors)) {
         d.first(d.second);
     }
-    destructors.erase(dso);
     return 0;
 }
 }
@@ -187,13 +191,13 @@ int getpagesize()
 
 int vfork()
 {
-    debug("vfork stubbed\n");
+    WARN_STUBBED();
     return -1;
 }
 
 int fork()
 {
-    debug("fork stubbed\n");
+    WARN_STUBBED();
     return -1;
 }
 
@@ -207,13 +211,29 @@ NO_SYS(int execvp(const char *, char *const []));
 
 int mlockall(int flags)
 {
+    WARN_STUBBED();
     return 0;
 }
 
 int munlockall(void)
 {
+    WARN_STUBBED();
     return 0;
 }
+
+int mlock(const void*, size_t)
+{
+    WARN_STUBBED();
+    return 0;
+}
+
+int munlock(const void*, size_t)
+{
+    WARN_STUBBED();
+    return 0;
+}
+
+NO_SYS(int mkfifo(const char*, mode_t));
 
 int posix_fadvise(int fd, off_t offset, off_t len, int advice)
 {
@@ -246,13 +266,14 @@ int getpid()
 //    WCTDEF(digit), WCTDEF(graph), WCTDEF(lower), WCTDEF(print),
 //    WCTDEF(punct), WCTDEF(space), WCTDEF(upper), WCTDEF(xdigit),
 
-static unsigned short c_locale_array[384] = {
 #include "ctype-data.h"
-};
 
 static struct __locale_struct c_locale = {
     { }, // __locales_data
     c_locale_array + 128, // __ctype_b
+    c_tolower_array + 128, // __ctype_tolower
+    c_toupper_array + 128, // __ctype_toupper
+    { }, // __names
 };
 
 locale_t __c_locale_ptr = &c_locale;
@@ -337,7 +358,12 @@ long sysconf(int name)
     }
 }
 
-long pathconf(const char *, int)
+long pathconf(const char *, int name)
+{
+    return fpathconf(-1, name);
+}
+
+long fpathconf(int, int)
 {
     WARN_STUBBED();
     return -1;
@@ -357,11 +383,6 @@ size_t confstr(int name, char* buf, size_t len)
     }
     debug(fmt("confstr: unknown parameter %1%\n") % name);
     abort();
-}
-
-int mallopt(int param, int value)
-{
-    return 0;
 }
 
 FILE *popen(const char *command, const char *type)

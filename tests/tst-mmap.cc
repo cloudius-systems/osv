@@ -120,7 +120,7 @@ int main(int argc, char **argv)
     buf = mmap(NULL, 4096, PROT_READ|PROT_WRITE, MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
     assert(buf != MAP_FAILED);
     sched::thread *t2 = nullptr;
-    sched::thread *t1 = new sched::thread([&]{
+    sched::thread *t1 = sched::thread::make([&]{
         *(char*)buf = 0; // write will succeed
         // wait for the t2 object to exist (not necessarily run)
         sched::thread::wait_until([&] { return t2 != nullptr; });
@@ -133,7 +133,7 @@ int main(int argc, char **argv)
         assert(!try_write(buf));
 
     }, sched::thread::attr().pin(sched::cpus[0]));
-    t2 = new sched::thread([&]{
+    t2 = sched::thread::make([&]{
         // wait for t1 to asks us to mprotect
         sched::thread::wait_until([&] { return state.load() == 1; });
         mprotect(buf, 4096, PROT_READ);

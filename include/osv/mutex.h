@@ -108,4 +108,14 @@ struct lock_guard_for_drop_lock {
 #define SCOPE_LOCK(lock) \
     std::lock_guard<decltype(lock)> CONCATENATE(_SCOPE_LOCK, __COUNTER__) (lock)
 
+// SCOPE_ADOPT_LOCK can be useful for a try_lock() version of WITH_LOCK:
+// if (lock->try_lock()) {
+//     SCOPE_ADOPT_LOCK(lock);
+//     // ... code to do under the lock
+// } else { // optional
+//     // ... code to do if we can't get the lock
+// }
+#define SCOPE_ADOPT_LOCK(lock) \
+    std::lock_guard<decltype(lock)> CONCATENATE(_SCOPE_LOCK, __COUNTER__) (lock, std::adopt_lock)
+
 #endif /* MUTEX_H_ */

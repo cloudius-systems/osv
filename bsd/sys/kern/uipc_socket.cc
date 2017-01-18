@@ -3469,11 +3469,19 @@ void
 soisdisconnected(struct socket *so)
 {
 
+	bool do_release = false;
 	/*
 	 * Note: This code assumes that SOCK_LOCK(so) and
 	 * SOCKBUF_LOCK(&so->so_rcv) are the same.
 	 */
 	SOCK_LOCK(so);
+	/*
+	 * If user space has already closed the socket, then it's possible
+	 * for some of these wakeups to trigger soclose.  We need to prevent
+	 * the socket from getting freed in the middle of this function, so
+	 * bump the reference count.
+	 */
+	soref(so);
 	so->so_state &= ~(SS_ISCONNECTING|SS_ISCONNECTED|SS_ISDISCONNECTING);
 	so->so_state |= SS_ISDISCONNECTED;
 	so->so_rcv.sb_state |= SBS_CANTRCVMORE;
@@ -3481,8 +3489,25 @@ soisdisconnected(struct socket *so)
 	so->so_snd.sb_state |= SBS_CANTSENDMORE;
 	sbdrop_locked(so, &so->so_snd, so->so_snd.sb_cc);
 	sowwakeup_locked(so);
+	/*
+	 * If we have the only reference, then we need to call sorele to
+	 * free the socket.  If not, then we just quietly drop the ref
+	 * count ourselves to avoid taking the accept lock and possibly
+	 * deadlocking.
+	 */
+	if (so->so_count == 1) {
+		do_release = true;
+	} else {
+		so->so_count--;
+	}
 	SOCK_UNLOCK(so);
 	wakeup(&so->so_timeo);
+
+	if (do_release) {
+		ACCEPT_LOCK();
+		SOCK_LOCK(so);
+		sorele(so);
+	}
 }
 
 /*

@@ -20,8 +20,11 @@
 #include <assert.h>
 #include <sys/uio.h>
 #include <string.h>
+#include <sys/socket.h>
+#include <arpa/inet.h>
 
 #include <iostream>
+#include <thread>
 
 
 static int tests = 0, fails = 0;
@@ -185,6 +188,72 @@ int main()
 
     free(b1);
     free(b2);
+
+    // We also had the same bug in recvmsg(), which also wrongly modified
+    // the input iovecs while it internally keeps track of how where it
+    // needs to read. See issue #775.
+    int sockfd;
+    expect_success(sockfd, socket(AF_INET, SOCK_DGRAM, 0));
+    int optval = 1;
+    setsockopt(sockfd, SOL_SOCKET, SO_REUSEADDR, &optval, sizeof(int));
+    struct sockaddr_in serveraddr;
+    bzero(&serveraddr, sizeof(serveraddr));
+    serveraddr.sin_family = AF_INET;
+    serveraddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    serveraddr.sin_port = htons(1234);
+    int ret;
+    expect_success(ret, bind(sockfd, (struct sockaddr*) &serveraddr, sizeof(serveraddr)));
+    std::thread t([sockfd, &iov, &buf1, &buf2] {
+            struct msghdr msg;
+            iov[0].iov_base = buf1;
+            iov[0].iov_len = 3;
+            iov[1].iov_base = buf2;
+            iov[1].iov_len = sizeof(buf2);
+            bzero(&msg, sizeof(msg));
+            msg.msg_iov = iov;
+            msg.msg_iovlen = 2;
+            int n;
+            expect_success(n, recvmsg(sockfd, &msg, 0));
+            expect(n, 6);
+            // verify that the recvmsg() call did not modify iov!
+            expect(iov[0].iov_base, (void*)buf1);
+            expect(iov[0].iov_len, (decltype(iov[0].iov_len))3);
+            expect(iov[1].iov_base, (void*)buf2);
+            expect(iov[1].iov_len, sizeof(buf2));
+            expect(msg.msg_iov, iov);
+            expect(msg.msg_iovlen, (decltype(msg.msg_iovlen))2);
+    });
+    // Wait for the thread to start listening before sending to it.
+    // sleep is an ugly choice, but easy...
+    sleep(1);
+    int sendsock;
+    expect_success(sendsock, socket(AF_INET, SOCK_DGRAM, 0));
+    expect_success(ret, sendto(sendsock, "Hello!", 6, 0, (const sockaddr*) &serveraddr, sizeof(serveraddr)));
+    t.join();
+    close(sockfd);
+    close(sendsock);
+
+    // Interestingly, we did not have this bug in sendmsg()... Check that too.
+    // It's easier because we don't actually need to receive the message :-)
+    expect_success(sendsock, socket(AF_INET, SOCK_DGRAM, 0));
+    iov[0].iov_base = buf1;
+    iov[0].iov_len = 3;
+    iov[1].iov_base = buf2;
+    iov[1].iov_len = 7;
+    struct msghdr msg;
+    bzero(&msg, sizeof(msg));
+    msg.msg_iov = iov;
+    msg.msg_iovlen = 2;
+    msg.msg_name = (sockaddr*) &serveraddr;
+    msg.msg_namelen = sizeof(serveraddr);
+    expect(sendmsg(sendsock, &msg, 0), (ssize_t)10);
+    expect(iov[0].iov_base, (void*)buf1);
+    expect(iov[0].iov_len, (decltype(iov[0].iov_len))3);
+    expect(iov[1].iov_base, (void*)buf2);
+    expect(iov[1].iov_len, (decltype(iov[1].iov_len))7);
+    expect(msg.msg_iov, iov);
+    expect(msg.msg_iovlen, (decltype(msg.msg_iovlen))2);
+    close(sendsock);
 
     std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";
     return fails == 0 ? 0 : 1;

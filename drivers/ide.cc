@@ -76,7 +76,7 @@ struct driver ide_driver = {
 };
 
 ide_drive::ide_drive(pci::device& pci_dev)
-    : _dev(_dev), _ro(false)
+    : _dev(pci_dev), _ro(false)
 {
     _driver_name = "ide";
     _id = _instance++;

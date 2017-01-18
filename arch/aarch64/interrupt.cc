@@ -6,8 +6,31 @@
  */
 
 #include <osv/interrupt.hh>
+#include <osv/sched.hh>
 
-/* Software-Generated Interrupts: we do not use them yet. - will need for SMP */
+/* Software-Generated Interrupts */
+sgi_interrupt::sgi_interrupt(enum ipi_id id, std::function<void ()> handler)
+    : interrupt(id, handler)
+{
+    idt.register_interrupt(this);
+}
+
+sgi_interrupt::~sgi_interrupt()
+{
+    idt.unregister_interrupt(this);
+}
+
+void sgi_interrupt::send(sched::cpu* cpu)
+{
+    gic::gic->send_sgi(gic::sgi_filter::SGI_TARGET_LIST,
+                       cpu->arch.smp_idx, get_id());
+}
+
+void sgi_interrupt::send_allbutself()
+{
+    gic::gic->send_sgi(gic::sgi_filter::SGI_TARGET_ALL_BUT_SELF,
+                       0, get_id());
+}
 
 /* Private Peripheral Interrupts */
 

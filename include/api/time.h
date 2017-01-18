@@ -7,16 +7,21 @@ extern "C" {
 
 #include <features.h>
 
+#ifdef __cplusplus
 #define NULL 0L
+#else
+#define NULL ((void*)0)
+#endif
+
 
 #define __NEED_size_t
 #define __NEED_time_t
 #define __NEED_clock_t
+#define __NEED_struct_timespec
 
 #if defined(_POSIX_SOURCE) || defined(_POSIX_C_SOURCE) \
  || defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) \
  || defined(_BSD_SOURCE)
-#define __NEED_struct_timespec
 #define __NEED_clockid_t
 #define __NEED_timer_t
 #define __NEED_pid_t
@@ -24,6 +29,11 @@ extern "C" {
 #endif
 
 #include <bits/alltypes.h>
+
+#if defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
+#define __tm_gmtoff tm_gmtoff
+#define __tm_zone tm_zone
+#endif
 
 struct tm
 {
@@ -39,10 +49,6 @@ struct tm
 	long __tm_gmtoff;
 	const char *__tm_zone;
 };
-#if defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
-#define tm_gmtoff __tm_gmtoff
-#define tm_zone __tm_zone
-#endif
 
 clock_t clock (void);
 time_t time (time_t *);
@@ -53,9 +59,11 @@ struct tm *gmtime (const time_t *);
 struct tm *localtime (const time_t *);
 char *asctime (const struct tm *);
 char *ctime (const time_t *);
+int timespec_get(struct timespec *, int);
 
-#define CLOCKS_PER_SEC 1000000UL
+#define CLOCKS_PER_SEC 1000000L
 
+#define TIME_UTC 1
 
 #if defined(_POSIX_SOURCE) || defined(_POSIX_C_SOURCE) \
  || defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE) \
@@ -80,11 +88,15 @@ struct itimerspec
 #define CLOCK_MONOTONIC          1
 #define CLOCK_PROCESS_CPUTIME_ID 2
 #define CLOCK_THREAD_CPUTIME_ID  3
+#define CLOCK_MONOTONIC_RAW      4
 #define CLOCK_REALTIME_COARSE    5
+#define CLOCK_MONOTONIC_COARSE   6
+#define CLOCK_BOOTTIME           7
+#define CLOCK_REALTIME_ALARM     8
+#define CLOCK_BOOTTIME_ALARM     9
+#define CLOCK_SGI_CYCLE         10
+#define CLOCK_TAI               11
 
-// There are 9 types of clock defined by Linux. We reserve space for 16 slots,
-// the next power of 2. This is OSv specific and should not be reused.
-#define _OSV_CLOCK_SLOTS              16
 #define TIMER_ABSTIME 1
 
 int nanosleep (const struct timespec *, struct timespec *);
@@ -104,7 +116,7 @@ int timer_getoverrun (timer_t);
 #endif
 
 
-#if defined(_XOPEN_SOURCE) || defined(_GNU_SOURCE)
+#if defined(_XOPEN_SOURCE) || defined(_BSD_SOURCE) || defined(_GNU_SOURCE)
 char *strptime (const char *__restrict, const char *__restrict, struct tm *__restrict);
 extern int daylight;
 extern long timezone;
@@ -115,7 +127,7 @@ struct tm *getdate (const char *);
 
 
 #if defined(_GNU_SOURCE) || defined(_BSD_SOURCE)
-int stime(time_t *);
+int stime(const time_t *);
 time_t timegm(struct tm *);
 #endif
 

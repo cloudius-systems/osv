@@ -15,14 +15,21 @@
 #include <osv/debug.h>
 #include "exceptions.hh"
 
+struct init_stack {
+    char stack[4096] __attribute__((aligned(16)));
+    init_stack* next;
+} __attribute__((packed));
+
 namespace sched {
 
 struct arch_cpu;
 struct arch_thread;
 
 struct arch_cpu {
+    init_stack initstack;
     void init_on_cpu();
-    int smp_idx;
+    int smp_idx; /* index into the cpus array */
+    u64 mpid;    /* actual MPID as read from the cpu */
 };
 
 struct arch_thread {
@@ -49,6 +56,6 @@ inline void arch_cpu::init_on_cpu()
     }
 }
 
-}
+} /* namespace sched */
 
 #endif /* ARCH_CPU_HH */

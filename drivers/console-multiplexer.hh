@@ -39,6 +39,7 @@ private:
     std::list<console_driver *> _drivers;
     mutex _mutex;
     LineDiscipline *_ldisc;
+    std::function<void(const char *str, size_t len)> _drivers_writer;
 };
 
 };

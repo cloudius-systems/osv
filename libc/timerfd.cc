@@ -40,7 +40,7 @@ private:
     // in a dedicated thread. We could have used a timer_base::client instead
     // of a real thread, but things get really complicated when trying to
     // support set() which cancels on one CPU the timer set on another CPU.
-    sched::thread _wakeup_thread;
+    std::unique_ptr<sched::thread> _wakeup_thread;
     s64 _wakeup_due = 0;
     condvar _wakeup_change_cond;
     bool _wakeup_thread_exit = false;
@@ -56,11 +56,11 @@ public:
 
 timerfd::timerfd(int clockid, int oflags)
     : special_file(FREAD | oflags, DTYPE_UNSPEC),
-      _wakeup_thread(
-            [&] { wakeup_thread_func(); }, sched::thread::attr().stack(4096).name("timerfd")),
+      _wakeup_thread(sched::thread::make(
+            [&] { wakeup_thread_func(); }, sched::thread::attr().stack(4096).name("timerfd"))),
       _clockid(clockid)
 {
-    _wakeup_thread.start();
+    _wakeup_thread->start();
 }
 
 int timerfd::close() {
@@ -68,7 +68,7 @@ int timerfd::close() {
         _wakeup_thread_exit = true;
         _wakeup_change_cond.wake_one();
     }
-    _wakeup_thread.join();
+    _wakeup_thread->join();
     return 0;
 }
 

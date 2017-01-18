@@ -4,10 +4,6 @@
             "type": "direct-dir",
             "path": "${OSV_BASE}/modules/cloud-init/"
         },
-        "mgmt": {
-            "type": "direct-dir",
-            "path": "${OSV_BASE}/mgmt/"
-        },
     "repositories": [
         "${OSV_BASE}/apps",
         "${OSV_BASE}/modules"

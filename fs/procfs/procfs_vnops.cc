@@ -24,6 +24,8 @@
 #include <sys/resource.h>
 #include <mntent.h>
 
+#include "cpuid.hh"
+
 namespace procfs {
 
 using namespace std;
@@ -361,6 +363,7 @@ procfs_mount(mount* mp, const char *dev, int flags, const void* data)
     root->add("self", self);
     root->add("0", self); // our standard pid
     root->add("mounts", inode_count++, procfs_mounts);
+    root->add("cpuinfo", inode_count++, [] { return processor::features_str(); });
 
     vp->v_data = static_cast<void*>(root);
 

@@ -30,7 +30,7 @@ class ConfigTemplate(Template):
 #
 # config files
 #
-def config_merge(a,b,path=None):
+def config_merge(a, b, path=None):
     if path is None: path = []
     for key in b:
         if key in a:
@@ -57,15 +57,15 @@ def config_flatten(d, parent_key='', sep='.'):
     return dict(items)
 
 # TODO need to update the method config files are found - currently seraching up the path
-def config(dir,params):
+def config(dir, params):
     # find config files
     config_files = []
     old_dir = ""
     while old_dir != dir:
        old_dir = dir
-       if os.path.isfile(os.path.join(dir,"test-config.json")):
-          config_files.insert(0,os.path.join(dir,"test-config.json"))
-       dir = os.path.abspath(os.path.join(dir,".."))
+       if os.path.isfile(os.path.join(dir, "test-config.json")):
+          config_files.insert(0, os.path.join(dir, "test-config.json"))
+       dir = os.path.abspath(os.path.join(dir, ".."))
     result = ""
     # merge config files
     for fconfig in config_files:
@@ -73,7 +73,7 @@ def config(dir,params):
        if result == "":
           result = new_config
        else:
-          config_merge(result,new_config)
+          config_merge(result, new_config)
     # flatten config
     config = config_flatten(result)
     # apply params
@@ -84,10 +84,10 @@ def config(dir,params):
            val = template.substitute(params)
            config[key] = val
         except KeyError:
-           print "missing value for config value",key
+           print "missing value for config value", key
            missing_key = True
     if missing_key:
-       sys.exit (1)
+       sys.exit(1)
     return config
 
 #
@@ -95,10 +95,10 @@ def config(dir,params):
 #
 
 def get_templates_from_list(list):
-    return fnmatch.filter(list,"*.template.*")
+    return fnmatch.filter(list, "*.template.*")
 
 def get_file_from_template(template):
-    return template.replace(".template","")
+    return template.replace(".template", "")
 
 def template_compare_filename(item1, item2):
     item1_val = int(item1.split("_")[1])
@@ -110,12 +110,12 @@ def template_compare_filename(item1, item2):
     else:
         return 0
 
-def template_prepare(params,dir):
+def template_prepare(params, dir):
     for (dirpath, dirnames, filenames) in os.walk(dir):
         for filename in get_templates_from_list(filenames):
-            template_apply(os.path.join(dirpath,filename),params)
-        for dir in fnmatch.filter (dirnames,"[a-zA-Z0-9].*"):
-            template_prepare(params,dir)
+            template_apply(os.path.join(dirpath, filename), params)
+        for dir in fnmatch.filter(dirnames, "[a-zA-Z0-9].*"):
+            template_prepare(params, dir)
 
 def template_apply(in_file, params):
     out_file = get_file_from_template(in_file)
@@ -125,27 +125,27 @@ def template_apply(in_file, params):
     try:
        out_fh.write(template.substitute(params))
     except KeyError:
-       print "missing value for config value in",in_file
+       print "missing value for config value in", in_file
        missing_key = True
-       sys.exit (1)
+       sys.exit(1)
     in_fh.close()
     out_fh.close()
-    os.chmod(out_file,0755)
-    print "compiling template",in_file,"->",out_file
+    os.chmod(out_file, 0755)
+    print "compiling template", in_file, "->", out_file
 
 #
 # run logic
 #
 def run_file(file):
-    print "running ",file
-    file_stdout = open(file + ".stdout","w")
-    file_stderr = open(file + ".stderr","w")
+    print "running ", file
+    file_stdout = open(file + ".stdout", "w")
+    file_stderr = open(file + ".stderr", "w")
     file_return = subprocess.call(file, stdout=file_stdout, stderr=file_stderr, shell=True)
     file_stdout.close()
     file_stderr.close();
-    print "return ",file_return
+    print "return ", file_return
     if file_return != 0:
-       file_stderr = open(file + ".stderr","r")
+       file_stderr = open(file + ".stderr", "r")
        print file_stderr.read()
     return file_return
 
@@ -164,14 +164,14 @@ def run(args):
     compile(args)
     error = False
     for dir in args.directory:
-        print "running files in",dir
+        print "running files in", dir
         files = []
         for (dirpath, dirnames, filenames) in os.walk(dir):
             for filename in get_templates_from_list(filenames):
                 files.append(filename)
         files.sort(cmp=template_compare_filename)
         for file in files:
-            file_return = run_file(os.path.join(dir,get_file_from_template(file)))
+            file_return = run_file(os.path.join(dir, get_file_from_template(file)))
             if file_return != 0:
                error = True
                break
@@ -183,9 +183,9 @@ def run(args):
 def compile(args):
     params = extract_config_params_from_args(args)
     for dir in args.directory:
-        print "compiling files in",dir
-        configuration = config(dir,params)
-        template_prepare(configuration,dir)
+        print "compiling files in", dir
+        configuration = config(dir, params)
+        template_prepare(configuration, dir)
 
 
 if __name__ == "__main__":
@@ -193,14 +193,14 @@ if __name__ == "__main__":
     subparsers = parser.add_subparsers(help="command")
 
     _run = subparsers.add_parser('run')
-    _run.add_argument('directory',nargs='+',help='directory to run tests')
-    _run.add_argument('--config_param',action='append',help='config param to be passed')
+    _run.add_argument('directory', nargs='+', help='directory to run tests')
+    _run.add_argument('--config_param', action='append', help='config param to be passed')
     _run.set_defaults(func=run)
 
     _compile = subparsers.add_parser('compile')
-    _compile.add_argument('directory',nargs='+',help='directory to compile tests')
-    _compile.add_argument('--config_param',action='append',help='config param to be passed')
+    _compile.add_argument('directory', nargs='+', help='directory to compile tests')
+    _compile.add_argument('--config_param', action='append', help='config param to be passed')
     _compile.set_defaults(func=compile)
 
-    args=parser.parse_args()
+    args = parser.parse_args()
     args.func(args)

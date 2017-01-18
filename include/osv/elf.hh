@@ -369,6 +369,7 @@ private:
     Elf64_Dyn& dynamic_tag(unsigned tag);
     Elf64_Dyn* _dynamic_tag(unsigned tag);
     symbol_module symbol(unsigned idx);
+    symbol_module symbol_other(unsigned idx);
     Elf64_Xword symbol_tls_module(unsigned idx);
     void relocate_rela();
     void relocate_pltgot();
@@ -529,7 +530,8 @@ public:
     /**
      * Set the default search path for get_library().
      *
-     * The search path defaults (as set in loader.cc) to /, /usr/lib.
+     * The search path defaults (as set in elf::program::program())
+     * to /, /usr/lib.
      */
     void set_search_path(std::initializer_list<std::string> path);
 
@@ -589,14 +591,17 @@ private:
     std::vector <object*> _modules_to_delete;
 
     // debugger interface
-    static object* s_objs[100];
+    static std::vector<object*> s_objs;
+    static mutex s_objs_mutex;
 
     friend elf::file::~file();
     friend class object;
 };
 
+void create_main_program();
+
 /**
- * Get the single elf::program instance
+ * Get the current elf::program instance
  */
 program* get_program();
 

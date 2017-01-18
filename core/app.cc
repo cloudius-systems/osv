@@ -16,6 +16,8 @@
 #include <errno.h>
 #include <algorithm>
 #include <boost/range/algorithm/transform.hpp>
+#include <osv/wait_record.hh>
+#include "libc/pthread.hh"
 
 using namespace boost::range;
 
@@ -120,9 +122,12 @@ shared_app_t application::run(const std::vector<std::string>& args)
     return run(args[0], args);
 }
 
-shared_app_t application::run(const std::string& command, const std::vector<std::string>& args)
+shared_app_t application::run(const std::string& command,
+                      const std::vector<std::string>& args,
+                      bool new_program,
+                      const std::unordered_map<std::string, std::string> *env)
 {
-    auto app = std::make_shared<application>(command, args);
+    auto app = std::make_shared<application>(command, args, new_program, env);
     app->start();
     apps.push(app);
     return app;
@@ -132,7 +137,21 @@ void run(const std::vector<std::string>& args) {
     application::run(args);
 }
 
-application::application(const std::string& command, const std::vector<std::string>& args)
+shared_app_t application::run_and_join(const std::string& command,
+                      const std::vector<std::string>& args,
+                      bool new_program,
+                      const std::unordered_map<std::string, std::string> *env,
+                      waiter* setup_waiter)
+{
+    auto app = std::make_shared<application>(command, args, new_program, env);
+    app->start_and_join(setup_waiter);
+    return app;
+}
+
+application::application(const std::string& command,
+                     const std::vector<std::string>& args,
+                     bool new_program,
+                     const std::unordered_map<std::string, std::string> *env)
     : _args(args)
     , _command(command)
     , _termination_requested(false)
@@ -141,7 +160,20 @@ application::application(const std::string& command, const std::vector<std::stri
     , _terminated(false)
 {
     try {
-        _lib = elf::get_program()->get_library(_command);
+        elf::program *current_program;
+
+        if (new_program) {
+            this->new_program();
+            clone_osv_environ();
+            current_program = _program.get();
+        } else {
+            // Do it in a separate branch because elf::get_program() would not
+            // have found us yet in the previous branch.
+            current_program = elf::get_program();
+        }
+
+        merge_in_environ(new_program, env);
+        _lib = current_program->get_library(_command);
     } catch(const std::exception &e) {
         throw launch_error(e.what());
     }
@@ -204,6 +236,38 @@ int application::join()
 
     trace_app_join_ret(_return_code);
     return _return_code;
+}
+
+void application::start_and_join(waiter* setup_waiter)
+{
+    // We start the new application code in the current thread. We temporarily
+    // change the app_runtime pointer of this thread, while keeping the old
+    // pointer saved and restoring it when the new application ends (keeping
+    // the shared pointer also keeps the calling application alive).
+    auto original_app = sched::thread::current()->app_runtime();
+    sched::thread::current()->set_app_runtime(runtime());
+    auto original_name = sched::thread::current()->name();
+    if (setup_waiter) {
+        setup_waiter->wake();
+    }
+    _thread = pthread_self(); // may be null if the caller is not a pthread.
+    main();
+    // FIXME: run_tsd_dtors() is a hack - If the new program registered a
+    // destructor via pthread_key_create() and this thread keeps living with
+    // data for this key, the destructor function, part of the new program,
+    // may be called after the program is unloaded - and crash. Let's run
+    // the destructors now. This is wrong if the calling program has its own
+    // thread-local data. It is fine if the thread was created specially for
+    // running start_and_join (or run_and_join() or osv::run()).
+    pthread_private::run_tsd_dtors();
+    sched::thread::current()->set_name(original_name);
+    sched::thread::current()->set_app_runtime(original_app);
+    original_app.reset();
+    _joiner = sched::thread::current();
+    _runtime.reset();
+    sched::thread::wait_until([&] { return _terminated.load(); });
+    _termination_request_callbacks.clear();
+    _lib.reset();
 }
 
 TRACEPOINT(trace_app_main, "app=%p, cmd=%s", application*, const char*);
@@ -353,6 +417,96 @@ int application::get_return_code()
 std::string application::get_command()
 {
     return _command;
+}
+
+// For simplicity, we will not reuse bits in the bitmap, since no destructor is
+// assigned to the program. In that case, a simple counter would do. But coding
+// this way is easy, and make this future extension simple.
+constexpr int max_namespaces = 32;
+std::bitset<max_namespaces> namespaces(1);
+
+void application::new_program()
+{
+    for (unsigned long i = 0; i < max_namespaces; ++i) {
+        if (!namespaces.test(i)) {
+            namespaces.set(i);
+            // This currently limits the size of the executable and shared
+            // libraries in each "program" to 1<<33 bytes, i.e., 8 GB.
+            // This should hopefully be more than enough; It is not a
+            // limit on the amount of memory this program can allocate -
+            // just a limit on the code size.
+            void *addr =
+	        reinterpret_cast<void *>(elf::program_base) + ((i + 1) << 33);
+           _program.reset(new elf::program(addr));
+           return;
+        }
+    }
+    abort("application::new_program() out of namespaces.\n");
+}
+
+elf::program *application::program() {
+    return _program.get();
+}
+
+
+void application::clone_osv_environ()
+{
+    _libenviron = _program->get_library("libenviron.so");
+    if (!_libenviron) {
+        abort("could not load libenviron.so\n");
+        return;
+    }
+
+    if (!environ) {
+        return;
+    }
+
+    auto putenv = _libenviron->lookup<int (const char *)>("putenv");
+
+    for (int i=0; environ[i] ; i++) {
+        // putenv simply assign the char * we have to duplicate it.
+        // FIXME: this will leak memory when the application is destroyed.
+        putenv(strdup(environ[i]));
+    }
+}
+
+void application::set_environ(const std::string &key, const std::string &value,
+                              bool new_program)
+{
+    // create a pointer to OSv's libc setenv()
+    auto my_setenv = setenv;
+
+    if (new_program) {
+        // If we are starting a new program use the libenviron.so's setenv()
+        my_setenv =
+            _libenviron->lookup<int (const char *, const char *, int)>("setenv");
+    }
+
+    // We do not need to strdup() since the libc will malloc() for us
+    // Note that we merge in the existing environment variables by
+    // using setenv() merge parameter.
+    // FIXME: This will leak at application exit.
+    my_setenv(key.c_str(), value.c_str(), 1);
+}
+
+void application::merge_in_environ(bool new_program,
+        const std::unordered_map<std::string, std::string> *env)
+{
+    if (!env) {
+        return;
+    }
+
+    for (auto &iter: *env) {
+        set_environ(iter.first, iter.second, new_program);
+    }
+}
+
+void with_all_app_threads(std::function<void(sched::thread &)> f, sched::thread& th1) {
+    sched::with_all_threads([&](sched::thread &th2) {
+        if (th2.app_runtime() == th1.app_runtime()) {
+            f(th2);
+        }
+    });
 }
 
 namespace this_application {

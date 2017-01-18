@@ -13,6 +13,7 @@
 #include "libc.hh"
 #include <osv/clock.hh>
 #include <osv/sched.hh>
+#include "pthread.hh"
 
 u64 convert(const timespec& ts)
 {
@@ -57,6 +58,7 @@ static inline void fill_ts(std::chrono::duration<Rep, Period> d, timespec *ts)
 int clock_gettime(clockid_t clk_id, struct timespec* ts)
 {
     switch (clk_id) {
+    case CLOCK_BOOTTIME:
     case CLOCK_MONOTONIC:
         fill_ts(osv::clock::uptime::now().time_since_epoch(), ts);
         break;

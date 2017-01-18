@@ -34,13 +34,13 @@ public:
 
         sched::thread::attr a;
         a.detached();
-        sched::thread *t21 = new sched::thread([this] {
+        sched::thread *t21 = sched::thread::make([this] {
             dbg_d("t21-before");
             msleep((void*)567, NULL, 0, "test1", 0);
             dbg_d("t21-after");
         }, a);
 
-        sched::thread *t22 = new sched::thread([this] {
+        sched::thread *t22 = sched::thread::make([this] {
             dbg_d("t22-before");
             msleep((void*)567, NULL, 0, "test1", 0);
             dbg_d("t22-after");
@@ -71,13 +71,13 @@ public:
 
         sched::thread::attr a;
         a.detached();
-        sched::thread *t11 = new sched::thread([this] {
+        sched::thread *t11 = sched::thread::make([this] {
             dbg_d("t11-before");
             msleep((void*)123, NULL, 0, "test1", 0);
             dbg_d("t11-after");
         }, a);
 
-        sched::thread *t12 = new sched::thread([this] {
+        sched::thread *t12 = sched::thread::make([this] {
             dbg_d("t12-before");
             msleep((void*)123, NULL, 0, "test1", 0);
             dbg_d("t12-after");
@@ -101,10 +101,10 @@ public:
         // Run the tests in detached threads
         sched::thread::attr a;
         a.detached();
-        sched::thread *t1 = new sched::thread([this] { test1(); }, a);
+        sched::thread *t1 = sched::thread::make([this] { test1(); }, a);
         t1->start();
 
-        sched::thread *t2 = new sched::thread([this] { test2(); }, a);
+        sched::thread *t2 = sched::thread::make([this] { test2(); }, a);
         t2->start();
 #endif
     }

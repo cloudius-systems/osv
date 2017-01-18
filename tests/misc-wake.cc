@@ -8,7 +8,7 @@
 
 #include <osv/sched.hh>
 #include <osv/debug.hh>
-
+#include <osv/elf.hh>
 #include <osv/condvar.h>
 #include <sys/mman.h>
 
@@ -28,10 +28,15 @@ int main(int argc, char **argv)
     //   wr->t->wake_with([] { wr->t = nullptr; });
     int npages = (sizeof(sched::thread)-1)/4096+1;
     void *pages[4];
-    pages[0] = mmap(NULL, npages*4096, PROT_NONE, 0, 0, 0);
-    pages[1] = mmap(NULL, npages*4096, PROT_NONE, 0, 0, 0);
-    pages[2] = mmap(NULL, npages*4096, PROT_NONE, 0, 0, 0);
-    pages[3] = mmap(NULL, npages*4096, PROT_NONE, 0, 0, 0);
+    pages[0] = mmap(NULL, npages*4096, PROT_NONE, MAP_ANONYMOUS | MAP_SHARED | MAP_POPULATE, 0, 0);
+    assert(pages[0] != MAP_FAILED);
+    pages[1] = mmap(NULL, npages*4096, PROT_NONE, MAP_ANONYMOUS | MAP_SHARED | MAP_POPULATE, 0, 0);
+    assert(pages[1] != MAP_FAILED);
+    pages[2] = mmap(NULL, npages*4096, PROT_NONE, MAP_ANONYMOUS | MAP_SHARED | MAP_POPULATE, 0, 0);
+    assert(pages[2] != MAP_FAILED);
+    pages[3] = mmap(NULL, npages*4096, PROT_NONE, MAP_ANONYMOUS | MAP_SHARED | MAP_POPULATE, 0, 0);
+    assert(pages[3] != MAP_FAILED);
+#if 0
     // double-buffering - two page regions out of the above four hold the
     // current two threads, and two are mprotect()ed to catch access to the
     // previously deleted threads.
@@ -77,7 +82,7 @@ int main(int argc, char **argv)
         std::atomic<sched::thread *>thread;
         auto t1 = new sched::thread([&] {
             while(!thread.load())
-                ;
+                sched::thread::yield();
             thread.load()->wake_with([&] { thread.store(nullptr); });
         });
         t1->start();
@@ -89,8 +94,13 @@ int main(int argc, char **argv)
         delete t2;
         delete t1;
     }
+#endif
 
     debug("wakeup idiom succeeded\n");
     return 0;
 
 }
+
+// Because we're using wake_with() and wait_until(), this executable must not
+// cause sleepable lazy symbol resolutions or on-demand paging:
+OSV_ELF_MLOCK_OBJECT();

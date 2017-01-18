@@ -137,11 +137,11 @@ public:
         dbg_d("POLL Test - Begin");
         memset(fds, 0, sizeof(fds));
 
-        sched::thread* t1 = new sched::thread([&] {
+        sched::thread* t1 = sched::thread::make([&] {
             poller_result = poller();
         });
 
-        sched::thread* t2 = new sched::thread([&] {
+        sched::thread* t2 = sched::thread::make([&] {
             connector_result = connector();
         });
 
@@ -262,11 +262,11 @@ public:
 
         dbg_d("Simple UDP test - Begin");
 
-        sched::thread* t1 = new sched::thread([&] {
+        sched::thread* t1 = sched::thread::make([&] {
             udp_server_result = udp_server();
         });
 
-        sched::thread* t2 = new sched::thread([&] {
+        sched::thread* t2 = sched::thread::make([&] {
             udp_client_result = udp_client();
         });
 

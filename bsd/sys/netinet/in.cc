@@ -431,11 +431,13 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 		goto out;
 
 	case SIOCGIFBRDADDR:
+#if 0
 		if ((ifp->if_flags & IFF_BROADCAST) == 0) {
 			error = EINVAL;
 			goto out;
 		}
-		*((struct bsd_sockaddr_in *)&ifr->ifr_dstaddr) = ia->ia_broadaddr;
+#endif
+		*((struct bsd_sockaddr_in *)&ifr->ifr_broadaddr) = ia->ia_broadaddr;
 		goto out;
 
 	case SIOCGIFDSTADDR:
