@@ -35,6 +35,49 @@ void *get_processor(void *cpuid)
     return NULL;
 }
 
+// Test that we can pin an existing thread to a specific CPU and then to unpin
+// it by changing its affinity to all CPUs. Currently we test this only on the
+// current thread.
+void *test_pin_unpin(void *)
+{
+    unsigned ncpus = sched::cpus.size();
+    // The thread starts with affinity to all cpus
+    cpu_set_t cs;
+    CPU_ZERO(&cs);
+    report("getaffinity", pthread_getaffinity_np(pthread_self(), sizeof(cs), &cs) == 0);
+    bool success = true;
+    for (unsigned i = 0; i < ncpus; i++) {
+        success = success && CPU_ISSET(i, &cs);
+    }
+    report("thread is initially unpinned", success);
+    // Pin the thread to cpu 0 only, and check it worked
+    CPU_ZERO(&cs);
+    CPU_SET(0, &cs);
+    report("setaffinity", pthread_setaffinity_np(pthread_self(), sizeof(cs), &cs) == 0);
+    CPU_ZERO(&cs);
+    report("getaffinity", pthread_getaffinity_np(pthread_self(), sizeof(cs), &cs) == 0);
+    success = CPU_ISSET(0, &cs);
+    for (unsigned i = 1; i < ncpus; i++) {
+        success = success && !CPU_ISSET(i, &cs);
+    }
+    report("thread is now pinned to cpu 0", success);
+    // Unpin the thread (set its affinity to all CPUs) and confirm it worked
+    CPU_ZERO(&cs);
+    for (unsigned i = 0; i < ncpus; i++) {
+        CPU_SET(i, &cs);
+    }
+    report("setaffinity", pthread_setaffinity_np(pthread_self(), sizeof(cs), &cs) == 0);
+    CPU_ZERO(&cs);
+    report("getaffinity", pthread_getaffinity_np(pthread_self(), sizeof(cs), &cs) == 0);
+    success = true;
+    for (unsigned i = 0; i < ncpus; i++) {
+        success = success && CPU_ISSET(i, &cs);
+    }
+    report("thread is now unpinned again", success);
+
+    return nullptr;
+}
+
 int main(void)
 {
     printf("starting pthread affinity test\n");
@@ -110,6 +153,10 @@ int main(void)
         success = success && (cs.__bits[i] == (size_t)-1);
     }
     report("All bits were set", success);
+
+    // Test that we can pin and unpin an existing thread
+    pthread_create(&thread, nullptr, test_pin_unpin, nullptr);
+    pthread_join(thread, nullptr);
 
     printf("SUMMARY: %u tests / %u failures\n", tests_total.load(), tests_failed.load());
     return tests_failed == 0 ? 0 : 1;

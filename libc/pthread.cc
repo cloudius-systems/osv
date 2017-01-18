@@ -1013,6 +1013,8 @@ static int setaffinity(sched::thread* t, size_t cpusetsize,
                 }
             }
         }
+    } else if (count == (int)sched::cpus.size()) {
+        t->unpin();
     } else {
         WARN_ONCE("Warning: OSv only supports cpu_set_t with at most one "
                 "CPU set.\n pthread_setaffinity_np or sched_setaffinity ignored.\n");
