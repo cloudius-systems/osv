@@ -118,6 +118,8 @@ private:
 
     constexpr static const char* TIME_FORMAT = "%a %b %d %H:%M:%S %Z %Y";
 
+    static std::string json_escape_UTF8_string(const std::string& utf8_string);
+
 };
 
 }

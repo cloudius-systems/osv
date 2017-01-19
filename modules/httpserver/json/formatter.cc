@@ -9,6 +9,7 @@
 #include "json_elements.hh"
 #include <float.h>
 #include <boost/math/special_functions/fpclassify.hpp>
+#include <iomanip>
 
 using namespace std;
 
@@ -18,13 +19,13 @@ namespace json {
 
 string formatter::to_json(const string& str)
 {
-    return '"' + str + '"';
+    return '"' + json_escape_UTF8_string(str) + '"';
 }
 
 string formatter::to_json(const char* str)
 {
     string res = "\"";
-    res += str;
+    res += json_escape_UTF8_string(str);
     return res + '"';
 }
 
@@ -69,6 +70,29 @@ string formatter::to_json(const jsonable& obj) {
 
 std::string formatter::to_json(unsigned long l) {
     return to_string(l);
+}
+
+std::string formatter::json_escape_UTF8_string(const std::string& utf8_string) {
+    std::ostringstream o;
+    for (auto c = utf8_string.cbegin(); c != utf8_string.cend(); c++) {
+        switch (*c) {
+            case '"': o << "\\\""; break;
+            case '\\': o << "\\\\"; break;
+            case '\b': o << "\\b"; break;
+            case '\f': o << "\\f"; break;
+            case '\n': o << "\\n"; break;
+            case '\r': o << "\\r"; break;
+            case '\t': o << "\\t"; break;
+            default:
+                if ('\x00' <= *c && *c <= '\x1f') {
+                    o << "\\u"
+                      << std::hex << std::setw(4) << std::setfill('0') << (int)*c;
+                } else {
+                    o << *c;
+                }
+        }
+    }
+    return o.str();
 }
 
 }
