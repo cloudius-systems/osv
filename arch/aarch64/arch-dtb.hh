@@ -131,4 +131,11 @@ bool dtb_get_pci_irqmap(u32 *bdfs, int *irq_ids, int n);
 #define DTB_PHYSHI_D_SH 11
 #define DTB_PHYSHI_F_SH 8
 
+/* bool dtb_get_vmm_is_xen();
+ *
+ * Returns true if Xen hypervisor is detected.
+ */
+
+bool dtb_get_vmm_is_xen();
+
 #endif /* ARCH_DTB_HH */

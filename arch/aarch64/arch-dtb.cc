@@ -569,3 +569,11 @@ bool dtb_get_pci_irqmap(u32 *bdfs, int *irq_ids, int n)
     }
     return true;
 }
+
+bool dtb_get_vmm_is_xen()
+{
+    if (fdt_check_header(dtb) != 0)
+        return false; /* broken header will be handled later */
+
+    return fdt_node_offset_by_compatible(dtb, -1, "xen,xen") >= 0;
+}

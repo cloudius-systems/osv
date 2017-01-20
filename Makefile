@@ -850,6 +850,7 @@ objects += arch/$(arch)/pci.o
 objects += arch/$(arch)/msi.o
 objects += arch/$(arch)/power.o
 objects += arch/$(arch)/feexcept.o
+objects += arch/$(arch)/xen.o
 
 $(out)/arch/x64/string-ssse3.o: CXXFLAGS += -mssse3
 
@@ -869,7 +870,6 @@ objects += arch/x64/ioapic.o
 objects += arch/x64/apic.o
 objects += arch/x64/apic-clock.o
 objects += arch/x64/entry-xen.o
-objects += arch/x64/xen.o
 objects += arch/x64/xen_intr.o
 objects += core/sampler.o
 objects += $(acpi)
