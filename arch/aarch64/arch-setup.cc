@@ -19,6 +19,7 @@
 
 #include "arch-mmu.hh"
 #include "arch-dtb.hh"
+#include "xen.hh"
 
 #include "drivers/console.hh"
 #include "drivers/pl011.hh"
@@ -90,10 +91,12 @@ void arch_setup_free_memory()
     mmu::linear_map((void *)mmu::mem_addr, (mmu::phys)mmu::mem_addr,
                     addr - mmu::mem_addr);
 
-    /* linear_map [TTBR0 - UART] */
-    addr = (mmu::phys)console::arch_early_console.get_base_addr();
-    mmu::linear_map((void *)addr, addr, 0x1000, mmu::page_size,
-                    mmu::mattr::dev);
+    if (!is_xen()) {
+        /* linear_map [TTBR0 - UART] */
+        addr = (mmu::phys)console::aarch64_console.pl011.get_base_addr();
+        mmu::linear_map((void *)addr, addr, 0x1000, mmu::page_size,
+                        mmu::mattr::dev);
+    }
 
     /* linear_map [TTBR0 - GIC DIST and GIC CPU] */
     u64 dist, cpu;
@@ -175,6 +178,14 @@ void arch_init_drivers()
 
 void arch_init_early_console()
 {
+    if (is_xen()) {
+        new (&console::aarch64_console.xen) console::XEN_Console();
+        console::arch_early_console = console::aarch64_console.xen;
+        return;
+    }
+
+    new (&console::aarch64_console.pl011) console::PL011_Console();
+    console::arch_early_console = console::aarch64_console.pl011;
     int irqid;
     u64 addr = dtb_get_uart(&irqid);
     if (!addr) {
@@ -182,8 +193,8 @@ void arch_init_early_console()
         return;
     }
 
-    console::arch_early_console.set_base_addr(addr);
-    console::arch_early_console.set_irqid(irqid);
+    console::aarch64_console.pl011.set_base_addr(addr);
+    console::aarch64_console.pl011.set_irqid(irqid);
 }
 
 bool arch_setup_console(std::string opt_console)

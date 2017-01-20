@@ -822,6 +822,7 @@ endif # x64
 
 ifeq ($(arch),aarch64)
 drivers += drivers/pl011.o
+drivers += drivers/xenconsole.o
 drivers += drivers/virtio.o
 drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-rng.o
@@ -859,6 +860,7 @@ objects += arch/$(arch)/psci.o
 objects += arch/$(arch)/arm-clock.o
 objects += arch/$(arch)/gic.o
 objects += arch/$(arch)/arch-dtb.o
+objects += arch/$(arch)/hypercall.o
 objects += $(libfdt)
 endif
 
