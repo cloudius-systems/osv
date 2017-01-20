@@ -216,11 +216,16 @@ reply reply::stock_reply(reply::status_type status,
         rep.content = stock_replies::to_string(status);
     }
     rep.status = status;
-    rep.headers.resize(2);
+
+    const int contentLength = rep.content.size();
+    rep.headers.resize(contentLength > 0 ? 2 : 1);
     rep.headers[0].name = "Content-Length";
-    rep.headers[0].value = std::to_string(rep.content.size());
-    rep.headers[1].name = "Content-Type";
-    rep.headers[1].value = "text/html";
+    rep.headers[0].value = std::to_string(contentLength);
+    // Add Content-Type only if there is some payload returned (see https://tools.ietf.org/html/rfc7231#section-3.1.1.5)
+    if (contentLength > 0) {
+         rep.headers[1].name = "Content-Type";
+         rep.headers[1].value = "text/html";
+    }
     return rep;
 }
 

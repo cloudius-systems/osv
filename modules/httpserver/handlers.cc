@@ -21,11 +21,15 @@ const std::string handler_base::ERROR_404_PAGE(
 
 void handler_base::set_headers_explicit(http::server::reply& rep, const std::string& mime)
 {
-    rep.headers.resize(2);
+    const int contentLength = rep.content.size();
+    rep.headers.resize(contentLength > 0 ? 2 : 1);
     rep.headers[0].name = "Content-Length";
-    rep.headers[0].value = to_string(rep.content.size());
-    rep.headers[1].name = "Content-Type";
-    rep.headers[1].value = mime;
+    rep.headers[0].value = to_string(contentLength);
+    // Add Content-Type only if there is some payload returned (see https://tools.ietf.org/html/rfc7231#section-3.1.1.5)
+    if (contentLength > 0) {
+         rep.headers[1].name = "Content-Type";
+         rep.headers[1].value = mime;
+    }
 }
 
 void handler_base::set_headers(http::server::reply& rep, const string& type)
