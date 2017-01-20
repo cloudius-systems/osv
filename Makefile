@@ -338,7 +338,7 @@ CFLAGS = -std=gnu99 $(COMMON)
 CFLAGS += -I libc/stdio -I libc/internal -I libc/arch/$(arch) \
 	-Wno-missing-braces -Wno-parentheses -Wno-unused-but-set-variable
 
-ASFLAGS = -g $(autodepend) -DASSEMBLY
+ASFLAGS = -g $(autodepend) -D__ASSEMBLY__
 
 $(out)/fs/vfs/main.o: CXXFLAGS += -Wno-sign-compare -Wno-write-strings
 

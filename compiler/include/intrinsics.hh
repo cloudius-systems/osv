@@ -2,7 +2,7 @@
 #ifndef COMPILER_INTRINSICS_HH
 #define COMPILER_INTRINSICS_HH
 
-#ifndef ASSEMBLY
+#ifndef __ASSEMBLY__
 
 #if __GNUC__ == 4 && __GNUC_MINOR__ < 8
 
