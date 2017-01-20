@@ -362,7 +362,6 @@ static int dtb_get_pci_node()
         goto out;
     }
 
-    abort("dtb_get_pci_node: no CAM or ECAM node found.\n");
  out:
     return dtb_pci_node;
 }

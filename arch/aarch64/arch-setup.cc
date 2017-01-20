@@ -39,6 +39,36 @@ void setup_temporary_phys_map()
     mmu::flush_tlb_all();
 }
 
+void arch_setup_pci()
+{
+    pci::set_pci_ecam(dtb_get_pci_is_ecam());
+
+    /* linear_map [TTBR0 - PCI config space] */
+    u64 pci_cfg;
+    size_t pci_cfg_len;
+    if (!dtb_get_pci_cfg(&pci_cfg, &pci_cfg_len))
+	return;
+
+    pci::set_pci_cfg(pci_cfg, pci_cfg_len);
+    pci_cfg = pci::get_pci_cfg(&pci_cfg_len);
+    mmu::linear_map((void *)pci_cfg, (mmu::phys)pci_cfg, pci_cfg_len,
+		    mmu::page_size, mmu::mattr::dev);
+
+    /* linear_map [TTBR0 - PCI I/O and memory ranges] */
+    u64 ranges[2]; size_t ranges_len[2];
+    if (!dtb_get_pci_ranges(ranges, ranges_len, 2)) {
+        abort("arch-setup: failed to get PCI ranges.\n");
+    }
+    pci::set_pci_io(ranges[0], ranges_len[0]);
+    pci::set_pci_mem(ranges[1], ranges_len[1]);
+    ranges[0] = pci::get_pci_io(&ranges_len[0]);
+    ranges[1] = pci::get_pci_mem(&ranges_len[1]);
+    mmu::linear_map((void *)ranges[0], (mmu::phys)ranges[0], ranges_len[0],
+                    mmu::page_size, mmu::mattr::dev);
+    mmu::linear_map((void *)ranges[1], (mmu::phys)ranges[1], ranges_len[1],
+                    mmu::page_size, mmu::mattr::dev);
+}
+
 void arch_setup_free_memory()
 {
     setup_temporary_phys_map();
@@ -77,32 +107,7 @@ void arch_setup_free_memory()
     mmu::linear_map((void *)cpu, (mmu::phys)cpu, cpu_len, mmu::page_size,
                     mmu::mattr::dev);
 
-    pci::set_pci_ecam(dtb_get_pci_is_ecam());
-
-    /* linear_map [TTBR0 - PCI config space] */
-    u64 pci_cfg;
-    size_t pci_cfg_len;
-    if (!dtb_get_pci_cfg(&pci_cfg, &pci_cfg_len)) {
-        abort("arch-setup: failed to get PCI configuration.\n");
-    }
-    pci::set_pci_cfg(pci_cfg, pci_cfg_len);
-    pci_cfg = pci::get_pci_cfg(&pci_cfg_len);
-    mmu::linear_map((void *)pci_cfg, (mmu::phys)pci_cfg, pci_cfg_len,
-                    mmu::page_size, mmu::mattr::dev);
-
-    /* linear_map [TTBR0 - PCI I/O and memory ranges] */
-    u64 ranges[2]; size_t ranges_len[2];
-    if (!dtb_get_pci_ranges(ranges, ranges_len, 2)) {
-        abort("arch-setup: failed to get PCI ranges.\n");
-    }
-    pci::set_pci_io(ranges[0], ranges_len[0]);
-    pci::set_pci_mem(ranges[1], ranges_len[1]);
-    ranges[0] = pci::get_pci_io(&ranges_len[0]);
-    ranges[1] = pci::get_pci_mem(&ranges_len[1]);
-    mmu::linear_map((void *)ranges[0], (mmu::phys)ranges[0], ranges_len[0],
-                    mmu::page_size, mmu::mattr::dev);
-    mmu::linear_map((void *)ranges[1], (mmu::phys)ranges[1], ranges_len[1],
-                    mmu::page_size, mmu::mattr::dev);
+    arch_setup_pci();
 
     mmu::switch_to_runtime_page_tables();
 
@@ -152,8 +157,11 @@ void arch_init_drivers()
     pci::dump_pci_irqmap();
 
     // Enumerate PCI devices
-    pci::pci_device_enumeration();
-    boot_time.event("pci enumerated");
+    size_t pci_cfg_len;
+    if (pci::get_pci_cfg(&pci_cfg_len)) {
+	    pci::pci_device_enumeration();
+	    boot_time.event("pci enumerated");
+    }
 
     // Initialize all drivers
     hw::driver_manager* drvman = hw::driver_manager::instance();
