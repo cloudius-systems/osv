@@ -19,6 +19,9 @@ operation_type str2type(const std::string& type)
     if (type == "PUT") {
         return PUT;
     }
+    if (type == "OPTIONS") {
+        return OPTIONS;
+    }
     return GET;
 }
 

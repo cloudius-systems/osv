@@ -14,6 +14,7 @@
 #include "mime_types.hh"
 #include "request.hh"
 #include "reply.hh"
+#include "common.hh"
 
 #include <iostream>
 #include <fstream>
@@ -110,7 +111,10 @@ void request_handler::handle_request(request& req, reply& rep)
         return;
     }
 
-    routes->handle(request_path, req, rep);
+    // Do not handle the request if this is OPTIONS as client is requesting
+    // capabilities of the server (see https://tools.ietf.org/html/rfc7231#section-4.3.7)
+    if(httpserver::str2type(req.method) != httpserver::OPTIONS)
+        routes->handle(request_path, req, rep);
 
     if (!allowed_domains.empty()) {
         auto origin = req.get_header("Origin");
