@@ -360,9 +360,13 @@ Elf64_Note::Elf64_Note(void *_base, char *str)
     // The note section strings will include the trailing 0. std::string
     // doesn't like that very much, and comparisons against a string that is
     // constructed from this string will fail. Therefore the - 1 at the end
-    n_owner.assign(str, base[0] - 1);
+    if (base[0] > 0) {
+        n_owner.assign(str, base[0] -1);
+    }
     str = align_up(str + base[0], 4);
-    n_value.assign(str, base[1] - 1);
+    if (base[1] > 0) {
+        n_value.assign(str, base[1] - 1);
+    }
 }
 
 void object::load_segments()
