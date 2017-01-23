@@ -108,6 +108,11 @@ int sched_yield()
     return 0;
 }
 
+extern "C" int sched_getcpu()
+{
+    return sched::cpu::current()->id;
+}
+
 extern "C"
 int getloadavg(double loadavg[], int nelem)
 {
