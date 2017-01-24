@@ -19,7 +19,7 @@
 namespace mmu {
 constexpr int max_phys_addr_size = 48;
 // device_range_* are used only for debug purpose
-constexpr int device_range_start = 0x8000000;
+constexpr int device_range_start = 0x3000000;
 constexpr int device_range_stop = 0x40000000;
 extern u64 mem_addr; /* set by the dtb_setup constructor */
 

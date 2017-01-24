@@ -58,9 +58,9 @@ extern start_info_t *xen_start_info;
 extern uint64_t get_system_time(int ticks);
 
 static inline int 
-HYPERVISOR_console_write(char *str, int count)
+HYPERVISOR_console_write(const char *str, int count)
 {
-    return HYPERVISOR_console_io(CONSOLEIO_write, count, str); 
+    return HYPERVISOR_console_io(CONSOLEIO_write, count, const_cast<char*>(str));
 }
 
 static inline void HYPERVISOR_crash(void) __dead2;

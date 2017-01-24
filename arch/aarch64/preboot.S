@@ -11,6 +11,30 @@ target = . + 0x10000
 .text
 .align 16
 
+_head:
+	/* Image header expected by Linux boot-loaders, see
+	 * Documentation/arm64/booting.txt in Linux tree for format description
+	*/
+	b prestart		// jump to actual prestart
+	.long 0			// reserved
+	.long 0x00080000	// image load offset
+	.long 0x00000000
+	.long 0			// unused image size -- already known by
+	.long 0			//    image loader, thus ignored
+	.long 0			// unused informative flags, Xen/QEMU
+	.long 0			//    image loaders ignore this field
+	.long 0			// reserved
+	.long 0			// reserved
+	.long 0			// reserved
+	.long 0			// reserved
+	.long 0			// reserved
+	.long 0			// reserved
+	.byte 0x41		// magic number, "ARM\x64"
+	.byte 0x52
+	.byte 0x4d
+	.byte 0x64
+	.long 0			// reserved
+
 .globl prestart
 prestart: // x4 = 0x40080000 set by qemu bootloader
         mov     x5, x0     /* save device tree blob addr */

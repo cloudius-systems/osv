@@ -31,6 +31,9 @@ start_elf:
         str     x5, [x1, #:lo12:dtb]
 
         mov     x29, xzr
+        bl      init_xen
+
+        mov     x29, xzr
         bl      premain
 
         adrp    x3, __argc

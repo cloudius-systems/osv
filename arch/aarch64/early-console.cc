@@ -5,11 +5,14 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "drivers/pl011.hh"
 #include <osv/prio.hh>
+
+#include "early-console.hh"
+#include "xen.hh"
 
 namespace console {
 
-PL011_Console arch_early_console __attribute__((init_priority((int)init_prio::console)));
+union AARCH64_Console aarch64_console;
+console_driver & arch_early_console = aarch64_console.pl011;
 
 }

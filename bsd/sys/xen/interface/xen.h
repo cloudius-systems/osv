@@ -33,6 +33,8 @@
 #include "arch-x86/xen.h"
 #elif defined(__ia64__)
 #include "arch-ia64.h"
+#elif defined(__aarch64__)
+#include "arch-aarch64.h"
 #else
 #error "Unsupported architecture"
 #endif
