@@ -16,10 +16,10 @@
 #include <osv/boot.hh>
 #include <osv/debug.hh>
 #include <osv/commands.hh>
+#include <osv/xen.hh>
 
 #include "arch-mmu.hh"
 #include "arch-dtb.hh"
-#include "xen.hh"
 
 #include "drivers/console.hh"
 #include "drivers/pl011.hh"

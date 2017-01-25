@@ -16,7 +16,7 @@ extern "C" {
 #include <osv/mmu.hh>
 #include <osv/mmio.hh>
 #include "arch.hh"
-#include "xen.hh"
+#include <osv/xen.hh>
 #include <osv/irqlock.hh>
 
 using boost::intrusive::get_parent_from_member;
