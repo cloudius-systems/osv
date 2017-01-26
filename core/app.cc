@@ -133,7 +133,7 @@ shared_app_t application::run(const std::string& command,
     return app;
 }
 
-void run(const std::vector<std::string>& args) {
+void run_background(const std::vector<std::string>& args) {
     application::run(args);
 }
 
