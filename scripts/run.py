@@ -126,6 +126,11 @@ def start_osv_qemu(options):
         "-device", "virtio-blk-pci,id=blk0,bootindex=0,drive=hd0,scsi=off",
         "-drive", "file=%s,if=none,id=hd0,%s" % (options.image_file, aio)]
 
+    if options.cloud_init_image:
+        args += [
+        "-device", "virtio-blk-pci,id=blk1,bootindex=1,drive=hd1,scsi=off",
+        "-drive", "file=%s,if=none,id=hd1" % (options.cloud_init_image)]
+
     if options.no_shutdown:
         args += ["-no-reboot", "-no-shutdown"]
 
@@ -478,11 +483,17 @@ if __name__ == "__main__":
                         help="specify gdb port number")
     parser.add_argument("--script", action="store",
                         help="XEN define configuration script for vif")
+    parser.add_argument("--cloud-init-image", action="store",
+                        help="Path to the optional cloud-init image that should be attached to the instance")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
     if not os.path.exists(cmdargs.image_file):
         raise Exception('Image file %s does not exist.' % cmdargs.image_file)
+    if cmdargs.cloud_init_image:
+        cmdargs.cloud_init_image = os.path.abspath(cmdargs.cloud_init_image)
+        if not os.path.exists(cmdargs.cloud_init_image):
+            raise Exception('Cloud-init image %s does not exist.' % cmdargs.cloud_init_image)
 
     if cmdargs.hypervisor == "auto":
         cmdargs.hypervisor = choose_hypervisor(cmdargs.networking)
