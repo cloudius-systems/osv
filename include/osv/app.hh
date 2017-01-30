@@ -10,8 +10,6 @@
 
 #include <functional>
 
-#ifdef _KERNEL
-
 #include <memory>
 #include <vector>
 #include <osv/sched.hh>
@@ -230,8 +228,6 @@ Execute f on all threads which belong to same app as t1 does.
 void with_all_app_threads(std::function<void(sched::thread &)> f, sched::thread& th1);
 
 }
-
-#endif /* _KERNEL */
 
 namespace osv {
 /**
