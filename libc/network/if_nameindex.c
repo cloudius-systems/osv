@@ -4,7 +4,8 @@
 #include <sys/socket.h>
 #include <sys/ioctl.h>
 #include <errno.h>
-#include "syscall.h"
+#include <unistd.h>
+#include <sys/syscall.h>
 
 #include <stdio.h>
 

@@ -34,7 +34,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
-#include <api/poll.h>
+#include <poll.h>
 
 #include <osv/mutex.h>
 #include <osv/uio.h>
