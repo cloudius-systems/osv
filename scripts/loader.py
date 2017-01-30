@@ -133,10 +133,10 @@ class Connect(gdb.Command):
                              gdb.COMMAND_NONE,
                              gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
-        port = 1234
+        host_port = 'localhost:1234'
         if arg:
-            port = int(arg.split()[0])
-        gdb.execute('target remote :%d' % port)
+            host_port = arg.split()[0]
+        gdb.execute('target remote %s' % host_port)
         global status_enum
         status_enum.running = gdb.parse_and_eval('sched::thread::status::running')
         status_enum.waiting = gdb.parse_and_eval('sched::thread::status::waiting')
