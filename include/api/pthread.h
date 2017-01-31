@@ -217,6 +217,7 @@ int pthread_attr_setaffinity_np(pthread_attr_t *, size_t, const cpu_set_t *);
 int pthread_attr_getaffinity_np(const pthread_attr_t *, size_t, cpu_set_t *);
 int pthread_setaffinity_np(pthread_t, size_t, const cpu_set_t *);
 int pthread_getaffinity_np(pthread_t, size_t, cpu_set_t *);
+pid_t pthread_gettid_np(pthread_t);
 #endif
 
 #ifdef __cplusplus
