@@ -419,6 +419,10 @@ std::string application::get_command()
     return _command;
 }
 
+pid_t application::get_main_thread_id() {
+    return pthread_gettid_np(_thread);
+}
+
 // For simplicity, we will not reuse bits in the bitmap, since no destructor is
 // assigned to the program. In that case, a simple counter would do. But coding
 // this way is easy, and make this future extension simple.

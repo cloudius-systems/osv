@@ -174,6 +174,11 @@ public:
      */
     std::string get_command();
 
+    /**
+      * Returns thread_id/PID of thread running app main() function.
+      */
+    pid_t get_main_thread_id();
+
     std::shared_ptr<application_runtime> runtime() const { return _runtime; }
     std::shared_ptr<elf::object> lib() const { return _lib; }
 
