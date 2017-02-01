@@ -1779,6 +1779,12 @@ void with_all_threads(std::function<void(thread &)> f) {
     }
 }
 
+void with_thread_by_id(unsigned id, std::function<void(thread *)> f) {
+    WITH_LOCK(thread_map_mutex) {
+        f(thread::find_by_id(id));
+    }
+}
+
 
 }
 
