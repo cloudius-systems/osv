@@ -11,6 +11,7 @@
 #include <boost/format.hpp>
 #include <osv/commands.hh>
 #include <osv/app.hh>
+#include <osv/sched.hh>
 
 namespace httpserver {
 
@@ -51,10 +52,27 @@ static std::string exec_app(const std::string& cmnd_line) {
 void init(routes& routes)
 {
     app_json_init_path("app API");
+
     run_app.set_handler([](const_req req) {
         string command = req.get_query_param("command");
         return exec_app(command);
     });
+
+    finished_app.set_handler([](const_req req) {
+        std::string tid_str = req.get_query_param("tid");
+        // TODO accept as input a space separated list too ?
+        pid_t tid = std::stol(tid_str);
+        // If the app did finish and was joined (or started detached), thread no longer exists.
+        // Or such thread never existed. In both cases, report thread as finished.
+        const char* th_finished = "1";
+        sched::with_thread_by_id(tid, [&](sched::thread *t) {
+            if (t && t->get_status() != sched::thread::status::terminated) {
+                th_finished = "0";
+            }
+        });
+        return th_finished;
+    });
+
 }
 }
 }

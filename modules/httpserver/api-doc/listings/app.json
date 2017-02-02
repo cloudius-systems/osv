@@ -34,5 +34,31 @@
                 }
             ]
         }
+        ,{
+            "path": "/app/finished",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Check if application terminated",
+                    "notes": "Check if application specified by thread ID tid finished. Invalid tid is reported as finished.",
+                    "type": "string",
+                    "nickname": "finished_app",
+                    "produces": [
+                        "application/json",
+                        "application/xml"
+                    ],
+                    "parameters": [
+                       {
+                                     "name": "tid",
+                                     "description": "application main thread ID",
+                                     "required": true,
+                                     "allowMultiple":false,
+                                     "type":"string",
+                                     "paramType":"query"
+                               }
+                    ]
+                }
+            ]
+        }
     ]
 }
