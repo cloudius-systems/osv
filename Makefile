@@ -1181,12 +1181,12 @@ musl += math/ldexpf.o
 musl += math/ldexpl.o
 musl += math/lgamma.o
 musl += math/lgamma_r.o
-$(out)/musl/src/math/lgamma_r.o: CFLAGS += -Wno-error=maybe-uninitialized
+$(out)/musl/src/math/lgamma_r.o: CFLAGS += -Wno-maybe-uninitialized
 musl += math/lgammaf.o
 musl += math/lgammaf_r.o
-$(out)/musl/src/math/lgammaf_r.o: CFLAGS += -Wno-error=maybe-uninitialized
+$(out)/musl/src/math/lgammaf_r.o: CFLAGS += -Wno-maybe-uninitialized
 musl += math/lgammal.o
-$(out)/musl/src/math/lgammal.o: CFLAGS += -Wno-error=maybe-uninitialized
+$(out)/musl/src/math/lgammal.o: CFLAGS += -Wno-maybe-uninitialized
 #musl += math/llrint.o
 #musl += math/llrintf.o
 #musl += math/llrintl.o
