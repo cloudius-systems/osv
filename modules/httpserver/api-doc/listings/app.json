@@ -14,7 +14,7 @@
                 {
                     "method": "PUT",
                     "summary": "Start an application",
-                    "notes": "Run an application with its command line parameters",
+                    "notes": "Run an application with its command line parameters. A space separated list of thread IDs is returned - one TID for each started application.",
                     "type": "string",
                     "nickname": "run_app",
                     "produces": [

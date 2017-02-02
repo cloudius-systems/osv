@@ -22,7 +22,7 @@ using namespace std;
 using namespace json;
 using namespace app_json;
 
-static void exec_app(const std::string& cmnd_line) {
+static std::string exec_app(const std::string& cmnd_line) {
     bool ok;
     auto new_commands = osv::parse_command_line(cmnd_line, ok);
     if (!ok) {
@@ -34,10 +34,18 @@ static void exec_app(const std::string& cmnd_line) {
             throw bad_param_exception("The use of ; is not allowed, use & for multiple commands");
         }
     }
+    std::string app_ids;
     for (auto cmnd: new_commands) {
         std::vector<std::string> c(cmnd.begin(), std::prev(cmnd.end()));
-        osv::run_background(c);
+        auto app = osv::application::run(c);
+        pid_t pid = app->get_main_thread_id();
+        assert(pid != 0);
+        app_ids += std::to_string(pid) + " ";
     }
+    if (app_ids.size()) {
+        app_ids.pop_back(); // remove trailing space
+    }
+    return app_ids;
 }
 
 void init(routes& routes)
@@ -45,8 +53,7 @@ void init(routes& routes)
     app_json_init_path("app API");
     run_app.set_handler([](const_req req) {
         string command = req.get_query_param("command");
-        exec_app(command);
-        return "";
+        return exec_app(command);
     });
 }
 }
