@@ -158,10 +158,12 @@ ok flag is set to false on parse error, and left unchanged otherwise.
 
 If cmd doesn't start with runscript, then vector with size 0 is returned.
 */
-std::vector<std::vector<std::string>> runscript_expand(const std::vector<std::string>& cmd, bool &ok)
+std::vector<std::vector<std::string>>
+runscript_expand(const std::vector<std::string>& cmd, bool &ok, bool &is_runscript)
 {
     std::vector<std::vector<std::string> > result2, result3;
     if (cmd[0] == "runscript") {
+        is_runscript = true;
         /*
         The cmd vector ends with additional ";" or "\0" element.
         */
@@ -173,6 +175,11 @@ std::vector<std::vector<std::string>> runscript_expand(const std::vector<std::st
         auto fn = cmd[1];
 
         std::ifstream in(fn);
+        if (!in.good()) {
+            printf("Failed to open runscript file '%s'.\n", fn.c_str());
+            ok = false;
+            return result2;
+        }
         std::string line;
         size_t line_num = 0;
         while (!in.eof()) {
@@ -192,6 +199,9 @@ std::vector<std::vector<std::string>> runscript_expand(const std::vector<std::st
             line_num++;
         }
     }
+    else {
+        is_runscript = false;
+    }
     return result2;
 }
 
@@ -207,13 +217,16 @@ parse_command_line(const std::string line,  bool &ok)
     */
     std::vector<std::vector<std::string>>::iterator cmd_iter;
     for (cmd_iter=result.begin(); ok && cmd_iter!=result.end(); ) {
-        result2 = runscript_expand(*cmd_iter, ok);
-        if (result2.size() > 0) {
+        bool is_runscript;
+        result2 = runscript_expand(*cmd_iter, ok, is_runscript);
+        if (is_runscript) {
             cmd_iter = result.erase(cmd_iter);
-            int pos;
-            pos = cmd_iter - result.begin();
-            result.insert(cmd_iter, result2.begin(), result2.end());
-            cmd_iter = result.begin() + pos + result2.size();
+            if (result2.size() > 0) {
+                int pos;
+                pos = cmd_iter - result.begin();
+                result.insert(cmd_iter, result2.begin(), result2.end());
+                cmd_iter = result.begin() + pos + result2.size();
+            }
         }
         else {
             cmd_iter++;
