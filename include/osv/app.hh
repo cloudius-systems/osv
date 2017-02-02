@@ -235,11 +235,6 @@ void with_all_app_threads(std::function<void(sched::thread &)> f, sched::thread&
 }
 
 namespace osv {
-/**
- * Creates a new app
- * args Arguments passed to the program's main() function.
- */
-void run_background(const std::vector<std::string>& args);
 
 namespace this_application {
 
