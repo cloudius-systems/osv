@@ -116,8 +116,50 @@ def symbol_formatter(src_addr):
 def syminfo(addr):
     return symbol_formatter(symbol_resolver(addr)[0])
 
+class Manifest(object):
+
+    def __init__(self):
+        # Load data from usr.manifest in build_dir
+        mm_path = os.path.join(build_dir, 'usr.manifest')
+        try:
+            self.data = open(mm_path).read().split('\n')
+        except IOError:
+            self.data = []
+
+    def find(self, path):
+        '''Try to locate file with help of usr.manifest'''
+        files = [ff.split(':', 1)[1].strip() for ff in self.data if ff.split(':', 1)[0].strip() == path]
+        if files:
+            file = files[-1]  # the last line in usr.manifest wins
+        else:
+            file = ""
+        file = self.resolve_symlink(file)
+        print('manifest.find_file: path=%s, found file=%s' % (path, file))
+        # usr.manifest contains lines like "%(gccbase)s/lib64/libgcc_s.so.1" too.
+        # Filter out such cases.
+        if os.path.exists(file):
+            return file
+        else:
+            return ""
+
+    def resolve_symlink(self, file):
+        '''If file is a symlink, try to resolve it with help of usr.manifest'''
+        resolved_file = file
+        if file.startswith('->'):
+            path = file[2:]
+            resolved_file = self.find(path)
+            # print('manifest.resolve_symlink: file=%s, resolved_file=%s' % (file, resolved_file))
+        return resolved_file
+
+manifest = Manifest()
+
 def translate(path):
     '''given a path, try to find it on the host OS'''
+    # First, try to locate file with help of usr.manifest
+    file = manifest.find(path)
+    if file:
+        return file
+    # Next, search for file in configured directories
     name = os.path.basename(path)
     for top in [build_dir, external, modules, apps_dir, '/zfs']:
         for root, dirs, files in os.walk(top):
