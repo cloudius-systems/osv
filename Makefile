@@ -1131,7 +1131,7 @@ musl += math/exp10l.o
 musl += math/exp2.o
 musl += math/exp2f.o
 musl += math/exp2l.o
-$(out)/musl/src/math/exp2l.o: CFLAGS += -Wno-error=unused-variable
+$(out)/musl/src/math/exp2l.o: CFLAGS += -Wno-unused-variable
 musl += math/expf.o
 musl += math/expl.o
 musl += math/expm1.o
