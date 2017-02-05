@@ -1606,6 +1606,7 @@ musl += temp/__randname.o
 musl += temp/mkdtemp.o
 musl += temp/mkstemp.o
 musl += temp/mktemp.o
+musl += temp/mkostemp.o
 musl += temp/mkostemps.o
 
 libc += time/__asctime.o
