@@ -5,8 +5,8 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include "xen.hh"
-#include "xen_intr.hh"
+#include <osv/xen.hh>
+#include <osv/xen_intr.hh>
 #include <bsd/porting/bus.h>
 #include <machine/intr_machdep.h>
 #include "bitops.h"
@@ -21,8 +21,22 @@ TRACEPOINT(trace_xen_irq_ret, "");
 TRACEPOINT(trace_xen_irq_exec, "");
 TRACEPOINT(trace_xen_irq_exec_ret, "");
 
+/*FIXME: use xen/evtchn.h when aarch64 supprted */
+#if defined(__x86_64__)
 void unmask_evtchn(int vector);
 int evtchn_from_irq(int irq);
+#else
+void unmask_evtchn(int port)
+{
+}
+
+int evtchn_from_irq(int irq)
+{
+    abort("Not implemented yet");
+    return 0; /* keep compiler happy */
+}
+
+#endif
 
 namespace xen {
 
@@ -120,6 +134,13 @@ static xen_irq *xen_irq_handlers;
 void xen_handle_irq()
 {
     xen_irq_handlers->wake();
+}
+
+bool xen_ack_irq()
+{
+    auto cpu = sched::cpu::current();
+    HYPERVISOR_shared_info->vcpu_info[cpu->id].evtchn_upcall_pending = 0;
+    return true;
 }
 
 static __attribute__((constructor)) void setup_xen_irq()

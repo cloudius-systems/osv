@@ -872,11 +872,11 @@ objects += arch/x64/ioapic.o
 objects += arch/x64/apic.o
 objects += arch/x64/apic-clock.o
 objects += arch/x64/entry-xen.o
-objects += arch/x64/xen_intr.o
 objects += core/sampler.o
 objects += $(acpi)
 endif # x64
 
+objects += core/xen_intr.o
 objects += core/math.o
 objects += core/spinlock.o
 objects += core/lfmutex.o

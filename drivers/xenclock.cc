@@ -14,7 +14,7 @@
 #include "string.h"
 #include "cpuid.hh"
 #include <osv/barrier.hh>
-#include "xen.hh"
+#include <osv/xen.hh>
 #include <osv/debug.hh>
 #include <osv/prio.hh>
 #include <osv/migration-lock.hh>

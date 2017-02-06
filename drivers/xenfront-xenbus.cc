@@ -6,13 +6,14 @@
  */
 
 #include "msr.hh"
+#include "xen.hh"
 #include <osv/types.h>
 #include <osv/mmu.hh>
 #include "string.h"
 #include "cpuid.hh"
 #include <osv/barrier.hh>
 #include <osv/debug.hh>
-#include "xen.hh"
+#include <osv/xen.hh>
 #include "processor.hh"
 #include "xenfront.hh"
 #include "xenfront-xenbus.hh"

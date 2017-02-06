@@ -19,7 +19,7 @@ extern "C" {
 #include <osv/shutdown.hh>
 #include "processor.hh"
 #include <osv/align.hh>
-#include "xen.hh"
+#include <osv/xen.hh>
 
 #include <osv/debug.h>
 #include <osv/mutex.h>
