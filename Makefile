@@ -1691,6 +1691,8 @@ musl += fenv/fegetexceptflag.o
 musl += fenv/feholdexcept.o
 musl += fenv/fesetexceptflag.o
 musl += fenv/$(musl_arch)/fenv.o
+else
+musl += fenv/fenv.o
 endif
 
 musl += crypt/crypt_blowfish.o
