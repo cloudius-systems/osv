@@ -595,11 +595,11 @@ bsd += bsd/sys/netinet/arpcache.o
 bsd += bsd/sys/xdr/xdr.o
 bsd += bsd/sys/xdr/xdr_array.o
 bsd += bsd/sys/xdr/xdr_mem.o
+bsd += bsd/sys/xen/evtchn.o
 
 ifeq ($(arch),x64)
 $(out)/bsd/%.o: COMMON += -DXEN -DXENHVM
 bsd += bsd/sys/xen/gnttab.o
-bsd += bsd/sys/xen/evtchn.o
 bsd += bsd/sys/xen/xenstore/xenstore.o
 bsd += bsd/sys/xen/xenbus/xenbus.o
 bsd += bsd/sys/xen/xenbus/xenbusb.o
