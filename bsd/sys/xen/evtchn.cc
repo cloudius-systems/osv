@@ -52,14 +52,6 @@ __FBSDID("$FreeBSD$");
 // We don't expose an evtchn device.
 #define evtchn_device_upcall(x) do {} while (0)
 
-static inline unsigned int __ffs(unsigned int word)
-{
-        __asm__("bsfl %1,%0"
-                :"=r" (word)
-                :"rm" (word));
-        return word;
-}
-
 /*
  * irq_mapping_update_lock: in order to allow an interrupt to occur in a critical
  *	section, to set pcpu->ipending (etc...) properly, we
