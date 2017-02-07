@@ -163,7 +163,13 @@ do {                                                                    \
  */
 typedef struct { volatile int counter; } atomic_t;
 
-
+static inline unsigned int __ffs(unsigned int word)
+{
+        __asm__("bsfl %1,%0"
+                :"=r" (word)
+                :"rm" (word));
+        return word;
+}
 
 #define xen_xchg(ptr,v) \
         ((__typeof__(*(ptr)))__xchg((unsigned long)(v),(ptr),sizeof(*(ptr))))

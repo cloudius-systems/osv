@@ -8,6 +8,7 @@
 #include "xen.hh"
 #include <osv/debug.hh>
 #include <osv/mmu.hh>
+#include <osv/xen.hh>
 #include "processor.hh"
 #include "cpuid.hh"
 #include "exceptions.hh"
@@ -113,13 +114,6 @@ static bool xen_pci_enabled()
 void evtchn_irq_is_legacy(void);
 
 namespace xen {
-
-static bool xen_ack_irq()
-{
-    auto cpu = sched::cpu::current();
-    HYPERVISOR_shared_info->vcpu_info[cpu->id].evtchn_upcall_pending = 0; 
-    return true;
-}
 
 // For HVMOP_set_param the param vector is comprised of
 // the vector number in the low part, and then:

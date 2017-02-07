@@ -7,7 +7,7 @@
 
 #include "apic.hh"
 #include "msr.hh"
-#include "xen.hh"
+#include <osv/xen.hh>
 #include <osv/percpu.hh>
 #include <cpuid.hh>
 #include <processor.hh>

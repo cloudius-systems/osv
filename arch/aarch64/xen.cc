@@ -6,16 +6,17 @@
  */
 
 #include <osv/types.h>
+#include <osv/xen.hh>
 #include <xen/interface/xen.h>
 
 #include "arch-dtb.hh"
-#include "xen.hh"
 
 shared_info_t *HYPERVISOR_shared_info;
 
 namespace xen {
 
 shared_info_t dummy_info;
+struct xen_shared_info xen_shared_info __attribute__((aligned(4096)));
 
 }
 

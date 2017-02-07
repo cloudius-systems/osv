@@ -5,12 +5,13 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#ifndef XEN_HH
-#define XEN_HH
-#include <xen/interface/xen.h>
+#ifndef XEN_ARCH_HH
+#define XEN_ARCH_HH
 
-extern "C" shared_info_t *HYPERVISOR_shared_info;
+namespace xen {
 
-#define is_xen() (HYPERVISOR_shared_info != nullptr)
+}
 
-#endif /* XEN_HH */
+#endif /* XEN_ARCH_HH */
+
+

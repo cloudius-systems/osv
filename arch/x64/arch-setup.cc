@@ -13,7 +13,7 @@
 #include "processor.hh"
 #include "processor-flags.h"
 #include "msr.hh"
-#include "xen.hh"
+#include <osv/xen.hh>
 #include <osv/elf.hh>
 #include <osv/types.h>
 #include <alloca.h>
