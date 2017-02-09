@@ -465,7 +465,7 @@ void* do_main_thread(void *_main_args)
     // Run command lines in /init/* before the manual command line
     if (opt_init) {
         std::vector<std::vector<std::string>> init_commands;
-        struct dirent **namelist;
+        struct dirent **namelist = nullptr;
         int count = scandir("/init", &namelist, NULL, alphasort);
         for (int i = 0; i < count; i++) {
             if (!strcmp(".", namelist[i]->d_name) ||
