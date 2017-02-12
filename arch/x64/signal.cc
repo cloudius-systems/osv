@@ -26,8 +26,24 @@ void build_signal_frame(exception_frame* ef,
                         const siginfo_t& si,
                         const struct sigaction& sa)
 {
-    void* rsp = reinterpret_cast<void*>(ef->rsp);
-    rsp -= 128;                 // skip red zone
+    // If an alternative signal stack was defined for this thread with
+    // sigaltstack() and the SA_ONSTACK flag was specified, we should run
+    // the signal handler on that stack. Otherwise, we need to run further
+    // down the same stack the thread was using when it received the signal:
+    void *rsp = nullptr;
+    if (sa.sa_flags & SA_ONSTACK) {
+        stack_t sigstack;
+        sigaltstack(nullptr, &sigstack);
+        if (!(sigstack.ss_flags & SS_DISABLE)) {
+            // ss_sp points to the beginning of the stack region, but x86
+            // stacks grow downward, from the end of the region
+            rsp = sigstack.ss_sp + sigstack.ss_size;
+        }
+    }
+    if (!rsp) {
+        rsp = reinterpret_cast<void*>(ef->rsp);
+        rsp -= 128;                 // skip red zone
+    }
     rsp -= sizeof(signal_frame);
     // the Linux x86_64 calling conventions want 16-byte aligned rsp.
     // signal_frame may want even stricter alignment (but probably won't).

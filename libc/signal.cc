@@ -584,9 +584,48 @@ extern "C" int getitimer(int which, struct itimerval *curr_value)
     }
 }
 
+// A per-thread stack set with sigaltstack() to be used by
+// build_signal_frame() when handling synchronous signals, most
+// importantly SIGSEGV (asynchronous signals run in a new thread in OSv,
+// so this alternative stack is irrelevant).  signal_stack_begin is the
+// beginning of stack region, and signal_stack_size is the size of this
+// region (we need to know both when stacks grow down).
+// The stack region is not guaranteed to be specially aligned, so when
+// build_signal_frame() uses it it might need to further snipped this region.
+// If signal_stack == nullptr, there is no alternative signal stack for
+// this thread.
+static __thread void* signal_stack_begin;
+static __thread size_t signal_stack_size;
+
 int sigaltstack(const stack_t *ss, stack_t *oss)
 {
-    WARN_STUBBED();
+    if (oss) {
+        if (signal_stack_begin) {
+            // FIXME: we are supposed to set SS_ONSTACK if a signal
+            // handler is currently running on this stack.
+            oss->ss_flags = 0;
+            oss->ss_sp = signal_stack_begin;
+            oss->ss_size = signal_stack_size;
+        } else {
+            oss->ss_flags = SS_DISABLE;
+        }
+    }
+    if (ss == nullptr) {
+        // sigaltstack may be used with ss==nullptr for querying the
+        // current state without changing it.
+        return 0;
+    }
+    // FIXME: we're are supposed to check if a signal handler is currently
+    // running on this stack, and if it is forbid changing it (EPERM).
+    if (ss->ss_flags & SS_DISABLE) {
+        signal_stack_begin = nullptr;
+    } else if (ss->ss_flags != 0) {
+        errno = EINVAL;
+        return -1;
+    } else {
+        signal_stack_begin = ss->ss_sp;
+        signal_stack_size = ss->ss_size;
+    }
     return 0;
 }
 
