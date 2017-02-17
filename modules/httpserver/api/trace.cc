@@ -46,18 +46,6 @@ void httpserver::api::trace::init(routes & routes)
         }
     };
 
-    struct str2bool {
-        str2bool(std::string s)
-        {
-            std::transform(s.begin(), s.end(), s.begin(), ::tolower);
-            value = s == "true" || s == "1";
-        }
-        operator bool() const {
-            return value;
-        }
-        bool value;
-    };
-
     trace_json_init_path("Trace API");
 
     trace_json::getTraceEventStatus.set_handler([](const_req req) {

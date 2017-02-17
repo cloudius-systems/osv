@@ -6,6 +6,9 @@
  */
 #include "common.hh"
 
+#include "request.hh"
+#include "exception.hh"
+
 namespace httpserver {
 
 operation_type str2type(const std::string& type)
@@ -23,6 +26,23 @@ operation_type str2type(const std::string& type)
         return OPTIONS;
     }
     return GET;
+}
+
+namespace api {
+
+bool str2bool(std::string val)
+{
+    std::transform(val.begin(), val.end(), val.begin(), ::tolower);
+    if (val == "" || val == "false" || val == "0") {
+        return false;
+    }
+    if (val == "true" || val == "1") {
+        return true;
+    }
+    throw bad_param_exception(std::string("Invalid value ") + val + " use true/false or 0/1");
+    return true;
+}
+
 }
 
 }

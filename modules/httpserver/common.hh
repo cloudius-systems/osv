@@ -26,6 +26,17 @@ enum operation_type {
  */
 operation_type str2type(const std::string& type);
 
+namespace api {
+
+/**
+ * Convert string to bool value. If input is invalid, exception is raised.
+ * @param val  string "true" or "1" -> true, "false", "0" or "" -> false.
+ * @return the boolean value
+ */
+bool str2bool(std::string val);
+
+}
+
 }
 
 #endif /* COMMON_HH_ */

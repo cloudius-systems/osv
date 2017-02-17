@@ -37,19 +37,6 @@ using namespace json;
 using namespace std;
 using namespace file_json;
 
-static bool is_true(const http::server::request& req, const string& param)
-{
-    string val = req.get_query_param(param);
-    std::transform(val.begin(), val.end(), val.begin(), ::tolower);
-    if (val == "" || val == "false") {
-        return false;
-    }
-    if (val != "true") {
-        throw bad_param_exception(string("Invalid value ") + val + " use true/false");
-    }
-    return true;
-}
-
 /**
  * A helper function to set the op and path param
  * It validate that both exists and if not, throw an exception
@@ -343,7 +330,7 @@ class del_file_handler : public handler_base {
             get_stat(full_path, buffer);
             try {
                 if ((buffer.st_mode & S_IFMT) == S_IFDIR
-                        && is_true(req, "recursive")) {
+                        && str2bool(req.get_query_param("recursive"))) {
                     boost::filesystem::remove_all(full_path);
                 } else {
                     boost::filesystem::remove(full_path);
