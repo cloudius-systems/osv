@@ -23,7 +23,7 @@ using namespace std;
 using namespace json;
 using namespace app_json;
 
-static std::string exec_app(const std::string& cmnd_line) {
+static std::string exec_app(const std::string& cmnd_line, bool new_program) {
     bool ok;
     auto new_commands = osv::parse_command_line(cmnd_line, ok);
     if (!ok) {
@@ -38,7 +38,7 @@ static std::string exec_app(const std::string& cmnd_line) {
     std::string app_ids;
     for (auto cmnd: new_commands) {
         std::vector<std::string> c(cmnd.begin(), std::prev(cmnd.end()));
-        auto app = osv::application::run(c);
+        auto app = osv::application::run(c[0], c, new_program);
         pid_t pid = app->get_main_thread_id();
         assert(pid != 0);
         app_ids += std::to_string(pid) + " ";
@@ -55,7 +55,8 @@ void init(routes& routes)
 
     run_app.set_handler([](const_req req) {
         string command = req.get_query_param("command");
-        return exec_app(command);
+        bool new_program = str2bool(req.get_query_param("new_program"));
+        return exec_app(command, new_program);
     });
 
     finished_app.set_handler([](const_req req) {

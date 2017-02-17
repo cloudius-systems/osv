@@ -22,19 +22,27 @@
                         "application/xml"
                     ],
                     "parameters": [
-                       {
-                                     "name": "command",
-                                     "description": "command with its parameters",
-                                     "required": true,
-                                     "allowMultiple":false,
-                                     "type":"string",
-                                     "paramType":"query"
-                               }
+                        {
+                            "name": "command",
+                            "description": "command with its parameters",
+                            "required": true,
+                            "allowMultiple":false,
+                            "type":"string",
+                            "paramType":"query"
+                        },
+                        {
+                            "name":"new_program",
+                            "description":"Should be application started in new ELF namespace, to have separate copies of libraries (global data variables)",
+                            "required":false,
+                            "allowMultiple":false,
+                            "type":"boolean",
+                            "paramType":"query"
+                       }
                     ]
                 }
             ]
-        }
-        ,{
+        },
+        {
             "path": "/app/finished",
             "operations": [
                 {
@@ -48,14 +56,14 @@
                         "application/xml"
                     ],
                     "parameters": [
-                       {
-                                     "name": "tid",
-                                     "description": "application main thread ID",
-                                     "required": true,
-                                     "allowMultiple":false,
-                                     "type":"string",
-                                     "paramType":"query"
-                               }
+                        {
+                            "name": "tid",
+                            "description": "application main thread ID",
+                            "required": true,
+                            "allowMultiple":false,
+                            "type":"string",
+                            "paramType":"query"
+                       }
                     ]
                 }
             ]
