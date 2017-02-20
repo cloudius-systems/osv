@@ -96,7 +96,7 @@ void xen_irq::do_irq()
                 void *arg = xen_allocated_irqs[port].arg;
                 xen_shared_info.evtchn_pending[l1i].fetch_and(~(1ULL << l2i));
                 xen_allocated_irqs[port].handler(arg);
-                unmask_evtchn(port);
+                xen_shared_info.evtchn_mask[l1i].fetch_and(~(1ULL << l2i));
             }
         }
         trace_xen_irq_exec_ret();
