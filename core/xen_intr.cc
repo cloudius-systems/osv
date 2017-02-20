@@ -9,7 +9,7 @@
 #include <osv/xen_intr.hh>
 #include <bsd/porting/bus.h>
 #include <machine/intr_machdep.h>
-#include "bitops.h"
+#include <osv/bitops.h>
 #include <osv/debug.hh>
 
 #include <osv/trace.hh>
