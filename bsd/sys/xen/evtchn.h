@@ -26,13 +26,6 @@
  */
 void notify_remote_via_irq(int irq);
 
-
-/* Entry point for notifications into Linux subsystems. */
-void evtchn_do_upcall(struct trapframe *frame);
-
-/* Entry point for notifications into the userland character device. */
-void evtchn_device_upcall(int port);
-
 void mask_evtchn(int port);
 
 void unmask_evtchn(int port);

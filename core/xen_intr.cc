@@ -169,14 +169,6 @@ intr_register_source(struct intsrc *isrc)
 {
     return 0;
 }
-
-void
-intr_execute_handlers(struct intsrc *isrc, struct trapframe *frame)
-{
-    // Make sure we are never called by the BSD code
-    abort();
-}
-
 struct intsrc *
 intr_lookup_source(int vector)
 {
