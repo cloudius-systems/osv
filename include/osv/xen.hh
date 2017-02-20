@@ -30,13 +30,12 @@ struct xen_vcpu_info {
     uint8_t evtchn_upcall_pending;
     uint8_t evtchn_upcall_mask;
     std::atomic<uint64_t> evtchn_pending_sel;
-    uint64_t cr2;
-    uint64_t pad;
+    arch_vcpu_info_t arch;
     pvclock_vcpu_time_info time;
 };
 
 struct xen_shared_info {
-    struct xen_vcpu_info vcpu_info[32];
+    struct xen_vcpu_info vcpu_info[MAX_VIRT_CPUS];
 
     std::atomic<unsigned long> evtchn_pending[sizeof(unsigned long) * 8];
     std::atomic<unsigned long> evtchn_mask[sizeof(unsigned long) * 8];

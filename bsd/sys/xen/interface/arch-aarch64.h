@@ -37,6 +37,7 @@ typedef uint64_t xen_ulong_t;
 #define PRI_xen_ulong "llx"
 
 struct arch_vcpu_info {
+    int empty[0];	/* force zero size */
 };
 typedef struct arch_vcpu_info arch_vcpu_info_t;
 
