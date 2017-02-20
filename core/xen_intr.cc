@@ -8,7 +8,10 @@
 #include <osv/xen.hh>
 #include <osv/xen_intr.hh>
 #include <bsd/porting/bus.h>
+#include <bsd/porting/netport.h>
 #include <machine/intr_machdep.h>
+#include <machine/xen/xen-os.h>
+#include <xen/evtchn.h>
 #include <osv/bitops.h>
 #include <osv/debug.hh>
 
@@ -20,23 +23,6 @@ TRACEPOINT(trace_xen_irq_ret, "");
 // this measures time spent processing an interrupt
 TRACEPOINT(trace_xen_irq_exec, "");
 TRACEPOINT(trace_xen_irq_exec_ret, "");
-
-/*FIXME: use xen/evtchn.h when aarch64 supprted */
-#if defined(__x86_64__)
-void unmask_evtchn(int vector);
-int evtchn_from_irq(int irq);
-#else
-void unmask_evtchn(int port)
-{
-}
-
-int evtchn_from_irq(int irq)
-{
-    abort("Not implemented yet");
-    return 0; /* keep compiler happy */
-}
-
-#endif
 
 namespace xen {
 
