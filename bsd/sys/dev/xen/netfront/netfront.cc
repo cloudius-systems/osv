@@ -82,7 +82,6 @@ __FBSDID("$FreeBSD$");
 #include <machine/intr_machdep.h>
 
 #include <machine/xen/xen-os.h>
-#include <machine/xen/xenfunc.h>
 #include <machine/xen/xenvar.h>
 #include <xen/hypervisor.h>
 #include <xen/xen_intr.h>
