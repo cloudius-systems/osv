@@ -81,6 +81,7 @@ static int server(void)
      */
     printf("server: sleep for 5 seconds..\n");
     sleep(5);
+    close(listenfd);
     return 0;
 }
 
