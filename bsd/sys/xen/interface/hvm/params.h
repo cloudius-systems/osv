@@ -56,6 +56,9 @@
 #define HVM_PARAM_BUFPIOREQ_PFN	9
 #endif
 
+#define HVM_PARAM_CONSOLE_PFN    17
+#define HVM_PARAM_CONSOLE_EVTCHN 18
+
 /*
  * Set mode for virtual timers (currently x86 only):
  *  delay_for_missed_ticks (default):
