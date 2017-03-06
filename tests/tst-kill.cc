@@ -49,7 +49,7 @@ int main(int ac, char** av)
     report(r == 0, "kill with signal 0 succeeds (and does nothing)");
     r = kill(-1, 0);
     report(r == 0, "kill of pid -1 is also fine");
-    r = kill(17, 0);
+    r = kill(17171717, 0);
     report(r == -1 && errno == ESRCH, "kill of non-existant process");
     r = kill(0, -2);
     report(r == -1 && errno == EINVAL, "kill with invalid signal number");
