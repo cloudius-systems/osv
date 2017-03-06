@@ -77,7 +77,14 @@ class Fedora(object):
         ec2_post_install = None
         version = '24'
 
-    versions = [Fedora_19, Fedora_20, Fedora_21, Fedora_22, Fedora_23, Fedora_24]
+    class Fedora_25(object):
+        packages = ['java-1.8.0-openjdk', 'python2-requests']
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '25'
+
+    versions = [Fedora_19, Fedora_20, Fedora_21, Fedora_22, Fedora_23, Fedora_24, Fedora_25]
 
 class RHELbased(Fedora):
     name = ['Scientific Linux', 'NauLinux', 'CentOS Linux',
@@ -218,7 +225,7 @@ for distro in distros:
                     if dver.ec2_post_install:
                         subprocess.check_call(dver.ec2_post_install, shell=True)
                 sys.exit(0)
-        print 'Your distribution version is not supported by this script'
+        print ('Your distribution %s version %s is not supported by this script' % (name, version))
         sys.exit(1)
 
 print 'Your distribution is not supported by this script.'
