@@ -130,6 +130,7 @@ int main(int ac, char** av)
     r = sigaction(SIGUSR1, nullptr, &oldact);
     report(r == 0 && oldact.sa_handler == handler1, "without SA_RESETHAND, signal handler is not reset");
     act.sa_flags = SA_RESETHAND;
+    global = 0;
     r = sigaction(SIGUSR1, &act, nullptr);
     report(r == 0, "set SIGUSR1 handler with SA_RESETHAND");
     r = kill(0, SIGUSR1);
