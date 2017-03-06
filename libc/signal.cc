@@ -353,10 +353,6 @@ int kill(pid_t pid, int sig)
                 // FIXME: proper second (siginfo) and third (context) arguments (See example in call_signal_handler)
                 sa.sa_sigaction(sig, nullptr, nullptr);
             } else {
-                if (sa.sa_flags & SA_RESETHAND) {
-                    signal_actions[sig].sa_flags = 0;
-                    signal_actions[sig].sa_handler = SIG_DFL;
-                }
                 sa.sa_handler(sig);
             }
         }, sched::thread::attr().detached().stack(65536).name("signal_handler"));
