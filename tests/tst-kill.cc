@@ -10,8 +10,9 @@
 #include <sys/types.h>
 #include <signal.h>
 #include <sys/socket.h>
-
-#include <osv/debug.hh>
+#include <stdio.h>
+#include <unistd.h>
+#include <errno.h>
 
 int tests = 0, fails = 0;
 
@@ -19,13 +20,13 @@ static void report(bool ok, const char* msg)
 {
     ++tests;
     fails += !ok;
-    debug("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
+    printf("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
 }
 
 int global = 0;
 
 void handler1(int sig) {
-    debug("handler1 called, sig=%d\n", sig);
+    printf("handler1 called, sig=%d, global=%d\n", sig, global);
     global = 1;
 }
 
@@ -144,12 +145,14 @@ int main(int ac, char** av)
     report(r == 0 && oldact.sa_handler == SIG_DFL, "with SA_RESETHAND, signal handler is reset");
 
 
-    debug("SUMMARY: %d tests, %d failures\n", tests, fails);
+    printf("SUMMARY: %d tests, %d failures\n", tests, fails);
 
     // At this point, handler1 might still be running, and if we return this
     // module, including handler1, might be unmapped. So sleep to make sure
     // that handler1 is done.
     sleep(1);
+
+    return fails == 0 ? 0 : 1;
 }
 
 
