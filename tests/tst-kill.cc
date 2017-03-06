@@ -78,8 +78,16 @@ int main(int ac, char** av)
     report(global == 0, "1 more second after cancelling alarm - still global==0");
 
     //Test that SIG_ALRM interrupts system calls
-    sr = signal(SIGALRM, handler1);
-    report(sr != SIG_ERR, "set SIGALRM handler");
+    // TODO: a previous version of this test used signal(), but on Linux
+    // signal() restarts system calls, so this test would fail, so we need
+    // to use sigaction() here. We should add a test verifying that on OSv
+    // signal() also doesn't interrupt networking system calls (however,
+    // currently such a test would fail).
+    //sr = signal(SIGALRM, handler1);
+    struct sigaction a = {};
+    a.sa_handler = handler1;
+    r = sigaction(SIGALRM, &a, nullptr);
+    report(r == 0, "set SIGALRM handler");
 
     auto s = socket(AF_INET,SOCK_DGRAM,0);
     char buf[10];
