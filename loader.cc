@@ -447,7 +447,7 @@ void* do_main_thread(void *_main_args)
         bool append = (opt_redirect.substr(0, 2) == ">>");
         auto fn = opt_redirect.substr(append ? 2 : 0);
         int fd = open(fn.c_str(),
-                O_WRONLY | O_CREAT | (append ? 0 : O_TRUNC), 777);
+                O_WRONLY | O_CREAT | (append ? O_APPEND: O_TRUNC), 777);
         if (fd < 0) {
             perror("output redirection failed");
         } else {
