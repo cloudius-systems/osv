@@ -4,6 +4,33 @@
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
  */
+
+// Console line discipline thread.
+//
+// The "line discipline" is an intermediate layer between a byte-
+// oriented console driver (e.g., a serial port) and the Unix tty device
+// implementing features such as input echo, line editing, etc. In OSv, this
+// is implemented in a thread (see read_poll()), which is also responsible
+// for read-ahead (input characters are read, echoed and buffered even if
+// no-one is yet reading).
+//
+// The code below implements a fixed line discipline (actually two - canonical
+// and non-canonical). We resisted the temptation to make the line discipline
+// a stand-alone pluggable object: In the early 1980s, 8th Edition Research
+// Unix experimented with pluggable line disciplines, providing improved
+// editing features such as CRT erase (backspace outputs backspace-space-
+// backspace), word erase, etc. These pluggable line-disciplines led to the
+// development of Unix "STREAMS". However, today, these concepts are all but
+// considered obsolete: In the mid 80s it was realized that these editing
+// features can better be implemented in userspace code - Contemporary shells
+// introduced sophisticated command-line editing (tcsh and ksh were both
+// announced in 1983), and the line-editing libraries appeared (GNU Readline,
+// in 1989). Posix's standardization of termios(3) also more-or-less set in
+// stone the features that Posix-compliant line discipline should support.
+//
+// We currently support only a subset of the termios(3) features, which we
+// considered most useful. More of the features can be added as needed.
+
 #include "line-discipline.hh"
 #include <osv/sched.hh>
 #include <osv/poll.h>
@@ -38,31 +65,6 @@ void LineDiscipline::read(struct uio *uio, int ioflag) {
         }
     }
 }
-
-// Console line discipline thread.
-//
-// The "line discipline" is an intermediate layer between a physical device
-// (here a serial port) and a character-device interface (here console_read())
-// implementing features such as input echo, line editing, etc. In OSv, this
-// is implemented in a thread, which is also responsible for read-ahead (input
-// characters are read, echoed and buffered even if no-one is yet reading).
-//
-// The code below implements a fixed line discipline (actually two - canonical
-// and non-canonical). We resisted the temptation to make the line discipline
-// a stand-alone pluggable object: In the early 1980s, 8th Edition Research
-// Unix experimented with pluggable line disciplines, providing improved
-// editing features such as CRT erase (backspace outputs backspace-space-
-// backspace), word erase, etc. These pluggable line-disciplines led to the
-// development of Unix "STREAMS". However, today, these concepts are all but
-// considered obsolete: In the mid 80s it was realized that these editing
-// features can better be implemented in userspace code - Contemporary shells
-// introduced sophisticated command-line editing (tcsh and ksh were both
-// announced in 1983), and the line-editing libraries appeared (GNU Readline,
-// in 1989). Posix's standardization of termios(3) also more-or-less set in
-// stone the features that Posix-compliant line discipline should support.
-//
-// We currently support only a subset of the termios(3) features, which we
-// considered most useful. More of the features can be added as needed.
 
 static inline bool isctrl(char c) {
     return ((c<' ' && c!='\t' && c!='\n') || c=='\177');
