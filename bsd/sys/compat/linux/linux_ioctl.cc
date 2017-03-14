@@ -143,26 +143,27 @@ linux_ifconf(struct bsd_ifconf *ifc_p)
     return (0);
 }
 
+// While many of the traditional bits returned by SIOCGIFFLAGS are the same
+// on BSD and Linux, some of the newer ones have different location, or
+// different meaning for the same bit location. So we need to convert the
+// BSD bits which we store internally to the Linux bits applications expect
+// us to return.
 static void
 linux_gifflags(struct ifnet *ifp, struct l_ifreq *ifr)
 {
     l_short flags;
 
+    // This assignment drops all the flags beyond the 16th bit.
+    // None of them have a Linux equivalent.
     flags = (ifp->if_flags | ifp->if_drv_flags);
-    /* These flags have no Linux equivalent
-     *
-     *  Notes:
-     *       - We do show IFF_SMART|IFF_DRV_OACTIVE|IFF_SIMPLEX
-     *       - IFF_LINK0 has a value of 0x1000 which conflics with the Linux
-     *         IFF_MULTICAST value.
-     */
-    flags &= ~(IFF_LINK0|IFF_LINK1|IFF_LINK2);
+    // These flags have no Linux equivalent:
+    flags &= ~(IFF_SMART|IFF_DRV_OACTIVE|IFF_SIMPLEX|IFF_LINK0|IFF_LINK1|IFF_LINK2);
     /* Linux' multicast flag is in a different bit */
     if (flags & IFF_MULTICAST) {
         flags &= ~IFF_MULTICAST;
         flags |= 0x1000;
     }
-    ifr->ifr_flags = flags ;
+    ifr->ifr_flags = flags;
 }
 
 #define ARPHRD_ETHER	1
