@@ -180,10 +180,16 @@ class Connect(gdb.Command):
             host_port = arg.split()[0]
         gdb.execute('target remote %s' % host_port)
         global status_enum
-        status_enum.running = gdb.parse_and_eval('sched::thread::status::running')
-        status_enum.waiting = gdb.parse_and_eval('sched::thread::status::waiting')
-        status_enum.queued = gdb.parse_and_eval('sched::thread::status::queued')
-        status_enum.waking = gdb.parse_and_eval('sched::thread::status::waking')
+        try:
+            status_enum.running = gdb.parse_and_eval('sched::thread::status::running')
+            status_enum.waiting = gdb.parse_and_eval('sched::thread::status::waiting')
+            status_enum.queued = gdb.parse_and_eval('sched::thread::status::queued')
+            status_enum.waking = gdb.parse_and_eval('sched::thread::status::waking')
+        except:
+            status_enum.running = gdb.parse_and_eval('sched::thread::running')
+            status_enum.waiting = gdb.parse_and_eval('sched::thread::waiting')
+            status_enum.queued = gdb.parse_and_eval('sched::thread::queued')
+            status_enum.waking = gdb.parse_and_eval('sched::thread::waking')
 
 
 Connect()
