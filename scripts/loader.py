@@ -287,7 +287,10 @@ def vma_list(node=None):
         node = intrusive_set_root_node(fpr)
 
     if node:
-        offset = gdb.parse_and_eval("(int)&(('mmu::vma'*)0)->_vma_list_hook")
+        try:
+            offset = gdb.parse_and_eval("(int)&(('mmu::vma'*)0)->_vma_list_hook")
+        except:
+            offset = gdb.parse_and_eval("(int)&((mmu::vma*)0)->_vma_list_hook")
         vma = node.cast(gdb.lookup_type('void').pointer()) - offset
         vma = vma.cast(gdb.lookup_type('mmu::vma').pointer())
 
