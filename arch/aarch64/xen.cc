@@ -8,6 +8,9 @@
 #include <osv/types.h>
 #include <osv/xen.hh>
 #include <xen/interface/xen.h>
+#include <bsd/porting/netport.h> /* __dead2 defined here */
+#include <machine/xen/xen-os.h>
+#include <xen/evtchn.h>
 
 #include "arch-dtb.hh"
 
@@ -17,6 +20,20 @@ namespace xen {
 
 shared_info_t dummy_info;
 struct xen_shared_info xen_shared_info __attribute__((aligned(4096)));
+constexpr int events_irq = 31; /*FIXME: get from FDT */
+
+void irq_init()
+{
+    if (!is_xen())
+        return;
+
+    evtchn_init(NULL);
+
+    auto intr = new spi_interrupt(gic::irq_type::IRQ_TYPE_LEVEL, events_irq,
+                                  xen::xen_ack_irq,
+                                  xen::xen_handle_irq);
+    irq_setup(intr);
+}
 
 }
 

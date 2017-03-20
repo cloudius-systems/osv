@@ -14,7 +14,7 @@ namespace xen {
 
 class xen_irq {
 public:
-    explicit xen_irq();
+    explicit xen_irq(interrupt *intr);
     void wake() { (*_thread)->wake(); }
     static void register_irq(int vector, driver_intr_t handler, void *arg);
     static void unregister_irq(int vector);
@@ -23,6 +23,8 @@ private:
     void cpu_init() { _cpu_init(sched::cpu::current()); };
     sched::cpu::notifier _cpu_notifier;
     void _cpu_init(sched::cpu *c);
+
+    std::unique_ptr<interrupt> _intr;
 
     static percpu <sched::thread *> _thread;
 };

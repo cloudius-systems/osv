@@ -32,6 +32,8 @@ void unmask_evtchn(int port);
 
 int evtchn_from_irq(int irq);
 
+void evtchn_init(void *arg);
+
 #ifdef SMP
 void rebind_evtchn_to_cpu(int port, unsigned int cpu);
 #else

@@ -26,7 +26,6 @@
 int xs_attach(struct device *);
 
 int xenpci_irq_init(device_t device, struct xenpci_softc *scp);
-void evtchn_init(void *arg);
 
 int xenbusb_front_probe(device_t dev);
 int xenbusb_front_attach(device_t dev);
@@ -64,13 +63,7 @@ xenbus::xenbus(pci::device& pci_dev)
     _dev.set_bus_master(true);
     _driver_name = std::string("xenfront-xenbus");
 
-    // From here on, all the OSV details are sorted, and we start the Xen
-    // bringup
-    evtchn_init(NULL);
-
-    if (processor::features().xen_vector_callback) {
-        xen::xen_set_callback();
-    } else {
+    if (!processor::features().xen_vector_callback) {
         _pgsi.reset(xen::xen_set_callback(irqno));
     }
 

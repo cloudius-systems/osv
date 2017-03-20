@@ -44,6 +44,7 @@
 #include <osv/sampler.hh>
 #include <osv/app.hh>
 #include <osv/firmware.hh>
+#include <osv/xen.hh>
 #include <dirent.h>
 #include <iostream>
 #include <fstream>
@@ -542,6 +543,7 @@ void main_cont(int ac, char** av)
 
     setenv("OSV_VERSION", osv::version().c_str(), 1);
 
+    xen::irq_init();
     smp_launch();
     setenv("OSV_CPUS", std::to_string(sched::cpus.size()).c_str(), 1);
     boot_time.event("SMP launched");

@@ -16,6 +16,7 @@
 #include <xen/interface/version.h>
 #include <xen/interface/hvm/hvm_op.h>
 #include <osv/alternative.hh>
+#include <osv/interrupt.hh>
 
 extern char hypercall_page[];
 extern uint8_t xen_features[];
@@ -53,7 +54,8 @@ extern struct xen_shared_info xen_shared_info;
 void xen_set_callback();
 void xen_handle_irq();
 bool xen_ack_irq();
-
+void irq_setup(interrupt *intr);
+void irq_init();
 }
 
 

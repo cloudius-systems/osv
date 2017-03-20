@@ -16,6 +16,7 @@
 #include <osv/sched.hh>
 #include <bsd/porting/pcpu.h>
 #include <machine/xen/xen-os.h>
+#include <xen/evtchn.h>
 
 shared_info_t *HYPERVISOR_shared_info;
 uint8_t xen_features[XENFEAT_NR_SUBMAPS * 32];
@@ -199,6 +200,20 @@ void xen_init(processor::features_type &features, unsigned base)
 
         features.xen_pci = xen_pci_enabled();
         HYPERVISOR_shared_info = reinterpret_cast<shared_info_t *>(&xen_shared_info);
+}
+
+void irq_init()
+{
+    if (!is_xen())
+        return;
+
+    evtchn_init(NULL);
+
+    /* if vector callback not supported, platform PCI driver will handle that */
+    if (processor::features().xen_vector_callback)
+        xen::xen_set_callback();
+
+    irq_setup(NULL);
 }
 
 extern "C"
