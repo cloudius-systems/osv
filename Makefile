@@ -818,6 +818,7 @@ drivers += drivers/ahci.o
 drivers += drivers/ide.o
 drivers += drivers/scsi-common.o
 drivers += drivers/vmw-pvscsi.o
+drivers += drivers/xenplatform-pci.o
 endif # x64
 
 ifeq ($(arch),aarch64)

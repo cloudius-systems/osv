@@ -18,8 +18,6 @@
 #include <bsd/porting/bus.h>
 #include <xen/interface/io/xenbus.h>
 
-#define XEN_VENDOR_ID 0x5853
-
 struct xenbus_device_ivars;
 
 template <typename T>

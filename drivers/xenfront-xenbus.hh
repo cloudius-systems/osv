@@ -9,22 +9,18 @@
 #define XENFRONT_BUS_DRIVER_H
 
 #include "drivers/xenfront.hh"
-#include "drivers/pci-device.hh"
+#include "drivers/device.hh"
 #include <osv/device.h>
 #include <bsd/porting/bus.h>
 
 namespace xenfront {
-
     class xenbus : public hw_driver {
     public:
 
-        explicit xenbus(pci::device& dev);
+        explicit xenbus();
         static hw_driver* probe(hw_device* dev);
-        pci::device& pci_device() { return _dev; }
 
-        bool parse_pci_config();
-        void dump_config();
-
+        virtual void dump_config();
         virtual std::string get_name() const { return _driver_name; }
         const std::string &get_node_path() { return _node_path; }
 
@@ -40,8 +36,6 @@ namespace xenfront {
     private:
         static struct xenbus *_instance;
         void wait_for_devices();
-        pci::device& _dev;
-        std::unique_ptr<gsi_level_interrupt> _pgsi;
         struct device _xenstore_device;
 
         std::vector<xenfront_driver *> _children;
