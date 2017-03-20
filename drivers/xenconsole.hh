@@ -9,13 +9,14 @@
 #define XEN_CONSOLE_HH
 
 #include "console-driver.hh"
-#include "exceptions.hh"
-#include <osv/interrupt.hh>
+#include <xen/interface/xen.h>
+#include <xen/interface/grant_table.h>
 
 namespace console {
 
 class XEN_Console : public console_driver {
 public:
+    XEN_Console();
     virtual void write(const char *str, size_t len);
     virtual void flush();
     virtual bool input_ready();
@@ -24,6 +25,15 @@ public:
 private:
     virtual void dev_start();
     virtual const char *thread_name() { return "xen-input"; }
+    void handle_intr();
+    static void console_intr(void *arg) {
+        static_cast<XEN_Console*>(arg)->handle_intr();
+    }
+
+    struct xencons_interface *_interface;
+    int _evtchn;
+    unsigned int _irq;
+    unsigned long _pfn;
 };
 
 }
