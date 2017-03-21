@@ -8,7 +8,11 @@
 #ifndef XEN_ARCH_HH
 #define XEN_ARCH_HH
 
+#include "cpuid.hh"
+
 namespace xen {
+
+void get_features(processor::features_type &features);
 
 }
 

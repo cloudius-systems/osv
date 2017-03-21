@@ -7,6 +7,7 @@
 
 #include "cpuid.hh"
 #include "processor.hh"
+#include "xen.hh"
 
 namespace processor {
 
@@ -74,6 +75,23 @@ const std::string& features_str()
     cpuid_str += "a64";
 
     return cpuid_str;
+}
+
+void process_cpuid(features_type& features)
+{
+    xen::get_features(features);
+}
+
+const features_type& features()
+{
+    // features() can be used very early, make sure it is initialized
+    static features_type f;
+    return f;
+}
+
+features_type::features_type()
+{
+    process_cpuid(*this);
 }
 
 }
