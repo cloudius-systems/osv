@@ -12,6 +12,7 @@
 #include <bsd/porting/netport.h> /* __dead2 defined here */
 #include <machine/xen/xen-os.h>
 #include <xen/evtchn.h>
+#include <machine/xen/hypercall.h>
 
 #include "arch-dtb.hh"
 #include "cpuid.hh"
@@ -21,8 +22,7 @@ uint8_t xen_features[XENFEAT_NR_SUBMAPS * 32];
 
 namespace xen {
 
-shared_info_t dummy_info;
-struct xen_shared_info xen_shared_info __attribute__((aligned(4096)));
+struct xen_shared_info xen_shared_info __attribute__((aligned(PAGE_SIZE)));
 constexpr int events_irq = 31; /*FIXME: get from FDT */
 
 /*TODO: this can be common x64/aarch64 code */
@@ -50,6 +50,21 @@ void get_features(processor::features_type &features)
         evtchn_irq_is_legacy();
 }
 
+void setup()
+{
+   struct xen_add_to_physmap map = {
+        .domid = DOMID_SELF,
+        .space = XENMAPSPACE_shared_info,
+        .idx = 0,
+        .gpfn = reinterpret_cast<xen_pfn_t>(&xen_shared_info) >> PAGE_SHIFT,
+    };
+
+    if (HYPERVISOR_memory_op(XENMEM_add_to_physmap, &map))
+        assert(0);
+
+    HYPERVISOR_shared_info = reinterpret_cast<shared_info_t *>(&xen_shared_info);
+}
+
 void irq_init()
 {
     if (!is_xen())
@@ -70,11 +85,8 @@ extern "C" {
 void init_xen()
 {
     HYPERVISOR_shared_info = nullptr;
-    if (dtb_get_vmm_is_xen()) {
-        /* set valid pointer just to know we're under Xen.
-         * Real shared page will be set up later, when page allocator works.
-        */
-        HYPERVISOR_shared_info = &xen::dummy_info;
-    }
+    if (dtb_get_vmm_is_xen())
+        xen::setup();
 }
+
 }
