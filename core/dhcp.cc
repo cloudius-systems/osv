@@ -81,11 +81,26 @@ namespace dhcp {
 
     const char * dhcp_options_magic = "\x63\x82\x53\x63";
 
+    static std::map<dhcp_message_type,const char*> dhcp_message_type_name_by_id = {
+        {DHCP_MT_DISCOVER, "DHCPDISCOVER"},
+        {DHCP_MT_OFFER, "DHCPOFFER"},
+        {DHCP_MT_REQUEST, "DHCPREQUEST"},
+        {DHCP_MT_DECLINE, "DHCPDECLINE"},
+        {DHCP_MT_ACK, "DHCPACK"},
+        {DHCP_MT_NAK, "DHCPNAK"},
+        {DHCP_MT_RELEASE, "DHCPRELEASE"},
+        {DHCP_MT_INFORM, "DHCPINFORM"},
+        {DHCP_MT_LEASEQUERY, "DHCPLEASEQUERY"},
+        {DHCP_MT_LEASEUNASSIGNED, "DHCPLEASEUNASSIGNED"},
+        {DHCP_MT_LEASEUNKNOWN, "DHCPLEASEUNKNOWN"},
+        {DHCP_MT_LEASEACTIVE, "DHCPLEASEACTIVE"},
+        {DHCP_MT_INVALID, "DHCPINVALID"}
+    };
+
     ///////////////////////////////////////////////////////////////////////////
 
     bool dhcp_socket::dhcp_send(dhcp_mbuf& packet)
     {
-
         struct bsd_sockaddr dst = {};
         struct mbuf *m = packet.get();
 
@@ -205,7 +220,8 @@ namespace dhcp {
     void dhcp_mbuf::compose_request(struct ifnet* ifp,
                                     u32 xid,
                                     ip::address_v4 yip,
-                                    ip::address_v4 sip)
+                                    ip::address_v4 sip,
+                                    dhcp_request_packet_type request_packet_type)
     {
         size_t dhcp_len = sizeof(struct dhcp_packet);
         struct dhcp_packet* pkt = pdhcp();
@@ -222,7 +238,11 @@ namespace dhcp {
         memcpy(pkt->chaddr, IF_LLADDR(ifp), ETHER_ADDR_LEN);
         ulong yip_n = htonl(yip.to_ulong());
         ulong sip_n = htonl(sip.to_ulong());
-        memcpy(&pkt->ciaddr.s_addr, &yip_n, 4);
+        if(request_packet_type == DHCP_REQUEST_RENEWING || request_packet_type == DHCP_REQUEST_REBINDING) {
+            // ciaddr should only be set to if RENEWING or REBINDING
+            // See pages 21 and 30-31 in https://www.ietf.org/rfc/rfc2131.txt
+            memcpy(&pkt->ciaddr.s_addr, &yip_n, 4);
+        }
 
         // Options
         u8* options_start = reinterpret_cast<u8*>(pkt+1);
@@ -244,7 +264,14 @@ namespace dhcp {
         *options++ = DHCP_OPTION_END;
 
         dhcp_len += options - options_start;
-        build_udp_ip_headers(dhcp_len, yip_n, sip_n);
+
+        // See page 33 in https://www.ietf.org/rfc/rfc2131.txt
+        if(request_packet_type == DHCP_REQUEST_RENEWING) {
+            build_udp_ip_headers(dhcp_len, yip_n, sip_n);
+        }
+        else {
+            build_udp_ip_headers(dhcp_len, INADDR_ANY, INADDR_BROADCAST);
+        }
     }
 
     void dhcp_mbuf::compose_release(struct ifnet* ifp,
@@ -420,6 +447,9 @@ namespace dhcp {
             options += op_len;
         }
 
+        dhcp_i( "Received %s message from DHCP server: %s regarding offerred IP address: %s",
+                dhcp_message_type_name_by_id[_message_type], _dhcp_server_ip.to_string().c_str(),
+                _your_ip.to_string().c_str());
         return true;
     }
 
@@ -519,6 +549,7 @@ namespace dhcp {
         // Save transaction id & send
         _xid = dm.get_xid();
         _client_addr = _server_addr = ipv4_zero;
+        dhcp_i( "Broadcasting DHCPDISCOVER message with xid: [%d]",_xid);
         _sock->dhcp_send(dm);
     }
 
@@ -533,6 +564,8 @@ namespace dhcp {
 
         // Save transaction id & send
         _xid = dm.get_xid();
+        dhcp_i( "Unicasting DHCPRELEASE message with xid: [%d] from client: %s to server: %s",
+                _xid, _client_addr.to_string().c_str(), _server_addr.to_string().c_str());
         _sock->dhcp_send(dm);
         // IP and routes have to be removed
         osv::stop_if(_ifp->if_xname, _client_addr.to_string().c_str());
@@ -553,9 +586,13 @@ namespace dhcp {
         _xid = rand();
         dm.compose_request(_ifp,
                            _xid,
-                           _client_addr, _server_addr);
+                           _client_addr,
+                           _server_addr,
+                           dhcp_mbuf::DHCP_REQUEST_RENEWING);
 
         // Send
+        dhcp_i( "Unicasting DHCPREQUEST message with xid: [%d] from client: %s to server: %s in order to RENEW lease of: %s",
+                _xid, _client_addr.to_string().c_str(), _server_addr.to_string().c_str(), _client_addr.to_string().c_str());
         _sock->dhcp_send(dm);
     }
 
@@ -600,14 +637,18 @@ namespace dhcp {
         dm_req.compose_request(_ifp,
                                _xid,
                                dm.get_your_ip(),
-                               dm.get_dhcp_server_ip());
+                               dm.get_dhcp_server_ip(),
+                               dhcp_mbuf::DHCP_REQUEST_SELECTING);
+        dhcp_i( "Broadcasting DHCPREQUEST message with xid: [%d] to SELECT offered IP: %s",
+                _xid, dm.get_your_ip().to_string().c_str());
         _sock->dhcp_send(dm_req);
     }
 
     void dhcp_interface_state::state_request(dhcp_mbuf &dm)
     {
         if (dm.get_message_type() == DHCP_MT_ACK) {
-            dhcp_i("Server acknowledged IP for interface %s", _ifp->if_xname);
+            dhcp_i("Server acknowledged IP %s for interface %s with time to lease in seconds: %d",
+                   dm.get_your_ip().to_string().c_str(), _ifp->if_xname, dm.get_lease_time_sec());
             _state = DHCP_ACKNOWLEDGE;
             _client_addr = dm.get_your_ip();
             _server_addr = dm.get_dhcp_server_ip();

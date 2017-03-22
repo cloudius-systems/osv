@@ -117,6 +117,13 @@ namespace dhcp {
             DHCP_REPLY = 2,
         };
 
+        enum dhcp_request_packet_type {
+            DHCP_REQUEST_INIT_REBOOT = 1,
+            DHCP_REQUEST_SELECTING = 2,
+            DHCP_REQUEST_RENEWING = 3,
+            DHCP_REQUEST_REBINDING = 4,
+        };
+
         dhcp_mbuf(bool attached = true, struct mbuf* m = nullptr);
         ~dhcp_mbuf();
 
@@ -129,7 +136,8 @@ namespace dhcp {
         void compose_request(struct ifnet* ifp,
                              u32 xid,
                              boost::asio::ip::address_v4 yip,
-                             boost::asio::ip::address_v4 sip);
+                             boost::asio::ip::address_v4 sip,
+                             dhcp_request_packet_type request_packet_type);
         void compose_release(struct ifnet* ifp,
                              boost::asio::ip::address_v4 yip,
                              boost::asio::ip::address_v4 sip);
