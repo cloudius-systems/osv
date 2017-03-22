@@ -253,12 +253,16 @@ namespace dhcp {
         ip::address_v4::bytes_type dhcp_server_ip = sip.to_bytes();
         ip::address_v4::bytes_type requested_ip = yip.to_bytes();
         options = add_option(options, DHCP_OPTION_MESSAGE_TYPE, 1, DHCP_MT_REQUEST);
-        options = add_option(options, DHCP_OPTION_DHCP_SERVER, 4, (u8*)&dhcp_server_ip);
+        if(request_packet_type == DHCP_REQUEST_SELECTING) {
+            options = add_option(options, DHCP_OPTION_DHCP_SERVER, 4, (u8*)&dhcp_server_ip);
+        }
         char hostname[256];
         if (0 == gethostname(hostname, sizeof(hostname))) {
             options = add_option(options, DHCP_OPTION_HOSTNAME, strlen(hostname), (u8*)hostname);
         }
-        options = add_option(options, DHCP_OPTION_REQUESTED_ADDRESS, 4, (u8*)&requested_ip);
+        if(request_packet_type == DHCP_REQUEST_SELECTING) {
+            options = add_option(options, DHCP_OPTION_REQUESTED_ADDRESS, 4, (u8*)&requested_ip);
+        }
         options = add_option(options, DHCP_OPTION_PARAMETER_REQUEST_LIST,
             sizeof(requested_options), requested_options);
         *options++ = DHCP_OPTION_END;
