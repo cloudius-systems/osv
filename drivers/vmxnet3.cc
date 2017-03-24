@@ -420,16 +420,16 @@ void vmxnet3::fill_driver_shared()
 
 hw_driver* vmxnet3::probe(hw_device* dev)
 {
-    if (opt_maxnic) {
-        if (maxnic-- <= 0)
-            return nullptr;
-    }
     try {
         if (auto pci_dev = dynamic_cast<pci::device*>(dev)) {
             pci_dev->dump_config();
             if (pci_dev->get_id() ==
                 hw_device_id(pciconf::vendor_id, pciconf::device_id)) {
-                return new vmxnet3(*pci_dev);
+                if (opt_maxnic && maxnic-- <= 0) {
+                    return nullptr;
+                } else {
+                    return new vmxnet3(*pci_dev);
+                }
             }
         }
     } catch (std::exception& e) {
