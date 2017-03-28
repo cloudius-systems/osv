@@ -1284,6 +1284,20 @@ musl += math/trunc.o
 musl += math/truncf.o
 musl += math/truncl.o
 
+# Issue #867: Gcc 4.8.4 has a bug where it optimizes the trivial round-
+# related functions incorrectly - it appears to convert calls to any
+# function called round() to calls to a function called lround() -
+# and similarly for roundf() and roundl().
+# None of the specific "-fno-*" options disable this buggy optimization,
+# unfortunately. The simplest workaround is to just disable optimization
+# for the affected files.
+$(out)/musl/src/math/lround.o: conf-opt := $(conf-opt) -O0
+$(out)/musl/src/math/lroundf.o: conf-opt := $(conf-opt) -O0
+$(out)/musl/src/math/lroundl.o: conf-opt := $(conf-opt) -O0
+$(out)/musl/src/math/llround.o: conf-opt := $(conf-opt) -O0
+$(out)/musl/src/math/llroundf.o: conf-opt := $(conf-opt) -O0
+$(out)/musl/src/math/llroundl.o: conf-opt := $(conf-opt) -O0
+
 musl += misc/a64l.o
 libc += misc/basename.o
 musl += misc/dirname.o
