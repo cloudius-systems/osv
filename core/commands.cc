@@ -92,6 +92,32 @@ parse_command_line_min(const std::string line, bool &ok)
 }
 
 /*
+Everything after first $ is assumed to be env var.
+So with AA=aa, "$AA" -> "aa", and "X$AA" => "Xaa"
+More than one $ is not supported, and "${AA}" is also not.
+*/
+void expand_environ_vars(std::vector<std::vector<std::string>>& result)
+{
+    std::vector<std::vector<std::string>>::iterator cmd_iter;
+    std::vector<std::string>::iterator line_iter;
+    for (cmd_iter=result.begin(); cmd_iter!=result.end(); cmd_iter++) {
+        for (line_iter=cmd_iter->begin(); line_iter!=cmd_iter->end(); line_iter++) {
+            size_t pos;
+            if ((pos = line_iter->find_first_of('$')) != std::string::npos) {
+                std::string new_word = line_iter->substr(0, pos);
+                std::string key = line_iter->substr(pos+1);
+                auto tmp = getenv(key.c_str());
+                //debug("    new_word=%s, key=%s, tmp=%s\n", new_word.c_str(), key.c_str(), tmp);
+                if (tmp) {
+                    new_word += tmp;
+                }
+                *line_iter = new_word;
+            }
+        }
+    }
+}
+
+/*
 In each runscript line, first N args starting with - are options.
 Parse options and remove them from result.
 
@@ -193,6 +219,9 @@ runscript_expand(const std::vector<std::string>& cmd, bool &ok, bool &is_runscri
                 ok = false;
                 return result2;
             }
+            // Replace env vars found inside script.
+            // Options, script command and script command parameters can be set via env vars.
+            expand_environ_vars(result3);
             // process and remove options from command
             runscript_process_options(result3);
             result2.insert(result2.end(), result3.begin(), result3.end());
@@ -210,6 +239,8 @@ parse_command_line(const std::string line,  bool &ok)
 {
     std::vector<std::vector<std::string> > result, result2;
     result = parse_command_line_min(line, ok);
+    // First replace environ variables in input command line.
+    expand_environ_vars(result);
 
     /*
     If command starts with runscript, we need to read actual command to
