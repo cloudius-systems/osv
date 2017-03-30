@@ -221,7 +221,8 @@ namespace dhcp {
                                     u32 xid,
                                     ip::address_v4 yip,
                                     ip::address_v4 sip,
-                                    dhcp_request_packet_type request_packet_type)
+                                    dhcp_request_packet_type request_packet_type,
+                                    std::string hostname)
     {
         size_t dhcp_len = sizeof(struct dhcp_packet);
         struct dhcp_packet* pkt = pdhcp();
@@ -256,10 +257,10 @@ namespace dhcp {
         if(request_packet_type == DHCP_REQUEST_SELECTING) {
             options = add_option(options, DHCP_OPTION_DHCP_SERVER, 4, (u8*)&dhcp_server_ip);
         }
-        char hostname[256];
-        if (0 == gethostname(hostname, sizeof(hostname))) {
-            options = add_option(options, DHCP_OPTION_HOSTNAME, strlen(hostname), (u8*)hostname);
+        if (hostname.length() > 0) {
+            options = add_option(options, DHCP_OPTION_HOSTNAME, hostname.length(), (u8*)(hostname.c_str()));
         }
+
         if(request_packet_type == DHCP_REQUEST_SELECTING) {
             options = add_option(options, DHCP_OPTION_REQUESTED_ADDRESS, 4, (u8*)&requested_ip);
         }
@@ -588,11 +589,17 @@ namespace dhcp {
         // Compose a dhcp request packet
         dhcp_mbuf dm(false);
         _xid = rand();
+        std::string hostname_str("");
+        char hostname[256];
+        if (0 == gethostname(hostname, sizeof(hostname))) {
+            hostname_str.assign(hostname);
+        }
         dm.compose_request(_ifp,
                            _xid,
                            _client_addr,
                            _server_addr,
-                           dhcp_mbuf::DHCP_REQUEST_RENEWING);
+                           dhcp_mbuf::DHCP_REQUEST_RENEWING,
+                           hostname_str);
 
         // Send
         dhcp_i( "Unicasting DHCPREQUEST message with xid: [%d] from client: %s to server: %s in order to RENEW lease of: %s",
@@ -638,11 +645,23 @@ namespace dhcp {
         // Send a DHCP Request
         _state = DHCP_REQUEST;
         dhcp_mbuf dm_req(false);
+        std::string hostname_str("");
+        if(dm.get_hostname().length() > 0) {
+            // Get from the offer message
+            hostname_str = dm.get_hostname();
+        }
+        else {
+            char hostname[256];
+            if (0 == gethostname(hostname, sizeof(hostname))) {
+                hostname_str = hostname;
+            }
+        }
         dm_req.compose_request(_ifp,
                                _xid,
                                dm.get_your_ip(),
                                dm.get_dhcp_server_ip(),
-                               dhcp_mbuf::DHCP_REQUEST_SELECTING);
+                               dhcp_mbuf::DHCP_REQUEST_SELECTING,
+                               hostname_str);
         dhcp_i( "Broadcasting DHCPREQUEST message with xid: [%d] to SELECT offered IP: %s",
                 _xid, dm.get_your_ip().to_string().c_str());
         _sock->dhcp_send(dm_req);
@@ -702,7 +721,8 @@ namespace dhcp {
 
             osv::set_dns_config(dm.get_dns_ips(), std::vector<std::string>());
             if (dm.get_hostname().size()) {
-	        sethostname(dm.get_hostname().c_str(), dm.get_hostname().size());
+	            sethostname(dm.get_hostname().c_str(), dm.get_hostname().size());
+                dhcp_i("Set hostname to: %s", dm.get_hostname().c_str());
             }
             // TODO: setup lease
         } else if (dm.get_message_type() == DHCP_MT_NAK) {

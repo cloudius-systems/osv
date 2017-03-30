@@ -137,7 +137,8 @@ namespace dhcp {
                              u32 xid,
                              boost::asio::ip::address_v4 yip,
                              boost::asio::ip::address_v4 sip,
-                             dhcp_request_packet_type request_packet_type);
+                             dhcp_request_packet_type request_packet_type,
+                             std::string hostname);
         void compose_release(struct ifnet* ifp,
                              boost::asio::ip::address_v4 yip,
                              boost::asio::ip::address_v4 sip);
