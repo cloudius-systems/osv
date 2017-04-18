@@ -21,7 +21,7 @@ public:
     virtual s64 boot_time() override __attribute__((no_instrument_function));
 private:
     std::atomic<bool> _smp_init;
-    std::once_flag _boot_systemtime_init_flag;
+    std::atomic<int> _boot_systemtime_init_counter;
     s64 _boot_systemtime;
     sched::cpu::notifier cpu_notifier;
     void setup_cpu();

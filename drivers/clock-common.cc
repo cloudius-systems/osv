@@ -9,6 +9,7 @@
 
 pv_based_clock::pv_based_clock()
     : _smp_init(false)
+    , _boot_systemtime_init_counter(sched::cpus.size())
     , cpu_notifier([&] { setup_cpu(); })
 {
 }
@@ -17,10 +18,15 @@ void pv_based_clock::setup_cpu()
 {
     init_on_cpu();
 
-    std::call_once(_boot_systemtime_init_flag, [&] {
+    // We need to do the following once, after all CPUs ran their
+    // init_init_on_cpu(), so any CPU calling uptime() will see not only
+    // _boot_systemtime set, but also a functional system_time(). Until
+    // all CPUs are set up, all of the will see zero uptime().
+    if (_boot_systemtime_init_counter.fetch_sub(1, std::memory_order_relaxed)
+            == 1) {
         _boot_systemtime = system_time();
         _smp_init.store(true, std::memory_order_release);
-    });
+    }
 }
 
 s64 pv_based_clock::time()
