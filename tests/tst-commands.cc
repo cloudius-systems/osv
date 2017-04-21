@@ -10,6 +10,7 @@
 
 #include <osv/commands.hh>
 #include <fstream>
+#include <map>
 
 static int tests = 0, fails = 0;
 
@@ -760,6 +761,120 @@ static bool test_runscript_with_env_in_script()
     return true;
 }
 
+static bool test_runscript_with_conditional_env_in_script(bool set_env_vars_before_evaluation)
+{
+    std::ofstream of1("/myscript", std::ios::out | std::ios::binary);
+    of1 << "--env=ASDF?=ttrt --env=PORT?=$THEPORT /$THEPROG pp1a $PRM1b pp1c $PRM1d\n";
+    of1.close();
+
+    std::vector<std::vector<std::string> > result;
+    std::vector<std::string> cmd = { "/prog1" };
+    std::map<std::string, std::string> expected_vars;
+    size_t expected_size[] = {6};
+    bool ok;
+
+    // those two are set during command parsing
+    if (NULL != getenv("ASDF")) {
+        return false;
+    }
+    if (NULL != getenv("PORT")) {
+        return false;
+    }
+    // those are required during command parsing
+    if (0 != setenv("THEPORT", "4321", 1)) {
+        return false;
+    }
+    if (0 != setenv("THEPROG", "prog1", 1)) {
+        return false;
+    }
+    if (0 != setenv("PRM1b", "pp1b", 1)) {
+        return false;
+    }
+    if (0 != setenv("PRM1d", "pp1d", 1)) {
+        return false;
+    }
+    // run test with conditional variables set or clear
+    if (set_env_vars_before_evaluation) {
+        expected_vars["ASDF"] = "asdf-old";
+        expected_vars["PORT"] = "port-old";
+        if (0 != setenv("ASDF", expected_vars["ASDF"].c_str(), 1)) {
+            return false;
+        }
+        if (0 != setenv("PORT", expected_vars["PORT"].c_str(), 1)) {
+            return false;
+        }
+    }
+    else {
+        expected_vars["ASDF"] = "ttrt";
+        expected_vars["PORT"] = "4321";
+    }
+
+    result = osv::parse_command_line(
+        std::string("runscript \"/myscript\";  "),
+        ok);
+
+    if (!ok) {
+        return false;
+    }
+
+    if (result.size() != 1) {
+        return false;
+    }
+
+    for (size_t i = 0; i < result.size(); i++) {
+        if (result[i].size() != expected_size[i]) {
+            return false;
+        }
+        if (result[i][0] != cmd[i]) {
+            return false;
+        }
+    }
+
+    if (result[0][1] != std::string("pp1a")) {
+        return false;
+    }
+    if (result[0][2] != std::string("pp1b")) {
+        return false;
+    }
+    if (result[0][3] != std::string("pp1c")) {
+        return false;
+    }
+    if (result[0][4] != std::string("pp1d")) {
+        return false;
+    }
+
+    // environ variable with ? in name should not be created
+    if (nullptr != getenv("ASDF?")) {
+        return false;
+    }
+    if (nullptr != getenv("PORT?")) {
+        return false;
+    }
+    // std::string(NULL) is undefined behavior, hence check getenv returns a valid string.
+    if (nullptr == getenv("ASDF")) {
+        return false;
+    }
+    if (nullptr == getenv("PORT")) {
+        return false;
+    }
+
+    if (expected_vars["ASDF"] != getenv("ASDF")) {
+        return false;
+    }
+    if (expected_vars["PORT"] != getenv("PORT")) {
+        return false;
+    }
+
+    unsetenv("ASDF");
+    unsetenv("PORT");
+    unsetenv("THEPORT");
+    unsetenv("THEPROG");
+    unsetenv("PRM1b");
+    unsetenv("PRM1d ");
+
+    return true;
+}
+
 int main(int argc, char *argv[])
 {
     report(test_parse_simplest(), "simplest command line");
@@ -790,6 +905,12 @@ int main(int argc, char *argv[])
            "runscript with --env");
     report(test_runscript_with_env_in_script(),
            "runscript with --env in script");
+    report(test_runscript_with_conditional_env_in_script(false),
+           "runscript with --env in script, makefile conditional syntax"
+           ", values unset before runscript");
+    report(test_runscript_with_conditional_env_in_script(true),
+           "runscript with --env in script, makefile conditional syntax"
+           ", values set before runscript");
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);
     return 0;
 }

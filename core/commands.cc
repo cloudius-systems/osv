@@ -166,8 +166,22 @@ static void runscript_process_options(std::vector<std::vector<std::string> >& re
 
         if (vars.count("env")) {
             for (auto t : vars["env"].as<std::vector<std::string>>()) {
-                debug("Setting in environment: %s\n", t);
-                putenv(strdup(t.c_str()));
+                size_t pos = t.find("?=");
+                if (std::string::npos == pos) {
+                    // the basic "KEY=value" syntax
+                    debug("Setting in environment: %s\n", t);
+                    putenv(strdup(t.c_str()));
+                }
+                else {
+                    // "KEY?=value", makefile-like syntax, set variable only if not yet set
+                    auto key = t.substr(0, pos);
+                    auto value = t.substr(pos+2);
+                    if (nullptr == getenv(key.c_str())) {
+                        debug("Setting in environment: %s=%s\n", key, value);
+                        setenv(key.c_str(), value.c_str(), 1);
+                    }
+                }
+
             }
         }
 
