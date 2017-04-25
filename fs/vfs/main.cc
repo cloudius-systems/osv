@@ -2100,11 +2100,21 @@ int chroot(const char *path)
     return -1;
 }
 
-#define BOOTFS_PATH_MAX 112
-
+// unpack_bootfs() unpacks a collection of files stored as part of the OSv
+// executable (in memory location "bootfs_start") into the file system,
+// normally the in-memory filesystem ramfs.
+// The files are packed in the executable in an ad-hoc format defined here.
+// Code in scripts/mkbootfs.py packs files into this format.
+#define BOOTFS_PATH_MAX 111
+enum class bootfs_file_type : char { other = 0, symlink = 1 };
 struct bootfs_metadata {
     uint64_t size;
     uint64_t offset;
+    // The file's type. Can be "symlink" or "other". A directory is an "other"
+    // file with its name ending with a "/" (and no content).
+    bootfs_file_type type;
+    // name must end with a null. For symlink files, the content must end
+    // with a null as well.
     char name[BOOTFS_PATH_MAX];
 };
 
@@ -2130,6 +2140,15 @@ void unpack_bootfs(void)
             }
         }
 
+        if (md[i].type == bootfs_file_type::symlink) {
+            // This is a symbolic link record. The file's content is the
+            // target path, and we assume ends with a null.
+            if (symlink(&bootfs_start + md[i].offset, md[i].name) != 0) {
+                kprintf("couldn't symlink %s: %d\n", md[i].name, errno);
+                sys_panic("unpack_bootfs failed");
+            }
+            continue;
+        }
         if (*(p-1) == '/' && md[i].size == 0) {
             // This is directory record. Nothing else to do
             continue;
@@ -2206,6 +2225,9 @@ static void import_extra_zfs_pools(void)
 
     // Import extra pools mounting datasets there contained.
     // Datasets from osv pool will not be mounted here.
+    if (access("zpool.so", X_OK) != 0) {
+        return;
+    }
     vector<string> zpool_args = {"zpool", "import", "-f", "-a" };
     auto ok = osv::run("zpool.so", zpool_args, &ret);
     assert(ok);

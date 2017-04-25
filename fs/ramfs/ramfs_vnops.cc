@@ -224,6 +224,42 @@ ramfs_mkdir(struct vnode *dvp, char *name, mode_t mode)
 	return 0;
 }
 
+static int
+ramfs_symlink(struct vnode *dvp, char *name, char *link)
+{
+	auto np = ramfs_add_node((ramfs_node*)dvp->v_data, name, VLNK);
+	if (np == NULL)
+		return ENOMEM;
+	// Save the link target without the final null, as readlink() wants it.
+	size_t len = strlen(link);
+	np->rn_buf = strndup(link, len);
+	np->rn_bufsize = np->rn_size = len;
+	return 0;
+}
+
+static int
+ramfs_readlink(struct vnode *vp, struct uio *uio) {
+	struct ramfs_node *np = (ramfs_node*)vp->v_data;
+	size_t len;
+
+	if (vp->v_type != VLNK) {
+		return EINVAL;
+	}
+	if (uio->uio_offset < 0) {
+		return EINVAL;
+	}
+	if (uio->uio_resid == 0) {
+		return 0;
+	}
+	if (uio->uio_offset >= (off_t)vp->v_size)
+		return 0;
+	if (vp->v_size - uio->uio_offset < uio->uio_resid)
+		len = vp->v_size - uio->uio_offset;
+	else
+		len = uio->uio_resid;
+	return uiomove(np->rn_buf + uio->uio_offset, len, uio);
+}
+
 /* Remove a directory */
 static int
 ramfs_rmdir(struct vnode *dvp, struct vnode *vp, char *name)
@@ -388,11 +424,11 @@ ramfs_rename(struct vnode *dvp1, struct vnode *vp1, char *name1,
 	} else {
 		/* Create new file or directory */
 		old_np = (ramfs_node*)vp1->v_data;
-		np = ramfs_add_node((ramfs_node*)dvp2->v_data, name2, VREG);
+		np = ramfs_add_node((ramfs_node*)dvp2->v_data, name2, old_np->rn_type);
 		if (np == NULL)
 			return ENOMEM;
 
-		if (vp1->v_type == VREG) {
+		if (old_np->rn_buf) {
 			/* Copy file data */
 			np->rn_buf = old_np->rn_buf;
 			np->rn_size = old_np->rn_size;
@@ -439,6 +475,8 @@ ramfs_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
 		}
 		if (np->rn_type == VDIR)
 			dir->d_type = DT_DIR;
+		else if (np->rn_type == VLNK)
+			dir->d_type = DT_LNK;
 		else
 			dir->d_type = DT_REG;
 		strlcpy((char *)&dir->d_name, np->rn_name,
@@ -476,8 +514,6 @@ ramfs_getattr(struct vnode *vnode, struct vattr *attr)
 #define ramfs_inactive	((vnop_inactive_t)vop_nullop)
 #define ramfs_link	((vnop_link_t)vop_eperm)
 #define ramfs_fallocate ((vnop_fallocate_t)vop_nullop)
-#define ramfs_readlink	((vnop_readlink_t)vop_nullop)
-#define ramfs_symlink	((vnop_symlink_t)vop_nullop)
 
 /*
  * vnode operations
