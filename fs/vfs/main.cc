@@ -2100,21 +2100,6 @@ int chroot(const char *path)
     return -1;
 }
 
-#ifdef NOTYET
-/*
- * Dump internal data.
- */
-static int
-fs_debug(struct task *t, struct msg *msg)
-{
-
-    kprintf("<File System Server>\n");
-    vnode_dump();
-    mount_dump();
-    return 0;
-}
-#endif
-
 #define BOOTFS_PATH_MAX 112
 
 struct bootfs_metadata {
