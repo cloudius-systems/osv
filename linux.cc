@@ -343,6 +343,7 @@ long syscall(long number, ...)
     SYSCALL3(madvise, void *, size_t, int);
     SYSCALL0(sched_yield);
     SYSCALL3(mincore, void *, size_t, unsigned char *);
+    SYSCALL3(dup3, int, int, int);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
