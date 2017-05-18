@@ -8,7 +8,7 @@
 tmp = 0x80000
 bootsect = 0x7c00
 cmdline = 0x7e00
-target =  0x1800000
+target =  OSV_LZKERNEL_BASE
 elf_entry_point_header_offset = 0x18
 lzentry = target+elf_entry_point_header_offset
 loader = OSV_KERNEL_BASE

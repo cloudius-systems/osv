@@ -7,9 +7,9 @@
 #include "fastlz.h"
 #include <cstddef>
 #include <stdint.h>
+#include <climits>
 
 #define BUFFER_OUT (char *)OSV_KERNEL_BASE
-#define MAX_BUFFER 0x1600000
 
 extern char _binary_loader_stripped_elf_lz_start;
 extern char _binary_loader_stripped_elf_lz_end;
@@ -23,7 +23,13 @@ extern "C" void *memset(void *s, int c, size_t n)
 
 extern "C" void uncompress_loader()
 {
+    // We do not know the exact uncompressed size, so don't really want to
+    // pass a the last (maxout) parameter of fastlz_decompress. Let it
+    // uncompress as much as it has input. The Makefile already verifies
+    // that the uncompressed kernel doesn't overwrite this uncompression code.
+    // Sadly, "INT_MAX" is the largest number we can pass. If we ever need
+    // more than 2GB here, it won't work.
     fastlz_decompress(&_binary_loader_stripped_elf_lz_start,
             (size_t) &_binary_loader_stripped_elf_lz_size,
-            BUFFER_OUT, MAX_BUFFER);
+            BUFFER_OUT, INT_MAX);
 }

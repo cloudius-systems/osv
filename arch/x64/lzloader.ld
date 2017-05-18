@@ -8,7 +8,7 @@ OUTPUT_ARCH(i386)
 OUTPUT_FORMAT(elf32-i386)
 SECTIONS
 {
-    . = 0x1801000;
+    . = OSV_LZKERNEL_BASE + 0x1000;
     .text : { *(.text) }
     .data : { *(.data) }
     .bss : { *(.bss) }

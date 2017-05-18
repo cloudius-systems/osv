@@ -10,12 +10,16 @@ if [ "$#" -ne 2 ]; then
     exit 1
 fi
 
-if [ $(ls -l "$1" | cut -d " " -f 5) -ge "$2" ]; then
-    echo "$1 is greater than $2, needed to uncompress kernel"
-    echo "Change arch/x64/boot16.S and arch/x65/lzloader.ld "
-    echo " in order to have more available space for the kernel. "
+size=$(ls -l "$1" | cut -d " " -f 5)
 
+if [ $size -ge 2147483647 ]; then
+    echo "$1 is bigger than INT_MAX limit of uncompressing kernel."
+    echo "If you really need such a huge kernel, fix fastlz/lzloader.cc"
     exit 1
-else
-    exit 0
 fi
+if [ $size -ge "$2" ]; then
+    echo "$1 is bigger than $2 available for uncompressing kernel."
+    echo "Increase 'lzkernel_base' in Makefile to raise this limit."
+    exit 1
+fi
+exit 0
