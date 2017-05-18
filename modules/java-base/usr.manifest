@@ -9,4 +9,3 @@
 /usr/lib/&/libexpat.so.1: %(miscbase)s/usr/lib64/&
 /usr/lib/&/libjpeg.so.62: %(miscbase)s/usr/lib64/&
 /usr/lib/jni/monitor.so: ${MODULE_DIR}/obj/jni/monitor.so
-/usr/lib/libosv.so: libosv.so
