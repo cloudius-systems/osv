@@ -30,6 +30,8 @@ def expand(items):
             yield (name, hostname)
 
 def unsymlink(f):
+    if f.startswith('!'):
+        f = f[1:]
     try:
         link = os.readlink(f)
         if link.startswith('/'):
