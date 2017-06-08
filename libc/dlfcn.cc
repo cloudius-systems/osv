@@ -127,7 +127,7 @@ extern "C" int dladdr(void *addr, Dl_info *info)
     // shared object. It should return 1 when we were able to find the object
     // (dli_fname, dli_fbase) even if we couldn't find the specific symbol
     // (dli_sname, dli_saddr).
-    return ei.base ? 1 : 0;
+    return ei.fname ? 1 : 0;
 }
 
 extern "C" char *dlerror(void)
