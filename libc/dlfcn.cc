@@ -123,8 +123,11 @@ extern "C" int dladdr(void *addr, Dl_info *info)
     info->dli_fbase = ei.base;
     info->dli_sname = ei.sym;
     info->dli_saddr = ei.addr;
-    /* dladdr returns non-zero on success and 0 on error */
-    return 1;
+    // dladdr() should return 0 only when the address is not contained in a
+    // shared object. It should return 1 when we were able to find the object
+    // (dli_fname, dli_fbase) even if we couldn't find the specific symbol
+    // (dli_sname, dli_saddr).
+    return ei.base ? 1 : 0;
 }
 
 extern "C" char *dlerror(void)

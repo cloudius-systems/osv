@@ -827,6 +827,8 @@ dladdr_info object::lookup_addr(const void* addr)
     if (addr < _base || addr >= _end) {
         return ret;
     }
+    ret.fname = _pathname.c_str();
+    ret.base = _base;
     auto strtab = dynamic_ptr<char>(DT_STRTAB);
     auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
     auto len = symtab_len();
@@ -853,8 +855,6 @@ dladdr_info object::lookup_addr(const void* addr)
     if (!best.symbol || addr > best.relocated_addr() + best.size()) {
         return ret;
     }
-    ret.fname = _pathname.c_str();
-    ret.base = _base;
     ret.sym = strtab + best.symbol->st_name;
     ret.addr = best.relocated_addr();
     return ret;
