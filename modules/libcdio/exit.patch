@@ -1,0 +1,14 @@
+diff --git a/lib/driver/logging.c b/lib/driver/logging.c
+index b89ab37..202256c 100644
+--- a/lib/driver/logging.c
++++ b/lib/driver/logging.c
+@@ -49,7 +49,8 @@ cdio_default_log_handler(cdio_log_level_t level, const char message[])
+         fprintf (stderr, "**ERROR: %s\n", message);
+         fflush (stderr);
+       }
+-      exit (EXIT_FAILURE);
++      // Is triggered by invalid ISO image - input file smaller that about 32 kB
++      // exit (EXIT_FAILURE);
+       break;
+     case CDIO_LOG_DEBUG:
+       if (level >= cdio_loglevel_default) {
