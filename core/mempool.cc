@@ -1564,6 +1564,8 @@ static inline void* std_malloc(size_t size, size_t alignment)
 
 void* calloc(size_t nmemb, size_t size)
 {
+    if (nmemb == 0 || size == 0)
+        return malloc(0);
     if (nmemb > std::numeric_limits<size_t>::max() / size)
         return nullptr;
     auto n = nmemb * size;
