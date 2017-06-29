@@ -1200,6 +1200,8 @@ int linux_to_bsd_tcp_sockopt(int name)
 	// Not using the constants because we never know what will the compiler
 	// will insert here. They are interface, so they shouldn't change.
 	switch (name) {
+	case 1: // TCP_NODELAY
+		return 0x001;
 	case 3: // TCP_CORK
 		return 0x004; // TCP_NOPUSH
 	case 4: // TCP_KEEPIDLE

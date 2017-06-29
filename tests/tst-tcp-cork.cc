@@ -6,16 +6,17 @@
  */
 
 /*
- * This is a test for the TCP_CORK socket option described in the tcp(7)
- * manual page. The server thread opens a socket, accepts connection and then
- * writes to in two separate writes of 100 bytes. If the first write is
- * not acknowleged for 100ms (because of "delayed ack"), the second write
- * is not sent (because of Naggle's algorithm). If the client measures the
- * amount of time it takes to get from 1 to 200 bytes, he will see more than
- * 100ms.
+ * This is a test for the TCP_CORK and TCP_NODELAY socket options described
+ * in the tcp(7) manual page. The server thread opens a socket, accepts
+ * connection and then writes to in two separate writes of 100 bytes. If the
+ * first write is not acknowleged for 100ms (because of "delayed ack"), the
+ * second write is not sent (because of Naggle's algorithm). If the client
+ * measures the amount of time it takes to get from 1 to 200 bytes, he will
+ * see more than 100ms.
  * But if TCP_CORK is used - and correctly supported - the two writes will
  * be flushed immediately as TCP_CORK is released, and this will take much
- * less than 100ms.
+ * less than 100ms. Similarly, when TCP_NODELAY is used, each write will be
+ * set out immediately, and not be delayed by Naggle's algorithm.
  */
 
 #include <stdio.h>
@@ -82,7 +83,7 @@ static int server(void)
             after-before).count();
 }
 
-static int client(bool cork)
+static int client(bool cork, bool nodelay)
 {
     int sock;
     struct sockaddr_in sa;
@@ -102,6 +103,12 @@ static int client(bool cork)
     if (cork) {
         int optval = 1;
         if (setsockopt(sock, IPPROTO_TCP, TCP_CORK, &optval, sizeof(int)) < 0) {
+            perror("setsockopt failed");
+        }
+    }
+    if (nodelay) {
+        int optval = 1;
+        if (setsockopt(sock, IPPROTO_TCP, TCP_NODELAY, &optval, sizeof(int)) < 0) {
             perror("setsockopt failed");
         }
     }
@@ -134,15 +141,15 @@ static int client(bool cork)
     return 0;
 }
 
-static bool test(bool cork)
+static bool test(bool cork, bool nodelay)
 {
     int srv_result;
     std::thread t([&srv_result] { srv_result = server(); });
     sleep(1);
-    int clnt_result = client(cork);
+    int clnt_result = client(cork, nodelay);
     t.join();
-    printf("test %d time (ms): %d \n", cork, srv_result);
-    if (cork) {
+    printf("test %d %d time (ms): %d \n", cork, nodelay, srv_result);
+    if (cork || nodelay) {
         // If TCP_CORK is used, both batches of 100 bytes are sent as soon as
         // we release the TCP_CORK option, which takes about 5ms because of the
         // 5ms delay we have between the two batches. It can be a bit more than
@@ -177,8 +184,9 @@ static void report(bool ok, const char* msg)
 
 int main(int argc, char **argv)
 {
-    report(test(false), "Without TCP_CORK, delayed ack comes into play");
-    report(test(true), "With TCP_CORK, no nagle so no delayed ack");
+    report(test(false, false), "Without TCP_CORK, delayed ack comes into play");
+    report(test(true, false), "With TCP_CORK, no nagle so no delayed ack");
+    report(test(false, true), "With TCP_NODELAY, no nagle so no delayed ack");
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);
     return fails;
 }
