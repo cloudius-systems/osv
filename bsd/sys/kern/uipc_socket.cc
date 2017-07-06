@@ -292,14 +292,19 @@ int
 socreate(int dom, struct socket **aso, int type, int proto,
     struct ucred *cred, struct thread *td)
 {
+	struct domain *dp;
 	struct protosw *prp;
 	struct socket *so;
 	int error;
 
+	dp = pffinddomain(dom);
+	if (dp == NULL)
+		return EAFNOSUPPORT;
+
 	if (proto)
-		prp = pffindproto(dom, proto, type);
+		prp = pffindproto(dp, proto, type);
 	else
-		prp = pffindtype(dom, type);
+		prp = pffindtype(dp, type);
 
 	if (prp == NULL || prp->pr_usrreqs->pru_attach == NULL ||
 	    prp->pr_usrreqs->pru_attach == pru_attach_notsupp)

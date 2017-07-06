@@ -315,7 +315,7 @@ ip_init(void)
 	if (!IS_DEFAULT_VNET(curvnet))
 		return;
 
-	pr = pffindproto(PF_INET, IPPROTO_RAW, SOCK_RAW);
+	pr = pffindproto(pffinddomain(PF_INET), IPPROTO_RAW, SOCK_RAW);
 	if (pr == NULL)
 		panic("ip_init: PF_INET not found");
 
@@ -1281,7 +1281,7 @@ ipproto_register(short ipproto)
 	 * The protocol slot must not be occupied by another protocol
 	 * already.  An index pointing to IPPROTO_RAW is unused.
 	 */
-	pr = pffindproto(PF_INET, IPPROTO_RAW, SOCK_RAW);
+	pr = pffindproto(pffinddomain(PF_INET), IPPROTO_RAW, SOCK_RAW);
 	if (pr == NULL)
 		return (EPFNOSUPPORT);
 	if (ip_protox[ipproto] != pr - inetsw)	/* IPPROTO_RAW */
@@ -1309,7 +1309,7 @@ ipproto_unregister(short ipproto)
 		return (EPROTONOSUPPORT);
 
 	/* Check if the protocol was indeed registered. */
-	pr = pffindproto(PF_INET, IPPROTO_RAW, SOCK_RAW);
+	pr = pffindproto(pffinddomain(PF_INET), IPPROTO_RAW, SOCK_RAW);
 	if (pr == NULL)
 		return (EPFNOSUPPORT);
 	if (ip_protox[ipproto] == pr - inetsw)  /* IPPROTO_RAW */

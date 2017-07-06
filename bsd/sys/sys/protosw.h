@@ -336,8 +336,9 @@ char	*prcorequests[] = {
 __BEGIN_DECLS
 void	pfctlinput(int, struct bsd_sockaddr *);
 void	pfctlinput2(int, struct bsd_sockaddr *, void *);
-struct protosw *pffindproto(int family, int protocol, int type);
-struct protosw *pffindtype(int family, int type);
+struct domain *pffinddomain(int family);
+struct protosw *pffindproto(struct domain *family, int protocol, int type);
+struct protosw *pffindtype(struct domain *family, int type);
 int	pf_proto_register(int family, struct protosw *npr);
 int	pf_proto_unregister(int family, int protocol, int type);
 __END_DECLS

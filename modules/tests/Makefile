@@ -86,7 +86,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-pthread-setcancelstate.so tst-syscall.so tst-pin.so tst-run.so \
 	tst-ifaddrs.so tst-pthread-affinity-inherit.so tst-sem-timed-wait.so \
 	tst-ttyname.so tst-pthread-barrier.so tst-feexcept.so tst-math.so \
-	tst-sigaltstack.so tst-fread.so tst-tcp-cork.so
+	tst-sigaltstack.so tst-fread.so tst-tcp-cork.so tst-tcp-v6.so
 
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 

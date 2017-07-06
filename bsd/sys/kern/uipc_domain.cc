@@ -245,17 +245,23 @@ domainfinalize(void *dummy)
 	callout_reset(&pfslow_callout, 1, pfslowtimo, NULL);
 }
 
-struct protosw *
-pffindtype(int family, int type)
+struct domain *
+pffinddomain(int family)
 {
 	struct domain *dp;
-	struct protosw *pr;
-
 	for (dp = domains; dp; dp = dp->dom_next)
 		if (dp->dom_family == family)
-			goto found;
-	return (0);
-found:
+			return dp;
+	return 0;
+}
+
+struct protosw *
+pffindtype(struct domain *dp, int type)
+{
+	if (!dp)
+		return 0;
+
+	struct protosw *pr;
 	for (pr = dp->dom_protosw; pr < dp->dom_protoswNPROTOSW; pr++)
 		if (pr->pr_type && pr->pr_type == type)
 			return (pr);
@@ -263,19 +269,14 @@ found:
 }
 
 struct protosw *
-pffindproto(int family, int protocol, int type)
+pffindproto(struct domain *dp, int protocol, int type)
 {
-	struct domain *dp;
+	if (!dp)
+		return 0;
+
 	struct protosw *pr;
 	struct protosw *maybe = 0;
 
-	if (family == 0)
-		return (0);
-	for (dp = domains; dp; dp = dp->dom_next)
-		if (dp->dom_family == family)
-			goto found;
-	return (0);
-found:
 	for (pr = dp->dom_protosw; pr < dp->dom_protoswNPROTOSW; pr++) {
 		if ((pr->pr_protocol == protocol) && (pr->pr_type == type))
 			return (pr);
