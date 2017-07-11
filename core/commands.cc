@@ -96,23 +96,31 @@ Everything after first $ is assumed to be env var.
 So with AA=aa, "$AA" -> "aa", and "X$AA" => "Xaa"
 More than one $ is not supported, and "${AA}" is also not.
 */
+void expand_environ_vars(std::string& word)
+{
+    size_t pos;
+    if ((pos = word.find_first_of('$')) != std::string::npos) {
+        std::string new_word = word.substr(0, pos);
+        std::string key = word.substr(pos+1);
+        auto tmp = getenv(key.c_str());
+        //debug("    new_word=%s, key=%s, tmp=%s\n", new_word.c_str(), key.c_str(), tmp);
+        if (tmp) {
+            new_word += tmp;
+        }
+        word = new_word;
+    }
+}
+
+/*
+Expand environ vars in each word.
+*/
 void expand_environ_vars(std::vector<std::vector<std::string>>& result)
 {
     std::vector<std::vector<std::string>>::iterator cmd_iter;
     std::vector<std::string>::iterator line_iter;
     for (cmd_iter=result.begin(); cmd_iter!=result.end(); cmd_iter++) {
         for (line_iter=cmd_iter->begin(); line_iter!=cmd_iter->end(); line_iter++) {
-            size_t pos;
-            if ((pos = line_iter->find_first_of('$')) != std::string::npos) {
-                std::string new_word = line_iter->substr(0, pos);
-                std::string key = line_iter->substr(pos+1);
-                auto tmp = getenv(key.c_str());
-                //debug("    new_word=%s, key=%s, tmp=%s\n", new_word.c_str(), key.c_str(), tmp);
-                if (tmp) {
-                    new_word += tmp;
-                }
-                *line_iter = new_word;
-            }
+            expand_environ_vars(*line_iter);
         }
     }
 }
@@ -167,19 +175,34 @@ static void runscript_process_options(std::vector<std::vector<std::string> >& re
         if (vars.count("env")) {
             for (auto t : vars["env"].as<std::vector<std::string>>()) {
                 size_t pos = t.find("?=");
+                std::string key, value;
                 if (std::string::npos == pos) {
                     // the basic "KEY=value" syntax
-                    debug("Setting in environment: %s\n", t);
-                    putenv(strdup(t.c_str()));
+                    size_t pos2 = t.find("=");
+                    assert(std::string::npos != pos2);
+                    key = t.substr(0, pos2);
+                    value = t.substr(pos2+1);
+                    //debug("Setting in environment (def): %s=%s\n", key, value);
                 }
                 else {
                     // "KEY?=value", makefile-like syntax, set variable only if not yet set
-                    auto key = t.substr(0, pos);
-                    auto value = t.substr(pos+2);
-                    if (nullptr == getenv(key.c_str())) {
-                        debug("Setting in environment: %s=%s\n", key, value);
-                        setenv(key.c_str(), value.c_str(), 1);
+                    key = t.substr(0, pos);
+                    value = t.substr(pos+2);
+                    if (nullptr != getenv(key.c_str())) {
+                        // key already used, do not overwrite it
+                        //debug("NOT setting in environment (makefile): %s=%s\n", key, value);
+                        key = "";
                     }
+                    else {
+                        //debug("Setting in environment (makefile): %s=%s\n", key, value);
+                    }
+                }
+
+                if (key.length() > 0) {
+                    // we have something to set
+                    expand_environ_vars(value);
+                    debug("Setting in environment: %s=%s\n", key, value);
+                    setenv(key.c_str(), value.c_str(), 1);
                 }
 
             }
@@ -191,7 +214,7 @@ static void runscript_process_options(std::vector<std::vector<std::string> >& re
 }
 
 /*
-If cmd starts with "runcript file", read content of file and
+If cmd starts with "runscript file", read content of file and
 return vector of all programs to be run.
 File can contain multiple commands per line.
 ok flag is set to false on parse error, and left unchanged otherwise.
@@ -234,10 +257,13 @@ runscript_expand(const std::vector<std::string>& cmd, bool &ok, bool &is_runscri
                 return result2;
             }
             // Replace env vars found inside script.
-            // Options, script command and script command parameters can be set via env vars.
-            expand_environ_vars(result3);
             // process and remove options from command
             runscript_process_options(result3);
+            // Options, script command and script command parameters can be set via env vars.
+            // Do this later than runscript_process_options, so that
+            // runscript with content "--env=PORT?=1111 /usr/lib/mpi_hello.so aaa $PORT ccc"
+            // will have argv[2] equal to final value of PORT env var.
+            expand_environ_vars(result3);
             result2.insert(result2.end(), result3.begin(), result3.end());
             line_num++;
         }
