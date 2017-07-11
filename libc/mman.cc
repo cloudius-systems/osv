@@ -130,6 +130,13 @@ void *mmap(void *addr, size_t length, int prot, int flags,
     auto mmap_flags = libc_flags_to_mmap(flags);
     auto mmap_perm  = libc_prot_to_perm(prot);
 
+    if ((flags & MAP_32BIT) && !(flags & MAP_FIXED) && !addr) {
+        // If addr is not specified, OSv by default starts mappings at address
+        // 0x200000000000ul (see mmu::allocate()).  MAP_32BIT asks for a lower
+        // default. If MAP_FIXED or addr were specified, the default does not
+        // matter anyway.
+        addr = (void*)0x2000000ul;
+    }
     if (flags & MAP_ANONYMOUS) {
         // We have already determined (see below) the region where the heap must be located. Now the JVM will request
         // fixed mappings inside that region
