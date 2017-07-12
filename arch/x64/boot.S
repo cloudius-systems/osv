@@ -44,7 +44,7 @@ gdt_end = .
 .bss
 
 .align 16
-. = . + 4096*4
+. = . + 4096*10
 init_stack_top = .
 
 . = . + 4096*10
