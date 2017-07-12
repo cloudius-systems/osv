@@ -47,10 +47,6 @@ gdt_end = .
 . = . + 4096*10
 init_stack_top = .
 
-. = . + 4096*10
-.global interrupt_stack_top
-interrupt_stack_top = .
-
 .text
 
 #define BOOT_CR0 ( X86_CR0_PE \
