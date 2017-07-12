@@ -297,7 +297,7 @@ void application::run_main(std::string path, int argc, char** argv)
     program_invocation_name = c_path;
     program_invocation_short_name = basename(c_path);
 
-    auto sz = argc; // for the trailing 0's.
+    unsigned sz = argc; // for the trailing 0's.
     for (int i = 0; i < argc; ++i) {
         sz += strlen(argv[i]);
     }
