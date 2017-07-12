@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 #include "fastlz.h"
+#include <string.h>
 #include <cstddef>
 #include <stdint.h>
 #include <climits>
