@@ -197,6 +197,7 @@ int openat(int dirfd, const char *pathname, int flags, ...)
 
     return error;
 }
+LFS64(openat);
 
 // open() has an optional third argument, "mode", which is only needed in
 // some cases (when the O_CREAT mode is used). As a safety feature, recent
@@ -222,6 +223,7 @@ int creat(const char *pathname, mode_t mode)
 {
     return open(pathname, O_CREAT|O_WRONLY|O_TRUNC, mode);
 }
+LFS64(creat);
 
 TRACEPOINT(trace_vfs_close, "%d", int);
 TRACEPOINT(trace_vfs_close_ret, "");
