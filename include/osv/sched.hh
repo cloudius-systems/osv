@@ -1009,9 +1009,9 @@ void preempt_enable();
 class interruptible
 {
 public:
-    static void prepare(thread* target_thread) throw()
+    static void prepare(thread* target_thread) noexcept
         { target_thread->interrupted(false); }
-    static void check(thread* target_thread, wait_guard& wg) throw(int) {
+    static void check(thread* target_thread, wait_guard& wg) {
         if(target_thread->interrupted()) {
             wg.stop();
             throw int(EINTR);
@@ -1022,9 +1022,9 @@ public:
 class noninterruptible
 {
 public:
-    static void prepare(thread* target_thread) throw()
+    static void prepare(thread* target_thread) noexcept
         {}
-    static void check(thread* target_thread, wait_guard& wg) throw()
+    static void check(thread* target_thread, wait_guard& wg) noexcept
         {}
 };
 
