@@ -108,7 +108,7 @@ start64:
     call premain
     mov __argc, %edi
     mov __argv, %rsi
-    jmp main
+    call main
     .cfi_endproc
 
 # The smp trampoline must be in the lower 1MB, so we manually relocate
