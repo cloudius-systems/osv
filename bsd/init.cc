@@ -44,6 +44,7 @@ void bsd_init(void)
 
     /* Random */
     struct timeval tv;
+    gettimeofday(&tv, NULL);
     bsd_srandom(tv.tv_sec ^ tv.tv_usec);
 
     arc4_init();
