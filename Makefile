@@ -576,6 +576,7 @@ bsd += bsd/sys/netinet/in.o
 bsd += bsd/sys/netinet/in_pcb.o
 bsd += bsd/sys/netinet/in_proto.o
 bsd += bsd/sys/netinet/in_mcast.o
+$(out)/bsd/sys/netinet/in_mcast.o: COMMON += -Wno-maybe-uninitialized
 bsd += bsd/sys/netinet/in_rmx.o
 bsd += bsd/sys/netinet/ip_id.o
 bsd += bsd/sys/netinet/ip_icmp.o
