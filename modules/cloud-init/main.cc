@@ -5,6 +5,9 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <unistd.h>
 #include "cloud-init.hh"
 #include "files-module.hh"
 #include "server-module.hh"
@@ -15,59 +18,60 @@
 #include <boost/program_options/parsers.hpp>
 #include <osv/debug.hh>
 #include <osv/exception_utils.hh>
+#include <osv/run.hh>
 
 using namespace std;
 using namespace init;
 namespace po = boost::program_options;
 
-// config_disk() checks whether we have a second disk (/dev/vblk1) which
-// holds nothing but a configuration file, and if there is, it copies the
-// configuration to the given file.
-// Currently, the configuration disk must be in a trivial format generated
-// by scripts/file2img: A magic header, then the length of the file (in
-// decimal), followed by the content.
+// config_disk() allows to use NoCloud VM configuration method - see
+// http://cloudinit.readthedocs.io/en/0.7.9/topics/datasources/nocloud.html.
+// NoCloud method provides two files with cnfiguration data (/user-data and
+// /meta-data) on a disk. The disk is required to have label "cidata".
+// It can contain ISO9660 or FAT filesystem.
+//
+// config_disk() checks whether we have a second disk (/dev/vblk1) with
+// ISO image, and if there is, it copies the configuration file from
+// /user-data to the given file.
 // config_disk() returns true if it has successfully read the configuration
 // into the requested file.
+//
+// OSv implementation limitations:
+// The /meta-data file is currently ignored.
+// Only ISO9660 filesystem is supported.
+// The mandatory "cidata" volume label is not checked.
+//
+// Example ISO image can be created by running
+// cloud-localds cloud-init.img cloud-init.yaml
+// The cloud-localds command is provided by cloud-utils package (fedora).
 static bool config_disk(const char* outfile) {
-    int fd = open("/dev/vblk1", O_RDONLY);
-    if (fd < 0) {
+    char disk[] = "/dev/vblk1";
+    char srcfile[] = "/user-data";
+    struct stat sb;
+    int ret;
+    int app_ret = -1;
+
+    ret = stat(disk, &sb);
+    if (ret != 0) {
         return false;
     }
-    char data[512];
-    ssize_t r = read(fd, data, sizeof(data));
-    static const char* magic = "!file_in_image\n";
-    ssize_t magic_len = strlen(magic);
-    if (r < magic_len || strncmp(data, magic, magic_len)) {
-        close(fd);
+
+    std::vector<std::string> cmd = {"/usr/bin/iso-read.so", "-e", srcfile, "-o", outfile, disk};
+    osv::run(cmd[0], cmd, &app_ret);
+    if (app_ret != 0) {
+        debug("cloud-init: warning, %s exited with code %d (%s is not ISO image?)\n", cmd[0], app_ret, disk);
         return false;
     }
-    debug("cloud-init: found configuration in /dev/vblk1\n");
-    int out = open(outfile, O_WRONLY|O_CREAT, 0777);
-    if (out < 0) {
-        debug("cloud-init: failed to copy configuration to %s\n", outfile);
-        close(fd);
+    ret = stat(outfile, &sb);
+    if (ret != 0) {
+        debug("cloud-init: stat(%s) failed, errno=%d\n", outfile, errno);
         return false;
     }
-    unsigned offset = magic_len;
-    while (offset < r && data[offset] != '\n')
-        offset++;
-    offset++; // skip the \n too
-    ssize_t filelen = atoi(data + magic_len);
-    while (filelen) {
-        int len = std::min(filelen, r - offset);
-        if (len <= 0) {
-            debug("cloud-init: unexpected end of image\n", outfile);
-            close(fd);
-            close(out);
-            return false;
-        }
-        write(out, data + offset, len);
-        filelen -= len;
-        offset = 0;
-        r = read(fd, data, sizeof(data));
+    if ((sb.st_mode & S_IFMT) != S_IFREG) {
+        debug("cloud-init: %s is not a file\n", outfile);
+        return false;
     }
-    close(fd);
-    close(out);
+    debug("cloud-init: copied file %s -> %s from ISO image %s\n", srcfile, outfile, disk);
     return true;
 }
 

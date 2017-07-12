@@ -1,4 +1,5 @@
-INCLUDES += -I../../include -I.
+INCLUDES = -I. -I../../include -I../../arch/$(ARCH) -I../.. \
+        -I../../build/$(mode)/gen/include
 
 autodepend = -MD -MT $@ -MP
 CXXFLAGS  = -g -rdynamic -Wall -std=c++11 -fPIC $(INCLUDES) $(autodepend)
