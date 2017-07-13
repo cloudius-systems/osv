@@ -130,7 +130,7 @@ typedef void    (*vmbus_chan_callback_t)(struct vmbus_channel *, void *);
 static __inline struct vmbus_channel *
 vmbus_get_channel(device_t dev)
 {
-    return device_get_ivars(dev);
+    return static_cast<struct vmbus_channel *>(device_get_ivars(dev));
 }
 
 /*

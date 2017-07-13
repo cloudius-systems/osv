@@ -616,6 +616,7 @@ bsd += bsd/sys/xen/xenbus/xenbusb.o
 bsd += bsd/sys/xen/xenbus/xenbusb_front.o
 bsd += bsd/sys/dev/xen/netfront/netfront.o
 bsd += bsd/sys/dev/xen/blkfront/blkfront.o
+bsd += bsd/sys/dev/hyperv/vmbus/hyperv.o
 endif
 
 bsd += bsd/sys/dev/random/hash.o

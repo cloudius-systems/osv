@@ -91,6 +91,9 @@ int                     hyperv_guid2str(const struct hyperv_guid *, char *,
 extern hyperv_tc64_t    hyperv_tc64;
 extern u_int            hyperv_features;        /* CPUID_HV_MSR_ */
 
+bool                    hyperv_identify();
+bool                    hyperv_is_timecount_available();
+
 #endif  /* _KERNEL */
 
 #endif  /* _HYPERV_H_ */
