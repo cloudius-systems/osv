@@ -942,7 +942,11 @@ def find_or_give_last(predicate, seq):
     return last
 
 def unique_ptr_get(u):
-    return u['_M_t']['_M_head_impl']
+    try:
+        # Since gcc 7
+        return u['_M_t']['_M_t']['_M_head_impl']
+    except:
+        return u['_M_t']['_M_head_impl']
 
 def thread_cpu(t):
     d = unique_ptr_get(t['_detached_state'])
