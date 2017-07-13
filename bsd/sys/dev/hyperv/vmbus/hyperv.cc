@@ -32,8 +32,6 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD$");
 
-#include <bsd/porting/netport.h>
-
 #include <sys/param.h>
 #include <sys/kernel.h>
 #include <sys/systm.h>

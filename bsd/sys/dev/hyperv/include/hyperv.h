@@ -31,6 +31,8 @@
 #ifndef _HYPERV_H_
 #define _HYPERV_H_
 
+#include <bsd/porting/netport.h>
+
 #ifdef _KERNEL
 
 #include <sys/param.h>
@@ -93,6 +95,7 @@ extern u_int            hyperv_features;        /* CPUID_HV_MSR_ */
 
 bool                    hyperv_identify();
 bool                    hyperv_is_timecount_available();
+uint64_t                hyperv_tc64_rdmsr();
 
 #endif  /* _KERNEL */
 

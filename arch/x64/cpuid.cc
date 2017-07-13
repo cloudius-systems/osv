@@ -8,6 +8,7 @@
 #include "cpuid.hh"
 #include "processor.hh"
 #include "xen.hh"
+#include <dev/hyperv/include/hyperv.h>
 
 namespace processor {
 
@@ -109,12 +110,19 @@ void process_xen_bits(features_type &features)
     }
 }
 
+void process_hyperv_bits(features_type &features) {
+    if(hyperv_identify() && hyperv_is_timecount_available()) {
+        features.hyperv_clocksource = true;
+    }
+}
+
 void process_cpuid(features_type& features)
 {
     for (unsigned i = 0; i < nr_cpuid_bits; ++i) {
         process_cpuid_bit(features, cpuid_bits[i]);
     }
     process_xen_bits(features);
+    process_hyperv_bits(features);
 }
 
 }
