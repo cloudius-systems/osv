@@ -107,8 +107,8 @@ int main(int argc, char *argv[])
     report(check_mapping(NULL, 0, MAP_SHARED, fd, 0, EINVAL) == 0,
         "force EINVAL by passing length equals to zero.");
 
-    constexpr void *unaligned_addr = reinterpret_cast<void*>(0xefff1001); // unaligned 4k-sized page.
-    constexpr void *aligned_addr   = reinterpret_cast<void*>(0xefff1000); // aligned 4k-sized page.
+    void *unaligned_addr = reinterpret_cast<void*>(0xefff1001); // unaligned 4k-sized page.
+    void *aligned_addr   = reinterpret_cast<void*>(0xefff1000); // aligned 4k-sized page.
     // if MAP_FIXED was specified, then mmap should return EINVAL to unaligned addresses.
     report(check_mapping(unaligned_addr, size, MAP_SHARED | MAP_FIXED, fd, 0, EINVAL) == 0,
         "force EINVAL by passing an unaligned addr and the flag MAP_FIXED.");
