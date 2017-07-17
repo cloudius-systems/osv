@@ -97,6 +97,14 @@ tests += testrunner.so
 $(out)/tests/tst-mmap.so: COMMON += -Wl,-z,now
 $(out)/tests/tst-elf-permissions.so: COMMON += -Wl,-z,relro
 
+# The following tests use special linker trickery which apprarently
+# doesn't work as expected with GOLD linker, so we need to choose BFD.
+# TODO: figure out why this workaround was needed (the reason may be
+# different for each of these tests), and avoid this workaround!
+$(out)/tests/tst-mmap.so: COMMON += -fuse-ld=bfd
+$(out)/tests/tst-elf-permissions.so: COMMON += -fuse-ld=bfd
+$(out)/tests/tst-tls.so: COMMON += -fuse-ld=bfd
+
 $(out)/tests/tst-tls.so: \
 		$(src)/tests/tst-tls.cc \
 		$(out)/tests/libtls.so
