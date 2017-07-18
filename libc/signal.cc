@@ -213,6 +213,8 @@ int sigprocmask(int how, const sigset_t* _set, sigset_t* _oldset)
     return 0;
 }
 
+UNIMPL(int sigsuspend(const sigset_t *mask));
+
 int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
 {
     // FIXME: We do not support any sa_flags besides SA_SIGINFO.
