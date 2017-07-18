@@ -19,6 +19,8 @@
 #include <utility>
 #include <sys/ioctl.h>
 
+#include <osv/stubbing.hh>
+
 using namespace std;
 
 struct af_local final : public special_file {
@@ -42,11 +44,17 @@ int af_local::ioctl(u_long cmd, void *data)
     int error = ENOTTY;
     switch (cmd) {
     case FIONBIO:
-        SCOPE_LOCK(f_lock);
-        if (*(int *)data)
-            f_flags |= FNONBLOCK;
-        else
-            f_flags &= ~FNONBLOCK;
+        {
+            SCOPE_LOCK(f_lock);
+            if (*(int *)data)
+                f_flags |= FNONBLOCK;
+            else
+                f_flags &= ~FNONBLOCK;
+        }
+        error = 0;
+        break;
+    case FIOASYNC:
+        WARN_ONCE("af_local::ioctl(FIOASYNC) stubbed\n");
         error = 0;
         break;
     }
