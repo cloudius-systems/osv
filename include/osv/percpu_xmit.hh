@@ -14,6 +14,7 @@
 
 #include <osv/clock.hh>
 #include <osv/migration-lock.hh>
+#include <osv/aligned_new.hh>
 
 #include <bsd/sys/sys/mbuf.h>
 
@@ -210,7 +211,7 @@ public:
 
         std::string worker_name_base(name + "-");
         for (auto c : sched::cpus) {
-            _cpuq.for_cpu(c)->reset(new cpu_queue_type);
+            _cpuq.for_cpu(c)->reset(aligned_new<cpu_queue_type>());
             _all_cpuqs.push_back(_cpuq.for_cpu(c)->get());
 
             _worker.for_cpu(c)->me =

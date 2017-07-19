@@ -90,6 +90,7 @@
 #include <machine/in_cksum.h>
 #include <osv/poll.h>
 #include <osv/net_trace.hh>
+#include <osv/aligned_new.hh>
 
 TRACEPOINT(trace_tcp_input_ack, "%p: We've got ACK: %u", void*, unsigned int);
 
@@ -3226,7 +3227,7 @@ static ipv4_tcp_conn_id tcp_connection_id(tcpcb* tp)
 void
 tcp_setup_net_channel(tcpcb* tp, struct ifnet* intf)
 {
-	auto nc = new net_channel([=] (mbuf *m) { tcp_net_channel_packet(tp, m); });
+	auto nc = aligned_new<net_channel>([=] (mbuf *m) { tcp_net_channel_packet(tp, m); });
 	tp->nc = nc;
 	tp->nc_intf = intf;
 	intf->add_net_channel(nc, tcp_connection_id(tp));

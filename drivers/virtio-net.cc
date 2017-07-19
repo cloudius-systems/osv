@@ -861,7 +861,7 @@ hw_driver* net::probe(hw_device* dev)
             if (opt_maxnic && maxnic-- <= 0) {
                 return nullptr;
             } else {
-                return new net(*pci_dev);
+                return aligned_new<net>(*pci_dev);
             }
         }
     }

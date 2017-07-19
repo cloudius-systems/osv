@@ -18,6 +18,7 @@
 #include <boost/intrusive/set.hpp>
 #include <boost/intrusive/parent_from_member.hpp>
 #include <osv/timer-set.hh>
+#include <osv/aligned_new.hh>
 
 namespace async {
 
@@ -247,7 +248,7 @@ private:
 static PERCPU(async_worker*, _percpu_worker);
 
 static sched::cpu::notifier _notifier([] () {
-    *_percpu_worker = new async_worker(sched::cpu::current());
+    *_percpu_worker = aligned_new<async_worker>(sched::cpu::current());
 });
 
 static inline async_worker& get_worker()

@@ -21,6 +21,7 @@ extern "C" {
 #include <osv/barrier.hh>
 #include <osv/prio.hh>
 #include "osv/percpu.hh"
+#include <osv/aligned_new.hh>
 
 extern "C" { void smp_main(void); }
 
@@ -76,7 +77,7 @@ void smp_init()
     parse_madt();
     sched::current_cpu = sched::cpus[0];
     for (auto c : sched::cpus) {
-        c->incoming_wakeups = new sched::cpu::incoming_wakeup_queue[sched::cpus.size()];
+        c->incoming_wakeups = aligned_array_new<sched::cpu::incoming_wakeup_queue>(sched::cpus.size());
     }
     smpboot_cr0 = read_cr0();
     smpboot_cr4 = read_cr4();

@@ -406,7 +406,18 @@ public:
     // view of the application's page table (see issue #790).
     template <typename... Args>
     static thread* make(Args&&... args) {
-        return new thread(std::forward<Args>(args)...);
+        // As explained in <osv/aligned_new.hh>, in C++11 we cannot use
+        // new() on an object which has non-default alignment requirements.
+        // We cannot use the tool aligned_new<thread> from that header
+        // because of the private constructor, so need to repeat the trick.
+        // Note that avoiding new() is is not *really* important because
+        // sizeof(thread) very large (over 20 KB) and would get a 4096-byte
+        // alignment anyway, even if we allocated it with normal new.
+        void *p = aligned_alloc(alignof(thread), sizeof(thread));
+        if (!p) {
+            return nullptr;
+        }
+        return new(p) thread(std::forward<Args>(args)...);
     }
 private:
     explicit thread(std::function<void ()> func, attr attributes = attr(),

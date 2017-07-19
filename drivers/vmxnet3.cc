@@ -39,6 +39,7 @@
 
 #include <osv/sched.hh>
 #include <osv/trace.hh>
+#include <osv/aligned_new.hh>
 
 #include "drivers/clock.hh"
 #include "drivers/clockevent.hh"
@@ -428,7 +429,7 @@ hw_driver* vmxnet3::probe(hw_device* dev)
                 if (opt_maxnic && maxnic-- <= 0) {
                     return nullptr;
                 } else {
-                    return new vmxnet3(*pci_dev);
+                    return aligned_new<vmxnet3>(*pci_dev);
                 }
             }
         }
