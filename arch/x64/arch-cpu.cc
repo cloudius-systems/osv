@@ -43,7 +43,14 @@ exception_guard::~exception_guard()
 }
 
 extern "C"
+[[gnu::target("no-sse")]]
 void fpu_state_init_xsave(processor::fpu_state *s) {
+    // s->xsavehdr is known at compile time, so gcc will not call memset()
+    // here. Rather it will generate direct instructions to zero the given
+    // length (24 bytes). We can't allow the compiler to use any SSE registers
+    // for that, because this function is used in fpu_lock before saving the
+    // FPU state to the stack, so must not touch any of the FPU registers.
+    // This is why the "gnu::target(no-sse)" specification above is critical.
     memset(s->xsavehdr, 0, sizeof(s->xsavehdr));
 }
 
