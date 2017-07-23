@@ -183,7 +183,7 @@ def start_osv_qemu(options):
     else:
         signal_option = ('off', 'on')[options.with_signals]
         args += ["-chardev", "stdio,mux=on,id=stdio,signal=%s" % signal_option]
-        args += ["-mon", "chardev=stdio,mode=readline,default"]
+        args += ["-mon", "chardev=stdio,mode=readline"]
         args += ["-device", "isa-serial,chardev=stdio"]
 
     for a in options.pass_args or []:
