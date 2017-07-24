@@ -88,6 +88,8 @@ bool check_bus(u16 bus)
             if (!parse_ok) {
                 pci_e("Error: couldn't parse device config space %02x:%02x.%x",
                         bus, slot, func);
+                // free the dev pointer to avoid memory leakage
+                delete dev;
                 break;
             }
 
