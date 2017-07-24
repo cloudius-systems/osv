@@ -121,13 +121,9 @@ LuaSec: $(CDIR)/ssl.lua
 $(CDIR)/ssl.lua: $(LUA_ROCKS_BIN)
 # Workaround because LuaRocks ignores /lib64
 ifneq ("$(wildcard /usr/lib64/libssl.so*)", "")
-	rm -rf luasec
-	git clone https://github.com/brunoos/luasec.git
-	cd luasec && ../out/bin/luarocks make luasec-0.6-1.rockspec OPENSSL_LIBDIR=/usr/lib64
+	out/bin/luarocks install LuaSec 0.5 OPENSSL_LIBDIR=/usr/lib64
 else
-	rm -rf luasec
-	git clone https://github.com/brunoos/luasec.git
-	cd luasec && ../out/bin/luarocks make luasec-0.6-1.rockspec
+	out/bin/luarocks install LuaSec 0.5
 endif
 
 ##
