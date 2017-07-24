@@ -29,63 +29,63 @@ class Fedora(object):
                 'flex', 'bison', 'maven-shade-plugin', 'python-dpkt', 'tcpdump', 'gdb',
                 'gnutls-utils', 'openssl', 'p11-kit', 'patch', 'wget',
                 'unzip', 'ncurses', 'ncurses-devel', 'libstdc++-static', 'openssl-libs',
-                'openssl-devel', 'libedit-devel', 'yaml-cpp-devel'
+                'libedit-devel', 'yaml-cpp-devel'
                 ]
     ec2_packages = standard_ec2_packages
     test_packages = ['openssl-devel']
     ec2_post_install = standard_ec2_post_install
 
     class Fedora_19(object):
-        packages = ['java-1.7.0-openjdk', 'python-requests']
+        packages = ['java-1.7.0-openjdk', 'python-requests', 'openssl-devel']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '19'
 
     class Fedora_20(object):
-        packages = ['java-1.7.0-openjdk', 'python-requests']
+        packages = ['java-1.7.0-openjdk', 'python-requests', 'openssl-devel']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '20'
 
     class Fedora_21(object):
-        packages = ['java-1.7.0-openjdk', 'python-requests']
+        packages = ['java-1.7.0-openjdk', 'python-requests', 'openssl-devel']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '21'
 
     class Fedora_22(object):
-        packages = ['java-1.8.0-openjdk', 'python-requests']
+        packages = ['java-1.8.0-openjdk', 'python-requests', 'openssl-devel']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '22'
 
     class Fedora_23(object):
-        packages = ['java-1.8.0-openjdk', 'python2-requests']
+        packages = ['java-1.8.0-openjdk', 'python2-requests', 'openssl-devel']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '23'
 
     class Fedora_24(object):
-        packages = ['java-1.8.0-openjdk', 'python2-requests']
+        packages = ['java-1.8.0-openjdk', 'python2-requests', 'openssl-devel']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '24'
 
     class Fedora_25(object):
-        packages = ['java-1.8.0-openjdk', 'python2-requests']
+        packages = ['java-1.8.0-openjdk', 'python2-requests', 'openssl-devel']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '25'
 
     class Fedora_26(object):
-        packages = ['java-1.8.0-openjdk', 'python2-requests']
+        packages = ['java-1.8.0-openjdk', 'python2-requests', 'compat-openssl10-devel']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
