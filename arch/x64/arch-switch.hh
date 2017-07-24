@@ -121,7 +121,7 @@ void thread::setup_tcb()
     assert(tls.size);
 
     void* user_tls_data;
-    auto user_tls_size = 0;
+    size_t user_tls_size = 0;
     if (_app_runtime) {
         auto obj = _app_runtime->app.lib();
         assert(obj);
@@ -129,8 +129,14 @@ void thread::setup_tcb()
         user_tls_data = obj->initial_tls();
     }
 
-    // FIXME: respect alignment
-    void* p = malloc(sched::tls.size + user_tls_size + sizeof(*_tcb));
+    // In arch/x64/loader.ld, the TLS template segment is aligned to 64
+    // bytes, and that's what the objects placed in it assume. So make
+    // sure our copy is allocated with the same 64-byte alignment, and
+    // verify that object::init_static_tls() ensured that user_tls_size
+    // also doesn't break this alignment .
+    assert(align_check(tls.size, (size_t)64));
+    assert(align_check(user_tls_size, (size_t)64));
+    void* p = aligned_alloc(64, sched::tls.size + user_tls_size + sizeof(*_tcb));
     if (user_tls_size) {
         memcpy(p, user_tls_data, user_tls_size);
     }
