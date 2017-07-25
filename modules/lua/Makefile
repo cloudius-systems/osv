@@ -119,6 +119,8 @@ $(CDIR)/path.lua: $(LUA_ROCKS_BIN)
 LuaSec: $(CDIR)/ssl.lua
 
 $(CDIR)/ssl.lua: $(LUA_ROCKS_BIN)
+	./check-openssl-version
+
 # Workaround because LuaRocks ignores /lib64
 ifneq ("$(wildcard /usr/lib64/libssl.so*)", "")
 	out/bin/luarocks install LuaSec 0.5 OPENSSL_LIBDIR=/usr/lib64
