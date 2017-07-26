@@ -43,7 +43,7 @@ T* aligned_new(Args&&... args) {
 template<typename T>
 T* aligned_array_new(size_t len) {
     // Allocate one extra item in the beginning, for length.
-    static_assert(sizeof(T) > sizeof(size_t));
+    static_assert(sizeof(T) > sizeof(size_t), "small T in aligned_array_new");
     void *p = aligned_alloc(alignof(T), sizeof(T) * (len+1));
     assert(p);
     *(size_t *)p = len;
