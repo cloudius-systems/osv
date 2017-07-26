@@ -57,7 +57,7 @@ T* aligned_array_new(size_t len) {
 
 template<typename T>
 void aligned_array_delete(T* p) {
-    static_assert(sizeof(T) > sizeof(size_t));
+    static_assert(sizeof(T) > sizeof(size_t), "small T in aligned_array_new");
     size_t len = *(size_t*)p;
     for (unsigned i = 0; i < len ; i++) {
         ++p;
