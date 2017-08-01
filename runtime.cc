@@ -58,6 +58,8 @@
 #include <grp.h>
 #include <unordered_map>
 #include <api/sys/prctl.h>
+#include <sys/wait.h>
+#include <pty.h>
 
 #define __LC_LAST 13
 
@@ -561,7 +563,6 @@ char *tmpnam_r(char *s)
     return s ? tmpnam(s) : NULL;
 }
 
-extern "C"
 pid_t wait3(int *status, int options, struct rusage *usage)
 {
     WARN_STUBBED();
@@ -569,7 +570,6 @@ pid_t wait3(int *status, int options, struct rusage *usage)
     return -1;
 }
 
-extern "C"
 pid_t wait4(pid_t pid, int *status, int options, struct rusage *usage)
 {
     WARN_STUBBED();
@@ -591,7 +591,6 @@ int getresgid(gid_t *rgid, gid_t *egid, gid_t *sgid)
     return -1;
 }
 
-extern "C"
 int openpty(int *amaster, int *aslave, char *name,
            const struct termios *termp,
            const struct winsize *winp)
@@ -601,7 +600,6 @@ int openpty(int *amaster, int *aslave, char *name,
     return -1;
 }
 
-extern "C"
 pid_t forkpty(int *amaster, char *name,
              const struct termios *termp,
              const struct winsize *winp)
