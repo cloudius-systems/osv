@@ -554,3 +554,73 @@ int sysctl(int *, int, void *, size_t *, void *, size_t)
     errno = ENOTDIR;
     return -1;
 }
+
+extern "C"
+char *tmpnam_r(char *s)
+{
+    return s ? tmpnam(s) : NULL;
+}
+
+extern "C"
+pid_t wait3(int *status, int options, struct rusage *usage)
+{
+    WARN_STUBBED();
+    errno = ECHILD;
+    return -1;
+}
+
+extern "C"
+pid_t wait4(pid_t pid, int *status, int options, struct rusage *usage)
+{
+    WARN_STUBBED();
+    errno = ECHILD;
+    return -1;
+}
+
+int getresuid(uid_t *ruid, uid_t *euid, uid_t *suid)
+{
+    WARN_STUBBED();
+    errno = ENOSYS;
+    return -1;
+}
+
+int getresgid(gid_t *rgid, gid_t *egid, gid_t *sgid)
+{
+    WARN_STUBBED();
+    errno = ENOSYS;
+    return -1;
+}
+
+extern "C"
+int openpty(int *amaster, int *aslave, char *name,
+           const struct termios *termp,
+           const struct winsize *winp)
+{
+    WARN_STUBBED();
+    errno = ENOENT;
+    return -1;
+}
+
+extern "C"
+pid_t forkpty(int *amaster, char *name,
+             const struct termios *termp,
+             const struct winsize *winp)
+{
+    WARN_STUBBED();
+    errno = ENOENT;
+    return -1;
+}
+
+int nice(int inc)
+{
+    return setpriority(PRIO_PROCESS, 0, getpriority(PRIO_PROCESS, 0)+inc);
+}
+
+char *ctermid(char *s)
+{
+    static char s2[L_ctermid];
+    WARN_STUBBED();
+    if (!s) s = s2;
+    *s = 0;
+    return s;
+}
