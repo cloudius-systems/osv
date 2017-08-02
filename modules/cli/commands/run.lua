@@ -17,7 +17,8 @@ Options:
 
 cmd.main = function(args)
   local args, opts = cmd.parser:parse(args)
-  flag_newprogram = opts.newprogram
+  flag_newprogram = 0
+  if opts.newprogram then flag_newprogram=1 end
 
   for i = 1, #args do
     osv_request({"app"}, "PUT", {
