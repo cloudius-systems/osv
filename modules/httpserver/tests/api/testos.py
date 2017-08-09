@@ -19,7 +19,7 @@ class testos(basetest.Basetest):
     def test_os_date(self):
         path = self.path_by_nick(self.os_api, "os_date")
         val = self.curl(path).encode('ascii', 'ignore')
-        self.assertRegexpMatches(val, "...\\s+...\\s+\\d+\\s+\\d\\d:\\d\\d:\\d\\d\\s+20..", path)
+        self.assertRegexpMatches(val, "...\\s+...\\s+\\d+\\s+\\d\\d:\\d\\d:\\d\\d\\s+UTC\\s+20..", path)
 
     def test_os_total_memory(self):
         path = self.path_by_nick(self.os_api, "os_memory_total")

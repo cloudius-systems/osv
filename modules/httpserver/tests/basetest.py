@@ -25,7 +25,11 @@ class Basetest(unittest.TestCase):
 
     @classmethod
     def get_json_api(cls, name):
-        json_data = open(os.path.join(cls.config.jsondir, name))
+        return cls.get_json_api_from_directory(cls.config.jsondir,name)
+
+    @classmethod
+    def get_json_api_from_directory(cls, directory, name):
+	json_data = open(os.path.join(directory, name))
         data = json.load(json_data)
         json_data.close()
         return data
@@ -145,7 +149,8 @@ class Basetest(unittest.TestCase):
 
     @classmethod
     def start_image(cls):
-        cls.jvm_api = cls.get_json_api("jvm.json")
+        jvm_plugin_api_listings_path = os.path.join(os.path.realpath(os.path.dirname(__file__)),'../../httpserver-jvm-plugin/api-doc/listings')
+        cls.jvm_api = cls.get_json_api_from_directory(jvm_plugin_api_listings_path,"jvm.json")
         cls.os_api = cls.get_json_api("os.json")
         if not cls.config.connect:
             cls.os_process = cls.exec_os()
