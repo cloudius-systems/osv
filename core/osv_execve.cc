@@ -8,7 +8,17 @@
 /* Record thread state changes (termination) by storing exit status into a map.
  * It is used to implement waitpid like functionality for threads (osv_waittid).
  **/
-static std::unordered_map<long, int> exited_threads;
+class application_status {
+public:
+    application_status() {
+        exit_code = 0;
+        errno_code = 0;
+    };
+public:
+    int exit_code;
+    int errno_code;
+};
+static std::unordered_map<long, application_status> exited_threads;
 static mutex exec_mutex;
 static condvar cond;
 extern "C" long gettid(); // implemented in linux.cc
@@ -24,32 +34,32 @@ static int thread_run_app_in_namespace(std::string filename,
 {
     const bool new_program = true; // run in new ELF namespace
     long tid = gettid(); // sched::thread::current()->id();
-    int ret = -1;
-    bool exception_raised = false;
+    application_status app_status;
 
     debugf_execve("thread_run_app_in_namespace... tid=%ld\n", tid);
+    assert(thread_id != nullptr);
+    assert(parent_waiter != nullptr);
     *thread_id = tid;
 
     try {
         auto app = osv::application::run_and_join(filename, args, new_program, &envp, parent_waiter);
-        ret = app->get_return_code();
-        debugf_execve("thread_run_app_in_namespace ret = %d tid=%ld\n", ret, tid);
+        app_status.exit_code = app->get_return_code();
+        debugf_execve("thread_run_app_in_namespace ret = %d tid=%ld\n", app_status.exit_code, tid);
     }
     catch (osv::launch_error &ex) {
-        exception_raised = true;
+        app_status.errno_code = ENOENT; // Assume the only possible problem is "no such file"
+        app_status.exit_code = -1;
     }
 
     WITH_LOCK(exec_mutex) {
-        exited_threads[tid] = ret;
+        exited_threads[tid] = app_status;
         cond.wake_all();
     }
 
-    if (exception_raised) {
+    if (app_status.errno_code != 0) {
         // osv::application::run_and_join failed, and likely didn't wake up parent_waiter.
-        // Wake parent now.
-        if (parent_waiter) {
-            parent_waiter->wake();
-        }
+        // Wake parent now, after errno is stored into exited_threads
+        parent_waiter->wake();
     }
 
     // Trigger event notification via file descriptor (fd created with eventfd).
@@ -57,7 +67,7 @@ static int thread_run_app_in_namespace(std::string filename,
         uint64_t notif = 1;
         write(notification_fd, &notif, sizeof(notif));
     }
-    return ret;
+    return app_status.exit_code;
 }
 
 static std::vector<std::string> argv_to_array(const char *const argv[])
@@ -99,6 +109,9 @@ extern "C" {
  * terminates.
  * If notification_fd is used, osv_waittid can wait on arbitrary thread and
  * return thread_id of (first) finished thread.
+ *
+ * On sucess, 0 is returned. In addition, errno is cleared to 0.
+ * On failure, -1 is returned and errno is set.
  **/
 int osv_execve(const char *path, char *const argv[], char *const envp[],
     long *thread_id, int notification_fd)
@@ -109,9 +122,10 @@ int osv_execve(const char *path, char *const argv[], char *const envp[],
     debugf_execve("OSv osv_execve:%d   argv[0]=%p %s\n", __LINE__, argv, argv? argv[0]:NULL);
     debugf_execve("OSv osv_execve:%d   envp[0]=%p %s\n", __LINE__, envp, envp? envp[0]:NULL);
 
-    if (thread_id) {
-        *thread_id = 0;
-    }
+    // input thread_id might be NULL
+    long tid, *ptid;
+    ptid = thread_id? thread_id: &tid;
+    *ptid = 0;
 
     /*
      * We have to start new program in new thread, otherwise current thread
@@ -129,16 +143,24 @@ int osv_execve(const char *path, char *const argv[], char *const envp[],
     waiter w(sched::thread::current());
     // If need to set thread_id, wait until the newly created thread sets it
     // and also sets the new app_runtime on this thread.
-    waiter* wp = thread_id ? &w : nullptr;
     std::thread th = std::thread(thread_run_app_in_namespace,
         std::move(filename), std::move(args), std::move(envp_map),
-        thread_id, notification_fd, wp);
+        ptid, notification_fd, &w);
     // detach from thread so that no join needes to be called.
     th.detach();
-    if (wp) {
-        wp->wait();
+    w.wait();
+    // errno_code is set if app failed to start.
+    WITH_LOCK(exec_mutex) {
+        auto it = exited_threads.find(*ptid);
+        if (it != exited_threads.end()) {
+            auto app_status = it->second;
+            errno = app_status.errno_code;
+            return -1;
+        }
     }
 
+    // seems busybox expects execve to clear errno on success
+    errno = 0;
     return 0;
 }
 
@@ -173,7 +195,7 @@ long osv_waittid(long tid, int *status, int options) {
                 cond.wait(exec_mutex);
             }
             // some thread terminated, we might be interested in it.
-            int exit_code;
+            application_status app_status;
             long tid2;
             auto it = exited_threads.end();
             if (tid <= 0) {
@@ -184,10 +206,10 @@ long osv_waittid(long tid, int *status, int options) {
             }
             if (it != exited_threads.end()) {
                 tid2 = it->first;
-                exit_code = it->second;
-                debugf_execve("osv_waittid tid=%ld exit_code=%d\n", tid2, exit_code);
+                app_status = it->second;
+                debugf_execve("osv_waittid tid=%ld app.exit_code=%d app.errno_code=%d\n", tid2, app_status.exit_code, app_status.errno_code);
                 if (status) {
-                    *status = ((exit_code<<8) & 0x0000FF00);
+                    *status = ((app_status.exit_code<<8) & 0x0000FF00);
                 }
                 exited_threads.erase(it);
                 return tid2;
