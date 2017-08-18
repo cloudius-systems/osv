@@ -24,17 +24,32 @@ static int thread_run_app_in_namespace(std::string filename,
 {
     const bool new_program = true; // run in new ELF namespace
     long tid = gettid(); // sched::thread::current()->id();
+    int ret = -1;
+    bool exception_raised = false;
 
     debugf_execve("thread_run_app_in_namespace... tid=%ld\n", tid);
     *thread_id = tid;
 
-    auto app = osv::application::run_and_join(filename, args, new_program, &envp, parent_waiter);
-    auto ret = app->get_return_code();
-    debugf_execve("thread_run_app_in_namespace ret = %d tid=%ld\n", ret, tid);
+    try {
+        auto app = osv::application::run_and_join(filename, args, new_program, &envp, parent_waiter);
+        ret = app->get_return_code();
+        debugf_execve("thread_run_app_in_namespace ret = %d tid=%ld\n", ret, tid);
+    }
+    catch (osv::launch_error &ex) {
+        exception_raised = true;
+    }
 
     WITH_LOCK(exec_mutex) {
         exited_threads[tid] = ret;
         cond.wake_all();
+    }
+
+    if (exception_raised) {
+        // osv::application::run_and_join failed, and likely didn't wake up parent_waiter.
+        // Wake parent now.
+        if (parent_waiter) {
+            parent_waiter->wake();
+        }
     }
 
     // Trigger event notification via file descriptor (fd created with eventfd).
