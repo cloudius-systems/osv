@@ -170,6 +170,7 @@ def build(args):
         print("Using image config: %s" % image_config_file)
         config = resolve.local_import(image_config_file)
         run_list = config.get('run', [])
+        selected_modules = []
     else:
         # If images/image_config doesn't exist, assume image_config is a
         # comma-separated list of module names, and build an image from those
@@ -203,10 +204,16 @@ def build(args):
             else:
                 api.require_running(name)
 
-        # Add moduless thare are implictly required if others are present
+        # Add modules that are implicitly required if others are present
         resolve.resolve_required_modules_if_other_is_present()
 
-    modules = resolve.get_required_modules()
+    # By default append manifests from all modules resolved through api.require()
+    # otherwise (add_required_to_manifest=False) only append manifests from the selected_modules
+    if args.add_required_to_manifest:
+        modules = resolve.get_required_modules()
+    else:
+        modules = list(module for module in resolve.get_required_modules() if module.name in selected_modules)
+
     modules_to_run = resolve.get_modules_to_run()
 
     print("Modules:")
@@ -260,7 +267,9 @@ if __name__ == "__main__":
                         help="image configuration name. Looked up in " + image_configs_dir)
     build_cmd.add_argument("--usrskel", action="store", default="default",
                         help="override default usr.manifest.skel")
-    build_cmd.set_defaults(func=build)
+    build_cmd.add_argument("--no-required", dest="add_required_to_manifest", action="store_false",
+                           help="do not add files to usr.manifest from modules implicitly resolved through api.require()")
+    build_cmd.set_defaults(func=build,add_required_to_manifest=True)
 
     clean_cmd = subparsers.add_parser("clean", help="Clean modules")
     clean_cmd.add_argument("-q", "--quiet", action="store_true")
