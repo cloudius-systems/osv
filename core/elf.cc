@@ -267,6 +267,11 @@ void file::load_elf_header()
 
 void file::read(Elf64_Off offset, void* data, size_t size)
 {
+    // read(fileref, ...) is void, and crashes with assertion failure if the
+    // file is not long enough. So we need to check first.
+    if (::size(_f) < offset + size) {
+        throw std::runtime_error("executable too short");
+    }
     ::read(_f, data, offset, size);
 }
 
