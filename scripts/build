@@ -150,7 +150,7 @@ fi
 export=${vars[export]-none}
 if [ "$export" == "selected" ]
 then
-    no_required_arg="--no-required"
+	no_required_arg="--no-required"
 fi
 jdkbase=$jdkbase ARCH=$arch mode=$mode OSV_BASE=$SRC OSV_BUILD_PATH=$OSV_BUILD_PATH scripts/module.py $j_arg build -c $modules $usrskel_arg $no_required_arg
 
@@ -188,8 +188,8 @@ zfs)
 	if [ "$export" == "none" ]
 	then
 		$SRC/scripts/upload_manifest.py -o usr.img -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
-    else
-        export_dir=${vars[export_dir]-$SRC/build/export}
+	else
+		export_dir=${vars[export_dir]-$SRC/build/export}
 		$SRC/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
 	fi
 	;;
