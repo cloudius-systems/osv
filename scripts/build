@@ -190,7 +190,7 @@ zfs)
 		$SRC/scripts/upload_manifest.py -o usr.img -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
     else
         export_dir=${vars[export_dir]-$SRC/build/export}
-		$SRC/scripts/export_manifest.py -e $export_dir -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
+		$SRC/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
 	fi
 	;;
 ramfs)

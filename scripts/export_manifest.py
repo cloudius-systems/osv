@@ -80,7 +80,7 @@ def main():
                         callback=add_var),
             make_option('-e',
                         dest='export',
-                        help='exports the contents of the usr.manifest into a given folder',
+                        help='exports the contents of the usr.manifest into a given folder (which is deleted first)',
                         metavar='FILE'),
     ])
 
