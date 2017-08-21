@@ -2,7 +2,7 @@
 INCLUDES = -isystem $(miscbase)/usr/include -I$(src)/build/$(mode)/gen/include
 INCLUDES += -I../../include -I. -I../../java -I../../arch/$(ARCH) -I../..
 INCLUDES += -I$(jdkbase)/include -I$(jdkbase)/include/linux
-INCLUDES += -I../httpserver
+INCLUDES += -I../httpserver-api
 
 # compiler flags:
 #  -g    adds debugging information to the executable file
@@ -11,7 +11,7 @@ autodepend = -MD -MT $@ -MP
 CXXFLAGS  = -g -Wall -std=c++11 -fPIC $(INCLUDES) -O2 $(autodepend)
 src = $(shell readlink -f ../..)
 
-CODE_GEN_FROM_JSON := ../httpserver/json2code.py
+CODE_GEN_FROM_JSON := ../httpserver-api/json2code.py
 RM := /bin/rm
 
 ifndef ARCH

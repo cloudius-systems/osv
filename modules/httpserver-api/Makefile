@@ -48,7 +48,7 @@ very-quiet = $(if $V, $1, @$1)
 
 DEPS := $(OBJ_FILES:.o=.d)
 
-module: all gui swagger-ui-lib
+module: all
 
 all: init lib$(TARGET).so
 
@@ -92,32 +92,18 @@ check: check-http check-ssl
 check-http:
 	# Test plain HTTP
 	cd $(src) && \
-	make image=httpserver,jetty && \
-	PYTHONPATH=$(src)/scripts modules/httpserver/tests/testhttpserver.py
+	make image=httpserver-api,jetty && \
+	PYTHONPATH=$(src)/scripts modules/httpserver-api/tests/testhttpserver.py
 
 check-ssl:
 	# Test SSL
 	cd $(src) && \
-	make image=httpserver.fg_ssl,certs,jetty && \
-	PYTHONPATH=$(src)/scripts modules/httpserver/tests/testhttpserver.py \
+	make image=httpserver-api.fg_ssl,certs,jetty && \
+	PYTHONPATH=$(src)/scripts modules/httpserver-api/tests/testhttpserver.py \
 		--cert modules/certs/build/client.pem \
 		--key modules/certs/build/client.key \
 		--cacert modules/certs/build/cacert.pem
 
 .PHONY: check check-http check-ssl
-
-
-swagger-ui-lib: swagger-ui/.git
-.PHONY: swagger-ui-lib
-
-swagger-ui/.git:
-	cd $(src) && git submodule update --init -f modules/httpserver/swagger-ui
-
-gui: osv-gui/.git
-	$(call quiet,make -C osv-gui)
-.PHONY: gui
-
-osv-gui/.git:
-	cd $(src) && git submodule update --init -f modules/httpserver/osv-gui
 
 .SECONDARY:
