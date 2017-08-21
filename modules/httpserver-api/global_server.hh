@@ -9,9 +9,11 @@
 #define GLOBAL_SERVER_HH_
 #include "routes.hh"
 #include "server.hh"
+#include <vector>
 #include <boost/program_options/variables_map.hpp>
 #include <mutex>
 #include <condition_variable>
+#include <external/x64/misc.bin/usr/include/yaml-cpp/node/iterator.h>
 
 namespace po = boost::program_options;
 
@@ -65,10 +67,14 @@ private:
 
     global_server();
     void set_routes();
+    void setup_redirects(const YAML::Node& node);
+    void setup_file_mappings(const YAML::Node& node);
+    void load_plugin(const std::string& path);
     static global_server* instance;
     routes _routes;
     http::server::server* s;
     po::variables_map config;
+    std::vector<void*> plugins;
 
     /**
      * set configuration based on command line.

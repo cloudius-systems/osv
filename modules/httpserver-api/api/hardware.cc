@@ -24,6 +24,10 @@ using namespace std;
 using namespace json;
 using namespace hardware_json;
 
+extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
+    httpserver::api::hardware::init(*routes);
+}
+
 void init(routes& routes)
 {
     hardware_json_init_path("Hardware management API");

@@ -19,6 +19,10 @@ using namespace json;
 using namespace std;
 using namespace env_json;
 
+extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
+    httpserver::api::env::init(*routes);
+}
+
 void init(routes& routes)
 {
     env_json_init_path("Environment variables API");

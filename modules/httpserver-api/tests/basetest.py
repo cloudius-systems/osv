@@ -66,7 +66,10 @@ class Basetest(unittest.TestCase):
         try:
             s.connect((cls._client.get_host(), cls._client.get_port()))
             s.close()
-            return cls.is_jvm_up()
+            if cls.config.check_jvm:
+                return cls.is_jvm_up()
+            else:
+                return True
         except socket.error:
             return False
 
@@ -149,8 +152,10 @@ class Basetest(unittest.TestCase):
 
     @classmethod
     def start_image(cls):
-        jvm_plugin_api_listings_path = os.path.join(os.path.realpath(os.path.dirname(__file__)),'../../httpserver-jvm-plugin/api-doc/listings')
-        cls.jvm_api = cls.get_json_api_from_directory(jvm_plugin_api_listings_path,"jvm.json")
+        if cls.config.check_jvm:
+            jvm_plugin_api_listings_path = \
+                os.path.join(os.path.realpath(os.path.dirname(__file__)),'../../httpserver-jvm-plugin/api-doc/listings')
+            cls.jvm_api = cls.get_json_api_from_directory(jvm_plugin_api_listings_path,"jvm.json")
         cls.os_api = cls.get_json_api("os.json")
         if not cls.config.connect:
             cls.os_process = cls.exec_os()

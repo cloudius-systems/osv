@@ -8,7 +8,7 @@ _module = '${OSV_BASE}/modules/httpserver-api'
 _exe = '/libhttpserver.so'
 
 usr_files = FileMap()
-usr_files.add(os.path.join(_module, 'libhttpserver.so')).to(_exe)
+usr_files.add(os.path.join(_module, 'libhttpserver-api.so')).to(_exe)
 usr_files.add(os.path.join(_module, 'api-doc')).to('/usr/mgmt/api')
 
 api.require('openssl')

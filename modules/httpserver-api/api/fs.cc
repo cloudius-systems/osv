@@ -32,6 +32,10 @@ static void fill_dfstat(DFStat& dfstat, const osv::mount_desc& mount, const stru
     dfstat.ffree = st.f_ffree;
 }
 
+extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
+    httpserver::api::fs::init(*routes);
+}
+
 void init(routes& routes) {
 
     fs_json_init_path("FS core API");

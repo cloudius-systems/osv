@@ -443,6 +443,10 @@ class put_file_handler : public handler_base {
     }
 };
 
+extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
+    httpserver::api::file::init(*routes);
+}
+
 void init(routes& routes)
 {
     file_json_init_path("file API");

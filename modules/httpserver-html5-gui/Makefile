@@ -19,4 +19,12 @@ gui: osv-gui/.git
 osv-gui/.git:
 	cd $(src) && git submodule update --init -f modules/httpserver-html5-gui/osv-gui
 
+check:
+	# Test if HTTP servers serves properly static content
+	cd $(src) && \
+	scripts/build image=httpserver-html5-gui.fg && \
+	PYTHONPATH=$(src)/scripts:$(src)/modules/httpserver-api/tests modules/httpserver-html5-gui/tests/testhttpserver.py
+
+.PHONY: check
+
 .SECONDARY:

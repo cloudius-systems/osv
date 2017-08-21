@@ -61,9 +61,8 @@ class set_jmx_handler : public handler_base {
     }
 };
 
-extern "C" void init(void* arg) {
-    auto r = reinterpret_cast<httpserver::routes*>(arg);
-    httpserver::api::jvm::init(*r);
+extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
+    httpserver::api::jvm::init(*routes);
 }
 /**
  * Initialize the routes object with specific routes mapping

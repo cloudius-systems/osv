@@ -240,6 +240,10 @@ private:
     routes& _routes;
 };
 
+extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
+    httpserver::api::api::init(*routes);
+}
+
 void init(routes& routes)
 {
     api_json_init_path("Advanced API options");

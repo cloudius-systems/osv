@@ -49,6 +49,10 @@ static std::string exec_app(const std::string& cmnd_line, bool new_program) {
     return app_ids;
 }
 
+extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
+    httpserver::api::app::init(*routes);
+}
+
 void init(routes& routes)
 {
     app_json_init_path("app API");

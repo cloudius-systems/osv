@@ -26,9 +26,8 @@ static void verify_jvm() {
         throw httpserver::not_found_exception("JVM not running");
     }
 }
-extern "C" void init(void* arg) {
-    auto r = reinterpret_cast<httpserver::routes*>(arg);
-    httpserver::api::jolokia::init(*r);
+extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
+    httpserver::api::jolokia::init(*routes);
 }
 /**
  * Initialize the routes object with specific routes mapping

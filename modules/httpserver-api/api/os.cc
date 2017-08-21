@@ -33,6 +33,10 @@ using namespace std;
 using namespace json;
 using namespace os_json;
 
+extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
+    httpserver::api::os::init(*routes);
+}
+
 void init(routes& routes)
 {
     os_json_init_path("OS core API");
