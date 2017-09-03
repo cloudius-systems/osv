@@ -38,6 +38,7 @@
 #include <sys/statvfs.h>
 #include <sys/stat.h>
 #include <sys/time.h>
+#include <sys/sendfile.h>
 
 #include <limits.h>
 #include <unistd.h>
@@ -2007,8 +2008,7 @@ int lchown(const char *path, uid_t owner, gid_t group)
 }
 
 
-extern "C"
-int sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
+ssize_t sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
 {
     struct file *in_fp;
     struct file *out_fp;
@@ -2086,6 +2086,7 @@ int sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
     return ret;
 }
 
+#undef sendfile64
 LFS64(sendfile);
 
 NO_SYS(int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags));
