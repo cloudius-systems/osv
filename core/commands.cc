@@ -318,6 +318,126 @@ std::string getcmdline()
     return std::string(osv_cmdline);
 }
 
+#define MY_DEBUG(args...) if(0) printf(args)
+/*
+loader_parse_cmdline accepts input str - OSv commandline, say:
+--env=AA=aa --env=BB=bb1\ bb2 app.so arg1 arg2
+
+The loader options are parsed and saved into argv, up to first not-loader-option
+token. argc is set to number of loader options.
+app_cmdline is set to unconsumed part of input str.
+Example output:
+argc = 2
+argv[0] = "--env=AA=aa"
+argv[1] = "--env=BB=bb1 bb2"
+argv[2] = NULL
+app_cmdline = "app.so arg1 arg2"
+
+The whitespaces can be escaped with '\' to allow options with spaces.
+Notes:
+ - _quoting_ loader options with space is not supported.
+ - input str is modified.
+ - output argv has to be free-d by caller.
+ - the strings pointed to by output argv and app_cmdline are in same memory as
+   original input str. The caller is not permited to modify or free data at str
+   after the call to loader_parse_cmdline, as that would corrupt returned
+   results in argv and app_cmdline.
+
+Note that std::string is intentionly not used, as it is not fully functional when
+called early during boot.
+*/
+void loader_parse_cmdline(char* str, int *pargc, char*** pargv, char** app_cmdline) {
+    *pargv = nullptr;
+    *pargc = 0;
+    *app_cmdline = nullptr;
+
+    const char *delim = " \t\n";
+    char esc = '\\';
+
+    // parse string
+    char *ap;
+    char *ap0=nullptr, *apE=nullptr; // first and last token.
+    int ntoken = 0;
+    ap0 = nullptr;
+    while(1) {
+        // Did we already consume all loader options?
+        // Look at first non-space char - if =='-', than this is loader option.
+        // Otherwise, it is application command.
+        char *ch = str;
+        while (ch && *ch != '\0') {
+            if (strchr(delim, *ch)) {
+                ch++;
+                continue;
+            }
+            else if (*ch == '-') {
+                // this is a loader option, continue with loader parsing
+                break;
+            }
+            else {
+                // ch is not space or '-', it is start of application command
+                // Save current position and stop loader parsing.
+                *app_cmdline = str;
+                break;
+            }
+        }
+        if (*ch == '\0') {
+            // empty str, contains only spaces
+            *app_cmdline = str;
+        }
+        if (*app_cmdline) {
+            break;
+        }
+        // there are loader options, continue with parsing
+
+        ap = stresep(&str, delim, esc);
+        assert(ap);
+
+        MY_DEBUG("  ap = %p %s, *ap=%d\n", ap, ap, *ap);
+        if (*ap != '\0') {
+            // valid token found
+            ntoken++;
+            if (ap0 == nullptr) {
+                ap0 = ap;
+            }
+            apE = ap;
+        }
+        else {
+            // Multiple consecutive delimiters found. Stresep will write multiple
+            // '\0' into str. Squash them into one, so that argv will be 'nice',
+            // in memory consecutive array of C strings.
+            if (str) {
+                MY_DEBUG("    shift   str %p '%s' <- %p '%s'\n", str-1, str-1, str, str);
+                memmove(str-1, str, strlen(str) + 1);
+                str--;
+            }
+        }
+        if (str == nullptr) {
+            // end of string, last char was delimiter
+            *app_cmdline = ap + strlen(ap); // make app_cmdline valid pointer to '\0'.
+            MY_DEBUG("    make app_cmdline valid pointer to '\\0' ap=%p '%s', app_cmdline=%p '%s'\n",
+                ap, ap, app_cmdline, app_cmdline);
+            break;
+        }
+
+    }
+    MY_DEBUG("  ap0 = %p '%s', apE = %p '%s', ntoken = %d, app_cmdline=%p '%s'\n",
+        ap0, ap0, apE, apE, ntoken, *app_cmdline, *app_cmdline);
+    *pargv = (char**)malloc(sizeof(char*) * (ntoken+1));
+    // str was modified, tokes are separated by exactly one '\0'
+    int ii;
+    for(ap = ap0, ii = 0; ii < ntoken; ap += strlen(ap)+1, ii++) {
+        assert(ap != nullptr);
+        assert(*ap != '\0');
+        MY_DEBUG("  argv[%d] = %p %s\n", ii, ap, ap);
+        (*pargv)[ii] = ap;
+    }
+    MY_DEBUG("  ntoken = %d, ii = %d\n", ntoken, ii);
+    assert(ii == ntoken);
+    (*pargv)[ii] = nullptr;
+    *pargc = ntoken;
+}
+#undef MY_DEBUG
+
 int parse_cmdline(const char *p)
 {
     char* save;

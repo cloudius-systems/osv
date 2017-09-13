@@ -11,6 +11,7 @@
 #include <osv/commands.hh>
 #include <fstream>
 #include <map>
+#include <string.h>
 
 static int tests = 0, fails = 0;
 
@@ -875,8 +876,218 @@ static bool test_runscript_with_conditional_env_in_script(bool set_env_vars_befo
     return true;
 }
 
+bool test_loader_parse_cmdline(const char* instr, std::vector<std::string> ref_argv, const char* ref_app_cmdline) {
+    char *str, *str_to_be_freed;
+    // strdup alternative code might catch read beyond end of str string.
+    // The strdup above might contains \0 beyond terminating '\0', so say
+    // strlen(str+strlen(str) + 1) still returns 0, or some random number
+    // instead of scanning random garbage.
+#if 0
+    *str = strdup(instr);
+    str_to_be_freed = str;
+#else
+    int str_length = std::max(strlen(instr), 1024ul);
+    str = (char*)malloc(str_length*9);
+    str_to_be_freed = str;
+    memset(str, 'X', str_length*9);
+    str += str_length*4;
+    strcpy(str, instr);
+#endif
+
+    int argc;
+    char** argv;
+    char *app_cmdline;
+
+    //printf("/*-------------------------------------*/\n");
+    //printf("str = %p '%s'\n", str, str);
+    osv::loader_parse_cmdline(str, &argc, &argv, &app_cmdline);
+
+    // print and check result
+    char **ch;
+    int ii;
+    int old_len = 0;
+    if (argc != (int)ref_argv.size()) {
+        return false;
+    }
+    for (ii = 0, ch = argv; ch != nullptr && *ch != nullptr; ii++, ch++) {
+        //printf("  argv[%d] = %p '%s', expected = '%s'\n", ii, *ch, *ch, ref_argv[ii].c_str());
+        if (ref_argv[ii] != argv[ii]) {
+            return false;
+        }
+        if(ii>0) {
+            // check that argv strings are consecutive in memory
+            // not really needed for loader options, but common implementation
+            // detail for Linux app main(argc, argv).
+            if ((argv[ii-1] + old_len) != argv[ii]) {
+                return false;
+            }
+        }
+        old_len = strlen(argv[ii]) + 1; // num of bytes including terminating null.
+    }
+
+    //printf("  ii = %d, ref_argv.size()=%d\n", ii, (int)ref_argv.size());
+    if (ii != argc) {
+        return false;
+    }
+    //printf("  app_cmdline=%p '%s', expected = '%s'\n", app_cmdline, app_cmdline, ref_app_cmdline);
+    if (std::string(app_cmdline) != ref_app_cmdline) {
+        return false;
+    }
+
+    free(argv);
+    free(str_to_be_freed);
+    //printf("/*-------------------------------------*/\n");
+    return true;
+}
+
+#define STRINGIZE(x) STRINGIZE2(x)
+#define STRINGIZE2(x) #x
+#define LINE_STRING STRINGIZE(__LINE__)
+
+void all_test_loader_parse_cmdline() {
+    // empty
+    report(test_loader_parse_cmdline("", {}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline(" ", {}, " "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("  ", {}, "  "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    //
+    report(test_loader_parse_cmdline("-", {"-"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("--", {"--"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("-- ", {"--"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("--  ", {"--"}, " "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("--   ", {"--"}, "  "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+
+    report(test_loader_parse_cmdline("aa", {}, "aa"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline(" aa", {}, " aa"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("aa ", {}, "aa " ),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline(" aa ", {}, " aa "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("  aa  ", {}, "  aa  "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    //
+    report(test_loader_parse_cmdline("--aa", {"--aa"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline(" --aa", {"--aa"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("--aa ", {"--aa"}, "" ),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline(" --aa ", {"--aa"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("  --aa  ", {"--aa"}, " "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+
+    report(test_loader_parse_cmdline("aa bb", {}, "aa bb"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("aa  bb", {}, "aa  bb"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("aa   bb", {}, "aa   bb"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("aa    bb", {}, "aa    bb"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    //
+    report(test_loader_parse_cmdline("--aa --bb", {"--aa", "--bb"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("--aa  --bb", {"--aa", "--bb"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("--aa   --bb", {"--aa", "--bb"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("--aa    --bb", {"--aa", "--bb"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+
+    report(test_loader_parse_cmdline("aa bb ", {}, "aa bb "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("aa bb  ", {}, "aa bb  "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("aa bb   ", {}, "aa bb   "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    //
+    report(test_loader_parse_cmdline("--aa --bb ", {"--aa", "--bb"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("--aa --bb  ", {"--aa", "--bb"}, " "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("--aa --bb   ", {"--aa", "--bb"}, "  "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+
+    report(test_loader_parse_cmdline(" aa bb", {}, " aa bb"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("  aa bb", {}, "  aa bb"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("   aa bb", {}, "   aa bb"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    //
+    report(test_loader_parse_cmdline(" --aa --bb", {"--aa", "--bb"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("  --aa --bb", {"--aa", "--bb"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("   --aa --bb", {"--aa", "--bb"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+
+    report(test_loader_parse_cmdline(" aa bb ", {}, " aa bb "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("  aa bb  ", {}, "  aa bb  "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("   aa bb   ", {}, "   aa bb   "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    //
+    report(test_loader_parse_cmdline(" --aa --bb ", {"--aa", "--bb"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("  --aa --bb  ", {"--aa", "--bb"}, " "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("   --aa --bb   ", {"--aa", "--bb"}, "  "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+
+    report(test_loader_parse_cmdline("--aa --bb cc", {"--aa", "--bb"}, "cc"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline(" --aa --bb cc", {"--aa", "--bb"}, "cc"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("  --aa --bb  cc", {"--aa", "--bb"}, " cc"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("   --aa --bb   cc", {"--aa", "--bb"}, "  cc"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+
+    report(test_loader_parse_cmdline("aa \"bb\" cc", {}, "aa \"bb\" cc"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("aa bb\\ cc dd", {}, "aa bb\\ cc dd"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("aa bb\\ \\ cc dd", {}, "aa bb\\ \\ cc dd"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    //
+    report(test_loader_parse_cmdline("--aa --\"bb\" --cc", {"--aa", "--\"bb\"", "--cc"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("--aa \"bb\" --cc", {"--aa"}, "\"bb\" --cc"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("--aa --bb\\ \\ cc --dd", {"--aa", "--bb  cc", "--dd"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("--aa --bb\\ \\ --cc --dd", {"--aa", "--bb  --cc", "--dd"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("--aa --bb\\ cc --dd", {"--aa", "--bb cc", "--dd"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("--aa --bb\\ --cc --dd", {"--aa", "--bb --cc", "--dd"}, ""),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+
+    // and realistic/valid OSv cmdline example
+    report(test_loader_parse_cmdline("--env=AA=aa  --env=BB=bb1\\ bb2   --env=CC=cc1\\ \\ cc2\\ cc3 prog arg1 \"arg2a arg2b\" arg3",
+        {"--env=AA=aa", "--env=BB=bb1 bb2", "--env=CC=cc1  cc2 cc3"}, "prog arg1 \"arg2a arg2b\" arg3"),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+    report(test_loader_parse_cmdline("--env=AA=aa  --env=BB=bb1\\ bb2   --env=CC=cc1\\ \\ cc2\\ cc3   prog  arg1 \"arg2a  arg2b\"  arg3  ",
+        {"--env=AA=aa", "--env=BB=bb1 bb2", "--env=CC=cc1  cc2 cc3"}, "  prog  arg1 \"arg2a  arg2b\"  arg3  "),
+        "TEST=loader_parse_cmdline:LINE=" LINE_STRING);
+}
+
 int main(int argc, char *argv[])
 {
+    all_test_loader_parse_cmdline();
+
     report(test_parse_simplest(), "simplest command line");
     report(test_parse_simplest_with_args(), "simplest command line with args");
     report(test_parse_simplest_with_quotes(),
