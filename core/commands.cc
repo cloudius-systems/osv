@@ -311,7 +311,7 @@ parse_command_line(const std::string line,  bool &ok)
 // time.  So let's go for a more traditional memory management to avoid testing
 // early / not early, etc
 char *osv_cmdline = nullptr;
-static std::vector<char*> args;
+static char* parsed_cmdline = nullptr;
 
 std::string getcmdline()
 {
@@ -440,32 +440,22 @@ void loader_parse_cmdline(char* str, int *pargc, char*** pargv, char** app_cmdli
 
 int parse_cmdline(const char *p)
 {
-    char* save;
-
-    if (args.size()) {
-        // From the strtok manpage, we see that: "The first call to strtok()
-        // sets this pointer to point to the first byte of the string." It
-        // follows from this that the first argument contains the address we
-        // should use to free the memory allocated for the string
-        free(args[0]);
+    if (__loader_argv) {
+        // __loader_argv was allocated by loader_parse_cmdline
+        free(__loader_argv);
     }
 
-    args.resize(0);
     if (osv_cmdline) {
         free(osv_cmdline);
     }
     osv_cmdline = strdup(p);
 
-    char* cmdline = strdup(p);
-
-    while ((p = strtok_r(cmdline, " \t\n", &save)) != nullptr) {
-        args.push_back(const_cast<char *>(p));
-        cmdline = nullptr;
+    if (parsed_cmdline) {
+        free(parsed_cmdline);
     }
-    args.push_back(nullptr);
-    __argv = args.data();
-    __argc = args.size() - 1;
+    parsed_cmdline = strdup(p);
 
+    loader_parse_cmdline(parsed_cmdline, &__loader_argc, &__loader_argv, &__app_cmdline);
     return 0;
 }
 

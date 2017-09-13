@@ -113,11 +113,11 @@ void premain()
     boot_time.event(".init functions");
 }
 
-int main(int ac, char **av)
+int main(int loader_argc, char **loader_argv)
 {
     smp_initial_find_current_cpu()->init_on_cpu();
-    void main_cont(int ac, char** av);
-    sched::init([=] { main_cont(ac, av); });
+    void main_cont(int loader_argc, char** loader_argv);
+    sched::init([=] { main_cont(loader_argc, loader_argv); });
 }
 
 static bool opt_leak = false;
@@ -144,20 +144,13 @@ int maxnic;
 static int sampler_frequency;
 static bool opt_enable_sampler = false;
 
-std::tuple<int, char**> parse_options(int ac, char** av)
+void parse_options(int loader_argc, char** loader_argv)
 {
     namespace bpo = boost::program_options;
     namespace bpos = boost::program_options::command_line_style;
 
     std::vector<const char*> args = { "osv" };
-
-    // due to https://svn.boost.org/trac/boost/ticket/6991, we can't terminate
-    // command line parsing on the executable name, so we need to look for it
-    // ourselves
-
-    auto nr_options = std::find_if(av, av + ac,
-                                   [](const char* arg) { return arg[0] != '-'; }) - av;
-    std::copy(av, av + nr_options, std::back_inserter(args));
+    std::copy(loader_argv, loader_argv + loader_argc, std::back_inserter(args));
 
     bpo::options_description desc("OSv options");
     desc.add_options()
@@ -297,29 +290,19 @@ std::tuple<int, char**> parse_options(int ac, char** av)
     }
 
     boot_delay = std::chrono::duration_cast<std::chrono::nanoseconds>(1_s * vars["delay"].as<float>());
-
-    av += nr_options;
-    ac -= nr_options;
-    return std::make_tuple(ac, av);
 }
 
 // return the std::string and the commands_args poiting to them as a move
-std::vector<std::vector<std::string> > prepare_commands(int ac, char** av)
+std::vector<std::vector<std::string> > prepare_commands(char* app_cmdline)
 {
-    if (ac == 0) {
+    if (strlen(app_cmdline) == 0) {
         puts("This image has an empty command line. Nothing to run.");
         osv::poweroff();
     }
     std::vector<std::vector<std::string> > commands;
-    std::string line = std::string("");
     bool ok;
 
-    // concatenate everything
-    for (auto i = 0; i < ac; i++) {
-        line += std::string(av[i]) + " ";
-    }
-
-    commands = osv::parse_command_line(line, ok);
+    commands = osv::parse_command_line(app_cmdline, ok);
 
     if (!ok) {
         puts("Failed to parse command line.");
@@ -338,7 +321,7 @@ static std::string read_file(std::string fn)
 
 void* do_main_thread(void *_main_args)
 {
-    auto main_args = static_cast<std::tuple<int,char**> *>(_main_args);
+    auto app_cmdline = static_cast<char*>(_main_args);
 
     if (!arch_setup_console(opt_console)) {
         abort("Unknown console:%s\n", opt_console.c_str());
@@ -448,7 +431,7 @@ void* do_main_thread(void *_main_args)
         }
     }
 
-    auto commands = prepare_commands(std::get<0>(*main_args), std::get<1>(*main_args));
+    auto commands = prepare_commands(app_cmdline);
 
     // Run command lines in /init/* before the manual command line
     if (opt_init) {
@@ -516,7 +499,7 @@ void* do_main_thread(void *_main_args)
     return nullptr;
 }
 
-void main_cont(int ac, char** av)
+void main_cont(int loader_argc, char** loader_argv)
 {
     osv::firmware_probe();
 
@@ -526,7 +509,7 @@ void main_cont(int ac, char** av)
 
     std::vector<std::vector<std::string> > cmds;
 
-    std::tie(ac, av) = parse_options(ac, av);
+    parse_options(loader_argc, loader_argv);
 
     setenv("OSV_VERSION", osv::version().c_str(), 1);
 
@@ -581,7 +564,6 @@ void main_cont(int ac, char** av)
 
     pthread_t pthread;
     // run the payload in a pthread, so pthread_self() etc. work
-    std::tuple<int,char**> main_args = std::make_tuple(ac,av);
     // start do_main_thread unpinned (== pinned to all cpus)
     cpu_set_t cpuset;
     CPU_ZERO(&cpuset);
@@ -591,7 +573,7 @@ void main_cont(int ac, char** av)
     pthread_attr_t attr;
     pthread_attr_init(&attr);
     pthread_attr_setaffinity_np(&attr, sizeof(cpuset), &cpuset);
-    pthread_create(&pthread, &attr, do_main_thread, (void *) &main_args);
+    pthread_create(&pthread, &attr, do_main_thread, (void *) __app_cmdline);
     void* retval;
     pthread_join(pthread, &retval);
 
@@ -610,5 +592,6 @@ void main_cont(int ac, char** av)
     }
 }
 
-int __argc;
-char** __argv;
+int __loader_argc = 0;
+char** __loader_argv = nullptr;
+char* __app_cmdline = nullptr;

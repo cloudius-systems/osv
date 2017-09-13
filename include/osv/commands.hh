@@ -13,8 +13,9 @@
 #include <vector>
 #include <system_error>
 
-extern int __argc;
-extern char** __argv;
+extern int __loader_argc;
+extern char** __loader_argv;
+extern char* __app_cmdline;
 static constexpr size_t max_cmdline = 1024;
 
 namespace osv {
