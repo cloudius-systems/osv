@@ -295,10 +295,6 @@ void parse_options(int loader_argc, char** loader_argv)
 // return the std::string and the commands_args poiting to them as a move
 std::vector<std::vector<std::string> > prepare_commands(char* app_cmdline)
 {
-    if (strlen(app_cmdline) == 0) {
-        puts("This image has an empty command line. Nothing to run.");
-        osv::poweroff();
-    }
     std::vector<std::vector<std::string> > commands;
     bool ok;
 
@@ -306,6 +302,10 @@ std::vector<std::vector<std::string> > prepare_commands(char* app_cmdline)
 
     if (!ok) {
         puts("Failed to parse command line.");
+        osv::poweroff();
+    }
+    if (commands.size() == 0) {
+        puts("This image has an empty command line. Nothing to run.");
         osv::poweroff();
     }
 
