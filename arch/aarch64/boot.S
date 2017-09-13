@@ -36,10 +36,10 @@ start_elf:
         mov     x29, xzr
         bl      premain
 
-        adrp    x3, __argc
-        ldr     x0, [x3, #:lo12:__argc]
-        adrp    x3, __argv
-        ldr     x1, [x3, #:lo12:__argv]
+        adrp    x3, __loader_argc
+        ldr     x0, [x3, #:lo12:__loader_argc]
+        adrp    x3, __loader_argv
+        ldr     x1, [x3, #:lo12:__loader_argv]
         bl      main
 
         bl      halt
