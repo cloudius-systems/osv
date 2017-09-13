@@ -22,6 +22,60 @@ static void report(bool ok, const char* msg)
     printf("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
 }
 
+static bool test_parse_empty()
+{
+    std::vector<std::vector<std::string> > result;
+    bool ok;
+
+    result = osv::parse_command_line(std::string(""), ok);
+
+    if (!ok) {
+        return false;
+    }
+
+    if (result.size() != 0) {
+        return false;
+    }
+
+    return true;
+}
+
+static bool test_parse_space()
+{
+    std::vector<std::vector<std::string> > result;
+    bool ok;
+
+    result = osv::parse_command_line(std::string(" "), ok);
+
+    if (!ok) {
+        return false;
+    }
+
+    if (result.size() != 0) {
+        return false;
+    }
+
+    return true;
+}
+
+static bool test_parse_spaces()
+{
+    std::vector<std::vector<std::string> > result;
+    bool ok;
+
+    result = osv::parse_command_line(std::string(" \t\n;"), ok);
+
+    if (!ok) {
+        return false;
+    }
+
+    if (result.size() != 0) {
+        return false;
+    }
+
+    return true;
+}
+
 static bool test_parse_simplest()
 {
     std::vector<std::vector<std::string> > result;
@@ -1088,6 +1142,9 @@ int main(int argc, char *argv[])
 {
     all_test_loader_parse_cmdline();
 
+    report(test_parse_empty(), "empty string");
+    report(test_parse_space(), "single space");
+    report(test_parse_spaces(), "multiple diffrent whitespaces");
     report(test_parse_simplest(), "simplest command line");
     report(test_parse_simplest_with_args(), "simplest command line with args");
     report(test_parse_simplest_with_quotes(),
