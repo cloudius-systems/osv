@@ -30,22 +30,11 @@
  */
 
 #include <sys/cdefs.h>
-#if defined(LIBC_SCCS) && !defined(lint)
-#if 0
-static char sccsid[] = "@(#)strsep.c	8.1 (Berkeley) 6/4/93";
-#else
-__RCSID("$NetBSD: stresep.c,v 1.4 2017/08/23 10:27:41 christos Exp $");
-#endif
-#endif /* LIBC_SCCS and not lint */
-
-#include "namespace.h"
 
 #include <assert.h>
 #include <string.h>
 
-#ifdef __weak_alias
-__weak_alias(stresep,_stresep)
-#endif
+#define _DIAGASSERT assert
 
 /*
  * Get next token from string *stringp, where tokens are possibly-empty

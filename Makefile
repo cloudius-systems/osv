@@ -1601,6 +1601,7 @@ musl += string/strnlen.o
 libc += string/strpbrk.o
 musl += string/strrchr.o
 libc += string/strsep.o
+libc += string/stresep.o
 libc += string/strsignal.o
 libc += string/strspn.o
 musl += string/strstr.o
