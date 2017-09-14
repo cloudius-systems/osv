@@ -54,6 +54,9 @@ BOOST_AUTO_TEST_CASE(test_connections_get_accepted_even_when_backlog_gets_overfl
 
     sockets_to_close.push_back(listen_s);
 
+    int reuse = 1;
+    BOOST_REQUIRE(setsockopt(listen_s, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse)) == 0);
+
     struct sockaddr_in laddr = {};
     laddr.sin_family = AF_INET;
     laddr.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -104,8 +107,12 @@ BOOST_AUTO_TEST_CASE(test_clients_are_not_reset_when_backlog_is_full_and_they_wr
     auto listen_s = socket(AF_INET, SOCK_STREAM, 0);
     if (listen_s < 0) {
         perror("socket");
+        BOOST_REQUIRE(false);
         exit(1);
     }
+
+    int reuse = 1;
+    BOOST_REQUIRE(setsockopt(listen_s, SOL_SOCKET, SO_REUSEADDR, (const char*)&reuse, sizeof(reuse)) == 0);
 
     struct sockaddr_in laddr = {};
     laddr.sin_family = AF_INET;
@@ -114,6 +121,7 @@ BOOST_AUTO_TEST_CASE(test_clients_are_not_reset_when_backlog_is_full_and_they_wr
 
     if (bind(listen_s, (struct sockaddr *) &laddr, sizeof(laddr)) < 0) {
         perror("bind");
+        BOOST_REQUIRE(false);
         exit(1);
     }
 
@@ -130,6 +138,7 @@ BOOST_AUTO_TEST_CASE(test_clients_are_not_reset_when_backlog_is_full_and_they_wr
             int s = socket(AF_INET, SOCK_STREAM, 0);
             if (s < 0) {
                 perror("socket");
+                BOOST_REQUIRE(false);
                 exit(1);
             }
 
@@ -142,6 +151,7 @@ BOOST_AUTO_TEST_CASE(test_clients_are_not_reset_when_backlog_is_full_and_they_wr
 
             if (connect(s, (struct sockaddr *)&raddr, sizeof(raddr))) {
                 perror("connect");
+                BOOST_REQUIRE(false);
                 exit(1);
             }
 
@@ -152,6 +162,7 @@ BOOST_AUTO_TEST_CASE(test_clients_are_not_reset_when_backlog_is_full_and_they_wr
                     break;
                 }
             }
+            close(s);
         }));
     }
 
@@ -170,6 +181,7 @@ BOOST_AUTO_TEST_CASE(test_clients_are_not_reset_when_backlog_is_full_and_they_wr
                 int bytes = read(client_s, &buf, sizeof(buf));
                 if (bytes < 0) {
                     perror("read");
+                    BOOST_REQUIRE(false);
                     exit(1);
                 }
             }
