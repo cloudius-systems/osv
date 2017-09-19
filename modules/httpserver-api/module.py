@@ -5,7 +5,7 @@ from osv.modules import api
 
 _module = '${OSV_BASE}/modules/httpserver-api'
 
-_exe = '/libhttpserver.so'
+_exe = '/libhttpserver-api.so'
 
 usr_files = FileMap()
 usr_files.add(os.path.join(_module, 'libhttpserver-api.so')).to(_exe)
