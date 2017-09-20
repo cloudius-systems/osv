@@ -107,7 +107,10 @@ void read_partition_table(struct device *dev)
 	unsigned long offset;
 	int index;
 
-	bread(dev, 0, &bp);
+	if (bread(dev, 0, &bp) != 0) {
+		debugf("read_partition_table failed for %s\n", dev->name);
+		return;
+	}
 
 	sched_lock();
 	// A real partition table (MBR) ends in the two bytes 0x55, 0xAA (see
