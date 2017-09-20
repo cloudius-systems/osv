@@ -201,7 +201,7 @@ void scsi::req_done()
         u32 len;
         while ((req = static_cast<scsi_virtio_req*>(queue->get_buf_elem(&len))) != nullptr) {
             auto response = req->resp.cmd.response;
-            auto status = req->resp.cmd.response;
+            auto status = req->resp.cmd.status;
             auto bio = req->bio;
 
             req->response = response;
