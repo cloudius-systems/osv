@@ -11,7 +11,7 @@
 #include "autogen/fs.json.hh"
 #include <string>
 #include <vector>
-#include <sys/vfs.h>
+#include <sys/statvfs.h>
 
 namespace httpserver {
 
@@ -23,13 +23,14 @@ using namespace std;
 using namespace json;
 using namespace fs_json;
 
-static void fill_dfstat(DFStat& dfstat, const osv::mount_desc& mount, const struct statfs& st) {
+static void fill_dfstat(DFStat& dfstat, const osv::mount_desc& mount, const struct statvfs& st) {
     dfstat.filesystem = mount.special;
     dfstat.mount = mount.path;
     dfstat.btotal = st.f_blocks;
     dfstat.bfree = st.f_bfree;
     dfstat.ftotal = st.f_files;
     dfstat.ffree = st.f_ffree;
+    dfstat.blocksize = st.f_frsize;
 }
 
 extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
@@ -45,13 +46,13 @@ void init(routes& routes) {
     {
         using namespace osv;
         const std::string onemount = req.param.at("mount");
-        struct statfs st;
+        struct statvfs st;
         httpserver::json::DFStat dfstat;
         vector<httpserver::json::DFStat> dfstats;
 
         for (mount_desc mount : osv::current_mounts()) {
             if (mount.type == "zfs" && (onemount == "" || onemount == mount.path)) {
-                if (statfs(mount.path.c_str(),&st) != 0) {
+                if (statvfs(mount.path.c_str(),&st) != 0) {
                     throw not_found_exception("mount does not exist");
                 }
                 fill_dfstat(dfstat, mount, st);
@@ -69,13 +70,13 @@ void init(routes& routes) {
 
     list_df_stats.set_handler([](const_req req)
         {
-            struct statfs st;
+            struct statvfs st;
             httpserver::json::DFStat dfstat;
             vector<httpserver::json::DFStat> res;
 
             for (osv::mount_desc mount : osv::current_mounts()) {
                 if (mount.type == "zfs") {
-                    if (statfs(mount.path.c_str(),&st) == 0) {
+                    if (statvfs(mount.path.c_str(),&st) == 0) {
                         fill_dfstat(dfstat, mount, st);
                         res.push_back(dfstat);
                     }

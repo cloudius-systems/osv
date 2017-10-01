@@ -87,6 +87,10 @@
                 "ffree" : {
                     "type": "long",
                     "description": "free file nodes in file system"
+                },
+                "blocksize" : {
+                    "type": "long",
+                    "description": "block size in bytes"
                 }
             }
         }
