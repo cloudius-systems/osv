@@ -50,7 +50,24 @@ apt-get install build-essential libboost-all-dev genromfs autoconf libtool openj
 
 **Arch Linux**
 ```
-pacman -S base-devel git python apache-ant maven qemu gdb boost yaml-cpp unzip
+pacman -S base-devel git python apache-ant maven qemu gdb boost yaml-cpp unzip openssl-1.0
+```
+
+Apply the following patch to make it work with openssl-1.0 
+```
+diff --git a/modules/lua/Makefile b/modules/lua/Makefile
+index 9676f349..ddb6a075 100644
+--- a/modules/lua/Makefile
++++ b/modules/lua/Makefile
+@@ -123,7 +123,7 @@ $(CDIR)/ssl.lua: $(LUA_ROCKS_BIN)
+ 
+ # Workaround because LuaRocks ignores /lib64
+ ifneq ("$(wildcard /usr/lib64/libssl.so*)", "")
+-       out/bin/luarocks install LuaSec 0.5 OPENSSL_LIBDIR=/usr/lib64
++       out/bin/luarocks install LuaSec 0.5 OPENSSL_LIBDIR=/usr/lib/openssl-1.0 OPENSSL_INCDIR=/usr/include/openssl-1.0
+ else
+        out/bin/luarocks install LuaSec 0.5
+ endif
 ```
 
 Before start building OSv, you'll need to add your account to kvm group.
