@@ -8,6 +8,7 @@ try:
     # This works on Python 2
     StringIO = StringIO.StringIO
 except ImportError:
+    import io
     # This works on Python 3
     StringIO = io.StringIO
 
