@@ -21,11 +21,16 @@ extern char _binary_loader_stripped_elf_lz_start;
 extern char _binary_loader_stripped_elf_lz_end;
 extern char _binary_loader_stripped_elf_lz_size;
 
-// std libraries used by fastlz.
-extern "C" void *memset(void *s, int c, size_t n)
-{
-    return __builtin_memset(s, c, n);
-}
+// The code in fastlz.cc does not call memset(), but some version of gcc
+// implement some assignments by calling memset(), so we need to implement
+// a memset() function. This is not performance-critical so let's stick to
+// the basic implementation we have in libc/string/memset.c. To avoid
+// compiling this source file a second time (the loader needs different
+// compile parameters), we #include it here instead.
+extern "C" void *memset(void *s, int c, size_t n);
+#define memset_base memset
+#include "libc/string/memset.c"
+#undef memset_base
 
 extern "C" void uncompress_loader()
 {
