@@ -9,13 +9,13 @@
 
 void *memset_base(void *dest, int c, size_t n)
 {
-	unsigned char *s = dest;
+	unsigned char *s = (unsigned char *)dest;
 	c = (unsigned char)c;
 	for (; ((uintptr_t)s & ALIGN) && n; n--) *s++ = c;
 	if (n) {
 		size_t *w, k = ONES * c;
-		for (w = (void *)s; n>=SS; n-=SS, w++) *w = k;
-		for (s = (void *)w; n; n--, s++) *s = c;
+		for (w = (size_t *)s; n>=SS; n-=SS, w++) *w = k;
+		for (s = (unsigned char *)w; n; n--, s++) *s = c;
 	}
 	return dest;
 }
