@@ -178,7 +178,7 @@ namespace pci {
     }
 
     function::function(u8 bus, u8 device, u8 func)
-        : _bus(bus), _device(device), _func(func), _have_msix(false), _msix_enabled(false)
+        : _bus(bus), _device(device), _func(func), _have_msix(false), _msix_enabled(false), _have_msi(false), _msi_enabled(false)
     {
 
     }
