@@ -45,9 +45,11 @@ static int thread_run_app_in_namespace(std::string filename,
         auto app = osv::application::run_and_join(filename, args, new_program, &envp, parent_waiter);
         app_status.exit_code = app->get_return_code();
         debugf_execve("thread_run_app_in_namespace ret = %d tid=%ld\n", app_status.exit_code, tid);
-    }
-    catch (osv::launch_error &ex) {
-        app_status.errno_code = ENOENT; // Assume the only possible problem is "no such file"
+    } catch (osv::invalid_elf_error &ex) {
+        app_status.errno_code = ENOEXEC;
+        app_status.exit_code = -1;
+    } catch (osv::launch_error &ex) {
+        app_status.errno_code = ENOENT; // Assume all the other errors are "no such file"
         app_status.exit_code = -1;
     }
 

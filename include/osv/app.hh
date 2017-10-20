@@ -38,6 +38,12 @@ public:
     launch_error(std::string msg) : std::runtime_error(msg) {}
 };
 
+class invalid_elf_error : public launch_error
+{
+public:
+    invalid_elf_error(std::string msg) : launch_error(msg) {}
+};
+
 class multiple_join_error : public std::runtime_error
 {
 public:

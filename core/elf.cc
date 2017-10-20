@@ -232,27 +232,27 @@ void file::load_elf_header()
     try {
         read(0, &_ehdr, sizeof(_ehdr));
     } catch(error &e) {
-        throw std::runtime_error(
+        throw osv::invalid_elf_error(
                 std::string("can't read elf header: ") + strerror(e.get()));
     }
     if (!(_ehdr.e_ident[EI_MAG0] == '\x7f'
           && _ehdr.e_ident[EI_MAG1] == 'E'
           && _ehdr.e_ident[EI_MAG2] == 'L'
           && _ehdr.e_ident[EI_MAG3] == 'F')) {
-        throw std::runtime_error("bad elf header");
+        throw osv::invalid_elf_error("bad elf header");
     }
     if (!(_ehdr.e_ident[EI_CLASS] == ELFCLASS64)) {
-        throw std::runtime_error("bad elf class");
+        throw osv::invalid_elf_error("bad elf class");
     }
     if (!(_ehdr.e_ident[EI_DATA] == ELFDATA2LSB)) {
-        throw std::runtime_error("bad elf endianness");
+        throw osv::invalid_elf_error("bad elf endianness");
     }
     if (!(_ehdr.e_ident[EI_VERSION] == EV_CURRENT)) {
-        throw std::runtime_error("bad elf version");
+        throw osv::invalid_elf_error("bad elf version");
     }
     if (!(_ehdr.e_ident[EI_OSABI] == ELFOSABI_LINUX
           || _ehdr.e_ident[EI_OSABI] == 0)) {
-        throw std::runtime_error("bad os abi");
+        throw osv::invalid_elf_error("bad os abi");
     }
     // We currently only support running ET_DYN objects (shared library or
     // position-independent executable). In the future we can add support for
@@ -260,7 +260,7 @@ void file::load_elf_header()
     // loading them at their specified address and moving the kernel out of
     // their way.
     if (_ehdr.e_type != ET_DYN) {
-        throw std::runtime_error(
+        throw osv::invalid_elf_error(
                 "bad executable type (only shared-object or PIE supported)");
     }
 }
@@ -270,7 +270,7 @@ void file::read(Elf64_Off offset, void* data, size_t size)
     // read(fileref, ...) is void, and crashes with assertion failure if the
     // file is not long enough. So we need to check first.
     if (::size(_f) < offset + size) {
-        throw std::runtime_error("executable too short");
+        throw osv::invalid_elf_error("executable too short");
     }
     ::read(_f, data, offset, size);
 }
@@ -432,7 +432,7 @@ void object::load_segments()
             break;
         default:
             abort();
-            throw std::runtime_error("bad p_type");
+            throw osv::invalid_elf_error("bad p_type");
         }
     }
     // As explained in issue #352, we currently don't correctly support TLS
@@ -520,7 +520,7 @@ Elf64_Dyn& object::dynamic_tag(unsigned tag)
 {
     auto r = _dynamic_tag(tag);
     if (!r) {
-        throw std::runtime_error("missing tag");
+        throw osv::invalid_elf_error("missing tag");
     }
     return *r;
 }

@@ -170,7 +170,9 @@ application::application(const std::string& command,
 
         merge_in_environ(new_program, env);
         _lib = current_program->get_library(_command);
-    } catch(const std::exception &e) {
+    } catch (const launch_error &e) {
+        throw;
+    } catch (const std::exception &e) {
         throw launch_error(e.what());
     }
 
