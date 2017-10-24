@@ -30,6 +30,7 @@ extern size_t jvm_heap_size;
 // parameters.
 
 #define JVM_PATH         "/usr/lib/jvm/jre/lib/amd64/server/libjvm.so"
+#define JVM9_PATH        "/usr/lib/jvm/java/lib/server/libjvm.so"
 
 #if defined(RUN_JAVA_NON_ISOLATED)
 #define RUNJAVA_JAR_PATH "/java/runjava-non-isolated.jar"
@@ -108,6 +109,9 @@ static int java_main(int argc, char **argv)
     auto prog = elf::get_program();
     // The JVM library remains loaded as long as jvm_so is in scope.
     auto jvm_so = prog->get_library(JVM_PATH);
+    if(!jvm_so) {
+        jvm_so = prog->get_library(JVM9_PATH);
+    }
 
     auto JNI_GetDefaultJavaVMInitArgs
         = prog->lookup_function<void (void*)>("JNI_GetDefaultJavaVMInitArgs");
