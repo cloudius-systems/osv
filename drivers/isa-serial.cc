@@ -82,7 +82,9 @@ void isa_serial_console::write(const char *str, size_t len)
 bool isa_serial_console::input_ready()
 {
     u8 val = pci::inb(ioport + regs::LSR);
-    return val & lsr::RECEIVE_DATA_READY;
+    // On VMWare hosts without a serial port, this register always
+    // returns 0xff.  Just ignore it instead of spinning incessantly.
+    return (val != 0xff && (val & lsr::RECEIVE_DATA_READY));
 }
 
 char isa_serial_console::readch()
