@@ -163,6 +163,13 @@ class Ubuntu(object):
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
 
+    class Ubuntu_17_04(object):
+        packages = ['openjdk-8-jdk']
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '17.04'
+
     class Ubuntu_16_04(object):
         packages = ['openjdk-8-jdk']
         ec2_packages = ['ec2-api-tools', 'awscli']
@@ -191,7 +198,7 @@ class Ubuntu(object):
         ec2_post_install = standard_ec2_post_install
         version = '13.10'
 
-    versions = [Ubuntu_16_04, Ubuntu_15_04, Ubuntu_14_04, Ubuntu_13_10]
+    versions = [Ubuntu_17_04, Ubuntu_16_04, Ubuntu_15_04, Ubuntu_14_04, Ubuntu_13_10]
 
 distros = [
            Debian(),
