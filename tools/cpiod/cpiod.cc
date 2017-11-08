@@ -52,9 +52,23 @@ static void change_mode(std::string path, mode_t mode) {
 
 class cpio_in_expand : public cpio_in {
 public:
-    cpio_in_expand(std::string prefix): _prefix(prefix) {};
+    class logger {
+    public:
+        logger(bool verbose): _verbose(verbose) {};
+        template<typename T>
+        logger& operator << (const T& x) {
+            if (_verbose) {
+                std::cout << x;
+            }
+            return *this;
+        }
+    public:
+        bool _verbose;
+    };
+public:
+    cpio_in_expand(std::string prefix, bool verbose): _prefix(prefix), _log(verbose) {};
     virtual void add_file(string name, istream& is, mode_t mode) override {
-        cout << "Adding " << name << "...\n";
+        _log << "Adding " << name << "...\n";
         name = add_prefix(name);
         make_directories(parent_path(name));
         ofstream os(name);
@@ -62,13 +76,13 @@ public:
         change_mode(name, mode);
     }
     virtual void add_dir(string name, mode_t mode) override {
-        cout << "Adding " << name << "...\n";
+        _log << "Adding " << name << "...\n";
         name = add_prefix(name);
         make_directories(name);
         change_mode(name, mode);
     }
     virtual void add_symlink(string oldpath, string newpath, mode_t mode) override {
-        cout << "Link " << newpath << " to " << oldpath << " ...\n";
+        _log << "Link " << newpath << " to " << oldpath << " ...\n";
         newpath = add_prefix(newpath);
         auto pos = newpath.rfind('/');
         if (pos != newpath.npos) {
@@ -82,6 +96,7 @@ public:
 
 private:
     std::string _prefix;
+    logger _log;
     std::string add_prefix(std::string path) {
         if (_prefix.empty()) {
             return path;
@@ -116,11 +131,13 @@ int main(int ac, char** av)
 {
     int port;
     std::string prefix;
+    bool verbose;
     // Declare the supported options.
     po::options_description desc("Allowed options");
     desc.add_options()
         ("help", "produce help message")
         ("port", po::value<int>()->default_value(10000), "set listening port")
+        ("verbose", po::value<bool>()->default_value(true), "disable verbose output")
         ("prefix", po::value<std::string>()->default_value(std::string("/")), "set prefix");
 
     po::variables_map vm;
@@ -134,6 +151,7 @@ int main(int ac, char** av)
 
     port = vm["port"].as<int>();
     prefix = vm["prefix"].as<std::string>();
+    verbose = vm["verbose"].as<bool>();
 
     boost::asio::io_service io_service;
     tcp::acceptor acceptor(io_service, tcp::endpoint(tcp::v4(), port));
@@ -141,7 +159,7 @@ int main(int ac, char** av)
     cout << "Waiting for connection from host...\n";
     boost::asio::ip::tcp::iostream socket;
     acceptor.accept(*socket.rdbuf());
-    cpio_in_expand expand_files(prefix);
+    cpio_in_expand expand_files(prefix, verbose);
     cpio_in::parse(socket, expand_files);
     sync();
 
@@ -158,4 +176,5 @@ int main(int ac, char** av)
             fprintf(stderr, "umount /zfs failed, error = %s\n", strerror(errno));
         }
     }
+    cout << "cpiod finished" << endl;
 }
