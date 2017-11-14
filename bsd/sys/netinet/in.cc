@@ -50,6 +50,7 @@
 #include <bsd/sys/net/if_llatbl.h>
 #include <bsd/sys/net/if_types.h>
 #include <bsd/sys/net/route.h>
+#include <bsd/sys/net/routecache.hh>
 #include <bsd/sys/net/vnet.h>
 
 #include <bsd/sys/netinet/in.h>
@@ -562,6 +563,12 @@ in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
 		goto out;
 
 	case SIOCDIFADDR:
+        /*
+         * Flush the route cache, since it likely contains entries that are
+         * going away here.
+         */
+        route_cache::invalidate();
+
 		/*
 		 * in_ifscrub kills the interface route.
 		 */

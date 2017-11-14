@@ -171,7 +171,12 @@ public:
     }
 
     static void invalidate() {
-
+        WITH_LOCK(cache_mutex) {
+            auto *old_cache = cache.read_by_owner();
+            auto new_cache = new routemap();
+            cache.assign(new_cache);
+            osv::rcu_dispose(old_cache);
+        }
     }
 };
 
