@@ -30,10 +30,12 @@ def upload(osv, manifest, depends):
     # We'll want to read the rest of the guest's output, so that it doesn't
     # hang, and so the user can see what's happening. Easiest to do this with
     # a thread.
-    def consumeoutput(file):
+    stop_output = False
+    def consumeoutput(file, silent):
         for line in iter(lambda: file.readline(), b''):
-            os.write(sys.stdout.fileno(), line)
-    threading.Thread(target=consumeoutput, args=(osv.stdout,)).start()
+            if not silent():
+                os.write(sys.stdout.fileno(), line)
+    threading.Thread(target=consumeoutput, args=(osv.stdout, lambda: stop_output)).start()
 
     # Send a CPIO header or file, padded to multiple of 4 bytes
     def cpio_send(data):
@@ -63,35 +65,51 @@ def upload(osv, manifest, depends):
                 + filename + b'\0')
 
     # Send the files to the guest
-    for name, hostname in files:
-        if hostname.startswith("->"):
-            link = hostname[2:]
-            cpio_send(cpio_header(name, stat.S_IFLNK, len(link)))
-            cpio_send(link.encode())
-        else:
-            depends.write('\t%s \\\n' % (hostname,))
-            if hostname.endswith("-stripped.so"):
-                continue
-            hostname = strip_file(hostname)
-            if os.path.islink(hostname):
-                perm = os.lstat(hostname).st_mode & 0o777
-                link = os.readlink(hostname)
-                cpio_send(cpio_header(name, perm | stat.S_IFLNK, len(link)))
+    try:
+        for name, hostname in files:
+            if hostname.startswith("->"):
+                link = hostname[2:]
+                cpio_send(cpio_header(name, stat.S_IFLNK, len(link)))
                 cpio_send(link.encode())
-            elif os.path.isdir(hostname):
-                perm = os.stat(hostname).st_mode & 0o777
-                cpio_send(cpio_header(name, perm | stat.S_IFDIR, 0))
             else:
-                perm = os.stat(hostname).st_mode & 0o777
-                cpio_send(cpio_header(name, perm | stat.S_IFREG, os.stat(hostname).st_size))
-                with open(hostname, 'rb') as f:
-                    cpio_send(f.read())
+                depends.write('\t%s \\\n' % (hostname,))
+                if hostname.endswith("-stripped.so"):
+                    continue
+                hostname = strip_file(hostname)
+                if os.path.islink(hostname):
+                    perm = os.lstat(hostname).st_mode & 0o777
+                    link = os.readlink(hostname)
+                    cpio_send(cpio_header(name, perm | stat.S_IFLNK, len(link)))
+                    cpio_send(link.encode())
+                elif os.path.isdir(hostname):
+                    perm = os.stat(hostname).st_mode & 0o777
+                    cpio_send(cpio_header(name, perm | stat.S_IFDIR, 0))
+                else:
+                    perm = os.stat(hostname).st_mode & 0o777
+                    cpio_send(cpio_header(name, perm | stat.S_IFREG, os.stat(hostname).st_size))
+                    with open(hostname, 'rb') as f:
+                        cpio_send(f.read())
+    except:
+        # We had an error uploading one of the files (e.g., one of the files
+        # in the manifest does not exist). Let's print an error message, but
+        # first stop the consumeoutput thread displaying the guest's output
+        # so its messages do not get mixed with ours. Then, do NOT exit -
+        # continue the code below to stop the guest normally.
+        import time
+        time.sleep(1) # give consumeoutput thread a chance to print some more
+        stop_output = True
+        print("\nERROR: file upload failed:")
+        print(sys.exc_info()[1])
     cpio_send(cpio_header("TRAILER!!!", 0, 0))
     s.shutdown(socket.SHUT_WR)
 
     # Wait for the guest to actually finish writing and syncing
     s.recv(1)
     s.close()
+    if stop_output:
+        # stop_output is set when we failed during the upload, so let's
+        # have the upload fail.
+        sys.exit(1)
 
 def main():
     make_option = optparse.make_option
