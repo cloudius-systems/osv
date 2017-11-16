@@ -91,7 +91,14 @@ class Fedora(object):
         ec2_post_install = None
         version = '26'
 
-    versions = [Fedora_19, Fedora_20, Fedora_21, Fedora_22, Fedora_23, Fedora_24, Fedora_25, Fedora_26]
+    class Fedora_27(object):
+        packages = ['java-1.8.0-openjdk', 'python2-requests', 'compat-openssl10-devel']
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '27'
+
+    versions = [Fedora_19, Fedora_20, Fedora_21, Fedora_22, Fedora_23, Fedora_24, Fedora_25, Fedora_26, Fedora_27]
 
 class RHELbased(Fedora):
     name = ['Scientific Linux', 'NauLinux', 'CentOS Linux',
