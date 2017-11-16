@@ -10,6 +10,7 @@
 #include <osv/sched.hh>
 #include <osv/prio.hh>
 #include <osv/printf.hh>
+#include <osv/aligned_new.hh>
 #include "processor.hh"
 #include "psci.hh"
 #include "arch-dtb.hh"
@@ -62,7 +63,7 @@ void smp_init()
     sched::current_cpu = sched::cpus[0];
 
     for (auto c : sched::cpus) {
-        c->incoming_wakeups = new sched::cpu::incoming_wakeup_queue[sched::cpus.size()];
+        c->incoming_wakeups = aligned_array_new<sched::cpu::incoming_wakeup_queue>(sched::cpus.size());
     }
 }
 
