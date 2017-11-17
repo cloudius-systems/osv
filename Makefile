@@ -458,7 +458,7 @@ $(out)/loader-stripped.elf.lz.o: $(out)/loader-stripped.elf $(out)/fastlz/lz
 
 $(out)/fastlz/lzloader.o: fastlz/lzloader.cc | generated-headers
 	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLAGS) -O2 -m32 -fno-instrument-functions -o $@ -c fastlz/lzloader.cc, CXX $<)
+	$(call quiet, $(CXX) $(CXXFLAGS) -O0 -m32 -fno-instrument-functions -o $@ -c fastlz/lzloader.cc, CXX $<)
 
 $(out)/lzloader.elf: $(out)/loader-stripped.elf.lz.o $(out)/fastlz/lzloader.o arch/x64/lzloader.ld \
 	$(out)/fastlz/fastlz.o
