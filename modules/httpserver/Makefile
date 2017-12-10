@@ -5,4 +5,5 @@
 clean:
 	-rm -rf autogen obj
 	-rm -f libhttpserver*.so usr.manifest
-.PHONY: clean
+module:
+.PHONY: clean module
