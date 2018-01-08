@@ -150,7 +150,9 @@ def main():
 
     upload(osv, manifest, depends)
 
-    osv.wait()
+    ret = osv.wait()
+    if ret != 0:
+        sys.exit("Upload failed.")
 
     depends.write('\n\n')
     depends.close()

@@ -201,7 +201,9 @@ def start_osv_qemu(options):
         if options.dry_run:
             print(format_args(cmdline))
         else:
-            subprocess.call(cmdline, env=qemu_env)
+            ret = subprocess.call(cmdline, env=qemu_env)
+            if ret != 0:
+                sys.exit("qemu failed.")
     except OSError as e:
         if e.errno == errno.ENOENT:
             print("'qemu-system-x86_64' binary not found. Please install the qemu-system-x86 package.")
