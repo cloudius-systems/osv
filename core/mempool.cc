@@ -767,7 +767,7 @@ void page_range_allocator::free(page_range* pr)
         pr2->size += pr->size;
         pr = pr2;
     }
-    if (_bitmap[get_bitmap_idx(*pr) + pr->size / page_size]) {
+    if (_bitmap[get_bitmap_idx(*pr) + pr->size / page_size - 1]) {
         auto pr2 = static_cast<page_range*>(static_cast<void*>(pr) + pr->size);
         remove(*pr2);
         pr->size += pr2->size;
