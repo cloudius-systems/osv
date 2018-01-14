@@ -352,15 +352,20 @@ long syscall(long number, ...)
 }
 long __syscall(long number, ...)  __attribute__((alias("syscall")));
 
-extern "C" long syscall_wrapper(long number, ...)
+// In x86-64, a SYSCALL instruction has exactly 6 parameters, because this is the number of registers
+// alloted for passing them (additional parameters *cannot* be passed on the stack). So we can get
+// 7 arguments to this function (syscall number plus its 6 parameters). Because in the x86-64 ABI the
+// seventh argument is on the stack, we must pass the arguments explicitly to the syscall() function
+// and can't just call it without any arguments and hope everything will be passed on
+extern "C" long syscall_wrapper(long number, long p1, long p2, long p3, long p4, long p5, long p6)
 {
     int errno_backup = errno;
     // syscall and function return value are in rax
-    auto ret = syscall(number);
+    auto ret = syscall(number, p1, p2, p3, p4, p5, p6);
     int result = -errno;
     errno = errno_backup;
     if (ret < 0 && ret >= -4096) {
-	return result;
+        return result;
     }
     return ret;
 }
