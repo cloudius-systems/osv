@@ -22,13 +22,14 @@ standard_ec2_post_install = ['pip install awscli &&'
 
 class Fedora(object):
     name = 'Fedora'
-    install = 'yum -y install'
+    install = 'yum -y install --allowerasing'
     packages = ['gcc-c++', 'gcc-c++-aarch64-linux-gnu', 'git', 'gdb', 'qemu-img',
                 'qemu-system-x86', 'libvirt', 'maven',
                 'ant', 'autoconf', 'automake', 'boost-static', 'genromfs', 'libtool',
                 'flex', 'bison', 'maven-shade-plugin', 'python-dpkt', 'tcpdump', 'gdb',
                 'gnutls-utils', 'openssl', 'p11-kit', 'patch', 'wget',
                 'unzip', 'ncurses', 'ncurses-devel', 'libstdc++-static', 'openssl-libs',
+
                 'libedit-devel', 'yaml-cpp-devel'
                 ]
     ec2_packages = standard_ec2_packages
