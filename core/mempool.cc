@@ -761,13 +761,15 @@ page_range* page_range_allocator::alloc_aligned(size_t size, size_t offset,
 
 void page_range_allocator::free(page_range* pr)
 {
-    if (_bitmap[get_bitmap_idx(*pr) - 1]) {
+    auto idx = get_bitmap_idx(*pr);
+    if (idx && _bitmap[idx - 1]) {
         auto pr2 = *(reinterpret_cast<page_range**>(pr) - 1);
         remove(*pr2);
         pr2->size += pr->size;
         pr = pr2;
     }
-    if (_bitmap[get_bitmap_idx(*pr) + pr->size / page_size - 1]) {
+    auto next_idx = get_bitmap_idx(*pr) + pr->size / page_size;
+    if (next_idx < _bitmap.size() && _bitmap[next_idx]) {
         auto pr2 = static_cast<page_range*>(static_cast<void*>(pr) + pr->size);
         remove(*pr2);
         pr->size += pr2->size;
