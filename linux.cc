@@ -13,6 +13,7 @@
 #include <osv/mutex.h>
 #include <osv/waitqueue.hh>
 #include <osv/stubbing.hh>
+#include <memory>
 
 #include <syscall.h>
 #include <stdarg.h>
@@ -28,6 +29,13 @@
 #include <signal.h>
 #include <sys/select.h>
 #include <sys/mman.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#include <sys/ioctl.h>
+#include <sys/file.h>
+#include <sys/unistd.h>
 
 #include <unordered_map>
 
@@ -309,6 +317,35 @@ static int sys_exit(int ret)
     return 0;
 }
 
+#define __NR_sys_ioctl __NR_ioctl
+//
+// We need to define explicit sys_ioctl that takes these 3 parameters to conform
+// to Linux signature of this system call. The underlying ioctl function which we delegate to
+// is variadic and takes slightly different paremeters and therefore cannot be used directly
+// as other system call implementations can.
+static int sys_ioctl(unsigned int fd, unsigned int command, unsigned long arg)
+{
+    return ioctl(fd, command, arg);
+}
+
+static int pselect6(int nfds, fd_set *readfds, fd_set *writefds,
+                   fd_set *exceptfds, const struct timespec *timeout_ts,
+                   void *sig)
+{
+    // As explained in the pselect(2) manual page, the system call pselect accepts
+    // pointer to a structure holding pointer to sigset_t and its size which is different
+    // the glibc version of pselect(). For now we are delaying implementation of this call
+    // scenario and raising an error when such call happens.
+    if(sig) {
+        WARN_ONCE("pselect6(): unimplemented with not-null sigmask\n");
+        errno = ENOSYS;
+        return -1;
+    }
+
+    return pselect(nfds, readfds, writefds, exceptfds, timeout_ts, NULL);
+}
+
+
 long syscall(long number, ...)
 {
     // Save FPU state and restore it at the end of this function
@@ -331,6 +368,7 @@ long syscall(long number, ...)
     SYSCALL4(epoll_ctl, int, int, int, struct epoll_event *);
     SYSCALL4(epoll_wait, int, struct epoll_event *, int, int);
     SYSCALL4(accept4, int, struct sockaddr *, socklen_t *, int);
+    SYSCALL3(connect, int, struct sockaddr *, socklen_t);
     SYSCALL5(get_mempolicy, int *, unsigned long *, unsigned long, void *, int);
     SYSCALL3(sched_getaffinity_syscall, pid_t, unsigned, unsigned long *);
     SYSCALL6(long_mmap, void *, size_t, int, int, int, off_t);
@@ -343,7 +381,30 @@ long syscall(long number, ...)
     SYSCALL3(madvise, void *, size_t, int);
     SYSCALL0(sched_yield);
     SYSCALL3(mincore, void *, size_t, unsigned char *);
+    SYSCALL4(openat, int, const char *, int, mode_t);
+    SYSCALL3(socket, int, int, int);
+    SYSCALL5(setsockopt, int, int, int, char *, int);
+    SYSCALL5(getsockopt, int, int, int, char *, unsigned int *);
+    SYSCALL3(getpeername, int, struct sockaddr *, unsigned int *);
+    SYSCALL3(bind, int, struct sockaddr *, int);
+    SYSCALL2(listen, int, int);
+    SYSCALL3(sys_ioctl, unsigned int, unsigned int, unsigned long);
+    SYSCALL2(stat, const char *, struct stat *);
+    SYSCALL2(fstat, int, struct stat *);
+    SYSCALL3(getsockname, int, struct sockaddr *, socklen_t *);
+    SYSCALL6(sendto, int, const void *, size_t, int, const struct sockaddr *, socklen_t);
+    SYSCALL3(sendmsg, int, const struct msghdr *, int);
+    SYSCALL6(recvfrom, int, void *, size_t, int, struct sockaddr *, socklen_t *);
+    SYSCALL3(recvmsg, int, struct msghdr *, int);
     SYSCALL3(dup3, int, int, int);
+    SYSCALL2(flock, int, int);
+    SYSCALL4(pwrite64, int, const void *, size_t, off_t);
+    SYSCALL1(fdatasync, int);
+    SYSCALL6(pselect6, int, fd_set *, fd_set *, fd_set *, const struct timespec *, void *);
+    SYSCALL3(fcntl, int, int, int);
+    SYSCALL4(pread64, int, void *, size_t, off_t);
+    SYSCALL2(ftruncate, int, off_t);
+    SYSCALL1(fsync, int);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
