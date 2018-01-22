@@ -48,7 +48,7 @@ int main(int argc, char **argv)
 
     asm ("movq %1, %%rax\n"
          "syscall\n"
-	 "movq %%rax, %0\n"
+         "movq %%rax, %0\n"
          : "=m" (tid)
          : "m" (syscall_nr)
          : "rax", "rdi");

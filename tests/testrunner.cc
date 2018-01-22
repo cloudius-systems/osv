@@ -17,7 +17,7 @@
 #include <osv/run.hh>
 #include <osv/debug.hh>
 
-#define TESTDIR		"/tests"
+#define TESTDIR        "/tests"
 
 static unsigned nr_tests, nr_failures;
 

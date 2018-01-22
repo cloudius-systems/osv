@@ -19,7 +19,7 @@
 
 static int tests = 0, fails = 0;
 
-static void report(bool ok, const char* msg)
+static void report(bool ok, const char *msg)
 {
     ++tests;
     fails += !ok;
@@ -39,7 +39,7 @@ static int check_vnode_duplicity(void)
     mktemp(oldpath);
     mktemp(newpath);
 
-    auto fd = open(oldpath, O_CREAT|O_TRUNC|O_RDWR, 0666);
+    auto fd = open(oldpath, O_CREAT | O_TRUNC | O_RDWR, 0666);
     close(fd);
 
     if (link(oldpath, newpath) != 0) {
@@ -68,11 +68,11 @@ static int check_vnode_duplicity(void)
         err = -1;
     }
     vn_unlock(olddp->d_vnode);
- err2:
+    err2:
     drele(newdp);
- err1:
+    err1:
     drele(olddp);
- err:
+    err:
     unlink(newpath);
     unlink(oldpath);
     return err;
@@ -83,18 +83,18 @@ int main(int argc, char *argv[])
     const char *oldpath, *newpath;
     char oldp[64], newp[64];
     struct stat st[2];
-    char buf[4] = { 0 };
-    char buf2[4] = { 0 };
+    char buf[4] = {0};
+    char buf2[4] = {0};
 
     if (argc > 2) {
         oldpath = argv[1];
         newpath = argv[2];
     } else {
 
-	strcpy(oldp, "/usr/tst-fs-linkXXXXXX");
+        strcpy(oldp, "/usr/tst-fs-linkXXXXXX");
         mktemp(oldp);
 
-	strcpy(newp, "/usr/tst-fs-linkXXXXXX");
+        strcpy(newp, "/usr/tst-fs-linkXXXXXX");
         mktemp(newp);
 
         oldpath = oldp;
@@ -104,7 +104,7 @@ int main(int argc, char *argv[])
     report(link(oldpath, newpath) < 0 && errno == ENOENT, "link returns ENOENT if source path does not exists");
 
     // Create a temporary file that's used in testing.
-    auto fd = open(oldpath, O_CREAT|O_TRUNC|O_RDWR, 0666);
+    auto fd = open(oldpath, O_CREAT | O_TRUNC | O_RDWR, 0666);
     write(fd, "test", 4);
     lseek(fd, 0, SEEK_SET);
     read(fd, buf, 4);

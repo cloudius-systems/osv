@@ -14,7 +14,7 @@
 #include <sys/stat.h>
 #include <fcntl.h>
 
-#define TMP_FILE	"/tmp/f1"
+#define TMP_FILE    "/tmp/f1"
 
 #define handle_perror(msg) \
    do { perror(msg); printf("\n"); exit(EXIT_FAILURE); } while (0)
