@@ -5,6 +5,8 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <unistd.h>
+
 #include <osv/dentry.h>
 #include <osv/vnode.h>
 #include <osv/mount.h>
@@ -350,6 +352,19 @@ static std::string procfs_mounts()
 	return rstr;
 }
 
+static std::string procfs_hostname()
+{
+    char hostname[4096];
+    memset(hostname, 0, 4096);
+
+    int ret = gethostname(hostname, 4095);
+    if (ret < 0) {
+        return std::string("");
+    }
+
+    return std::string(hostname);
+}
+
 static int
 procfs_mount(mount* mp, const char *dev, int flags, const void* data)
 {
@@ -359,10 +374,18 @@ procfs_mount(mount* mp, const char *dev, int flags, const void* data)
     self->add("maps", inode_count++, mmu::procfs_maps);
     self->add("stat", inode_count++, procfs_stats);
 
+    auto kernel = make_shared<proc_dir_node>(inode_count++);
+    kernel->add("hostname", inode_count++, procfs_hostname);
+
+    auto sys = make_shared<proc_dir_node>(inode_count++);
+    sys->add("kernel", kernel);
+
     auto* root = new proc_dir_node(vp->v_ino);
     root->add("self", self);
     root->add("0", self); // our standard pid
     root->add("mounts", inode_count++, procfs_mounts);
+    root->add("sys", sys);
+
     root->add("cpuinfo", inode_count++, [] { return processor::features_str(); });
 
     vp->v_data = static_cast<void*>(root);
