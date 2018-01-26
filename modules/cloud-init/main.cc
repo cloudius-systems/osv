@@ -30,11 +30,12 @@ namespace po = boost::program_options;
 // /meta-data) on a disk. The disk is required to have label "cidata".
 // It can contain ISO9660 or FAT filesystem.
 //
-// config_disk() checks whether we have a second disk (/dev/vblk1) with
+// config_disk() checks whether we have a second disk (/dev/vblkX) with
 // ISO image, and if there is, it copies the configuration file from
 // /user-data to the given file.
 // config_disk() returns true if it has successfully read the configuration
-// into the requested file.
+// into the requested file. It triest to get configuratioe from first few
+// vblk devices, namely vblk1 to vblk10.
 //
 // OSv implementation limitations:
 // The /meta-data file is currently ignored.
@@ -45,34 +46,38 @@ namespace po = boost::program_options;
 // cloud-localds cloud-init.img cloud-init.yaml
 // The cloud-localds command is provided by cloud-utils package (fedora).
 static bool config_disk(const char* outfile) {
-    char disk[] = "/dev/vblk1";
-    char srcfile[] = "/user-data";
-    struct stat sb;
-    int ret;
-    int app_ret = -1;
+    for (int ii=1; ii<=10; ii++) {
+        char disk[20];
+        char srcfile[] = "/user-data";
+        struct stat sb;
+        int ret;
+        int app_ret = -1;
 
-    ret = stat(disk, &sb);
-    if (ret != 0) {
-        return false;
-    }
+        snprintf(disk, sizeof(disk), "/dev/vblk%d", ii);
+        ret = stat(disk, &sb);
+        if (ret != 0) {
+            continue;
+        }
 
-    std::vector<std::string> cmd = {"/usr/bin/iso-read.so", "-e", srcfile, "-o", outfile, disk};
-    osv::run(cmd[0], cmd, &app_ret);
-    if (app_ret != 0) {
-        debug("cloud-init: warning, %s exited with code %d (%s is not ISO image?)\n", cmd[0], app_ret, disk);
-        return false;
+        std::vector<std::string> cmd = {"/usr/bin/iso-read.so", "-e", srcfile, "-o", outfile, disk};
+        osv::run(cmd[0], cmd, &app_ret);
+        if (app_ret != 0) {
+            debug("cloud-init: warning, %s exited with code %d (%s is not ISO image?)\n", cmd[0], app_ret, disk);
+            continue;
+        }
+        ret = stat(outfile, &sb);
+        if (ret != 0) {
+            debug("cloud-init: disk %s, stat(%s) failed, errno=%d\n", disk, outfile, errno);
+            continue;
+        }
+        if ((sb.st_mode & S_IFMT) != S_IFREG) {
+            debug("cloud-init: disk %s, %s is not a file\n", disk, outfile);
+            return false;
+        }
+        debug("cloud-init: copied file %s -> %s from ISO image %s\n", srcfile, outfile, disk);
+        return true;
     }
-    ret = stat(outfile, &sb);
-    if (ret != 0) {
-        debug("cloud-init: stat(%s) failed, errno=%d\n", outfile, errno);
-        return false;
-    }
-    if ((sb.st_mode & S_IFMT) != S_IFREG) {
-        debug("cloud-init: %s is not a file\n", outfile);
-        return false;
-    }
-    debug("cloud-init: copied file %s -> %s from ISO image %s\n", srcfile, outfile, disk);
-    return true;
+    return false;
 }
 
 int main(int argc, char* argv[])
