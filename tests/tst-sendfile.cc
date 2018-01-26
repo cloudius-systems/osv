@@ -21,7 +21,7 @@
 
 static int tests = 0, fails = 0;
 
-const char *test_filename = "testdata_for_sendfile_input";
+const char *test_filename = "/tmp/testdata_for_sendfile_input";
 int size_test_file = 1024*1024;
 
 /* the fd for the testfile */
@@ -52,7 +52,7 @@ bool gen_random_file()
 /* Copies count bytes from the input file starting from offset and then verifies it */
 int test_sendfile_on_filecopy(off_t *offset, size_t count)
 {
-    const char *out_file = "testdata_sendfile_output";
+    const char *out_file = "/tmp/testdata_sendfile_output";
     int write_fd = open(out_file, O_RDWR | O_TRUNC | O_CREAT, S_IRWXU);
     if (write_fd == -1) {
         printf("\topen() failed with error message = %s\n",strerror(errno));
@@ -165,7 +165,7 @@ int test_sendfile_on_socket(off_t *offset, size_t count)
 
 int test_extents(int testfile_readfd, size_t offset, size_t count)
 {
-    const char *out_file = "testdata_sendfile_output";
+    const char *out_file = "/tmp/testdata_sendfile_output";
     off_t off;
     int write_fd = open(out_file, O_RDWR | O_TRUNC | O_CREAT, S_IRWXU);
     if (write_fd == -1) {
@@ -236,13 +236,13 @@ int main()
     ret = sendfile(100, testfile_readfd, NULL, 10);
     report(ret == -1 && errno == EBADF, "test for bad out_fd");
 
-    int write_fd = open("temp_file", O_WRONLY|O_CREAT, 0755);
+    int write_fd = open("/tmp/temp_file", O_WRONLY|O_CREAT, 0755);
     report(write_fd > 0, "open dummy testfile in write mode");
     ret = sendfile(write_fd, 100, NULL, 100);
     report(ret == -1 && errno == EBADF, "test for bad in_fd");
     report(close(write_fd) == 0, "close the dummy testfile");
 
-    write_fd = open("temp_file", O_RDONLY);
+    write_fd = open("/tmp/temp_file", O_RDONLY);
     report(write_fd > 0, "open dummy testfile in read only mode");
     ret = sendfile(write_fd, testfile_readfd, NULL, 10);
     report(ret == -1 && errno == EBADF, "test for bad mode of out_fd");

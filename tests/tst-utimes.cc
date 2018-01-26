@@ -67,7 +67,7 @@ int main(int argc, char *argv[])
     if (argc > 1) {
         path = argv[1];
     } else {
-        path = "/usr/foo";
+        path = "/tmp/foo";
     }
     asprintf(&pathlnk, "%s.lnk", path);
 

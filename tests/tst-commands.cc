@@ -358,11 +358,11 @@ static bool test_cpiod_haproxy()
 static bool test_runscript_multiple_with_args_quotes()
 {
     // Script without \n at the end
-    std::ofstream of1("/zpool-list", std::ios::out | std::ios::binary);
+    std::ofstream of1("/tmp/zpool-list", std::ios::out | std::ios::binary);
     of1 << "/zpool.so list";
     of1.close();
     // Script with \n at the end
-    std::ofstream of2("/myprog-prm");
+    std::ofstream of2("/tmp/myprog-prm");
     of2 << "/myprog.so prm1 \"prm2a prm2b\" prm3\n";
     of2.close();
 
@@ -371,7 +371,7 @@ static bool test_runscript_multiple_with_args_quotes()
     bool ok;
 
     result = osv::parse_command_line(
-        std::string("runscript \"/zpool-list\"; runscript /myprog-prm  "),
+        std::string("runscript \"/tmp/zpool-list\"; runscript /tmp/myprog-prm  "),
         ok);
 
     if (!ok) {
@@ -411,7 +411,7 @@ static bool test_runscript_multiple_with_args_quotes()
 
 static bool test_runscript_multiple_commands_per_line()
 {
-    std::ofstream of1("/myscript", std::ios::out | std::ios::binary);
+    std::ofstream of1("/tmp/myscript", std::ios::out | std::ios::binary);
     of1 << "/prog1; /prog2";
     of1.close();
 
@@ -420,7 +420,7 @@ static bool test_runscript_multiple_commands_per_line()
     bool ok;
 
     result = osv::parse_command_line(
-        std::string("runscript \"/myscript\""),
+        std::string("runscript \"/tmp/myscript\""),
         ok);
 
     if (!ok) {
@@ -450,7 +450,7 @@ static bool test_runscript_multiple_commands_per_line()
 
 static bool test_runscript_multiple_commands_per_line_with_args()
 {
-    std::ofstream of1("/myscript", std::ios::out | std::ios::binary);
+    std::ofstream of1("/tmp/myscript", std::ios::out | std::ios::binary);
     of1 << "/prog1 pp1a ; /prog2 pp2a pp2b";
     of1.close();
 
@@ -459,7 +459,7 @@ static bool test_runscript_multiple_commands_per_line_with_args()
     bool ok;
 
     result = osv::parse_command_line(
-        std::string("runscript \"/myscript\""),
+        std::string("runscript \"/tmp/myscript\""),
         ok);
 
     if (!ok) {
@@ -500,7 +500,7 @@ static bool test_runscript_multiple_commands_per_line_with_args()
 
 static bool test_runscript_multiple_commands_per_line_with_args_quotes()
 {
-    std::ofstream of1("/myscript", std::ios::out | std::ios::binary);
+    std::ofstream of1("/tmp/myscript", std::ios::out | std::ios::binary);
     of1 << "/prog1 pp1a ; /prog2 pp2a pp2b; /prog3 pp3a \"pp3b1 pp3b2\" \"pp3c1;pp3c2\" \"pp3d\" \" ;; --onx -fon;x \\t\"; ";
     of1.close();
 
@@ -509,7 +509,7 @@ static bool test_runscript_multiple_commands_per_line_with_args_quotes()
     bool ok;
 
     result = osv::parse_command_line(
-        std::string("runscript \"/myscript\""),
+        std::string("runscript \"/tmp/myscript\""),
         ok);
 
     if (!ok) {
@@ -573,7 +573,7 @@ static bool test_runscript_multiple_commands_per_line_with_args_quotes()
 
 static bool test_runscript_multiline()
 {
-    std::ofstream of1("/myscript", std::ios::out | std::ios::binary);
+    std::ofstream of1("/tmp/myscript", std::ios::out | std::ios::binary);
     of1 << "/prog1\n";
     of1 << "/prog2 \n";
     of1 << "  /prog3;  \n";
@@ -591,7 +591,7 @@ static bool test_runscript_multiline()
 
 
     result = osv::parse_command_line(
-        std::string("runscript \"/myscript\";  "),
+        std::string("runscript \"/tmp/myscript\";  "),
         ok);
 
     if (!ok) {
@@ -615,7 +615,7 @@ static bool test_runscript_multiline()
 
 static bool test_runscript_multiline_multiple_commands_per_line_with_args_quotes()
 {
-    std::ofstream of1("/myscript", std::ios::out | std::ios::binary);
+    std::ofstream of1("/tmp/myscript", std::ios::out | std::ios::binary);
     of1 << "/prog1 pp1a pp1b\n";
     of1 << "\t/prog2 pp2a \"pp2b1 pp2b2\" pp2c ; \n";
     of1 << "  /prog3 pp3a pp3b \"pp3c1 pp3c2\";  /prog4 \"pp4a1 pp4a2\";  \n";
@@ -627,7 +627,7 @@ static bool test_runscript_multiline_multiple_commands_per_line_with_args_quotes
     bool ok;
 
     result = osv::parse_command_line(
-        std::string("runscript \"/myscript\";  "),
+        std::string("runscript \"/tmp/myscript\";  "),
         ok);
 
     if (!ok) {
@@ -683,7 +683,7 @@ static bool test_runscript_multiline_multiple_commands_per_line_with_args_quotes
 
 static bool test_runscript_with_env()
 {
-    std::ofstream of1("/myscript", std::ios::out | std::ios::binary);
+    std::ofstream of1("/tmp/myscript", std::ios::out | std::ios::binary);
     of1 << "--env=ASDF=ttrt /prog1 pp1a pp1b\n";
     of1.close();
 
@@ -697,7 +697,7 @@ static bool test_runscript_with_env()
     }
 
     result = osv::parse_command_line(
-        std::string("runscript \"/myscript\";  "),
+        std::string("runscript \"/tmp/myscript\";  "),
         ok);
 
     if (!ok) {
@@ -735,7 +735,7 @@ static bool test_runscript_with_env()
 
 static bool test_runscript_with_env_in_script()
 {
-    std::ofstream of1("/myscript", std::ios::out | std::ios::binary);
+    std::ofstream of1("/tmp/myscript", std::ios::out | std::ios::binary);
     of1 << "--env=ASDF=ttrt --env=PORT=$THEPORT /$THEPROG pp1a $PRM1b pp1c $PRM1d\n";
     of1.close();
 
@@ -766,7 +766,7 @@ static bool test_runscript_with_env_in_script()
     }
 
     result = osv::parse_command_line(
-        std::string("runscript \"/myscript\";  "),
+        std::string("runscript \"/tmp/myscript\";  "),
         ok);
 
     if (!ok) {
@@ -818,7 +818,7 @@ static bool test_runscript_with_env_in_script()
 
 static bool test_runscript_with_conditional_env_in_script(bool set_env_vars_before_evaluation)
 {
-    std::ofstream of1("/myscript", std::ios::out | std::ios::binary);
+    std::ofstream of1("/tmp/myscript", std::ios::out | std::ios::binary);
     of1 << "--env=ASDF?=ttrt --env=PORT?=$THEPORT /$THEPROG pp1a $PRM1b pp1c $PRM1d\n";
     of1.close();
 
@@ -865,7 +865,7 @@ static bool test_runscript_with_conditional_env_in_script(bool set_env_vars_befo
     }
 
     result = osv::parse_command_line(
-        std::string("runscript \"/myscript\";  "),
+        std::string("runscript \"/tmp/myscript\";  "),
         ok);
 
     if (!ok) {
