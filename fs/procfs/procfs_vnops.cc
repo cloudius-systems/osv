@@ -354,10 +354,8 @@ static std::string procfs_mounts()
 
 static std::string procfs_hostname()
 {
-    char hostname[4096];
-    memset(hostname, 0, 4096);
-
-    int ret = gethostname(hostname, 4095);
+    char hostname[65];
+    int ret = gethostname(hostname, 65);
     if (ret < 0) {
         return std::string("");
     }
