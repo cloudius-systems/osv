@@ -37,26 +37,27 @@
 #ifdef DEBUG_RAMFS
 #define DPRINTF(a)	dprintf a
 #else
-#define DPRINTF(a)	do {} while (0)
+#define DPRINTF(a)    do {} while (0)
 #endif
 
-#define ASSERT(e)	assert(e)
+#define ASSERT(e)    assert(e)
 
 /*
  * File/directory node for RAMFS
  */
 struct ramfs_node {
-	struct	ramfs_node *rn_next;   /* next node in the same directory */
-	struct	ramfs_node *rn_child;  /* first child node */
-	int	 rn_type;	/* file or directory */
-	char	*rn_name;	/* name (null-terminated) */
-	size_t	 rn_namelen;	/* length of name not including terminator */
-	size_t	 rn_size;	/* file size */
-	char	*rn_buf;	/* buffer to the file data */
-	size_t	 rn_bufsize;	/* allocated buffer size */
+    struct ramfs_node *rn_next;   /* next node in the same directory */
+    struct ramfs_node *rn_child;  /* first child node */
+    int rn_type;    /* file or directory */
+    char *rn_name;    /* name (null-terminated) */
+    size_t rn_namelen;    /* length of name not including terminator */
+    size_t rn_size;    /* file size */
+    char *rn_buf;    /* buffer to the file data */
+    size_t rn_bufsize;    /* allocated buffer size */
 };
 
 struct ramfs_node *ramfs_allocate_node(const char *name, int type);
+
 void ramfs_free_node(struct ramfs_node *node);
 
 #endif /* !_RAMFS_H */
