@@ -1802,6 +1802,7 @@ int futimesat(int dirfd, const char *pathname, const struct timeval times[2])
     struct stat st;
     struct file *fp;
     int error;
+    char *absolute_path;
 
     if ((pathname && pathname[0] == '/') || dirfd == AT_FDCWD)
         return utimes(pathname, times);
@@ -1825,17 +1826,19 @@ int futimesat(int dirfd, const char *pathname, const struct timeval times[2])
     if (error)
         goto out_errno;
 
+    /* build absolute path */
+    absolute_path = (char*)malloc(PATH_MAX);
+    strlcpy(absolute_path, fp->f_dentry->d_mount->m_path, PATH_MAX);
+    strlcat(absolute_path, fp->f_dentry->d_path, PATH_MAX);
+
     if (pathname) {
-        auto length = strlen(fp->f_dentry->d_path) + strlen(pathname) + 2;
-        auto absolute_path = (char*)malloc(length);
-        snprintf(absolute_path, length, "%s/%s", fp->f_dentry->d_path, pathname);
-        error = utimes(absolute_path, times);
-        free(absolute_path);
-    } else {
-        // TODO: it's really ugly how we convert the fd to path, and utimes
-        // will need to look up this path again.
-        error = utimes(fp->f_dentry->d_path, times);
+        strlcat(absolute_path, "/", PATH_MAX);
+        strlcat(absolute_path, pathname, PATH_MAX);
     }
+
+    error = utimes(absolute_path, times);
+    free(absolute_path);
+
     fdrop(fp);
 
     if (error)

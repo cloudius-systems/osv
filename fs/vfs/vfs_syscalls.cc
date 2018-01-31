@@ -1353,6 +1353,8 @@ sys_utimensat(int dirfd, const char *pathname, const struct timespec times[2], i
 	    ap = std::string(fp->f_dentry->d_path) + "/" + pathname;
 	else
 	    ap = fp->f_dentry->d_path;
+
+	ap = std::string(fp->f_dentry->d_mount->m_path) + "/" + ap;
     }
 
     /* FIXME: Add support for AT_SYMLINK_NOFOLLOW */
