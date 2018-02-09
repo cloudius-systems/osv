@@ -380,7 +380,7 @@ void loader_parse_cmdline(char* str, int *pargc, char*** pargv, char** app_cmdli
                 break;
             }
         }
-        if (*ch == '\0') {
+        if (ch && *ch == '\0') {
             // empty str, contains only spaces
             *app_cmdline = str;
         }
