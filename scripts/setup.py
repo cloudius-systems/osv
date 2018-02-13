@@ -23,15 +23,39 @@ standard_ec2_post_install = ['pip install awscli &&'
 class Fedora(object):
     name = 'Fedora'
     install = 'yum -y install --allowerasing'
-    packages = ['gcc-c++', 'gcc-c++-aarch64-linux-gnu', 'git', 'gdb', 'qemu-img',
-                'qemu-system-x86', 'libvirt', 'maven',
-                'ant', 'autoconf', 'automake', 'boost-static', 'genromfs', 'libtool',
-                'flex', 'bison', 'maven-shade-plugin', 'python-dpkt', 'tcpdump', 'gdb',
-                'gnutls-utils', 'openssl', 'p11-kit', 'patch', 'wget',
-                'unzip', 'ncurses', 'ncurses-devel', 'libstdc++-static', 'openssl-libs',
-
-                'libedit-devel', 'yaml-cpp-devel'
-                ]
+    packages = [
+                'ant',
+                'autoconf',
+                'automake',
+                'bison',
+                'boost-static',
+                'flex',
+                'gcc-c++',
+                'gcc-c++-aarch64-linux-gnu',
+                'gdb',
+                'genromfs',
+                'git',
+                'gnutls-utils',
+                'libedit-devel',
+                'libstdc++-static',
+                'libtool',
+                'libvirt',
+                'maven',
+                'maven-shade-plugin',
+                'ncurses',
+                'ncurses-devel',
+                'openssl',
+                'openssl-libs',
+                'p11-kit',
+                'patch',
+                'python-dpkt',
+                'qemu-img',
+                'qemu-system-x86',
+                'tcpdump',
+                'unzip',
+                'wget',
+                'yaml-cpp-devel',
+                 ]
     ec2_packages = standard_ec2_packages
     test_packages = ['openssl-devel']
     ec2_post_install = standard_ec2_post_install
@@ -102,8 +126,7 @@ class Fedora(object):
     versions = [Fedora_19, Fedora_20, Fedora_21, Fedora_22, Fedora_23, Fedora_24, Fedora_25, Fedora_26, Fedora_27]
 
 class RHELbased(Fedora):
-    name = ['Scientific Linux', 'NauLinux', 'CentOS Linux',
-            'Red Hat Enterprise Linux', 'Oracle Linux']
+    name = ['Scientific Linux', 'NauLinux', 'CentOS Linux', 'Red Hat Enterprise Linux', 'Oracle Linux']
 
     class RHELbased_70(object):
         packages = []
@@ -138,12 +161,32 @@ class RHELbased(Fedora):
 class Debian(object):
     name = 'debian'
     install = 'apt-get -y install'
-    packages = ['build-essential', 'libboost-all-dev', 'genromfs', 'autoconf',
-                'libtool', 'openjdk-7-jdk', 'ant', 'maven',
-                'libmaven-shade-plugin-java', 'tcpdump', 'gdb', 'gawk',
-                'gnutls-bin', 'openssl', 'python-requests', 'python-dpkt',
-                'qemu-system-x86', 'qemu-utils', 'lib32stdc++-4.9-dev',
-                'p11-kit', 'libssl-dev', 'libedit-dev', 'libncurses5-dev']
+    packages = [
+                'ant',
+                'autoconf',
+                'build-essential',
+                'gawk',
+                'gdb',
+                'genromfs',
+                'gnutls-bin',
+                'lib32stdc++-4.9-dev',
+                'libboost-all-dev',
+                'libedit-dev',
+                'libmaven-shade-plugin-java',
+                'libncurses5-dev',
+                'libssl-dev',
+                'libtool',
+                'maven',
+                'openjdk-7-jdk',
+                'openssl',
+                'p11-kit',
+                'python-dpkt',
+                'python-requests',
+                'qemu-system-x86',
+                'qemu-utils',
+                'tcpdump',
+                ]
+
     ec2_packages = standard_ec2_packages
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
@@ -160,12 +203,33 @@ class Debian(object):
 class Ubuntu(object):
     name = 'Ubuntu'
     install = 'apt-get -y install'
-    packages = ['build-essential', 'libboost-all-dev', 'genromfs', 'autoconf',
-                'libtool', 'ant', 'qemu-utils', 'maven',
-                'libmaven-shade-plugin-java', 'python-dpkt', 'tcpdump', 'gdb', 'qemu-system-x86',
-                'gawk', 'gnutls-bin', 'openssl', 'python-requests', 'p11-kit', 'g++-multilib',
-                'libssl-dev', 'libedit-dev', 'curl', 'libvirt-bin',
-                'libncurses5-dev', 'libyaml-cpp-dev', 'unzip'
+    packages = [
+                'ant',
+                'autoconf',
+                'build-essential',
+                'curl',
+                'g++-multilib',
+                'gawk',
+                'gdb',
+                'genromfs',
+                'gnutls-bin',
+                'libboost-all-dev',
+                'libedit-dev',
+                'libmaven-shade-plugin-java',
+                'libncurses5-dev',
+                'libssl-dev',
+                'libtool',
+                'libvirt-bin',
+                'libyaml-cpp-dev',
+                'maven',
+                'openssl',
+                'p11-kit',
+                'python-dpkt',
+                'python-requests',
+                'qemu-system-x86',
+                'qemu-utils',
+                'tcpdump',
+                'unzip',
                 ]
     ec2_packages = standard_ec2_packages
     test_packages = ['libssl-dev', 'zip']
