@@ -208,10 +208,23 @@ class Ubuntu(object):
 
     versions = [Ubuntu_17_04, Ubuntu_16_04, Ubuntu_15_04, Ubuntu_14_04, Ubuntu_13_10]
 
+class LinuxMint(Ubuntu):
+    name = 'LinuxMint'
+
+    class LinuxMint_18_03(object):
+        packages = ['openjdk-8-jdk']
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '18.3'
+
+    versions = [LinuxMint_18_03]
+
 distros = [
            Debian(),
            Fedora(),
            Ubuntu(),
+           LinuxMint(),
            RHELbased()
            ]
 
