@@ -54,7 +54,7 @@ all: lib$(TARGET).so api_api api_app api_env api_file api_fs api_hardware api_ne
 	$(call quiet, cat _usr_*.manifest | sort | uniq > usr.manifest, CREATE_MANIFEST)
 
 add_api_to_manifest = \
-	echo "/usr/mgmt/plugins/libhttpserver-$(1).so: `realpath libhttpserver-$(1).so`" > _usr_$(1).manifest
+	echo "/usr/mgmt/plugins/libhttpserver-$(1).so: `pwd`/libhttpserver-$(1).so" > _usr_$(1).manifest
 
 add_boost_dependencies_to_manifest = \
 	ldd libhttpserver-$(1).so | grep boost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' > _usr_$(1)_boost.manifest

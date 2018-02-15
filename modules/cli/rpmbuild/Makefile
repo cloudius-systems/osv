@@ -1,4 +1,4 @@
-ROOT_DIR := $(shell dirname $(realpath $(lastword $(MAKEFILE_LIST))))
+ROOT_DIR := $(shell pwd)
 CLI_ROOT=$(ROOT_DIR)/..
 LUA_DIR=$(CLI_ROOT)/../lua
 VERSION=1.0

@@ -71,7 +71,7 @@ $(BUILD)/$(LuaRocks_F)/src/luarocks: $(BUILD)/$(LuaRocks_F)/Makefile
 		make build
 
 $(BUILD)/$(LuaRocks_F)/Makefile: $(BUILD)/$(LuaRocks_F)/configure
-	$(eval PREFIX=$(shell dirname $(realpath $(lastword $(MAKEFILE_LIST)))))
+	$(eval PREFIX=$(shell pwd))
 	cd $(BUILD)/$(LuaRocks_F) && \
 		./configure --prefix=$(PREFIX)/$(OUT) --force-config \
 		--with-lua-include=$(PREFIX)/src --lua-version=$(LUA_V) \
