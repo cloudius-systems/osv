@@ -1,75 +1,11 @@
 #!/usr/bin/python
 
-import os, struct, optparse, io, subprocess
+import os, struct, optparse, io
 try:
     import configparser
 except ImportError:
     import ConfigParser as configparser
-
-defines = {}
-def add_var(option, opt, value, parser):
-    var, val = value.split('=')
-    defines[var] = val
-
-def expand(items):
-    for name, hostname in items:
-        if name.endswith('/**') and hostname.endswith('/**'):
-            name = name[:-2]
-            hostname = hostname[:-2]
-            for dirpath, dirnames, filenames in os.walk(hostname):
-                for filename in filenames:
-                    relpath = dirpath[len(hostname):]
-                    if relpath != "":
-                        relpath += "/"
-                    yield (name + relpath + filename,
-                           hostname + relpath + filename)
-        elif '/&/' in name and hostname.endswith('/&'):
-            prefix, suffix = name.split('/&/', 1)
-            yield (prefix + '/' + suffix, hostname[:-1] + suffix)
-        else:
-            yield (name, hostname)
-
-def unsymlink(f):
-    if f.startswith('!'):
-        f = f[1:]
-    try:
-        link = os.readlink(f)
-        if link.startswith('/'):
-            # try to find a match
-            base = os.path.dirname(f)
-            while not os.path.exists(base + link):
-                base = os.path.dirname(base)
-        else:
-            base = os.path.dirname(f) + '/'
-        return unsymlink(base + link)
-    except Exception:
-        return f
-
-def read_manifest(fn):
-    manifest = configparser.SafeConfigParser()
-    manifest.optionxform = str # avoid lowercasing
-    manifest.read(fn)
-
-    files = dict([(f, manifest.get('manifest', f, vars=defines))
-                  for f in manifest.options('manifest')])
-    return files
-
-def to_strip(filename):
-    ff = os.path.abspath(filename)
-    osvdir = os.path.abspath('../..')
-    return ff.startswith(os.getcwd()) or \
-        ff.startswith(osvdir + "/modules") or \
-        ff.startswith(osvdir + "/apps")
-
-def strip_file(filename):
-    stripped_filename = filename
-    if filename.endswith(".so") and to_strip(filename):
-        stripped_filename = filename[:-3] + "-stripped.so"
-        if not os.path.exists(stripped_filename) \
-                or (os.path.getmtime(stripped_filename) < \
-                    os.path.getmtime(filename)):
-            subprocess.call([os.getenv("STRIP", "strip"), "-o", stripped_filename, filename])
-    return stripped_filename
+from manifest_common import add_var, expand, unsymlink, read_manifest, defines, strip_file
 
 def main():
     make_option = optparse.make_option
@@ -104,11 +40,12 @@ def main():
     if options.depends:
         depends = open(options.depends, 'w')
     out = open(options.output, 'wb')
-    
+
     depends.write(u'%s: \\\n' % (options.output,))
 
     files = read_manifest(options.manifest)
-    files = list(expand(files.items()))
+    files = [(x, y % defines) for (x, y) in files]
+    files = list(expand(files))
     files = [(x, unsymlink(y)) for (x, y) in files]
     files = [(x, y) for (x, y) in files if not x.endswith("-stripped.so")]
     files = [(x, strip_file(y)) for (x, y) in files]
