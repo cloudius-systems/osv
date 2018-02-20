@@ -9,6 +9,12 @@ int __vfprintf_chk(FILE * f, int flag, const char *fmt, va_list ap)
     return vfprintf(f, fmt, ap);
 }
 
+// from http://www.openwall.com/lists/musl/2015/06/17/1
+int __vprintf_chk(int flag, const char *fmt, va_list ap)
+{
+	return vfprintf(stdout, fmt, ap);
+}
+
 int __printf_chk (int flag, const char *fmt, ...)
 {
     va_list args;
