@@ -165,20 +165,24 @@ class Debian(object):
     packages = [
                 'ant',
                 'autoconf',
+                'automake',
+                'bison',
                 'build-essential',
+                'curl',
+                'flex',
                 'gawk',
                 'gdb',
                 'genromfs',
+                'git',
                 'gnutls-bin',
-                'lib32stdc++-4.9-dev',
                 'libboost-all-dev',
                 'libedit-dev',
                 'libmaven-shade-plugin-java',
                 'libncurses5-dev',
                 'libssl-dev',
                 'libtool',
+                'libyaml-cpp-dev',
                 'maven',
-                'openjdk-7-jdk',
                 'openssl',
                 'p11-kit',
                 'python-dpkt',
@@ -186,6 +190,8 @@ class Debian(object):
                 'qemu-system-x86',
                 'qemu-utils',
                 'tcpdump',
+                'unzip',
+                'wget',
                 ]
 
     ec2_packages = standard_ec2_packages
@@ -193,13 +199,20 @@ class Debian(object):
     ec2_post_install = None
 
     class debian(object):
-        packages = []
+        packages = ['lib32stdc++-4.9-dev', 'openjdk-7-jdk',]
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = 'jessie/sid'
 
-    versions = [debian]
+    class Debian_9_3(object):
+        packages = ['lib32stdc++-6-dev', 'openjdk-8-jdk',]
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '9.3'
+
+    versions = [debian, Debian_9_3]
 
 class Ubuntu(object):
     name = 'Ubuntu'
