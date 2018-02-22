@@ -29,6 +29,7 @@ class Fedora(object):
                 'automake',
                 'bison',
                 'boost-static',
+                'curl',
                 'flex',
                 'gcc-c++',
                 'gcc-c++-aarch64-linux-gnu',
