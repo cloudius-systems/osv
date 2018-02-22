@@ -207,12 +207,16 @@ class Ubuntu(object):
     packages = [
                 'ant',
                 'autoconf',
+                'automake',
+                'bison',
                 'build-essential',
                 'curl',
+                'flex',
                 'g++-multilib',
                 'gawk',
                 'gdb',
                 'genromfs',
+                'git',
                 'gnutls-bin',
                 'libboost-all-dev',
                 'libedit-dev',
@@ -231,7 +235,9 @@ class Ubuntu(object):
                 'qemu-utils',
                 'tcpdump',
                 'unzip',
+                'wget',
                 ]
+
     ec2_packages = standard_ec2_packages
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
