@@ -19,6 +19,7 @@ os.environ["LANG"]="C"
 
 blacklist= [
     "tst-dns-resolver.so",
+    "tst-feexcept.so",
 ]
 
 add_tests([
