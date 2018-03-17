@@ -1,5 +1,6 @@
 [manifest]
 /libenviron.so: libenviron.so
+/libvdso.so: libvdso.so
 /zpool.so: zpool.so
 /libzfs.so: libzfs.so
 /libuutil.so: libuutil.so

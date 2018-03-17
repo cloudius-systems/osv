@@ -1873,6 +1873,11 @@ $(out)/libenviron.so: $(environ_sources)
 	$(makedir)
 	 $(call quiet, $(CC) $(CFLAGS) -shared -o $(out)/libenviron.so $(environ_sources), CC libenviron.so)
 
+$(out)/libvdso.so: libc/vdso/vdso.c
+	$(makedir)
+	$(call quiet, $(CC) -c -fPIC -o $(out)/libvdso.o libc/vdso/vdso.c, CC libvdso.o)
+	$(call quiet, $(LD) -shared -fPIC -o $(out)/libvdso.so $(out)/libvdso.o --version-script=libc/vdso/vdso.version, LINK libvdso.so)
+
 bootfs_manifest ?= bootfs.manifest.skel
 
 # If parameter "bootfs_manifest" has been changed since the last make,
@@ -1885,7 +1890,7 @@ $(bootfs_manifest_dep): phony
 	fi
 
 $(out)/bootfs.bin: scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep) $(tools:%=$(out)/%) \
-		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so
+		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so $(out)/libvdso.so
 	$(call quiet, olddir=`pwd`; cd $(out); $$olddir/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m $$olddir/$(bootfs_manifest) \
 		-D jdkbase=$(jdkbase) -D gccbase=$(gccbase) -D \
 		glibcbase=$(glibcbase) -D miscbase=$(miscbase), MKBOOTFS $@)

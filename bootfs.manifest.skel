@@ -1,4 +1,5 @@
 [manifest]
+/libvdso.so: libvdso.so
 /libuutil.so: libuutil.so
 /zpool.so: zpool.so
 /libzfs.so: libzfs.so
