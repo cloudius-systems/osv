@@ -30,9 +30,24 @@
 // write to local disk. The ROFS is inspired and shares some ideas
 // from the original MFS implementation by James Root from 2015.
 //
-// This initial version of ROFS operates without cache. It reads as much data
-// from disk as requested per uio passed in to the read function and it does
-// not retain/cache it for any subsequent read of the same data.
+// The ROFS can operate in two modes - without cache and with cache.
+// Without cache ROFS reads as much data from disk as requested
+// per uio passed in to the read function but it does not retain/cache it
+// for any subsequent read of the same data. Conversely in cache mode
+// ROFS reads more data from disk than needed per uio and stores it in memory
+// in anticipation there will be more subsequent contiguous reads of data.
+// By default ROFS operates in cache-mode but can be changed to non-cache
+// by passing '--disable_rofs_cache' boot option.
+//
+// Specifically ROFS cache mode implements simple "read-around" strategy by
+// dividing a file into same size (32K) segments and reading entire segment
+// into memory when corresponding offset of file is requested. Files smaller
+// than 32K are loaded in full on first read. This simple read-around strategy
+// can achieve 80-90% cache hit ratio in many conducted measurements. Also it can
+// deliver 2-3 increase of read speed over non-cache mode at some cost of
+// too much unneeded data read (15-20%). Lastly the loaded data stays
+// in memory forever as there is no LRU logic implemented that could limit
+// memory used.
 //
 // The structure of the data on disk is explained in scripts/gen-rofs-img.py
 
@@ -110,8 +125,12 @@ struct rofs_info {
     struct rofs_inode *inodes;
 };
 
-int rofs_read_blocks(struct device *device, uint64_t starting_block, uint64_t blocks_count, void *buf);
+namespace rofs {
+    int
+    cache_read(struct rofs_inode *inode, struct device *device, struct rofs_super_block *sb, struct uio *uio);
+}
 
-void rofs_set_vnode(struct vnode *vnode, struct rofs_inode *inode);
+int rofs_read_blocks(struct device *device, uint64_t starting_block, uint64_t blocks_count, void* buf);
+void rofs_set_vnode(struct vnode* vnode, struct rofs_inode *inode);
 
 #endif

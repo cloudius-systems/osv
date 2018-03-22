@@ -123,6 +123,7 @@ int main(int loader_argc, char **loader_argv)
     sched::init([=] { main_cont(loader_argc, loader_argv); });
 }
 
+static bool opt_disable_rofs_cache = false;
 static bool opt_leak = false;
 static bool opt_noshutdown = false;
 bool opt_power_off_on_abort = false;
@@ -180,6 +181,7 @@ void parse_options(int loader_argc, char** loader_argv)
         ("nameserver", bpo::value<std::string>(), "set nameserver address")
         ("delay", bpo::value<float>()->default_value(0), "delay in seconds before boot")
         ("redirect", bpo::value<std::string>(), "redirect stdout and stderr to file")
+        ("disable_rofs_cache", "disable ROFS memory cache")
     ;
     bpo::variables_map vars;
     // don't allow --foo bar (require --foo=bar) so we can find the first non-option
@@ -200,6 +202,10 @@ void parse_options(int loader_argc, char** loader_argv)
 
     if (vars.count("leak")) {
         opt_leak = true;
+    }
+
+    if (vars.count("disable_rofs_cache")) {
+        opt_disable_rofs_cache = true;
     }
 
     if (vars.count("noshutdown")) {
@@ -351,6 +357,10 @@ void* do_main_thread(void *_main_args)
             boot_time.event("ZFS mounted");
         }
         else {
+            if(opt_disable_rofs_cache) {
+                debug("Disabling ROFS memory cache.\n");
+                rofs_disable_cache();
+            }
             boot_time.event("ROFS mounted");
         }
     }

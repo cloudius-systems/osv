@@ -1771,6 +1771,7 @@ fs_objs += devfs/devfs_vnops.o \
 
 fs_objs += rofs/rofs_vfsops.o \
 	rofs/rofs_vnops.o \
+	rofs/rofs_cache.o \
 	rofs/rofs_common.o
 
 fs_objs += procfs/procfs_vnops.o

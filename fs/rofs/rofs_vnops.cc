@@ -104,7 +104,7 @@ static int rofs_readlink(struct vnode *vnode, struct uio *uio)
 //
 // This function reads as much data as requested per uio in single read from the disk but
 // the data does not get retained for subsequent reads
-static int rofs_read(struct vnode *vnode, struct file *fp, struct uio *uio, int ioflag)
+static int rofs_read_without_cache(struct vnode *vnode, struct file *fp, struct uio *uio, int ioflag)
 {
     struct rofs_info *rofs = (struct rofs_info *) vnode->v_mount->m_data;
     struct rofs_super_block *sb = rofs->sb;
@@ -147,7 +147,20 @@ static int rofs_read(struct vnode *vnode, struct file *fp, struct uio *uio, int 
     free(buf);
     return rv;
 }
+//
+// This version of read function reads more data than needed per uio following simple
+// "read-around" logic. The data gets retained in cache and retrieved from memory
+// by subsequent or contiguous reads. For details look at rofs_cache.cc.
+static int rofs_read_with_cache(struct vnode *vnode, struct file* fp, struct uio *uio, int ioflag) {
+    struct rofs_info *rofs = (struct rofs_info *) vnode->v_mount->m_data;
+    struct rofs_super_block *sb = rofs->sb;
+    struct rofs_inode *inode = (struct rofs_inode *) vnode->v_data;
+    struct device *device = vnode->v_mount->m_dev;
 
+    VERIFY_READ_INPUT_ARGUMENTS()
+
+    return rofs::cache_read(inode,device,sb,uio);
+}
 //
 // This functions reads directory information (dentries) based on information in memory
 // under rofs->dir_entries table
@@ -279,7 +292,7 @@ static int rofs_getattr(struct vnode *vnode, struct vattr *attr)
 struct vnops rofs_vnops = {
     rofs_open,               /* open */
     rofs_close,              /* close */
-    rofs_read,               /* read */
+    rofs_read_with_cache,    /* read */
     rofs_write,              /* write - returns error when called */
     rofs_seek,               /* seek */
     rofs_ioctl,              /* ioctl */
@@ -301,3 +314,7 @@ struct vnops rofs_vnops = {
     rofs_readlink,           /* read link */
     rofs_symlink             /* symbolic link - returns error when called*/
 };
+
+extern "C" void rofs_disable_cache() {
+    rofs_vnops.vop_read = rofs_read_without_cache;
+}
