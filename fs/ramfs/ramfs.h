@@ -54,6 +54,10 @@ struct ramfs_node {
     size_t rn_size;    /* file size */
     char *rn_buf;    /* buffer to the file data */
     size_t rn_bufsize;    /* allocated buffer size */
+    struct timespec rn_ctime;
+    struct timespec rn_atime;
+    struct timespec rn_mtime;
+    int rn_mode;
 };
 
 struct ramfs_node *ramfs_allocate_node(const char *name, int type);

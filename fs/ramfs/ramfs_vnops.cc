@@ -44,11 +44,28 @@
 #include <osv/vnode.h>
 #include <osv/file.h>
 #include <osv/mount.h>
+#include <osv/vnode_attr.h>
 
 #include "ramfs.h"
 
 static mutex_t ramfs_lock = MUTEX_INITIALIZER;
 static uint64_t inode_count = 1; /* inode 0 is reserved to root */
+
+static void
+set_times_to_now(struct timespec *time1, struct timespec *time2 = nullptr, struct timespec *time3 = nullptr)
+{
+    struct timespec now;
+    clock_gettime(CLOCK_REALTIME, &now);
+    if (time1) {
+        memcpy(time1, &now, sizeof(struct timespec));
+    }
+    if (time2) {
+        memcpy(time2, &now, sizeof(struct timespec));
+    }
+    if (time3) {
+        memcpy(time3, &now, sizeof(struct timespec));
+    }
+}
 
 struct ramfs_node *
 ramfs_allocate_node(const char *name, int type)
@@ -68,6 +85,16 @@ ramfs_allocate_node(const char *name, int type)
     }
     strlcpy(np->rn_name, name, np->rn_namelen + 1);
     np->rn_type = type;
+
+    if (type == VDIR)
+        np->rn_mode = S_IFDIR|0777;
+    else if (type == VLNK)
+        np->rn_mode = S_IFLNK|0777;
+    else
+        np->rn_mode = S_IFREG|0777;
+
+    set_times_to_now(&(np->rn_ctime), &(np->rn_atime), &(np->rn_mtime));
+
     return np;
 }
 
@@ -101,6 +128,9 @@ ramfs_add_node(struct ramfs_node *dnp, char *name, int type)
             prev = prev->rn_next;
         prev->rn_next = np;
     }
+
+    set_times_to_now(&(dnp->rn_mtime), &(dnp->rn_ctime));
+
     mutex_unlock(&ramfs_lock);
     return np;
 }
@@ -130,6 +160,8 @@ ramfs_remove_node(struct ramfs_node *dnp, struct ramfs_node *np)
     }
     ramfs_free_node(np);
 
+    set_times_to_now(&(dnp->rn_mtime), &(dnp->rn_ctime));
+
     mutex_unlock(&ramfs_lock);
     return 0;
 }
@@ -141,6 +173,9 @@ ramfs_rename_node(struct ramfs_node *np, char *name)
     char *tmp;
 
     len = strlen(name);
+    if (len > NAME_MAX) {
+        return ENAMETOOLONG;
+    }
     if (len <= np->rn_namelen) {
         /* Reuse current name buffer */
         strlcpy(np->rn_name, name, np->rn_namelen + 1);
@@ -154,6 +189,7 @@ ramfs_rename_node(struct ramfs_node *np, char *name)
         np->rn_name = tmp;
     }
     np->rn_namelen = len;
+    set_times_to_now(&(np->rn_ctime));
     return 0;
 }
 
@@ -214,6 +250,10 @@ ramfs_mkdir(struct vnode *dvp, char *name, mode_t mode)
     struct ramfs_node *np;
 
     DPRINTF(("mkdir %s\n", name));
+    if (strlen(name) > NAME_MAX) {
+        return ENAMETOOLONG;
+    }
+
     if (!S_ISDIR(mode))
         return EINVAL;
 
@@ -221,12 +261,16 @@ ramfs_mkdir(struct vnode *dvp, char *name, mode_t mode)
     if (np == NULL)
         return ENOMEM;
     np->rn_size = 0;
+
     return 0;
 }
 
 static int
 ramfs_symlink(struct vnode *dvp, char *name, char *link)
 {
+    if (strlen(name) > NAME_MAX) {
+        return ENAMETOOLONG;
+    }
     auto np = ramfs_add_node((ramfs_node *) dvp->v_data, name, VLNK);
     if (np == NULL)
         return ENOMEM;
@@ -234,6 +278,7 @@ ramfs_symlink(struct vnode *dvp, char *name, char *link)
     size_t len = strlen(link);
     np->rn_buf = strndup(link, len);
     np->rn_bufsize = np->rn_size = len;
+
     return 0;
 }
 
@@ -258,6 +303,8 @@ ramfs_readlink(struct vnode *vp, struct uio *uio)
         len = vp->v_size - uio->uio_offset;
     else
         len = uio->uio_resid;
+
+    set_times_to_now( &(np->rn_atime));
     return uiomove(np->rn_buf + uio->uio_offset, len, uio);
 }
 
@@ -308,6 +355,7 @@ ramfs_truncate(struct vnode *vp, off_t length)
     }
     np->rn_size = length;
     vp->v_size = length;
+    set_times_to_now(&(np->rn_mtime), &(np->rn_ctime));
     return 0;
 }
 
@@ -318,6 +366,10 @@ static int
 ramfs_create(struct vnode *dvp, char *name, mode_t mode)
 {
     struct ramfs_node *np;
+
+    if (strlen(name) > NAME_MAX) {
+        return ENAMETOOLONG;
+    }
 
     DPRINTF(("create %s in %s\n", name, dvp->v_path));
     if (!S_ISREG(mode))
@@ -356,6 +408,8 @@ ramfs_read(struct vnode *vp, struct file *fp, struct uio *uio, int ioflag)
     else
         len = uio->uio_resid;
 
+    set_times_to_now(&(np->rn_atime));
+
     return uiomove(np->rn_buf + uio->uio_offset, len, uio);
 }
 
@@ -372,6 +426,9 @@ ramfs_write(struct vnode *vp, struct uio *uio, int ioflag)
     }
     if (uio->uio_offset < 0) {
         return EINVAL;
+    }
+    if (uio->uio_offset >= LONG_MAX) {
+        return EFBIG;
     }
     if (uio->uio_resid == 0) {
         return 0;
@@ -399,6 +456,8 @@ ramfs_write(struct vnode *vp, struct uio *uio, int ioflag)
         np->rn_size = end_pos;
         vp->v_size = end_pos;
     }
+
+    set_times_to_now(&(np->rn_mtime), &(np->rn_ctime));
     return uiomove(np->rn_buf + uio->uio_offset, uio->uio_resid, uio);
 }
 
@@ -452,6 +511,8 @@ ramfs_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
 
     mutex_lock(&ramfs_lock);
 
+    set_times_to_now(&(((ramfs_node *) vp->v_data)->rn_atime));
+
     if (fp->f_offset == 0) {
         dir->d_type = DT_DIR;
         strlcpy((char *) &dir->d_name, ".", sizeof(dir->d_name));
@@ -502,6 +563,39 @@ ramfs_getattr(struct vnode *vnode, struct vattr *attr)
 {
     attr->va_nodeid = vnode->v_ino;
     attr->va_size = vnode->v_size;
+
+    struct ramfs_node *np = (ramfs_node *) vnode->v_data;
+    attr->va_type = (vtype) np->rn_type;
+
+    memcpy(&(attr->va_atime), &(np->rn_atime), sizeof(struct timespec));
+    memcpy(&(attr->va_ctime), &(np->rn_ctime), sizeof(struct timespec));
+    memcpy(&(attr->va_mtime), &(np->rn_mtime), sizeof(struct timespec));
+
+    attr->va_mode = np->rn_mode;
+
+    return 0;
+}
+
+static int
+ramfs_setattr(struct vnode *vnode, struct vattr *attr) {
+    struct ramfs_node *np = (ramfs_node *) vnode->v_data;
+
+    if (attr->va_mask & AT_ATIME) {
+        memcpy(&(np->rn_atime), &(attr->va_atime), sizeof(struct timespec));
+    }
+
+    if (attr->va_mask & AT_CTIME) {
+        memcpy(&(np->rn_ctime), &(attr->va_ctime), sizeof(struct timespec));
+    }
+
+    if (attr->va_mask & AT_MTIME) {
+        memcpy(&(np->rn_mtime), &(attr->va_mtime), sizeof(struct timespec));
+    }
+
+    if (attr->va_mask & AT_MODE) {
+        np->rn_mode = attr->va_mode;
+    }
+
     return 0;
 }
 
@@ -510,7 +604,6 @@ ramfs_getattr(struct vnode *vnode, struct vattr *attr)
 #define ramfs_seek      ((vnop_seek_t)vop_nullop)
 #define ramfs_ioctl     ((vnop_ioctl_t)vop_einval)
 #define ramfs_fsync     ((vnop_fsync_t)vop_nullop)
-#define ramfs_setattr   ((vnop_setattr_t)vop_eperm)
 #define ramfs_inactive  ((vnop_inactive_t)vop_nullop)
 #define ramfs_link      ((vnop_link_t)vop_eperm)
 #define ramfs_fallocate ((vnop_fallocate_t)vop_nullop)
