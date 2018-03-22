@@ -13,16 +13,22 @@
 #include <unistd.h>
 #include <limits.h>
 #include <stdlib.h>
+#include <iostream>
 
 #define debug printf
 
-#define TESTDIR    "/tmp"
+#if defined(READ_ONLY_FS)
+#define TESTDIR    "/rofs/tst-symlink"
+#else
+#define TESTDIR    "/tmp/tst-symlink"
+#endif
 
 #define N1    "f1"
 #define N2    "f2_AAA"
 #define N3    "f3"
 #define N4    "f4"
 #define N5    "f5"
+#define N6    "f6"
 #define D1    "d1"
 #define D2    "d2_AAA"
 #define D3    "d3"
@@ -30,20 +36,24 @@
 
 int tests = 0, fails = 0;
 
-static void report(bool ok, const char *msg)
+static void report(bool ok, const char* msg)
 {
     ++tests;
     fails += !ok;
-    debug("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
-    if (fails)
+    printf("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
+    if (fails) {
+        printf("Errno: %d\n", errno);
         exit(0);
+    }
 }
 
+#if !defined(READ_ONLY_FS)
 static void fill_buf(char *b, unsigned int no)
 {
     memset(b, 'A', no - 1);
     b[no - 1] = 0;
 }
+#endif
 
 static bool search_dir(const char *dir, const char *name)
 {
@@ -67,54 +77,79 @@ int main(int argc, char **argv)
 {
     struct stat buf;
     int rc;
-    int error;
-    time_t t1;
     char path[PATH_MAX];
     int fd;
-    int fd1;
-    char b1[4097];
-    char b2[4097];
-    char path1[PATH_MAX];
 
     debug("Testing symlink() and related functions.\n");
 
     report(sizeof(path) >= 4096, "sizeof(PATH_MAX)");
 
+#if defined(READ_ONLY_FS)
+    report(-1 == mkdir("/rofs/tst-symlink1", 0777) && errno == EROFS, "mkdir");
+#else
+    report(0 == mkdir(TESTDIR, 0777), "mkdir");
+#endif
+
     report(chdir(TESTDIR) == 0, "chdir");
 
     /*
      * test to check
-     * access to symlink
-     * file type
+     *    access to symlink
+     *    file type
      */
+
+#if defined(READ_ONLY_FS)
+    fd = open(N1, O_RDONLY);
+#else
     fd = creat(N1, 0777);
+#endif
     report(fd >= 0, "creat");
     report(search_dir(TESTDIR, N1) == true, "search dir");
 
     report(lstat(N1, &buf) == 0, "lstat");
     report(S_ISREG(buf.st_mode) == 1, "file mode");
 
+#if defined(READ_ONLY_FS)
+    report(symlink(N1, N6) == -1 && errno == EROFS, "symlink");
+    report(search_dir(TESTDIR, N2) == true, "search dir");
+#else
     report(symlink(N1, N2) == 0, "symlink");
     report(search_dir(TESTDIR, N2) == true, "search dir");
+#endif
 
+#if defined(READ_ONLY_FS)
+    report(access(N1, R_OK) == 0, "access1");
+    report(access(N1, R_OK | W_OK) == -1 && errno == EROFS, "access2");
+    report(access(N2, R_OK) == 0, "access3");
+    report(access(N2, R_OK | W_OK) == -1 && errno == EROFS, "access4");
+#else
     report(access(N1, R_OK | W_OK) == 0, "access");
     report(access(N2, R_OK | W_OK) == 0, "access");
+#endif
 
     rc = readlink(N2, path, sizeof(path));
     report(rc >= 0, "readlink");
     path[rc] = 0;
+#if defined(READ_ONLY_FS)
+    report(strcmp(path, TESTDIR "/" N1) == 0, "readlink path");
+#else
     report(strcmp(path, N1) == 0, "readlink path");
-
+#endif
     report(lstat(N2, &buf) == 0, "lstat");
     report(S_ISLNK(buf.st_mode) == 1, "file mode");
 
     close(fd);
+#if defined(READ_ONLY_FS)
+    report(unlink(N1) == -1 && errno == EROFS, "unlink");
+#else
     report(unlink(N1) == 0, "unlink");
+#endif
     report(lstat(N2, &buf) == 0, "lstat");
     report(S_ISLNK(buf.st_mode) == 1, "file mode");
 
+#if !defined(READ_ONLY_FS)
     rc = stat(N2, &buf);
-    error = errno;
+    int error = errno;
     report(rc < 0, "stat");
     report(error == ENOENT, "ENOENT expected");
 
@@ -130,7 +165,10 @@ int main(int argc, char **argv)
     report(fd >= 0, "creat");
     report(symlink(N1, N2) == 0, "symlink");
 
-    fd1 = open(N2, O_RDONLY);
+    char b1[4097];
+    char b2[4097];
+
+    int fd1 = open(N2, O_RDONLY);
     report(fd1 >= 0, "symlink open");
 
     fill_buf(b1, sizeof(b1));
@@ -143,11 +181,14 @@ int main(int argc, char **argv)
     report(rc == sizeof(b2), "symlink read");
 
     report(memcmp(b1, b2, sizeof(b1)) == 0, "data verification");
+#endif
 
 #ifdef NOT_YET
     rc = ftruncate(fd1, 0);
     report(rc != 0 && errno == EINVAL, "symlink fd truncate");
 #endif
+
+#if !defined(READ_ONLY_FS)
     report(ftruncate(fd, 0) == 0, "file fd truncate");
     report(fstat(fd, &buf) == 0, "fstat file");
     report(buf.st_size == 0, "file size after truncate");
@@ -192,7 +233,7 @@ int main(int argc, char **argv)
     report(fd >= 0, "creat");
     report(mkdir(D1, 0777) == 0, "mkdir");
     report(stat(D1, &buf) == 0, "stat");
-    t1 = buf.st_ctime;
+    time_t t1 = buf.st_ctime;
     sleep(1);
 
     snprintf(path, sizeof(path), "%s/%s", D1, N2);
@@ -221,6 +262,7 @@ int main(int argc, char **argv)
     report(symlink(N1, path) == 0, "symlink");
     report(unlink(path) == 0, "unlink");
 
+    printf("-->Smok\n");
     fill_buf(path, 257);
     rc = symlink(N1, path);
     error = errno;
@@ -300,6 +342,7 @@ int main(int argc, char **argv)
     report(fd >= 0, "create file");
     close(fd);
 
+    char path1[PATH_MAX];
     report(symlink(D1, D2) == 0, "symlink to directory"); /* /tmp/d2 -> /tmp/d1 */
     snprintf(path1, sizeof(path1), "%s/%s", D1, N2);
     report(rename(path, path1) == 0, "rename(f1,f2)");
@@ -344,7 +387,14 @@ int main(int argc, char **argv)
     report(unlink(path) == 0, "unlink(d4/f5)");
     report(unlink(D3) == 0, "unlink(d3)");
     report(rmdir(D4) == 0, "rmdir");
+#endif
 
-    debug("SUMMARY: %d tests, %d failures\n", tests, fails);
+#if defined(READ_ONLY_FS)
+    report(-1 == rmdir(TESTDIR) && errno == ENOTEMPTY, "rmdir");
+#else
+    report(0 == rmdir(TESTDIR), "rmdir");
+#endif
+
+    std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";
     return (fails == 0 ? 0 : 1);
 }

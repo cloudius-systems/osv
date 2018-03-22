@@ -13,22 +13,32 @@
 
 #include <osv/debug.hh>
 
+#if defined(READ_ONLY_FS)
+#define SUBDIR "rofs"
+#else
+#define SUBDIR "tmp"
+#endif
+
 int tests = 0, fails = 0;
 
 static void report(bool ok, const char* msg)
 {
     ++tests;
     fails += !ok;
-    debug("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
+    printf("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
 }
 
 int main(int argc, char **argv)
 {
     debug("Testing readdir() and related functions\n");
-    report(mkdir("/tmp/tst-readdir", 0777) == 0, "mkdir");
+#if defined(READ_ONLY_FS)
+    report(mkdir("/rofs/tst-readdir-empty2", 0777) == -1 && errno == EROFS, "mkdir");
+#else
+    report(mkdir("/tmp/tst-readdir-empty", 0777) == 0, "mkdir empty");
+#endif
 
     // test readdir() on empty directory
-    DIR *dir = opendir("/tmp/tst-readdir");
+    DIR *dir = opendir("/" SUBDIR "/tst-readdir-empty");
     report(dir != NULL, "opendir");
     struct dirent *ent;
     ent = readdir(dir);
@@ -43,11 +53,15 @@ int main(int argc, char **argv)
     report(iret == 0, "closedir");
 
     // test readdir() on directory with one file
-    int fd;
-    fd=creat("/tmp/tst-readdir/aaa", 0777);
+#if defined(READ_ONLY_FS)
+    report(creat("/rofs/tst-readdir/non-existent", 0777) < 0 && errno == EROFS, "creat");
+#else
+    report(mkdir("/tmp/tst-readdir", 0777) == 0, "mkdir empty");
+    int fd=creat("/tmp/tst-readdir/aaa", 0777);
     report(fd>=0, "creat");
     close(fd);
-    dir = opendir("/tmp/tst-readdir");
+#endif
+    dir = opendir("/" SUBDIR "/tst-readdir");
     report(dir != NULL, "opendir");
     ent = readdir(dir);
     report(ent != NULL, "readdir");
@@ -64,7 +78,7 @@ int main(int argc, char **argv)
     report(iret == 0, "closedir");
 
     // test readdir_r() on directory with one file
-    dir = opendir("/tmp/tst-readdir");
+    dir = opendir("/" SUBDIR "/tst-readdir");
     report(dir != NULL, "opendir");
     ent = (struct dirent *)malloc(4096);
     struct dirent *r;
@@ -80,7 +94,7 @@ int main(int argc, char **argv)
     free(ent);
 
     // test rewinddir(), still on a directory with one file
-    dir = opendir("/tmp/tst-readdir");
+    dir = opendir("/" SUBDIR "/tst-readdir");
     report(dir != NULL, "opendir");
     ent = (struct dirent *)malloc(4096);
     report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
@@ -106,7 +120,7 @@ int main(int argc, char **argv)
     free(ent);
 
     // test telldir(), seekdir()
-    dir = opendir("/tmp/tst-readdir");
+    dir = opendir("/" SUBDIR "/tst-readdir");
     report(dir != NULL, "opendir");
     ent = (struct dirent *)malloc(4096);
     report(readdir_r(dir, ent, &r)==0 && r!=NULL, "readdir_r");
@@ -128,6 +142,11 @@ int main(int argc, char **argv)
     report(iret == 0, "closedir");
     free(ent);
 
+#if defined(READ_ONLY_FS)
+    report(unlink("/rofs/tst-readdir/aaa")==-1 && errno == EROFS, "unlink aaa");
+    report(rmdir("/rofs/tst-readdir")==-1 && errno == ENOTEMPTY, "rmdir");
+    report(mknod("/rofs/tst-readdir/b", 0777|S_IFREG, 0) == -1 && errno == EROFS, "mknod");
+#else
     // clean up the temporary directory we created with one file.
     report(unlink("/tmp/tst-readdir/aaa")==0, "unlink aaa");
     report(rmdir("/tmp/tst-readdir")==0, "rmdir");
@@ -192,9 +211,10 @@ int main(int argc, char **argv)
     report(unlink("/tmp/tst-readdir/c")==0, "unlink");
     report(unlink("/tmp/tst-readdir/d")==0, "unlink");
     report(rmdir("/tmp/tst-readdir")==0, "rmdir");
+    report(rmdir("/tmp/tst-readdir-empty")==0, "rmdir empty");
+#endif
 
-
-    debug("SUMMARY: %d tests, %d failures\n", tests, fails);
+    printf("SUMMARY: %d tests, %d failures\n", tests, fails);
     return fails == 0 ? 0 : 1;
 }
 

@@ -32,8 +32,8 @@ extern "C" int namei(char *, struct dentry **);
 static int check_vnode_duplicity(void)
 {
     int err = 0;
-    char oldpath[64] = "/usr/tst-fs-linkXXXXXX";
-    char newpath[64] = "/usr/tst-fs-linkXXXXXX";
+    char oldpath[64] = "/tmp/tst-fs-linkXXXXXX";
+    char newpath[64] = "/tmp/tst-fs-linkXXXXXX";
     struct dentry *olddp, *newdp;
 
     mktemp(oldpath);
@@ -91,10 +91,10 @@ int main(int argc, char *argv[])
         newpath = argv[2];
     } else {
 
-        strcpy(oldp, "/usr/tst-fs-linkXXXXXX");
+        strcpy(oldp, "/tmp/tst-fs-linkXXXXXX");
         mktemp(oldp);
 
-        strcpy(newp, "/usr/tst-fs-linkXXXXXX");
+        strcpy(newp, "/tmp/tst-fs-linkXXXXXX");
         mktemp(newp);
 
         oldpath = oldp;

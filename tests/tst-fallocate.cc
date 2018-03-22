@@ -48,7 +48,7 @@ int main(int argc, char *argv[])
     struct stat st;
     struct statfs fs;
 
-    strcpy(path, "/usr/tst-fallocateXXXXXX");
+    strcpy(path, "/tmp/tst-fallocateXXXXXX");
     mktemp(path);
 
     // Create a temporary file that's used in testing.

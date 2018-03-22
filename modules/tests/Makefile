@@ -4,6 +4,7 @@ module: usr.manifest build_all_tests
 src := $(OSV_BASE)
 out := $(OSV_BUILD_PATH)
 arch := $(ARCH)
+fs_type := $(fs_type)
 # TODO: consider setting $(out) not to OSV_BUILD_PATH but to ./build/$ARCH.
 # TODO: need to set up CXX, etc., for cross compilation, as in the main
 # Makefile...
@@ -50,8 +51,34 @@ $(out)/%.o: $(src)/%.cc
 $(out)/%.o: $(src)/%.c
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $< , CC $*.c)
+$(out)/tests/rofs/%.o: $(src)/tests/%.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -DREAD_ONLY_FS -c -o $@ $<, CXX $*.cc)
+$(out)/tests/rofs/%.o: $(src)/tests/%.c
+	$(makedir)
+	$(call quiet, $(CC) $(CFLAGS) -DREAD_ONLY_FS -c -o $@ $< , CC $*.c)
 $(out)/%.so: $(out)/%.o
 	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $< $(LIBS), LD $*.so)
+
+# The rofs test image mounts /tmp as ramfs and 4 tests that exercise file system
+# fail due to some unresolved bugs or other shortcomings of the ramfs implementation
+# and are temporarily removed from the rofs-only-tests list. The tests tst-readdir.so
+# and tst-rename.so would fail until the issue #68 is fixed. Similarly
+# tst-fs-link.so do not pass due to lack of hard links support in the ramfs
+# implementation. Lastly tst-fallocate.so also does not work with ramfs due to
+# the shortcomings in ramfs implementation of statfs that does not report free/used
+# blocks adequately.
+#
+# These 4 tests are compiled from the same source files but passed in READ_ONLY_FS
+# to switch relevant logic in those tests to exercise scenarios applicable
+# to read-only filesystem
+rofs-only-tests := rofs/tst-chdir.so rofs/tst-symlink.so rofs/tst-readdir.so \
+	rofs/tst-concurrent-read.so
+
+zfs-only-tests := tst-readdir.so tst-fallocate.so tst-fs-link.so \
+	tst-concurrent-read.so
+
+specific-fs-tests := $($(fs_type)-only-tests)
 
 tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	misc-bsd-callout.so tst-bsd-kthread.so tst-bsd-taskqueue.so \
@@ -60,13 +87,13 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-mmap-file.so misc-mmap-big-file.so tst-mmap.so tst-huge.so \
 	tst-elf-permissions.so misc-mutex.so misc-sockets.so tst-condvar.so \
 	tst-queue-mpsc.so tst-af-local.so tst-pipe.so tst-yield.so \
-	misc-ctxsw.so tst-readdir.so tst-read.so tst-symlink.so tst-openat.so \
+	misc-ctxsw.so tst-read.so tst-symlink.so tst-openat.so \
 	tst-eventfd.so tst-remove.so misc-wake.so tst-epoll.so misc-lfring.so \
 	misc-fsx.so tst-sleep.so tst-resolve.so tst-except.so \
 	misc-tcp-sendonly.so tst-tcp-nbwrite.so misc-tcp-hash-srv.so \
 	misc-loadbalance.so misc-scheduler.so tst-console.so tst-app.so \
 	misc-setpriority.so misc-timeslice.so misc-tls.so misc-gtod.so \
-	tst-dns-resolver.so tst-fs-link.so tst-kill.so tst-truncate.so \
+	tst-dns-resolver.so tst-kill.so tst-truncate.so \
 	misc-panic.so tst-utimes.so tst-utimensat.so tst-futimesat.so \
 	misc-tcp.so tst-strerror_r.so misc-random.so misc-urandom.so \
 	tst-commands.so tst-threadcomplete.so tst-timerfd.so \
@@ -75,7 +102,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-concurrent-init.so tst-ring-spsc-wraparound.so tst-shm.so \
 	tst-align.so tst-cxxlocale.so misc-tcp-close-without-reading.so \
 	tst-sigwait.so tst-sampler.so misc-malloc.so misc-memcpy.so \
-	misc-free-perf.so tst-fallocate.so misc-printf.so tst-hostname.so \
+	misc-free-perf.so misc-printf.so tst-hostname.so \
 	tst-sendfile.so misc-lock-perf.so tst-uio.so tst-printf.so \
 	tst-pthread-affinity.so tst-pthread-tsd.so tst-thread-local.so \
 	tst-zfs-mount.so tst-regex.so tst-tcp-siocoutq.so \
@@ -111,7 +138,7 @@ $(out)/tests/tst-tls.so: \
 	$(makedir)
 	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -shared -o $@ $< tests/libtls.so, CXX tst-tls.so)
 
-boost-tests := tst-rename.so tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
+boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	misc-bdev-write.so misc-bdev-wlatency.so misc-bdev-rw.so \
 	tst-promise.so tst-dlfcn.so tst-stat.so tst-wait-for.so \
 	tst-bsd-tcp1.so tst-bsd-tcp1-zsnd.so tst-bsd-tcp1-zrcv.so \
@@ -119,6 +146,12 @@ boost-tests := tst-rename.so tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	tst-poll.so tst-bitset-iter.so tst-timer-set.so tst-clock.so \
 	tst-rcu-hashtable.so tst-unordered-ring-mpsc.so \
 	tst-seek.so
+
+rofs-only-boost-tests :=
+
+zfs-only-boost-tests := tst-rename.so
+
+boost-tests += $($(fs_type)-only-boost-tests)
 
 BOOSTLIBS=$(src)/external/$(ARCH)/misc.bin/usr/lib64
 $(boost-tests:%=$(out)/tests/%): LIBS += \
@@ -157,15 +190,20 @@ $(solaris-tests:%=$(out)/tests/%): COMMON+= \
 	-I $(src)/bsd/sys -I $(src)/bsd -I $(src)/bsd/$(ARCH)
 
 all_tests := $(tests:%=tests/%)
+all_tests += $(specific-fs-tests:%=tests/%)
 
 build_all_tests: $(all_tests:%=$(out)/%)
-.PHONY: build_all_tests
+.PHONY: build_all_tests clean
 
 # Automatically generate usr.manifest which includes all tests.
-usr.manifest: $(lastword $(MAKEFILE_LIST)) usr.manifest.skel
+usr.manifest: $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FORCE
 	@echo "  generating modules/tests/usr.manifest"
 	@cat $@.skel > $@
-	@echo $(all_tests) | tr ' ' '\n' | awk '{print "/" $$0 ": ./" $$0}' >> $@
+	@echo $(all_tests) | tr ' ' '\n' | grep -v "tests/rofs/tst-.*.so" | awk '{print "/" $$0 ": ./" $$0}' >> $@
+	@echo $(all_tests) | tr ' ' '\n' | grep "tests/rofs/tst-.*.so" | sed 's/\.so//' | awk 'BEGIN { FS = "/" } ; { print "/tests/" $$3 "-rofs.so: ./tests/" $$2 "/" $$3 ".so"}' >> $@
+	./create_static.sh $(out) $(fs_type)
+.PHONY: FORCE
+FORCE:
 
 clean:
 	-rm -f usr.manifest
