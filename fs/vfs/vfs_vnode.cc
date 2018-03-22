@@ -478,22 +478,25 @@ vnode_dump(void)
 int
 vop_nullop(void)
 {
-
 	return 0;
 }
 
 int
 vop_einval(void)
 {
-
 	return EINVAL;
 }
 
 int
 vop_eperm(void)
 {
-
 	return EPERM;
+}
+
+int
+vop_erofs(void)
+{
+	return EROFS;
 }
 
 /*

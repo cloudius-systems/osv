@@ -210,6 +210,7 @@ struct vnops {
 int	 vop_nullop(void);
 int	 vop_einval(void);
 int	 vop_eperm(void);
+int	 vop_erofs(void);
 struct vnode *vn_lookup(struct mount *, uint64_t);
 void	 vn_lock(struct vnode *);
 void	 vn_unlock(struct vnode *);

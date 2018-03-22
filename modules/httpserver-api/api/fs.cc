@@ -51,7 +51,7 @@ void init(routes& routes) {
         vector<httpserver::json::DFStat> dfstats;
 
         for (mount_desc mount : osv::current_mounts()) {
-            if (mount.type == "zfs" && (onemount == "" || onemount == mount.path)) {
+            if ((mount.type == "zfs" || mount.type == "rofs") && (onemount == "" || onemount == mount.path)) {
                 if (statvfs(mount.path.c_str(),&st) != 0) {
                     throw not_found_exception("mount does not exist");
                 }
@@ -75,7 +75,7 @@ void init(routes& routes) {
             vector<httpserver::json::DFStat> res;
 
             for (osv::mount_desc mount : osv::current_mounts()) {
-                if (mount.type == "zfs") {
+                if (mount.type == "zfs" || mount.type == "rofs") {
                     if (statvfs(mount.path.c_str(),&st) == 0) {
                         fill_dfstat(dfstat, mount, st);
                         res.push_back(dfstat);

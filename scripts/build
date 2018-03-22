@@ -134,9 +134,10 @@ manifest=$OUT/bootfs.manifest
 fs_type=${vars[fs]-zfs}
 usrskel_arg=
 case $fs_type in
-zfs)	;; # Nothing to change here. This is our default behavior
+zfs);; # Nothing to change here. This is our default behavior
+rofs)	usrskel_arg="--usrskel usr_rofs.manifest.skel";;
 ramfs)	manifest=$OUT/usr.manifest
-	usrskel_arg="--usrskel usr_nozfs.manifest.skel";;
+	usrskel_arg="--usrskel usr_ramfs.manifest.skel";;
 *)	echo "Unknown filesystem \"$fs_type\"" >&2
 	exit 2
 esac
@@ -170,8 +171,7 @@ then
 fi
 
 loader_size=`stat --printf %s $OUT/loader.img`
-zfs_start=$(($loader_size+2097151 & ~2097151))
-zfs_size=$(($fs_size - $zfs_start))
+kernel_end=$(($loader_size+2097151 & ~2097151))
 
 # The python scripts called below assume the current directory is $OUT (as was
 # the case in our old build.mk).
@@ -180,7 +180,8 @@ cd $OUT
 case $fs_type in
 zfs)
 	cp loader.img bare.raw
-	$SRC/scripts/imgedit.py setpartition "-f raw bare.raw" 2 $zfs_start $zfs_size
+	zfs_size=$(($fs_size - $kernel_end))
+	$SRC/scripts/imgedit.py setpartition "-f raw bare.raw" 2 $kernel_end $zfs_size
 
 	qemu-img convert -f raw -O qcow2 bare.raw usr.img
 	qemu-img resize usr.img ${fs_size}b >/dev/null 2>&1
@@ -192,6 +193,17 @@ zfs)
 		export_dir=${vars[export_dir]-$SRC/build/export}
 		$SRC/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
 	fi
+	;;
+rofs)
+	rm -rf rofs.img
+	$SRC/scripts/gen-${fs_type}-img.py -o rofs.img -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
+	rofs_size=`stat --printf %s rofs.img`
+	img_size=$((kernel_end + rofs_size))
+	cp loader.img bare.raw
+	$SRC/scripts/imgedit.py setpartition "-f raw bare.raw" 2 $kernel_end $rofs_size
+	qemu-img resize bare.raw ${img_size}b >/dev/null 2>&1
+	dd if=rofs.img of=bare.raw obs=${kernel_end} seek=1 >/dev/null 2>&1
+	qemu-img convert -f raw -O qcow2 bare.raw usr.img
 	;;
 ramfs)
 	qemu-img convert -f raw -O qcow2 loader.img usr.img

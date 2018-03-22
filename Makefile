@@ -1769,6 +1769,10 @@ fs_objs += ramfs/ramfs_vfsops.o \
 fs_objs += devfs/devfs_vnops.o \
 	devfs/device.o
 
+fs_objs += rofs/rofs_vfsops.o \
+	rofs/rofs_vnops.o \
+	rofs/rofs_common.o
+
 fs_objs += procfs/procfs_vnops.o
 
 objects += $(addprefix fs/, $(fs_objs))

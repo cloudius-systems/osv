@@ -1,0 +1,4 @@
+/dev/vblk0.1 /          rofs      defaults 0 0
+none         /dev       devfs     defaults 0 0
+none         /proc      procfs    defaults 0 0
+none         /tmp       ramfs     defaults 0 0

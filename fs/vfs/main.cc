@@ -2249,26 +2249,9 @@ static void import_extra_zfs_pools(void)
     }
 }
 
-extern "C" void mount_zfs_rootfs(bool pivot_root)
+void pivot_rootfs(const char* path)
 {
-    int ret;
-
-    if (mkdir("/zfs", 0755) < 0)
-        kprintf("failed to create /zfs, error = %s\n", strerror(errno));
-
-    ret = sys_umount("/dev");
-    if (ret)
-        kprintf("failed to unmount /dev, error = %s\n", strerror(ret));
-
-    ret = sys_mount("/dev/vblk0.1", "/zfs", "zfs", 0, (void *)"osv/zfs");
-    if (ret)
-        kprintf("failed to mount /zfs, error = %s\n", strerror(ret));
-
-    if (!pivot_root) {
-        return;
-    }
-
-    ret = sys_pivot_root("/zfs", "/");
+    int ret = sys_pivot_root(path, "/");
     if (ret)
         kprintf("failed to pivot root, error = %s\n", strerror(ret));
 
@@ -2294,6 +2277,52 @@ extern "C" void mount_zfs_rootfs(bool pivot_root)
         }
     }
     endmntent(ent);
+}
+
+extern "C" void unmount_devfs()
+{
+    int ret = sys_umount("/dev");
+    if (ret)
+        kprintf("failed to unmount /dev, error = %s\n", strerror(ret));
+}
+
+extern "C" int mount_rofs_rootfs(bool pivot_root)
+{
+    int ret;
+
+    if (mkdir("/rofs", 0755) < 0)
+        kprintf("failed to create /rofs, error = %s\n", strerror(errno));
+
+    ret = sys_mount("/dev/vblk0.1", "/rofs", "rofs", MNT_RDONLY, 0);
+
+    if (ret) {
+        kprintf("failed to mount /rofs, error = %s\n", strerror(ret));
+        rmdir("/rofs");
+        return ret;
+    }
+
+    if (pivot_root) {
+        pivot_rootfs("/rofs");
+    }
+
+    return 0;
+}
+
+extern "C" void mount_zfs_rootfs(bool pivot_root)
+{
+    if (mkdir("/zfs", 0755) < 0)
+        kprintf("failed to create /zfs, error = %s\n", strerror(errno));
+
+    int ret = sys_mount("/dev/vblk0.1", "/zfs", "zfs", 0, (void *)"osv/zfs");
+
+    if (ret)
+        kprintf("failed to mount /zfs, error = %s\n", strerror(ret));
+
+    if (!pivot_root) {
+        return;
+    }
+
+    pivot_rootfs("/zfs");
 
     import_extra_zfs_pools();
 }

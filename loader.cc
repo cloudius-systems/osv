@@ -84,7 +84,10 @@ void setup_tls(elf::init_table inittab)
 extern "C" {
     void premain();
     void vfs_init(void);
+    void unmount_devfs();
     void mount_zfs_rootfs(bool);
+    int mount_rofs_rootfs(bool);
+    void rofs_disable_cache();
 }
 
 void premain()
@@ -165,7 +168,7 @@ void parse_options(int loader_argc, char** loader_argv)
         ("maxnic", bpo::value<int>(), "maximum NIC number")
         ("norandom", "don't initialize any random device")
         ("noshutdown", "continue running after main() returns")
-	("power-off-on-abort", "use poweroff instead of halt if it's aborted")
+        ("power-off-on-abort", "use poweroff instead of halt if it's aborted")
         ("noinit", "don't run commands from /init")
         ("verbose", "be verbose, print debug messages")
         ("console", bpo::value<std::vector<std::string>>(), "select console driver")
@@ -335,11 +338,22 @@ void* do_main_thread(void *_main_args)
     boot_time.event("drivers loaded");
 
     if (opt_mount) {
-        zfsdev::zfsdev_init();
-        mount_zfs_rootfs(opt_pivot);
-        bsd_shrinker_init();
+        unmount_devfs();
+        //
+        // Try to mount rofs
+        if(mount_rofs_rootfs(opt_pivot) != 0) {
+            //
+            // Failed -> try to mount zfs
+            zfsdev::zfsdev_init();
+            mount_zfs_rootfs(opt_pivot);
+            bsd_shrinker_init();
+
+            boot_time.event("ZFS mounted");
+        }
+        else {
+            boot_time.event("ROFS mounted");
+        }
     }
-    boot_time.event("ZFS mounted");
 
     bool has_if = false;
     osv::for_each_if([&has_if] (std::string if_name) {
