@@ -1741,6 +1741,7 @@ musl += crypt/crypt_md5.o
 musl += crypt/crypt_r.o
 musl += crypt/crypt_sha256.o
 musl += crypt/crypt_sha512.o
+libc += crypt/encrypt.o
 
 #include $(src)/fs/build.mk:
 
