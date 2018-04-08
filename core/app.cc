@@ -169,7 +169,31 @@ application::application(const std::string& command,
         }
 
         merge_in_environ(new_program, env);
-        _lib = current_program->get_library(_command);
+        prepare_argv(current_program);
+        //
+        // Some applications (specifically Golang ones) during initialization of it's ELF object
+        // invoke init functions that access variables from TLS (Thread Local Storage) memory
+        // area by offset determined during compilation. This type of TLS access is called
+        // "initial exec" (or static) and is best explained by the Ulrich Drepper's paper -
+        // https://www.uclibc.org/docs/tls.pdf.
+        //
+        // In essence library code accesses thread-local variables located in application static
+        // TLS memory area that belongs to the current thread. The static TLS memory area is
+        // setup by thread::setup_tcb() during thread construction phase based on TLS templates
+        // of the corresponding application ELF object. The TLS templates are captured by
+        // object::init_static_tls() (called by program::get_library()) but only used when
+        // creating new threads to run the application code. So the TLS memory area of the current
+        // thread is not affected.
+        //
+        // Hopefully it is clear by now that the TLS memory area of the thread invoking this constructor,
+        // which typically is a parent to new application thread yet to be started, is not setup
+        // and therefore should not be accessed by init functions during ELF object initialization.
+        // In order to overcome this constraint, which by the way is well explained by the
+        // issue #810 and very hard to fix correctly, we need to delay initialization of the application
+        // ELF object and pass delay_init set to true (3rd argument) to the get_library method below.
+        // The ELF object will be initialized by explicitly calling program::init_library() from
+        // application::main() invoked by new thread later.
+        _lib = current_program->get_library(_command, {}, true);
     } catch (const launch_error &e) {
         throw;
     } catch (const std::exception &e) {
@@ -274,7 +298,12 @@ TRACEPOINT(trace_app_main_ret, "return_code=%d", int);
 void application::main()
 {
     __libc_stack_end = __builtin_frame_address(0);
-
+    //
+    // Explicitly initialize the application ELF object which would have been
+    // loaded earlier most likely by parent thread in application constructor.
+    // Effectively the ELF initialization has been delayed until this moment
+    // for reasons explained in application::application().
+    elf::get_program()->init_library(_args.size(), _argv.get());
     sched::thread::current()->set_name(_command);
 
     if (_main) {
@@ -292,65 +321,81 @@ void application::main()
     // _entry_point() doesn't return
 }
 
-void application::run_main(std::string path, int argc, char** argv)
+void application::prepare_argv(elf::program *program)
 {
-    char *c_path = (char *)(path.c_str());
-    // path is guaranteed to keep existing this function
+    // Prepare program_* variable used by the libc
+    char *c_path = (char *)(_command.c_str());
     program_invocation_name = c_path;
     program_invocation_short_name = basename(c_path);
 
-    unsigned sz = argc; // for the trailing 0's.
-    for (int i = 0; i < argc; ++i) {
-        sz += strlen(argv[i]);
+    // Allocate a continuous buffer for arguments: _argv_buf
+    // First count the trailing zeroes
+    auto sz = _args.size();
+    // Then add the sum of each argument size to sz
+    for (auto &str: _args) {
+        sz += str.size();
     }
+    _argv_buf.reset(new char[sz]);
 
-    std::unique_ptr<char []> argv_buf(new char[sz]);
-    char *ab = argv_buf.get();
     // In Linux, the pointer arrays argv[] and envp[] are continguous.
     // Unfortunately, some programs rely on this fact (e.g., libgo's
     // runtime_goenvs_unix()) so it is useful that we do this too.
+
+    // First count the number of environment variables
     int envcount = 0;
     while (environ[envcount]) {
         envcount++;
     }
-    char *contig_argv[argc + 1 + envcount + 1];
 
-    for (int i = 0; i < argc; ++i) {
-        size_t asize = strlen(argv[i]);
-        memcpy(ab, argv[i], asize);
-        ab[asize] = '\0';
+    // Allocate the continuous buffer for argv[] and envp[]
+    _argv.reset(new char*[_args.size() + 1 + envcount + 1 + sizeof(Elf64_auxv_t) * 3]);
+
+    // Fill the argv part of these buffers
+    char *ab = _argv_buf.get();
+    char **contig_argv = _argv.get();
+    for (size_t i = 0; i < _args.size(); i++) {
+	auto &str = _args[i];
+        memcpy(ab, str.c_str(), str.size());
+        ab[str.size()] = '\0';
         contig_argv[i] = ab;
-        ab += asize + 1;
+        ab += str.size() + 1;
     }
-    contig_argv[argc] = nullptr;
+    contig_argv[_args.size()] = nullptr;
 
+    // Do the same for environ
     for (int i = 0; i < envcount; i++) {
-        contig_argv[argc + 1 + i] = environ[i];
+        contig_argv[_args.size() + 1 + i] = environ[i];
     }
-    contig_argv[argc + 1 + envcount] = nullptr;
+    contig_argv[_args.size() + 1 + envcount] = nullptr;
 
-    // make sure to have a fresh optind across calls
-    // FIXME: fails if run() is executed in parallel
-    int old_optind = optind;
-    optind = 0;
-    _return_code = _main(argc, contig_argv);
-    optind = old_optind;
+    _libvdso = program->get_library("libvdso.so");
+    if (!_libvdso) {
+        abort("could not load libvdso.so\n");
+    }
+
+    // Pass the VDSO library to the application.
+    Elf64_auxv_t* _auxv =
+        reinterpret_cast<Elf64_auxv_t *>(&contig_argv[_args.size() + 1 + envcount + 1]);
+    _auxv[0].a_type = AT_SYSINFO_EHDR;
+    _auxv[0].a_un.a_val = reinterpret_cast<uint64_t>(_libvdso->base());
+
+    _auxv[1].a_type = AT_PAGESZ;
+    _auxv[1].a_un.a_val = sysconf(_SC_PAGESIZE);
+
+    _auxv[2].a_type = AT_NULL;
+    _auxv[2].a_un.a_val = 0;
 }
 
 void application::run_main()
 {
     trace_app_main(this, _command.c_str());
 
-    // C main wants mutable arguments, so we have can't use strings directly
-    std::vector<std::vector<char>> mut_args;
-    transform(_args, back_inserter(mut_args),
-            [](std::string s) { return std::vector<char>(s.data(), s.data() + s.size() + 1); });
-    std::vector<char*> argv;
-    transform(mut_args.begin(), mut_args.end(), back_inserter(argv),
-            [](std::vector<char>& s) { return s.data(); });
-    auto argc = argv.size();
-    argv.push_back(nullptr);
-    run_main(_command, argc, argv.data());
+    // make sure to have a fresh optind across calls
+    // FIXME: fails if run() is executed in parallel
+    int old_optind = optind;
+    optind = 0;
+    _return_code = _main(_args.size(), _argv.get());
+    optind = old_optind;
 
     if (_return_code) {
         debug("program %s returned %d\n", _command.c_str(), _return_code);

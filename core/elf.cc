@@ -937,19 +937,21 @@ std::string object::pathname()
 }
 
 // Run the object's static constructors or similar initialization
-void object::run_init_funcs()
+void object::run_init_funcs(int argc, char** argv)
 {
+    // Invoke any init functions if present and pass in argc and argv
+    // The reason why we pass argv and argc is explained in issue #795
     if (dynamic_exists(DT_INIT)) {
         auto func = dynamic_ptr<void>(DT_INIT);
         if (func) {
-            reinterpret_cast<void(*)()>(func)();
+            reinterpret_cast<void(*)(int, char**)>(func)(argc, argv);
         }
     }
     if (dynamic_exists(DT_INIT_ARRAY)) {
-        auto funcs = dynamic_ptr<void (*)()>(DT_INIT_ARRAY);
+        auto funcs = dynamic_ptr<void(*)(int, char**)>(DT_INIT_ARRAY);
         auto nr = dynamic_val(DT_INIT_ARRAYSZ) / sizeof(*funcs);
         for (auto i = 0u; i < nr; ++i) {
-            funcs[i]();
+            funcs[i](argc, argv);
         }
     }
 }
@@ -1176,25 +1178,58 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
 }
 
 std::shared_ptr<object>
-program::get_library(std::string name, std::vector<std::string> extra_path)
+program::get_library(std::string name, std::vector<std::string> extra_path, bool delay_init)
 {
     SCOPE_LOCK(_mutex);
+    //
+    // Shared library needs to be initialized before any of its symbols (function or variable)
+    // is accessed. The initialization involves invoking so called init functions and is handled by
+    // the init_library() method below. The parameter delay_init determines whether init_library is
+    // called right away or at some arbitrary time later.
+    //
+    // Because init_library() needs to access the library object itself and it's dependencies possibly
+    // later we push the loaded objects list on a _loaded_objects_stack member variable of the program.
+    //
+    // Since a library can load another one like java.so does in OSv, we want a stack
+    // structure so each init_library call gets it's corresponding list of objects to operate on.
+    //
     std::vector<std::shared_ptr<object>> loaded_objects;
     auto ret = load_object(name, extra_path, loaded_objects);
+    _loaded_objects_stack.push(loaded_objects);
+
     if (ret) {
         ret->init_static_tls();
     }
-    // After loading the object and all its needed objects, run these objects'
-    // init functions in reverse order (so those of deepest needed object runs
-    // first) and finally make the loaded objects visible in search order.
-    auto size = loaded_objects.size();
-    for (int i = size - 1; i >= 0; i--) {
-        loaded_objects[i]->run_init_funcs();
+
+    if (!delay_init) {
+        init_library();
     }
-    for (unsigned i = 0; i < size; i++) {
-        loaded_objects[i]->setprivate(false);
-    }
+
     return ret;
+}
+
+void program::init_library(int argc, char** argv)
+{
+    // Get the list of pointers to shared objects from stack before iterating on them
+    if(!_loaded_objects_stack.empty()) {
+        std::vector<std::shared_ptr<object>> loaded_objects =
+                _loaded_objects_stack.top();
+        //
+        // After loading the object and all its needed objects, run these objects'
+        // init functions in reverse order (so those of deepest needed object runs
+        // first) and finally make the loaded objects visible in search order.
+        auto size = loaded_objects.size();
+        for (unsigned i = 0; i < size; i++) {
+            loaded_objects[i]->setprivate(true);
+        }
+        for (int i = size - 1; i >= 0; i--) {
+            loaded_objects[i]->run_init_funcs(argc, argv);
+        }
+        for (unsigned i = 0; i < size; i++) {
+            loaded_objects[i]->setprivate(false);
+        }
+        _loaded_objects_stack.pop();
+    }
 }
 
 void program::remove_object(object *ef)

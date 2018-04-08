@@ -20,6 +20,10 @@
 #include <unordered_map>
 #include <string>
 
+#include "musl/include/elf.h"
+#undef AT_UID // prevent collisions
+#undef AT_GID
+
 extern "C" void __libc_start_main(int(*)(int, char**), int, char**, void(*)(),
     void(*)(), void(*)(), void*);
 
@@ -203,6 +207,7 @@ private:
     void start_and_join(waiter* setup_waiter);
     void main();
     void run_main(std::string path, int argc, char** argv);
+    void prepare_argv(elf::program *program);
     void run_main();
     friend void ::__libc_start_main(int(*)(int, char**), int, char**, void(*)(),
         void(*)(), void(*)(), void*);
@@ -219,9 +224,17 @@ private:
     mutex _termination_mutex;
     std::shared_ptr<elf::object> _lib;
     std::shared_ptr<elf::object> _libenviron;
+    std::shared_ptr<elf::object> _libvdso;
     main_func_t* _main;
     void (*_entry_point)();
     static app_registry apps;
+
+    // _argv is set by prepare_argv() called from the constructor and needs to be
+    // retained as member variable so that it later can be passed as argument by either
+    // application::main and application::run_main() or application::run_main() called
+    // from __libc_start_main()
+    std::unique_ptr<char *[]> _argv;
+    std::unique_ptr<char []> _argv_buf; // actual arguments content _argv points to
 
     // Must be destroyed before _lib, because contained function objects may
     // have destructors which are part of the application's code.

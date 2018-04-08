@@ -11,6 +11,7 @@
 #include "fs/fs.hh"
 #include <vector>
 #include <map>
+#include <stack>
 #include <memory>
 #include <unordered_set>
 #include <osv/types.h>
@@ -334,7 +335,7 @@ public:
     const std::vector<Elf64_Phdr> *phdrs();
     std::string soname();
     std::string pathname();
-    void run_init_funcs();
+    void run_init_funcs(int argc, char** argv);
     void run_fini_funcs();
     template <typename T = void>
     T* lookup(const char* name);
@@ -523,9 +524,22 @@ public:
      * \param[in] extra_path  Additional directories to search in addition to
      *                        the default search path which is set with
      *                        set_search_path().
+     * \param[in] delay_init  If true the init functions in the library and its
+     *                        dependencies will not be executed until some later
+     *                        time when the init_library() is called. By default
+     *                        the init functions are executed right away.
      */
     std::shared_ptr<elf::object>
-    get_library(std::string lib, std::vector<std::string> extra_path = {});
+    get_library(std::string lib, std::vector<std::string> extra_path = {}, bool delay_init = false);
+
+    /**
+     * Execute init functions of the library itself and its dependencies.
+     *
+     * Any arguments passed in are relayed to the init functions. Right now
+     * the only place that explicitly invokes init_library is application::main()
+     * method which also passes any argv passed to the application.
+     */
+    void init_library(int argc = 0, char **argv = nullptr);
 
     /**
      * Set the default search path for get_library().
@@ -596,6 +610,9 @@ private:
 
     friend elf::file::~file();
     friend class object;
+    // this allows the objects resolved by get_library() get initialized
+    // by init_library() at arbitrary time later - the delayed initialization scenario
+    std::stack<std::vector<std::shared_ptr<object>>> _loaded_objects_stack;
 };
 
 void create_main_program();
