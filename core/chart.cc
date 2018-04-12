@@ -20,8 +20,18 @@ void boot_time_chart::print_one_time(int index)
 
 void boot_time_chart::event(const char *str)
 {
-    arrays[_event].str  = str;
-    arrays[_event++].stamp = processor::ticks();
+    event(_event++, str, processor::ticks());
+}
+
+void boot_time_chart::event(int event_idx, const char *str)
+{
+    event(event_idx, str, processor::ticks());
+}
+
+void boot_time_chart::event(int event_idx, const char *str, u64 stamp)
+{
+    arrays[event_idx].str = str;
+    arrays[event_idx].stamp = stamp;
 }
 
 void boot_time_chart::print_chart()

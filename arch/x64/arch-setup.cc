@@ -134,11 +134,11 @@ void arch_setup_free_memory()
     u64 time;
     time = omb.tsc_init_hi;
     time = (time << 32) | omb.tsc_init;
-    boot_time.arrays[0] = { "", time };
+    boot_time.event(0, "", time );
 
     time = omb.tsc_disk_done_hi;
     time = (time << 32) | omb.tsc_disk_done;
-    boot_time.arrays[1] = { "disk read (real mode)", time };
+    boot_time.event(1, "disk read (real mode)", time );
 
     auto c = processor::cpuid(0x80000000);
     if (c.a >= 0x80000008) {
