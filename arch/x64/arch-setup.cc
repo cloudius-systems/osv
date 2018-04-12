@@ -50,6 +50,7 @@ struct osv_multiboot_info_type {
     struct multiboot_info_type mb;
     u32 tsc_init, tsc_init_hi;
     u32 tsc_disk_done, tsc_disk_done_hi;
+    u32 tsc_uncompress_done, tsc_uncompress_done_hi;
     u8 disk_err;
 } __attribute__((packed));
 
@@ -139,6 +140,10 @@ void arch_setup_free_memory()
     time = omb.tsc_disk_done_hi;
     time = (time << 32) | omb.tsc_disk_done;
     boot_time.event(1, "disk read (real mode)", time );
+
+    time = omb.tsc_uncompress_done_hi;
+    time = (time << 32) | omb.tsc_uncompress_done;
+    boot_time.event(2, "uncompress lzloader.elf", time );
 
     auto c = processor::cpuid(0x80000000);
     if (c.a >= 0x80000008) {

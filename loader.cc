@@ -109,7 +109,7 @@ void premain()
     }
 
     setup_tls(inittab);
-    boot_time.event(2,"TLS initialization");
+    boot_time.event(3,"TLS initialization");
     for (auto init = inittab.start; init < inittab.start + inittab.count; ++init) {
         (*init)();
     }

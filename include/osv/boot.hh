@@ -21,7 +21,7 @@ private:
     // relatively late (the code that takes the measure is so early it cannot
     // call this one directly. Therefore, the measurements would appear in the
     // middle of the list, and we want to preserve order.
-    int _event = 3;
+    int _event = 4;
     time_element arrays[16];
 
     void print_one_time(int index);
