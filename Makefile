@@ -1381,6 +1381,7 @@ musl += network/getservbyport.o
 libc += network/getifaddrs.o
 libc += network/if_nameindex.o
 musl += network/if_freenameindex.o
+libc += network/res_init.o
 
 musl += prng/rand.o
 musl += prng/rand_r.o
