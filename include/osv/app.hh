@@ -98,12 +98,16 @@ public:
      * \param args Parameters which will be passed to program's main().
      * \param new_program true if a new elf namespace must be started
      * \param env pointer to an unordered_map than will be merged in current env
+     * \param main_function_name name of the main function - the default is 'main'
+     * \param post_main optional function to be executed after program's main() ends
      * \throw launch_error
      */
     static shared_app_t run(const std::string& command,
             const std::vector<std::string>& args,
             bool new_program = false,
-            const std::unordered_map<std::string, std::string> *env = nullptr);
+            const std::unordered_map<std::string, std::string> *env = nullptr,
+            const std::string& main_function_name = "main",
+            std::function<void()> post_main = nullptr);
 
     static void join_all() {
         apps.join();
@@ -112,7 +116,9 @@ public:
     application(const std::string& command,
             const std::vector<std::string>& args,
             bool new_program = false,
-            const std::unordered_map<std::string, std::string> *env = nullptr);
+            const std::unordered_map<std::string, std::string> *env = nullptr,
+            const std::string& main_function_name = "main",
+            std::function<void()> post_main = nullptr);
 
     ~application();
 
@@ -136,13 +142,17 @@ public:
      * \param args Parameters which will be passed to program's main().
      * \param new_program true if a new elf namespace must be started
      * \param env pointer to an unordered_map than will be merged in current env
+     * \param main_function_name name of the main function - the default is 'main'
+     * \param post_main optional function to be executed after program's main() ends
      * \throw launch_error
      */
     static shared_app_t run_and_join(const std::string& command,
             const std::vector<std::string>& args,
             bool new_program = false,
             const std::unordered_map<std::string, std::string> *env = nullptr,
-            waiter* setup_waiter = nullptr);
+            waiter* setup_waiter = nullptr,
+            const std::string& main_function_name = "main",
+            std::function<void()> post_main = nullptr);
 
     /**
      * Installs a termination callback which will be called when
@@ -243,6 +253,7 @@ private:
     std::shared_ptr<application_runtime> _runtime;
     sched::thread* _joiner;
     std::atomic<bool> _terminated;
+    std::function<void()> _post_main;
     friend struct application_runtime;
 };
 

@@ -125,9 +125,12 @@ shared_app_t application::run(const std::vector<std::string>& args)
 shared_app_t application::run(const std::string& command,
                       const std::vector<std::string>& args,
                       bool new_program,
-                      const std::unordered_map<std::string, std::string> *env)
+                      const std::unordered_map<std::string, std::string> *env,
+                      const std::string& main_function_name,
+                      std::function<void()> post_main)
 {
-    auto app = std::make_shared<application>(command, args, new_program, env);
+    auto app = std::make_shared<application>(command, args, new_program, env,
+                                             main_function_name, post_main);
     app->start();
     apps.push(app);
     return app;
@@ -137,9 +140,12 @@ shared_app_t application::run_and_join(const std::string& command,
                       const std::vector<std::string>& args,
                       bool new_program,
                       const std::unordered_map<std::string, std::string> *env,
-                      waiter* setup_waiter)
+                      waiter* setup_waiter,
+                      const std::string& main_function_name,
+                      std::function<void()> post_main)
 {
-    auto app = std::make_shared<application>(command, args, new_program, env);
+    auto app = std::make_shared<application>(command, args, new_program, env,
+                                             main_function_name, post_main);
     app->start_and_join(setup_waiter);
     return app;
 }
@@ -147,13 +153,16 @@ shared_app_t application::run_and_join(const std::string& command,
 application::application(const std::string& command,
                      const std::vector<std::string>& args,
                      bool new_program,
-                     const std::unordered_map<std::string, std::string> *env)
+                     const std::unordered_map<std::string, std::string> *env,
+                     const std::string& main_function_name,
+                     std::function<void()> post_main)
     : _args(args)
     , _command(command)
     , _termination_requested(false)
     , _runtime(new application_runtime(*this))
     , _joiner(nullptr)
     , _terminated(false)
+    , _post_main(post_main)
 {
     try {
         elf::program *current_program;
@@ -204,7 +213,7 @@ application::application(const std::string& command,
         throw launch_error("Failed to load object: " + command);
     }
 
-    _main = _lib->lookup<int (int, char**)>("main");
+    _main = _lib->lookup<int (int, char**)>(main_function_name.c_str());
     if (!_main) {
         _entry_point = reinterpret_cast<void(*)()>(_lib->entry_point());
     }
@@ -308,6 +317,10 @@ void application::main()
 
     if (_main) {
         run_main();
+
+        if(_post_main) {
+            _post_main();
+        }
     } else {
         // The application is expected not to initialize the environment in
         // which it runs on its owns but to call __libc_start_main(). If that's
@@ -317,7 +330,6 @@ void application::main()
         // vector.
         _entry_point();
     }
-
     // _entry_point() doesn't return
 }
 
