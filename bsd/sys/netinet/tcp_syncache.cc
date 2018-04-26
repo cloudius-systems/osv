@@ -810,9 +810,6 @@ syncache_socket(struct syncache *sc, struct socket *lso, struct mbuf *m)
 
 	INP_UNLOCK(inp);
 
-	SOCK_LOCK(so);
-	soisconnected(so);
-
 	TCPSTAT_INC(tcps_accepts);
 	return (so);
 

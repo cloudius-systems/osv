@@ -1914,6 +1914,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	case TCPS_SYN_RECEIVED:
 
 		TCPSTAT_INC(tcps_connects);
+		SOCK_LOCK(so);
 		soisconnected(so);
 		/* Do window scaling? */
 		if ((tp->t_flags & (TF_RCVD_SCALE|TF_REQ_SCALE)) ==
