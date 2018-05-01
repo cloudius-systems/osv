@@ -15,6 +15,7 @@
 #include <unordered_set>
 #include <osv/latch.hh>
 #include <osv/elf.hh>
+#include <osv/migration-lock.hh>
 
 using value_t = int;
 using set_t = std::unordered_set<value_t>;
@@ -32,6 +33,7 @@ static set_t drain(Ring& ring)
 
 BOOST_AUTO_TEST_CASE(test_insert_and_drain)
 {
+    SCOPE_LOCK(migration_lock);
     unordered_ring_mpsc<value_t,16> ring;
 
     assert(ring.push(1));
@@ -51,6 +53,7 @@ BOOST_AUTO_TEST_CASE(test_insert_and_drain)
 
 BOOST_AUTO_TEST_CASE(test_when_ring_gets_full)
 {
+    SCOPE_LOCK(migration_lock);
     unordered_ring_mpsc<value_t,4> ring;
 
     assert(ring.push(1));
@@ -72,6 +75,7 @@ BOOST_AUTO_TEST_CASE(test_when_ring_gets_full)
 
 BOOST_AUTO_TEST_CASE(test_concurrent_access)
 {
+    SCOPE_LOCK(migration_lock);
     constexpr value_t n_items = 1024*128;
     unordered_ring_mpsc<value_t,n_items*2> ring;
 
