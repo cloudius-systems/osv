@@ -358,7 +358,6 @@ bio_init(void)
 		auto* bp = &buf_table[i];
 		bp->b_flags = B_INVAL;
 		bp->b_data = malloc(BSIZE);
-		mutex_init(&bp->b_lock);
 		free_list.push_back(*bp);
 	}
 	sem_init(&free_sem, 0, NBUFS);

@@ -71,7 +71,9 @@ public:
         memcpy((void*) this, (const void*) &other, sizeof(*this));
         // try to catch some monkey business
         rt_refcnt = -1;
+#if 0
         mutex_init(&rt_mtx._mutex);
+#endif
     }
     nonlockable_rtentry() {
         // This shouldn't be necessary, but cache[dst] = ... uses it
@@ -81,7 +83,9 @@ public:
         memcpy((void*) this, (const void*) &other, sizeof(*this));
         // try to catch some monkey business
         rt_refcnt = -1;
+#if 0
         mutex_init(&rt_mtx._mutex);
+#endif
         return *this;
     }
 };
@@ -156,7 +160,9 @@ public:
         memcpy(ret, ro.ro_rt, sizeof(*ret));
         RO_RTFREE(&ro);
         ret->rt_refcnt = -1; // try to catch some monkey-business
+#if 0
         mutex_init(&ret->rt_mtx._mutex); // try to catch some monkey-business?
+#endif
         // Add the result to the cache
         WITH_LOCK(cache_mutex) {
             auto *old_cache = cache.read_by_owner();

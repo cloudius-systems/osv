@@ -61,9 +61,23 @@ static inline void mutex_unlock(mutex_t *m) { lockfree_mutex_unlock(m); }
 static inline bool mutex_trylock(mutex_t *m) { return lockfree_mutex_try_lock(m); }
 static inline bool mutex_owned(mutex_t *m) { return lockfree_mutex_owned(m); }
 #endif
-/** both C and C++ code currently use these, though they should be C-only  **/
+#ifndef __cplusplus
 static inline void mutex_init(mutex_t* m) { memset(m, 0, sizeof(mutex_t)); }
 static inline void mutex_destroy(mutex_t* m) { }
+#else
+// In C++ code, mutex_init()/mutex_destroy() should NOT be used. Rather,
+// mutex's constructor and destructor will work. Importantly, both the C
+// mutex_init() and the C++ constructor do the same thing (set all the
+// structure's fields to zero).
+// Nevertheless, for compatibility with old C code which was transfered to C++
+// we want to support mutex_init()/mutex_destroy(). If they are functions,
+// gcc 8 complains *here* that the memset call is not a good idea on an
+// object (and it usually isn't!). So we make them macros, so the compiler
+// will only complain at the call site (and the check can be disabled with
+// -Wno-class-memaccess for each call site).
+#define mutex_init(m) memset(m, 0, sizeof(mutex_t))
+#define mutex_destroy(m)
+#endif
 #define MUTEX_INITIALIZER   {}
 
 #ifdef __cplusplus

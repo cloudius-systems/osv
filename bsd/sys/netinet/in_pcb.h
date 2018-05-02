@@ -334,9 +334,12 @@ struct inpcbinfo {
 
 #ifdef _KERNEL
 
-#define INP_LOCK_INIT(inp, d, t) \
-	mutex_init(&(inp)->inp_lock)
-#define INP_LOCK_DESTROY(inp)	mutex_destroy(&(inp)->inp_lock)
+// No need to do any initialization to the lock, if the inp object was
+// created in C++ and the constructor ran (i.e., with new)
+//#define INP_LOCK_INIT(inp, d, t) mutex_init(&(inp)->inp_lock)
+//#define INP_LOCK_DESTROY(inp)	mutex_destroy(&(inp)->inp_lock)
+#define INP_LOCK_INIT(inp, d, t)
+#define INP_LOCK_DESTROY(inp, d, t)
 #define INP_LOCK(inp)		mutex_lock(&(inp)->inp_lock)
 #define INP_TRY_LOCK(inp)	mutex_try_lock(&(inp)->inp_lock)
 #define INP_UNLOCK(inp)		mutex_unlock(&(inp)->inp_lock)

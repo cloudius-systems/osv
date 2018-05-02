@@ -184,19 +184,16 @@ vget(struct mount *mp, uint64_t ino, struct vnode **vpp)
 		return 1;
 	}
 
-	if (!(vp = new vnode)) {
+	if (!(vp = new vnode())) {
 		VNODE_UNLOCK();
 		return 0;
 	}
-
-	memset(vp, 0, sizeof(struct vnode));
 
 	LIST_INIT(&vp->v_names);
 	vp->v_ino = ino;
 	vp->v_mount = mp;
 	vp->v_refcnt = 1;
 	vp->v_op = mp->m_op->vfs_vnops;
-	mutex_init(&vp->v_lock);
 	vp->v_nrlocks = 0;
 
 	/*
@@ -204,7 +201,6 @@ vget(struct mount *mp, uint64_t ino, struct vnode **vpp)
 	 */
 	if ((error = VFS_VGET(mp, vp)) != 0) {
 		VNODE_UNLOCK();
-		mutex_destroy(&vp->v_lock);
 		delete vp;
 		return error;
 	}
@@ -250,7 +246,6 @@ vput(struct vnode *vp)
 	vp->v_nrlocks--;
 	ASSERT(vp->v_nrlocks == 0);
 	mutex_unlock(&vp->v_lock);
-	mutex_destroy(&vp->v_lock);
 	delete vp;
 }
 
@@ -296,7 +291,6 @@ vrele(struct vnode *vp)
 	 */
 	VOP_INACTIVE(vp);
 	vfs_unbusy(vp->v_mount);
-	mutex_destroy(&vp->v_lock);
 	delete vp;
 }
 

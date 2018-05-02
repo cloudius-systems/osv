@@ -31,8 +31,8 @@ struct synch_thread {
 
 class synch_port {
 public:
-    synch_port() { mutex_init(&_lock); }
-    virtual ~synch_port() { mutex_destroy(&_lock); }
+    synch_port() { }
+    virtual ~synch_port() { }
 
     static synch_port* instance() {
         if (_instance == nullptr) {

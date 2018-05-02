@@ -82,7 +82,6 @@ dentry_alloc(struct dentry *parent_dp, struct vnode *vp, const char *path)
     dp->d_vnode = vp;
     dp->d_mount = mp;
     dp->d_path = strdup(path);
-    mutex_init(&dp->d_lock);
     LIST_INIT(&dp->d_children);
 
     if (parent_dp) {
