@@ -513,6 +513,13 @@ $(out)/bsd/sys/netinet/in.o: COMMON+=-fno-strict-aliasing
 
 $(out)/bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/metaslab.o: COMMON+=-Wno-tautological-compare
 
+# A lot of the BSD code used to be C code, which commonly bzero()ed or
+# memcpy()ed objects. In C++, this should not be done (objects have
+# constructors and assignments), and gcc 8 starts to warn about it.
+# Instead of fixing all these occurances, let's ask gcc to ignore this
+# warning. At least for now.
+$(out)/bsd/%.o: CXXFLAGS += -Wno-class-memaccess
+
 bsd  = bsd/init.o
 bsd += bsd/net.o
 bsd += bsd/$(arch)/machine/in_cksum.o
