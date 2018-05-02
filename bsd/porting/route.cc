@@ -153,8 +153,13 @@ static struct mbuf*  osv_route_arp_rtmsg(int if_idx, int cmd, const char* ip,
     m_rtmsg->m_rtm.rtm_seq = ++msg_seq;
     m_rtmsg->m_rtm.rtm_addrs = (RTA_GATEWAY | RTA_DST);
 
+    // Note that (((struct bsd_sockaddr *)(sa))->sa_len) is the real
+    // length of the address structure, but in the routing socket we're
+    // supposed to round the length to multiples of 8 bytes (long).
+    // We still can't *copy* this much from the input address structure,
+    // because the compiler (starting from gcc 8) would warn about it.
 #define CP_ADDR(w, sa) \
-    l = SA_SIZE_ALWAYS(&(sa)); bcopy(&(sa), cp, l); cp += l;\
+    l = SA_SIZE_ALWAYS(&(sa)); bcopy(&(sa), cp, (((struct bsd_sockaddr *)(&(sa)))->sa_len)); cp += l;\
 
     CP_ADDR(RTA_DST, dst);
     CP_ADDR(RTA_GATEWAY, sdl_m);
