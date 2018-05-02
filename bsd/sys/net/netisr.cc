@@ -875,7 +875,6 @@ netisr_start_swi(void)
 void netisr_init(void *arg)
 {
 	NETISR_LOCK_INIT();
-	bzero(&main_nws, sizeof(main_nws));
 	netisr_maxthreads = 1;
 	if (netisr_defaultqlimit > netisr_maxqlimit) {
 		printf("netisr_init: forcing defaultqlimit from %d to %d\n",
