@@ -9,6 +9,7 @@
 #include <osv/elf.hh>
 #include <link.h>
 #include <osv/debug.hh>
+#include <osv/stubbing.hh>
 
 static __thread char dlerror_msg[128];
 static __thread char *dlerror_ptr;
@@ -80,6 +81,13 @@ void* dlsym(void* handle, const char* name)
         return nullptr;
     }
     return sym.relocated_addr();
+}
+
+extern "C"
+void* dlvsym(void* handle, const char* name, char *version)
+{
+    WARN_ONCE("dlvsym() stubbed, ignoring version parameter");
+    return dlsym(handle, name);
 }
 
 extern "C"
