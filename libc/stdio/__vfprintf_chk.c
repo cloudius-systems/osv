@@ -1,6 +1,7 @@
 #include "stdio_impl.h"
 #include <stdlib.h>
 #include <stdarg.h>
+#include <wchar.h>
 
 /* Used by code compiled on Linux with -D_FORTIFY_SOURCE */
 
@@ -82,5 +83,18 @@ int __vsprintf_chk (char *s, int flags, size_t slen, const char *format,
     if (ret > slen) {
         abort();
     }
+    return ret;
+}
+
+int __swprintf_chk(wchar_t *s, size_t n, int flag, size_t slen, const wchar_t *format, ...)
+{
+    if(slen < n) {
+        abort();
+    }
+    va_list args;
+    int ret;
+    va_start(args, format);
+    ret = vswprintf(s, n, format, args);
+    va_end(args);
     return ret;
 }
