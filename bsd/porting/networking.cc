@@ -45,7 +45,7 @@ int if_set_mtu(std::string if_name, u16 mtu)
     bzero(&ifreq, sizeof(struct bsd_ifreq));
 
     /* IF Name */
-    strncpy(ifreq.ifr_name, if_name.c_str(), IFNAMSIZ);
+    strlcpy(ifreq.ifr_name, if_name.c_str(), IFNAMSIZ);
     auto ifp = ifunit_ref(if_name.c_str());
     if (!ifp) {
         return (ENOENT);
@@ -76,7 +76,7 @@ int start_if(std::string if_name, std::string ip_addr, std::string mask_addr)
     bzero(&ifra, sizeof(struct in_aliasreq));
 
     /* IF Name */
-    strncpy(ifra.ifra_name, if_name.c_str(), IFNAMSIZ);
+    strlcpy(ifra.ifra_name, if_name.c_str(), IFNAMSIZ);
     ifp = ifunit_ref(if_name.c_str());
     if (!ifp) {
         return (ENOENT);
@@ -105,7 +105,7 @@ int start_if(std::string if_name, std::string ip_addr, std::string mask_addr)
     broadcast->sin_addr.s_addr = (addr->sin_addr.s_addr &
                                   mask->sin_addr.s_addr) |
                                  ~mask->sin_addr.s_addr ;
-    strncpy(oldaddr.ifr_name, if_name.c_str(), IFNAMSIZ);
+    strlcpy(oldaddr.ifr_name, if_name.c_str(), IFNAMSIZ);
     error = in_control(NULL, SIOCGIFADDR, (caddr_t)&oldaddr, ifp, NULL);
     if (!error) {
         in_control(NULL, SIOCDIFADDR, (caddr_t)&oldaddr, ifp, NULL);
@@ -131,7 +131,7 @@ int stop_if(std::string if_name, std::string ip_addr)
     bzero(&ifra, sizeof(struct in_aliasreq));
 
     /* IF Name */
-    strncpy(ifra.ifra_name, if_name.c_str(), IFNAMSIZ);
+    strlcpy(ifra.ifra_name, if_name.c_str(), IFNAMSIZ);
     ifp = ifunit_ref(if_name.c_str());
     if (!ifp) {
         return (ENOENT);
@@ -164,7 +164,7 @@ int ifup(std::string if_name)
         return (EINVAL);
     }
 
-    strncpy(ifr.ifr_name, if_name.c_str(), IFNAMSIZ);
+    strlcpy(ifr.ifr_name, if_name.c_str(), IFNAMSIZ);
     error = ifioctl(NULL, SIOCGIFFLAGS, (caddr_t)&ifr, NULL);
     if (error) {
         return (error);

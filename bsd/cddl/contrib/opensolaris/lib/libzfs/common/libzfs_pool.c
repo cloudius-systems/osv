@@ -3359,8 +3359,8 @@ set_path(zpool_handle_t *zhp, nvlist_t *nv, const char *path)
 {
 	zfs_cmd_t zc = { 0 };
 
-	(void) strncpy(zc.zc_name, zhp->zpool_name, sizeof (zc.zc_name));
-	(void) strncpy(zc.zc_value, path, sizeof (zc.zc_value));
+	(void) strlcpy(zc.zc_name, zhp->zpool_name, sizeof (zc.zc_name));
+	(void) strlcpy(zc.zc_value, path, sizeof (zc.zc_value));
 	verify(nvlist_lookup_uint64(nv, ZPOOL_CONFIG_GUID,
 	    &zc.zc_guid) == 0);
 

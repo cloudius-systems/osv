@@ -12,7 +12,7 @@ unsigned if_nametoindex(const char *name)
 	int fd, r;
 
 	if ((fd = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0) return -1;
-	strncpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
+	strlcpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
 	r = ioctl(fd, SIOCGIFINDEX, &ifr);
 	close(fd);
 	return r < 0 ? r : ifr.ifr_ifindex;

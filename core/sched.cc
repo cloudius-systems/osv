@@ -998,8 +998,8 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
     // name was set for this one, set one by prepending ">" to parent's name.
     if (!_attr._name[0] && s_current) {
         _attr._name[0] = '>';
-        strncpy(_attr._name.data()+1, s_current->_attr._name.data(),
-                sizeof(_attr._name) - 2);
+        strlcpy(_attr._name.data()+1, s_current->_attr._name.data(),
+                sizeof(_attr._name) - 1);
     }
 }
 

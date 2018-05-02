@@ -2143,7 +2143,7 @@ void unpack_bootfs(void)
 
         // mkdir() directories needed for this path name, as necessary
         char tmp[BOOTFS_PATH_MAX];
-        strncpy(tmp, md[i].name, BOOTFS_PATH_MAX);
+        strlcpy(tmp, md[i].name, BOOTFS_PATH_MAX);
         for (p = tmp; *p; ++p) {
             if (*p == '/') {
                 *p = '\0';
