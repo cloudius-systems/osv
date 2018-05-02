@@ -190,6 +190,7 @@ int getpagesize()
 {
     return 4096;
 }
+ALIAS(getpagesize, __getpagesize);
 
 int vfork()
 {
