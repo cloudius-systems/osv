@@ -275,8 +275,7 @@ int dmu_get_recursive_snaps_nvl(const char *fsname, const char *snapname,
 int dmu_snapshots_destroy_nvl(struct nvlist *snaps, boolean_t defer, char *);
 int dmu_objset_snapshot(char *fsname, char *snapname, char *tag,
     struct nvlist *props, boolean_t recursive, boolean_t temporary, int fd);
-int dmu_objset_rename(const char *name, const char *newname,
-    boolean_t recursive);
+int dmu_objset_rename(const char *name, const char *newname, int flags);
 int dmu_objset_find(const char *name, int func(const char *, void *), void *arg,
     int flags);
 void dmu_objset_byteswap(void *buf, size_t size);
