@@ -23,7 +23,7 @@
 #include <vector>
 #include "boost/filesystem/path.hpp"
 #include <boost/algorithm/string.hpp>
-#include <boost/regex.hpp>
+#include <regex>
 #include <boost/algorithm/string/replace.hpp>
 #include <sys/stat.h>
 
@@ -263,15 +263,15 @@ class get_file_handler : public file_interaction_handler {
 
         struct stat buffer;
         auto reg = global_to_regexp(strs[pos]);
-        boost::regex pattern(reg, boost::regex::normal);
+        std::regex pattern(reg, std::regex::ECMAScript);
         boost::filesystem::directory_iterator end_itr;
         for (; itr != end_itr; ++itr) {
             if (pos + 1 == strs.size()) {
-                if (boost::regex_match(itr->path().filename().string(), pattern) && stat((*itr).path().string().c_str(), &buffer) == 0) {
+                if (std::regex_match(itr->path().filename().string(), pattern) && stat((*itr).path().string().c_str(), &buffer) == 0) {
                     res.push_back(get_file_status(itr->path().string(), itr->path().filename().string(), buffer));
                 }
             } else {
-                if (boost::filesystem::is_directory(itr->status()) && boost::regex_match(itr->path().filename().string(), pattern)) {
+                if (boost::filesystem::is_directory(itr->status()) && std::regex_match(itr->path().filename().string(), pattern)) {
                     boost::filesystem::directory_iterator subdir_itr(itr->path());
                     list_directory_using_wildcard(strs, pos + 1, subdir_itr,res);
                 }

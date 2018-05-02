@@ -21,7 +21,7 @@ ifndef OSV_BUILD_PATH
 endif
 miscbase = $(src)/external/$(ARCH)/misc.bin
 libs-dir = $(miscbase)/usr/lib64
-boost-libs := -lboost_system -lboost_filesystem -lboost_regex
+boost-libs := -lboost_system -lboost_filesystem
 
 # the build target executable:
 TARGET = httpserver-api
