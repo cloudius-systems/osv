@@ -270,7 +270,7 @@ bool scsi_common::test_lun(u16 target, u16 lun)
         try {
             exec_inquiry(target, lun);
             exec_test_unit_ready(target, lun);
-        } catch (std::runtime_error err) {
+        } catch (std::runtime_error&) {
             nr++;
             continue;
         }
@@ -288,7 +288,7 @@ void scsi_common::scan()
             for (auto &lun : luns) {
                 add_lun(target, lun);
             }
-        } catch(std::runtime_error err) {
+        } catch(std::runtime_error&) {
             continue;
         }
     }
