@@ -108,7 +108,7 @@ xapic::xapic()
 
 void xapic::enable()
 {
-    wrmsr(msr::IA32_APIC_BASE, _apic_base | APIC_BASE_GLOBAL_ENABLE);
+    wrmsr(msr::IA32_APIC_BASE, rdmsr(msr::IA32_APIC_BASE) | APIC_BASE_GLOBAL_ENABLE);
     software_enable();
 }
 
@@ -169,7 +169,7 @@ u32 x2apic::id()
 
 void x2apic::enable()
 {
-    wrmsr(msr::IA32_APIC_BASE, _apic_base | APIC_BASE_GLOBAL_ENABLE | (1 << 10));
+    wrmsr(msr::IA32_APIC_BASE, rdmsr(msr::IA32_APIC_BASE) | APIC_BASE_GLOBAL_ENABLE | (1 << 10));
     software_enable();
 }
 
