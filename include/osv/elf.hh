@@ -189,6 +189,8 @@ enum {
     DT_FINI_ARRAY = 26, // d_ptr Pointer to an array of pointers to termination functions.
     DT_INIT_ARRAYSZ = 27, // d_val Size, in bytes, of the array of initialization functions.
     DT_FINI_ARRAYSZ = 28, // d_val Size, in bytes, of the array of termination functions.
+    DT_FLAGS = 28, // value is various flags, bits from DF_*.
+    DT_FLAGS_1 = 0x6ffffffb, // value is various flags, bits from DF_1_*.
     DT_LOOS = 0x60000000, // Defines a range of dynamic table tags that are reserved for
       // environment-specific use.
     DT_HIOS = 0x6FFFFFFF, //
@@ -196,6 +198,13 @@ enum {
       // processor-specific use.
     DT_HIPROC = 0x7FFFFFFF, //
     DT_GNU_HASH = 0x6ffffef5,
+};
+
+enum {
+    DF_BIND_NOW = 0x8,
+};
+enum {
+    DF_1_NOW = 0x1,
 };
 
 enum {

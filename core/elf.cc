@@ -630,7 +630,9 @@ void object::relocate_pltgot()
 #endif /* AARCH64_PORT_STUB */
         original_plt = static_cast<void*>(_base + (u64)pltgot[1]);
     }
-    bool bind_now = dynamic_exists(DT_BIND_NOW) || mlocked();
+    bool bind_now = dynamic_exists(DT_BIND_NOW) || mlocked() ||
+        (dynamic_exists(DT_FLAGS) && (dynamic_val(DT_FLAGS) & DF_BIND_NOW)) ||
+        (dynamic_exists(DT_FLAGS_1) && (dynamic_val(DT_FLAGS_1) & DF_1_NOW));
 
     auto rel = dynamic_ptr<Elf64_Rela>(DT_JMPREL);
     auto nrel = dynamic_val(DT_PLTRELSZ) / sizeof(*rel);
