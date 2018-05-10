@@ -882,7 +882,13 @@ def exit_thread_context():
         active_thread_context.__exit__()
         active_thread_context = None
 
-timer_state_expired = gdb.parse_and_eval('sched::timer_base::expired')
+def enum_value (type_name, val_name):
+    for field in gdb.lookup_type(type_name).fields():
+        if field.name == (type_name + "::" + val_name):
+            return field.enumval
+    raise Exception('value %s not found in enum %s' % (val_name, type_name))
+
+timer_state_expired = enum_value('sched::timer_base::state', 'expired')
 
 def show_thread_timers(t):
     timer_list = intrusive_list(t['_active_timers'])
