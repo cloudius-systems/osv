@@ -6,6 +6,7 @@
  */
 
 #include <osv/app.hh>
+#include <osv/stubbing.hh>
 #include <string>
 #include <osv/run.hh>
 #include <osv/power.hh>
@@ -359,8 +360,16 @@ void application::prepare_argv(elf::program *program)
         envcount++;
     }
 
+    // Load vdso library if available
+    int auxv_parameters_count = 2;
+    _libvdso = program->get_library("libvdso.so");
+    if (!_libvdso) {
+        auxv_parameters_count--;
+        WARN_ONCE("application::prepare_argv(): missing libvdso.so -> may prevent shared libraries specifically Golang ones from functioning\n");
+    }
+
     // Allocate the continuous buffer for argv[] and envp[]
-    _argv.reset(new char*[_args.size() + 1 + envcount + 1 + sizeof(Elf64_auxv_t) * 3]);
+    _argv.reset(new char*[_args.size() + 1 + envcount + 1 + sizeof(Elf64_auxv_t) * (auxv_parameters_count + 1)]);
 
     // Fill the argv part of these buffers
     char *ab = _argv_buf.get();
@@ -380,22 +389,21 @@ void application::prepare_argv(elf::program *program)
     }
     contig_argv[_args.size() + 1 + envcount] = nullptr;
 
-    _libvdso = program->get_library("libvdso.so");
-    if (!_libvdso) {
-        abort("could not load libvdso.so\n");
-    }
 
     // Pass the VDSO library to the application.
     Elf64_auxv_t* _auxv =
         reinterpret_cast<Elf64_auxv_t *>(&contig_argv[_args.size() + 1 + envcount + 1]);
-    _auxv[0].a_type = AT_SYSINFO_EHDR;
-    _auxv[0].a_un.a_val = reinterpret_cast<uint64_t>(_libvdso->base());
+    int auxv_idx = 0;
+    if (_libvdso) {
+        _auxv[auxv_idx].a_type = AT_SYSINFO_EHDR;
+        _auxv[auxv_idx++].a_un.a_val = reinterpret_cast<uint64_t>(_libvdso->base());
+    }
 
-    _auxv[1].a_type = AT_PAGESZ;
-    _auxv[1].a_un.a_val = sysconf(_SC_PAGESIZE);
+    _auxv[auxv_idx].a_type = AT_PAGESZ;
+    _auxv[auxv_idx++].a_un.a_val = sysconf(_SC_PAGESIZE);
 
-    _auxv[2].a_type = AT_NULL;
-    _auxv[2].a_un.a_val = 0;
+    _auxv[auxv_idx].a_type = AT_NULL;
+    _auxv[auxv_idx].a_un.a_val = 0;
 }
 
 void application::run_main()
