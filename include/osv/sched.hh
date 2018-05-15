@@ -591,7 +591,9 @@ public:
       * wait queue for) a crucial mutex (e.g., for I/O or memory allocation),
       * which could cause the whole system to block. So use at your own peril.
       */
-     bool unsafe_stop();
+    bool unsafe_stop();
+    void setup_large_syscall_stack();
+    void free_tiny_syscall_stack();
 private:
     static void wake_impl(detached_state* st,
             unsigned allowed_initial_states_mask = 1 << unsigned(status::waiting));

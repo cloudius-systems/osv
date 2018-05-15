@@ -12,6 +12,37 @@
 #include <osv/barrier.hh>
 #include <string.h>
 
+//
+// The last 16 bytes of the syscall stack are reserved for -
+// tiny/large indicator and extra 8 bytes to make it 16 bytes aligned
+// as Linux x64 ABI mandates.
+#define SYSCALL_STACK_RESERVED_SPACE_SIZE (2 * 8)
+//
+// The tiny stack has to be large enough to allow for execution of
+// thread::setup_large_syscall_stack() that allocates and sets up
+// large syscall stack. It was measured that as of this writing
+// setup_large_syscall_stack() needs a little over 600 bytes of stack
+// to properly operate. This makes 1024 bytes to be an adequate size
+// of tiny stack.
+// All application threads pre-allocate tiny syscall stack so there
+// is a tiny penalty with this solution.
+#define TINY_SYSCALL_STACK_SIZE 1024
+#define TINY_SYSCALL_STACK_DEPTH (TINY_SYSCALL_STACK_SIZE - SYSCALL_STACK_RESERVED_SPACE_SIZE)
+//
+// The large syscall stack is setup and switched to on first
+// execution of SYSCALL instruction for given application thread.
+#define LARGE_SYSCALL_STACK_SIZE (16 * PAGE_SIZE)
+#define LARGE_SYSCALL_STACK_DEPTH (LARGE_SYSCALL_STACK_SIZE - SYSCALL_STACK_RESERVED_SPACE_SIZE)
+
+#define SET_SYSCALL_STACK_TYPE_INDICATOR(value) \
+*((long*)(_tcb->syscall_stack_top)) = value;
+
+#define GET_SYSCALL_STACK_TYPE_INDICATOR() \
+*((long*)(_tcb->syscall_stack_top))
+
+#define TINY_SYSCALL_STACK_INDICATOR 0l
+#define LARGE_SYSCALL_STACK_INDICATOR 1l
+
 extern "C" {
 void thread_main(void);
 void thread_main_c(sched::thread* t);
@@ -146,6 +177,66 @@ void thread::setup_tcb()
     _tcb = static_cast<thread_control_block*>(p + tls.size + user_tls_size);
     _tcb->self = _tcb;
     _tcb->tls_base = p + user_tls_size;
+
+    if (is_app()) {
+        //
+        // Allocate TINY syscall call stack
+        void* tiny_syscall_stack_begin = malloc(TINY_SYSCALL_STACK_SIZE);
+        assert(tiny_syscall_stack_begin);
+        //
+        // The top of the stack needs to be 16 bytes lower to make space for
+        // OSv syscall stack type indicator and extra 8 bytes to make it 16-bytes aligned
+        _tcb->syscall_stack_top = tiny_syscall_stack_begin + TINY_SYSCALL_STACK_DEPTH;
+        SET_SYSCALL_STACK_TYPE_INDICATOR(TINY_SYSCALL_STACK_INDICATOR);
+    }
+    else {
+        _tcb->syscall_stack_top = 0;
+    }
+}
+
+void thread::setup_large_syscall_stack()
+{
+    assert(is_app());
+    assert(GET_SYSCALL_STACK_TYPE_INDICATOR() == TINY_SYSCALL_STACK_INDICATOR);
+    //
+    // Allocate LARGE syscall stack
+    void* large_syscall_stack_begin = malloc(LARGE_SYSCALL_STACK_SIZE);
+    void* large_syscall_stack_top = large_syscall_stack_begin + LARGE_SYSCALL_STACK_DEPTH;
+    //
+    // Copy all of the tiny stack to the are of last 1024 bytes of large stack.
+    // This way we do not have to pop and push the same registers to be saved again.
+    // Also the caller stack pointer is also copied.
+    // We could have copied only last 128 (registers) + 16 bytes (2 fields) instead
+    // of all of the stack but copying 1024 is simpler and happens
+    // only once per thread.
+    void* tiny_syscall_stack_top = _tcb->syscall_stack_top;
+    memcpy(large_syscall_stack_top - TINY_SYSCALL_STACK_DEPTH,
+           tiny_syscall_stack_top - TINY_SYSCALL_STACK_DEPTH, TINY_SYSCALL_STACK_SIZE);
+    //
+    // Save beginning of tiny stack at the bottom of LARGE stack so
+    // that we can deallocate it in free_tiny_syscall_stack
+    *((void**)large_syscall_stack_begin) = tiny_syscall_stack_top - TINY_SYSCALL_STACK_DEPTH;
+    //
+    // Set canary value (0xDEADBEAFDEADBEAF) under bottom + 8 of LARGE stack
+    *((long*)(large_syscall_stack_begin + 8)) = 0xdeadbeafdeadbeaf;
+    //
+    // Switch syscall stack address value in TCB to the top of the LARGE one
+    _tcb->syscall_stack_top = large_syscall_stack_top;
+    SET_SYSCALL_STACK_TYPE_INDICATOR(LARGE_SYSCALL_STACK_INDICATOR);
+}
+
+void thread::free_tiny_syscall_stack()
+{
+    assert(is_app());
+    assert(GET_SYSCALL_STACK_TYPE_INDICATOR() == LARGE_SYSCALL_STACK_INDICATOR);
+
+    void* large_syscall_stack_top = _tcb->syscall_stack_top;
+    void* large_syscall_stack_begin = large_syscall_stack_top - LARGE_SYSCALL_STACK_DEPTH;
+    //
+    // Lookup address of tiny stack saved by setup_large_syscall_stack()
+    // at the bottom of LARGE stack (current syscall stack)
+    void* tiny_syscall_stack_begin = *((void**)large_syscall_stack_begin);
+    free(tiny_syscall_stack_begin);
 }
 
 void thread::free_tcb()
@@ -155,6 +246,13 @@ void thread::free_tcb()
         free(_tcb->tls_base - obj->initial_tls_size());
     } else {
         free(_tcb->tls_base);
+    }
+
+    if (_tcb->syscall_stack_top) {
+        void* syscall_stack_begin = GET_SYSCALL_STACK_TYPE_INDICATOR() == TINY_SYSCALL_STACK_INDICATOR ?
+            _tcb->syscall_stack_top - TINY_SYSCALL_STACK_DEPTH :
+            _tcb->syscall_stack_top - LARGE_SYSCALL_STACK_DEPTH;
+        free(syscall_stack_begin);
     }
 }
 
@@ -169,6 +267,16 @@ void thread_main_c(thread* t)
     processor::init_fpu();
     t->main();
     t->complete();
+}
+
+extern "C" void setup_large_syscall_stack()
+{
+    sched::thread::current()->setup_large_syscall_stack();
+}
+
+extern "C" void free_tiny_syscall_stack()
+{
+    sched::thread::current()->free_tiny_syscall_stack();
 }
 
 }

@@ -169,27 +169,69 @@ syscall_entry:
     .cfi_register rip, rcx # rcx took previous rip value
     .cfi_register rflags, r11 # r11 took previous rflags value
     # There is no ring transition and rflags are left unchanged.
+    #
+    # Unfortunately the mov instruction cannot be used to dereference an address
+    # on syscall stack pointed by address in TCB (%fs:16) - double memory dereference.
+    # Therefore we are forced to save caller stack address in a field in TCB.
+    movq %rsp, %fs:24 # syscall_caller_stack_pointer
+    #
+    # Switch stack to "tiny" syscall stack that should be large
+    # enough to setup "large" syscall stack (only when first SYSCALL on this thread)
+    movq %fs:16, %rsp
 
-    # Skip the "red zone" allowed by the AMD64 ABI (the caller used a
-    # SYSCALL instruction and doesn't know he called a function):
-    subq $128, %rsp
+    # Skip large syscall stack setup if it has been already setup
+    cmpq $0, (%rsp)  // Check if we are on tiny or large stack
+    jne large_stack_has_been_setup
 
-    # Align the stack to 16 bytes. We align it now because of limitations of
-    # the CFI language, but need to ensure it is still aligned before we call
-    # syscall_wrapper(), so must ensure that the number of pushes below are
-    # even.
-    # An additional complication is that we need to restore %rsp later without
-    # knowing how it was previously aligned. In the following trick, without
-    # using an additional register, the two pushes leave the stack with the
-    # same alignment it had originally, and a copy of the original %rsp at
-    # (%rsp) and 8(%rsp). The andq then aligns the stack - if it was already
-    # 16 byte aligned nothing changes, if it was 8 byte aligned then it
-    # subtracts 8 from %rsp, meaning that the original %rsp is now at 8(%rsp)
-    # and 16(%rsp). In both cases we can restore it below from 8(%rsp).
-    pushq %rsp
-    pushq (%rsp)
-    andq $-16, %rsp
+    # We are on small stack
+    # Save all registers
+    pushq %rcx
+    pushq %rcx
+    pushq %rbp
+    pushq %rbx
+    pushq %rax
+    pushq %rdx
+    pushq %rsi
+    pushq %rdi
+    pushq %r8
+    pushq %r9
+    pushq %r10
+    pushq %r11 # contains rflags before syscall instruction
+    pushq %r12
+    pushq %r13
+    pushq %r14
+    pushq %r15
+    # Please note we pushed rcx twice to make stack 16-bytes aligned
 
+    # Call setup_large_syscall_stack to setup large call stack
+    # This function does not take any arguments nor returns anything.
+    # It ends up allocating large stack and storing its address in tcb
+    callq setup_large_syscall_stack
+    movq %fs:16, %rsp  // Switch stack to large stack
+    subq $128, %rsp    // Skip 128 bytes of large stack so that we can restore all registers saved above (16 pushes).
+                       // Please note that these 128 bytes have been copied by setup_large_syscall_stack function
+                       // so that we do not have to pop and then push same registers again.
+    callq free_tiny_syscall_stack
+
+    # Restore all registers
+    popq %r15
+    popq %r14
+    popq %r13
+    popq %r12
+    popq %r11
+    popq %r10
+    popq %r9
+    popq %r8
+    popq %rdi
+    popq %rsi
+    popq %rdx
+    popq %rax
+    popq %rbx
+    popq %rbp
+    popq %rcx
+    popq %rcx
+
+large_stack_has_been_setup:
     .cfi_def_cfa %rsp, 0
 
     # We need to save and restore the caller's %rbp anyway, so let's also
@@ -204,9 +246,8 @@ syscall_entry:
     # We do this just so we can refer to it with CFI and help gdb's DWARF
     # stack unwinding. This saving not otherwise needed for correct operation
     # (we anyway restore it below by undoing all our modifications).
-    movq 24(%rsp), %rbp
-    addq $128, %rbp
-    pushq %rbp
+    pushq %fs:24
+
     .cfi_adjust_cfa_offset 8
     .cfi_rel_offset %rsp, 0
 
@@ -275,16 +316,14 @@ syscall_entry:
     popq_cfi %rbp
     popq_cfi %rcx
 
-    movq 8(%rsp), %rsp # undo alignment (as explained above)
-
     # restore rflags
     # push the rflag state syscall saved in r11 to the stack
     pushq %r11
     # pop the stack value in flag register
     popfq
 
-    #undo red-zone skip without altering restored flags
-    lea 128(%rsp), %rsp
+    # Restore caller stack pointer
+    movq %fs:24, %rsp
 
     # jump to rcx where the syscall instruction put rip
     # (sysret would leave rxc cloberred so we have nothing to do to restore it)
