@@ -9,7 +9,12 @@
 #include <sys/poll.h>
 #include <unistd.h>
 #include <errno.h>
+#include <sys/types.h>
+#include <sys/stat.h>
+#include <fcntl.h>
+#ifdef __OSV__
 #include <osv/latch.hh>
+#endif
 
 #include <string>
 #include <iostream>
@@ -77,6 +82,38 @@ static void test_epolloneshot()
 
     r = epoll_ctl(ep, EPOLL_CTL_DEL, s[0], &event);
     report(r == 0, "epoll_ctl DEL");
+}
+
+// Test epoll on a VFS file. It's not a very interesting case, and Linux
+// doesn't even support epoll on disk filesystems (like ext4), but it
+// turns out that on the /proc filesystem, it does work on Linux. In OSv,
+// polling a VFS file (disk file or /proc file) uses the trivial poll_no_poll()
+// which previously (see issue #971) caused crashes if it got unexpected
+// request flags.
+static void test_epoll_file()
+{
+    constexpr int MAXEVENTS = 1024;
+    struct epoll_event events[MAXEVENTS];
+
+    int ep = epoll_create(1);
+    report(ep >= 0, "epoll_create");
+
+    int fd = open("/proc/sys/kernel/hostname", O_RDONLY);
+    report(fd >= 0, "open file");
+
+    struct epoll_event event;
+    // Some extra flags, which caused issue #971
+    event.events = EPOLLIN | EPOLLRDHUP | EPOLLONESHOT | EPOLLET;
+    event.data.u32 = 123;
+
+    int r = epoll_ctl(ep, EPOLL_CTL_ADD, fd, &event);
+    report(r == 0, "epoll_ctl ADD");
+    r = epoll_wait(ep, events, MAXEVENTS, 0);
+    report(r == 1, "epoll_wait");
+
+    r = epoll_ctl(ep, EPOLL_CTL_DEL, fd, &event);
+    report(r == 0, "epoll_ctl DEL");
+    close(fd);
 }
 
 int main(int ac, char** av)
@@ -154,6 +191,7 @@ int main(int ac, char** av)
             "epoll timeout");
 
     ////////////////////////////////////////////////////////////////////////////
+#ifdef __OSV__
     event.events = EPOLLIN | EPOLLET;
     r = epoll_ctl(ep, EPOLL_CTL_MOD, s[0], &event);
     report(r == 0, "epoll_ctl_mod");
@@ -174,6 +212,7 @@ int main(int ac, char** av)
     r = epoll_ctl(ep, EPOLL_CTL_MOD, s[0], &event);
     report(r == 0, "epoll_ctl_mod");
     t2.join();
+#endif
 
     ////////////////////////////////////////////////////////////////////////////
     // Test EPOLLET (edge-triggered event notification)
@@ -229,6 +268,7 @@ int main(int ac, char** av)
     report(r == -1 && errno == EEXIST, "EEXIST");
 
     test_epolloneshot();
+    test_epoll_file();
 
     std::cout << "SUMMARY: " << tests << ", " << fails << " failures\n";
     return !!fails;
