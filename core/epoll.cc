@@ -30,26 +30,28 @@ TRACEPOINT(trace_epoll_ctl, "epfd=%d, fd=%d, op=%s event=0x%x", int, int, const 
 TRACEPOINT(trace_epoll_wait, "epfd=%d, maxevents=%d, timeout=%d", int, int, int);
 TRACEPOINT(trace_epoll_ready, "fd=%d file=%p, event=0x%x", int, file*, int);
 
-// We implement epoll using poll(), and therefore need to convert epoll's
-// event bits to and poll(). These are mostly the same, so the conversion
-// is trivial, but we verify this here with static_asserts. We additionally
-// support the epoll-only EPOLLET and EPOLLONESHOT, but those are not passed
-// on to poll() who wouldn't know what to do with them.
+// We implement epoll using the file's poll() method, and therefore need to
+// convert epoll's event bits to and poll ones. These are mostly the same,
+// so the conversion is trivial, but we verify this here with static_asserts.
+// We also pass the EPOLLET bit from epoll to poll because sockets' poll needs
+// to avoid a certain optimization (see sopoll_generic_locked()).
+// The remaining epoll-specific bit, EPOLLONESHOT, is not passed to poll().
 static_assert(POLLIN == EPOLLIN, "POLLIN!=EPOLLIN");
 static_assert(POLLOUT == EPOLLOUT, "POLLOUT!=EPOLLOUT");
 static_assert(POLLRDHUP == EPOLLRDHUP, "POLLRDHUP!=EPOLLRDHUP");
 static_assert(POLLPRI == EPOLLPRI, "POLLPRI!=EPOLLPRI");
 static_assert(POLLERR == EPOLLERR, "POLLERR!=EPOLLERR");
 static_assert(POLLHUP == EPOLLHUP, "POLLHUP!=EPOLLHUP");
-constexpr int SUPPORTED_EVENTS =
+constexpr int POLL_OUTPUTS =
         EPOLLIN | EPOLLOUT | EPOLLRDHUP | EPOLLPRI | EPOLLERR | EPOLLHUP;
+constexpr int POLL_INPUTS = POLL_OUTPUTS | EPOLLET;
 inline uint32_t events_epoll_to_poll(uint32_t e)
 {
-    return e & SUPPORTED_EVENTS;
+    return e & POLL_INPUTS;
 }
 inline uint32_t events_poll_to_epoll(uint32_t e)
 {
-    assert (!(e & ~SUPPORTED_EVENTS));
+    assert (!(e & ~POLL_OUTPUTS));
     return e;
 }
 
