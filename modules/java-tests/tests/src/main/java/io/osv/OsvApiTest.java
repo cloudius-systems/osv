@@ -15,6 +15,6 @@ public class OsvApiTest {
     public void testOSvVersionIsSet() {
         assertThat(System.getProperty("osv.version"))
                 .isNotEmpty()
-                .matches("v\\d+\\.\\d+([-a-z0-9]+)?");
+                .matches("v\\d+\\.\\d+(\\.\\d+)?([-a-z0-9]+)?");
     }
 }
