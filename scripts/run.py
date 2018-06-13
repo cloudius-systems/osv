@@ -160,16 +160,18 @@ def start_osv_qemu(options):
                 args += ["-netdev", "bridge,id=hn%d,br=%s,helper=%s" % (idx, options.bridge, bridge_helper)]
             net_device_options.extend(['netdev=hn%d' % idx, 'id=nic%d' % idx])
         else:
-            args += ["-netdev", "user,id=un%d,net=192.168.122.0/24,host=192.168.122.1" % idx]
+            if options.api:
+                forward_options = ',hostfwd=tcp::8000-:8000'
+            else:
+                forward_options = ''
+
+            for rule in options.forward:
+                forward_options += ',hostfwd=%s' % rule
+
+            args += ["-netdev", "user,id=un%d,net=192.168.122.0/24,host=192.168.122.1%s" % (idx, forward_options)]
             net_device_options.append("netdev=un%d" % idx)
 
         args += ["-device", ','.join(net_device_options)]
-
-    if options.api:
-        args += ["-redir", "tcp:8000::8000"]
-
-    for rule in options.forward:
-        args += ['-redir', rule]
 
     args += ["-device", "virtio-rng-pci"]
 

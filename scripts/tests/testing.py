@@ -193,7 +193,7 @@ class Guest(SupervisedProcess):
         args.extend(['--pass-args=-monitor unix:%s,server,nowait' % self.monitor_socket])
 
         for rule in forward:
-            args.extend(['--forward', 'tcp:%s::%s' % rule])
+            args.extend(['--forward', 'tcp::%s-:%s' % rule])
 
         args.extend(['--unsafe-cache'])
 

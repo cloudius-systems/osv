@@ -125,7 +125,7 @@ class Basetest(unittest.TestCase):
         if cls.config.use_sudo:
             args += ["/usr/bin/sudo", cls.config.run_script, "-n"]
         else:
-            args += [cls.config.run_script, "--forward", "tcp:" + str(cls._client.get_port()) + "::" + str(cls._client.get_port())]
+            args += [cls.config.run_script, "--forward", "tcp::" + str(cls._client.get_port()) + "-:" + str(cls._client.get_port())]
 
         if cls.config.cmd:
             args += ["-e", cls.config.cmd]
