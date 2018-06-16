@@ -116,6 +116,7 @@ public abstract class Jvm<T> {
 
         Method main = klass.getMethod("main", String[].class);
         try {
+            main.setAccessible(true);
             main.invoke(null, new Object[]{args});
         } catch (InvocationTargetException ex) {
             throw ex.getCause();
