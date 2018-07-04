@@ -126,6 +126,7 @@ zap_hash(zap_name_t *zn)
 	return (h);
 }
 
+#if 0
 static int
 zap_normalize(zap_t *zap, const char *name, char *namenorm)
 {
@@ -144,12 +145,14 @@ zap_normalize(zap_t *zap, const char *name, char *namenorm)
 
 	return (err);
 }
+#endif
 
 boolean_t
 zap_match(zap_name_t *zn, const char *matchname)
 {
 	ASSERT(!(zap_getflags(zn->zn_zap) & ZAP_FLAG_UINT64_KEY));
 
+#if 0
 	if (zn->zn_matchtype == MT_FIRST) {
 		char norm[ZAP_MAXNAMELEN];
 
@@ -158,9 +161,12 @@ zap_match(zap_name_t *zn, const char *matchname)
 
 		return (strcmp(zn->zn_key_norm, norm) == 0);
 	} else {
+#endif
 		/* MT_BEST or MT_EXACT */
 		return (strcmp(zn->zn_key_orig, matchname) == 0);
+#if 0
 	}
+#endif
 }
 
 void
@@ -179,6 +185,7 @@ zap_name_alloc(zap_t *zap, const char *key, matchtype_t mt)
 	zn->zn_key_orig = key;
 	zn->zn_key_orig_numints = strlen(zn->zn_key_orig) + 1;
 	zn->zn_matchtype = mt;
+#if 0
 	if (zap->zap_normflags) {
 		if (zap_normalize(zap, key, zn->zn_normbuf) != 0) {
 			zap_name_free(zn);
@@ -186,7 +193,9 @@ zap_name_alloc(zap_t *zap, const char *key, matchtype_t mt)
 		}
 		zn->zn_key_norm = zn->zn_normbuf;
 		zn->zn_key_norm_numints = strlen(zn->zn_key_norm) + 1;
-	} else {
+	} else
+#endif
+    {
 		if (mt != MT_EXACT) {
 			zap_name_free(zn);
 			return (NULL);

@@ -49,7 +49,9 @@
 #include <sys/byteorder.h>
 #include <sys/errno.h>
 #include <sys/u8_textprep.h>
+#if 0
 #include <sys/u8_textprep_data.h>
+#endif
 
 
 /* The maximum possible number of bytes in a UTF-8 character. */
@@ -444,6 +446,7 @@ u8_validate(char *u8str, size_t n, char **list, int flag, int *errnum)
 	return (ret_val);
 }
 
+#if 0
 /*
  * The do_case_conv() looks at the mapping tables and returns found
  * bytes if any. If not found, the input bytes are returned. The function
@@ -1832,6 +1835,7 @@ do_norm_compare(size_t uv, uchar_t *s1, uchar_t *s2, size_t n1, size_t n2,
 	}
 	return (1);
 }
+#endif
 
 /*
  * The u8_strcmp() function compares two UTF-8 strings quite similar to
@@ -1859,6 +1863,7 @@ u8_strcmp(const char *s1, const char *s2, size_t n, int flag, size_t uv,
 		uv = U8_UNICODE_LATEST;
 	}
 
+#if 0
 	if (flag == 0) {
 		flag = U8_STRCMP_CS;
 	} else {
@@ -1881,7 +1886,11 @@ u8_strcmp(const char *s1, const char *s2, size_t n, int flag, size_t uv,
 	}
 
 	if (flag == U8_STRCMP_CS) {
+#else
+	assert (flag == 0);
+#endif
 		return (n == 0 ? strcmp(s1, s2) : strncmp(s1, s2, n));
+#if 0
 	}
 
 	n1 = strlen(s1);
@@ -1907,8 +1916,10 @@ u8_strcmp(const char *s1, const char *s2, size_t n, int flag, size_t uv,
 
 	return (do_norm_compare(uv, (uchar_t *)s1, (uchar_t *)s2, n1, n2,
 	    flag, errnum));
+#endif
 }
 
+#if 0
 size_t
 u8_textprep_str(char *inarray, size_t *inlen, char *outarray, size_t *outlen,
 	int flag, size_t unicode_version, int *errnum)
@@ -2129,3 +2140,4 @@ u8_textprep_str(char *inarray, size_t *inlen, char *outarray, size_t *outlen,
 
 	return (ret_val);
 }
+#endif
