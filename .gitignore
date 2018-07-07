@@ -36,11 +36,14 @@ modules/java-mgmt/cloudius/target/
 modules/java-mgmt/obj/
 modules/httpserver/usr.manifest
 modules/httpserver-jolokia-plugin/autogen/
-modules/httpserver-jolokia-plugin/jolokia.so
+modules/httpserver-jolokia-plugin/jolokia*.so
 modules/httpserver-jolokia-plugin/obj/
 modules/httpserver-jolokia-plugin/jolokia-agent/target/
 modules/httpserver-jolokia-plugin/jolokia-agent/dependency-reduced-pom.xml
 modules/httpserver-jvm-plugin/autogen/
-modules/httpserver-jvm-plugin/jvm.so
+modules/httpserver-jvm-plugin/jvm*.so
 modules/httpserver-jvm-plugin/obj/
+modules/libtools/*.so
+modules/libtools/*.o
+modules/libyaml/usr.manifest
 .idea
