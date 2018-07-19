@@ -302,7 +302,14 @@ class LinuxMint(Ubuntu):
         ec2_post_install = None
         version = '18.3'
 
-    versions = [LinuxMint_18_03]
+    class LinuxMint_19(object):
+        packages = ['openjdk-8-jdk', 'bridge-utils']
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '19'
+
+    versions = [LinuxMint_18_03, LinuxMint_19]
 
 distros = [
            Debian(),
