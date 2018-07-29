@@ -135,7 +135,8 @@ fs_type=${vars[fs]-zfs}
 usrskel_arg=
 case $fs_type in
 zfs);; # Nothing to change here. This is our default behavior
-rofs)	usrskel_arg="--usrskel usr_rofs.manifest.skel";;
+rofs)	manifest=bootfs_empty.manifest.skel
+	usrskel_arg="--usrskel usr_rofs.manifest.skel";;
 ramfs)	manifest=$OUT/usr.manifest
 	usrskel_arg="--usrskel usr_ramfs.manifest.skel";;
 *)	echo "Unknown filesystem \"$fs_type\"" >&2
