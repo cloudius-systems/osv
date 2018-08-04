@@ -32,6 +32,7 @@ __BEGIN_DECLS
 void mtx_init(struct mtx *m, const char *name, const char *type, int opts);
 void mtx_destroy(struct mtx *m);
 void mtx_lock(struct mtx *mp);
+int mtx_trylock(struct mtx *mp);
 void mtx_unlock(struct mtx *mp);
 void mtx_assert(struct mtx *mp, int flag);
 

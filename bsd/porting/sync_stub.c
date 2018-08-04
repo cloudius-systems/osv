@@ -26,6 +26,11 @@ void mtx_lock(struct mtx *mp)
     mutex_lock(&mp->_mutex);
 }
 
+int mtx_trylock(struct mtx *mp)
+{
+    return mutex_trylock(&mp->_mutex) ? 1 : 0;
+}
+
 void mtx_unlock(struct mtx *mp)
 {
     mutex_unlock(&mp->_mutex);
