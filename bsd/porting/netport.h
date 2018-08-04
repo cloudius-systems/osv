@@ -191,7 +191,14 @@ size_t strlcpy(char *dst, const char *src, size_t siz);
     #define NULL (0)
 #endif
 
-#define KASSERT(exp,msg) assert(exp)
+#define KASSERT_PRINT(...) tprintf_e("bsd-kassert", __VA_ARGS__)
+#define KASSERT(exp, msg) \
+    do {                                        \
+        if (!(exp)) {                           \
+            KASSERT_PRINT msg ;                 \
+            assert(exp);                        \
+        }                                       \
+    } while(0)
 
 #define bsd_min(a, b) ((a) < (b) ? (a) : (b))
 #define bsd_max(a, b) ((a) > (b) ? (a) : (b))

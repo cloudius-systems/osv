@@ -551,8 +551,8 @@ if_attach_internal(struct ifnet *ifp, int vmove)
 
 	KASSERT(!(ifp->if_capenable & IFCAP_HWSTATS) ||
 		    (ifp->if_getinfo != NULL),
-		    "get_if_info should be initialized if HW/SW support internal "
-		    "statistics handling");
+		    ("get_if_info should be initialized if HW/SW support internal "
+		     "statistics handling"));
 
 	if (ifp->if_getinfo == NULL)
 		ifp->if_getinfo = if_getinfo;

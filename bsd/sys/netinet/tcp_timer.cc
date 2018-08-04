@@ -435,7 +435,7 @@ tcp_timer_tso_flush(serial_timer_task& timer, struct tcpcb *tp)
 
 
 	KASSERT(inp != NULL, ("tcp_timer_tso_flush: inp == NULL"));
-	KASSERT(tp->t_flags & TF_TSO, "tcp_timer_tso_flush: TSO disabled");
+	KASSERT(tp->t_flags & TF_TSO, ("tcp_timer_tso_flush: TSO disabled"));
 	INP_LOCK(inp);
 
 	// Re-check the TF_TSO_PENDING flag under the lock

@@ -1,8 +1,6 @@
 #ifndef _OSV_BSD_SYSTM_H
 #define _OSV_BSD_SYSTM_H
 
-#include <assert.h>
-
-#define KASSERT(exp, msg) assert(exp)
+/* Nothing defined here, but lots of files include this header */
 
 #endif
