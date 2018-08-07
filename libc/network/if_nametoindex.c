@@ -11,7 +11,7 @@ unsigned if_nametoindex(const char *name)
 	struct ifreq ifr;
 	int fd, r;
 
-	if ((fd = socket(AF_UNIX, SOCK_DGRAM, 0)) < 0) return -1;
+	if ((fd = socket(AF_INET, SOCK_DGRAM, 0)) < 0) return -1;
 	strlcpy(ifr.ifr_name, name, sizeof ifr.ifr_name);
 	r = ioctl(fd, SIOCGIFINDEX, &ifr);
 	close(fd);
