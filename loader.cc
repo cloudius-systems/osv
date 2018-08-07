@@ -6,6 +6,7 @@
  */
 
 #include <osv/drivers_config.h>
+#include <bsd/porting/netport.h>
 #include <osv/kernel_config.h>
 #include "fs/fs.hh"
 #include <bsd/init.hh>
@@ -169,8 +170,8 @@ static bool opt_verbose = false;
 static std::string opt_chdir;
 static bool opt_bootchart = false;
 static std::vector<std::string> opt_ip;
-static std::string opt_defaultgw;
-static std::string opt_nameserver;
+static std::vector<std::string> opt_defaultgw;
+static std::vector<std::string> opt_nameserver;
 static std::string opt_redirect;
 static std::chrono::nanoseconds boot_delay;
 std::vector<mntent> opt_mount_fs;
@@ -397,11 +398,15 @@ static void parse_options(int loader_argc, char** loader_argv)
     }
 
     if (options::option_value_exists(options_values, "defaultgw")) {
-        opt_defaultgw = options::extract_option_value(options_values, "defaultgw");
+        for (auto t : options::extract_option_values(options_values, "defaultgw")) {
+            opt_defaultgw.push_back(t);
+        }
     }
 
     if (options::option_value_exists(options_values, "nameserver")) {
-        opt_nameserver = options::extract_option_value(options_values, "nameserver");
+        for (auto t : options::extract_option_values(options_values, "nameserver")) {
+            opt_nameserver.push_back(t);
+        }
     }
 
     if (options::option_value_exists(options_values, "redirect")) {
@@ -655,16 +660,26 @@ void* do_main_thread(void *_main_args)
     }
 
 #if CONF_networking_stack
+#ifdef INET6
+    // Enable IPv6 StateLess Address AutoConfiguration (SLAAC)
+    osv::set_ipv6_accept_rtadv(true);
+#endif
+
     bool has_if = false;
     osv::for_each_if([&has_if] (std::string if_name) {
         if (if_name == "lo0")
             return;
 
         has_if = true;
-        // Start DHCP by default and wait for an IP
-        if (osv::start_if(if_name, "0.0.0.0", "255.255.255.0") != 0 ||
-            osv::ifup(if_name) != 0)
+
+        if (osv::ifup(if_name) != 0)
             debug("Could not initialize network interface.\n");
+
+        if (opt_ip.size() == 0) {
+            // Start DHCP by default and wait for an IP
+            if (osv::if_add_addr(if_name, "0.0.0.0", "255.255.255.0") != 0)
+                debug("Could not add 0.0.0.0 IP to interface.\n");
+        }
     });
     if (has_if) {
 #if CONF_networking_dhcp
@@ -672,25 +687,52 @@ void* do_main_thread(void *_main_args)
             dhcp_start(true);
         } else {
 #endif
+            // Add interface IP addresses
             for (auto t : opt_ip) {
                 std::vector<std::string> tmp;
                 osv::split(tmp, t, " ,", true);
                 if (tmp.size() != 3)
                     abort("incorrect parameter on --ip");
 
-                printf("%s: %s\n",tmp[0].c_str(),tmp[1].c_str());
+                printf("%s: %s %s\n",tmp[0].c_str(),tmp[1].c_str(), tmp[2].c_str());
 
-                if (osv::start_if(tmp[0], tmp[1], tmp[2]) != 0)
-                    debug("Could not initialize network interface.\n");
+                if (osv::if_add_addr(tmp[0], tmp[1], tmp[2]) != 0)
+                    debug("Could not add IP address to interface.\n");
             }
+            // Add default gateway routes
+            // One default route is allowed for IPv4 and one for IPv6
             if (opt_defaultgw.size() != 0) {
-                osv_route_add_network("0.0.0.0",
-                                      "0.0.0.0",
-                                      opt_defaultgw.c_str());
+                bool has_defaultgw_v4=false, has_defaultgw_v6=false;
+                for (auto t : opt_defaultgw) {
+                    auto addr = boost::asio::ip::make_address(t);
+                    if (addr.is_v4()) {
+                        if (!has_defaultgw_v4) {
+                            osv_route_add_network("0.0.0.0",
+                                                  "0.0.0.0",
+                                                  t.c_str());
+                            has_defaultgw_v4 = true;
+                        }
+                    }
+                    else {
+                        if (!has_defaultgw_v6) {
+                            osv_route_add_network("::",
+                                                  "::",
+                                                  t.c_str());
+                            has_defaultgw_v6 = true;
+                        }
+                    }
+                }
             }
+            // Add nameserver addresses
             if (opt_nameserver.size() != 0) {
-                auto addr = boost::asio::ip::make_address_v4(opt_nameserver);
-                osv::set_dns_config({boost::asio::ip::address(addr)}, std::vector<std::string>());
+                std::vector<boost::asio::ip::address> dns_servers;
+                for (auto t : opt_nameserver) {
+                    auto addr = boost::asio::ip::make_address(t);
+                    dns_servers.push_back(addr);
+                }
+                if (!dns_servers.empty()) {
+                    osv::set_dns_config(dns_servers, std::vector<std::string>());
+                }
             }
 #if CONF_networking_dhcp
         }
