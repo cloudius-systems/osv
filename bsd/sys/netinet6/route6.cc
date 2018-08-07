@@ -32,24 +32,23 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD: stable/9/sys/netinet6/route6.c 238231 2012-07-08 11:28:33Z bz $");
 
-#include "opt_inet.h"
-#include "opt_inet6.h"
+#include <bsd/porting/netport.h>
 
-#include <sys/param.h>
-#include <sys/mbuf.h>
-#include <sys/socket.h>
-#include <sys/systm.h>
-#include <sys/queue.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/systm.h>
+#include <bsd/sys/sys/queue.h>
 
-#include <net/if.h>
+#include <bsd/sys/net/if.h>
 
-#include <netinet/in.h>
-#include <netinet6/in6_var.h>
-#include <netinet/ip6.h>
-#include <netinet6/ip6_var.h>
-#include <netinet6/scope6_var.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet6/in6_var.h>
+#include <bsd/sys/netinet/ip6.h>
+#include <bsd/sys/netinet6/ip6_var.h>
+#include <bsd/sys/netinet6/scope6_var.h>
 
-#include <netinet/icmp6.h>
+#include <bsd/sys/netinet/icmp6.h>
 
 /*
  * proto - is unused

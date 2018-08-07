@@ -32,31 +32,34 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD: stable/9/sys/netinet6/frag6.c 238479 2012-07-15 11:27:15Z bz $");
 
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/malloc.h>
-#include <sys/mbuf.h>
-#include <sys/domain.h>
-#include <sys/protosw.h>
-#include <sys/socket.h>
-#include <sys/errno.h>
+#include <bsd/porting/netport.h>
+
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/systm.h>
+#include <bsd/sys/sys/malloc.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/domain.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/socket.h>
+#include <errno.h>
 #include <sys/time.h>
-#include <sys/kernel.h>
+#include <bsd/sys/sys/kernel.h>
 #include <sys/syslog.h>
 
-#include <net/if.h>
-#include <net/route.h>
-#include <net/vnet.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/vnet.h>
 
-#include <netinet/in.h>
-#include <netinet/in_var.h>
-#include <netinet/ip6.h>
-#include <netinet6/ip6_var.h>
-#include <netinet/icmp6.h>
-#include <netinet/in_systm.h>	/* for ECN definitions */
-#include <netinet/ip.h>		/* for ECN definitions */
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet/ip6.h>
+#include <bsd/sys/netinet6/in6_var.h>
+#include <bsd/sys/netinet6/ip6_var.h>
+#include <bsd/sys/netinet/icmp6.h>
+#include <bsd/sys/netinet/in_systm.h>	/* for ECN definitions */
+#include <bsd/sys/netinet/ip.h>		/* for ECN definitions */
 
-#include <security/mac/mac_framework.h>
+//#include <security/mac/mac_framework.h>
 
 /*
  * Define it to get a correct behavior on per-interface statistics.
@@ -89,7 +92,7 @@ static VNET_DEFINE(struct ip6q, ip6q);	/* ip6 reassemble queue */
 #define	IP6Q_LOCK_ASSERT()	mtx_assert(&ip6qlock, MA_OWNED)
 #define	IP6Q_UNLOCK()		mtx_unlock(&ip6qlock)
 
-static MALLOC_DEFINE(M_FTABLE, "fragment", "fragment reassembly header");
+MALLOC_DEFINE(M_FTABLE, "fragment", "fragment reassembly header");
 
 /*
  * Initialise reassembly queue and fragment identifier.
@@ -114,7 +117,7 @@ frag6_init(void)
 		return;
 
 	EVENTHANDLER_REGISTER(nmbclusters_change,
-	    frag6_change, NULL, EVENTHANDLER_PRI_ANY);
+		(void *)frag6_change, NULL, EVENTHANDLER_PRI_ANY);
 
 	IP6Q_LOCK_INIT();
 }
@@ -190,8 +193,8 @@ frag6_input(struct mbuf **mp, int *offp, int proto)
 	}
 #else
 	/* we are violating the spec, this is not the destination interface */
-	if ((m->m_flags & M_PKTHDR) != 0)
-		dstifp = m->m_pkthdr.rcvif;
+	if ((m->m_hdr.mh_flags & M_PKTHDR) != 0)
+		dstifp = m->M_dat.MH.MH_pkthdr.rcvif;
 #endif
 
 	/* jumbo payload can't contain a fragment header */
@@ -274,14 +277,13 @@ frag6_input(struct mbuf **mp, int *offp, int proto)
 		else if (V_frag6_nfragpackets >= (u_int)V_ip6_maxfragpackets)
 			goto dropfrag;
 		V_frag6_nfragpackets++;
-		q6 = (struct ip6q *)malloc(sizeof(struct ip6q), M_FTABLE,
-		    M_NOWAIT);
+		q6 = (struct ip6q *)malloc(sizeof(struct ip6q));
 		if (q6 == NULL)
 			goto dropfrag;
 		bzero(q6, sizeof(*q6));
 #ifdef MAC
 		if (mac_ip6q_init(q6, M_NOWAIT) != 0) {
-			free(q6, M_FTABLE);
+			free(q6);
 			goto dropfrag;
 		}
 		mac_ip6q_create(m, q6);
@@ -354,7 +356,7 @@ frag6_input(struct mbuf **mp, int *offp, int proto)
 
 				/* dequeue the fragment. */
 				frag6_deq(af6);
-				free(af6, M_FTABLE);
+				free(af6);
 
 				/* adjust pointer. */
 				ip6err = mtod(merr, struct ip6_hdr *);
@@ -374,8 +376,7 @@ frag6_input(struct mbuf **mp, int *offp, int proto)
 		}
 	}
 
-	ip6af = (struct ip6asfrag *)malloc(sizeof(struct ip6asfrag), M_FTABLE,
-	    M_NOWAIT);
+	ip6af = (struct ip6asfrag *)malloc(sizeof(struct ip6asfrag));
 	if (ip6af == NULL)
 		goto dropfrag;
 	bzero(ip6af, sizeof(*ip6af));
@@ -399,14 +400,14 @@ frag6_input(struct mbuf **mp, int *offp, int proto)
 	ecn0 = q6->ip6q_ecn;
 	if (ecn == IPTOS_ECN_CE) {
 		if (ecn0 == IPTOS_ECN_NOTECT) {
-			free(ip6af, M_FTABLE);
+			free(ip6af);
 			goto dropfrag;
 		}
 		if (ecn0 != IPTOS_ECN_CE)
 			q6->ip6q_ecn = IPTOS_ECN_CE;
 	}
 	if (ecn == IPTOS_ECN_NOTECT && ecn0 != IPTOS_ECN_NOTECT) {
-		free(ip6af, M_FTABLE);
+		free(ip6af);
 		goto dropfrag;
 	}
 
@@ -473,7 +474,7 @@ frag6_input(struct mbuf **mp, int *offp, int proto)
 			    "overlaps the previous fragment\n",
 			    i, ip6_sprintf(ip6buf, &q6->ip6q_src));
 #endif
-			free(ip6af, M_FTABLE);
+			free(ip6af);
 			goto dropfrag;
 		}
 	}
@@ -485,7 +486,7 @@ frag6_input(struct mbuf **mp, int *offp, int proto)
 			    "overlaps the succeeding fragment",
 			    i, ip6_sprintf(ip6buf, &q6->ip6q_src));
 #endif
-			free(ip6af, M_FTABLE);
+			free(ip6af);
 			goto dropfrag;
 		}
 	}
@@ -536,17 +537,17 @@ insert:
 	while (af6 != (struct ip6asfrag *)q6) {
 		af6dwn = af6->ip6af_down;
 		frag6_deq(af6);
-		while (t->m_next)
-			t = t->m_next;
-		t->m_next = IP6_REASS_MBUF(af6);
-		m_adj(t->m_next, af6->ip6af_offset);
-		free(af6, M_FTABLE);
+		while (t->m_hdr.mh_next)
+			t = t->m_hdr.mh_next;
+		t->m_hdr.mh_next = IP6_REASS_MBUF(af6);
+		m_adj(t->m_hdr.mh_next, af6->ip6af_offset);
+		free(af6);
 		af6 = af6dwn;
 	}
 
 	/* adjust offset to point where the original next header starts */
 	offset = ip6af->ip6af_offset - sizeof(struct ip6_frag);
-	free(ip6af, M_FTABLE);
+	free(ip6af);
 	ip6 = mtod(m, struct ip6_hdr *);
 	ip6->ip6_plen = htons((u_short)next + offset - sizeof(struct ip6_hdr));
 	if (q6->ip6q_ecn == IPTOS_ECN_CE)
@@ -557,12 +558,12 @@ insert:
 #endif
 
 	/* Delete frag6 header */
-	if (m->m_len >= offset + sizeof(struct ip6_frag)) {
+	if (m->m_hdr.mh_len >= offset + sizeof(struct ip6_frag)) {
 		/* This is the only possible case with !PULLDOWN_TEST */
-		ovbcopy((caddr_t)ip6, (caddr_t)ip6 + sizeof(struct ip6_frag),
+		memmove((caddr_t)ip6, (caddr_t)ip6 + sizeof(struct ip6_frag),
 		    offset);
-		m->m_data += sizeof(struct ip6_frag);
-		m->m_len -= sizeof(struct ip6_frag);
+		m->m_hdr.mh_data += sizeof(struct ip6_frag);
+		m->m_hdr.mh_len -= sizeof(struct ip6_frag);
 	} else {
 		/* this comes with no copy if the boundary is on cluster */
 		if ((t = m_split(m, offset, M_DONTWAIT)) == NULL) {
@@ -571,7 +572,7 @@ insert:
 #ifdef MAC
 			mac_ip6q_destroy(q6);
 #endif
-			free(q6, M_FTABLE);
+			free(q6);
 			V_frag6_nfragpackets--;
 			goto dropfrag;
 		}
@@ -593,14 +594,14 @@ insert:
 	mac_ip6q_reassemble(q6, m);
 	mac_ip6q_destroy(q6);
 #endif
-	free(q6, M_FTABLE);
+	free(q6);
 	V_frag6_nfragpackets--;
 
-	if (m->m_flags & M_PKTHDR) { /* Isn't it always true? */
+	if (m->m_hdr.mh_flags & M_PKTHDR) { /* Isn't it always true? */
 		int plen = 0;
-		for (t = m; t; t = t->m_next)
-			plen += t->m_len;
-		m->m_pkthdr.len = plen;
+		for (t = m; t; t = t->m_hdr.mh_next)
+			plen += t->m_hdr.mh_len;
+		m->M_dat.MH.MH_pkthdr.len = plen;
 	}
 
 	V_ip6stat.ip6s_reassembled++;
@@ -660,14 +661,14 @@ frag6_freef(struct ip6q *q6)
 				    ICMP6_TIME_EXCEED_REASSEMBLY, 0);
 		} else
 			m_freem(m);
-		free(af6, M_FTABLE);
+		free(af6);
 	}
 	frag6_remque(q6);
 	V_frag6_nfrags -= q6->ip6q_nfrag;
 #ifdef MAC
 	mac_ip6q_destroy(q6);
 #endif
-	free(q6, M_FTABLE);
+	free(q6);
 	V_frag6_nfragpackets--;
 }
 
@@ -701,15 +702,15 @@ frag6_deq(struct ip6asfrag *af6)
 }
 
 void
-frag6_insque(struct ip6q *new, struct ip6q *old)
+frag6_insque(struct ip6q *pnew, struct ip6q *pold)
 {
 
 	IP6Q_LOCK_ASSERT();
 
-	new->ip6q_prev = old;
-	new->ip6q_next = old->ip6q_next;
-	old->ip6q_next->ip6q_prev= new;
-	old->ip6q_next = new;
+	pnew->ip6q_prev = pold;
+	pnew->ip6q_next = pold->ip6q_next;
+	pold->ip6q_next->ip6q_prev= pnew;
+	pold->ip6q_next = pnew;
 }
 
 void

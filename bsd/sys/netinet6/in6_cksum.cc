@@ -63,12 +63,14 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD: stable/9/sys/netinet6/in6_cksum.c 238227 2012-07-08 10:29:01Z bz $");
 
-#include <sys/param.h>
-#include <sys/mbuf.h>
-#include <sys/systm.h>
-#include <netinet/in.h>
-#include <netinet/ip6.h>
-#include <netinet6/scope6_var.h>
+#include <bsd/porting/netport.h>
+
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/systm.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/ip6.h>
+#include <bsd/sys/netinet6/scope6_var.h>
 
 /*
  * Checksum routine for Internet Protocol family headers (Portable Version).
@@ -171,8 +173,8 @@ in6_cksum(struct mbuf *m, u_int8_t nxt, u_int32_t off, u_int32_t len)
 	} l_util;
 
 	/* Sanity check. */
-	KASSERT(m->m_pkthdr.len >= off + len, ("%s: mbuf len (%d) < off(%d)+"
-	    "len(%d)", __func__, m->m_pkthdr.len, off, len));
+	KASSERT(m->M_dat.MH.MH_pkthdr.len >= off + len, ("%s: mbuf len (%d) < off(%d)+"
+	    "len(%d)", __func__, m->M_dat.MH.MH_pkthdr.len, off, len));
 
 	/*
 	 * First create IP6 pseudo header and calculate a summary.
@@ -207,14 +209,14 @@ in6_cksum(struct mbuf *m, u_int8_t nxt, u_int32_t off, u_int32_t len)
 	 * Secondly calculate a summary of the first mbuf excluding offset.
 	 */
 	while (off > 0) {
-		if (m->m_len <= off)
-			off -= m->m_len;
+		if (m->m_hdr.mh_len <= off)
+			off -= m->m_hdr.mh_len;
 		else
 			break;
-		m = m->m_next;
+		m = m->m_hdr.mh_next;
 	}
 	w = (u_int16_t *)(mtod(m, u_char *) + off);
-	mlen = m->m_len - off;
+	mlen = m->m_hdr.mh_len - off;
 	if (len < mlen)
 		mlen = len;
 	len -= mlen;
@@ -267,14 +269,14 @@ in6_cksum(struct mbuf *m, u_int8_t nxt, u_int32_t off, u_int32_t len)
 	} else if (mlen == -1)
 		s_util.c[0] = *(char *)w;
  next:
-	m = m->m_next;
+	m = m->m_hdr.mh_next;
 
 	/*
 	 * Lastly calculate a summary of the rest of mbufs.
 	 */
 
-	for (;m && len; m = m->m_next) {
-		if (m->m_len == 0)
+	for (;m && len; m = m->m_hdr.mh_next) {
+		if (m->m_hdr.mh_len == 0)
 			continue;
 		w = mtod(m, u_int16_t *);
 		if (mlen == -1) {
@@ -289,10 +291,10 @@ in6_cksum(struct mbuf *m, u_int8_t nxt, u_int32_t off, u_int32_t len)
 			s_util.c[1] = *(char *)w;
 			sum += s_util.s;
 			w = (u_int16_t *)((char *)w + 1);
-			mlen = m->m_len - 1;
+			mlen = m->m_hdr.mh_len - 1;
 			len--;
 		} else
-			mlen = m->m_len;
+			mlen = m->m_hdr.mh_len;
 		if (len < mlen)
 			mlen = len;
 		len -= mlen;

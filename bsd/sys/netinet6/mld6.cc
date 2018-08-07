@@ -66,36 +66,35 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD: stable/9/sys/netinet6/mld6.c 237995 2012-07-02 11:46:47Z bms $");
 
-#include "opt_inet.h"
-#include "opt_inet6.h"
+#include <bsd/porting/netport.h>
 
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/mbuf.h>
-#include <sys/socket.h>
-#include <sys/protosw.h>
-#include <sys/sysctl.h>
-#include <sys/kernel.h>
-#include <sys/callout.h>
-#include <sys/malloc.h>
-#include <sys/module.h>
-#include <sys/ktr.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/systm.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/protosw.h>
+//#include <bsd/sys/sys/sysctl.h>
+#include <bsd/sys/sys/kernel.h>
+#include <bsd/porting/callout.h>
+#include <bsd/sys/sys/malloc.h>
+#include <bsd/sys/sys/module.h>
+//#include <sys/ktr.h>
 
-#include <net/if.h>
-#include <net/route.h>
-#include <net/vnet.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/vnet.h>
 
-#include <netinet/in.h>
-#include <netinet/in_var.h>
-#include <netinet6/in6_var.h>
-#include <netinet/ip6.h>
-#include <netinet6/ip6_var.h>
-#include <netinet6/scope6_var.h>
-#include <netinet/icmp6.h>
-#include <netinet6/mld6.h>
-#include <netinet6/mld6_var.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet6/in6_var.h>
+#include <bsd/sys/netinet/ip6.h>
+#include <bsd/sys/netinet6/ip6_var.h>
+#include <bsd/sys/netinet6/scope6_var.h>
+#include <bsd/sys/netinet/icmp6.h>
+#include <bsd/sys/netinet6/mld6.h>
+#include <bsd/sys/netinet6/mld6_var.h>
 
-#include <security/mac/mac_framework.h>
+//#include <security/mac/mac_framework.h>
 
 #ifndef KTR_MLD
 #define KTR_MLD KTR_INET6
@@ -144,8 +143,10 @@ static void	mld_v2_process_group_timers(struct mld_ifinfo *,
 		    struct in6_multi *, const int);
 static int	mld_v2_process_group_query(struct in6_multi *,
 		    struct mld_ifinfo *mli, int, struct mbuf *, const int);
+#if 0 // TODO: sysctl not supported yet
 static int	sysctl_mld_gsr(SYSCTL_HANDLER_ARGS);
 static int	sysctl_mld_ifinfo(SYSCTL_HANDLER_ARGS);
+#endif
 
 /*
  * Normative references: RFC 2710, RFC 3590, RFC 3810.
@@ -263,8 +264,10 @@ static struct mld_raopt mld_ra = {
 	.ra = {
 	    .ip6or_type = IP6OPT_ROUTER_ALERT,
 	    .ip6or_len = IP6OPT_RTALERT_LEN - 2,
-	    .ip6or_value[0] = ((IP6OPT_RTALERT_MLD >> 8) & 0xFF),
-	    .ip6or_value[1] = (IP6OPT_RTALERT_MLD & 0xFF)
+	    .ip6or_value = {
+            ((IP6OPT_RTALERT_MLD >> 8) & 0xFF),
+            (IP6OPT_RTALERT_MLD & 0xFF)
+        }
 	}
 };
 static struct ip6_pktopts mld_po;
@@ -274,17 +277,17 @@ mld_save_context(struct mbuf *m, struct ifnet *ifp)
 {
 
 #ifdef VIMAGE
-	m->m_pkthdr.header = ifp->if_vnet;
+	m->M_dat.MH.MH_pkthdr.header = ifp->if_vnet;
 #endif /* VIMAGE */
-	m->m_pkthdr.flowid = ifp->if_index;
+	m->M_dat.MH.MH_pkthdr.flowid = ifp->if_index;
 }
 
 static __inline void
 mld_scrub_context(struct mbuf *m)
 {
 
-	m->m_pkthdr.header = NULL;
-	m->m_pkthdr.flowid = 0;
+	m->M_dat.MH.MH_pkthdr.header = NULL;
+	m->M_dat.MH.MH_pkthdr.flowid = 0;
 }
 
 /*
@@ -299,11 +302,13 @@ mld_restore_context(struct mbuf *m)
 {
 
 #if defined(VIMAGE) && defined(INVARIANTS)
-	KASSERT(curvnet == m->m_pkthdr.header,
+	KASSERT(curvnet == m->M_dat.MH.MH_pkthdr.header,
 	    ("%s: called when curvnet was not restored", __func__));
 #endif
-	return (m->m_pkthdr.flowid);
+	return (m->M_dat.MH.MH_pkthdr.flowid);
 }
+
+#if 0 // TODO: sysctl not supported yet
 
 /*
  * Retrieve or set threshold between group-source queries in seconds.
@@ -401,6 +406,8 @@ out_locked:
 	return (error);
 }
 
+#endif
+
 /*
  * Dispatch an entire queue of pending packet chains.
  * VIMAGE: Assumes the vnet pointer has been set.
@@ -488,7 +495,7 @@ mli_alloc_locked(/*const*/ struct ifnet *ifp)
 
 	MLD_LOCK_ASSERT();
 
-	mli = malloc(sizeof(struct mld_ifinfo), M_MLD, M_NOWAIT|M_ZERO);
+	mli = (struct mld_ifinfo *)calloc(1, sizeof(struct mld_ifinfo));
 	if (mli == NULL)
 		goto out;
 
@@ -606,7 +613,7 @@ mli_delete_locked(const struct ifnet *ifp)
 			    ("%s: there are dangling in_multi references",
 			    __func__));
 
-			free(mli, M_MLD);
+			free(mli);
 			return;
 		}
 	}
@@ -1016,7 +1023,7 @@ mld_v2_process_group_query(struct in6_multi *inm, struct mld_ifinfo *mli,
 		if (inm->in6m_state == MLD_G_QUERY_PENDING_MEMBER ||
 		    inm->in6m_state == MLD_SG_QUERY_PENDING_MEMBER) {
 			in6m_clear_recorded(inm);
-			timer = min(inm->in6m_timer, timer);
+			timer = bsd_min(inm->in6m_timer, timer);
 		}
 		inm->in6m_state = MLD_G_QUERY_PENDING_MEMBER;
 		inm->in6m_timer = MLD_RANDOM_DELAY(timer);
@@ -1029,7 +1036,7 @@ mld_v2_process_group_query(struct in6_multi *inm, struct mld_ifinfo *mli,
 	 * been received but a group-specific query is already pending.
 	 */
 	if (inm->in6m_state == MLD_G_QUERY_PENDING_MEMBER) {
-		timer = min(inm->in6m_timer, timer);
+		timer = bsd_min(inm->in6m_timer, timer);
 		inm->in6m_timer = MLD_RANDOM_DELAY(timer);
 		V_current_state_timers_running6 = 1;
 		return (retval);
@@ -1063,9 +1070,9 @@ mld_v2_process_group_query(struct in6_multi *inm, struct mld_ifinfo *mli,
 				break;
 			nrecorded += retval;
 			soff += sizeof(struct in6_addr);
-			if (soff >= m->m_len) {
-				soff = soff - m->m_len;
-				m = m->m_next;
+			if (soff >= m->m_hdr.mh_len) {
+				soff = soff - m->m_hdr.mh_len;
+				m = m->m_hdr.mh_next;
 				if (m == NULL)
 					break;
 			}
@@ -1248,7 +1255,7 @@ mld_input(struct mbuf *m, int off, int icmp6len)
 
 	CTR3(KTR_MLD, "%s: called w/mbuf (%p,%d)", __func__, m, off);
 
-	ifp = m->m_pkthdr.rcvif;
+	ifp = m->M_dat.MH.MH_pkthdr.rcvif;
 
 	ip6 = mtod(m, struct ip6_hdr *);
 
@@ -1811,7 +1818,7 @@ mld_v1_transmit_report(struct in6_multi *in6m, const int type)
 			ifa_free(&ia->ia_ifa);
 		return (ENOMEM);
 	}
-	mh->m_next = md;
+	mh->m_hdr.mh_next = md;
 
 	/*
 	 * FUTURE: Consider increasing alignment by ETHER_HDR_LEN, so
@@ -1819,8 +1826,8 @@ mld_v1_transmit_report(struct in6_multi *in6m, const int type)
 	 * for the header in the most common case.
 	 */
 	MH_ALIGN(mh, sizeof(struct ip6_hdr));
-	mh->m_pkthdr.len = sizeof(struct ip6_hdr) + sizeof(struct mld_hdr);
-	mh->m_len = sizeof(struct ip6_hdr);
+	mh->M_dat.MH.MH_pkthdr.len = sizeof(struct ip6_hdr) + sizeof(struct mld_hdr);
+	mh->m_hdr.mh_len = sizeof(struct ip6_hdr);
 
 	ip6 = mtod(mh, struct ip6_hdr *);
 	ip6->ip6_flow = 0;
@@ -1830,7 +1837,7 @@ mld_v1_transmit_report(struct in6_multi *in6m, const int type)
 	ip6->ip6_src = ia ? ia->ia_addr.sin6_addr : in6addr_any;
 	ip6->ip6_dst = in6m->in6m_addr;
 
-	md->m_len = sizeof(struct mld_hdr);
+	md->m_hdr.mh_len = sizeof(struct mld_hdr);
 	mld = mtod(md, struct mld_hdr *);
 	mld->mld_type = type;
 	mld->mld_code = 0;
@@ -1843,7 +1850,7 @@ mld_v1_transmit_report(struct in6_multi *in6m, const int type)
 	    sizeof(struct ip6_hdr), sizeof(struct mld_hdr));
 
 	mld_save_context(mh, ifp);
-	mh->m_flags |= M_MLDV1;
+	mh->m_hdr.mh_flags |= M_MLDV1;
 
 	mld_dispatch_packet(mh);
 
@@ -2011,7 +2018,7 @@ mld_initial_join(struct in6_multi *inm, struct mld_ifinfo *mli,
 			 */
 			odelay = MLD_RANDOM_DELAY(MLD_V1_MAX_RI * PR_FASTHZ);
 			if (delay) {
-				inm->in6m_timer = max(delay, odelay);
+				inm->in6m_timer = bsd_max(delay, odelay);
 				V_current_state_timers_running6 = 1;
 			} else {
 				inm->in6m_state = MLD_IDLE_MEMBER;
@@ -2064,7 +2071,7 @@ mld_initial_join(struct in6_multi *inm, struct mld_ifinfo *mli,
 			if (delay) {
 				if (inm->in6m_sctimer > 1) {
 					inm->in6m_sctimer =
-					    min(inm->in6m_sctimer, delay);
+					    bsd_min(inm->in6m_sctimer, delay);
 				} else
 					inm->in6m_sctimer = delay;
 			} else
@@ -2429,10 +2436,10 @@ mld_v2_enqueue_group_record(struct ifqueue *ifq, struct in6_multi *inm,
 	m0 = ifq->ifq_tail;
 	if (!is_group_query &&
 	    m0 != NULL &&
-	    (m0->m_pkthdr.PH_vt.vt_nrecs + 1 <= MLD_V2_REPORT_MAXRECS) &&
-	    (m0->m_pkthdr.len + minrec0len) <
+	    (m0->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs + 1 <= MLD_V2_REPORT_MAXRECS) &&
+	    (m0->M_dat.MH.MH_pkthdr.len + minrec0len) <
 	     (ifp->if_mtu - MLD_MTUSPACE)) {
-		m0srcs = (ifp->if_mtu - m0->m_pkthdr.len -
+		m0srcs = (ifp->if_mtu - m0->M_dat.MH.MH_pkthdr.len -
 			    sizeof(struct mldv2_record)) /
 			    sizeof(struct in6_addr);
 		m = m0;
@@ -2466,7 +2473,7 @@ mld_v2_enqueue_group_record(struct ifqueue *ifq, struct in6_multi *inm,
 	mr.mr_numsrc = 0;
 	mr.mr_addr = inm->in6m_addr;
 	in6_clearscope(&mr.mr_addr);
-	if (!m_append(m, sizeof(struct mldv2_record), (void *)&mr)) {
+	if (!m_append(m, sizeof(struct mldv2_record), (c_caddr_t)&mr)) {
 		if (m != m0)
 			m_freem(m);
 		CTR1(KTR_MLD, "%s: m_append() failed.", __func__);
@@ -2494,7 +2501,7 @@ mld_v2_enqueue_group_record(struct ifqueue *ifq, struct in6_multi *inm,
 		if (m == m0) {
 			md = m_last(m);
 			pmr = (struct mldv2_record *)(mtod(md, uint8_t *) +
-			    md->m_len - nbytes);
+			    md->m_hdr.mh_len - nbytes);
 		} else {
 			md = m_getptr(m, 0, &off);
 			pmr = (struct mldv2_record *)(mtod(md, uint8_t *) +
@@ -2520,7 +2527,7 @@ mld_v2_enqueue_group_record(struct ifqueue *ifq, struct in6_multi *inm,
 			}
 			CTR1(KTR_MLD, "%s: append node", __func__);
 			if (!m_append(m, sizeof(struct in6_addr),
-			    (void *)&ims->im6s_addr)) {
+						  (c_caddr_t)&ims->im6s_addr)) {
 				if (m != m0)
 					m_freem(m);
 				CTR1(KTR_MLD, "%s: m_append() failed.",
@@ -2550,10 +2557,10 @@ mld_v2_enqueue_group_record(struct ifqueue *ifq, struct in6_multi *inm,
 	 */
 	if (m != m0) {
 		CTR1(KTR_MLD, "%s: enqueueing first packet", __func__);
-		m->m_pkthdr.PH_vt.vt_nrecs = 1;
+		m->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs = 1;
 		_IF_ENQUEUE(ifq, m);
 	} else
-		m->m_pkthdr.PH_vt.vt_nrecs++;
+		m->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs++;
 
 	/*
 	 * No further work needed if no source list in packet(s).
@@ -2581,13 +2588,13 @@ mld_v2_enqueue_group_record(struct ifqueue *ifq, struct in6_multi *inm,
 		pmr = (struct mldv2_record *)(mtod(md, uint8_t *) + off);
 		CTR1(KTR_MLD, "%s: allocated next packet", __func__);
 
-		if (!m_append(m, sizeof(struct mldv2_record), (void *)&mr)) {
+		if (!m_append(m, sizeof(struct mldv2_record), (c_caddr_t)&mr)) {
 			if (m != m0)
 				m_freem(m);
 			CTR1(KTR_MLD, "%s: m_append() failed.", __func__);
 			return (-ENOMEM);
 		}
-		m->m_pkthdr.PH_vt.vt_nrecs = 1;
+		m->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs = 1;
 		nbytes += sizeof(struct mldv2_record);
 
 		m0srcs = (ifp->if_mtu - MLD_MTUSPACE -
@@ -2611,7 +2618,7 @@ mld_v2_enqueue_group_record(struct ifqueue *ifq, struct in6_multi *inm,
 			}
 			CTR1(KTR_MLD, "%s: append node", __func__);
 			if (!m_append(m, sizeof(struct in6_addr),
-			    (void *)&ims->im6s_addr)) {
+				(c_caddr_t)&ims->im6s_addr)) {
 				if (m != m0)
 					m_freem(m);
 				CTR1(KTR_MLD, "%s: m_append() failed.",
@@ -2714,12 +2721,12 @@ mld_v2_enqueue_filter_change(struct ifqueue *ifq, struct in6_multi *inm)
 		do {
 			m0 = ifq->ifq_tail;
 			if (m0 != NULL &&
-			    (m0->m_pkthdr.PH_vt.vt_nrecs + 1 <=
+			    (m0->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs + 1 <=
 			     MLD_V2_REPORT_MAXRECS) &&
-			    (m0->m_pkthdr.len + MINRECLEN) <
+			    (m0->M_dat.MH.MH_pkthdr.len + MINRECLEN) <
 			     (ifp->if_mtu - MLD_MTUSPACE)) {
 				m = m0;
-				m0srcs = (ifp->if_mtu - m0->m_pkthdr.len -
+				m0srcs = (ifp->if_mtu - m0->M_dat.MH.MH_pkthdr.len -
 					    sizeof(struct mldv2_record)) /
 					    sizeof(struct in6_addr);
 				CTR1(KTR_MLD,
@@ -2733,7 +2740,7 @@ mld_v2_enqueue_filter_change(struct ifqueue *ifq, struct in6_multi *inm)
 					    "%s: m_get*() failed", __func__);
 					return (-ENOMEM);
 				}
-				m->m_pkthdr.PH_vt.vt_nrecs = 0;
+				m->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs = 0;
 				mld_save_context(m, ifp);
 				m0srcs = (ifp->if_mtu - MLD_MTUSPACE -
 				    sizeof(struct mldv2_record)) /
@@ -2752,7 +2759,7 @@ mld_v2_enqueue_filter_change(struct ifqueue *ifq, struct in6_multi *inm)
 			memset(&mr, 0, sizeof(mr));
 			mr.mr_addr = inm->in6m_addr;
 			in6_clearscope(&mr.mr_addr);
-			if (!m_append(m, sizeof(mr), (void *)&mr)) {
+			if (!m_append(m, sizeof(mr), (c_caddr_t)&mr)) {
 				if (m != m0)
 					m_freem(m);
 				CTR1(KTR_MLD,
@@ -2770,7 +2777,7 @@ mld_v2_enqueue_filter_change(struct ifqueue *ifq, struct in6_multi *inm)
 				/* current packet; offset from last append */
 				md = m_last(m);
 				pmr = (struct mldv2_record *)(mtod(md,
-				    uint8_t *) + md->m_len -
+				    uint8_t *) + md->m_hdr.mh_len -
 				    sizeof(struct mldv2_record));
 			}
 			/*
@@ -2814,7 +2821,7 @@ mld_v2_enqueue_filter_change(struct ifqueue *ifq, struct in6_multi *inm)
 				} else if (crt != nrt)
 					continue;
 				if (!m_append(m, sizeof(struct in6_addr),
-				    (void *)&ims->im6s_addr)) {
+					(c_caddr_t)&ims->im6s_addr)) {
 					if (m != m0)
 						m_freem(m);
 					CTR1(KTR_MLD,
@@ -2854,13 +2861,13 @@ mld_v2_enqueue_filter_change(struct ifqueue *ifq, struct in6_multi *inm)
 			 * Count the new group record, and enqueue this
 			 * packet if it wasn't already queued.
 			 */
-			m->m_pkthdr.PH_vt.vt_nrecs++;
+			m->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs++;
 			if (m != m0)
 				_IF_ENQUEUE(ifq, m);
 			nbytes += npbytes;
 		} while (nims != NULL);
-		drt |= crt;
-		crt = (~crt & REC_FULL);
+		drt = (rectype_t)(drt | crt);
+		crt = (rectype_t)(~crt & REC_FULL);
 	}
 
 	CTR3(KTR_MLD, "%s: queued %d ALLOW_NEW, %d BLOCK_OLD", __func__,
@@ -2916,10 +2923,10 @@ mld_v2_merge_state_changes(struct in6_multi *inm, struct ifqueue *ifscq)
 		if (mt != NULL) {
 			recslen = m_length(m, NULL);
 
-			if ((mt->m_pkthdr.PH_vt.vt_nrecs +
-			    m->m_pkthdr.PH_vt.vt_nrecs <=
+			if ((mt->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs +
+			    m->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs <=
 			    MLD_V2_REPORT_MAXRECS) &&
-			    (mt->m_pkthdr.len + recslen <=
+			    (mt->M_dat.MH.MH_pkthdr.len + recslen <=
 			    (inm->in6m_ifp->if_mtu - MLD_MTUSPACE)))
 				domerge = 1;
 		}
@@ -2928,7 +2935,7 @@ mld_v2_merge_state_changes(struct in6_multi *inm, struct ifqueue *ifscq)
 			CTR2(KTR_MLD,
 			    "%s: outbound queue full, skipping whole packet %p",
 			    __func__, m);
-			mt = m->m_nextpkt;
+			mt = m->m_hdr.mh_nextpkt;
 			if (!docopy)
 				m_freem(m);
 			m = mt;
@@ -2938,14 +2945,14 @@ mld_v2_merge_state_changes(struct in6_multi *inm, struct ifqueue *ifscq)
 		if (!docopy) {
 			CTR2(KTR_MLD, "%s: dequeueing %p", __func__, m);
 			_IF_DEQUEUE(gq, m0);
-			m = m0->m_nextpkt;
+			m = m0->m_hdr.mh_nextpkt;
 		} else {
 			CTR2(KTR_MLD, "%s: copying %p", __func__, m);
 			m0 = m_dup(m, M_NOWAIT);
 			if (m0 == NULL)
 				return (ENOMEM);
-			m0->m_nextpkt = NULL;
-			m = m->m_nextpkt;
+			m0->m_hdr.mh_nextpkt = NULL;
+			m = m->m_hdr.mh_nextpkt;
 		}
 
 		if (!domerge) {
@@ -2959,12 +2966,12 @@ mld_v2_merge_state_changes(struct in6_multi *inm, struct ifqueue *ifscq)
 			    __func__, m0, mt);
 
 			mtl = m_last(mt);
-			m0->m_flags &= ~M_PKTHDR;
-			mt->m_pkthdr.len += recslen;
-			mt->m_pkthdr.PH_vt.vt_nrecs +=
-			    m0->m_pkthdr.PH_vt.vt_nrecs;
+			m0->m_hdr.mh_flags &= ~M_PKTHDR;
+			mt->M_dat.MH.MH_pkthdr.len += recslen;
+			mt->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs +=
+			    m0->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs;
 
-			mtl->m_next = m0;
+			mtl->m_hdr.mh_next = m0;
 		}
 	}
 
@@ -3085,7 +3092,7 @@ mld_dispatch_packet(struct mbuf *m)
 	im6o.im6o_multicast_loop = (V_ip6_mrouter != NULL);
 	im6o.im6o_multicast_ifp = ifp;
 
-	if (m->m_flags & M_MLDV1) {
+	if (m->m_hdr.mh_flags & M_MLDV1) {
 		m0 = m;
 	} else {
 		m0 = mld_v2_encap_report(ifp, m);
@@ -3097,8 +3104,8 @@ mld_dispatch_packet(struct mbuf *m)
 	}
 
 	mld_scrub_context(m0);
-	m->m_flags &= ~(M_PROTOFLAGS);
-	m0->m_pkthdr.rcvif = V_loif;
+	m->m_hdr.mh_flags &= ~(M_PROTOFLAGS);
+	m0->M_dat.MH.MH_pkthdr.rcvif = V_loif;
 
 	ip6 = mtod(m0, struct ip6_hdr *);
 #if 0
@@ -3162,7 +3169,7 @@ mld_v2_encap_report(struct ifnet *ifp, struct mbuf *m)
 	int			 mldreclen;
 
 	KASSERT(ifp != NULL, ("%s: null ifp", __func__));
-	KASSERT((m->m_flags & M_PKTHDR),
+	KASSERT((m->m_hdr.mh_flags & M_PKTHDR),
 	    ("%s: mbuf chain %p is !M_PKTHDR", __func__, m));
 
 	/*
@@ -3184,8 +3191,8 @@ mld_v2_encap_report(struct ifnet *ifp, struct mbuf *m)
 	mldreclen = m_length(m, NULL);
 	CTR2(KTR_MLD, "%s: mldreclen is %d", __func__, mldreclen);
 
-	mh->m_len = sizeof(struct ip6_hdr) + sizeof(struct mldv2_report);
-	mh->m_pkthdr.len = sizeof(struct ip6_hdr) +
+	mh->m_hdr.mh_len = sizeof(struct ip6_hdr) + sizeof(struct mldv2_report);
+	mh->M_dat.MH.MH_pkthdr.len = sizeof(struct ip6_hdr) +
 	    sizeof(struct mldv2_report) + mldreclen;
 
 	ip6 = mtod(mh, struct ip6_hdr *);
@@ -3204,10 +3211,10 @@ mld_v2_encap_report(struct ifnet *ifp, struct mbuf *m)
 	mld->mld_code = 0;
 	mld->mld_cksum = 0;
 	mld->mld_v2_reserved = 0;
-	mld->mld_v2_numrecs = htons(m->m_pkthdr.PH_vt.vt_nrecs);
-	m->m_pkthdr.PH_vt.vt_nrecs = 0;
+	mld->mld_v2_numrecs = htons(m->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs);
+	m->M_dat.MH.MH_pkthdr.PH_vt.vt_nrecs = 0;
 
-	mh->m_next = m;
+	mh->m_hdr.mh_next = m;
 	mld->mld_cksum = in6_cksum(mh, IPPROTO_ICMPV6,
 	    sizeof(struct ip6_hdr), sizeof(struct mldv2_report) + mldreclen);
 	return (mh);
@@ -3244,8 +3251,8 @@ mld_rec_type_to_str(const int type)
 }
 #endif
 
-static void
-mld_init(void *unused __unused)
+void
+mld_init(void *unused __unused2)
 {
 
 	CTR1(KTR_MLD, "%s: initializing", __func__);
@@ -3259,8 +3266,8 @@ mld_init(void *unused __unused)
 }
 SYSINIT(mld_init, SI_SUB_PSEUDO, SI_ORDER_MIDDLE, mld_init, NULL);
 
-static void
-mld_uninit(void *unused __unused)
+void
+mld_uninit(void *unused __unused2)
 {
 
 	CTR1(KTR_MLD, "%s: tearing down", __func__);
@@ -3268,8 +3275,8 @@ mld_uninit(void *unused __unused)
 }
 SYSUNINIT(mld_uninit, SI_SUB_PSEUDO, SI_ORDER_MIDDLE, mld_uninit, NULL);
 
-static void
-vnet_mld_init(const void *unused __unused)
+void
+vnet_mld_init(const void *unused __unused2)
 {
 
 	CTR1(KTR_MLD, "%s: initializing", __func__);
@@ -3279,8 +3286,8 @@ vnet_mld_init(const void *unused __unused)
 VNET_SYSINIT(vnet_mld_init, SI_SUB_PSEUDO, SI_ORDER_ANY, vnet_mld_init,
     NULL);
 
-static void
-vnet_mld_uninit(const void *unused __unused)
+void
+vnet_mld_uninit(const void *unused __unused2)
 {
 
 	CTR1(KTR_MLD, "%s: tearing down", __func__);
@@ -3291,8 +3298,10 @@ vnet_mld_uninit(const void *unused __unused)
 VNET_SYSUNINIT(vnet_mld_uninit, SI_SUB_PSEUDO, SI_ORDER_ANY, vnet_mld_uninit,
     NULL);
 
-static int
-mld_modevent(module_t mod, int type, void *unused __unused)
+#if 0 // TODO: modevent not supported
+
+int
+mld_modevent(module_t mod, int type, void *unused __unused2)
 {
 
     switch (type) {
@@ -3310,4 +3319,7 @@ static moduledata_t mld_mod = {
     mld_modevent,
     0
 };
+
+#endif
+
 DECLARE_MODULE(mld, mld_mod, SI_SUB_PSEUDO, SI_ORDER_ANY);

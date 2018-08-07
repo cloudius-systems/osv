@@ -32,40 +32,41 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD: stable/9/sys/netinet6/in6_ifattach.c 233200 2012-03-19 20:49:16Z jhb $");
 
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/malloc.h>
-#include <sys/socket.h>
-#include <sys/sockio.h>
-#include <sys/jail.h>
-#include <sys/kernel.h>
-#include <sys/proc.h>
+#include <bsd/porting/netport.h>
+
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/systm.h>
+#include <bsd/sys/sys/malloc.h>
+#include <bsd/sys/sys/socket.h>
+//#include <sys/sockio.h>
+//#include <sys/jail.h>
+#include <bsd/sys/sys/kernel.h>
+#include <bsd/sys/sys/proc.h>
 #include <sys/syslog.h>
-#include <sys/md5.h>
+#include <bsd/sys/sys/md5.h>
 
-#include <net/if.h>
-#include <net/if_dl.h>
-#include <net/if_types.h>
-#include <net/route.h>
-#include <net/vnet.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_dl.h>
+#include <bsd/sys/net/if_types.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/vnet.h>
 
-#include <netinet/in.h>
-#include <netinet/in_var.h>
-#include <netinet/if_ether.h>
-#include <netinet/in_pcb.h>
-#include <netinet/ip_var.h>
-#include <netinet/udp.h>
-#include <netinet/udp_var.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet/if_ether.h>
+#include <bsd/sys/netinet/in_pcb.h>
+#include <bsd/sys/netinet/ip_var.h>
+#include <bsd/sys/netinet/udp.h>
+#include <bsd/sys/netinet/udp_var.h>
 
-#include <netinet/ip6.h>
-#include <netinet6/ip6_var.h>
-#include <netinet6/in6_var.h>
-#include <netinet6/in6_pcb.h>
-#include <netinet6/in6_ifattach.h>
-#include <netinet6/ip6_var.h>
-#include <netinet6/nd6.h>
-#include <netinet6/mld6_var.h>
-#include <netinet6/scope6_var.h>
+#include <bsd/sys/netinet/ip6.h>
+#include <bsd/sys/netinet6/ip6_var.h>
+#include <bsd/sys/netinet6/in6_var.h>
+#include <bsd/sys/netinet6/in6_pcb.h>
+#include <bsd/sys/netinet6/in6_ifattach.h>
+#include <bsd/sys/netinet6/nd6.h>
+#include <bsd/sys/netinet6/mld6_var.h>
+#include <bsd/sys/netinet6/scope6_var.h>
 
 VNET_DEFINE(unsigned long, in6_maxmtu) = 0;
 
@@ -112,17 +113,23 @@ static int
 get_rand_ifid(struct ifnet *ifp, struct in6_addr *in6)
 {
 	MD5_CTX ctxt;
-	struct prison *pr;
 	u_int8_t digest[16];
+	char hostname[64];
 	int hostnamelen;
 
-	pr = curthread->td_ucred->cr_prison;
-	mtx_lock(&pr->pr_mtx);
-	hostnamelen = strlen(pr->pr_hostname);
+	if (gethostname(hostname, sizeof(hostname)) != 0)
+	{
+		bsd_log(LOG_ERR, "%s(): Unable to get hostname\n", __FUNCTION__);
+		return -1;
+	}
+
+	hostnamelen = strlen(hostname);
+
 #if 0
 	/* we need at least several letters as seed for ifid */
-	if (hostnamelen < 3) {
-		mtx_unlock(&pr->pr_mtx);
+	if (hostnamelen < 3)
+	{
+		bsd_log(LOG_ERR, "%s(): Hostname too short\n", __FUNCTION__);
 		return -1;
 	}
 #endif
@@ -130,8 +137,7 @@ get_rand_ifid(struct ifnet *ifp, struct in6_addr *in6)
 	/* generate 8 bytes of pseudo-random value. */
 	bzero(&ctxt, sizeof(ctxt));
 	MD5Init(&ctxt);
-	MD5Update(&ctxt, pr->pr_hostname, hostnamelen);
-	mtx_unlock(&pr->pr_mtx);
+	MD5Update(&ctxt, hostname, hostnamelen);
 	MD5Final(digest, &ctxt);
 
 	/* assumes sizeof(digest) > sizeof(ifid) */
@@ -235,8 +241,8 @@ generate_tmp_ifid(u_int8_t *seed0, const u_int8_t *seed1, u_int8_t *ret)
 int
 in6_get_hw_ifid(struct ifnet *ifp, struct in6_addr *in6)
 {
-	struct ifaddr *ifa;
-	struct sockaddr_dl *sdl;
+	struct bsd_ifaddr *ifa;
+	struct bsd_sockaddr_dl *sdl;
 	u_int8_t *addr;
 	size_t addrlen;
 	static u_int8_t allzero[8] = { 0, 0, 0, 0, 0, 0, 0, 0 };
@@ -247,7 +253,7 @@ in6_get_hw_ifid(struct ifnet *ifp, struct in6_addr *in6)
 	TAILQ_FOREACH(ifa, &ifp->if_addrhead, ifa_link) {
 		if (ifa->ifa_addr->sa_family != AF_LINK)
 			continue;
-		sdl = (struct sockaddr_dl *)ifa->ifa_addr;
+		sdl = (struct bsd_sockaddr_dl *)ifa->ifa_addr;
 		if (sdl == NULL)
 			continue;
 		if (sdl->sdl_alen == 0)
@@ -261,7 +267,7 @@ in6_get_hw_ifid(struct ifnet *ifp, struct in6_addr *in6)
 
 found:
 	IF_ADDR_LOCK_ASSERT(ifp);
-	addr = LLADDR(sdl);
+	addr = (uint8_t*)LLADDR(sdl);
 	addrlen = sdl->sdl_alen;
 
 	/* get EUI64 */
@@ -467,7 +473,7 @@ in6_ifattach_linklocal(struct ifnet *ifp, struct ifnet *altifp)
 	strncpy(ifra.ifra_name, if_name(ifp), sizeof(ifra.ifra_name));
 
 	ifra.ifra_addr.sin6_family = AF_INET6;
-	ifra.ifra_addr.sin6_len = sizeof(struct sockaddr_in6);
+	ifra.ifra_addr.sin6_len = sizeof(struct bsd_sockaddr_in6);
 	ifra.ifra_addr.sin6_addr.s6_addr32[0] = htonl(0xfe800000);
 	ifra.ifra_addr.sin6_addr.s6_addr32[1] = 0;
 	if ((ifp->if_flags & IFF_LOOPBACK) != 0) {
@@ -483,7 +489,7 @@ in6_ifattach_linklocal(struct ifnet *ifp, struct ifnet *altifp)
 	if (in6_setscope(&ifra.ifra_addr.sin6_addr, ifp, NULL))
 		return (-1);
 
-	ifra.ifra_prefixmask.sin6_len = sizeof(struct sockaddr_in6);
+	ifra.ifra_prefixmask.sin6_len = sizeof(struct bsd_sockaddr_in6);
 	ifra.ifra_prefixmask.sin6_family = AF_INET6;
 	ifra.ifra_prefixmask.sin6_addr = in6mask64;
 	/* link-local addresses should NEVER expire. */
@@ -574,7 +580,7 @@ in6_ifattach_loopback(struct ifnet *ifp)
 	 */
 	strncpy(ifra.ifra_name, if_name(ifp), sizeof(ifra.ifra_name));
 
-	ifra.ifra_prefixmask.sin6_len = sizeof(struct sockaddr_in6);
+	ifra.ifra_prefixmask.sin6_len = sizeof(struct bsd_sockaddr_in6);
 	ifra.ifra_prefixmask.sin6_family = AF_INET6;
 	ifra.ifra_prefixmask.sin6_addr = in6mask128;
 
@@ -582,11 +588,11 @@ in6_ifattach_loopback(struct ifnet *ifp)
 	 * Always initialize ia_dstaddr (= broadcast address) to loopback
 	 * address.  Follows IPv4 practice - see in_ifinit().
 	 */
-	ifra.ifra_dstaddr.sin6_len = sizeof(struct sockaddr_in6);
+	ifra.ifra_dstaddr.sin6_len = sizeof(struct bsd_sockaddr_in6);
 	ifra.ifra_dstaddr.sin6_family = AF_INET6;
 	ifra.ifra_dstaddr.sin6_addr = in6addr_loopback;
 
-	ifra.ifra_addr.sin6_len = sizeof(struct sockaddr_in6);
+	ifra.ifra_addr.sin6_len = sizeof(struct bsd_sockaddr_in6);
 	ifra.ifra_addr.sin6_family = AF_INET6;
 	ifra.ifra_addr.sin6_addr = in6addr_loopback;
 
@@ -624,28 +630,27 @@ int
 in6_nigroup(struct ifnet *ifp, const char *name, int namelen,
     struct in6_addr *in6)
 {
-	struct prison *pr;
 	const char *p;
-	u_char *q;
+	char *q;
 	MD5_CTX ctxt;
 	u_int8_t digest[16];
 	char l;
 	char n[64];	/* a single label must not exceed 63 chars */
+	char hostname[64];
 
 	/*
 	 * If no name is given and namelen is -1,
 	 * we try to do the hostname lookup ourselves.
 	 */
 	if (!name && namelen == -1) {
-		pr = curthread->td_ucred->cr_prison;
-		mtx_lock(&pr->pr_mtx);
-		name = pr->pr_hostname;
+        	if (gethostname(hostname, sizeof(hostname)) != 0) {
+                	bsd_log(LOG_ERR, "%s(): Unable to get hostname\n", __FUNCTION__);
+                	return -1;
+        	}
+		name = hostname;
 		namelen = strlen(name);
-	} else
-		pr = NULL;
+	}
 	if (!name || !namelen) {
-		if (pr != NULL)
-			mtx_unlock(&pr->pr_mtx);
 		return -1;
 	}
 
@@ -653,14 +658,10 @@ in6_nigroup(struct ifnet *ifp, const char *name, int namelen,
 	while (p && *p && *p != '.' && p - name < namelen)
 		p++;
 	if (p == name || p - name > sizeof(n) - 1) {
-		if (pr != NULL)
-			mtx_unlock(&pr->pr_mtx);
 		return -1;	/* label too long */
 	}
 	l = p - name;
 	strncpy(n, name, l);
-	if (pr != NULL)
-		mtx_unlock(&pr->pr_mtx);
 	n[(int)l] = '\0';
 	for (q = n; *q; q++) {
 		if ('A' <= *q && *q <= 'Z')
@@ -738,10 +739,10 @@ in6_ifattach(struct ifnet *ifp, struct ifnet *altifp)
 	 * XXX multiple loopback interface case.
 	 */
 	if ((ifp->if_flags & IFF_LOOPBACK) != 0) {
-		struct ifaddr *ifa;
+		struct bsd_ifaddr *ifa;
 
 		in6 = in6addr_loopback;
-		ifa = (struct ifaddr *)in6ifa_ifpwithaddr(ifp, &in6);
+		ifa = (struct bsd_ifaddr *)in6ifa_ifpwithaddr(ifp, &in6);
 		if (ifa == NULL) {
 			if (in6_ifattach_loopback(ifp) != 0)
 				return;
@@ -762,7 +763,7 @@ in6_ifattach(struct ifnet *ifp, struct ifnet *altifp)
 			error = in6_ifattach_linklocal(ifp, altifp);
 #if 0
 			if (error)
-				log(LOG_NOTICE, "in6_ifattach_linklocal: "
+				bsd_log(LOG_NOTICE, "in6_ifattach_linklocal: "
 				    "failed to add a link-local addr to %s\n",
 				    if_name(ifp));
 #endif
@@ -788,10 +789,10 @@ void
 in6_ifdetach(struct ifnet *ifp)
 {
 	struct in6_ifaddr *ia;
-	struct ifaddr *ifa, *next;
+	struct bsd_ifaddr *ifa, *next;
 	struct radix_node_head *rnh;
 	struct rtentry *rt;
-	struct sockaddr_in6 sin6;
+	struct bsd_sockaddr_in6 sin6;
 	struct in6_multi_mship *imm;
 
 	/* remove neighbor management table */
@@ -857,7 +858,7 @@ in6_ifdetach(struct ifnet *ifp)
 	 * These only get automatically installed for the default FIB.
 	 */
 	bzero(&sin6, sizeof(sin6));
-	sin6.sin6_len = sizeof(struct sockaddr_in6);
+	sin6.sin6_len = sizeof(struct bsd_sockaddr_in6);
 	sin6.sin6_family = AF_INET6;
 	sin6.sin6_addr = in6addr_linklocal_allnodes;
 	if (in6_setscope(&sin6.sin6_addr, ifp, NULL))
@@ -867,7 +868,7 @@ in6_ifdetach(struct ifnet *ifp)
 	rnh = rt_tables_get_rnh(RT_DEFAULT_FIB, AF_INET6);
 	if (rnh != NULL) {
 		RADIX_NODE_HEAD_LOCK(rnh);
-		rt = in6_rtalloc1((struct sockaddr *)&sin6, 0, RTF_RNH_LOCKED,
+		rt = in6_rtalloc1((struct bsd_sockaddr *)&sin6, 0, RTF_RNH_LOCKED,
 		    RT_DEFAULT_FIB);
 		if (rt) {
 			if (rt->rt_ifp == ifp)

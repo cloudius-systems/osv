@@ -69,6 +69,8 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD: stable/9/sys/netinet6/ip6_id.c 174510 2007-12-10 16:03:40Z obrien $");
 
+#include <bsd/porting/netport.h>
+
 /*
  * seed = random (bits - 1) bit
  * n = prime, g0 = generator to n,
@@ -89,17 +91,16 @@ __FBSDID("$FreeBSD: stable/9/sys/netinet6/ip6_id.c 174510 2007-12-10 16:03:40Z o
  * This avoids reuse issues caused by reseeding.
  */
 
-#include <sys/types.h>
-#include <sys/param.h>
-#include <sys/kernel.h>
-#include <sys/socket.h>
-#include <sys/libkern.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/kernel.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/libkern.h>
 
-#include <net/if.h>
-#include <net/route.h>
-#include <netinet/in.h>
-#include <netinet/ip6.h>
-#include <netinet6/ip6_var.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/ip6.h>
+#include <bsd/sys/netinet6/ip6_var.h>
 
 #ifndef INT32_MAX
 #define INT32_MAX	0x7fffffffU
@@ -186,6 +187,7 @@ initid(struct randomtab *p)
 {
 	u_int32_t j, i;
 	int noprime = 1;
+	struct timeval tv;
 
 	p->ru_x = arc4random() % p->ru_m;
 
@@ -221,7 +223,8 @@ initid(struct randomtab *p)
 	p->ru_g = pmod(p->ru_gen, j, p->ru_n);
 	p->ru_counter = 0;
 
-	p->ru_reseed = time_second + p->ru_out;
+	getmicrotime(&tv);
+	p->ru_reseed = tv.tv_sec + p->ru_out;
 	p->ru_msb = p->ru_msb ? 0 : (1U << (p->ru_bits - 1));
 }
 
@@ -230,8 +233,11 @@ randomid(struct randomtab *p)
 {
 	int i, n;
 	u_int32_t tmp;
+	struct timeval tv;
 
-	if (p->ru_counter >= p->ru_max || time_second > p->ru_reseed)
+	getmicrotime(&tv);
+
+	if (p->ru_counter >= p->ru_max || tv.tv_sec > p->ru_reseed)
 		initid(p);
 
 	tmp = arc4random();

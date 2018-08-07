@@ -32,23 +32,28 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD: stable/9/sys/netinet6/scope6.c 243382 2012-11-22 00:22:54Z ae $");
 
-#include <sys/param.h>
-#include <sys/malloc.h>
-#include <sys/mbuf.h>
-#include <sys/socket.h>
-#include <sys/systm.h>
-#include <sys/queue.h>
+#include <bsd/porting/netport.h>
+
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/malloc.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/systm.h>
+#include <bsd/sys/sys/queue.h>
 #include <sys/syslog.h>
 
-#include <net/if.h>
-#include <net/vnet.h>
+#include <bsd/sys/sys/ioccom.h>
+#include <bsd/sys/sys/mbuf.h>
 
-#include <netinet/in.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/vnet.h>
 
-#include <netinet/ip6.h>
-#include <netinet6/in6_var.h>
-#include <netinet6/ip6_var.h>
-#include <netinet6/scope6_var.h>
+#include <bsd/sys/netinet/in.h>
+
+#include <bsd/sys/netinet/ip6.h>
+#include <bsd/sys/netinet6/in6_var.h>
+#include <bsd/sys/netinet6/ip6_var.h>
+#include <bsd/sys/netinet6/scope6_var.h>
 
 #ifdef ENABLE_DEFAULT_SCOPE
 VNET_DEFINE(int, ip6_use_defzone) = 1;
@@ -89,7 +94,7 @@ scope6_ifattach(struct ifnet *ifp)
 {
 	struct scope6_id *sid;
 
-	sid = (struct scope6_id *)malloc(sizeof(*sid), M_IFADDR, M_WAITOK);
+	sid = (struct scope6_id *)malloc(sizeof(*sid));
 	bzero(sid, sizeof(*sid));
 
 	/*
@@ -111,7 +116,7 @@ void
 scope6_ifdetach(struct scope6_id *sid)
 {
 
-	free(sid, M_IFADDR);
+	free(sid);
 }
 
 int
@@ -328,7 +333,7 @@ scope6_addr2default(struct in6_addr *addr)
  * address.
  */
 int
-sa6_embedscope(struct sockaddr_in6 *sin6, int defaultok)
+sa6_embedscope(struct bsd_sockaddr_in6 *sin6, int defaultok)
 {
 	struct ifnet *ifp;
 	u_int32_t zoneid;
@@ -361,18 +366,18 @@ sa6_embedscope(struct sockaddr_in6 *sin6, int defaultok)
 }
 
 /*
- * generate standard sockaddr_in6 from embedded form.
+ * generate standard bsd_sockaddr_in6 from embedded form.
  */
 int
-sa6_recoverscope(struct sockaddr_in6 *sin6)
+sa6_recoverscope(struct bsd_sockaddr_in6 *sin6)
 {
 	char ip6buf[INET6_ADDRSTRLEN];
 	u_int32_t zoneid;
 
 	if (sin6->sin6_scope_id != 0) {
-		log(LOG_NOTICE,
-		    "sa6_recoverscope: assumption failure (non 0 ID): %s%%%d\n",
-		    ip6_sprintf(ip6buf, &sin6->sin6_addr), sin6->sin6_scope_id);
+		bsd_log(LOG_NOTICE,
+		        "sa6_recoverscope: assumption failure (non 0 ID): %s%%%d\n",
+		         ip6_sprintf(ip6buf, &sin6->sin6_addr), sin6->sin6_scope_id);
 		/* XXX: proceed anyway... */
 	}
 	if (IN6_IS_SCOPE_LINKLOCAL(&sin6->sin6_addr) ||

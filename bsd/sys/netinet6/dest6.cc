@@ -32,28 +32,28 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD: stable/9/sys/netinet6/dest6.c 196019 2009-08-01 19:26:27Z rwatson $");
 
-#include "opt_inet.h"
-#include "opt_inet6.h"
+#include <bsd/porting/netport.h>
 
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/malloc.h>
-#include <sys/mbuf.h>
-#include <sys/domain.h>
-#include <sys/protosw.h>
-#include <sys/socket.h>
-#include <sys/errno.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/systm.h>
+#include <bsd/sys/sys/malloc.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/domain.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/socket.h>
+#include <errno.h>
 #include <sys/time.h>
-#include <sys/kernel.h>
+#include <bsd/sys/sys/kernel.h>
 
-#include <net/if.h>
-#include <net/route.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/route.h>
 
-#include <netinet/in.h>
-#include <netinet/in_var.h>
-#include <netinet/ip6.h>
-#include <netinet6/ip6_var.h>
-#include <netinet/icmp6.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet/ip6.h>
+#include <bsd/sys/netinet6/ip6_var.h>
+#include <bsd/sys/netinet6/in6_var.h>
+#include <bsd/sys/netinet/icmp6.h>
 
 /*
  * Destination options header processing.

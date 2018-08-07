@@ -32,50 +32,46 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD: stable/9/sys/netinet6/ip6_forward.c 243586 2012-11-27 01:59:51Z ae $");
 
-#include "opt_inet.h"
-#include "opt_inet6.h"
-#include "opt_ipfw.h"
-#include "opt_ipsec.h"
-#include "opt_ipstealth.h"
+#include <bsd/porting/netport.h>
 
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/malloc.h>
-#include <sys/mbuf.h>
-#include <sys/domain.h>
-#include <sys/protosw.h>
-#include <sys/socket.h>
-#include <sys/errno.h>
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/systm.h>
+#include <bsd/sys/sys/malloc.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/sys/sys/domain.h>
+#include <bsd/sys/sys/protosw.h>
+#include <bsd/sys/sys/socket.h>
+#include <errno.h>
 #include <sys/time.h>
-#include <sys/kernel.h>
+#include <bsd/sys/sys/kernel.h>
 #include <sys/syslog.h>
 
-#include <net/if.h>
-#include <net/netisr.h>
-#include <net/route.h>
-#include <net/pfil.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/netisr.h>
+#include <bsd/sys/net/route.h>
+#include <bsd/sys/net/pfil.h>
 
-#include <netinet/in.h>
-#include <netinet/in_var.h>
-#include <netinet/in_systm.h>
-#include <netinet/ip.h>
-#include <netinet/ip_var.h>
-#include <netinet6/in6_var.h>
-#include <netinet/ip6.h>
-#include <netinet6/ip6_var.h>
-#include <netinet6/scope6_var.h>
-#include <netinet/icmp6.h>
-#include <netinet6/nd6.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/in_var.h>
+#include <bsd/sys/netinet/in_systm.h>
+#include <bsd/sys/netinet/ip.h>
+#include <bsd/sys/netinet/ip_var.h>
+#include <bsd/sys/netinet6/in6_var.h>
+#include <bsd/sys/netinet/ip6.h>
+#include <bsd/sys/netinet6/ip6_var.h>
+#include <bsd/sys/netinet6/scope6_var.h>
+#include <bsd/sys/netinet/icmp6.h>
+#include <bsd/sys/netinet6/nd6.h>
 
-#include <netinet/in_pcb.h>
+#include <bsd/sys/netinet/in_pcb.h>
 
 #ifdef IPSEC
-#include <netipsec/ipsec.h>
-#include <netipsec/ipsec6.h>
-#include <netipsec/key.h>
+#include <bsd/sys/netipsec/ipsec.h>
+#include <bsd/sys/netipsec/ipsec6.h>
+#include <bsd/sys/netipsec/key.h>
 #endif /* IPSEC */
 
-#include <netinet6/ip6protosw.h>
+#include <bsd/sys/netinet6/ip6protosw.h>
 
 /*
  * Forward a packet.  If some error occurs return the sender
@@ -93,7 +89,7 @@ void
 ip6_forward(struct mbuf *m, int srcrt)
 {
 	struct ip6_hdr *ip6 = mtod(m, struct ip6_hdr *);
-	struct sockaddr_in6 *dst = NULL;
+	struct bsd_sockaddr_in6 *dst = NULL;
 	struct rtentry *rt = NULL;
 	struct route_in6 rin6;
 	int error, type = 0, code = 0;
@@ -132,20 +128,22 @@ ip6_forward(struct mbuf *m, int srcrt)
 	 * Do not forward packets with unspecified source.  It was discussed
 	 * in July 2000, on the ipngwg mailing list.
 	 */
-	if ((m->m_flags & (M_BCAST|M_MCAST)) != 0 ||
+	if ((m->m_hdr.mh_flags & (M_BCAST|M_MCAST)) != 0 ||
 	    IN6_IS_ADDR_MULTICAST(&ip6->ip6_dst) ||
 	    IN6_IS_ADDR_UNSPECIFIED(&ip6->ip6_src)) {
 		V_ip6stat.ip6s_cantforward++;
+		struct timeval tv;
+		getmicrotime(&tv);
 		/* XXX in6_ifstat_inc(rt->rt_ifp, ifs6_in_discard) */
-		if (V_ip6_log_time + V_ip6_log_interval < time_second) {
-			V_ip6_log_time = time_second;
-			log(LOG_DEBUG,
+		if (V_ip6_log_time + V_ip6_log_interval < tv.tv_sec) {
+			V_ip6_log_time = tv.tv_sec;
+			bsd_log(LOG_DEBUG,
 			    "cannot forward "
 			    "from %s to %s nxt %d received on %s\n",
 			    ip6_sprintf(ip6bufs, &ip6->ip6_src),
 			    ip6_sprintf(ip6bufd, &ip6->ip6_dst),
 			    ip6->ip6_nxt,
-			    if_name(m->m_pkthdr.rcvif));
+			    if_name(m->M_dat.MH.MH_pkthdr.rcvif));
 		}
 		m_freem(m);
 		return;
@@ -175,7 +173,7 @@ ip6_forward(struct mbuf *m, int srcrt)
 	 * It is important to save it before IPsec processing as IPsec
 	 * processing may modify the mbuf.
 	 */
-	mcopy = m_copy(m, 0, imin(m->m_pkthdr.len, ICMPV6_PLD_MAXLEN));
+	mcopy = m_copy(m, 0, imin(m->M_dat.MH.MH_pkthdr.len, ICMPV6_PLD_MAXLEN));
 
 #ifdef IPSEC
 	/* get a security policy for this packet */
@@ -342,7 +340,7 @@ ip6_forward(struct mbuf *m, int srcrt)
 	}
 
 	/* adjust pointer */
-	dst = (struct sockaddr_in6 *)state.dst;
+	dst = (struct bsd_sockaddr_in6 *)state.dst;
 	rt = state.ro ? state.ro->ro_rt : NULL;
 	if (dst != NULL && rt != NULL)
 		ipsecrt = 1;
@@ -353,17 +351,17 @@ skip_ipsec:
 #endif
 again:
 	bzero(&rin6, sizeof(struct route_in6));
-	dst = (struct sockaddr_in6 *)&rin6.ro_dst;
-	dst->sin6_len = sizeof(struct sockaddr_in6);
+	dst = (struct bsd_sockaddr_in6 *)&rin6.ro_dst;
+	dst->sin6_len = sizeof(struct bsd_sockaddr_in6);
 	dst->sin6_family = AF_INET6;
 	dst->sin6_addr = ip6->ip6_dst;
 again2:
-	rin6.ro_rt = in6_rtalloc1((struct sockaddr *)dst, 0, 0, M_GETFIB(m));
+	rin6.ro_rt = in6_rtalloc1((struct bsd_sockaddr *)dst, 0, 0, M_GETFIB(m));
 	if (rin6.ro_rt != NULL)
 		RT_UNLOCK(rin6.ro_rt);
 	else {
 		V_ip6stat.ip6s_noroute++;
-		in6_ifstat_inc(m->m_pkthdr.rcvif, ifs6_in_noroute);
+		in6_ifstat_inc(m->M_dat.MH.MH_pkthdr.rcvif, ifs6_in_noroute);
 		if (mcopy) {
 			icmp6_error(mcopy, ICMP6_DST_UNREACH,
 			ICMP6_DST_UNREACH_NOROUTE, 0);
@@ -391,7 +389,7 @@ skip_routing:
 		V_ip6stat.ip6s_badscope++;
 		goto bad;
 	}
-	if (in6_setscope(&src_in6, m->m_pkthdr.rcvif, &inzone)) {
+	if (in6_setscope(&src_in6, m->M_dat.MH.MH_pkthdr.rcvif, &inzone)) {
 		V_ip6stat.ip6s_cantforward++;
 		V_ip6stat.ip6s_badscope++;
 		goto bad;
@@ -405,15 +403,17 @@ skip_routing:
 		V_ip6stat.ip6s_badscope++;
 		in6_ifstat_inc(rt->rt_ifp, ifs6_in_discard);
 
-		if (V_ip6_log_time + V_ip6_log_interval < time_second) {
-			V_ip6_log_time = time_second;
-			log(LOG_DEBUG,
+		struct timeval tv;
+		getmicrotime(&tv);
+		if (V_ip6_log_time + V_ip6_log_interval < tv.tv_sec) {
+			V_ip6_log_time = tv.tv_sec;
+			bsd_log(LOG_DEBUG,
 			    "cannot forward "
 			    "src %s, dst %s, nxt %d, rcvif %s, outif %s\n",
 			    ip6_sprintf(ip6bufs, &ip6->ip6_src),
 			    ip6_sprintf(ip6bufd, &ip6->ip6_dst),
 			    ip6->ip6_nxt,
-			    if_name(m->m_pkthdr.rcvif), if_name(rt->rt_ifp));
+			    if_name(m->M_dat.MH.MH_pkthdr.rcvif), if_name(rt->rt_ifp));
 		}
 		if (mcopy)
 			icmp6_error(mcopy, ICMP6_DST_UNREACH,
@@ -429,7 +429,7 @@ skip_routing:
 	 * packet to a different zone by (e.g.) a default route.
 	 */
 	dst_in6 = ip6->ip6_dst;
-	if (in6_setscope(&dst_in6, m->m_pkthdr.rcvif, &inzone) != 0 ||
+	if (in6_setscope(&dst_in6, m->M_dat.MH.MH_pkthdr.rcvif, &inzone) != 0 ||
 	    in6_setscope(&dst_in6, rt->rt_ifp, &outzone) != 0 ||
 	    inzone != outzone) {
 		V_ip6stat.ip6s_cantforward++;
@@ -437,7 +437,7 @@ skip_routing:
 		goto bad;
 	}
 
-	if (m->m_pkthdr.len > IN6_LINKMTU(rt->rt_ifp)) {
+	if (m->M_dat.MH.MH_pkthdr.len > IN6_LINKMTU(rt->rt_ifp)) {
 		in6_ifstat_inc(rt->rt_ifp, ifs6_in_toobig);
 		if (mcopy) {
 			u_long mtu;
@@ -478,7 +478,7 @@ skip_routing:
 	}
 
 	if (rt->rt_flags & RTF_GATEWAY)
-		dst = (struct sockaddr_in6 *)rt->rt_gateway;
+		dst = (struct bsd_sockaddr_in6 *)rt->rt_gateway;
 
 	/*
 	 * If we are to forward the packet using the same interface
@@ -489,7 +489,7 @@ skip_routing:
 	 * Also, don't send redirect if forwarding using a route
 	 * modified by a redirect.
 	 */
-	if (V_ip6_sendredirects && rt->rt_ifp == m->m_pkthdr.rcvif && !srcrt &&
+	if (V_ip6_sendredirects && rt->rt_ifp == m->M_dat.MH.MH_pkthdr.rcvif && !srcrt &&
 #ifdef IPSEC
 	    !ipsecrt &&
 #endif /* IPSEC */
@@ -540,12 +540,12 @@ skip_routing:
 			       "src %s, dst %s, nxt %d, rcvif %s, outif %s\n",
 			       ip6_sprintf(ip6bufs, &ip6->ip6_src),
 			       ip6_sprintf(ip6bufd, &ip6->ip6_dst),
-			       ip6->ip6_nxt, if_name(m->m_pkthdr.rcvif),
+			       ip6->ip6_nxt, if_name(m->M_dat.MH.MH_pkthdr.rcvif),
 			       if_name(rt->rt_ifp));
 		}
 
 		/* we can just use rcvif in forwarding. */
-		origifp = m->m_pkthdr.rcvif;
+		origifp = m->M_dat.MH.MH_pkthdr.rcvif;
 	}
 	else
 		origifp = rt->rt_ifp;
@@ -571,20 +571,20 @@ skip_routing:
 
 	/* See if destination IP address was changed by packet filter. */
 	if (!IN6_ARE_ADDR_EQUAL(&odst, &ip6->ip6_dst)) {
-		m->m_flags |= M_SKIP_FIREWALL;
+		m->m_hdr.mh_flags |= M_SKIP_FIREWALL;
 		/* If destination is now ourself drop to ip6_input(). */
 		if (in6_localip(&ip6->ip6_dst)) {
-			m->m_flags |= M_FASTFWD_OURS;
-			if (m->m_pkthdr.rcvif == NULL)
-				m->m_pkthdr.rcvif = V_loif;
-			if (m->m_pkthdr.csum_flags & CSUM_DELAY_DATA_IPV6) {
-				m->m_pkthdr.csum_flags |=
+			m->m_hdr.mh_flags |= M_FASTFWD_OURS;
+			if (m->M_dat.MH.MH_pkthdr.rcvif == NULL)
+				m->M_dat.MH.MH_pkthdr.rcvif = V_loif;
+			if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_DELAY_DATA_IPV6) {
+				m->M_dat.MH.MH_pkthdr.csum_flags |=
 				    CSUM_DATA_VALID_IPV6 | CSUM_PSEUDO_HDR;
-				m->m_pkthdr.csum_data = 0xffff;
+				m->M_dat.MH.MH_pkthdr.csum_data = 0xffff;
 			}
 #ifdef SCTP
-			if (m->m_pkthdr.csum_flags & CSUM_SCTP_IPV6)
-				m->m_pkthdr.csum_flags |= CSUM_SCTP_VALID;
+			if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_SCTP_IPV6)
+				m->M_dat.MH.MH_pkthdr.csum_flags |= CSUM_SCTP_VALID;
 #endif
 			error = netisr_queue(NETISR_IPV6, m);
 			goto out;
@@ -593,28 +593,28 @@ skip_routing:
 	}
 
 	/* See if local, if yes, send it to netisr. */
-	if (m->m_flags & M_FASTFWD_OURS) {
-		if (m->m_pkthdr.rcvif == NULL)
-			m->m_pkthdr.rcvif = V_loif;
-		if (m->m_pkthdr.csum_flags & CSUM_DELAY_DATA_IPV6) {
-			m->m_pkthdr.csum_flags |=
+	if (m->m_hdr.mh_flags & M_FASTFWD_OURS) {
+		if (m->M_dat.MH.MH_pkthdr.rcvif == NULL)
+			m->M_dat.MH.MH_pkthdr.rcvif = V_loif;
+		if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_DELAY_DATA_IPV6) {
+			m->M_dat.MH.MH_pkthdr.csum_flags |=
 			    CSUM_DATA_VALID_IPV6 | CSUM_PSEUDO_HDR;
-			m->m_pkthdr.csum_data = 0xffff;
+			m->M_dat.MH.MH_pkthdr.csum_data = 0xffff;
 		}
 #ifdef SCTP
-		if (m->m_pkthdr.csum_flags & CSUM_SCTP_IPV6)
-			m->m_pkthdr.csum_flags |= CSUM_SCTP_VALID;
+		if (m->M_dat.MH.MH_pkthdr.csum_flags & CSUM_SCTP_IPV6)
+			m->M_dat.MH.MH_pkthdr.csum_flags |= CSUM_SCTP_VALID;
 #endif
 		error = netisr_queue(NETISR_IPV6, m);
 		goto out;
 	}
 	/* Or forward to some other address? */
-	if ((m->m_flags & M_IP6_NEXTHOP) &&
+	if ((m->m_hdr.mh_flags & M_IP6_NEXTHOP) &&
 	    (fwd_tag = m_tag_find(m, PACKET_TAG_IPFORWARD, NULL)) != NULL) {
-		dst = (struct sockaddr_in6 *)&rin6.ro_dst;
-		bcopy((fwd_tag+1), dst, sizeof(struct sockaddr_in6));
-		m->m_flags |= M_SKIP_FIREWALL;
-		m->m_flags &= ~M_IP6_NEXTHOP;
+		dst = (struct bsd_sockaddr_in6 *)&rin6.ro_dst;
+		bcopy((fwd_tag+1), dst, sizeof(struct bsd_sockaddr_in6));
+		m->m_hdr.mh_flags |= M_SKIP_FIREWALL;
+		m->m_hdr.mh_flags &= ~M_IP6_NEXTHOP;
 		m_tag_delete(m, fwd_tag);
 		goto again2;
 	}

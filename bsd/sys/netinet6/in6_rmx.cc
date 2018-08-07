@@ -62,36 +62,38 @@
 #include <sys/cdefs.h>
 __FBSDID("$FreeBSD: stable/9/sys/netinet6/in6_rmx.c 242646 2012-11-06 01:18:53Z melifaro $");
 
-#include <sys/param.h>
-#include <sys/systm.h>
-#include <sys/kernel.h>
-#include <sys/lock.h>
-#include <sys/sysctl.h>
-#include <sys/queue.h>
-#include <sys/socket.h>
-#include <sys/socketvar.h>
-#include <sys/mbuf.h>
-#include <sys/rwlock.h>
+#include <bsd/porting/netport.h>
+
+#include <bsd/sys/sys/param.h>
+#include <bsd/sys/sys/systm.h>
+#include <bsd/sys/sys/kernel.h>
+#include <bsd/sys/sys/lock.h>
+//#include <bsd/sys/sys/sysctl.h>
+#include <bsd/sys/sys/queue.h>
+#include <bsd/sys/sys/socket.h>
+#include <bsd/sys/sys/socketvar.h>
+#include <bsd/sys/sys/mbuf.h>
+#include <bsd/porting/rwlock.h>
 #include <sys/syslog.h>
-#include <sys/callout.h>
+#include <bsd/porting/callout.h>
 
-#include <net/if.h>
-#include <net/route.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/route.h>
 
-#include <netinet/in.h>
-#include <netinet/ip_var.h>
-#include <netinet/in_var.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/ip_var.h>
+#include <bsd/sys/netinet/in_var.h>
 
-#include <netinet/ip6.h>
-#include <netinet6/ip6_var.h>
+#include <bsd/sys/netinet/ip6.h>
+#include <bsd/sys/netinet6/ip6_var.h>
 
-#include <netinet/icmp6.h>
-#include <netinet6/nd6.h>
+#include <bsd/sys/netinet/icmp6.h>
+#include <bsd/sys/netinet6/nd6.h>
 
-#include <netinet/tcp.h>
-#include <netinet/tcp_seq.h>
-#include <netinet/tcp_timer.h>
-#include <netinet/tcp_var.h>
+#include <bsd/sys/netinet/tcp.h>
+#include <bsd/sys/netinet/tcp_seq.h>
+#include <bsd/sys/netinet/tcp_timer.h>
+#include <bsd/sys/netinet/tcp_var.h>
 
 extern int	in6_inithead(void **head, int off);
 #ifdef VIMAGE
@@ -106,7 +108,7 @@ in6_addroute(void *v_arg, void *n_arg, struct radix_node_head *head,
     struct radix_node *treenodes)
 {
 	struct rtentry *rt = (struct rtentry *)treenodes;
-	struct sockaddr_in6 *sin6 = (struct sockaddr_in6 *)rt_key(rt);
+	struct bsd_sockaddr_in6 *sin6 = (struct bsd_sockaddr_in6 *)rt_key(rt);
 	struct radix_node *ret;
 
 	RADIX_NODE_HEAD_WLOCK_ASSERT(head);
@@ -153,7 +155,7 @@ in6_addroute(void *v_arg, void *n_arg, struct radix_node_head *head,
 		 *	net route entry, 3ffe:0501:: -> if0.
 		 *	This case should not raise an error.
 		 */
-		rt2 = in6_rtalloc1((struct sockaddr *)sin6, 0, RTF_RNH_LOCKED,
+		rt2 = in6_rtalloc1((struct bsd_sockaddr *)sin6, 0, RTF_RNH_LOCKED,
 		    rt->rt_fibnum);
 		if (rt2) {
 			if (((rt2->rt_flags & (RTF_HOST|RTF_GATEWAY)) == 0)
@@ -170,7 +172,7 @@ in6_addroute(void *v_arg, void *n_arg, struct radix_node_head *head,
 
 SYSCTL_DECL(_net_inet6_ip6);
 
-static VNET_DEFINE(int, rtq_toomany6) = 128;
+VNET_DEFINE(int, rtq_toomany6) = 128;
 	/* 128 cached routes is ``too many'' */
 #define	V_rtq_toomany6			VNET(rtq_toomany6)
 SYSCTL_VNET_INT(_net_inet6_ip6, IPV6CTL_RTMAXCACHE, rtmaxcache, CTLFLAG_RW,
@@ -200,7 +202,7 @@ static int
 in6_mtuexpire(struct radix_node *rn, void *rock)
 {
 	struct rtentry *rt = (struct rtentry *)rn;
-	struct mtuex_arg *ap = rock;
+	struct mtuex_arg *ap = (struct mtuex_arg *)rock;
 
 	/* sanity */
 	if (!rt)
@@ -267,13 +269,13 @@ in6_inithead(void **head, int off)
 {
 	struct radix_node_head *rnh;
 
-	if (!rn_inithead(head, offsetof(struct sockaddr_in6, sin6_addr) << 3))
+	if (!rn_inithead(head, offsetof(struct bsd_sockaddr_in6, sin6_addr) << 3))
 		return 0;		/* See above */
 
 	if (off == 0)		/* See above */
 		return 1;	/* only do the rest for the real thing */
 
-	rnh = *head;
+	rnh = (struct radix_node_head *) *head;
 	rnh->rnh_addaddr = in6_addroute;
 
 	if (V__in6_rt_was_here == 0) {
@@ -299,16 +301,16 @@ in6_detachhead(void **head, int off)
  * Extended API for IPv6 FIB support.
  */
 void
-in6_rtredirect(struct sockaddr *dst, struct sockaddr *gw, struct sockaddr *nm,
-    int flags, struct sockaddr *src, u_int fibnum)
+in6_rtredirect(struct bsd_sockaddr *dst, struct bsd_sockaddr *gw, struct bsd_sockaddr *nm,
+    int flags, struct bsd_sockaddr *src, u_int fibnum)
 {
 
 	rtredirect_fib(dst, gw, nm, flags, src, fibnum);
 }
 
 int
-in6_rtrequest(int req, struct sockaddr *dst, struct sockaddr *gw,
-    struct sockaddr *mask, int flags, struct rtentry **ret_nrt, u_int fibnum)
+in6_rtrequest(int req, struct bsd_sockaddr *dst, struct bsd_sockaddr *gw,
+    struct bsd_sockaddr *mask, int flags, struct rtentry **ret_nrt, u_int fibnum)
 {
 
 	return (rtrequest_fib(req, dst, gw, mask, flags, ret_nrt, fibnum));
@@ -329,7 +331,7 @@ in6_rtalloc_ign(struct route_in6 *ro, u_long ignflags, u_int fibnum)
 }
 
 struct rtentry *
-in6_rtalloc1(struct sockaddr *dst, int report, u_long ignflags, u_int fibnum)
+in6_rtalloc1(struct bsd_sockaddr *dst, int report, u_long ignflags, u_int fibnum)
 {
 
 	return (rtalloc1_fib(dst, report, ignflags, fibnum));
