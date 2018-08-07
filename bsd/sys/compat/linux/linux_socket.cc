@@ -40,12 +40,14 @@
 #include <bsd/uipc_syscalls.h>
 
 #include <bsd/sys/sys/limits.h>
+#include <bsd/sys/sys/malloc.h>
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/sys/socketvar.h>
 
 
 #include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_dl.h>
 #include <bsd/sys/netinet/in.h>
 #include <bsd/sys/netinet/in_systm.h>
 #include <bsd/sys/netinet/ip.h>
@@ -57,6 +59,7 @@
 
 #include <bsd/sys/compat/linux/linux.h>
 #include <bsd/sys/compat/linux/linux_socket.h>
+#include <bsd/sys/compat/linux/linux_netlink.h>
 
 #define __NEED_sa_family_t
 #include <bits/alltypes.h>
@@ -186,8 +189,8 @@ linux_getsockaddr(struct bsd_sockaddr **sap, const struct bsd_osockaddr *osa, in
 			     !IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr))) {
 				sin6->sin6_scope_id = 0;
 			} else {
-				log(LOG_DEBUG,
-				    "obsolete pre-RFC2553 bsd_sockaddr_in6 rejected\n");
+				bsd_log(LOG_DEBUG,
+					"obsolete pre-RFC2553 bsd_sockaddr_in6 rejected\n");
 				error = EINVAL;
 				goto out;
 			}
@@ -288,6 +291,26 @@ bsd_to_linux_domain(int domain)
 }
 
 static int
+bsd_to_linux_sockopt_level(int level)
+{
+	switch (level) {
+	case SOL_SOCKET:
+		return (LINUX_SOL_SOCKET);
+	}
+	return (level);
+}
+
+static int
+linux_to_bsd_sockopt_level(int level)
+{
+	switch (level) {
+	case LINUX_SOL_SOCKET:
+		return (SOL_SOCKET);
+	}
+	return (level);
+}
+
+static int
 linux_to_bsd_ip_sockopt(int opt)
 {
 
@@ -313,6 +336,106 @@ linux_to_bsd_ip_sockopt(int opt)
 	}
 	return (-1);
 }
+
+#ifdef INET6
+
+static int
+linux_to_bsd_ipv6_sockopt(int opt)
+{
+
+	switch (opt) {
+	case LINUX_IPV6_ADDRFORM:
+		return (IPV6_ADDRFORM);
+	case LINUX_IPV6_2292PKTINFO:
+		return (IPV6_2292PKTINFO);
+	case LINUX_IPV6_2292HOPOPTS:
+		return (IPV6_2292HOPOPTS);
+	case LINUX_IPV6_2292DSTOPTS:
+		return (IPV6_2292DSTOPTS);
+	case LINUX_IPV6_2292RTHDR:
+		return (IPV6_2292RTHDR);
+	case LINUX_IPV6_2292PKTOPTIONS:
+		return (IPV6_2292PKTOPTIONS);
+	case LINUX_IPV6_CHECKSUM:
+		return (IPV6_CHECKSUM);
+	case LINUX_IPV6_2292HOPLIMIT:
+		return (IPV6_2292HOPLIMIT);
+#ifdef LINUX_IPV6_RXSRCRT
+	case LINUX_IPV6_RXSRCRT:
+		return (IPV6_RXSRCRT);
+#endif
+	case LINUX_IPV6_NEXTHOP:
+		return (IPV6_NEXTHOP);
+	case LINUX_IPV6_AUTHHDR:
+		return (IPV6_AUTHHDR);
+	case LINUX_IPV6_UNICAST_HOPS:
+		return (IPV6_UNICAST_HOPS);
+	case LINUX_IPV6_MULTICAST_IF:
+		return (IPV6_MULTICAST_IF);
+	case LINUX_IPV6_MULTICAST_HOPS:
+		return (IPV6_MULTICAST_HOPS);
+	case LINUX_IPV6_MULTICAST_LOOP:
+		return (IPV6_MULTICAST_LOOP);
+	case LINUX_IPV6_JOIN_GROUP:
+		return (IPV6_JOIN_GROUP);
+	case LINUX_IPV6_LEAVE_GROUP:
+		return (IPV6_LEAVE_GROUP);
+	case LINUX_IPV6_ROUTER_ALERT:
+		return (IPV6_ROUTER_ALERT);
+	case LINUX_IPV6_MTU_DISCOVER:
+		return (IPV6_MTU_DISCOVER);
+	case LINUX_IPV6_MTU:
+		return (IPV6_MTU);
+	case LINUX_IPV6_RECVERR:
+		return (IPV6_RECVERR);
+	case LINUX_IPV6_V6ONLY:
+		return (IPV6_V6ONLY);
+	case LINUX_IPV6_JOIN_ANYCAST:
+		return (IPV6_JOIN_ANYCAST);
+	case LINUX_IPV6_LEAVE_ANYCAST:
+		return (IPV6_LEAVE_ANYCAST);
+	case LINUX_IPV6_IPSEC_POLICY:
+		return (IPV6_IPSEC_POLICY);
+	case LINUX_IPV6_XFRM_POLICY:
+		return (IPV6_XFRM_POLICY);
+	case LINUX_IPV6_RECVPKTINFO:
+		return (IPV6_RECVPKTINFO);
+	case LINUX_IPV6_PKTINFO:
+		return (IPV6_PKTINFO);
+	case LINUX_IPV6_RECVHOPLIMIT:
+		return (IPV6_RECVHOPLIMIT);
+	case LINUX_IPV6_HOPLIMIT:
+		return (IPV6_HOPLIMIT);
+	case LINUX_IPV6_RECVHOPOPTS:
+		return (IPV6_RECVHOPOPTS);
+	case LINUX_IPV6_HOPOPTS:
+		return (IPV6_HOPOPTS);
+	case LINUX_IPV6_RTHDRDSTOPTS:
+		return (IPV6_RTHDRDSTOPTS);
+	case LINUX_IPV6_RECVRTHDR:
+		return (IPV6_RECVRTHDR);
+	case LINUX_IPV6_RTHDR:
+		return (IPV6_RTHDR);
+	case LINUX_IPV6_RECVDSTOPTS:
+		return (IPV6_RECVDSTOPTS);
+	case LINUX_IPV6_DSTOPTS:
+		return (IPV6_DSTOPTS);
+	case LINUX_IPV6_RECVPATHMTU:
+		return (IPV6_RECVPATHMTU);
+	case LINUX_IPV6_PATHMTU:
+		return (IPV6_PATHMTU);
+	case LINUX_IPV6_DONTFRAG:
+		return (IPV6_DONTFRAG);
+	case LINUX_IPV6_RECVTCLASS:
+		return (IPV6_RECVTCLASS);
+	case LINUX_IPV6_TCLASS:
+		return (IPV6_TCLASS);
+	}
+	return (-1);
+}
+
+#endif // INET6
+
 
 static int
 linux_to_bsd_so_sockopt(int opt)
@@ -407,7 +530,7 @@ bsd_to_linux_sockaddr(struct bsd_sockaddr *sa)
 
 	u_short family = sa->sa_family;
 	*(u_short *)sa = family;
-	
+
 	return (0);
 }
 
@@ -438,47 +561,114 @@ linux_sa_put(struct bsd_osockaddr *osa)
 	return (0);
 }
 
+static int
+linux_to_bsd_cmsg_type(int cmsg_level, int cmsg_type)
+{
+	switch(cmsg_level) {
+	case LINUX_SOL_SOCKET:
+		switch (cmsg_type) {
 #if 0
-static int
-linux_to_bsd_cmsg_type(int cmsg_type)
-{
-
-	switch (cmsg_type) {
-	case LINUX_SCM_RIGHTS:
-		return (SCM_RIGHTS);
-	case LINUX_SCM_CREDENTIALS:
-		return (SCM_CREDS);
-	}
-	return (-1);
-}
-
-static int
-bsd_to_linux_cmsg_type(int cmsg_type)
-{
-
-	switch (cmsg_type) {
-	case SCM_RIGHTS:
-		return (LINUX_SCM_RIGHTS);
-	case SCM_CREDS:
-		return (LINUX_SCM_CREDENTIALS);
-	}
-	return (-1);
-}
-
+		case LINUX_SCM_RIGHTS:
+			return (SCM_RIGHTS);
+		case LINUX_SCM_CREDENTIALS:
+			return (SCM_CREDS);
 #endif
+		case LINUX_SCM_TIMESTAMP:
+			return (SCM_TIMESTAMP);
+		}
+		break;
+	case IPPROTO_IP:
+		switch (cmsg_type) {
+		case IP_PKTINFO:
+			return cmsg_type;
+		}
+		break;
+#ifdef INET6
+	case IPPROTO_IPV6:
+		switch (cmsg_type) {
+		case IPV6_PKTINFO:
+			return cmsg_type;
+		}
+		break;
+#endif
+	}
+	return (-1);
+}
 
 static int
-linux_to_bsd_msghdr(struct msghdr *hdr)
+bsd_to_linux_cmsg_type(int cmsg_level, int cmsg_type)
 {
-	/* Ignore msg_control in OSv */
-	hdr->msg_control = NULL;
-	hdr->msg_flags = linux_to_bsd_msg_flags(hdr->msg_flags);
+
+	switch (cmsg_level) {
+	case SOL_SOCKET:
+		switch (cmsg_type) {
+#if 0
+		case SCM_RIGHTS:
+			return (LINUX_SCM_RIGHTS);
+		case SCM_CREDS:
+			return (LINUX_SCM_CREDENTIALS);
+#endif
+		case SCM_TIMESTAMP:
+			return (LINUX_SCM_TIMESTAMP);
+		}
+		break;
+	case IPPROTO_IP:
+		switch (cmsg_type) {
+		case IP_RECVIF:
+		case IP_RECVDSTADDR:
+			// IP_RECVIF and IP_RECVDSTADDR get combined into IP_PKTINFO
+			return IP_PKTINFO;
+		case IP_PKTINFO:
+			return cmsg_type;
+		}
+		break;
+#ifdef INET6
+	case IPPROTO_IPV6:
+		switch (cmsg_type) {
+		case IPV6_PKTINFO:
+			return cmsg_type;
+		}
+		break;
+#endif
+	}
+
+	return (-1);
+}
+
+static int
+linux_to_bsd_msghdr(struct msghdr *bhdr, const struct l_msghdr *lhdr)
+{
+	if (lhdr->msg_controllen > INT_MAX)
+		return (ENOBUFS);
+
+	bhdr->msg_name		= (void *)lhdr->msg_name;
+	bhdr->msg_namelen = lhdr->msg_namelen;
+	bhdr->msg_iov			= (iovec *)lhdr->msg_iov;
+	bhdr->msg_iovlen	= lhdr->msg_iovlen;
+	bhdr->msg_control = (void *)lhdr->msg_control;
+
+	/*
+	 * msg_controllen is skipped since BSD and LINUX control messages
+	 * are potentially different sizes (e.g. the cred structure used
+	 * by SCM_CREDS is different between the two operating system).
+	 *
+	 * The caller can set it (if necessary) after converting all the
+	 * control messages.
+	 */
+
+	bhdr->msg_flags = linux_to_bsd_msg_flags(lhdr->msg_flags);
 	return (0);
 }
 
 static int
-bsd_to_linux_msghdr(const struct msghdr *hdr)
+bsd_to_linux_msghdr(const struct msghdr *bhdr, struct l_msghdr *lhdr)
 {
+	lhdr->msg_name		= (l_uintptr_t)bhdr->msg_name;
+	lhdr->msg_namelen = bhdr->msg_namelen;
+	lhdr->msg_iov			= (l_uintptr_t)bhdr->msg_iov;
+	lhdr->msg_iovlen	= bhdr->msg_iovlen;
+	lhdr->msg_control = (l_uintptr_t)bhdr->msg_control;
+
 	/*
 	 * msg_controllen is skipped since BSD and LINUX control messages
 	 * are potentially different sizes (e.g. the cred structure used
@@ -519,8 +709,11 @@ linux_sendit(int s, struct msghdr *mp, int flags,
 
 	if (mp->msg_name != NULL) {
 		error = linux_getsockaddr(&to, (const bsd_osockaddr*)mp->msg_name, mp->msg_namelen);
-		if (error)
+		if (error) {
+			if (control)
+				m_freem(control);
 			return (error);
+		}
 		mp->msg_name = to;
 	} else
 		to = NULL;
@@ -637,13 +830,13 @@ linux_socket(int domain, int type, int protocol, int *out_fd)
 	 * For simplicity we do this unconditionally of the net.inet6.ip6.v6only
 	 * sysctl value.
 	 */
-	if (bsd_args.domain == PF_INET6) {
+	if (domain == PF_INET6) {
 		int v6only;
 
 		v6only = 0;
 		/* We ignore any error returned by setsockopt() */
-		kern_setsockopt(td, td->td_retval[0], IPPROTO_IPV6, IPV6_V6ONLY,
-		    &v6only, UIO_SYSSPACE, sizeof(v6only));
+		kern_setsockopt(s, IPPROTO_IPV6, IPV6_V6ONLY,
+		    &v6only, sizeof(v6only));
 	}
 #endif
 
@@ -897,7 +1090,7 @@ linux_recvfrom(int s, void* buf, size_t len, int flags,
 	error = sys_recvfrom(s, (caddr_t)buf, len, bsd_flags, from,
 		fromlen, bytes);
 	bsd_to_linux_sockaddr(from);
-	
+
 	if (error)
 		return (error);
 	if (from) {
@@ -909,18 +1102,20 @@ linux_recvfrom(int s, void* buf, size_t len, int flags,
 }
 
 int
-linux_sendmsg(int s, struct msghdr* msg, int flags, ssize_t* bytes)
+linux_sendmsg(int s, struct l_msghdr* linux_msg, int flags, ssize_t* bytes)
 {
 #if 0
-	struct cmsghdr *cmsg;
-	struct mbuf *control;
-	struct iovec *iov;
-	socklen_t datalen;
-	struct bsd_sockaddr *sa;
 	sa_family_t sa_family;
-	void *data;
+	struct bsd_sockaddr *sa;
+	struct iovec *iov;
 #endif
+	struct l_cmsghdr *linux_cmsg;
+	struct cmsghdr *cmsg;
+	struct mbuf *control = 0;
+	socklen_t datalen;
+	void *data;
 
+	struct msghdr msg;
 	int error;
 
 	/*
@@ -930,106 +1125,128 @@ linux_sendmsg(int s, struct msghdr* msg, int flags, ssize_t* bytes)
 	 * order to handle this case.  This should be checked, but allows the
 	 * Linux ping to work.
 	 */
-	if (msg->msg_control != NULL && msg->msg_controllen == 0)
-		msg->msg_control = NULL;
 
-	/* FIXME: Translate msg control */
-	assert(msg->msg_control == NULL);
+	if (linux_msg->msg_control != NULL && linux_msg->msg_controllen == 0)
+		linux_msg->msg_control = NULL;
 
-	error = linux_to_bsd_msghdr(msg);
+	error = linux_to_bsd_msghdr(&msg, linux_msg);
 	if (error)
 		return (error);
 
-	/* FIXME: OSv - cmsgs translation is done credentials and rights,
-	   we ignore those in OSv. */
+	/* Linux to BSD cmsgs translation */
+	if ((linux_cmsg = LINUX_CMSG_FIRSTHDR(linux_msg)) != NULL) {
+		uint8_t cmsg_buf[CMSG_HDRSZ];
+
 #if 0
-	if ((ptr_cmsg = LINUX_CMSG_FIRSTHDR(&linux_msg)) != NULL) {
+		// TODO: This causes unnecessary malloc/free
+		//       Does this really need to be done?
 		error = kern_getsockname(td, args->s, &sa, &datalen);
 		if (error)
 			goto bad;
 		sa_family = sa->sa_family;
-		free(sa, M_SONAME);
+		free(sa);
+#endif
 
+		cmsg = (struct cmsghdr*) cmsg_buf;
 		error = ENOBUFS;
-		cmsg = malloc(CMSG_HDRSZ, M_TEMP, M_WAITOK | M_ZERO);
 		control = m_get(M_WAIT, MT_CONTROL);
 		if (control == NULL)
 			goto bad;
 
 		do {
-			error = copyin(ptr_cmsg, &linux_cmsg,
-			    sizeof(struct l_cmsghdr));
-			if (error)
-				goto bad;
-
 			error = EINVAL;
-			if (linux_cmsg.cmsg_len < sizeof(struct l_cmsghdr))
+			if (linux_cmsg->cmsg_len < sizeof(struct l_cmsghdr))
 				goto bad;
 
-			/*
-			 * Now we support only SCM_RIGHTS and SCM_CRED,
-			 * so return EINVAL in any other cmsg_type
-			 */
 			cmsg->cmsg_type =
-			    linux_to_bsd_cmsg_type(linux_cmsg.cmsg_type);
+				linux_to_bsd_cmsg_type(linux_cmsg->cmsg_level, linux_cmsg->cmsg_type);
 			cmsg->cmsg_level =
-			    linux_cmsg.cmsg_level;
-			if (cmsg->cmsg_type linux_sendmsg== -1
-			    || cmsg->cmsg_level != SOL_SOCKET)
+				linux_to_bsd_sockopt_level(linux_cmsg->cmsg_level);
+			if (cmsg->cmsg_type == -1)
 				goto bad;
 
-			/*
-			 * Some applications (e.g. pulseaudio) attempt to
-			 * send ancillary data even if the underlying protocol
-			 * doesn't support it which is not allowed in the
-			 * FreeBSD system call interface.
-			 */
-			if (sa_family != AF_UNIX)
-				continue;
+			data = LINUX_CMSG_DATA(linux_cmsg);
+			datalen = linux_cmsg->cmsg_len - L_CMSG_HDRSZ;
 
-			data = LINUX_CMSG_DATA(ptr_cmsg);
-			datalen = linux_cmsg.cmsg_len - L_CMSG_HDRSZ;
-
-			switch (cmsg->cmsg_type)
-			{
-			case SCM_RIGHTS:
-				break;
-
-			case SCM_CREDS:
-				data = &cmcred;
-				datalen = sizeof(cmcred);
-
+			if (cmsg->cmsg_level == SOL_SOCKET) {
+#if 0
 				/*
-				 * The lower levels will fill in the structure
+				 * Some applications (e.g. pulseaudio) attempt to
+				 * send ancillary data even if the underlying protocol
+				 * doesn't support it which is not allowed in the
+				 * FreeBSD system call interface.
 				 */
-				bzero(data, datalen);
-				break;
+				if (sa_family != AF_UNIX)
+					continue;
+
+				switch (cmsg->cmsg_type) {
+				case SCM_RIGHTS:
+					break;
+
+				case SCM_CREDS:
+					data = &cmcred;
+					datalen = sizeof(cmcred);
+
+					/*
+					 * The lower levels will fill in the structure
+					 */
+					bzero(data, datalen);
+					break;
+				default:
+					goto bad;
+				}
+#else
+				goto bad;
+#endif
+			}
+			else if (cmsg->cmsg_level == IPPROTO_IP) {
+				switch(cmsg->cmsg_type) {
+				case IP_PKTINFO:
+					break;
+				default:
+					goto bad;
+				}
+			}
+#ifdef INET6
+			else if (cmsg->cmsg_level == IPPROTO_IPV6) {
+				switch(cmsg->cmsg_type) {
+				case IPV6_PKTINFO:
+					break;
+				default:
+					goto bad;
+				}
+			}
+#endif /* INET6 */
+			else {
+				goto bad;
 			}
 
 			cmsg->cmsg_len = CMSG_LEN(datalen);
 
 			error = ENOBUFS;
-			if (!m_append(control, CMSG_HDRSZ, (c_caddr_t)cmsg))
+			if (!m_append(control, CMSG_HDRSZ, (c_caddr_t)cmsg) ||
+			    !m_append(control, datalen, (c_caddr_t)data)) {
 				goto bad;
-			if (!m_append(control, datalen, (c_caddr_t)data))
-				goto bad;
-		} while ((ptr_cmsg = LINUX_CMSG_NXTHDR(&linux_msg, ptr_cmsg)));
+			}
+
+		} while ((linux_cmsg = LINUX_CMSG_NXTHDR(linux_msg, linux_cmsg)));
 
 		if (m_length(control, NULL) == 0) {
 			m_freem(control);
 			control = NULL;
 		}
 	}
-#endif
 
-	error = linux_sendit(s, msg, flags, NULL, bytes);
-
-#if 0
+	error = linux_sendit(s, &msg, flags, control, bytes);
+	control = NULL; /* transfered ownership of control mbuf */
 bad:
+#if 0
 	free(iov);
 	if (cmsg)
 		free(cmsg);
 #endif
+	if (control)
+		m_freem(control);
 	return (error);
 }
 
@@ -1039,156 +1256,241 @@ struct linux_recvmsg_args {
 	int flags;
 };
 
-/* FIXME: OSv - flags are ignored, the flags
- * inside the msghdr are used instead */
 int
-linux_recvmsg(int s, struct msghdr *msg, int flags, ssize_t* bytes)
+linux_recvmsg_append_cmsg(caddr_t buf, socklen_t buflen,
+						  struct l_cmsghdr *linux_cmsg, caddr_t data, socklen_t datalen)
 {
-#if 0
+	int error;
+	caddr_t dst = buf;
+
+	if (LINUX_CMSG_LEN(datalen) > buflen)
+		return EMSGSIZE;
+
+	error = copyout(linux_cmsg, dst, L_CMSG_HDRSZ);
+	if (error)
+		return error;
+	dst += L_CMSG_HDRSZ;
+
+	error = copyout(data, dst, datalen);
+	if (error)
+		return error; 
+
+	return 0;
+}
+
+int
+linux_recvmsg(int s, struct l_msghdr *linux_msg, int flags, ssize_t* bytes)
+{
+	struct cmsghdr *cm;
+	struct msghdr msg;
 	socklen_t datalen, outlen;
 	struct mbuf *control = NULL;
-	struct mbuf **controlp;
+	struct mbuf **controlp = NULL;
 	caddr_t outbuf;
 	void *data;
-	int error, i, fd, fds, *fdp;
-#endif
 	int error;
-	error = linux_to_bsd_msghdr(msg);
+
+	error = linux_to_bsd_msghdr(&msg, linux_msg);
 	if (error)
 		return (error);
 
-	if (msg->msg_name) {
-		error = linux_to_bsd_sockaddr((struct bsd_sockaddr *)msg->msg_name,
-		    msg->msg_namelen);
+	/*
+	 * Set msg_flags from flags parameter like sys_recvmsg() for standard behavior.
+	 * msg_flags in msghdr passed to kern_recvit() are used as in/out.
+	 * msg_flags in msghdr passed to recvmsg() are used for out only and the
+	 * flags paramter is used for in.
+	 *
+	 */
+	msg.msg_flags = linux_to_bsd_msg_flags(flags);
+
+	if (msg.msg_name) {
+		error = linux_to_bsd_sockaddr((struct bsd_sockaddr *)msg.msg_name,
+			msg.msg_namelen);
 		if (error)
 			goto bad;
 	}
 
-	assert(msg->msg_control == NULL);
-
-	error = kern_recvit(s, msg, NULL, bytes);
+	controlp = (msg.msg_control != NULL) ? &control : NULL;
+	error = kern_recvit(s, &msg, controlp, bytes);
 	if (error)
 		goto bad;
 
-	error = bsd_to_linux_msghdr(msg);
+	error = bsd_to_linux_msghdr(&msg, linux_msg);
 	if (error)
 		goto bad;
 
-	if (msg->msg_name) {
-		error = bsd_to_linux_sockaddr((struct bsd_sockaddr *)msg->msg_name);
+	if (linux_msg->msg_name) {
+		error = bsd_to_linux_sockaddr((struct bsd_sockaddr *)linux_msg->msg_name);
 		if (error)
 			goto bad;
 	}
-	if (msg->msg_name && msg->msg_namelen > 2) {
-		error = linux_sa_put((bsd_osockaddr*)msg->msg_name);
+	if (linux_msg->msg_name && linux_msg->msg_namelen > 2) {
+		error = linux_sa_put((bsd_osockaddr*)linux_msg->msg_name);
 		if (error)
 			goto bad;
 	}
 
-	assert(msg->msg_controllen == 0);
-	assert(msg->msg_control == NULL);
+	outbuf = (caddr_t)(linux_msg->msg_control);
+	outlen = 0;
 
+	if (control && outbuf) {
+		struct mbuf *c_mb;
+		uint8_t cmsg_buf[L_CMSG_HDRSZ];
+		struct l_cmsghdr *linux_cmsg = (struct l_cmsghdr *)cmsg_buf;
+		struct in_addr *ipv4_recv_addr = NULL;
+		struct bsd_sockaddr_dl *recv_addr_dl = NULL;
+		struct timeval *ftmvl;
+		l_timeval ltmvl;
+
+		for (c_mb = control; c_mb; c_mb = c_mb->m_hdr.mh_next) {
+
+			msg.msg_control = mtod(c_mb, struct cmsghdr *);
+			msg.msg_controllen = c_mb->m_hdr.mh_len;
+
+			cm = CMSG_FIRSTHDR(&msg);
+
+			while (cm != NULL) {
+				linux_cmsg->cmsg_type =
+					bsd_to_linux_cmsg_type(cm->cmsg_level, cm->cmsg_type);
+				linux_cmsg->cmsg_level =
+					bsd_to_linux_sockopt_level(cm->cmsg_level);
+				if (linux_cmsg->cmsg_type == -1) {
+					error = EINVAL;
+					goto bad;
+				}
+
+				data = CMSG_DATA(cm);
+				datalen = (caddr_t)cm + cm->cmsg_len - (caddr_t)data;
+
+				if (cm->cmsg_level == SOL_SOCKET) {
+					switch (cm->cmsg_type) {
 #if 0
-	if (control) {
-		linux_cmsg = malloc(L_CMSG_HDRSZ, M_TEMP, M_WAITOK | M_ZERO);
+					case SCM_RIGHTS:
+						if (args->flags & LINUX_MSG_CMSG_CLOEXEC) {
+							fds = datalen / sizeof(int);
+							fdp = data;
+							for (i = 0; i < fds; i++) {
+								fd = *fdp++;
+								(void)kern_fcntl(td, fd,
+												 F_SETFD, FD_CLOEXEC);
+							}
+						}
+						break;
 
-		msg.msg_control = mtod(control, struct cmsghdr *);
-		msg.msg_controllen = control->m_hdr.mh_len;
-
-		cm = CMSG_FIRSTHDR(&msg);
-
-		while (cm != NULL) {
-			linux_cmsg->cmsg_type =
-			    bsd_to_linux_cmsg_type(cm->cmsg_type);
-			linux_cmsg->cmsg_level =
-			    bsd_to_linux_sockopt_level(cm->cmsg_level);
-			if (linux_cmsg->cmsg_type == -1
-			    || cm->cmsg_level != SOL_SOCKET)
-			{
-				error = EINVAL;
-				goto bad;
-			}
-
-			data = CMSG_DATA(cm);
-			datalen = (caddr_t)cm + cm->cmsg_len - (caddr_t)data;
-
-			switch (cm->cmsg_type)
-			{
-			case SCM_RIGHTS:
-				if (args->flags & LINUX_MSG_CMSG_CLOEXEC) {
-					fds = datalen / sizeof(int);
-					fdp = data;
-					for (i = 0; i < fds; i++) {
-						fd = *fdp++;
-						(void)kern_fcntl(td, fd,
-						    F_SETFD, FD_CLOEXEC);
+					case SCM_CREDS:
+						/*
+						 * Currently LOCAL_CREDS is never in
+						 * effect for Linux so no need to worry
+						 * about sockcred
+						 */
+						if (datalen != sizeof(*cmcred)) {
+							error = EMSGSIZE;
+							goto bad;
+						}
+						cmcred = (struct cmsgcred *)data;
+						bzero(&linux_ucred, sizeof(linux_ucred));
+						linux_ucred.pid = cmcred->cmcred_pid;
+						linux_ucred.uid = cmcred->cmcred_uid;
+						linux_ucred.gid = cmcred->cmcred_gid;
+						data = &linux_ucred;
+						datalen = sizeof(linux_ucred);
+						break;
+#endif
+					case SCM_TIMESTAMP:
+						if (datalen != sizeof(struct timeval)) {
+							error = EMSGSIZE;
+							goto bad;
+						}
+						ftmvl = (struct timeval *)data;
+						ltmvl.tv_sec = ftmvl->tv_sec;
+						ltmvl.tv_usec = ftmvl->tv_usec;
+						data = &ltmvl;
+						datalen = sizeof(ltmvl);
+						break;
+					default:
+						error = EINVAL;
+						goto bad;
 					}
 				}
-				break;
-
-			case SCM_CREDS:
-				/*
-				 * Currently LOCAL_CREDS is never in
-				 * effect for Linux so no need to worry
-				 * about sockcred
-				 */
-				if (datalen != sizeof(*cmcred)) {
-					error = EMSGSIZE;
+				else if (cm->cmsg_level == IPPROTO_IP) {
+					switch (cm->cmsg_type) {
+					case IP_RECVIF:
+						recv_addr_dl = (struct bsd_sockaddr_dl *) data;
+						goto next;
+					case IP_RECVDSTADDR:
+						ipv4_recv_addr = (struct in_addr *) data;
+						goto next;
+					default:
+						error = EINVAL;
+						goto bad;
+					}
+				}
+#ifdef INET6
+				else if (cm->cmsg_level == IPPROTO_IPV6) {
+					switch (cm->cmsg_type) {
+					case IPV6_PKTINFO:
+						break;
+					default:
+						error = EINVAL;
+						goto bad;
+					}
+				}
+#endif
+				else {
+					error = EINVAL;
 					goto bad;
 				}
-				cmcred = (struct cmsgcred *)data;
-				bzero(&linux_ucred, sizeof(linux_ucred));
-				linux_ucred.pid = cmcred->cmcred_pid;
-				linux_ucred.uid = cmcred->cmcred_uid;
-				linux_ucred.gid = cmcred->cmcred_gid;
-				data = &linux_ucred;
-				datalen = sizeof(linux_ucred);
-				break;
-			}
 
-			if (outlen + LINUX_CMSG_LEN(datalen) >
-			    linux_msg.msg_controllen) {
-				if (outlen == 0) {
-					error = EMSGSIZE;
+				linux_cmsg->cmsg_len = LINUX_CMSG_LEN(datalen);
+				error = linux_recvmsg_append_cmsg(outbuf, linux_msg->msg_controllen - outlen,
+								  linux_cmsg, (caddr_t)data, datalen);
+				if (error) {
+					if (outlen) {
+						linux_msg->msg_flags |= LINUX_MSG_CTRUNC;
+						error = 0;
+						goto out;
+					}
 					goto bad;
-				} else {
-					linux_msg.msg_flags |=
-					    LINUX_MSG_CTRUNC;
+				}
+				outbuf += LINUX_CMSG_ALIGN(datalen);
+				outlen += LINUX_CMSG_LEN(datalen);
+
+next:
+				cm = CMSG_NXTHDR(&msg, cm);
+			}
+		}
+
+		/* FreeBSD doesn't support IP_PKTINFO so build from IP_RECVIF and IP_RECVDSTADDR */
+		if (recv_addr_dl && ipv4_recv_addr) {
+			struct l_in_pktinfo pktinfo;
+			pktinfo.ipi_ifindex = recv_addr_dl->sdl_index;
+			pktinfo.ipi_spec_dst.s_addr = 0;
+			pktinfo.ipi_addr.s_addr = ipv4_recv_addr->s_addr;
+			datalen = sizeof(pktinfo);
+
+			linux_cmsg->cmsg_type = LINUX_IP_PKTINFO;
+			linux_cmsg->cmsg_len = LINUX_CMSG_LEN(datalen);
+			error = linux_recvmsg_append_cmsg(outbuf, linux_msg->msg_controllen - outlen,
+							  linux_cmsg, (caddr_t)&pktinfo, datalen);
+			if (error) {
+				if (outlen) {
+					linux_msg->msg_flags |= LINUX_MSG_CTRUNC;
+					error = 0;
 					goto out;
 				}
+				goto bad;
 			}
-
-			linux_cmsg->cmsg_len = LINUX_CMSG_LEN(datalen);
-
-			error = copyout(linux_cmsg, outbuf, L_CMSG_HDRSZ);
-			if (error)
-				goto bad;
-			outbuf += L_CMSG_HDRSZ;
-
-			error = copyout(data, outbuf, datalen);
-			if (error)
-				goto bad;
-
 			outbuf += LINUX_CMSG_ALIGN(datalen);
 			outlen += LINUX_CMSG_LEN(datalen);
-
-			cm = CMSG_NXTHDR(&msg, cm);
 		}
 	}
 
 out:
-	linux_msg.msg_controllen = outlen;
-	error = copyout(&linux_msg, PTRIN(args->msg), sizeof(linux_msg));
+	linux_msg->msg_controllen = outlen;
 
 bad:
-	free(iov);
 	if (control != NULL)
 		m_freem(control);
-	if (linux_cmsg != NULL)
-		free(linux_cmsg);
-#endif
-
-bad:
 
 	return (error);
 }
@@ -1224,6 +1526,35 @@ int linux_to_bsd_tcp_sockopt(int name)
 }
 
 int
+linux_setsockopt_ip_pktinfo(int s, caddr_t val, int valsize)
+{
+	int error;
+
+	if ((error = sys_setsockopt(s, IPPROTO_IP, IP_RECVIF, val, valsize)))
+		return error;
+	return sys_setsockopt(s, IPPROTO_IP, IP_RECVDSTADDR, val, valsize);
+}
+
+int
+linux_getsockopt_ip_pktinfo(int s, void *val, socklen_t *valsize)
+{
+	int error;
+	int if_enable = 0, addr_enable = 0;
+	socklen_t optsize = sizeof(addr_enable);
+
+	if (*valsize < sizeof(addr_enable)) {
+		errno = EINVAL;
+		return -1;
+	}
+	if ((error = sys_getsockopt(s, IPPROTO_IP, IP_RECVIF, &if_enable, &optsize)))
+		return error;
+	if ((error = sys_getsockopt(s, IPPROTO_IP, IP_RECVDSTADDR, &addr_enable, &optsize)))
+		return error;
+	*(int *) val = (if_enable && addr_enable);
+	return 0;
+}
+
+int
 linux_setsockopt(int s, int level, int name, caddr_t val, int valsize)
 {
 	int error;
@@ -1233,8 +1564,16 @@ linux_setsockopt(int s, int level, int name, caddr_t val, int valsize)
 		name = linux_to_bsd_so_sockopt(name);
 		break;
 	case IPPROTO_IP:
+		if (name == LINUX_IP_PKTINFO) {
+			return linux_setsockopt_ip_pktinfo(s, val, valsize);
+		}
 		name = linux_to_bsd_ip_sockopt(name);
 		break;
+#ifdef INET6
+	case IPPROTO_IPV6:
+		name = linux_to_bsd_ipv6_sockopt(name);
+		break;
+#endif
 	case IPPROTO_TCP:
 		name = linux_to_bsd_tcp_sockopt(name);
 		break;
@@ -1269,8 +1608,16 @@ linux_getsockopt(int s, int level, int name, void *val, socklen_t *valsize)
 		name = linux_to_bsd_so_sockopt(name);
 		break;
 	case IPPROTO_IP:
+		if (name == LINUX_IP_PKTINFO) {
+			return linux_getsockopt_ip_pktinfo(s, val, valsize);
+		}
 		name = linux_to_bsd_ip_sockopt(name);
 		break;
+#ifdef INET6
+	case IPPROTO_IPV6:
+		name = linux_to_bsd_ipv6_sockopt(name);
+		break;
+#endif
 	case IPPROTO_TCP:
 		name = linux_to_bsd_tcp_sockopt(name);
 		break;

@@ -190,7 +190,7 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
 }
 
 extern "C"
-ssize_t recvmsg(int fd, struct msghdr *msg, int flags)
+ssize_t recvmsg(int fd, struct l_msghdr *msg, int flags)
 {
 	ssize_t bytes;
 	int error;
@@ -246,14 +246,14 @@ ssize_t send(int fd, const void *buf, size_t len, int flags)
 }
 
 extern "C"
-ssize_t sendmsg(int fd, const struct msghdr *msg, int flags)
+ssize_t sendmsg(int fd, const struct l_msghdr *msg, int flags)
 {
 	ssize_t bytes;
 	int error;
 
 	sock_d("sendmsg(fd=%d, msg=..., flags=0x%x)", fd, flags)
 
-	error = linux_sendmsg(fd, (struct msghdr *)msg, flags, &bytes);
+	error = linux_sendmsg(fd, (struct l_msghdr *)msg, flags, &bytes);
 	if (error) {
 		sock_d("sendmsg() failed, errno=%d", error);
 		errno = error;

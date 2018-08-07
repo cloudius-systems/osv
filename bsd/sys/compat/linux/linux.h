@@ -57,7 +57,8 @@ typedef l_longlong	l_loff_t;
 typedef l_ushort	l_mode_t;
 typedef l_long		l_off_t;
 typedef l_int		l_pid_t;
-typedef l_uint		l_size_t;
+typedef l_ulong		l_size_t;
+typedef l_long		l_ssize_t;
 typedef l_long		l_suseconds_t;
 typedef l_long		l_time_t;
 typedef l_uint		l_uid_t;
@@ -75,6 +76,8 @@ typedef struct {
 } l_timeval;
 
 #define	l_fd_set	fd_set
+
+#define LINUX_SOL_SOCKET	1
 
 #define	LINUX_SO_DEBUG		1
 #define	LINUX_SO_REUSEADDR	2
@@ -108,12 +111,6 @@ struct l_sockaddr {
 	char		sa_data[14];
 } __packed;
 
-struct l_cmsghdr {
-	l_size_t	cmsg_len;
-	l_int		cmsg_level;
-	l_int		cmsg_type;
-};
-
 struct l_ifmap {
 	l_ulong		mem_start;
 	l_ulong		mem_end;
@@ -142,6 +139,7 @@ struct l_ifreq {
 		l_int		ifru_mtu;
 		struct l_ifmap	ifru_map;
 		char		ifru_slave[LINUX_IFNAMSIZ];
+                char            ifru_newname[LINUX_IFNAMSIZ];
 		l_uintptr_t	ifru_data;
 	} ifr_ifru;
 } __packed;
