@@ -23,6 +23,7 @@
 #include <bsd/sys/netinet/cc.h>
 #include <bsd/sys/net/ethernet.h>
 #include <bsd/sys/net/route.h>
+#include <bsd/sys/compat/linux/linux_netlink.h>
 
 /* Generation of ip ids */
 void ip_initid(void);
@@ -32,6 +33,8 @@ extern "C" {
     extern  struct domain inetdomain;
     /* AF_ROUTE */
     extern  struct domain routedomain;
+    /* AF_NETLINK */
+    extern  struct domain netlinkdomain;
 }
 
 void net_init(void)
@@ -53,9 +56,11 @@ void net_init(void)
     domaininit(NULL);
     OSV_DOMAIN_SET(inet);
     OSV_DOMAIN_SET(route);
+    OSV_DOMAIN_SET(netlink);
     rts_init();
     route_init();
     vnet_route_init();
+    netlink_init();
     ipport_tick_init(NULL);
     arp_init();
     domainfinalize(NULL);
