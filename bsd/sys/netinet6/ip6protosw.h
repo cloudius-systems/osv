@@ -71,7 +71,7 @@
  */
 
 struct mbuf;
-struct sockaddr;
+struct bsd_sockaddr;
 struct socket;
 struct domain;
 struct thread;
@@ -103,8 +103,8 @@ struct ip6ctlparam {
 	struct icmp6_hdr *ip6c_icmp6;	/* icmp6 header of target packet */
 	struct ip6_hdr *ip6c_ip6;	/* ip6 header of target packet */
 	int ip6c_off;			/* offset of the target proto header */
-	struct sockaddr_in6 *ip6c_src;	/* srcaddr w/ additional info */
-	struct sockaddr_in6 *ip6c_dst;	/* (final) dstaddr w/ additional info */
+	struct bsd_sockaddr_in6 *ip6c_src;	/* srcaddr w/ additional info */
+	struct bsd_sockaddr_in6 *ip6c_dst;	/* (final) dstaddr w/ additional info */
 	struct in6_addr *ip6c_finaldst;	/* final destination address */
 	void *ip6c_cmdarg;		/* control command dependent data */
 	u_int8_t ip6c_nxt;		/* final next header field */
@@ -122,7 +122,7 @@ struct ip6protosw {
 	int	(*pr_output)		/* output to protocol (from above) */
 			(struct mbuf *, ...);
 	void	(*pr_ctlinput)		/* control input (from below) */
-			(int, struct sockaddr *, void *);
+			(int, struct bsd_sockaddr *, void *);
 	int	(*pr_ctloutput)		/* control output (from above) */
 			(struct socket *, struct sockopt *);
 

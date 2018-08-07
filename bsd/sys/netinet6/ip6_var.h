@@ -127,7 +127,7 @@ struct	ip6po_rhinfo {
 
 /* Nexthop related info */
 struct	ip6po_nhinfo {
-	struct	sockaddr *ip6po_nhi_nexthop;
+	struct	bsd_sockaddr *ip6po_nhi_nexthop;
 	struct	route_in6 ip6po_nhi_route; /* Route to the nexthop */
 };
 #define ip6po_nexthop	ip6po_nhinfo.ip6po_nhi_nexthop
@@ -402,13 +402,12 @@ int	ip6_process_hopopts(struct mbuf *, u_int8_t *, int, u_int32_t *,
 struct mbuf	**ip6_savecontrol_v4(struct inpcb *, struct mbuf *,
 	    struct mbuf **, int *);
 void	ip6_savecontrol(struct inpcb *, struct mbuf *, struct mbuf **);
-void	ip6_notify_pmtu(struct inpcb *, struct sockaddr_in6 *,
-			     u_int32_t *);
+void	ip6_notify_pmtu(struct inpcb *, struct bsd_sockaddr_in6 *, u_int32_t *);
 int	ip6_sysctl(int *, u_int, void *, size_t *, void *, size_t);
 
 void	ip6_forward(struct mbuf *, int);
 
-void	ip6_mloopback(struct ifnet *, struct mbuf *, struct sockaddr_in6 *);
+void	ip6_mloopback(struct ifnet *, struct mbuf *, struct bsd_sockaddr_in6 *);
 int	ip6_output(struct mbuf *, struct ip6_pktopts *,
 			struct route_in6 *,
 			int,
@@ -432,7 +431,7 @@ void	frag6_drain(void);
 
 void	rip6_init(void);
 int	rip6_input(struct mbuf **, int *, int);
-void	rip6_ctlinput(int, struct sockaddr *, void *);
+void	rip6_ctlinput(int, struct bsd_sockaddr *, void *);
 int	rip6_ctloutput(struct socket *, struct sockopt *);
 int	rip6_output(struct mbuf *, ...);
 int	rip6_usrreq(struct socket *,
@@ -441,13 +440,13 @@ int	rip6_usrreq(struct socket *,
 int	dest6_input(struct mbuf **, int *, int);
 int	none_input(struct mbuf **, int *, int);
 
-int	in6_selectsrc(struct sockaddr_in6 *, struct ip6_pktopts *,
+int	in6_selectsrc(struct bsd_sockaddr_in6 *, struct ip6_pktopts *,
 	struct inpcb *inp, struct route_in6 *, struct ucred *cred,
 	struct ifnet **, struct in6_addr *);
-int in6_selectroute(struct sockaddr_in6 *, struct ip6_pktopts *,
+int in6_selectroute(struct bsd_sockaddr_in6 *, struct ip6_pktopts *,
 	struct ip6_moptions *, struct route_in6 *, struct ifnet **,
 	struct rtentry **);
-int	in6_selectroute_fib(struct sockaddr_in6 *, struct ip6_pktopts *,
+int	in6_selectroute_fib(struct bsd_sockaddr_in6 *, struct ip6_pktopts *,
 	    struct ip6_moptions *, struct route_in6 *, struct ifnet **,
 	    struct rtentry **, u_int);
 u_int32_t ip6_randomid(void);

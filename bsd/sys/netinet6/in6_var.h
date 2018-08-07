@@ -64,7 +64,8 @@
 #ifndef _NETINET6_IN6_VAR_H_
 #define _NETINET6_IN6_VAR_H_
 
-#include <sys/tree.h>
+#include <bsd/sys/netinet6/in6.h>
+#include <bsd/sys/tree.h>
 
 #ifdef _KERNEL
 #include <sys/libkern.h>
@@ -109,13 +110,13 @@ struct in6_ifextra {
 #define	LLTABLE6(ifp)	(((struct in6_ifextra *)(ifp)->if_afdata[AF_INET6])->lltable)
 
 struct	in6_ifaddr {
-	struct	ifaddr ia_ifa;		/* protocol-independent info */
+	struct	bsd_ifaddr ia_ifa;		/* protocol-independent info */
 #define	ia_ifp		ia_ifa.ifa_ifp
 #define ia_flags	ia_ifa.ifa_flags
-	struct	sockaddr_in6 ia_addr;	/* interface address */
-	struct	sockaddr_in6 ia_net;	/* network number of interface */
-	struct	sockaddr_in6 ia_dstaddr; /* space for destination addr */
-	struct	sockaddr_in6 ia_prefixmask; /* prefix mask */
+	struct	bsd_sockaddr_in6 ia_addr;	/* interface address */
+	struct	bsd_sockaddr_in6 ia_net;	/* network number of interface */
+	struct	bsd_sockaddr_in6 ia_dstaddr; /* space for destination addr */
+	struct	bsd_sockaddr_in6 ia_prefixmask; /* prefix mask */
 	u_int32_t ia_plen;		/* prefix length */
 	TAILQ_ENTRY(in6_ifaddr)	ia_link;	/* list of IPv6 addresses */
 	int	ia6_flags;
@@ -138,8 +139,8 @@ TAILQ_HEAD(in6_ifaddrhead, in6_ifaddr);
 
 /* control structure to manage address selection policy */
 struct in6_addrpolicy {
-	struct sockaddr_in6 addr; /* prefix address */
-	struct sockaddr_in6 addrmask; /* prefix mask */
+	struct bsd_sockaddr_in6 addr; /* prefix address */
+	struct bsd_sockaddr_in6 addrmask; /* prefix mask */
 	int preced;		/* precedence */
 	int label;		/* matching label */
 	u_quad_t use;		/* statistics */
@@ -267,8 +268,8 @@ struct icmp6_ifstat {
 struct	in6_ifreq {
 	char	ifr_name[IFNAMSIZ];
 	union {
-		struct	sockaddr_in6 ifru_addr;
-		struct	sockaddr_in6 ifru_dstaddr;
+		struct	bsd_sockaddr_in6 ifru_addr;
+		struct	bsd_sockaddr_in6 ifru_dstaddr;
 		int	ifru_flags;
 		int	ifru_flags6;
 		int	ifru_metric;
@@ -282,9 +283,9 @@ struct	in6_ifreq {
 
 struct	in6_aliasreq {
 	char	ifra_name[IFNAMSIZ];
-	struct	sockaddr_in6 ifra_addr;
-	struct	sockaddr_in6 ifra_dstaddr;
-	struct	sockaddr_in6 ifra_prefixmask;
+	struct	bsd_sockaddr_in6 ifra_addr;
+	struct	bsd_sockaddr_in6 ifra_dstaddr;
+	struct	bsd_sockaddr_in6 ifra_prefixmask;
 	int	ifra_flags;
 	struct in6_addrlifetime ifra_lifetime;
 };
@@ -293,16 +294,19 @@ struct	in6_aliasreq {
 #define IN6_PREFIX_ND	1
 #define IN6_PREFIX_RR	2
 
+struct prf_ra {
+	u_char onlink : 1;
+	u_char autonomous : 1;
+	u_char reserved : 6;
+};
+
+
 /*
  * prefix related flags passed between kernel(NDP related part) and
  * user land command(ifconfig) and daemon(rtadvd).
  */
 struct in6_prflags {
-	struct prf_ra {
-		u_char onlink : 1;
-		u_char autonomous : 1;
-		u_char reserved : 6;
-	} prf_ra;
+	struct prf_ra prf_ra;
 	u_char prf_reserved1;
 	u_short prf_reserved2;
 	/* want to put this on 4byte offset */
@@ -322,7 +326,7 @@ struct  in6_prefixreq {
 	u_int32_t ipr_vltime;
 	u_int32_t ipr_pltime;
 	struct in6_prflags ipr_flags;
-	struct	sockaddr_in6 ipr_prefix;
+	struct	bsd_sockaddr_in6 ipr_prefix;
 };
 
 #define PR_ORIG_RA	0
@@ -354,8 +358,8 @@ struct	in6_rrenumreq {
 	u_int32_t irr_vltime;
 	u_int32_t irr_pltime;
 	struct in6_prflags irr_flags;
-	struct	sockaddr_in6 irr_matchprefix;
-	struct	sockaddr_in6 irr_useprefix;
+	struct	bsd_sockaddr_in6 irr_matchprefix;
+	struct	bsd_sockaddr_in6 irr_useprefix;
 };
 
 #define irr_raf_mask_onlink	irr_raflagmask.onlink
@@ -380,10 +384,10 @@ struct	in6_rrenumreq {
 #define IA6_MASKIN6(ia)	(&((ia)->ia_prefixmask.sin6_addr))
 #define IA6_SIN6(ia)	(&((ia)->ia_addr))
 #define IA6_DSTSIN6(ia)	(&((ia)->ia_dstaddr))
-#define IFA_IN6(x)	(&((struct sockaddr_in6 *)((x)->ifa_addr))->sin6_addr)
-#define IFA_DSTIN6(x)	(&((struct sockaddr_in6 *)((x)->ifa_dstaddr))->sin6_addr)
+#define IFA_IN6(x)	(&((struct bsd_sockaddr_in6 *)((x)->ifa_addr))->sin6_addr)
+#define IFA_DSTIN6(x)	(&((struct bsd_sockaddr_in6 *)((x)->ifa_dstaddr))->sin6_addr)
 
-#define IFPR_IN6(x)	(&((struct sockaddr_in6 *)((x)->ifpr_prefix))->sin6_addr)
+#define IFPR_IN6(x)	(&((struct bsd_sockaddr_in6 *)((x)->ifpr_prefix))->sin6_addr)
 
 #ifdef _KERNEL
 #define IN6_ARE_MASKED_ADDR_EQUAL(d, a, m)	(	\
@@ -726,7 +730,7 @@ struct sockopt;
 
 /* Multicast KPIs. */
 int	im6o_mc_filter(const struct ip6_moptions *, const struct ifnet *,
-	    const struct sockaddr *, const struct sockaddr *);
+	    const struct bsd_sockaddr *, const struct bsd_sockaddr *);
 int	in6_mc_join(struct ifnet *, const struct in6_addr *,
 	    struct in6_mfilter *, struct in6_multi **, int);
 int	in6_mc_join_locked(struct ifnet *, const struct in6_addr *,
@@ -755,7 +759,7 @@ int	in6_control(struct socket *, u_long, caddr_t, struct ifnet *,
 	struct thread *);
 int	in6_update_ifa(struct ifnet *, struct in6_aliasreq *,
 	struct in6_ifaddr *, int);
-void	in6_purgeaddr(struct ifaddr *);
+void	in6_purgeaddr(struct bsd_ifaddr *);
 int	in6if_do_dad(struct ifnet *);
 void	in6_purgeif(struct ifnet *);
 void	in6_savemkludge(struct in6_ifaddr *);
@@ -765,6 +769,7 @@ void	in6_setmaxmtu(void);
 int	in6_if2idlen(struct ifnet *);
 struct in6_ifaddr *in6ifa_ifpforlinklocal(struct ifnet *, int);
 struct in6_ifaddr *in6ifa_ifpwithaddr(struct ifnet *, struct in6_addr *);
+struct in6_ifaddr *in6ifa_llaonifp(struct ifnet *);
 char	*ip6_sprintf(char *, const struct in6_addr *);
 int	in6_addr2zoneid(struct ifnet *, struct in6_addr *, u_int32_t *);
 int	in6_matchlen(struct in6_addr *, struct in6_addr *);
@@ -775,22 +780,119 @@ int	in6_prefix_ioctl(struct socket *, u_long, caddr_t,
 int	in6_prefix_add_ifid(int, struct in6_ifaddr *);
 void	in6_prefix_remove_ifid(int, struct in6_ifaddr *);
 void	in6_purgeprefix(struct ifnet *);
-void	in6_ifremloop(struct ifaddr *);
-void	in6_ifaddloop(struct ifaddr *);
+void	in6_ifremloop(struct bsd_ifaddr *);
+void	in6_ifaddloop(struct bsd_ifaddr *);
 
-int	in6_is_addr_deprecated(struct sockaddr_in6 *);
+int	in6_is_addr_deprecated(struct bsd_sockaddr_in6 *);
 int	in6_src_ioctl(u_long, caddr_t);
 
 /*
  * Extended API for IPv6 FIB support.
  */
-void	in6_rtredirect(struct sockaddr *, struct sockaddr *, struct sockaddr *,
-	    int, struct sockaddr *, u_int);
-int	in6_rtrequest(int, struct sockaddr *, struct sockaddr *,
-	    struct sockaddr *, int, struct rtentry **, u_int);
+void	in6_rtredirect(struct bsd_sockaddr *, struct bsd_sockaddr *, struct bsd_sockaddr *,
+	    int, struct bsd_sockaddr *, u_int);
+int	in6_rtrequest(int, struct bsd_sockaddr *, struct bsd_sockaddr *,
+	    struct bsd_sockaddr *, int, struct rtentry **, u_int);
 void	in6_rtalloc(struct route_in6 *, u_int);
 void	in6_rtalloc_ign(struct route_in6 *, u_long, u_int);
-struct rtentry *in6_rtalloc1(struct sockaddr *, int, u_long, u_int);
+struct rtentry *in6_rtalloc1(struct bsd_sockaddr *, int, u_long, u_int);
 #endif /* _KERNEL */
+
+#ifdef _KERNEL
+
+/*
+ * These macros were originally ip6.h but g++ won't compile with it there
+ * and due to cicrular dependency had to move to in6_var.h
+ */
+
+/*
+ * IP6_EXTHDR_CHECK ensures that region between the IP6 header and the
+ * target header (including IPv6 itself, extension headers and
+ * TCP/UDP/ICMP6 headers) are contiguous. KAME requires drivers
+ * to store incoming data into one internal mbuf or one or more external
+ * mbufs(never into two or more internal mbufs). Thus, the third case is
+ * supposed to never be matched but is prepared just in case.
+ */
+
+#define IP6_EXTHDR_CHECK(m, off, hlen, ret)				\
+do {									\
+    if ((m)->m_hdr.mh_next != NULL) {					\
+	if (((m)->m_hdr.mh_flags & M_LOOP) &&				\
+	    ((m)->m_hdr.mh_len < (off) + (hlen)) &&			\
+	    (((m) = m_pullup((m), (off) + (hlen))) == NULL)) {		\
+		V_ip6stat.ip6s_exthdrtoolong++;				\
+		return ret;						\
+	} else if ((m)->m_hdr.mh_flags & M_EXT) {			\
+		if ((m)->m_hdr.mh_len < (off) + (hlen)) {		\
+			V_ip6stat.ip6s_exthdrtoolong++;			\
+			m_freem(m);					\
+			return ret;					\
+		}							\
+	} else {							\
+		if ((m)->m_hdr.mh_len < (off) + (hlen)) {		\
+			V_ip6stat.ip6s_exthdrtoolong++;			\
+			m_freem(m);					\
+			return ret;					\
+		}							\
+	}								\
+    } else {								\
+	if ((m)->m_hdr.mh_len < (off) + (hlen)) {			\
+		V_ip6stat.ip6s_tooshort++;				\
+		in6_ifstat_inc(m->M_dat.MH.MH_pkthdr.rcvif, ifs6_in_truncated);	\
+		m_freem(m);						\
+		return ret;						\
+	}								\
+    }									\
+} while (/*CONSTCOND*/ 0)
+
+/*
+ * IP6_EXTHDR_GET ensures that intermediate protocol header (from "off" to
+ * "len") is located in single mbuf, on contiguous memory region.
+ * The pointer to the region will be returned to pointer variable "val",
+ * with type "typ".
+ * IP6_EXTHDR_GET0 does the same, except that it aligns the structure at the
+ * very top of mbuf.  GET0 is likely to make memory copy than GET.
+ *
+ * XXX we're now testing this, needs m_pulldown()
+ */
+#define IP6_EXTHDR_GET(val, typ, m, off, len) \
+do {									\
+	struct mbuf *t;							\
+	int tmp;							\
+	if ((m)->m_hdr.mh_len >= (off) + (len))				\
+		(val) = (typ)(mtod((m), caddr_t) + (off));		\
+	else {								\
+		t = m_pulldown((m), (off), (len), &tmp);		\
+		if (t) {						\
+			if (t->m_hdr.mh_len < tmp + (len))		\
+				panic("m_pulldown malfunction");	\
+			(val) = (typ)(mtod(t, caddr_t) + tmp);		\
+		} else {						\
+			(val) = (typ)NULL;				\
+			(m) = NULL;					\
+		}							\
+	}								\
+} while (/*CONSTCOND*/ 0)
+
+#define IP6_EXTHDR_GET0(val, typ, m, off, len) \
+do {									\
+	struct mbuf *t;							\
+	if ((off) == 0)							\
+		(val) = (typ)mtod(m, caddr_t);				\
+	else {								\
+		t = m_pulldown((m), (off), (len), NULL);		\
+		if (t) {						\
+			if (t->m_hdr.mh_len < (len))			\
+				panic("m_pulldown malfunction");	\
+			(val) = (typ)mtod(t, caddr_t);			\
+		} else {						\
+			(val) = (typ)NULL;				\
+			(m) = NULL;					\
+		}							\
+	}								\
+} while (/*CONSTCOND*/ 0)
+
+#endif /*_KERNEL*/
+
 
 #endif /* _NETINET6_IN6_VAR_H_ */

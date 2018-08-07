@@ -109,4 +109,11 @@ struct mldv2_record {
  */
 #define MLD_TIMER_SCALE			1000
 
+__BEGIN_DECLS
+
+extern void mld_init(void *);
+extern void vnet_mld_init(const void *);
+
+__END_DECLS
+
 #endif /* _NETINET6_MLD6_H_ */

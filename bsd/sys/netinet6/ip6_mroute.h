@@ -111,8 +111,8 @@ struct mif6ctl {
  * Argument structure for MRT6_ADD_MFC and MRT6_DEL_MFC
  */
 struct mf6cctl {
-	struct sockaddr_in6 mf6cc_origin;	/* IPv6 origin of mcasts */
-	struct sockaddr_in6 mf6cc_mcastgrp; /* multicast group associated */
+	struct bsd_sockaddr_in6 mf6cc_origin;	/* IPv6 origin of mcasts */
+	struct bsd_sockaddr_in6 mf6cc_mcastgrp; /* multicast group associated */
 	mifi_t		mf6cc_parent;	/* incoming ifindex */
 	struct if_set	mf6cc_ifset;	/* set of forwarding ifs */
 };
@@ -181,8 +181,8 @@ struct mrt6msg {
  * packet counts
  */
 struct sioc_sg_req6 {
-	struct sockaddr_in6 src;
-	struct sockaddr_in6 grp;
+	struct bsd_sockaddr_in6 src;
+	struct bsd_sockaddr_in6 grp;
 	u_quad_t pktcnt;
 	u_quad_t bytecnt;
 	u_quad_t wrong_if;
@@ -222,8 +222,8 @@ struct mif6 {
  * The kernel's multicast forwarding cache entry structure
  */
 struct mf6c {
-	struct sockaddr_in6  mf6c_origin;	/* IPv6 origin of mcasts     */
-	struct sockaddr_in6  mf6c_mcastgrp;	/* multicast group associated*/
+	struct bsd_sockaddr_in6  mf6c_origin;	/* IPv6 origin of mcasts     */
+	struct bsd_sockaddr_in6  mf6c_mcastgrp;	/* multicast group associated*/
 	mifi_t		 mf6c_parent;		/* incoming IF               */
 	struct if_set	 mf6c_ifset;		/* set of outgoing IFs */
 

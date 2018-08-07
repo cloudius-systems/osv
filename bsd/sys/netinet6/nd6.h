@@ -38,8 +38,10 @@
 #define RTF_ANNOUNCE	RTF_PROTO2
 #endif
 
-#include <sys/queue.h>
-#include <sys/callout.h>
+#include <bsd/sys/sys/queue.h>
+#include <bsd/sys/netinet6/in6.h>
+#include <bsd/sys/netinet6/in6_var.h>
+#include <bsd/porting/callout.h>
 
 struct llentry;
 
@@ -103,7 +105,7 @@ struct nd_ifinfo {
 
 struct in6_nbrinfo {
 	char ifname[IFNAMSIZ];	/* if name, e.g. "en0" */
-	struct in6_addr addr;	/* IPv6 address of the neighbor */
+	struct  in6_addr addr;	/* IPv6 address of the neighbor */
 	long	asked;		/* number of queries already sent for this addr */
 	int	isrouter;	/* if it acts as a router */
 	int	state;		/* reachability state */
@@ -124,7 +126,7 @@ struct	in6_drlist {
 };
 
 struct	in6_defrouter {
-	struct	sockaddr_in6 rtaddr;
+	struct	bsd_sockaddr_in6 rtaddr;
 	u_char	flags;
 	u_short	rtlifetime;
 	u_long	expire;
@@ -166,7 +168,7 @@ struct	in6_prlist {
 };
 
 struct in6_prefix {
-	struct	sockaddr_in6 prefix;
+	struct	bsd_sockaddr_in6 prefix;
 	struct prf_ra raflags;
 	u_char	prefixlen;
 	u_char	origin;
@@ -177,7 +179,7 @@ struct in6_prefix {
 	int refcnt;
 	u_short if_index;
 	u_short advrtrs; /* number of advertisement routers */
-	/* struct sockaddr_in6 advrtr[] */
+	/* struct bsd_sockaddr_in6 advrtr[] */
 };
 
 #ifdef _KERNEL
@@ -248,7 +250,7 @@ struct nd_prefixctl {
 	struct ifnet *ndpr_ifp;
 
 	/* prefix */
-	struct sockaddr_in6 ndpr_prefix;
+	struct bsd_sockaddr_in6 ndpr_prefix;
 	u_char	ndpr_plen;
 
 	u_int32_t ndpr_vltime;	/* advertised valid lifetime */
@@ -261,7 +263,7 @@ struct nd_prefixctl {
 struct nd_prefix {
 	struct ifnet *ndpr_ifp;
 	LIST_ENTRY(nd_prefix) ndpr_entry;
-	struct sockaddr_in6 ndpr_prefix;	/* prefix */
+	struct bsd_sockaddr_in6 ndpr_prefix;	/* prefix */
 	struct in6_addr ndpr_mask; /* netmask derived from the prefix */
 
 	u_int32_t ndpr_vltime;	/* advertised valid lifetime */
@@ -341,7 +343,7 @@ VNET_DECLARE(int, nd6_onlink_ns_rfc4861);
 #define	V_nd6_debug			VNET(nd6_debug)
 #define	V_nd6_onlink_ns_rfc4861		VNET(nd6_onlink_ns_rfc4861)
 
-#define nd6log(x)	do { if (V_nd6_debug) log x; } while (/*CONSTCOND*/ 0)
+#define nd6log(x)	do { if (V_nd6_debug) bsd_log x; } while (/*CONSTCOND*/ 0)
 
 VNET_DECLARE(struct callout, nd6_timer_ch);
 #define	V_nd6_timer_ch			VNET(nd6_timer_ch)
@@ -391,7 +393,7 @@ void nd6_destroy(void);
 #endif
 struct nd_ifinfo *nd6_ifattach(struct ifnet *);
 void nd6_ifdetach(struct nd_ifinfo *);
-int nd6_is_addr_neighbor(struct sockaddr_in6 *, struct ifnet *);
+int nd6_is_addr_neighbor(struct bsd_sockaddr_in6 *, struct ifnet *);
 void nd6_option_init(void *, int, union nd_opts *);
 struct nd_opt_hdr *nd6_option(union nd_opts *);
 int nd6_options(union nd_opts *);
@@ -409,27 +411,27 @@ int nd6_ioctl(u_long, caddr_t, struct ifnet *);
 struct llentry *nd6_cache_lladdr(struct ifnet *, struct in6_addr *,
 	char *, int, int, int);
 int nd6_output(struct ifnet *, struct ifnet *, struct mbuf *,
-	struct sockaddr_in6 *, struct rtentry *);
+	struct bsd_sockaddr_in6 *, struct rtentry *);
 int nd6_output_lle(struct ifnet *, struct ifnet *, struct mbuf *,
-	struct sockaddr_in6 *, struct rtentry *, struct llentry *,
+	struct bsd_sockaddr_in6 *, struct rtentry *, struct llentry *,
 	struct mbuf **);
 int nd6_output_flush(struct ifnet *, struct ifnet *, struct mbuf *,
-	struct sockaddr_in6 *, struct route *);
+	struct bsd_sockaddr_in6 *, struct route *);
 int nd6_need_cache(struct ifnet *);
 int nd6_storelladdr(struct ifnet *, struct mbuf *,
-	struct sockaddr *, u_char *, struct llentry **);
+	struct bsd_sockaddr *, u_char *, struct llentry **);
 
 /* nd6_nbr.c */
 void nd6_na_input(struct mbuf *, int, int);
 void nd6_na_output(struct ifnet *, const struct in6_addr *,
-	const struct in6_addr *, u_long, int, struct sockaddr *);
+	const struct in6_addr *, u_long, int, struct bsd_sockaddr *);
 void nd6_ns_input(struct mbuf *, int, int);
 void nd6_ns_output(struct ifnet *, const struct in6_addr *,
 	const struct in6_addr *, struct llentry *, int);
 caddr_t nd6_ifptomac(struct ifnet *);
-void nd6_dad_start(struct ifaddr *, int);
-void nd6_dad_stop(struct ifaddr *);
-void nd6_dad_duplicated(struct ifaddr *);
+void nd6_dad_start(struct bsd_ifaddr *, int);
+void nd6_dad_stop(struct bsd_ifaddr *);
+void nd6_dad_duplicated(struct bsd_ifaddr *);
 
 /* nd6_rtr.c */
 void nd6_rs_input(struct mbuf *, int, int);
