@@ -39,18 +39,21 @@ struct lro_entry
 	struct mbuf		*m_tail;
 	union {
 		struct ip	*ip4;
-		/* FIXME: OSv - uncomment when we have IPv6 */
-		/* struct ip6_hdr	*ip6; */
+#ifdef INET6
+		struct ip6_hdr	*ip6;
+#endif
 	} leip;
 	union {
 		in_addr_t	s_ip4;
-		/* FIXME: OSv - uncomment when we have IPv6 */
-		/* struct in6_addr	s_ip6; */
+#ifdef INET6
+		struct in6_addr	s_ip6;
+#endif
 	} lesource;
 	union {
 		in_addr_t	d_ip4;
-		/* FIXME: OSv - uncomment when we have IPv6 */
-		/* struct in6_addr	d_ip6; */
+#ifdef INET6
+		struct in6_addr	d_ip6;
+#endif
 	} ledest;
 	uint16_t		source_port;
 	uint16_t		dest_port;

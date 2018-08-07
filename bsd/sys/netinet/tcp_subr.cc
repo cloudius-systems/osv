@@ -122,6 +122,7 @@ SYSCTL_VNET_PROC(_net_inet_tcp, TCPCTL_MSSDFLT, mssdflt,
     "Default TCP Maximum Segment Size");
 #endif
 
+#if 0
 #ifdef INET6
 static int
 sysctl_net_inet_tcp_mss_v6_check(SYSCTL_HANDLER_ARGS)
@@ -144,6 +145,7 @@ SYSCTL_VNET_PROC(_net_inet_tcp, TCPCTL_V6MSSDFLT, v6mssdflt,
     &sysctl_net_inet_tcp_mss_v6_check, "I",
    "Default TCP Maximum Segment Size for IPv6");
 #endif /* INET6 */
+#endif
 
 /*
  * Minimum MSS we accept and use. This prevents DoS attacks where
@@ -466,7 +468,7 @@ tcp_respond(struct tcpcb *tp, void *ipgen, struct tcphdr *th, struct mbuf *m,
 
 #ifdef INET6
 	isipv6 = ((struct ip *)ipgen)->ip_v == (IPV6_VERSION >> 4);
-	ip6 = ipgen;
+	ip6 = (struct ip6_hdr *)ipgen;
 #endif /* INET6 */
 	ip = (struct ip *)ipgen;
 
@@ -1733,7 +1735,7 @@ tcp_maxmtu6(struct in_conninfo *inc, int *flags)
 		if (sro6.ro_rt->rt_rmx.rmx_mtu == 0)
 			maxmtu = IN6_LINKMTU(sro6.ro_rt->rt_ifp);
 		else
-			maxmtu = min(sro6.ro_rt->rt_rmx.rmx_mtu,
+			maxmtu = bsd_min(sro6.ro_rt->rt_rmx.rmx_mtu,
 				     IN6_LINKMTU(sro6.ro_rt->rt_ifp));
 
 		/* Report additional interface capabilities. */

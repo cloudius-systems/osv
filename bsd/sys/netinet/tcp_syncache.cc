@@ -692,8 +692,7 @@ syncache_socket(struct syncache *sc, struct socket *lso, struct mbuf *m)
 		laddr6 = inp->in6p_laddr;
 		if (IN6_IS_ADDR_UNSPECIFIED(&inp->in6p_laddr))
 		inp->in6p_laddr = sc->sc_inc.inc6_laddr;
-		if ((error = in6_pcbconnect_mbuf(inp, (struct bsd_sockaddr *)&sin6,
-					thread0.td_ucred, m)) != 0) {
+		if ((error = in6_pcbconnect_mbuf(inp, (struct bsd_sockaddr *)&sin6, 0, m)) != 0) {
 			inp->in6p_laddr = laddr6;
 			if ((s = tcp_log_addrs(&sc->sc_inc, NULL, NULL, NULL))) {
 				bsd_log(LOG_DEBUG, "%s; %s: in6_pcbconnect failed "

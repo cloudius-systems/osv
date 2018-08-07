@@ -197,6 +197,17 @@ int		lltable_sysctl_dumparp(int, struct sysctl_req *);
 size_t		llentry_free(struct llentry *);
 struct llentry  *llentry_alloc(struct ifnet *, struct lltable *,
 		    struct bsd_sockaddr_storage *);
+
+/*
+ * Iterate over all lltables
+ */
+int lltable_foreach(int (*func)(struct lltable *llt, void *cbdata), void *cbdata);
+
+/*
+ * Iterate over all llentries in the lltable
+ */
+int lltable_foreach_lle(struct lltable *llt, int (*func)(struct lltable *llt, struct llentry *lle, void *cbdata), void *cbdata);
+
 __END_DECLS
 
 /*
@@ -216,4 +227,6 @@ lla_lookup_fast(struct lltable *llt, u_int flags, const struct bsd_sockaddr *l3a
 }
 
 int		lla_rt_output(struct rt_msghdr *, struct rt_addrinfo *);
+
+
 #endif  /* _NET_IF_LLATBL_H_ */
