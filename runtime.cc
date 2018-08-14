@@ -237,6 +237,7 @@ int munlock(const void*, size_t)
 }
 
 NO_SYS(int mkfifo(const char*, mode_t));
+NO_SYS(int mkfifoat(int, const char *, mode_t));
 
 int posix_fadvise(int fd, off_t offset, off_t len, int advice)
 {
