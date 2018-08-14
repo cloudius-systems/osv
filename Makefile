@@ -1625,6 +1625,7 @@ libc += string/wcscat.o
 musl += string/wcschr.o
 musl += string/wcscmp.o
 libc += string/wcscpy.o
+libc += string/__wcscpy_chk.o
 musl += string/wcscspn.o
 musl += string/wcsdup.o
 musl += string/wcslen.o
