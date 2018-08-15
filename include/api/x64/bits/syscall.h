@@ -312,6 +312,7 @@
 #define __NR_process_vm_writev			311
 #define __NR_kcmp				312
 #define __NR_finit_module			313
+#define __NR_getrandom				318
 
 #undef __NR_fstatat
 #undef __NR_pread

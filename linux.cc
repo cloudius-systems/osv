@@ -36,6 +36,7 @@
 #include <sys/ioctl.h>
 #include <sys/file.h>
 #include <sys/unistd.h>
+#include <sys/random.h>
 
 #include <unordered_map>
 
@@ -417,6 +418,7 @@ long syscall(long number, ...)
     SYSCALL2(ftruncate, int, off_t);
     SYSCALL1(fsync, int);
     SYSCALL5(epoll_pwait, int, struct epoll_event *, int, int, void*);
+    SYSCALL3(getrandom, char *, size_t, unsigned int);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);

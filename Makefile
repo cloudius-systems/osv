@@ -1401,6 +1401,7 @@ musl += prng/lrand48.o
 musl += prng/mrand48.o
 musl += prng/seed48.o
 musl += prng/srand48.o
+libc += random.o
 
 libc += process/execve.o
 libc += process/execle.o
