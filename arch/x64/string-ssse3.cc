@@ -79,7 +79,7 @@ struct unaligned_copier<Width, Shift>::loader {
 template <unsigned Width, unsigned Shift>
 template <typename Ignore>
 struct unaligned_copier<Width, Shift>::loader<Width, Ignore> {
-    using reg_file = unaligned_copier<Width, Shift>::reg_file;
+    using reg_file = typename unaligned_copier<Width, Shift>::reg_file;
     void operator()(reg_file& regs, const __m128i* src) {}
 };
 
@@ -99,7 +99,7 @@ struct unaligned_copier<Width, Shift>::shifter {
 template <unsigned Width, unsigned Shift>
 template <typename Ignore>
 struct unaligned_copier<Width, Shift>::shifter<Width, Ignore> {
-    using reg_file = unaligned_copier<Width, Shift>::reg_file;
+    using reg_file = typename unaligned_copier<Width, Shift>::reg_file;
     void operator()(reg_file& regs) {}
 };
 
@@ -117,7 +117,7 @@ struct unaligned_copier<Width, Shift>::storer {
 template <unsigned Width, unsigned Shift>
 template <typename Ignore>
 struct unaligned_copier<Width, Shift>::storer<Width, Ignore> {
-    using reg_file = unaligned_copier<Width, Shift>::reg_file;
+    using reg_file = typename unaligned_copier<Width, Shift>::reg_file;
     void operator()(reg_file& regs, __m128i* dest) {}
 };
 
