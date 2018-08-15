@@ -29,6 +29,8 @@
 #ifndef SYS_DEV_RANDOM_RANDOMDEV_SOFT_H_INCLUDED
 #define SYS_DEV_RANDOM_RANDOMDEV_SOFT_H_INCLUDED
 
+#include <sys/sys/random.h>
+
 /* This header contains only those definitions that are global
  * and harvester-specific for the entropy processor
  */

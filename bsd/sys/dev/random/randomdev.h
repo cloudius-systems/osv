@@ -30,7 +30,7 @@
 #define SYS_DEV_RANDOM_RANDOMDEV_H_INCLUDED
 
 #include <sys/selinfo.h>
-#include <sys/random.h>
+#include <sys/sys/random.h>
 #include <sys/param.h>
 
 /* This header contains only those definitions that are global

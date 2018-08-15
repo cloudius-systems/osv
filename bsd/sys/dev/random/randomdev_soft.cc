@@ -49,7 +49,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/module.h>
 #include <sys/mutex.h>
 #include <sys/poll.h>
-#include <sys/random.h>
 #include <sys/selinfo.h>
 #include <sys/sysctl.h>
 #include <sys/uio.h>
