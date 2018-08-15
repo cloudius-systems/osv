@@ -9,6 +9,7 @@
 #include <fcntl.h>
 #include <string.h>
 #include <errno.h>
+#include <sys/random.h>
 
 #define RANDOM_PATH "/dev/random"
 //
@@ -19,10 +20,16 @@
 //   getrandom does not read flags argument to differentiate quality of random data returned
 // - does not check if random source data is available
 // - does not differentiate between blocking vs non-blocking behavior
+// - return ENOSYS when GRND_NONBLOCK passed in flags
 ssize_t getrandom(void *buf, size_t count, unsigned int flags)
 {
     int fd;
     ssize_t read;
+
+    if(flags & GRND_NONBLOCK) {
+        errno = ENOSYS;
+        return -1;
+    }
 
     fd = open(RANDOM_PATH, O_RDONLY);
     if (fd < 0) {
