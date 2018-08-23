@@ -2132,6 +2132,7 @@ struct bootfs_metadata {
 
 extern char bootfs_start;
 
+int ramfs_set_file_data(struct vnode *vp, const void *data, size_t size);
 void unpack_bootfs(void)
 {
     struct bootfs_metadata *md = (struct bootfs_metadata *)&bootfs_start;
@@ -2173,13 +2174,22 @@ void unpack_bootfs(void)
             sys_panic("unpack_bootfs failed");
         }
 
-        ret = write(fd, &bootfs_start + md[i].offset, md[i].size);
-        if (ret != md[i].size) {
-            kprintf("write failed, ret = %d, errno = %d\n",
-                    ret, errno);
+        struct file *fp;
+        int error = fget(fd, &fp);
+        if (error) {
+            kprintf("couldn't fget %s: %d\n",
+                    md[i].name, error);
             sys_panic("unpack_bootfs failed");
         }
 
+        struct vnode *vp = fp->f_dentry->d_vnode;
+        ret = ramfs_set_file_data(vp, &bootfs_start + md[i].offset, md[i].size);
+        if (ret) {
+            kprintf("ramfs_set_file_data failed, ret = %d\n", ret);
+            sys_panic("unpack_bootfs failed");
+        }
+
+        fdrop(fp);
         close(fd);
     }
 }

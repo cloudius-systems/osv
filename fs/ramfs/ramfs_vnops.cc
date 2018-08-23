@@ -94,6 +94,7 @@ ramfs_allocate_node(const char *name, int type)
         np->rn_mode = S_IFREG|0777;
 
     set_times_to_now(&(np->rn_ctime), &(np->rn_atime), &(np->rn_mtime));
+    np->rn_owns_buf = true;
 
     return np;
 }
@@ -101,7 +102,7 @@ ramfs_allocate_node(const char *name, int type)
 void
 ramfs_free_node(struct ramfs_node *np)
 {
-    if (np->rn_buf != NULL)
+    if (np->rn_buf != NULL && np->rn_owns_buf)
         free(np->rn_buf);
 
     free(np->rn_name);
@@ -336,7 +337,8 @@ ramfs_truncate(struct vnode *vp, off_t length)
 
     if (length == 0) {
         if (np->rn_buf != NULL) {
-            free(np->rn_buf);
+            if(np->rn_owns_buf)
+                free(np->rn_buf);
             np->rn_buf = NULL;
             np->rn_bufsize = 0;
         }
@@ -348,10 +350,12 @@ ramfs_truncate(struct vnode *vp, off_t length)
             return EIO;
         if (np->rn_size != 0) {
             memcpy(new_buf, np->rn_buf, vp->v_size);
-            free(np->rn_buf);
+            if(np->rn_owns_buf)
+                free(np->rn_buf);
         }
         np->rn_buf = (char *) new_buf;
         np->rn_bufsize = new_size;
+        np->rn_owns_buf = true;
     }
     np->rn_size = length;
     vp->v_size = length;
@@ -413,6 +417,30 @@ ramfs_read(struct vnode *vp, struct file *fp, struct uio *uio, int ioflag)
     return uiomove(np->rn_buf + uio->uio_offset, len, uio);
 }
 
+int
+ramfs_set_file_data(struct vnode *vp, const void *data, size_t size)
+{
+    struct ramfs_node *np = (ramfs_node *) vp->v_data;
+
+    if (vp->v_type == VDIR) {
+        return EISDIR;
+    }
+    if (vp->v_type != VREG) {
+        return EINVAL;
+    }
+    if (np->rn_buf) {
+        return EINVAL;
+    }
+
+    np->rn_buf = (char *) data;
+    np->rn_bufsize = size;
+    np->rn_size = size;
+    vp->v_size = size;
+    np->rn_owns_buf = false;
+
+    return 0;
+}
+
 static int
 ramfs_write(struct vnode *vp, struct uio *uio, int ioflag)
 {
@@ -448,13 +476,15 @@ ramfs_write(struct vnode *vp, struct uio *uio, int ioflag)
                 return EIO;
             if (np->rn_size != 0) {
                 memcpy(new_buf, np->rn_buf, vp->v_size);
-                free(np->rn_buf);
+                if(np->rn_owns_buf)
+                    free(np->rn_buf);
             }
             np->rn_buf = (char *) new_buf;
             np->rn_bufsize = new_size;
         }
         np->rn_size = end_pos;
         vp->v_size = end_pos;
+        np->rn_owns_buf = true;
     }
 
     set_times_to_now(&(np->rn_mtime), &(np->rn_ctime));
