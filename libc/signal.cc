@@ -627,12 +627,6 @@ int sigaltstack(const stack_t *ss, stack_t *oss)
     return 0;
 }
 
-extern "C" int __sigsetjmp(sigjmp_buf env, int savemask)
-{
-    WARN_STUBBED();
-    return 0;
-}
-
 extern "C" int signalfd(int fd, const sigset_t *mask, int flags)
 {
     WARN_STUBBED();

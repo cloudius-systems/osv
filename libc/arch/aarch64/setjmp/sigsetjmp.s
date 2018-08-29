@@ -4,10 +4,13 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+.global __sigsetjmp
 .global _sigsetjmp
 .global sigsetjmp
+.type __sigsetjmp,@function
 .type _sigsetjmp,@function
 .type sigsetjmp,@function
+__sigsetjmp:
 _sigsetjmp:
 sigsetjmp:
         wfi
