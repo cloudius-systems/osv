@@ -103,10 +103,15 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
     return true;
 }
 
-bool object::arch_relocate_jump_slot(u32 sym, void *addr, Elf64_Sxword addend)
+bool object::arch_relocate_jump_slot(u32 sym, void *addr, Elf64_Sxword addend, bool ignore_missing)
 {
-    *static_cast<void**>(addr) = symbol(sym).relocated_addr();
-    return true;
+    auto _sym = symbol(sym, ignore_missing);
+    if (_sym.symbol) {
+        *static_cast<void**>(addr) = _sym.relocated_addr();
+         return true;
+    } else {
+         return false;
+    }
 }
 
 void object::prepare_initial_tls(void* buffer, size_t size,

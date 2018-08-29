@@ -549,7 +549,7 @@ static std::string demangle(const char *name) {
     return ret;
 }
 
-symbol_module object::symbol(unsigned idx)
+symbol_module object::symbol(unsigned idx, bool ignore_missing)
 {
     auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
     assert(dynamic_val(DT_SYMENT) == sizeof(Elf64_Sym));
@@ -562,8 +562,11 @@ symbol_module object::symbol(unsigned idx)
         return symbol_module(sym, this);
     }
     if (!ret.symbol) {
-        abort("%s: failed looking up symbol %s\n",
-                pathname().c_str(), demangle(name).c_str());
+        if (ignore_missing) {
+            debug("%s: failed looking up symbol %s\n", pathname().c_str(), demangle(name).c_str());
+        } else {
+            abort("%s: failed looking up symbol %s\n", pathname().c_str(), demangle(name).c_str());
+        }
     }
     return ret;
 }
@@ -643,13 +646,13 @@ void object::relocate_pltgot()
         void *addr = _base + p->r_offset;
         if (bind_now) {
             // If on-load binding is requested (instead of the default lazy
-            // binding), resolve all the PLT entries now.
+            // binding), try to resolve all the PLT entries now.
+            // If symbol cannot be resolved warn about it instead of aborting
             u32 sym = info >> 32;
-            if (!arch_relocate_jump_slot(sym, addr, p->r_addend)) {
-                debug_early("relocate_pltgot(): failed jump slot relocation\n");
-                abort();
-            }
-        } else if (original_plt) {
+            if (arch_relocate_jump_slot(sym, addr, p->r_addend, true))
+                  continue;
+        }
+        if (original_plt) {
             // Restore the link to the original plt.
             // We know the JUMP_SLOT entries are in plt order, and that
             // each plt entry is 16 bytes.
