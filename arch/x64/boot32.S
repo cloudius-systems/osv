@@ -22,4 +22,4 @@ start32:
 .align 4096
 
 elf64_header:
-.incbin "loader.elf"
+.incbin "loader-stripped.elf"

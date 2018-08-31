@@ -63,6 +63,7 @@ def set_imgargs(options):
     if options.sampler:
         execute = '--sampler=%d %s' % (int(options.sampler), execute)
 
+    options.osv_cmdline = execute
     cmdline = ["scripts/imgedit.py", "setargs", options.image_file, execute]
     if options.dry_run:
         print(format_args(cmdline))
@@ -108,6 +109,14 @@ def start_osv_qemu(options):
         args += [
         "-display", "sdl"]
 
+    if options.kernel:
+        boot_index = ""
+        args += [
+        "-kernel", options.kernel_file,
+        "-append", options.osv_cmdline]
+    else:
+        boot_index = ",bootindex=0"
+
     if options.sata:
         args += [
         "-machine", "q35",
@@ -117,13 +126,13 @@ def start_osv_qemu(options):
         args += [
         "-device", "virtio-scsi-pci,id=scsi0",
         "-drive", "file=%s,if=none,id=hd0,media=disk,%s" % (options.image_file, aio),
-        "-device", "scsi-hd,bus=scsi0.0,drive=hd0,scsi-id=1,lun=0,bootindex=0"]
+        "-device", "scsi-hd,bus=scsi0.0,drive=hd0,scsi-id=1,lun=0%s" % boot_index]
     elif options.ide:
         args += [
         "-hda", options.image_file]
     else:
         args += [
-        "-device", "virtio-blk-pci,id=blk0,bootindex=0,drive=hd0,scsi=off",
+        "-device", "virtio-blk-pci,id=blk0,drive=hd0,scsi=off%s" % boot_index,
         "-drive", "file=%s,if=none,id=hd0,%s" % (options.image_file, aio)]
 
     if options.cloud_init_image:
@@ -489,9 +498,12 @@ if __name__ == "__main__":
                         help="XEN define configuration script for vif")
     parser.add_argument("--cloud-init-image", action="store",
                         help="Path to the optional cloud-init image that should be attached to the instance")
+    parser.add_argument("-k", "--kernel", action="store_true",
+                        help="Run OSv in QEMU kernel mode as multiboot.")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
+    cmdargs.kernel_file = "build/%s/loader.bin" % cmdargs.opt_path
     if not os.path.exists(cmdargs.image_file):
         raise Exception('Image file %s does not exist.' % cmdargs.image_file)
     if cmdargs.cloud_init_image:

@@ -131,7 +131,7 @@ endif
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
 
-all: $(out)/loader.img links
+all: $(out)/loader.img links $(out)/loader.bin
 .PHONY: all
 
 links:
@@ -442,7 +442,8 @@ $(out)/loader.bin: $(out)/arch/x64/boot32.o arch/x64/loader32.ld
 	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
 	                $(filter-out %.bin, $(^:%.ld=-T %.ld)), LD $@)
 
-$(out)/arch/x64/boot32.o: $(out)/loader.elf
+$(out)/arch/x64/boot32.o: $(out)/loader-stripped.elf
+$(out)/arch/x64/boot32.o: ASFLAGS += -I$(out)
 
 $(out)/fastlz/fastlz.o:
 	$(makedir)
