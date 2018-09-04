@@ -131,7 +131,10 @@ endif
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
 
-all: $(out)/loader.img links $(out)/loader.bin
+all: $(out)/loader.img links
+ifeq ($(arch),x64)
+all: $(out)/loader.bin
+endif
 .PHONY: all
 
 links:
