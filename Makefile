@@ -369,7 +369,7 @@ $(out)/%.o: %.c | generated-headers
 
 $(out)/%.o: %.S
 	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLAGS) $(ASFLAGS) -c -o $@ $<, AS $*.s)
+	$(call quiet, $(CXX) $(CXXFLAGS) $(ASFLAGS) -c -o $@ $<, AS $*.S)
 
 $(out)/%.o: %.s
 	$(makedir)
