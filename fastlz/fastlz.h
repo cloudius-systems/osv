@@ -18,6 +18,30 @@
 #define FASTLZ_VERSION_STRING "0.1.0"
 
 /**
+ * 1 MB was chosen for segment size to make sure that
+ * it could fit into 2nd MB just before uncompressed
+ * kernel located at 0x200000. Therefore corresponding
+ * constant values in Makefile - kernel_base and lzkernel_base
+ * were selected to be 0x200000 and 0x100000 (1MB lower) respectively.
+ */
+#define SEGMENT_SIZE (1024 * 1024)
+/**
+ * The maximum compressed segment size needs to be slightly less
+ * than 1 MB so that in worst case scenario first segment
+ * which is decompressed as last does not overlap with
+ * its target decompressed area - 2nd MB. It has to be by 4 bytes
+ * plus 3 pages smaller than 1 MB because first 3 pages (0x3000) in lzloader.elf
+ * are occupied by fastlz decompression code and next 4 bytes store
+ * offset of the segments info table. In case first segment is of
+ * original size and overlaps slightly with its target 2nd MB (kernel_base),
+ * then data would be copied byte by byte going backwards from last
+ * byte towards 1st one.
+ * All in all this scheme guarantees no data is overwritten
+ * no matter what the scenario.
+ */
+#define MAX_COMPRESSED_SEGMENT_SIZE (SEGMENT_SIZE - sizeof(int) - 0x3000)
+
+/**
   Compress a block of data in the input buffer and returns the size of
   compressed block. The size of input buffer is specified by length. The
   minimum input buffer size is 16.

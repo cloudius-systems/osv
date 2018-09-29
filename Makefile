@@ -419,14 +419,8 @@ ifeq ($(arch),x64)
 
 # kernel_base is where the kernel will be loaded after uncompression.
 # lzkernel_base is where the compressed kernel is loaded from disk.
-# As issue #872 explains, lzkernel_base must be chosen high enough for
-# (lzkernel_base - kernel_base) to be bigger than the kernel's size.
-# On the other hand, don't increase lzkernel_base too much, because it puts
-# a lower limit on the VM's RAM size.
-# Below we verify that the compiled kernel isn't too big given the current
-# setting of these paramters; Otherwise we recommend to increase lzkernel_base.
 kernel_base := 0x200000
-lzkernel_base := 0x1800000
+lzkernel_base := 0x100000
 
 
 $(out)/boot.bin: arch/x64/boot16.ld $(out)/arch/x64/boot16.o
@@ -466,9 +460,9 @@ $(out)/fastlz/lzloader.o: fastlz/lzloader.cc | generated-headers
 
 $(out)/lzloader.elf: $(out)/loader-stripped.elf.lz.o $(out)/fastlz/lzloader.o arch/x64/lzloader.ld \
 	$(out)/fastlz/fastlz.o
-	$(call very-quiet, scripts/check-image-size.sh $(out)/loader-stripped.elf $(shell bash -c 'echo $$(($(lzkernel_base)-$(kernel_base)))'))
+	$(call very-quiet, scripts/check-image-size.sh $(out)/loader-stripped.elf)
 	$(call quiet, $(LD) -o $@ --defsym=OSV_LZKERNEL_BASE=$(lzkernel_base) \
-		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
+		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -z max-page-size=4096 \
 		-T arch/x64/lzloader.ld \
 		$(filter %.o, $^), LINK lzloader.elf)
 	$(call quiet, truncate -s %32768 $@, ALIGN lzloader.elf)

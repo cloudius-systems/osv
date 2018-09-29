@@ -10,6 +10,7 @@ SECTIONS
 {
     . = OSV_LZKERNEL_BASE + 0x1000;
     .text : { *(.text) }
+    . = OSV_LZKERNEL_BASE + 0x3000;
     .data : { *(.data) }
     .bss : { *(.bss) }
     .edata = .;
