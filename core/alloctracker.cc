@@ -33,7 +33,7 @@ void alloc_tracker::remember(void *addr, int size)
                          malloc(size_allocations * sizeof(struct alloc_info));
             if (old_allocations) {
                 memcpy(allocations, old_allocations,
-                        size_allocations * sizeof(struct alloc_info));
+                        old_size * sizeof(struct alloc_info));
             } else {
                 first_free = -1;
                 newest_allocation = -1;
