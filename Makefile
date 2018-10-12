@@ -422,7 +422,7 @@ ifeq ($(arch),x64)
 kernel_base := 0x200000
 lzkernel_base := 0x100000
 
-
+$(out)/arch/x64/boot16.o: $(out)/lzloader.elf
 $(out)/boot.bin: arch/x64/boot16.ld $(out)/arch/x64/boot16.o
 	$(call quiet, $(LD) -o $@ -T $^, LD $@)
 
@@ -435,11 +435,12 @@ $(out)/loader.img: $(out)/boot.bin $(out)/lzloader.elf
 	$(call quiet, scripts/imgedit.py setsize "-f raw $@" $(image-size), IMGEDIT $@)
 	$(call quiet, scripts/imgedit.py setargs "-f raw $@" $(cmdline), IMGEDIT $@)
 
+$(out)/arch/x64/boot32.o: $(out)/lzloader.elf
 $(out)/loader.bin: $(out)/arch/x64/boot32.o arch/x64/loader32.ld
 	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
 	                $(filter-out %.bin, $(^:%.ld=-T %.ld)), LD $@)
 
-$(out)/arch/x64/boot32.o: $(out)/loader-stripped.elf
+$(out)/arch/x64/boot32.o: $(out)/lzloader.elf
 $(out)/arch/x64/boot32.o: ASFLAGS += -I$(out)
 
 $(out)/fastlz/fastlz.o:

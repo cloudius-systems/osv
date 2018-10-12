@@ -26,9 +26,7 @@ stage1_args="stage1"
 for i
 do
 	case $i in
-	image=*|modules=*|fs=*|usrskel=*) ;;
-	check)
-		make clean ;;
+	image=*|modules=*|fs=*|usrskel=*|check) ;;
 	clean)
 		stage1_args=clean ;;
 	*)	# yuck... Is there a prettier way to append to array?
@@ -53,8 +51,6 @@ do
 		set -x
 		OSV_BASE=`pwd` ./scripts/module.py clean -q
 		exit;;
-	check)
-		OSV_BASE=`pwd` ./scripts/module.py clean -q ;;
 	esac
 done
 
