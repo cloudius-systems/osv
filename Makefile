@@ -1869,9 +1869,9 @@ $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
 	    $(^:%.ld=-T %.ld) \
 	    --whole-archive \
-	      $(libstdc++.a) $(libgcc.a) $(libgcc_eh.a) \
+	      $(libstdc++.a) $(libgcc_eh.a) \
 	      $(boost-libs) \
-	    --no-whole-archive, \
+	    --no-whole-archive $(libgcc.a), \
 		LINK loader.elf)
 	@# Build libosv.so matching this loader.elf. This is not a separate
 	@# rule because that caused bug #545.
