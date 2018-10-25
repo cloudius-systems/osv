@@ -135,6 +135,7 @@ class Fedora(object):
 
 class RHELbased(Fedora):
     name = ['Scientific Linux', 'NauLinux', 'CentOS Linux', 'Red Hat Enterprise Linux', 'Oracle Linux']
+    install = 'yum -y install '
 
     class RHELbased_70(object):
         packages = []
@@ -164,7 +165,21 @@ class RHELbased(Fedora):
         ec2_post_install = None
         version = '7.3'
 
-    versions = [RHELbased_70, RHELbased_71, RHELbased_72, RHELbased_73]
+    class RHELbased_74(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '7.4'
+
+    class RHELbased_75(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '7.5'
+
+    versions = [RHELbased_70, RHELbased_71, RHELbased_72, RHELbased_73, RHELbased_74, RHELbased_75]
 
 class Debian(object):
     name = 'debian'
