@@ -1514,6 +1514,8 @@ int fcntl(int fd, int cmd, int arg)
     return -1;
 }
 
+LFS64(fcntl);
+
 TRACEPOINT(trace_vfs_access, "\"%s\" 0%0o", const char*, int);
 TRACEPOINT(trace_vfs_access_ret, "");
 TRACEPOINT(trace_vfs_access_err, "%d", int);
