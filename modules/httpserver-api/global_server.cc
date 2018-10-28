@@ -35,11 +35,8 @@ bool global_server::run(po::variables_map& _config)
     if (get().s != nullptr) {
         return false;
     }
-    //TODO: It would be nice to add config option that specifies location
-    //of httpserver.conf. Also maybe the default location should be /etc/httpserver.conf
-    //but it seems that cloud-init module has some dependency on it --> look at
-    // modules/cloud-init/server-module.hh
-    std::ifstream f("/tmp/httpserver.conf");
+    std::string config_file_path = _config["config-file"].as<std::string>();
+    std::ifstream f(config_file_path);
     if (f.is_open()) {
         try {
             YAML::Node doc = YAML::Load(f);

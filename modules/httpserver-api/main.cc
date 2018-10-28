@@ -26,6 +26,7 @@ int main(int argc, char* argv[])
     po::options_description desc("Allowed options");
     desc.add_options()
         ("help", "produce help message")
+        ("config-file", po::value<std::string>()->default_value("/tmp/httpserver.conf"), "configuration file path")
         ("access-allow", po::value<std::string>(),
              "Set the Access-Control-Allow-Origin to *. Note the security risk")
         ("ipaddress", po::value<std::string>(), "set the ip address")
