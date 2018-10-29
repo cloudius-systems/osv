@@ -177,7 +177,7 @@ enum {
     DT_PLTREL = 20, // d_val Type of relocation entry used for the procedure linkage
       // table. The d_val member contains either DT_REL or DT_RELA.
     DT_DEBUG = 21, // d_ptr Reserved for debugger use.
-    DT_TEXTREL = 22, // ignored The presence of this dynamic table entry signals that the
+    DT_TEXTREL = 22, // The presence of this dynamic table entry signals that the
       // relocation table contains relocations for a non-writable
       // segment.
     DT_JMPREL = 23, // d_ptr Address of the relocations associated with the procedure
@@ -367,6 +367,8 @@ protected:
     virtual void unload_segment(const Elf64_Phdr& segment) = 0;
     virtual void read(Elf64_Off offset, void* data, size_t len) = 0;
     bool mlocked();
+    bool has_non_writable_text_relocations();
+    unsigned get_segment_mmap_permissions(const Elf64_Phdr& phdr);
 private:
     Elf64_Sym* lookup_symbol_old(const char* name);
     Elf64_Sym* lookup_symbol_gnu(const char* name);
@@ -388,6 +390,7 @@ private:
     void collect_dependencies(std::unordered_set<elf::object*>& ds);
     void prepare_initial_tls(void* buffer, size_t size, std::vector<ptrdiff_t>& offsets);
     void alloc_static_tls();
+    void make_text_writable(bool flag);
 protected:
     program& _prog;
     std::string _pathname;

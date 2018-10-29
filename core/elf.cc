@@ -325,13 +325,7 @@ void file::load_segment(const Elf64_Phdr& phdr)
     ulong filesz = align_up(filesz_unaligned, mmu::page_size);
     ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz, mmu::page_size) - vstart;
 
-    unsigned perm = 0;
-    if (phdr.p_flags & PF_X)
-        perm |= mmu::perm_exec;
-    if (phdr.p_flags & PF_W)
-        perm |= mmu::perm_write;
-    if (phdr.p_flags & PF_R)
-        perm |= mmu::perm_read;
+    unsigned perm = get_segment_mmap_permissions(phdr);
 
     auto flag = mmu::mmap_fixed | (mlocked() ? mmu::mmap_populate : 0);
     mmu::map_file(_base + vstart, filesz, flag, perm, _f, align_down(phdr.p_offset, mmu::page_size));
@@ -352,6 +346,11 @@ bool object::mlocked()
         }
     }
     return false;
+}
+
+bool object::has_non_writable_text_relocations()
+{
+    return dynamic_exists(DT_TEXTREL);
 }
 
 Elf64_Note::Elf64_Note(void *_base, char *str)
@@ -468,8 +467,24 @@ void object::unload_segments()
      }
 }
 
+unsigned object::get_segment_mmap_permissions(const Elf64_Phdr& phdr)
+{
+    unsigned perm = 0;
+    if (phdr.p_flags & PF_X)
+        perm |= mmu::perm_exec;
+    if (phdr.p_flags & PF_W)
+        perm |= mmu::perm_write;
+    if (phdr.p_flags & PF_R)
+        perm |= mmu::perm_read;
+    return perm;
+}
+
 void object::fix_permissions()
 {
+    if(has_non_writable_text_relocations()) {
+        make_text_writable(false);
+    }
+
     for (auto&& phdr : _phdrs) {
         if (phdr.p_type != PT_GNU_RELRO)
             continue;
@@ -479,6 +494,20 @@ void object::fix_permissions()
 
         assert((phdr.p_flags & (PF_R | PF_W | PF_X)) == PF_R);
         mmu::mprotect(_base + vstart, memsz, mmu::perm_read);
+    }
+}
+
+void object::make_text_writable(bool flag)
+{
+    for (auto&& phdr : _phdrs) {
+        if (phdr.p_type != PT_LOAD)
+            continue;
+
+        ulong vstart = align_down(phdr.p_vaddr, mmu::page_size);
+        ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz, mmu::page_size) - vstart;
+
+        unsigned perm = get_segment_mmap_permissions(phdr);
+        mmu::mprotect(_base + vstart, memsz, flag ? perm | mmu::perm_write : perm);
     }
 }
 
@@ -600,6 +629,10 @@ symbol_module object::symbol_other(unsigned idx)
 
 void object::relocate_rela()
 {
+    if(has_non_writable_text_relocations()) {
+        make_text_writable(true);
+    }
+
     auto rela = dynamic_ptr<Elf64_Rela>(DT_RELA);
     assert(dynamic_val(DT_RELAENT) == sizeof(Elf64_Rela));
     unsigned nb = dynamic_val(DT_RELASZ) / sizeof(Elf64_Rela);
