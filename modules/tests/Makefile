@@ -60,12 +60,7 @@ $(out)/tests/rofs/%.o: $(src)/tests/%.c
 $(out)/%.so: $(out)/%.o
 	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $< $(LIBS), LD $*.so)
 
-NON_FPIC_CXXFLAGS = $(autodepend) $(INCLUDES) -g -O2 -mcmodel=large -fno-pie -DBOOST_TEST_DYN_LINK \
-	-U _FORTIFY_SOURCE -D_KERNEL -D__OSV__ -DCONF_debug_memory=0 \
-	-Wall -Wno-pointer-arith -Wformat=0 -Wno-format-security
-$(out)/tests/tst-non-fpic.so: $(src)/tests/tst-non-fpic.cc
-	$(makedir)
-	$(call quiet, $(CXX) -shared $(NON_FPIC_CXXFLAGS) -o $@ $<, LD $*.so)
+$(out)/tests/tst-non-fpic.o: CXXFLAGS:=$(subst -fPIC,-mcmodel=large,$(CXXFLAGS))
 
 # The rofs test image mounts /tmp as ramfs and 4 tests that exercise file system
 # fail due to some unresolved bugs or other shortcomings of the ramfs implementation
