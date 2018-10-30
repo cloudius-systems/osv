@@ -262,6 +262,13 @@ class Ubuntu(object):
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
 
+    class Ubuntu_18_04(object):
+        packages = ['openjdk-8-jdk', 'bridge-utils']
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '18.04'
+
     class Ubuntu_17_04(object):
         packages = ['openjdk-8-jdk']
         ec2_packages = ['ec2-api-tools', 'awscli']
@@ -297,7 +304,7 @@ class Ubuntu(object):
         ec2_post_install = standard_ec2_post_install
         version = '13.10'
 
-    versions = [Ubuntu_17_04, Ubuntu_16_04, Ubuntu_15_04, Ubuntu_14_04, Ubuntu_13_10]
+    versions = [Ubuntu_18_04, Ubuntu_17_04, Ubuntu_16_04, Ubuntu_15_04, Ubuntu_14_04, Ubuntu_13_10]
 
 class LinuxMint(Ubuntu):
     name = 'LinuxMint'
