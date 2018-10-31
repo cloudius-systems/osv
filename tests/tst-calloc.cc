@@ -31,7 +31,6 @@ int main()
 {
     char *buf1;
     const char ref0[11] = "\0";
-    const char refX[11] = "XXXXXXXXXX";
     int len1, len2;
 
     len1 = 1;
