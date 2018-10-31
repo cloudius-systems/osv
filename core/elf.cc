@@ -492,7 +492,6 @@ void object::fix_permissions()
         ulong vstart = align_down(phdr.p_vaddr, mmu::page_size);
         ulong memsz = align_up(phdr.p_vaddr + phdr.p_memsz, mmu::page_size) - vstart;
 
-        assert((phdr.p_flags & (PF_R | PF_W | PF_X)) == PF_R);
         mmu::mprotect(_base + vstart, memsz, mmu::perm_read);
     }
 }
