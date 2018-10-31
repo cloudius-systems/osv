@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <unistd.h>
 #include <pthread.h>
 #include <stdio.h>
 #include <stdbool.h>
