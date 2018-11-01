@@ -1,6 +1,8 @@
 #define _XOPEN_SOURCE
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
+#include <unistd.h>
 #include <crypt.h>
 
 char* concat_str(char* first_block, char* second_block) {
