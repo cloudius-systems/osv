@@ -32,41 +32,37 @@ int main(void) {
 	if (strcmp(result3, crypt(password, concat_str((char*) "$5$", password))) != 0) return -3;
 
 	// $6$Ab(d3$TB6UIPV7sprvpcQh2esPr2/ye4FTp9lLft8yAj.2x/HcTXPwzGDxdK/tIF10DdVdV9Z2hhc3MaosUBS3fdueZ1
-	if (strcmp(result4, crypt(password, concat_str((char*) "$6$", password))) !=0) return -4;
+	if (strcmp(result4, crypt(password, concat_str((char*) "$6$", password))) != 0) return -4;
 
 	// encrypt
 	// http://man7.org/linux/man-pages/man3/encrypt.3.html
 	char key[64];
 	char buf[64];
-	char txt[9];
+	char txt[6];
 	int i, j;
 
-	for (i = 0; i < 8; i++) {
+	for (i = 0; i < 6; i++) {
 		for (j = 0; j < 8; j++) {
 			buf[i * 8 + j] = password[i] >> j & 1;
 		}
-
-		setkey(key);
 	}
+	setkey(key);
+
 
 	encrypt(buf, 0);
-	for (i = 0; i < 8; i++) {
+	for (i = 0; i < 6; i++) {
 		for (j = 0, txt[i] = '\0'; j < 8; j++) {
 			txt[i] |= buf[i * 8 + j] << j;
 		}
-
-		txt[8] = '\0';
 	}
 
 	if (strcmp(password, txt) == 0) return -5;
 
 	encrypt(buf, 1);
-	for (i = 0; i < 8; i++) {
+	for (i = 0; i < 6; i++) {
 		for (j = 0, txt[i] = '\0'; j < 8; j++) {
 			txt[i] |= buf[i * 8 + j] << j;
 		}
-
-		txt[8] = '\0';
 	}
 
 	return (strcmp(password, txt) == 0) ? 0 : -6;
