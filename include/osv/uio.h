@@ -48,6 +48,7 @@ enum	uio_rw { UIO_READ, UIO_WRITE };
  */
 #define IOSIZE_MAX      INT_MAX
 
+#undef UIO_MAXIOV
 #define UIO_MAXIOV 1024
 
 #define UIO_SYSSPACE 0
