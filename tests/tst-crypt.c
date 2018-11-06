@@ -8,8 +8,8 @@
 char* concat_str(char* first_block, char* second_block) {
 	static char tmp[10];
 	memset(tmp, 0, sizeof(tmp));
-	strncat(tmp, first_block, sizeof(first_block));
-	strncat(tmp, second_block, sizeof(second_block));
+	strcat(tmp, first_block);
+	strcat(tmp, second_block);
 	return tmp;
 }
 
