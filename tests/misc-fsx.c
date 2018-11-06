@@ -1467,9 +1467,9 @@ main(int argc, char **argv)
 			randomoplen = 0;
 			break;
 		case 'P':
-			strncpy(goodfile, optarg, sizeof(goodfile));
+			strncpy(goodfile, optarg, sizeof(goodfile) - 1);
 			strcat(goodfile, "/");
-			strncpy(logfile, optarg, sizeof(logfile));
+			strncpy(logfile, optarg, sizeof(logfile) - 1);
 			strcat(logfile, "/");
 			break;
                 case 'R':
