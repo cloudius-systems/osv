@@ -125,6 +125,7 @@ tests += testrunner.so
 # Tests with special compilation parameters needed...
 $(out)/tests/tst-mmap.so: COMMON += -Wl,-z,now
 $(out)/tests/tst-elf-permissions.so: COMMON += -Wl,-z,relro
+$(out)/tests/misc-free-perf.so: COMMON += -faligned-new
 
 # The following tests use special linker trickery which apprarently
 # doesn't work as expected with GOLD linker, so we need to choose BFD.
