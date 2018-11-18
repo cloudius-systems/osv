@@ -98,16 +98,25 @@ git submodule update --init --recursive
 Finally, build everything at once:
 
 ```
-make
+make -j$(nproc)
 ```
 
 to build only the OSv kernel, or more usefully,
 
 ```
-scripts/build
+scripts/build -j$(nproc)
 ```
 
 to build an image of the OSv kernel and the default application.
+
+Command nproc (embedded in bash/core-utils) will calculte the number of jobs/threads for make and scripts/build automatically.
+Alternatively, the environment variable MAKEFLAGS can be exported as follows:
+
+```
+export MAKEFLAGS=-j$(nproc)
+```
+
+In that case, make and scripts/build do not need the parameter -j.
 
 scripts/build creates the image ```build/last/usr.img``` in qcow2 format.
 To convert this image to other formats, use the ```scripts/convert```
