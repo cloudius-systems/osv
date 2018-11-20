@@ -9,6 +9,18 @@
 #include <cassert>
 #include <osv/trace-count.hh>
 
+void test_malloc(size_t size) {
+    void *addr = malloc(size);
+    assert(addr);
+    free(addr);
+}
+
+void test_aligned_alloc(size_t alignment, size_t size) {
+    void *addr = aligned_alloc(alignment, size);
+    assert(addr);
+    free(addr);
+}
+
 int main() {
     tracepoint_counter *memory_malloc_mempool_counter = nullptr,
             *memory_malloc_page_counter = nullptr;
@@ -27,19 +39,35 @@ int main() {
     auto memory_malloc_mempool_counter_now = memory_malloc_mempool_counter->read();
     auto memory_malloc_page_counter_now = memory_malloc_page_counter->read();
 
-    const int allocation_count = 1024;
+    const int allocation_count = 256;
     for( int i = 0; i < allocation_count; i++) {
-        void *addr = malloc(7);
-        assert(addr);
-        free(addr);
+        // Expects malloc_pool allocations
+        test_malloc(3);
+        test_malloc(4);
+        test_malloc(6);
+        test_malloc(7);
+        test_malloc(8);
+        test_malloc(9);
+        test_malloc(15);
+        test_malloc(16);
+        test_malloc(17);
+        test_malloc(32);
+        test_malloc(1024);
 
-        addr = malloc(17);
-        assert(addr);
-        free(addr);
+        // Expects malloc_pool allocations
+        test_aligned_alloc(16, 5);
+        test_aligned_alloc(16, 19);
+        test_aligned_alloc(32, 17);
+        test_aligned_alloc(1024, 255);
+
+        // Expects full page allocations
+        test_malloc(1025);
+        test_aligned_alloc(2048, 1027);
     }
 
-    // Verify all allocations above were handled by malloc_pool
-    assert(memory_malloc_mempool_counter->read() - memory_malloc_mempool_counter_now >= 2 * allocation_count);
-    // Verify that NO allocations were handled by alloc_page
-    assert(memory_malloc_page_counter->read() - memory_malloc_page_counter_now == 0);
+    // Verify correct number of allocations above were handled by malloc_pool
+    assert(memory_malloc_mempool_counter->read() - memory_malloc_mempool_counter_now >= 15 * allocation_count);
+
+    // Verify correct number of allocations were handled by alloc_page
+    assert(memory_malloc_page_counter->read() - memory_malloc_page_counter_now == 2 * allocation_count);
 }
