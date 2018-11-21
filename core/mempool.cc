@@ -1547,7 +1547,7 @@ static inline void* std_malloc(size_t size, size_t alignment)
         return libc_error_ptr<void *>(ENOMEM);
     void *ret;
     size_t minimum_size = std::max(size, memory::pool::min_object_size);
-    if (minimum_size <= memory::pool::max_object_size && alignment <= minimum_size && smp_allocator) {
+    if (size <= memory::pool::max_object_size && alignment <= minimum_size && smp_allocator) {
         unsigned n = ilog2_roundup(minimum_size);
         ret = memory::malloc_pools[n].alloc();
         ret = translate_mem_area(mmu::mem_area::main, mmu::mem_area::mempool,

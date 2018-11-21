@@ -12,13 +12,13 @@
 void test_malloc(size_t size) {
     void *addr = malloc(size);
     assert(addr);
-    free(addr);
+    assert(reinterpret_cast<uintptr_t>(addr) % 8 == 0);
 }
 
 void test_aligned_alloc(size_t alignment, size_t size) {
     void *addr = aligned_alloc(alignment, size);
     assert(addr);
-    free(addr);
+    assert(reinterpret_cast<uintptr_t>(addr) % alignment == 0);
 }
 
 int main() {
