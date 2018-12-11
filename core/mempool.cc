@@ -1432,6 +1432,128 @@ static void early_free_page(void* v)
     auto pr = new (v) page_range(page_size);
     free_page_range(pr);
 }
+//
+// Following variables and functions are used to implement simple
+// early (pre-SMP) memory allocation scheme.
+mutex early_alloc_lock;
+// early_object_pages holds a pointer to the beginning of the current page
+// intended to be used for next early object allocation
+static void* early_object_page = nullptr;
+// early_alloc_next_offset points to the 0-relative address of free
+// memory within a page pointed by early_object_page. Normally it is an
+// offset of the first byte right after last byte of the previously
+// allocated object in current page. Typically it is NOT an offset
+// of next object to be allocated as we need to account for proper
+// alignment and space for 2-bytes size field preceding every
+// allocated object.
+static size_t early_alloc_next_offset = 0;
+static size_t early_alloc_previous_offset = 0;
+
+static early_page_header* to_early_page_header(void* object)
+{
+    return reinterpret_cast<early_page_header*>(
+            reinterpret_cast<std::uintptr_t>(object) & ~(page_size - 1));
+}
+
+static void setup_early_alloc_page() {
+    early_object_page = early_alloc_page();
+    early_page_header *page_header = to_early_page_header(early_object_page);
+    // Set the owner field to null so that functions that free objects
+    // or compute object size can differentiate between post-SMP malloc pool
+    // and early (pre-SMP) allocation
+    page_header->owner = nullptr;
+    page_header->allocations_count = 0;
+    early_alloc_next_offset = sizeof(early_page_header);
+}
+
+static bool will_fit_in_early_alloc_page(size_t size, size_t alignment)
+{
+    auto lowest_offset = align_up(sizeof(early_page_header) + sizeof(unsigned short), alignment);
+    return lowest_offset + size <= page_size;
+}
+
+//
+// This function implements simple but effective scheme
+// of allocating objects of size < 4096 before SMP is setup. It does so by
+// remembering where within current page free memory starts. Then it
+// calculates next closest offset matching specified alignment
+// and verifies there is enough space until end of the current
+// page to allocate from. If not it allocates next full page
+// to find enough requested space.
+static void* early_alloc_object(size_t size, size_t alignment)
+{
+    WITH_LOCK(early_alloc_lock) {
+        if (!early_object_page) {
+            setup_early_alloc_page();
+        }
+
+        // Each object is preceded by 2 bytes (unsigned short) of size
+        // so make sure there is enough room between new object and previous one
+        size_t offset = align_up(early_alloc_next_offset + sizeof(unsigned short), alignment);
+
+        if (offset + size > page_size) {
+            setup_early_alloc_page();
+            offset = align_up(early_alloc_next_offset + sizeof(unsigned short), alignment);
+        }
+
+        // Verify we have enough space to satisfy this allocation
+        assert(offset + size <= page_size);
+
+        auto ret = early_object_page + offset;
+        early_alloc_previous_offset = early_alloc_next_offset;
+        early_alloc_next_offset = offset + size;
+
+        // Save size of the allocated object 2 bytes before it address
+        *reinterpret_cast<unsigned short *>(ret - sizeof(unsigned short)) =
+                static_cast<unsigned short>(size);
+        to_early_page_header(early_object_page)->allocations_count++;
+        return ret;
+    }
+}
+
+//
+// This function fairly rarely actually frees previously
+// allocated memory. It does so only if all objects
+// have been freed in a page based on allocations_count or
+// if the object being freed is the last one that was allocated.
+static void early_free_object(void *object)
+{
+    WITH_LOCK(early_alloc_lock) {
+        early_page_header *page_header = to_early_page_header(object);
+        assert(!page_header->owner);
+        unsigned short *size_addr = reinterpret_cast<unsigned short*>(object - sizeof(unsigned short));
+        unsigned short size = *size_addr;
+        if (!size) {
+            return;
+        }
+
+        *size_addr = 0; // Reset size to 0 so that we know this object was freed and prevent from freeing again
+        page_header->allocations_count--;
+        if (page_header->allocations_count <= 0) { // Any early page
+            early_free_page(page_header);
+            if (early_object_page == page_header) {
+                early_object_page = nullptr;
+            }
+        }
+        else if(early_object_page == page_header) { // Current early page
+            // Assuming we are freeing the object that was the last one allocated,
+            // simply subtract its size from the early_alloc_next_offset to arrive at the previous
+            // value of early_alloc_next_offset it was when allocating last object
+            void *last_obj = static_cast<void *>(page_header) + (early_alloc_next_offset - size);
+            // Check if we are freeing last allocated object (free followed by malloc)
+            // and deallocate if so by moving the early_alloc_next_offset to the previous
+            // position
+            if (last_obj == object) {
+                early_alloc_next_offset = early_alloc_previous_offset;
+            }
+        }
+    }
+}
+
+static size_t early_object_size(void* v)
+{
+    return *reinterpret_cast<unsigned short*>(v - sizeof(unsigned short));
+}
 
 static void* untracked_alloc_page()
 {
@@ -1547,18 +1669,22 @@ static inline void* std_malloc(size_t size, size_t alignment)
         return libc_error_ptr<void *>(ENOMEM);
     void *ret;
     size_t minimum_size = std::max(size, memory::pool::min_object_size);
-    if (size <= memory::pool::max_object_size && alignment <= minimum_size && smp_allocator) {
+    if (smp_allocator && size <= memory::pool::max_object_size && alignment <= minimum_size) {
         unsigned n = ilog2_roundup(minimum_size);
         ret = memory::malloc_pools[n].alloc();
         ret = translate_mem_area(mmu::mem_area::main, mmu::mem_area::mempool,
                                  ret);
         trace_memory_malloc_mempool(ret, size, 1 << n, alignment);
-    } else if (alignment <= memory::pool::max_object_size && minimum_size <= alignment && smp_allocator) {
+    } else if (smp_allocator && alignment <= memory::pool::max_object_size && minimum_size <= alignment) {
         unsigned n = ilog2_roundup(alignment);
         ret = memory::malloc_pools[n].alloc();
         ret = translate_mem_area(mmu::mem_area::main, mmu::mem_area::mempool,
                                  ret);
         trace_memory_malloc_mempool(ret, size, 1 << n, alignment);
+    } else if (!smp_allocator && memory::will_fit_in_early_alloc_page(size,alignment)) {
+        ret = memory::early_alloc_object(size, alignment);
+        ret = translate_mem_area(mmu::mem_area::main, mmu::mem_area::mempool,
+                                 ret);
     } else if (minimum_size <= mmu::page_size && alignment <= mmu::page_size) {
         ret = mmu::translate_mem_area(mmu::mem_area::main, mmu::mem_area::page,
                                        memory::alloc_page());
@@ -1592,7 +1718,13 @@ static size_t object_size(void *object)
     case mmu::mem_area::mempool:
         object = mmu::translate_mem_area(mmu::mem_area::mempool,
                                          mmu::mem_area::main, object);
-        return memory::pool::from_object(object)->get_size();
+        {
+            auto pool = memory::pool::from_object(object);
+            if (pool)
+                return pool->get_size();
+            else
+                return memory::early_object_size(object);
+        }
     case mmu::mem_area::page:
         return mmu::page_size;
     case mmu::mem_area::debug:
@@ -1639,7 +1771,13 @@ void free(void* object)
     case mmu::mem_area::mempool:
         object = mmu::translate_mem_area(mmu::mem_area::mempool,
                                          mmu::mem_area::main, object);
-        return memory::pool::from_object(object)->free(object);
+        {
+            auto pool = memory::pool::from_object(object);
+            if (pool)
+                return pool->free(object);
+            else
+                return memory::early_free_object(object);
+        }
     case mmu::mem_area::debug:
         return dbg::free(object);
     default:

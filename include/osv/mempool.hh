@@ -36,6 +36,16 @@ void setup_free_memory(void* start, size_t bytes);
 
 namespace bi = boost::intrusive;
 
+// Please note that early_page_header and pool:page_header
+// structs have common 'owner' field. The owner field
+// in early_page_header is always set to 'nullptr' and allows
+// us to differentiate between pages used by early
+// malloc and regular malloc pools
+struct early_page_header {
+    void* owner;
+    unsigned short allocations_count;
+};
+
 struct free_object {
     free_object* next;
 };
