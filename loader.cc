@@ -141,7 +141,6 @@ static std::string opt_defaultgw;
 static std::string opt_nameserver;
 static std::string opt_redirect;
 static std::chrono::nanoseconds boot_delay;
-bool opt_assign_net = false;
 bool opt_maxnic = false;
 int maxnic;
 
@@ -214,10 +213,6 @@ void parse_options(int loader_argc, char** loader_argv)
 
     if (vars.count("power-off-on-abort")) {
         opt_power_off_on_abort = true;
-    }
-
-    if (vars.count("assign-net")) {
-        opt_assign_net = true;
     }
 
     if (vars.count("maxnic")) {

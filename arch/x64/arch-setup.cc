@@ -258,15 +258,12 @@ void arch_init_premain()
 #include "drivers/virtio-blk.hh"
 #include "drivers/virtio-scsi.hh"
 #include "drivers/virtio-net.hh"
-#include "drivers/virtio-assign.hh"
 #include "drivers/virtio-rng.hh"
 #include "drivers/xenplatform-pci.hh"
 #include "drivers/ahci.hh"
 #include "drivers/vmw-pvscsi.hh"
 #include "drivers/vmxnet3.hh"
 #include "drivers/ide.hh"
-
-extern bool opt_assign_net;
 
 void arch_init_drivers()
 {
@@ -282,11 +279,7 @@ void arch_init_drivers()
     hw::driver_manager* drvman = hw::driver_manager::instance();
     drvman->register_driver(virtio::blk::probe);
     drvman->register_driver(virtio::scsi::probe);
-    if (opt_assign_net) {
-        drvman->register_driver(virtio::assigned::probe_net);
-    } else {
-        drvman->register_driver(virtio::net::probe);
-    }
+    drvman->register_driver(virtio::net::probe);
     drvman->register_driver(virtio::rng::probe);
     drvman->register_driver(xenfront::xenplatform_pci::probe);
     drvman->register_driver(ahci::hba::probe);
