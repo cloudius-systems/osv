@@ -420,6 +420,7 @@ long syscall(long number, ...)
     SYSCALL5(epoll_pwait, int, struct epoll_event *, int, int, void*);
     SYSCALL3(getrandom, char *, size_t, unsigned int);
     SYSCALL2(nanosleep, const struct timespec*, struct timespec *);
+    SYSCALL4(fstatat, int, const char *, struct stat *, int);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
