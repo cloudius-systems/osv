@@ -318,6 +318,13 @@ static int sys_exit(int ret)
     return 0;
 }
 
+#define __NR_sys_exit_group __NR_exit_group
+static int sys_exit_group(int ret)
+{
+    exit(ret);
+    return 0;
+}
+
 #define __NR_sys_ioctl __NR_ioctl
 //
 // We need to define explicit sys_ioctl that takes these 3 parameters to conform
@@ -421,6 +428,7 @@ long syscall(long number, ...)
     SYSCALL3(getrandom, char *, size_t, unsigned int);
     SYSCALL2(nanosleep, const struct timespec*, struct timespec *);
     SYSCALL4(fstatat, int, const char *, struct stat *, int);
+    SYSCALL1(sys_exit_group, int);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
