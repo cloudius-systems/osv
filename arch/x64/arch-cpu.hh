@@ -71,6 +71,11 @@ struct save_fpu {
     T state;
     void save() {
         fpu_state_save(state.addr());
+        // Reset FPU state after saving it as the thread we are about
+        // to switch from might have been using MMX registers and
+        // the thread scheduler that does FPU calculations needs
+        // FPU to be a clean state
+        asm volatile("emms");
     }
     void restore() {
         fpu_state_restore(state.addr());

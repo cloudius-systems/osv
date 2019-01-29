@@ -103,6 +103,9 @@ void thread::switch_to()
            [rip]"i"(offsetof(thread_state, rip))
          : "rbx", "rdx", "rsi", "rdi", "r8", "r9",
            "r10", "r11", "r12", "r13", "r14", "r15", "memory");
+    // As the catch-all solution, reset FPU state and more specifically
+    // its status word. For details why we need it please see issue #1020.
+    asm volatile ("emms");
     processor::fldcw(fpucw);
     processor::ldmxcsr(mxcsr);
 }
