@@ -122,7 +122,7 @@ class virtio_driver;
     class vring {
     public:
 
-        vring(virtio_driver* const dev, u16 num, u16 q_index);
+        vring(virtio_driver* const driver, u16 num, u16 q_index);
         virtual ~vring();
 
         u64 get_paddr();
@@ -183,6 +183,8 @@ class virtio_driver;
         // Total number of descriptors in ring
         int size() {return _num;}
 
+        u16 index() {return _q_index; }
+
         // Use memory order acquire when there are prior updates to local variables that must
         // be seen by the reading threads
         void set_used_event(u16 event, std::memory_order order) {_used_event->store(event, order);};
@@ -240,7 +242,7 @@ class virtio_driver;
     private:
 
         // Up pointer
-        virtio_driver* _dev;
+        virtio_driver* _driver;
         u16 _q_index;
         // The physical of the physical address handed to the virtio device
         void* _vring_ptr;

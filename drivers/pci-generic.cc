@@ -16,6 +16,8 @@
 #include "drivers/pci-function.hh"
 #include "drivers/pci-bridge.hh"
 #include "drivers/pci-device.hh"
+#include "drivers/virtio.hh"
+#include "drivers/virtio-pci-device.hh"
 
 namespace pci {
 
@@ -93,11 +95,28 @@ bool check_bus(u16 bus)
                 break;
             }
 
-            if (!device_manager::instance()->register_device(dev)) {
+            hw_device *dev_to_register = dev;
+            //
+            // Create virtio_device if vendor is VIRTIO_VENDOR_ID
+            if (dev->get_vendor_id() == virtio::VIRTIO_VENDOR_ID) {
+                if (auto pci_dev = dynamic_cast<device*>(dev)) {
+                    dev_to_register = virtio::create_virtio_pci_device(pci_dev);
+                    if (!dev_to_register) {
+                        pci_e("Error: couldn't create virtio pci device %02x:%02x.%x",
+                              bus, slot, func);
+                        delete dev;
+                    }
+                }
+                else
+                    pci_e("Error: expected regular pci device %02x:%02x.%x",
+                          bus, slot, func);
+            }
+
+            if (dev_to_register && !device_manager::instance()->register_device(dev_to_register)) {
                 pci_e("Error: couldn't register device %02x:%02x.%x",
-                        bus, slot, func);
+                      bus, slot, func);
                 //TODO: Need to beautify it as multiple instances of the device may exist
-                delete dev;
+                delete dev_to_register;
             }
 
             // test for multiple functions

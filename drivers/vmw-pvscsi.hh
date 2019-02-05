@@ -8,11 +8,13 @@
 #ifndef VMW_PVSCSI_DRIVER_H
 #define VMW_PVSCSI_DRIVER_H
 
-#include "drivers/virtio.hh"
+#include "drivers/driver.hh"
 #include "drivers/pci-device.hh"
 #include "drivers/scsi-common.hh"
 #include <osv/bio.h>
 #include <osv/types.h>
+#include <osv/interrupt.hh>
+#include <osv/msi.hh>
 
 namespace vmw {
 

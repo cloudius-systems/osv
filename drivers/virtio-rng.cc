@@ -36,13 +36,28 @@ static int virtio_rng_read(void *buf, int size)
 }
 
 namespace virtio {
-rng::rng(pci::device& pci_dev)
-    : virtio_driver(pci_dev)
-    , _irq(pci_dev, [&] { return ack_irq(); }, [&] { handle_irq(); })
+rng::rng(virtio_device& dev)
+    : virtio_driver(dev)
     , _thread(sched::thread::make([&] { worker(); }, sched::thread::attr().name("virtio-rng")))
 {
+    // Steps 4 & 5 - negotiate and confirm features
+    setup_features();
+
+    // Step 7 - generic init of virtqueues
+    probe_virt_queues();
+
+    interrupt_factory int_factory;
+    int_factory.create_pci_interrupt = [this](pci::device &pci_dev) {
+        return new pci_interrupt(
+            pci_dev,
+            [=] { return this->ack_irq(); },
+            [=] { this->handle_irq(); });
+    };
+    _dev.register_interrupt(int_factory);
+
     _queue = get_virt_queue(0);
 
+    // Step 8
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
     _thread->start();
@@ -79,7 +94,7 @@ void rng::handle_irq()
 
 bool rng::ack_irq()
 {
-    return virtio_conf_readb(VIRTIO_PCI_ISR);
+    return _dev.read_and_ack_isr();
 }
 
 void rng::worker()
@@ -124,7 +139,7 @@ void rng::refill()
 
 hw_driver* rng::probe(hw_device* dev)
 {
-    return virtio::probe<rng, VIRTIO_RNG_DEVICE_ID>(dev);
+    return virtio::probe<rng, VIRTIO_ID_RNG>(dev);
 }
 
 }

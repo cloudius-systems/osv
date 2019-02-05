@@ -22,11 +22,7 @@ namespace virtio {
 
 class rng : public virtio_driver, randomdev::hw_rng {
 public:
-    enum {
-        VIRTIO_RNG_DEVICE_ID = 0x1005,
-    };
-
-    explicit rng(pci::device& dev);
+    explicit rng(virtio_device& dev);
     virtual ~rng();
 
     virtual std::string get_name() const { return "virtio-rng"; }
@@ -44,7 +40,6 @@ private:
 
     static const size_t _pool_size = 64;
     std::vector<char> _entropy;
-    pci_interrupt _irq;
     std::unique_ptr<sched::thread> _thread;
     condvar _producer;
     condvar _consumer;

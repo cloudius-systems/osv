@@ -10,7 +10,6 @@
 
 #include "drivers/virtio.hh"
 #include "drivers/virtio-blk.hh"
-#include "drivers/pci-device.hh"
 #include <osv/interrupt.hh>
 
 #include <osv/mempool.hh>
@@ -24,6 +23,7 @@
 
 #include <osv/sched.hh>
 #include "osv/trace.hh"
+#include "osv/aligned_new.hh"
 
 #include <osv/device.h>
 #include <osv/bio.h>
@@ -100,7 +100,7 @@ struct driver blk_driver = {
 
 bool blk::ack_irq()
 {
-    auto isr = virtio_conf_readb(VIRTIO_PCI_ISR);
+    auto isr = _dev.read_and_ack_isr();
     auto queue = get_virt_queue(0);
 
     if (isr) {
@@ -112,33 +112,44 @@ bool blk::ack_irq()
 
 }
 
-blk::blk(pci::device& pci_dev)
-    : virtio_driver(pci_dev), _ro(false)
+blk::blk(virtio_device& virtio_dev)
+    : virtio_driver(virtio_dev), _ro(false)
 {
 
     _driver_name = "virtio-blk";
     _id = _instance++;
     virtio_i("VIRTIO BLK INSTANCE %d", _id);
 
+    // Steps 4 & 5 - negotiate and confirm features
     setup_features();
     read_config();
+
+    // Step 7 - generic init of virtqueues
+    probe_virt_queues();
 
     //register the single irq callback for the block
     sched::thread* t = sched::thread::make([this] { this->req_done(); },
             sched::thread::attr().name("virtio-blk"));
     t->start();
     auto queue = get_virt_queue(0);
-    if (pci_dev.is_msix()) {
-        _msi.easy_register({ { 0, [=] { queue->disable_interrupts(); }, t } });
-    } else {
-        _irq.reset(new pci_interrupt(pci_dev,
-                                     [=] { return ack_irq(); },
-                                     [=] { t->wake(); }));
-    }
+
+    interrupt_factory int_factory;
+    int_factory.register_msi_bindings = [queue, t](interrupt_manager &msi) {
+        msi.easy_register( {{ 0, [=] { queue->disable_interrupts(); }, t }});
+    };
+
+    int_factory.create_pci_interrupt = [this,t](pci::device &pci_dev) {
+        return new pci_interrupt(
+            pci_dev,
+            [=] { return this->ack_irq(); },
+            [=] { t->wake(); });
+    };
+    _dev.register_interrupt(int_factory);
 
     // Enable indirect descriptor
     queue->set_use_indirect(true);
 
+    // Step 8
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
     struct blk_priv* prv;
@@ -164,7 +175,7 @@ blk::~blk()
 void blk::read_config()
 {
     //read all of the block config (including size, mce, topology,..) in one shot
-    virtio_conf_read(virtio_pci_config_offset(), &_config, sizeof(_config));
+    virtio_conf_read(0, &_config, sizeof(_config));
 
     trace_virtio_blk_read_config_capacity(_config.capacity);
 
@@ -308,7 +319,7 @@ u32 blk::get_driver_features()
 
 hw_driver* blk::probe(hw_device* dev)
 {
-    return virtio::probe<blk, VIRTIO_BLK_DEVICE_ID>(dev);
+    return virtio::probe<blk, VIRTIO_ID_BLOCK>(dev);
 }
 
 }

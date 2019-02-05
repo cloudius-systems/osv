@@ -53,7 +53,6 @@ public:
     };
 
     enum {
-        VIRTIO_NET_DEVICE_ID = 0x1000,
         VIRTIO_NET_S_LINK_UP = 1,       /* Link is up */
         VIRTIO_NET_S_ANNOUNCE = 2,       /* Announcement is needed */
         VIRTIO_NET_OK = 0,
@@ -204,8 +203,9 @@ public:
             u16 virtqueue_pairs;
     };
 
-    explicit net(pci::device& dev);
+    explicit net(virtio_device& dev);
     virtual ~net();
+    void init();
 
     virtual std::string get_name() const { return _driver_name; }
     void read_config();
@@ -269,8 +269,6 @@ private:
 
     u32 _hdr_size;
 
-    std::unique_ptr<pci_interrupt> _irq;
-
     struct rxq_stats {
         u64 rx_packets; /* if_ipackets */
         u64 rx_bytes;   /* if_ibytes */
@@ -298,6 +296,12 @@ private:
 
         wakeup_stats tx_wakeup_stats;
     };
+
+    struct pre_init {
+        explicit pre_init(virtio::net *_net) {
+           _net->init();
+        }
+    } _pre_init;
 
     /* Single Rx queue object */
     struct rxq {

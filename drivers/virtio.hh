@@ -9,14 +9,9 @@
 #define VIRTIO_DRIVER_H
 
 #include "driver.hh"
-#include <osv/pci.hh>
 #include "drivers/driver.hh"
 #include "drivers/virtio-vring.hh"
-#include "drivers/pci-function.hh"
-#include "drivers/pci-device.hh"
-#include "drivers/virtio-vring.hh"
-#include <osv/interrupt.hh>
-#include <osv/msi.hh>
+#include "drivers/virtio-device.hh"
 
 namespace virtio {
 
@@ -42,52 +37,15 @@ enum VIRTIO_CONFIG {
     /* The Host publishes the avail index for which it expects a kick
      * at the end of the used ring. Guest should ignore the used->flags field. */
     VIRTIO_RING_F_EVENT_IDX = 29,
-
+    /* Version bit that can be used to detect legacy vs modern devices */
+    VIRTIO_F_VERSION_1 = 32,
     /* Do we get callbacks when the ring is completely used, even if we've
      * suppressed them? */
     VIRTIO_F_NOTIFY_ON_EMPTY = 24,
-    /* A 32-bit r/o bitmask of the features supported by the host */
-    VIRTIO_PCI_HOST_FEATURES = 0,
-    /* A 32-bit r/w bitmask of features activated by the guest */
-    VIRTIO_PCI_GUEST_FEATURES = 4,
-    /* A 32-bit r/w PFN for the currently selected queue */
-    VIRTIO_PCI_QUEUE_PFN = 8,
-    /* A 16-bit r/o queue size for the currently selected queue */
-    VIRTIO_PCI_QUEUE_NUM = 12,
-    /* A 16-bit r/w queue selector */
-    VIRTIO_PCI_QUEUE_SEL = 14,
-    /* A 16-bit r/w queue notifier */
-    VIRTIO_PCI_QUEUE_NOTIFY = 16,
-    /* An 8-bit device status register.  */
-    VIRTIO_PCI_STATUS = 18,
-    /* An 8-bit r/o interrupt status register.  Reading the value will return the
-     * current contents of the ISR and will also clear it.  This is effectively
-     * a read-and-acknowledge. */
-    VIRTIO_PCI_ISR = 19,
-    /* The bit of the ISR which indicates a device configuration change. */
-    VIRTIO_PCI_ISR_CONFIG  = 0x2,
-    /* MSI-X registers: only enabled if MSI-X is enabled. */
-    /* A 16-bit vector for configuration changes. */
-    VIRTIO_MSI_CONFIG_VECTOR = 20,
-    /* A 16-bit vector for selected queue notifications. */
-    VIRTIO_MSI_QUEUE_VECTOR = 22,
-    /* Vector value used to disable MSI for queue */
-    VIRTIO_MSI_NO_VECTOR = 0xffff,
-    /* Virtio ABI version, this must match exactly */
-    VIRTIO_PCI_ABI_VERSION = 0,
-    /* How many bits to shift physical queue address written to QUEUE_PFN.
-     * 12 is historical, and due to x86 page size. */
-    VIRTIO_PCI_QUEUE_ADDR_SHIFT = 12,
-    /* The alignment to use between consumer and producer parts of vring.
-     * x86 pagesize again. */
-    VIRTIO_PCI_VRING_ALIGN = 4096,
-
 };
 
 enum {
     VIRTIO_VENDOR_ID = 0x1af4,
-    VIRTIO_PCI_ID_MIN = 0x1000,
-    VIRTIO_PCI_ID_MAX = 0x103f,
 
     VIRTIO_ID_NET     = 1,
     VIRTIO_ID_BLOCK   = 2,
@@ -100,24 +58,16 @@ enum {
     VIRTIO_ID_RPROC_SERIAL = 11,
 };
 
-#define VIRTIO_ALIGN(x) ((x + (VIRTIO_PCI_VRING_ALIGN-1)) & ~(VIRTIO_PCI_VRING_ALIGN-1))
-
 const unsigned max_virtqueues_nr = 64;
 
 class virtio_driver : public hw_driver {
 public:
-    explicit virtio_driver(pci::device& dev);
+    explicit virtio_driver(virtio_device& dev);
     virtual ~virtio_driver();
 
     virtual std::string get_name() const = 0;
 
     virtual void dump_config();
-
-    // The remaining space is defined by each driver as the per-driver
-    // configuration space
-    int virtio_pci_config_offset() {return (_dev.is_msix_enabled())? 24 : 20;}
-
-    bool parse_pci_config();
 
     void probe_virt_queues();
     vring* get_virt_queue(unsigned idx);
@@ -126,35 +76,21 @@ public:
     void wait_for_queue(vring* queue, bool (vring::*pred)() const);
 
     // guest/host features physical access
-    u32 get_device_features();
+    u64 get_device_features();
     bool get_device_feature_bit(int bit);
-    void set_guest_features(u32 features);
-    void set_guest_feature_bit(int bit, bool on);
-    u32 get_guest_features();
+    void set_guest_features(u64 features);
     bool get_guest_feature_bit(int bit);
 
     // device status
     u8 get_dev_status();
     void set_dev_status(u8 status);
     void add_dev_status(u8 status);
-    void del_dev_status(u8 status);
-
-    // Access the virtio conf address space set by pci bar 1
-    bool get_virtio_config_bit(u32 offset, int bit);
-    void set_virtio_config_bit(u32 offset, int bit, bool on);
 
     // Access virtio config space
     void virtio_conf_read(u32 offset, void* buf, int length);
-    void virtio_conf_write(u32 offset, void* buf, int length);
-    u8 virtio_conf_readb(u32 offset) { return _bar1->readb(offset);};
-    u16 virtio_conf_readw(u32 offset) { return _bar1->readw(offset);};
-    u32 virtio_conf_readl(u32 offset) { return _bar1->readl(offset);};
-    void virtio_conf_writeb(u32 offset, u8 val) { _bar1->writeb(offset, val);};
-    void virtio_conf_writew(u32 offset, u16 val) { _bar1->writew(offset, val);};
-    void virtio_conf_writel(u32 offset, u32 val) { _bar1->writel(offset, val);};
 
     bool kick(int queue);
-    void reset_host_side();
+    void reset_device();
     void free_queues();
 
     bool get_indirect_buf_cap() {return _cap_indirect_buf;}
@@ -162,17 +98,16 @@ public:
     bool get_event_idx_cap() {return _cap_event_idx;}
     void set_event_idx_cap(bool on) {_cap_event_idx = on;}
 
-    pci::device& pci_device() { return _dev; }
+    size_t get_vring_alignment() { return _dev.get_vring_alignment();}
+
 protected:
     // Actual drivers should implement this on top of the basic ring features
     virtual u32 get_driver_features() { return 1 << VIRTIO_RING_F_INDIRECT_DESC | 1 << VIRTIO_RING_F_EVENT_IDX; }
     void setup_features();
 protected:
-    pci::device& _dev;
-    interrupt_manager _msi;
+    virtio_device& _dev;
     vring* _queues[max_virtqueues_nr];
     u32 _num_queues;
-    pci::bar* _bar1;
     bool _cap_indirect_buf;
     bool _cap_event_idx = false;
     static int _disk_idx;
@@ -181,9 +116,9 @@ protected:
 template <typename T, u16 ID>
 hw_driver* probe(hw_device* dev)
 {
-    if (auto pci_dev = dynamic_cast<pci::device*>(dev)) {
-        if (pci_dev->get_id() == hw_device_id(VIRTIO_VENDOR_ID, ID)) {
-            return new T(*pci_dev);
+    if (auto virtio_dev = dynamic_cast<virtio_device*>(dev)) {
+        if (virtio_dev->get_id() == hw_device_id(VIRTIO_VENDOR_ID, ID)) {
+            return new T(*virtio_dev);
         }
     }
     return nullptr;
