@@ -73,6 +73,7 @@ namespace pci {
         // map mmio region
         void map();
         void unmap();
+        bool is_mapped();
         mmioaddr_t get_mmio();
 
         // Access the pio or mmio bar
@@ -343,6 +344,7 @@ namespace pci {
 
         // Capability parsing
         u8 find_capability(u8 cap_id);
+        u8 find_capability(u8 cap_id, std::function<bool (function*, u8)> predicate);
 
         bar * get_bar(int idx);
         void add_bar(int idx, bar* bar);

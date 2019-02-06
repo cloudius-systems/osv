@@ -66,6 +66,10 @@ void virtio_driver::setup_features()
             set_event_idx_cap(true);
 
     set_guest_features(subset);
+
+    // Step 5 - confirm features (only applies to modern devices)
+    if (_dev.is_modern())
+        add_dev_status(VIRTIO_CONFIG_S_FEATURES_OK);
 }
 
 void virtio_driver::dump_config()
@@ -127,6 +131,9 @@ void virtio_driver::probe_virt_queues()
         virtio_d("Queue[%d] -> size %d, paddr %x", (_num_queues-1), qsize, queue->get_paddr());
 
     } while (true);
+
+    for (u32 _q = 0; _q < _num_queues; _q++)
+        _dev.activate_queue(_q);
 }
 
 vring* virtio_driver::get_virt_queue(unsigned idx)

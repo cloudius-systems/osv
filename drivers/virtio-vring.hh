@@ -128,6 +128,10 @@ class virtio_driver;
         u64 get_paddr();
         static unsigned get_size(unsigned int num, unsigned long align);
 
+        u64 get_desc_addr();
+        u64 get_avail_addr();
+        u64 get_used_addr();
+
         // Ring operations
         bool add_buf(void* cookie);
         // Get the top item from the used ring

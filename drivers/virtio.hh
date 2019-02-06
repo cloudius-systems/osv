@@ -23,6 +23,9 @@ enum VIRTIO_CONFIG {
     VIRTIO_CONFIG_S_DRIVER = 2,
     /* Driver has used its parts of the config, and is happy */
     VIRTIO_CONFIG_S_DRIVER_OK = 4,
+    /* Indicates that the driver has acknowledged all the features it understands,
+     * and feature negotiation is complete */
+    VIRTIO_CONFIG_S_FEATURES_OK = 8,
     /* We've given up on this device. */
     VIRTIO_CONFIG_S_FAILED = 0x80,
     /* Some virtio feature bits (currently bits 28 through 31) are reserved for the

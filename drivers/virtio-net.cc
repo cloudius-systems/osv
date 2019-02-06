@@ -250,7 +250,13 @@ net::net(virtio_device& dev)
 
     poll_task->set_priority(sched::thread::priority_infinity);
 
-    _hdr_size = _mergeable_bufs ? sizeof(net_hdr_mrg_rxbuf) : sizeof(net_hdr);
+    if (_dev.is_modern()) {
+        //TODO: Legacy vs non-legacy -> the non-legacy header includes one more field
+        _hdr_size = sizeof(net_hdr_mrg_rxbuf);
+    }
+    else {
+        _hdr_size = _mergeable_bufs ? sizeof(net_hdr_mrg_rxbuf) : sizeof(net_hdr);
+    }
 
     //initialize the BSD interface _if
     _ifn = if_alloc(IFT_ETHER);
@@ -335,8 +341,17 @@ net::~net()
 
 void net::read_config()
 {
-    //read all of the net config  in one shot
-    virtio_conf_read(0, &_config, sizeof(_config));
+    if (_dev.is_modern()) {
+        //TODO: It may to do with legacy vs non-legacy device
+        //but at least with latest spec we should check if individual
+        //config fields are available vs reading whole config struct. For example
+        //firecracker reports memory read violation warnings
+        virtio_conf_read(0, &(_config.mac[0]), sizeof(_config.mac));
+    }
+    else {
+        //read all of the net config  in one shot
+        virtio_conf_read(0, &_config, sizeof(_config));
+    }
 
     if (get_guest_feature_bit(VIRTIO_NET_F_MAC))
         net_i("The mac addr of the device is %x:%x:%x:%x:%x:%x",

@@ -59,6 +59,7 @@ public:
     virtual void select_queue(int queue) = 0;
     virtual u16 get_queue_size() = 0;
     virtual void setup_queue(vring *queue) = 0;
+    virtual void activate_queue(int queue) = 0;
     virtual void kick_queue(int queue) = 0;
 
     virtual u64 get_available_features() = 0;

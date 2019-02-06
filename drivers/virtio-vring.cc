@@ -87,6 +87,21 @@ namespace virtio {
         return mmu::virt_to_phys(_vring_ptr);
     }
 
+    u64 vring::get_desc_addr()
+    {
+        return mmu::virt_to_phys(_desc);
+    }
+
+    u64 vring::get_avail_addr()
+    {
+        return mmu::virt_to_phys(_avail);
+    }
+
+    u64 vring::get_used_addr()
+    {
+        return mmu::virt_to_phys(_used);
+    }
+
     unsigned vring::get_size(unsigned int num, unsigned long align)
     {
         return (((sizeof(vring_desc) * num + sizeof(u16) * (3 + num)

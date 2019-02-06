@@ -57,6 +57,9 @@ enum VIRTIO_PCI_CONFIG {
     VIRTIO_PCI_VRING_ALIGN = 4096,
     VIRTIO_PCI_LEGACY_ID_MIN = 0x1000,
     VIRTIO_PCI_LEGACY_ID_MAX = 0x103f,
+    VIRTIO_PCI_MODERN_ABI_VERSION = 1,
+    VIRTIO_PCI_MODERN_ID_MIN = 0x1040,
+    VIRTIO_PCI_MODERN_ID_MAX = 0x107f,
 };
 
 class virtio_pci_device : public virtio_device {
@@ -100,6 +103,7 @@ public:
     virtual void select_queue(int queue);
     virtual u16 get_queue_size();
     virtual void setup_queue(vring *queue);
+    virtual void activate_queue(int queue) {}
     virtual void kick_queue(int queue);
 
     virtual u64 get_available_features();
@@ -132,6 +136,163 @@ private:
     void virtio_conf_writel(u32 offset, u32 val) { _bar1->writel(offset, val);};
 
     pci::bar* _bar1;
+};
+
+enum VIRTIO_MODERN_PCI_CONFIG {
+    /* Common configuration */
+    VIRTIO_PCI_CAP_COMMON_CFG = 1,
+    /* Notifications */
+    VIRTIO_PCI_CAP_NOTIFY_CFG = 2,
+    /* ISR Status */
+    VIRTIO_PCI_CAP_ISR_CFG = 3,
+    /* Device specific configuration */
+    VIRTIO_PCI_CAP_DEVICE_CFG = 4,
+    /* PCI configuration access */
+    VIRTIO_PCI_CAP_PCI_CFG = 5,
+};
+
+/* This is the PCI capability header: */
+struct virtio_pci_cap {
+    u8 cap_vndr;    /* Generic PCI field: PCI_CAP_ID_VNDR */
+    u8 cap_next;    /* Generic PCI field: next ptr. */
+    u8 cap_len;     /* Generic PCI field: capability length */
+    u8 cfg_type;    /* Identifies the structure. */
+    u8 bar;         /* Where to find it. */
+    u8 padding[3];  /* Pad to full dword. */
+    u32 offset;     /* Offset within bar. */
+    u32 length;     /* Length of the structure, in bytes. */
+};
+
+/* The notification location is found using the VIRTIO_PCI_CAP_NOTIFY_CFG capability.
+ * This capability is immediately followed by an additional field, like so:*/
+struct virtio_pci_notify_cap {
+    struct virtio_pci_cap cap;
+    u32 notify_offset_multiplier;  /* Multiplier for queue_notify_off. */
+};
+
+/* The common configuration structure is found at the bar and offset within
+ * the VIRTIO_PCI_CAP_COMMON_CFG capability; its layout is below. */
+struct virtio_pci_common_cfg {
+    /* About the whole device. */
+    u32 device_feature_select;     /* read-write */
+    u32 device_feature;            /* read-only for driver */
+    u32 driver_feature_select;     /* read-write */
+    u32 driver_feature;            /* read-write */
+    u16 msix_config;               /* read-write */
+    u16 num_queues;                /* read-only for driver */
+    u8 device_status;              /* read-write */
+    u8 config_generation;          /* read-only for driver */
+
+    /* About a specific virtqueue. */
+    u16 queue_select;              /* read-write */
+    u16 queue_size;                /* read-write, power of 2, or 0. */
+    u16 queue_msix_vector;         /* read-write */
+    u16 queue_enable;              /* read-write */
+    u16 queue_notify_off;          /* read-only for driver */
+    u32 queue_desc_lo;             /* read-write */
+    u32 queue_desc_hi;             /* read-write */
+    u32 queue_avail_lo;            /* read-write */
+    u32 queue_avail_hi;            /* read-write */
+    u32 queue_used_lo;             /* read-write */
+    u32 queue_used_hi;             /* read-write */
+};
+
+#define COMMON_CFG_OFFSET_OF(field) offsetof(struct virtio_pci_common_cfg, field)
+
+class virtio_modern_pci_device : public virtio_pci_device {
+public:
+    struct virtio_capability {
+        virtio_capability(u32 cfg_offset, pci::bar* bar, u32 bar_no, u32 bar_offset, u32 length) :
+            _cfg_offset(cfg_offset),
+            _bar(bar),
+            _bar_no(bar_no),
+            _bar_offset(bar_offset),
+            _length(length) {
+            assert(_length > 0 && _bar_offset >= 0 && _bar_offset + _length <= _bar->get_size());
+        }
+
+        u8 virtio_conf_readb(u32 offset) {
+            verify_offset(offset, sizeof(u8));
+            return _bar->readb(_bar_offset + offset);
+        };
+        u16 virtio_conf_readw(u32 offset) {
+            verify_offset(offset, sizeof(u16));
+            return _bar->readw(_bar_offset + offset);
+        };
+        u32 virtio_conf_readl(u32 offset) {
+            verify_offset(offset, sizeof(u32));
+            return _bar->readl(_bar_offset + offset);
+        };
+        void virtio_conf_writeb(u32 offset, u8 val) {
+            verify_offset(offset, sizeof(u8));
+            _bar->writeb(_bar_offset + offset, val);
+        };
+        void virtio_conf_writew(u32 offset, u16 val) {
+            verify_offset(offset, sizeof(u16));
+            _bar->writew(_bar_offset + offset, val);
+        };
+        void virtio_conf_writel(u32 offset, u32 val) {
+            verify_offset(offset, sizeof(u32));
+            _bar->writel(_bar_offset + offset, val);
+        };
+        u32 get_cfg_offset() { return _cfg_offset; }
+
+        void print(const char *prefix) {
+            virtio_d("%s bar=%d, offset=%x, size=%x", prefix, _bar_no, _bar_offset, _length);
+        }
+    private:
+        inline void verify_offset(u32 offset, u32 size) {
+            assert(offset >= 0 && offset + size <= _length);
+        }
+
+        u32 _cfg_offset;
+        pci::bar* _bar;
+        u32 _bar_no;
+        u32 _bar_offset;
+        u32 _length;
+    };
+
+    explicit virtio_modern_pci_device(pci::device *dev);
+    ~virtio_modern_pci_device() {}
+
+    virtual const char *get_version() { return "modern"; }
+    virtual u16 get_type_id() { return _dev->get_device_id() - VIRTIO_PCI_MODERN_ID_MIN; };
+
+    virtual void dump_config();
+
+    virtual void select_queue(int queue);
+    virtual u16 get_queue_size();
+    virtual void setup_queue(vring *queue);
+    virtual void activate_queue(int queue);
+    virtual void kick_queue(int queue);
+
+    virtual u64 get_available_features();
+    virtual bool get_available_feature_bit(int bit);
+
+    virtual void set_enabled_features(u64 features);
+    virtual u64 get_enabled_features();
+    virtual bool get_enabled_feature_bit(int bit);
+
+    virtual u8 get_status();
+    virtual void set_status(u8 status);
+
+    virtual u8 read_config(u32 offset);
+    virtual u8 read_and_ack_isr();
+
+    virtual bool is_modern() { return true; };
+
+protected:
+    virtual bool parse_pci_config();
+private:
+    void parse_virtio_capability(std::unique_ptr<virtio_capability> &ptr, u8 type);
+
+    std::unique_ptr<virtio_capability> _common_cfg;
+    std::unique_ptr<virtio_capability> _isr_cfg;
+    std::unique_ptr<virtio_capability> _notify_cfg;
+    std::unique_ptr<virtio_capability> _device_cfg;
+
+    u32 _notify_offset_multiplier;
+    u32 _queues_notify_offsets[64];
 };
 
 // Creates appropriate instance of virtio_pci_device

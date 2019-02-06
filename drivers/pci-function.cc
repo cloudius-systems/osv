@@ -100,6 +100,11 @@ namespace pci {
         }
     }
 
+    bool bar::is_mapped()
+    {
+        return _addr_mmio != mmio_nullptr;
+    }
+
     mmioaddr_t bar::get_mmio()
     {
         return _addr_mmio;
@@ -809,6 +814,11 @@ namespace pci {
 
     u8 function::find_capability(u8 cap_id)
     {
+        return this->find_capability(cap_id, [](function *fun, u8 off) { return true; } );
+    }
+
+    u8 function::find_capability(u8 cap_id, std::function<bool (function*, u8)> predicate)
+    {
         u8 capabilities_base = pci_readb(PCI_CAPABILITIES_PTR);
         u8 off = capabilities_base;
         u8 bad_offset = 0xFF;
@@ -818,7 +828,7 @@ namespace pci {
         while (off != 0) {
             // Read capability
             u8 capability = pci_readb(off + PCI_CAP_OFF_ID);
-            if (capability == cap_id) {
+            if (capability == cap_id && predicate(this, off)) {
                 return off;
             }
 
@@ -858,9 +868,9 @@ namespace pci {
         for (int bar_idx = 1; bar_idx <= 6; bar_idx++) {
             bar *bar = get_bar(bar_idx);
             if (bar) {
-                pci_d("    bar[%d]: %sbits addr=%p size=%x",
+                pci_d("    bar[%d]: %sbits addr=%p size=%x, mmio=%d",
                     bar_idx, (bar->is_64() ? "64" : "32"),
-                    bar->get_addr64(), bar->get_size());
+                    bar->get_addr64(), bar->get_size(), bar->is_mmio());
             }
         }
 

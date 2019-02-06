@@ -174,8 +174,17 @@ blk::~blk()
 
 void blk::read_config()
 {
-    //read all of the block config (including size, mce, topology,..) in one shot
-    virtio_conf_read(0, &_config, sizeof(_config));
+    if (_dev.is_modern()) {
+        //TODO: It may to do with legacy vs non-legacy device
+        //but at least with latest spec we should check if individual
+        //config fields are available vs reading whole config struct. For example
+        //firecracker reports memory read violation warnings
+        virtio_conf_read(0, &_config, sizeof(_config.capacity));
+    }
+    else {
+        //read all of the block config (including size, mce, topology,..) in one shot
+        virtio_conf_read(0, &_config, sizeof(_config));
+    }
 
     trace_virtio_blk_read_config_capacity(_config.capacity);
 
@@ -251,9 +260,12 @@ int blk::make_request(struct bio* bio)
 
         if (!bio) return EIO;
 
-        if (bio->bio_bcount/mmu::page_size + 1 > _config.seg_max) {
-            trace_virtio_blk_make_request_seg_max(bio->bio_bcount, _config.seg_max);
-            return EIO;
+        // TODO: Check if seg_max is unavailable if modern ...
+        if (!_dev.is_modern()) {
+            if (bio->bio_bcount/mmu::page_size + 1 > _config.seg_max) {
+                trace_virtio_blk_make_request_seg_max(bio->bio_bcount, _config.seg_max);
+                return EIO;
+            }
         }
 
         auto* queue = get_virt_queue(0);
