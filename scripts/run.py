@@ -124,7 +124,7 @@ def start_osv_qemu(options):
         "-device", "ide-hd,drive=hd0,id=idehd0,bus=ide.0"]
     elif options.scsi:
         args += [
-        "-device", "virtio-scsi-pci,id=scsi0",
+        "-device", "virtio-scsi-pci,id=scsi0%s" % options.virtio_device_suffix,
         "-drive", "file=%s,if=none,id=hd0,media=disk,%s" % (options.image_file, aio),
         "-device", "scsi-hd,bus=scsi0.0,drive=hd0,scsi-id=1,lun=0%s" % boot_index]
     elif options.ide:
@@ -132,12 +132,12 @@ def start_osv_qemu(options):
         "-hda", options.image_file]
     else:
         args += [
-        "-device", "virtio-blk-pci,id=blk0,drive=hd0,scsi=off%s" % boot_index,
+        "-device", "virtio-blk-pci,id=blk0,drive=hd0,scsi=off%s%s" % (boot_index, options.virtio_device_suffix),
         "-drive", "file=%s,if=none,id=hd0,%s" % (options.image_file, aio)]
 
     if options.cloud_init_image:
         args += [
-        "-device", "virtio-blk-pci,id=blk1,bootindex=1,drive=hd1,scsi=off",
+        "-device", "virtio-blk-pci,id=blk1,bootindex=1,drive=hd1,scsi=off%s" % options.virtio_device_suffix,
         "-drive", "file=%s,if=none,id=hd1" % (options.cloud_init_image)]
 
     if options.no_shutdown:
@@ -180,9 +180,13 @@ def start_osv_qemu(options):
             args += ["-netdev", "user,id=un%d,net=192.168.122.0/24,host=192.168.122.1%s" % (idx, forward_options)]
             net_device_options.append("netdev=un%d" % idx)
 
-        args += ["-device", ','.join(net_device_options)]
+        net_device_options_str = ','.join(net_device_options)
+        if not options.vmxnet3:
+            net_device_options_str = net_device_options_str + options.virtio_device_suffix
 
-    args += ["-device", "virtio-rng-pci"]
+        args += ["-device", net_device_options_str]
+
+    args += ["-device", "virtio-rng-pci%s" % options.virtio_device_suffix]
 
     if options.hypervisor == "kvm":
         args += ["-enable-kvm", "-cpu", "host,+x2apic"]
@@ -500,6 +504,8 @@ if __name__ == "__main__":
                         help="Path to the optional cloud-init image that should be attached to the instance")
     parser.add_argument("-k", "--kernel", action="store_true",
                         help="Run OSv in QEMU kernel mode as multiboot.")
+    parser.add_argument("--virtio", action="store", choices=["legacy","transitional","modern"], default="transitional",
+                        help="specify virtio version: legacy, transitional or modern")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
@@ -513,5 +519,13 @@ if __name__ == "__main__":
 
     if cmdargs.hypervisor == "auto":
         cmdargs.hypervisor = choose_hypervisor(cmdargs.networking)
+
+    if cmdargs.virtio == "legacy":
+        cmdargs.virtio_device_suffix = ",disable-legacy=off,disable-modern=on"
+    elif cmdargs.virtio == "modern":
+        cmdargs.virtio_device_suffix = ",disable-legacy=on,disable-modern=off"
+    else:
+        cmdargs.virtio_device_suffix = ""
+
     # Call main
     main(cmdargs)
