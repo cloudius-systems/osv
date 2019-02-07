@@ -844,6 +844,7 @@ ifeq ($(arch),aarch64)
 drivers += drivers/pl011.o
 drivers += drivers/xenconsole.o
 drivers += drivers/virtio.o
+drivers += drivers/virtio-pci-device.o
 drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-rng.o
 drivers += drivers/virtio-blk.o
