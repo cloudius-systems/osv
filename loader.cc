@@ -55,6 +55,7 @@
 #include "drivers/null.hh"
 
 #include "libc/network/__dns.hh"
+#include <processor.hh>
 
 using namespace osv;
 using namespace osv::clock::literals;
@@ -426,6 +427,10 @@ void* do_main_thread(void *_main_args)
     }
 
     boot_time.event("Total time");
+    // Some hypervisors like firecracker when booting OSv
+    // look for this write to this port as a signal of end of
+    // boot time.
+    processor::outb(123, 0x3f0);
 
     if (opt_bootchart) {
         boot_time.print_chart();

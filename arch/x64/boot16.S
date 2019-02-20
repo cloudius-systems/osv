@@ -12,7 +12,7 @@ target =  OSV_LZKERNEL_BASE
 elf_entry_point_header_offset = 0x18
 lzentry = target+elf_entry_point_header_offset
 loader = OSV_KERNEL_BASE
-entry = loader+elf_entry_point_header_offset
+start32 = loader+0x800
 
 mb_info = 0x1000
 // OSv information lays in the end of this struct, which is 88 bytes in size.
@@ -168,7 +168,7 @@ done_e820:
     mov %edx, mb_uncompress_hi
     mov $loader, %eax
     mov $mb_info, %ebx
-    call *entry
+    call *start32
 
 .org 0x1b8
 .byte 0x56, 0x53, 0x4F, 0, 0, 0

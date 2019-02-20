@@ -14,7 +14,13 @@ SECTIONS
 	 *
 	 * We can't export the ELF header base as a symbol, because ld
 	 * insists on moving stuff around if we do.
+	 *
+	 * Place address of start32 routine at predefined offset in memory
 	 */
+    . = OSV_KERNEL_BASE + 0x800;
+    .start32_address : {
+        *(.start32_address)
+    }
     . = OSV_KERNEL_BASE + 0x1000;
     .dynamic : { *(.dynamic) } :dynamic :text
     .text : {
@@ -108,4 +114,4 @@ PHDRS {
 	eh_frame PT_GNU_EH_FRAME;
 	note PT_NOTE;
 }
-ENTRY(start32);
+ENTRY(entry64);
