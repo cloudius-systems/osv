@@ -12,6 +12,7 @@
 namespace acpi {
 
 void init();
+bool is_enabled();
 
 }
 

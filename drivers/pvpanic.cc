@@ -21,6 +21,10 @@ static u32 port;
 
 void probe_and_setup()
 {
+    if (!acpi::is_enabled()) {
+        return;
+    }
+
     ACPI_BUFFER results;
     ACPI_OBJECT obj;
     ACPI_STATUS status;

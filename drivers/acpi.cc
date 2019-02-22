@@ -539,8 +539,21 @@ namespace acpi {
 
 static ACPI_TABLE_DESC TableArray[ACPI_MAX_INIT_TABLES];
 
+static bool enabled = false;
+
+bool is_enabled() {
+    return enabled;
+}
+
 void early_init()
 {
+    ACPI_SIZE rsdp;
+    auto st = AcpiFindRootPointer(&rsdp);
+    if (ACPI_FAILURE(st)) {
+        acpi_w("Warning: Failed to find ACPI root pointer!\n");
+        return;
+    }
+
     ACPI_STATUS status;
 
     status = AcpiInitializeTables(TableArray, ACPI_MAX_INIT_TABLES, TRUE);
@@ -569,6 +582,8 @@ void early_init()
         acpi_e("AcpiLoadTables failed: %s\n", AcpiFormatException(status));
         return;
     }
+
+    enabled = true;
 }
 
 UINT32 acpi_poweroff(void *unused)
@@ -581,6 +596,10 @@ UINT32 acpi_poweroff(void *unused)
 // The following function comes from the documentation example page 262
 void init()
 {
+    if (!enabled) {
+        return;
+    }
+
     ACPI_STATUS status;
 
 

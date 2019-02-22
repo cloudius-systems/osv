@@ -15,6 +15,7 @@
 extern "C" {
 #include "acpi.h"
 }
+#include <drivers/acpi.hh>
 #include <boost/intrusive/parent_from_member.hpp>
 #include <osv/debug.hh>
 #include <osv/sched.hh>
@@ -72,9 +73,26 @@ void parse_madt()
     debug(fmt("%d CPUs detected\n") % nr_cpus);
 }
 
+void parse_mp_table()
+{
+    //TODO: This a nasty hack to support single vCPU. Eventually we should
+    // parse out equivalent information about all vCPUs from MP table. For
+    // details please see https://wiki.osdev.org/Symmetric_Multiprocessing#Finding_information_using_MP_Table
+    auto c = new sched::cpu(0);
+    c->arch.apic_id = 0;
+    c->arch.initstack.next = smp_stack_free;
+    smp_stack_free = &c->arch.initstack;
+    sched::cpus.push_back(c);
+}
+
 void smp_init()
 {
-    parse_madt();
+    if (acpi::is_enabled()) {
+        parse_madt();
+    } else {
+        parse_mp_table();
+    }
+
     sched::current_cpu = sched::cpus[0];
     for (auto c : sched::cpus) {
         c->incoming_wakeups = aligned_array_new<sched::cpu::incoming_wakeup_queue>(sched::cpus.size());

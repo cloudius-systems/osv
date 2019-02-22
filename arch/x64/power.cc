@@ -15,6 +15,8 @@ extern "C" {
 #include "acpi.h"
 }
 
+#include <drivers/acpi.hh>
+
 namespace osv {
 
 void halt(void)
@@ -27,15 +29,25 @@ void halt(void)
 
 void poweroff(void)
 {
-    ACPI_STATUS status = AcpiEnterSleepStatePrep(ACPI_STATE_S5);
-    if (ACPI_FAILURE(status)) {
-        debug("AcpiEnterSleepStatePrep failed: %s\n", AcpiFormatException(status));
-        halt();
-    }
-    status = AcpiEnterSleepState(ACPI_STATE_S5);
-    if (ACPI_FAILURE(status)) {
-        debug("AcpiEnterSleepState failed: %s\n", AcpiFormatException(status));
-        halt();
+    if (acpi::is_enabled()) {
+        ACPI_STATUS status = AcpiEnterSleepStatePrep(ACPI_STATE_S5);
+        if (ACPI_FAILURE(status)) {
+            debug("AcpiEnterSleepStatePrep failed: %s\n", AcpiFormatException(status));
+            halt();
+        }
+        status = AcpiEnterSleepState(ACPI_STATE_S5);
+        if (ACPI_FAILURE(status)) {
+            debug("AcpiEnterSleepState failed: %s\n", AcpiFormatException(status));
+            halt();
+        }
+    } else {
+        // On hypervisors that do not support ACPI like firecracker we
+        // resort to a reset using the 8042 PS/2 Controller ("keyboard controller")
+        // as a way to shutdown the VM
+        //TODO: Figure out if there is another method we could try
+        // first to to power off on non-firecracker platforms
+        // without using ACPI
+        processor::outb(0xfe, 0x64);
     }
 
     // We shouldn't get here on x86.
