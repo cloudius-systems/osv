@@ -429,6 +429,7 @@ long syscall(long number, ...)
     SYSCALL2(nanosleep, const struct timespec*, struct timespec *);
     SYSCALL4(fstatat, int, const char *, struct stat *, int);
     SYSCALL1(sys_exit_group, int);
+    SYSCALL4(readlinkat, int, const char *, char *, size_t);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);

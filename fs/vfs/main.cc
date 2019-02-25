@@ -1760,6 +1760,39 @@ ssize_t readlink(const char *pathname, char *buf, size_t bufsize)
     return -1;
 }
 
+ssize_t readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsize)
+{
+    if (pathname[0] == '/' || dirfd == AT_FDCWD) {
+        return readlink(pathname, buf, bufsize);
+    }
+
+    struct file *fp;
+    int error = fget(dirfd, &fp);
+    if (error) {
+        errno = error;
+        return -1;
+    }
+
+    struct vnode *vp = fp->f_dentry->d_vnode;
+    vn_lock(vp);
+
+    std::unique_ptr<char []> up (new char[PATH_MAX]);
+    char *p = up.get();
+
+    /* build absolute path */
+    strlcpy(p, fp->f_dentry->d_mount->m_path, PATH_MAX);
+    strlcat(p, fp->f_dentry->d_path, PATH_MAX);
+    strlcat(p, "/", PATH_MAX);
+    strlcat(p, pathname, PATH_MAX);
+
+    error = readlink(p, buf, bufsize);
+
+    vn_unlock(vp);
+    fdrop(fp);
+
+    return error;
+}
+
 TRACEPOINT(trace_vfs_fallocate, "%d %d 0x%x 0x%x", int, int, loff_t, loff_t);
 TRACEPOINT(trace_vfs_fallocate_ret, "");
 TRACEPOINT(trace_vfs_fallocate_err, "%d", int);
