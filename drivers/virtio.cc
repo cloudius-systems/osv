@@ -63,22 +63,32 @@ void virtio_driver::setup_features()
         set_indirect_buf_cap(true);
 
     if (subset & (1 << VIRTIO_RING_F_EVENT_IDX))
-            set_event_idx_cap(true);
+        set_event_idx_cap(true);
 
     set_guest_features(subset);
 
-    // Step 5 - confirm features (only applies to modern devices)
-    if (_dev.is_modern())
+    if (_dev.is_modern()) {
+        //
+        // Step 5 - confirm features (only applies to modern devices)
         add_dev_status(VIRTIO_CONFIG_S_FEATURES_OK);
+        //
+        // Step 6 - re-read device status to ensure the FEATURES_OK bit is still set
+        assert(get_dev_status() & VIRTIO_CONFIG_S_FEATURES_OK);
+    }
 }
 
 void virtio_driver::dump_config()
 {
     _dev.dump_config();
 
+#if CONF_logger_debug
+    auto device_features = get_device_features();
     virtio_d("    virtio features: ");
-    for (int i = 0; i < 64; i++)
-        virtio_d(" %d ", get_device_feature_bit(i));
+
+    for (int i = 0; i < 64; i++) {
+        virtio_d(" %d ", 0 != (device_features & (1 << i)));
+    }
+#endif
 }
 
 void virtio_driver::reset_device()
@@ -172,19 +182,17 @@ u64 virtio_driver::get_device_features()
     return _dev.get_available_features();
 }
 
-bool virtio_driver::get_device_feature_bit(int bit)
-{
-    return _dev.get_available_feature_bit(bit);
-}
-
 void virtio_driver::set_guest_features(u64 features)
 {
+    // Write negotiated features to the device
     _dev.set_enabled_features(features);
+    // Save negotiated features
+    _enabled_features = features;
 }
 
 bool virtio_driver::get_guest_feature_bit(int bit)
 {
-    return _dev.get_enabled_feature_bit(bit);
+    return (_enabled_features & (1 << bit)) != 0;
 }
 
 u8 virtio_driver::get_dev_status()

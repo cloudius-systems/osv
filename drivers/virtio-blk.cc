@@ -115,12 +115,11 @@ bool blk::ack_irq()
 blk::blk(virtio_device& virtio_dev)
     : virtio_driver(virtio_dev), _ro(false)
 {
-
     _driver_name = "virtio-blk";
     _id = _instance++;
     virtio_i("VIRTIO BLK INSTANCE %d", _id);
 
-    // Steps 4 & 5 - negotiate and confirm features
+    // Steps 4, 5 & 6 - negotiate and confirm features
     setup_features();
     read_config();
 
@@ -144,6 +143,13 @@ blk::blk(virtio_device& virtio_dev)
             [=] { return this->ack_irq(); },
             [=] { t->wake(); });
     };
+
+    int_factory.create_gsi_edge_interrupt = [this,t]() {
+        return new gsi_edge_interrupt(
+                _dev.get_irq(),
+                [=] { if (this->ack_irq()) t->wake(); });
+    };
+
     _dev.register_interrupt(int_factory);
 
     // Enable indirect descriptor
@@ -172,33 +178,34 @@ blk::~blk()
     // including the thread objects and their stack
 }
 
+#define READ_CONFIGURATION_FIELD(config,field_name,field) \
+    virtio_conf_read(offsetof(config,field_name), &field, sizeof(field));
+
 void blk::read_config()
 {
-    if (_dev.is_modern()) {
-        //TODO: It may to do with legacy vs non-legacy device
-        //but at least with latest spec we should check if individual
-        //config fields are available vs reading whole config struct. For example
-        //firecracker reports memory read violation warnings
-        virtio_conf_read(0, &_config, sizeof(_config.capacity));
-    }
-    else {
-        //read all of the block config (including size, mce, topology,..) in one shot
-        virtio_conf_read(0, &_config, sizeof(_config));
-    }
-
+    READ_CONFIGURATION_FIELD(blk_config,capacity,_config.capacity)
     trace_virtio_blk_read_config_capacity(_config.capacity);
 
-    if (get_guest_feature_bit(VIRTIO_BLK_F_SIZE_MAX))
+    if (get_guest_feature_bit(VIRTIO_BLK_F_SIZE_MAX)) {
+        READ_CONFIGURATION_FIELD(blk_config,size_max,_config.size_max)
         trace_virtio_blk_read_config_size_max(_config.size_max);
-    if (get_guest_feature_bit(VIRTIO_BLK_F_SEG_MAX))
+    }
+    if (get_guest_feature_bit(VIRTIO_BLK_F_SEG_MAX)) {
+        READ_CONFIGURATION_FIELD(blk_config,seg_max,_config.seg_max)
         trace_virtio_blk_read_config_seg_max(_config.seg_max);
+    }
     if (get_guest_feature_bit(VIRTIO_BLK_F_GEOMETRY)) {
+        READ_CONFIGURATION_FIELD(blk_config,geometry,_config.geometry)
         trace_virtio_blk_read_config_geometry((u32)_config.geometry.cylinders, (u32)_config.geometry.heads, (u32)_config.geometry.sectors);
     }
-    if (get_guest_feature_bit(VIRTIO_BLK_F_BLK_SIZE))
+    if (get_guest_feature_bit(VIRTIO_BLK_F_BLK_SIZE)) {
+        READ_CONFIGURATION_FIELD(blk_config,blk_size,_config.blk_size)
         trace_virtio_blk_read_config_blk_size(_config.blk_size);
+    }
     if (get_guest_feature_bit(VIRTIO_BLK_F_TOPOLOGY)) {
-        trace_virtio_blk_read_config_topology((u32)_config.physical_block_exp, (u32)_config.alignment_offset, (u32)_config.min_io_size, (u32)_config.opt_io_size);
+        READ_CONFIGURATION_FIELD(blk_config,topology,_config.topology)
+        trace_virtio_blk_read_config_topology((u32)_config.topology.physical_block_exp, (u32)_config.topology.alignment_offset,
+          (u32)_config.topology.min_io_size, (u32)_config.topology.opt_io_size);
     }
     if (get_guest_feature_bit(VIRTIO_BLK_F_CONFIG_WCE))
         trace_virtio_blk_read_config_wce((u32)_config.wce);
@@ -260,8 +267,7 @@ int blk::make_request(struct bio* bio)
 
         if (!bio) return EIO;
 
-        // TODO: Check if seg_max is unavailable if modern ...
-        if (!_dev.is_modern()) {
+        if (get_guest_feature_bit(VIRTIO_BLK_F_SEG_MAX)) {
             if (bio->bio_bcount/mmu::page_size + 1 > _config.seg_max) {
                 trace_virtio_blk_make_request_seg_max(bio->bio_bcount, _config.seg_max);
                 return EIO;

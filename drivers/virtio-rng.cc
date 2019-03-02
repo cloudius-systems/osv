@@ -40,7 +40,7 @@ rng::rng(virtio_device& dev)
     : virtio_driver(dev)
     , _thread(sched::thread::make([&] { worker(); }, sched::thread::attr().name("virtio-rng")))
 {
-    // Steps 4 & 5 - negotiate and confirm features
+    // Steps 4, 5 & 6 - negotiate and confirm features
     setup_features();
 
     // Step 7 - generic init of virtqueues

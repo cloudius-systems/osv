@@ -80,7 +80,6 @@ public:
 
     // guest/host features physical access
     u64 get_device_features();
-    bool get_device_feature_bit(int bit);
     void set_guest_features(u64 features);
     bool get_guest_feature_bit(int bit);
 
@@ -114,6 +113,7 @@ protected:
     bool _cap_indirect_buf;
     bool _cap_event_idx = false;
     static int _disk_idx;
+    u64 _enabled_features;
 };
 
 template <typename T, u16 ID>

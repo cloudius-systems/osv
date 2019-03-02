@@ -97,24 +97,9 @@ u64 virtio_legacy_pci_device::get_available_features()
     return virtio_conf_readl(VIRTIO_PCI_HOST_FEATURES);
 }
 
-bool virtio_legacy_pci_device::get_available_feature_bit(int bit)
-{
-    return get_virtio_config_bit(VIRTIO_PCI_HOST_FEATURES, bit);
-}
-
 void virtio_legacy_pci_device::set_enabled_features(u64 features)
 {
     virtio_conf_writel(VIRTIO_PCI_GUEST_FEATURES, (u32)features);
-}
-
-u64 virtio_legacy_pci_device::get_enabled_features()
-{
-    return virtio_conf_readl(VIRTIO_PCI_GUEST_FEATURES);
-}
-
-bool virtio_legacy_pci_device::get_enabled_feature_bit(int bit)
-{
-    return get_virtio_config_bit(VIRTIO_PCI_GUEST_FEATURES, bit);
 }
 
 u8 virtio_legacy_pci_device::get_status()
@@ -241,34 +226,12 @@ u64 virtio_modern_pci_device::get_available_features()
     return features;
 }
 
-bool virtio_modern_pci_device::get_available_feature_bit(int bit)
-{
-    return 0 != (get_available_features() & (1 << bit));
-}
-
 void virtio_modern_pci_device::set_enabled_features(u64 features)
 {
     _common_cfg->virtio_conf_writel(COMMON_CFG_OFFSET_OF(driver_feature_select), 0);
     _common_cfg->virtio_conf_writel(COMMON_CFG_OFFSET_OF(driver_feature), (u32)features);
     _common_cfg->virtio_conf_writel(COMMON_CFG_OFFSET_OF(driver_feature_select), 1);
     _common_cfg->virtio_conf_writel(COMMON_CFG_OFFSET_OF(driver_feature), features >> 32);
-}
-
-u64 virtio_modern_pci_device::get_enabled_features()
-{
-    u64 features;
-
-    _common_cfg->virtio_conf_writel(COMMON_CFG_OFFSET_OF(driver_feature_select), 0);
-    features = _common_cfg->virtio_conf_readl(COMMON_CFG_OFFSET_OF(driver_feature));
-    _common_cfg->virtio_conf_writel(COMMON_CFG_OFFSET_OF(driver_feature_select), 1);
-    features |= ((u64)_common_cfg->virtio_conf_readl(COMMON_CFG_OFFSET_OF(driver_feature)) << 32);
-
-    return features;
-}
-
-bool virtio_modern_pci_device::get_enabled_feature_bit(int bit)
-{
-    return 0 != (get_enabled_features() & (1 << bit));
 }
 
 u8 virtio_modern_pci_device::get_status()

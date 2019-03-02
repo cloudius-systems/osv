@@ -147,7 +147,7 @@ scsi::scsi(virtio_device& dev)
     _driver_name = "virtio-scsi";
     _id = _instance++;
 
-    // Steps 4 & 5 - negotiate and confirm features
+    // Steps 4, 5 & 6 - negotiate and confirm features
     setup_features();
     read_config();
 

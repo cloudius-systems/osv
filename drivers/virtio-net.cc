@@ -228,7 +228,7 @@ bool net::ack_irq()
 
 void net::init()
 {
-    // Steps 4 & 5 - negotiate and confirm features
+    // Steps 4, 5 & 6 - negotiate and confirm features
     setup_features();
     read_config();
 
@@ -250,8 +250,8 @@ net::net(virtio_device& dev)
 
     poll_task->set_priority(sched::thread::priority_infinity);
 
+    // Please look at the section 5.1.6.1 of virtio specification for explanation
     if (_dev.is_modern()) {
-        //TODO: Legacy vs non-legacy -> the non-legacy header includes one more field
         _hdr_size = sizeof(net_hdr_mrg_rxbuf);
     }
     else {
@@ -316,6 +316,13 @@ net::net(virtio_device& dev)
             [=] { return this->ack_irq(); },
             [=] { poll_task->wake(); });
     };
+
+    int_factory.create_gsi_edge_interrupt = [this,poll_task]() {
+        return new gsi_edge_interrupt(
+            _dev.get_irq(),
+            [=] { if (this->ack_irq()) poll_task->wake(); });
+    };
+
     _dev.register_interrupt(int_factory);
 
     fill_rx_ring();
@@ -341,17 +348,7 @@ net::~net()
 
 void net::read_config()
 {
-    if (_dev.is_modern()) {
-        //TODO: It may to do with legacy vs non-legacy device
-        //but at least with latest spec we should check if individual
-        //config fields are available vs reading whole config struct. For example
-        //firecracker reports memory read violation warnings
-        virtio_conf_read(0, &(_config.mac[0]), sizeof(_config.mac));
-    }
-    else {
-        //read all of the net config  in one shot
-        virtio_conf_read(0, &_config, sizeof(_config));
-    }
+    virtio_conf_read(0, &(_config.mac[0]), sizeof(_config.mac));
 
     if (get_guest_feature_bit(VIRTIO_NET_F_MAC))
         net_i("The mac addr of the device is %x:%x:%x:%x:%x:%x",

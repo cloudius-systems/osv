@@ -82,15 +82,17 @@ public:
             /* block size of device (if VIRTIO_BLK_F_BLK_SIZE) */
             u32 blk_size;
 
-            /* the next 4 entries are guarded by VIRTIO_BLK_F_TOPOLOGY  */
-            /* exponent for physical block per logical block. */
-            u8 physical_block_exp;
-            /* alignment offset in logical blocks. */
-            u8 alignment_offset;
-            /* minimum I/O size without performance penalty in logical blocks. */
-            u16 min_io_size;
-            /* optimal sustained I/O size in logical blocks. */
-            u32 opt_io_size;
+            struct blk_topology {
+                    /* the next 4 entries are guarded by VIRTIO_BLK_F_TOPOLOGY  */
+                    /* exponent for physical block per logical block. */
+                    u8 physical_block_exp;
+                    /* alignment offset in logical blocks. */
+                    u8 alignment_offset;
+                    /* minimum I/O size without performance penalty in logical blocks. */
+                    u16 min_io_size;
+                    /* optimal sustained I/O size in logical blocks. */
+                    u32 opt_io_size;
+            } topology;
 
             /* writeback mode (if VIRTIO_BLK_F_CONFIG_WCE) */
             u8 wce;

@@ -65,11 +65,7 @@ public:
     virtual void kick_queue(int queue) = 0;
 
     virtual u64 get_available_features() = 0;
-    virtual bool get_available_feature_bit(int bit) = 0;
-
     virtual void set_enabled_features(u64 features) = 0;
-    virtual u64 get_enabled_features() = 0;
-    virtual bool get_enabled_feature_bit(int bit) = 0;
 
     // From the spec:
     // "The device status field provides a simple low-level indication of

@@ -107,11 +107,7 @@ public:
     virtual void kick_queue(int queue);
 
     virtual u64 get_available_features();
-    virtual bool get_available_feature_bit(int bit);
-
     virtual void set_enabled_features(u64 features);
-    virtual u64 get_enabled_features();
-    virtual bool get_enabled_feature_bit(int bit);
 
     virtual u8 get_status();
     virtual void set_status(u8 status);
@@ -267,11 +263,7 @@ public:
     virtual void kick_queue(int queue);
 
     virtual u64 get_available_features();
-    virtual bool get_available_feature_bit(int bit);
-
     virtual void set_enabled_features(u64 features);
-    virtual u64 get_enabled_features();
-    virtual bool get_enabled_feature_bit(int bit);
 
     virtual u8 get_status();
     virtual void set_status(u8 status);
