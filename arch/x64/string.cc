@@ -329,7 +329,7 @@ extern "C" void backwards_fixup(exception_frame *ef, size_t fixup)
 // loop counter may be in some register other than rcx. Because we have listed
 // it as an input operand, *at the time* of copy it will be in the correct
 // position, which means the compiler will have to generate an extra operation
-// in that scenarion. We will trust the compiler to do the right thing and keep
+// in that scenario. We will trust the compiler to do the right thing and keep
 // the counter in rcx since it knows it has to be there eventually. And if it
 // can't, it can't. That's probably better than to code the whole thing ourselves.
 static inline __always_inline void
