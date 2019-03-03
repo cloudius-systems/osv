@@ -233,18 +233,18 @@ void arch_init_premain()
 #include "drivers/vmxnet3.hh"
 #include "drivers/ide.hh"
 
+extern bool opt_pci_disabled;
 void arch_init_drivers()
 {
     // initialize panic drivers
     panic::pvpanic::probe_and_setup();
     boot_time.event("pvpanic done");
 
-    // Enumerate PCI devices
-    //TODO: Add boot option --pci=off to skip PCI enumeration
-    // as on some platforms like firecracker enumerating "empty" bus
-    // takes up to 10ms
-    pci::pci_device_enumeration();
-    boot_time.event("pci enumerated");
+    if (!opt_pci_disabled) {
+        // Enumerate PCI devices
+        pci::pci_device_enumeration();
+        boot_time.event("pci enumerated");
+    }
 
     // Initialize all drivers
     hw::driver_manager* drvman = hw::driver_manager::instance();

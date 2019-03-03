@@ -144,6 +144,7 @@ static std::string opt_redirect;
 static std::chrono::nanoseconds boot_delay;
 bool opt_maxnic = false;
 int maxnic;
+bool opt_pci_disabled = false;
 
 static int sampler_frequency;
 static bool opt_enable_sampler = false;
@@ -182,6 +183,7 @@ void parse_options(int loader_argc, char** loader_argv)
         ("delay", bpo::value<float>()->default_value(0), "delay in seconds before boot")
         ("redirect", bpo::value<std::string>(), "redirect stdout and stderr to file")
         ("disable_rofs_cache", "disable ROFS memory cache")
+        ("nopci", "disable PCI enumeration")
     ;
     bpo::variables_map vars;
     // don't allow --foo bar (require --foo=bar) so we can find the first non-option
@@ -295,6 +297,10 @@ void parse_options(int loader_argc, char** loader_argv)
     }
 
     boot_delay = std::chrono::duration_cast<std::chrono::nanoseconds>(1_s * vars["delay"].as<float>());
+
+    if (vars.count("nopci")) {
+        opt_pci_disabled = true;
+    }
 }
 
 // return the std::string and the commands_args poiting to them as a move
