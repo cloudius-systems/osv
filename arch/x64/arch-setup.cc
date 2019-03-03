@@ -24,9 +24,11 @@
 
 osv_multiboot_info_type* osv_multiboot_info;
 
+#include "drivers/virtio-mmio.hh"
 void parse_cmdline(multiboot_info_type& mb)
 {
     auto p = reinterpret_cast<char*>(mb.cmdline);
+    virtio::parse_mmio_device_configuration(p);
     osv::parse_cmdline(p);
 }
 
@@ -245,6 +247,9 @@ void arch_init_drivers()
         pci::pci_device_enumeration();
         boot_time.event("pci enumerated");
     }
+
+    // Register any parsed virtio-mmio devices
+    virtio::register_mmio_devices(device_manager::instance());
 
     // Initialize all drivers
     hw::driver_manager* drvman = hw::driver_manager::instance();

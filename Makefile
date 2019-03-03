@@ -821,6 +821,7 @@ drivers += arch/$(arch)/pvclock-abi.o
 drivers += drivers/virtio.o
 drivers += drivers/virtio-pci-device.o
 drivers += drivers/virtio-vring.o
+drivers += drivers/virtio-mmio.o
 drivers += drivers/virtio-net.o
 drivers += drivers/vmxnet3.o
 drivers += drivers/vmxnet3-queues.o
