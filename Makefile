@@ -893,6 +893,8 @@ objects += arch/x64/ioapic.o
 objects += arch/x64/apic.o
 objects += arch/x64/apic-clock.o
 objects += arch/x64/entry-xen.o
+objects += arch/x64/vmlinux.o
+objects += arch/x64/vmlinux-boot64.o
 objects += core/sampler.o
 objects += $(acpi)
 endif # x64

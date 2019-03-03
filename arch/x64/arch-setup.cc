@@ -22,45 +22,6 @@
 #include <osv/commands.hh>
 #include "dmi.hh"
 
-struct multiboot_info_type {
-    u32 flags;
-    u32 mem_lower;
-    u32 mem_upper;
-    u32 boot_device;
-    u32 cmdline;
-    u32 mods_count;
-    u32 mods_addr;
-    u32 syms[4];
-    u32 mmap_length;
-    u32 mmap_addr;
-    u32 drives_length;
-    u32 drives_addr;
-    u32 config_table;
-    u32 boot_loader_name;
-    u32 apm_table;
-    u32 vbe_control_info;
-    u32 vbe_mode_info;
-    u16 vbe_mode;
-    u16 vbe_interface_seg;
-    u16 vbe_interface_off;
-    u16 vbe_interface_len;
-} __attribute__((packed));
-
-struct osv_multiboot_info_type {
-    struct multiboot_info_type mb;
-    u32 tsc_init, tsc_init_hi;
-    u32 tsc_disk_done, tsc_disk_done_hi;
-    u32 tsc_uncompress_done, tsc_uncompress_done_hi;
-    u8 disk_err;
-} __attribute__((packed));
-
-struct e820ent {
-    u32 ent_size;
-    u64 addr;
-    u64 size;
-    u32 type;
-} __attribute__((packed));
-
 osv_multiboot_info_type* osv_multiboot_info;
 
 void parse_cmdline(multiboot_info_type& mb)
@@ -117,95 +78,12 @@ extern size_t elf_size;
 extern void* elf_start;
 extern boot_time_chart boot_time;
 
-// Because entry64 replaces start32 as a new entry of loader.elf we need a way
+// Because vmlinux_entry64 replaces start32 as a new entry of loader.elf we need a way
 // to place address of start32 so that boot16 know where to jump to. We achieve
 // it by placing address of start32 at the known offset at memory
 // as defined by section .start32_address in loader.ld
 extern "C" void start32();
 void * __attribute__((section (".start32_address"))) start32_address = reinterpret_cast<void*>(&start32);
-
-#define OSV_MULTI_BOOT_INFO_ADDR      0x1000
-#define OSV_E820_TABLE_ADDR           0x2000
-
-//
-// Instead of defining full boot_params and setup_header structs as in
-// Linux source code, we define only handful of offsets pointing the fields
-// we need to read from there. For details please this chunk of Linux code -
-// https://github.com/torvalds/linux/blob/b6839ef26e549de68c10359d45163b0cfb031183/arch/x86/include/uapi/asm/bootparam.h#L151-L198
-#define LINUX_KERNEL_BOOT_FLAG_MAGIC  0xaa55
-#define LINUX_KERNEL_HDR_MAGIC        0x53726448 // "HdrS"
-
-#define SETUP_HEADER_OFFSET  0x1f1   // look at bootparam.h in linux
-#define SETUP_HEADER_FIELD_VAL(boot_params, offset, field_type) \
-    (*static_cast<field_type*>(boot_params + SETUP_HEADER_OFFSET + offset))
-
-#define BOOT_FLAG_OFFSET     sizeof(u8) + 4 * sizeof(u16) + sizeof(u32)
-#define HDR_MAGIC_OFFSET     sizeof(u8) + 6 * sizeof(u16) + sizeof(u32)
-
-#define E820_ENTRIES_OFFSET  0x1e8   // look at bootparam.h in linux
-#define E820_TABLE_OFFSET    0x2d0   // look at bootparam.h in linux
-
-#define CMD_LINE_PTR_OFFSET  sizeof(u8) * 5 + sizeof(u16) * 11 + sizeof(u32) * 7
-
-struct linux_e820ent {
-    u64 addr;
-    u64 size;
-    u32 type;
-} __attribute__((packed));
-
-// When OSv kernel gets booted directly as 64-bit ELF (loader.elf) as it is
-// the case on firecracker we need a way to extract all necessary information
-// about available memory and command line. This information is provided
-// the struct boot_params (see details above) placed in memory at the address
-// specified in the RSI register.
-// The following extract_linux_boot_params() function is called from
-// entry64 in boot.S and verifies OSV was indeed boot as Linux and
-// copies memory and cmdline information into OSv multiboot struct.
-// Please see https://www.kernel.org/doc/Documentation/x86/boot.txt for details
-// of Linux boot protocol. Bear in mind that OSv implements very narrow specific
-// subset of the protocol as assumed by firecracker.
-extern "C" void extract_linux_boot_params(void *boot_params)
-{   //
-    // Verify we are being booted as Linux 64-bit ELF kernel
-    assert( SETUP_HEADER_FIELD_VAL(boot_params, BOOT_FLAG_OFFSET, u16) == LINUX_KERNEL_BOOT_FLAG_MAGIC);
-    assert( SETUP_HEADER_FIELD_VAL(boot_params, HDR_MAGIC_OFFSET, u32) == LINUX_KERNEL_HDR_MAGIC);
-
-    // Set location of multiboot info struct at arbitrary place in lower memory
-    // to copy to (happens to be the same as in boot16.S)
-    osv_multiboot_info_type* mb_info = reinterpret_cast<osv_multiboot_info_type*>(OSV_MULTI_BOOT_INFO_ADDR);
-
-    // Copy command line pointer from boot params
-    mb_info->mb.cmdline = SETUP_HEADER_FIELD_VAL(boot_params, CMD_LINE_PTR_OFFSET, u32);
-
-    // Copy e820 information from boot params
-    mb_info->mb.mmap_length = 0;
-    mb_info->mb.mmap_addr = OSV_E820_TABLE_ADDR;
-
-    struct linux_e820ent *source_e820_table = static_cast<struct linux_e820ent *>(boot_params + E820_TABLE_OFFSET);
-    struct e820ent *dest_e820_table = reinterpret_cast<struct e820ent *>(mb_info->mb.mmap_addr);
-
-    u8 en820_entries = *static_cast<u8*>(boot_params + E820_ENTRIES_OFFSET);
-    for (int e820_index = 0; e820_index < en820_entries; e820_index++) {
-        dest_e820_table[e820_index].ent_size = 20;
-        dest_e820_table[e820_index].type = source_e820_table[e820_index].type;
-        dest_e820_table[e820_index].addr = source_e820_table[e820_index].addr;
-        dest_e820_table[e820_index].size = source_e820_table[e820_index].size;
-        mb_info->mb.mmap_length += sizeof(e820ent);
-    }
-
-    auto now = processor::ticks();
-    u32 now_high = (u32)(now >> 32);
-    u32 now_low = (u32)now;
-
-    mb_info->tsc_init_hi = now_high;
-    mb_info->tsc_init = now_low;
-
-    mb_info->tsc_disk_done_hi = now_high;
-    mb_info->tsc_disk_done = now_low;
-
-    mb_info->tsc_uncompress_done_hi = now_high;
-    mb_info->tsc_uncompress_done = now_low;
-}
 
 void arch_setup_free_memory()
 {

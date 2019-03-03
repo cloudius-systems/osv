@@ -114,4 +114,4 @@ PHDRS {
 	eh_frame PT_GNU_EH_FRAME;
 	note PT_NOTE;
 }
-ENTRY(entry64);
+ENTRY(vmlinux_entry64);
