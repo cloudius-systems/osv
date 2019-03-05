@@ -11,7 +11,7 @@
 
 namespace virtio {
 
-// This implements virtio-io mmio device (transport layer, modeled after PSI).
+// This implements virtio-io mmio device (transport layer, modeled after PCI).
 // Read here - https://www.kraxel.org/virtio/virtio-v1.0-cs03-virtio-gpu.html#x1-1080002
 hw_device_id mmio_device::get_id()
 {
