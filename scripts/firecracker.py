@@ -53,7 +53,27 @@ class ApiClient(object):
         self.make_put_call('/network-interfaces/%s' % interface_name, {
             'iface_id': interface_name,
             'host_dev_name': host_interface_name,
-            'guest_mac': "52:54:00:12:34:56"
+            'guest_mac': "52:54:00:12:34:56",
+            'rx_rate_limiter': {
+               'bandwidth': {
+                  'size': 0,
+                  'refill_time': 0
+               },
+               'ops': {
+                  'size': 0,
+                  'refill_time': 0
+               }
+            },
+            'tx_rate_limiter': {
+               'bandwidth': {
+                  'size': 0,
+                  'refill_time': 0
+               },
+               'ops': {
+                  'size': 0,
+                  'refill_time': 0
+               }
+            }
         })
 
     def start_instance(self):
