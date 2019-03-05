@@ -150,8 +150,7 @@ def start_firecracker(firecracker_path, socket_path):
 
     # Start firecracker process to communicate over specified UNIX socket file
     return subprocess.Popen([firecracker_path, '--api-sock', socket_path],
-                           stdin=subprocess.PIPE, stdout=sys.stdout,
-                           stderr=subprocess.STDOUT)
+                           stdout=sys.stdout, stderr=subprocess.STDOUT)
 
 
 def get_memory_size_in_mb(options):
