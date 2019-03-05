@@ -45,7 +45,7 @@ class ApiClient(object):
         self.make_put_call('/drives/rootfs', {
             'drive_id': 'rootfs',
             'path_on_host': disk_image_path,
-            'is_root_device': True,
+            'is_root_device': False,
             'is_read_only': False
         })
 
