@@ -317,11 +317,13 @@ net::net(virtio_device& dev)
             [=] { poll_task->wake(); });
     };
 
+#ifndef AARCH64_PORT_STUB
     int_factory.create_gsi_edge_interrupt = [this,poll_task]() {
         return new gsi_edge_interrupt(
             _dev.get_irq(),
             [=] { if (this->ack_irq()) poll_task->wake(); });
     };
+#endif
 
     _dev.register_interrupt(int_factory);
 
