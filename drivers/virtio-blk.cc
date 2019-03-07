@@ -255,12 +255,12 @@ void blk::req_done()
     }
 }
 
+static const int sector_size = 512;
+
 int64_t blk::size()
 {
-    return _config.capacity * _config.blk_size;
+    return _config.capacity * sector_size;
 }
-
-static const int sector_size = 512;
 
 int blk::make_request(struct bio* bio)
 {
