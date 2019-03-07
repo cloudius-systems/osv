@@ -228,6 +228,7 @@ public:
 	void	*t_pspare2[4];		/* 4 TBD */
 	uint64_t _pad[6];		/* 6 TBD (1-2 CC/RTT?) */
 public:
+	__attribute__((always_inline)) // Necessary because of issue #1029
 	inline void set_state(int state) {
 		trace_tcp_state(this, t_state, state);
 		t_state = state;

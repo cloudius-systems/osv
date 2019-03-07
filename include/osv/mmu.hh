@@ -177,6 +177,7 @@ inline bool pte_is_cow(pt_element<0> pte)
 static TRACEPOINT(trace_clear_pte, "ptep=%p, cow=%d, pte=%x", void*, bool, uint64_t);
 
 template<int N>
+__attribute__((always_inline)) // Necessary because of issue #1029
 inline pt_element<N> clear_pte(hw_ptep<N> ptep)
 {
     auto old = ptep.exchange(make_empty_pte<N>());

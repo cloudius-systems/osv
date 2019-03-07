@@ -21,9 +21,9 @@
 #define virtio_w(...)   tprintf_w(virtio_tag, __VA_ARGS__)
 #define virtio_e(...)   tprintf_e(virtio_tag, __VA_ARGS__)
 
-TRACEPOINT(trace_vring_get_buf_finalize, "vring=%p: _used_ring_host_head %d",
+static TRACEPOINT(trace_vring_get_buf_finalize, "vring=%p: _used_ring_host_head %d",
                                          void*, int);
-TRACEPOINT(trace_vring_update_used_event, "vring=%p: _used_ring_host_head %d",
+static TRACEPOINT(trace_vring_update_used_event, "vring=%p: _used_ring_host_head %d",
                                           void*, int);
 
 namespace virtio {
@@ -147,6 +147,7 @@ class virtio_driver;
          *
          * @param update_host if TRUE - update the host as well
          */
+        __attribute__((always_inline)) inline // Necessary because of issue #1029
         void get_buf_finalize(bool update_host = true) {
             _used_ring_host_head++;
 
@@ -157,6 +158,7 @@ class virtio_driver;
             }
         }
 
+        __attribute__((always_inline)) inline // Necessary because of issue #1029
         void update_used_event() {
             // only let the host know about our used idx in case irq are enabled
             if (_avail->interrupt_on()) {
