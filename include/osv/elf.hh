@@ -111,6 +111,7 @@ enum {
     PT_GNU_EH_FRAME = 0x6474e550, // Exception handling records
     PT_GNU_STACK = 0x6474e551, // Stack permissions record
     PT_GNU_RELRO = 0x6474e552, // Read-only after relocations
+    PT_GNU_PROPERTY = 0x6474e553,
     PT_PAX_FLAGS = 0x65041580,
 };
 

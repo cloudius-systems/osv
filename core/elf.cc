@@ -423,6 +423,7 @@ void object::load_segments()
         case PT_GNU_RELRO:
         case PT_GNU_EH_FRAME:
         case PT_PAX_FLAGS:
+        case PT_GNU_PROPERTY:
             break;
         case PT_TLS:
             _tls_segment = _base + phdr.p_vaddr;
@@ -430,8 +431,7 @@ void object::load_segments()
             _tls_uninit_size = phdr.p_memsz - phdr.p_filesz;
             break;
         default:
-            abort();
-            throw osv::invalid_elf_error("bad p_type");
+            abort("Unknown p_type in executable %s: %d\n", pathname(), phdr.p_type);
         }
     }
     // As explained in issue #352, we currently don't correctly support TLS
