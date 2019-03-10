@@ -92,6 +92,7 @@ bool global_server::run(po::variables_map& _config)
         }
     });
 
+    std::cout << "Rest API server running on port " << get().config["port"].as<std::string>() << std::endl;
     get().s->run();
     return true;
 }
