@@ -100,7 +100,7 @@ do
 done
 
 # fs_size_mb is in megabytes (1024*1024 bytes)
-fs_size_mb=${vars[fs_size_mb]-10240}
+fs_size_mb=${vars[fs_size_mb]-256}
 # fs_size is in bytes
 fs_size=${vars[fs_size]-$(($fs_size_mb*1024*1024))}
 # size must be a multiple of 512. Round it down
