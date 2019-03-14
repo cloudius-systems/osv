@@ -154,7 +154,7 @@ def main():
 
     image_path = os.path.abspath(options.output)
     upload_port = find_free_port()
-    osv = subprocess.Popen('cd ../..; scripts/run.py --vnc none -m 512 -c1 -i %s -u -s -e "--norandom --nomount --noinit /tools/mkfs.so; /tools/cpiod.so --prefix /zfs/zfs/; /zfs.so set compression=off osv" --forward tcp:127.0.0.1:%s-:10000' % (image_path,upload_port), shell=True, stdout=subprocess.PIPE)
+    osv = subprocess.Popen('cd ../..; scripts/run.py --vnc none -m 512 -c1 -i "%s" -u -s -e "--norandom --nomount --noinit /tools/mkfs.so; /tools/cpiod.so --prefix /zfs/zfs/; /zfs.so set compression=off osv" --forward tcp:127.0.0.1:%s-:10000' % (image_path,upload_port), shell=True, stdout=subprocess.PIPE)
 
     upload(osv, manifest, depends, upload_port)
 

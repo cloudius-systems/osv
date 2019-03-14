@@ -50,13 +50,16 @@ def write_cstr(file, str):
 class nbd_file(object):
 
     def __init__(self, filename):
+        fileformat = []
+        if filename.startswith("-f raw "):
+            filename = filename[7:]
+            fileformat = ['-f', 'raw']
         self._filename = filename
         self._offset = 0
         self._buf = None
         self._closed = True
         nbd_port = randint(10809, 20809)
-        self._process = subprocess.Popen("qemu-nbd -p %d %s" % (nbd_port, filename),
-                                        shell=True, stdout=_devnull)
+        self._process = subprocess.Popen(["qemu-nbd", "-p", str(nbd_port)] + fileformat + [filename], shell=False, stdout=_devnull)
         # wait for qemu-nbd to start: this thing doesn't tell anything on stdout
         while True:
             try:

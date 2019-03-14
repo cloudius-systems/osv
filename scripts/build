@@ -119,10 +119,10 @@ esac
 modules=${vars[modules]-!$image}
 
 # TODO: some modules need these... Would be better if they wouldn't...
-jdkbase=${vars[jdkbase]-`find $SRC/external/$arch/openjdk.bin/usr/lib/jvm -maxdepth 1 -type d -name 'java*'`}
-gccbase=${vars[gccbase]-$SRC/external/$arch/gcc.bin}
-glibcbase=${vars[glibcbase]-$SRC/external/$arch/glibc.bin}
-miscbase=${vars[miscbase]-$SRC/external/$arch/misc.bin}
+jdkbase=${vars[jdkbase]-`find "$SRC"/external/$arch/openjdk.bin/usr/lib/jvm -maxdepth 1 -type d -name 'java*'`}
+gccbase=${vars[gccbase]-"$SRC"/external/$arch/gcc.bin}
+glibcbase=${vars[glibcbase]-"$SRC"/external/$arch/glibc.bin}
+miscbase=${vars[miscbase]-"$SRC"/external/$arch/misc.bin}
 
 case $OUT in
 /*)	OSV_BUILD_PATH=$OUT;;
@@ -182,26 +182,26 @@ case $fs_type in
 zfs)
 	cp loader.img bare.raw
 	zfs_size=$(($fs_size - $kernel_end))
-	$SRC/scripts/imgedit.py setpartition "-f raw bare.raw" 2 $kernel_end $zfs_size
+	"$SRC"/scripts/imgedit.py setpartition "-f raw bare.raw" 2 $kernel_end $zfs_size
 
 	qemu-img convert -f raw -O qcow2 bare.raw usr.img
 	qemu-img resize usr.img ${fs_size}b >/dev/null 2>&1
 
 	if [ "$export" == "none" ]
 	then
-		$SRC/scripts/upload_manifest.py -o usr.img -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
+		"$SRC"/scripts/upload_manifest.py -o usr.img -m usr.manifest -D jdkbase="$jdkbase" -D gccbase="$gccbase" -D glibcbase="$glibcbase" -D miscbase="$miscbase"
 	else
 		export_dir=${vars[export_dir]-$SRC/build/export}
-		$SRC/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
+		"$SRC"/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D jdkbase="$jdkbase" -D gccbase="$gccbase" -D glibcbase="$glibcbase" -D miscbase="$miscbase"
 	fi
 	;;
 rofs)
 	rm -rf rofs.img
-	$SRC/scripts/gen-${fs_type}-img.py -o rofs.img -m usr.manifest -D jdkbase=$jdkbase -D gccbase=$gccbase -D glibcbase=$glibcbase -D miscbase=$miscbase
+	"$SRC"/scripts/gen-${fs_type}-img.py -o rofs.img -m usr.manifest -D jdkbase="$jdkbase" -D gccbase="$gccbase" -D glibcbase="$glibcbase" -D miscbase="$miscbase"
 	rofs_size=`stat --printf %s rofs.img`
 	img_size=$((kernel_end + rofs_size))
 	cp loader.img bare.raw
-	$SRC/scripts/imgedit.py setpartition "-f raw bare.raw" 2 $kernel_end $rofs_size
+	"$SRC"/scripts/imgedit.py setpartition "-f raw bare.raw" 2 $kernel_end $rofs_size
 	qemu-img resize bare.raw ${img_size}b >/dev/null 2>&1
 	dd if=rofs.img of=bare.raw obs=${kernel_end} seek=1 >/dev/null 2>&1
 	qemu-img convert -f raw -O qcow2 bare.raw usr.img
@@ -211,14 +211,14 @@ ramfs)
 	;;
 esac
 
-$SRC/scripts/imgedit.py setargs usr.img `cat cmdline`
+"$SRC"/scripts/imgedit.py setargs usr.img `cat cmdline`
 
 # Support "build check"
 for i
 do
 	case $i in
 	check)	set -x
-		cd $SRC
+		cd "$SRC"
 		exec ./scripts/test.py
 	esac
 done
