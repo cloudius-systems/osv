@@ -154,7 +154,7 @@ if [ "$export" == "selected" ]
 then
 	no_required_arg="--no-required"
 fi
-fs_type=$fs_type jdkbase=$jdkbase ARCH=$arch mode=$mode OSV_BASE=$SRC OSV_BUILD_PATH=$OSV_BUILD_PATH scripts/module.py $j_arg build -c $modules $usrskel_arg $no_required_arg
+fs_type=$fs_type jdkbase=$jdkbase ARCH=$arch mode=$mode OSV_BASE=$SRC OSV_BUILD_PATH=$OSV_BUILD_PATH scripts/module.py $j_arg build -c "$modules" $usrskel_arg $no_required_arg
 
 bootfs_manifest=$manifest make "${args[@]}" | tee -a build.out
 # check exit status of make
