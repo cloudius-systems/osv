@@ -166,7 +166,10 @@ def align_up(v, pagesize):
 def do_split_format(format_str):
     chars = iter(format_str)
     while True:
-        c = next(chars)
+        try:
+            c = next(chars)
+        except StopIteration:
+            return
         if c in '<>=!@':
             raise Exception('Not supported: ' + c)
         if c == '*':
