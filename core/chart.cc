@@ -45,3 +45,10 @@ void boot_time_chart::print_chart()
         print_one_time(i);
     }
 }
+
+void boot_time_chart::print_total_time()
+{
+    auto last = arrays[_event - 1].stamp;
+    auto initial = arrays[0].stamp;
+    printf("Booted up in %.2f ms\n", to_msec(last - initial));
+}

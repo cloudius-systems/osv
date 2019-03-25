@@ -443,6 +443,9 @@ void* do_main_thread(void *_main_args)
     if (opt_bootchart) {
         boot_time.print_chart();
     }
+    else {
+        boot_time.print_total_time();
+    }
 
     if (!opt_redirect.empty()) {
         // redirect stdout and stdin to the given file, instead of the console

@@ -15,6 +15,7 @@ public:
     void event(int event_idx, const char *str);
     void event(int event_idx, const char *str, u64 stamp);
     void print_chart();
+    void print_total_time();
 private:
     // Can we keep it at 0 and let the initial two users increment it?  No, we
     // cannot. The reason is that the code that *parses* those fields run
