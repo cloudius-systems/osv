@@ -244,7 +244,6 @@ class Ubuntu(object):
                 'libncurses5-dev',
                 'libssl-dev',
                 'libtool',
-                'libvirt-bin',
                 'libyaml-cpp-dev',
                 'maven',
                 'openssl',
@@ -262,49 +261,63 @@ class Ubuntu(object):
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
 
+    class Ubuntu_19_04(object):
+        packages = ['openjdk-8-jdk', 'bridge-utils', 'libvirt-daemon-system', 'libvirt-clients']
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '19.04'
+
+    class Ubuntu_18_10(object):
+        packages = ['openjdk-8-jdk', 'bridge-utils', 'libvirt-daemon-system', 'libvirt-clients']
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '18.10'
+
     class Ubuntu_18_04(object):
-        packages = ['openjdk-8-jdk', 'bridge-utils']
+        packages = ['openjdk-8-jdk', 'bridge-utils', 'libvirt-bin']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '18.04'
 
     class Ubuntu_17_04(object):
-        packages = ['openjdk-8-jdk']
+        packages = ['openjdk-8-jdk', 'libvirt-bin']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '17.04'
 
     class Ubuntu_16_04(object):
-        packages = ['openjdk-8-jdk']
+        packages = ['openjdk-8-jdk', 'libvirt-bin']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '16.04'
 
     class Ubuntu_15_04(object):
-        packages = ['openjdk-7-jdk']
+        packages = ['openjdk-7-jdk', 'libvirt-bin']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '15.04'
 
     class Ubuntu_14_04(object):
-        packages = ['openjdk-7-jdk']
+        packages = ['openjdk-7-jdk', 'libvirt-bin']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '14.04'
 
     class Ubuntu_13_10(object):
-        packages = ['openjdk-7-jdk']
+        packages = ['openjdk-7-jdk', 'libvirt-bin']
         ec2_packages = []
         test_packages = []
         ec2_post_install = standard_ec2_post_install
         version = '13.10'
 
-    versions = [Ubuntu_18_04, Ubuntu_17_04, Ubuntu_16_04, Ubuntu_15_04, Ubuntu_14_04, Ubuntu_13_10]
+    versions = [Ubuntu_19_04, Ubuntu_18_10, Ubuntu_18_04, Ubuntu_17_04, Ubuntu_16_04, Ubuntu_15_04, Ubuntu_14_04, Ubuntu_13_10]
 
 class LinuxMint(Ubuntu):
     name = 'LinuxMint'
