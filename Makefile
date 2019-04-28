@@ -1325,6 +1325,7 @@ $(out)/musl/src/math/llroundl.o: conf-opt := $(conf-opt) -O0
 musl += misc/a64l.o
 libc += misc/basename.o
 musl += misc/dirname.o
+libc += misc/error.o
 libc += misc/ffs.o
 musl += misc/get_current_dir_name.o
 libc += misc/gethostid.o
