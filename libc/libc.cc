@@ -32,6 +32,9 @@
 char *program_invocation_name;
 char *program_invocation_short_name;
 
+weak_alias(program_invocation_name, __progname_full);
+weak_alias(program_invocation_short_name, __progname);
+
 int libc_error(int err)
 {
     errno = err;
