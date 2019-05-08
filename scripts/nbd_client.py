@@ -32,7 +32,7 @@ class nbd_client(object):
         self._length = 0
         self._s = socket.create_connection((hostname, port))
         self._closed = False
-        self._old_style_handshake()
+        self._handshake()
 
     def __del__(self):
         self.close()
@@ -44,12 +44,38 @@ class nbd_client(object):
             self._disconnect()
             self._closed = True
 
-    def _old_style_handshake(self):
+    def _handshake(self):
+        # Perform handshake as specified in
+        # https://github.com/NetworkBlockDevice/nbd/blob/master/doc/proto.md
         nbd_magic = self._s.recv(len("NBDMAGIC"))
         assert(nbd_magic == b'NBDMAGIC')
-        buf = self._s.recv(8 + 8 + 4)
-        (magic, self._size, self._flags) = struct.unpack(">QQL", buf)
+        buf = self._s.recv(8)
+        (magic,) = struct.unpack(">Q", buf)
+        if magic == 0x49484156454F5054:
+            self._new_style_handshake(magic)
+        else:
+            self._old_style_handshake(magic)
+
+    def _old_style_handshake(self, magic):
         assert(magic == 0x00420281861253)
+        buf = self._s.recv(8 + 4)
+        (self._size, self._flags) = struct.unpack(">QL", buf)
+        # ignore trailing zeroes
+        self._s.recv(124)
+
+    def _new_style_handshake(self, magic):
+        assert(magic == 0x49484156454F5054) # Should have received IHAVEOPT
+        buf = self._s.recv(2)
+        (self._flags) = struct.unpack(">H", buf)
+        client_flags = struct.pack('>L', 0)
+        self._s.send(client_flags)
+
+        options = struct.pack('>QLL', 0x49484156454F5054, 1, 0)
+        self._s.send(options)
+
+        buf = self._s.recv(8 + 2)
+        (self._size, self._flags) = struct.unpack(">QH", buf)
+
         # ignore trailing zeroes
         self._s.recv(124)
 
