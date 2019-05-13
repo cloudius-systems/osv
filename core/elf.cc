@@ -147,6 +147,19 @@ void* object::lookup(const char* symbol)
     return sm.relocated_addr();
 }
 
+void* object::cached_lookup(const std::string& name)
+{
+    auto cached_address_it = _cached_symbols.find(name);
+    if (cached_address_it != _cached_symbols.end()) {
+        return cached_address_it->second;
+    }
+    else {
+        void *symbol_address = lookup(name.c_str());
+        _cached_symbols[name] = symbol_address;
+        return symbol_address;
+    }
+}
+
 std::vector<Elf64_Shdr> object::sections()
 {
     size_t bytes = size_t(_ehdr.e_shentsize) * _ehdr.e_shnum;

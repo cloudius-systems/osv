@@ -14,6 +14,7 @@
 #include <stack>
 #include <memory>
 #include <unordered_set>
+#include <unordered_map>
 #include <osv/types.h>
 #include <atomic>
 
@@ -349,6 +350,7 @@ public:
     void run_fini_funcs();
     template <typename T = void>
     T* lookup(const char* name);
+    void* cached_lookup(const std::string& name);
     dladdr_info lookup_addr(const void* addr);
     bool contains_addr(const void* addr);
     ulong module_index() const;
@@ -414,6 +416,8 @@ protected:
     std::unique_ptr<char[]> _section_names_cache;
     bool _is_executable;
     bool is_core();
+
+    std::unordered_map<std::string,void*> _cached_symbols;
 
     // Keep list of references to other modules, to prevent them from being
     // unloaded. When this object is unloaded, the reference count of all

@@ -1,6 +1,7 @@
 #include <stddef.h>
 #include <getopt.h>
 #include <stdio.h>
+#include "getopt.hh"
 
 extern "C" {
 
@@ -8,6 +9,8 @@ extern int __optpos, __optreset;
 
 static int __getopt_long(int argc, char *const *argv, const char *optstring, const struct option *longopts, int *idx, int longonly)
 {
+	getopt_caller_vars_copier guard;
+
 	if (!optind || __optreset) {
 		__optreset = 0;
 		__optpos = 0;
@@ -46,7 +49,7 @@ static int __getopt_long(int argc, char *const *argv, const char *optstring, con
 			return '?';
 		}
 	}
-	return getopt(argc, argv, optstring);
+	return __getopt(argc, argv, optstring);
 }
 
 int getopt_long(int argc, char *const *argv, const char *optstring, const struct option *longopts, int *idx)

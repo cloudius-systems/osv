@@ -4,6 +4,7 @@
 #include <limits.h>
 #include <stdlib.h>
 #include <libc/libc.hh>
+#include "getopt.hh"
 
 extern "C" {
 
@@ -13,7 +14,7 @@ int optind=1, opterr=1, optopt, __optpos, __optreset=0;
 #define optpos __optpos
 weak_alias(__optreset, optreset);
 
-int getopt(int argc, char * const argv[], const char *optstring)
+int __getopt(int argc, char * const argv[], const char *optstring)
 {
 	int i;
 	wchar_t c, d;
@@ -71,6 +72,12 @@ int getopt(int argc, char * const argv[], const char *optstring)
 		optpos = 0;
 	}
 	return c;
+}
+
+int getopt(int argc, char * const argv[], const char *optstring)
+{
+	getopt_caller_vars_copier guard;
+	return __getopt(argc, argv, optstring);
 }
 
 weak_alias(getopt, __posix_getopt);

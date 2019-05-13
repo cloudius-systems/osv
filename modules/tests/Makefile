@@ -62,6 +62,13 @@ $(out)/%.so: $(out)/%.o
 
 $(out)/tests/tst-non-fpic.o: CXXFLAGS:=$(subst -fPIC,-mcmodel=large,$(CXXFLAGS))
 
+$(out)/tests/tst-getopt-pie.o: CXXFLAGS:=$(subst -fPIC,-fpie,$(CXXFLAGS))
+$(out)/tests/tst-getopt-pie.o: $(src)/tests/tst-getopt.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+$(out)/tests/tst-getopt-pie.so: $(out)/tests/tst-getopt-pie.o
+	$(call quiet, $(CXX) $(CXXFLAGS) -pie -o $@ $< $(LIBS), LD $*.so)
+
 # The rofs test image mounts /tmp as ramfs and 4 tests that exercise file system
 # fail due to some unresolved bugs or other shortcomings of the ramfs implementation
 # and are temporarily removed from the rofs-only-tests list. The tests tst-readdir.so
@@ -117,7 +124,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-ttyname.so tst-pthread-barrier.so tst-feexcept.so tst-math.so \
 	tst-sigaltstack.so tst-fread.so tst-tcp-cork.so tst-tcp-v6.so \
 	tst-calloc.so tst-crypt.so tst-non-fpic.so tst-small-malloc.so \
-	tst-mmx-fpu.so
+	tst-mmx-fpu.so tst-getopt.so tst-getopt-pie.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
 tests += testrunner.so
