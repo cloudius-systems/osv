@@ -95,6 +95,8 @@ ramfs_allocate_node(const char *name, int type)
 
     set_times_to_now(&(np->rn_ctime), &(np->rn_atime), &(np->rn_mtime));
     np->rn_owns_buf = true;
+    np->rn_ref_count = 0;
+    np->rn_removed = false;
 
     return np;
 }
@@ -102,6 +104,10 @@ ramfs_allocate_node(const char *name, int type)
 void
 ramfs_free_node(struct ramfs_node *np)
 {
+    if (!np->rn_removed || np->rn_ref_count > 0) {
+	    return;
+    }
+
     if (np->rn_buf != NULL && np->rn_owns_buf)
         free(np->rn_buf);
 
@@ -159,7 +165,11 @@ ramfs_remove_node(struct ramfs_node *dnp, struct ramfs_node *np)
         }
         prev->rn_next = np->rn_next;
     }
-    ramfs_free_node(np);
+
+    np->rn_removed = true;
+    if (np->rn_ref_count <= 0) {
+        ramfs_free_node(np);
+    }
 
     set_times_to_now(&(dnp->rn_mtime), &(dnp->rn_ctime));
 
@@ -522,6 +532,9 @@ ramfs_rename(struct vnode *dvp1, struct vnode *vp1, char *name1,
             np->rn_buf = old_np->rn_buf;
             np->rn_size = old_np->rn_size;
             np->rn_bufsize = old_np->rn_bufsize;
+            np->rn_owns_buf = old_np->rn_owns_buf;
+            np->rn_ref_count = old_np->rn_ref_count;
+            np->rn_removed = old_np->rn_removed;
             old_np->rn_buf = NULL;
         }
         /* Remove source file */
@@ -629,8 +642,27 @@ ramfs_setattr(struct vnode *vnode, struct vattr *attr) {
     return 0;
 }
 
-#define ramfs_open      ((vnop_open_t)vop_nullop)
-#define ramfs_close     ((vnop_close_t)vop_nullop)
+int ramfs_open(struct file *fp)
+{
+    struct vnode *vp = file_dentry(fp)->d_vnode;
+    struct ramfs_node *np = (ramfs_node *) vp->v_data;
+    np->rn_ref_count++;
+    return 0;
+}
+
+int ramfs_close(struct vnode *dvp, struct file *file)
+{
+    struct vnode *vp = file_dentry(file)->d_vnode;
+    struct ramfs_node *np = (ramfs_node *) vp->v_data;
+    np->rn_ref_count--;
+
+    if (np->rn_removed && np->rn_ref_count <= 0) {
+        ramfs_free_node(np);
+    }
+
+    return 0;
+}
+
 #define ramfs_seek      ((vnop_seek_t)vop_nullop)
 #define ramfs_ioctl     ((vnop_ioctl_t)vop_einval)
 #define ramfs_fsync     ((vnop_fsync_t)vop_nullop)

@@ -14,6 +14,7 @@
 #include <fcntl.h>
 #include <stdio.h>
 #include <errno.h>
+#include <assert.h>
 
 static int tests = 0, fails = 0;
 
@@ -81,6 +82,34 @@ static int check_mapping(void *addr, size_t size, unsigned flags, int fd,
     return 0;
 }
 
+static int test_mmap_with_file_removed()
+{
+    char file_template[30];
+    snprintf(file_template, sizeof(file_template) / sizeof(char), "%s/mmap-file-deleted.XXXXXX", "/tmp");
+
+    auto fd1 = mkstemp(file_template);
+    assert(fd1 != -1);
+
+    assert(unlink(file_template) >= 0);
+    size_t buf_size = 131072;
+    assert(ftruncate(fd1, buf_size) >= 0);
+
+    auto buf = (char *) mmap(NULL, buf_size, PROT_READ|PROT_WRITE, MAP_PRIVATE, fd1, 0);
+    assert(buf != MAP_FAILED);
+
+    auto fd2 = open(file_template, O_RDWR);
+    close(fd2);
+
+    auto urandom = fopen("/dev/urandom", "rb");
+    assert(urandom != NULL);
+    assert(fread(buf, 1, buf_size, urandom) == buf_size);
+
+    close(fd1);
+    report(munmap(buf,buf_size) == 0, "test_mmap_with_file_removed succeeded");
+
+    return 0;
+}
+
 int main(int argc, char *argv[])
 {
     auto fd = open("/tmp/mmap-file-test", O_CREAT|O_TRUNC|O_RDWR, 0666);
@@ -142,6 +171,8 @@ int main(int argc, char *argv[])
             "mprotect: try to add write permission to read only mmap.");
     report(munmap(b, 4096) == 0, "munmap temporary mapping");
     report(close(fd) == 0, "close again");
+
+    test_mmap_with_file_removed();
 
     // TODO: map an append-only file with prot asking for PROT_WRITE, mmap should return EACCES.
     // TODO: map a file under a fs mounted with the flag NO_EXEC and prot asked for PROT_EXEC (expect EPERM).

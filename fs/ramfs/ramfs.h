@@ -59,6 +59,8 @@ struct ramfs_node {
     struct timespec rn_mtime;
     int rn_mode;
     bool rn_owns_buf;
+    int rn_ref_count;
+    bool rn_removed;
 };
 
 struct ramfs_node *ramfs_allocate_node(const char *name, int type);
