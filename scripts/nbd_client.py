@@ -66,7 +66,8 @@ class nbd_client(object):
     def _new_style_handshake(self, magic):
         assert(magic == 0x49484156454F5054) # Should have received IHAVEOPT
         buf = self._s.recv(2)
-        (self._flags) = struct.unpack(">H", buf)
+        (handshake_flags,) = struct.unpack(">H", buf)
+
         client_flags = struct.pack('>L', 0)
         self._s.send(client_flags)
 
@@ -74,7 +75,8 @@ class nbd_client(object):
         self._s.send(options)
 
         buf = self._s.recv(8 + 2)
-        (self._size, self._flags) = struct.unpack(">QH", buf)
+        (self._size, transport_flags) = struct.unpack(">QH", buf)
+        self._flags = (handshake_flags << 16) + transport_flags
 
         # ignore trailing zeroes
         self._s.recv(124)
