@@ -167,7 +167,7 @@ enum {
     DT_INIT = 12, // d_ptr Address of the initialization function.
     DT_FINI = 13, // d_ptr Address of the termination function.
     DT_SONAME = 14, // d_val The string table offset of the name of this shared object.
-    DT_RPATH = 15, // d_val The string table offset of a shared library search path string.
+    DT_RPATH = 15, // d_val The string table offset of a shared library search path string (deprecated)
     DT_SYMBOLIC = 16, // ignored The presence of this dynamic table entry modifies the
       // symbol resolution algorithm for references within the
       // library. Symbols defined within the library are used to
@@ -191,6 +191,7 @@ enum {
     DT_FINI_ARRAY = 26, // d_ptr Pointer to an array of pointers to termination functions.
     DT_INIT_ARRAYSZ = 27, // d_val Size, in bytes, of the array of initialization functions.
     DT_FINI_ARRAYSZ = 28, // d_val Size, in bytes, of the array of termination functions.
+    DT_RUNPATH = 29, // d_val The string table offset of a shared library search path string.
     DT_FLAGS = 30, // value is various flags, bits from DF_*.
     DT_FLAGS_1 = 0x6ffffffb, // value is various flags, bits from DF_1_*.
     DT_LOOS = 0x60000000, // Defines a range of dynamic table tags that are reserved for

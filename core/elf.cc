@@ -932,8 +932,17 @@ static std::string dirname(std::string path)
 void object::load_needed(std::vector<std::shared_ptr<object>>& loaded_objects)
 {
     std::vector<std::string> rpath;
-    if (dynamic_exists(DT_RPATH)) {
-        std::string rpath_str = dynamic_str(DT_RPATH);
+
+    std::string rpath_str;
+    // Prefer newer DT_RUNPATH
+    if (dynamic_exists(DT_RUNPATH)) {
+        rpath_str = dynamic_str(DT_RUNPATH);
+    // Otherwise fall back to older DT_RPATH
+    } else if (dynamic_exists(DT_RPATH)) {
+        rpath_str = dynamic_str(DT_RPATH);
+    }
+
+    if (!rpath_str.empty()) {
         boost::replace_all(rpath_str, "$ORIGIN", dirname(_pathname));
         boost::split(rpath, rpath_str, boost::is_any_of(":"));
     }
