@@ -117,10 +117,6 @@ sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 	DPRINTF(VFSDB_SYSCALL, ("sys_open: path=%s flags=%x mode=%x\n",
 				path, flags, mode));
 
-	if (path == nullptr) {
-		return (EFAULT);
-	}
-
 	flags = fflags(flags);
 	if (flags & O_CREAT) {
 		error = namei(path, &dp);

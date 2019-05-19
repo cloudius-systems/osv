@@ -120,11 +120,6 @@ int open(const char *pathname, int flags, ...)
     int fd, error;
     int acc;
 
-    if (pathname == nullptr) {
-        error = EFAULT;
-        goto out_errno;
-    }
-
     acc = 0;
     switch (flags & O_ACCMODE) {
     case O_RDONLY:

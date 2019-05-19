@@ -146,6 +146,10 @@ task_conv(struct task *t, const char *cpath, int acc, char *full)
 {
 	int rc;
 
+	if (cpath == nullptr) {
+		return (EFAULT);
+	}
+
 	rc = path_conv(t->t_cwd, cpath, full);
 	if (rc != 0) {
 		return (rc);
