@@ -34,7 +34,7 @@ slow_path:
     auto pdata = &data;
     // encapsulate the trace_slow_path() in a function callable from asm:
     void (*do_slow_path)(tracepointv* tp, decltype(data)* d)
-            = [](tracepointv* tp, decltype(data)* d) [[gnu::cold]] {
+            = [](tracepointv* tp, decltype(data)* d) __attribute__((cold)) {
         tp->trace_slow_path(*d);
     };
     tracepointv* tp = this;
