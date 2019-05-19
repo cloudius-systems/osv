@@ -330,6 +330,13 @@ static std::string read_file(std::string fn)
           std::istreambuf_iterator<char>());
 }
 
+static void stop_all_remaining_app_threads()
+{
+    while(!application::unsafe_stop_and_abandon_other_threads()) {
+        usleep(100000);
+    }
+}
+
 void* do_main_thread(void *_main_args)
 {
     auto app_cmdline = static_cast<char*>(_main_args);
@@ -507,7 +514,14 @@ void* do_main_thread(void *_main_args)
         auto suffix = it.back();
         try {
             bool background = (suffix == "&") || (suffix == "&!");
-            auto app = application::run(newvec);
+
+            shared_app_t app;
+            if (suffix == "!") {
+                app = application::run(newvec[0], newvec, false, nullptr, "main", stop_all_remaining_app_threads);
+            } else {
+                app = application::run(newvec);
+            }
+
             if (suffix == "&!") {
                 detached.push_back(app);
             } else if (!background) {

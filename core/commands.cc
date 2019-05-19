@@ -40,11 +40,11 @@ struct command : qi::grammar<sciter,
                        ("\\r", '\r')("\\t", '\t')("\\v", '\v')("\\\\", '\\')
                        ("\\\'", '\'')("\\\"", '\"');
 
-        string %= qi::no_skip[+(unesc_char | (char_ - ' ' - ';' - '&'))];
+        string %= qi::no_skip[+(unesc_char | (char_ - ' ' - ';' - '&' - '!'))];
         quoted_string %= lexeme['"' >> *(unesc_char | (char_ - '"')) >> '"'];
 
         start %= ((quoted_string | string) % *space) >>
-                (char_(';') | qi::string("&!") | char_('&') | qi::eoi);
+                (char_(';') | qi::string("&!") | char_('&') | char_('!') | qi::eoi);
     }
 
     qi::rule<sciter, std::string(), ascii::space_type> string;
