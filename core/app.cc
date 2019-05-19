@@ -318,10 +318,6 @@ void application::main()
 
     if (_main) {
         run_main();
-
-        if(_post_main) {
-            _post_main();
-        }
     } else {
         // The application is expected not to initialize the environment in
         // which it runs on its owns but to call __libc_start_main(). If that's
@@ -419,6 +415,10 @@ void application::run_main()
 
     if (_return_code) {
         debug("program %s returned %d\n", _command.c_str(), _return_code);
+    }
+
+    if(_post_main) {
+        _post_main();
     }
 
     trace_app_main_ret(_return_code);

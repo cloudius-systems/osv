@@ -216,7 +216,6 @@ private:
     void start();
     void start_and_join(waiter* setup_waiter);
     void main();
-    void run_main(std::string path, int argc, char** argv);
     void prepare_argv(elf::program *program);
     void run_main();
     friend void ::__libc_start_main(int(*)(int, char**), int, char**, void(*)(),
