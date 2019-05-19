@@ -359,7 +359,7 @@ public:
             return *this;
         }
         attr& name(std::string n) {
-            strncpy(_name.data(), n.data(), sizeof(_name) - 1);
+            strlcpy(_name.data(), n.data(), sizeof(_name));
             return *this;
         }
     };
