@@ -46,6 +46,7 @@ int main(int argc, char **argv)
     expect(fstatat(-1, "/tmp/f1", &st, 0), 0);
     expect(st.st_size, (off_t)0);
     expect_errno(fstatat(-1, "/tmp/f2", &st, 0), ENOENT);
+    expect_errno(fstatat(-1, "/tmp/f2", &st, AT_SYMLINK_NOFOLLOW), ENOENT);
 
     // test paths relative to cwd:
     char* oldwd = getcwd(NULL, 0);
@@ -54,6 +55,7 @@ int main(int argc, char **argv)
     expect(fstatat(AT_FDCWD, "f1", &st, 0), 0);
     expect(st.st_size, (off_t)0);
     expect_errno(fstatat(AT_FDCWD, "f2", &st, 0), ENOENT);
+    expect_errno(fstatat(AT_FDCWD, "f2", &st, AT_SYMLINK_NOFOLLOW), ENOENT);
 
     // test paths relative to open directory:
     chdir("/");
@@ -63,6 +65,7 @@ int main(int argc, char **argv)
     expect(fstatat(dir, "f1", &st, 0), 0);
     expect(st.st_size, (off_t)0);
     expect_errno(fstatat(dir, "f2", &st, 0), ENOENT);
+    expect_errno(fstatat(dir, "f2", &st, AT_SYMLINK_NOFOLLOW), ENOENT);
     close(dir);
 
     // test operating on an open file itself (not a directory)
@@ -70,10 +73,17 @@ int main(int argc, char **argv)
     st.st_size = 123;
     expect(fstatat(dir, "", &st, AT_EMPTY_PATH), 0);
     expect(st.st_size, (off_t)0);
-    close(dir);
 
+    // test AT_SYMLINK_NOFOLLOW with actual symlink
+    expect(symlink("/tmp/f1", "/tmp/symlink"), 0);
+    expect((dir = open("/tmp", 0, O_DIRECTORY)) >= 0, true);
+    expect(fstatat(dir, "symlink", &st, AT_SYMLINK_NOFOLLOW), 0);
+    expect(S_ISLNK(st.st_mode) != 0, true);
+
+    close(dir);
     chdir(oldwd);
     free(oldwd);
+    remove("/tmp/symlink");
     remove("/tmp/f1");
 
     std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";
