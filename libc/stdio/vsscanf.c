@@ -15,4 +15,8 @@ int vsscanf(const char *restrict s, const char *restrict fmt, va_list ap)
 	return vfscanf(&f, fmt, ap);
 }
 
+#if __GNUC__ >= 9
+weak_alias(vsscanf,__isoc99_vsscanf) __attribute__((nothrow));
+#else
 weak_alias(vsscanf,__isoc99_vsscanf);
+#endif
