@@ -98,6 +98,9 @@ ramfs_allocate_node(const char *name, int type)
     np->rn_ref_count = 0;
     np->rn_removed = false;
 
+    np->rn_file_segments_by_offset = new std::map<off_t,struct ramfs_file_segment>();
+    np->rn_total_segments_size = 0;
+
     return np;
 }
 
@@ -108,8 +111,17 @@ ramfs_free_node(struct ramfs_node *np)
 	    return;
     }
 
-    if (np->rn_buf != NULL && np->rn_owns_buf)
-        free(np->rn_buf);
+    if (np->rn_file_segments_by_offset != NULL) {
+        if (np->rn_owns_buf) {
+            for (auto it = np->rn_file_segments_by_offset->begin(); it != np->rn_file_segments_by_offset->end(); ++it) {
+                free(it->second.data);
+                it->second.data = NULL;
+            }
+        }
+
+        delete np->rn_file_segments_by_offset;
+    }
+
 
     free(np->rn_name);
     free(np);
@@ -287,8 +299,14 @@ ramfs_symlink(struct vnode *dvp, char *name, char *link)
         return ENOMEM;
     // Save the link target without the final null, as readlink() wants it.
     size_t len = strlen(link);
-    np->rn_buf = strndup(link, len);
-    np->rn_bufsize = np->rn_size = len;
+    np->rn_size = len;
+
+    ramfs_file_segment new_segment = {
+        .size = len,
+        .data = strndup(link, len)
+    };
+    (*np->rn_file_segments_by_offset)[0] = new_segment;
+    np->rn_total_segments_size = len;
 
     return 0;
 }
@@ -316,7 +334,7 @@ ramfs_readlink(struct vnode *vp, struct uio *uio)
         len = uio->uio_resid;
 
     set_times_to_now( &(np->rn_atime));
-    return uiomove(np->rn_buf + uio->uio_offset, len, uio);
+    return uiomove((*np->rn_file_segments_by_offset)[0].data + uio->uio_offset, len, uio);
 }
 
 /* Remove a directory */
@@ -334,41 +352,69 @@ ramfs_remove(struct vnode *dvp, struct vnode *vp, char *name)
     return ramfs_remove_node((ramfs_node *) dvp->v_data, (ramfs_node *) vp->v_data);
 }
 
+#define ENLARGE_FACTOR 1.1f
+static int
+ramfs_enlarge_data_buffer(struct ramfs_node *np, size_t desired_length)
+{
+    // New total size has to be at least greater by the ENLARGE_FACTOR
+    auto new_total_segment_size = round_page(std::max<size_t>(np->rn_total_segments_size * ENLARGE_FACTOR, desired_length));
+    assert(new_total_segment_size >= desired_length);
+
+    auto new_segment_size = np->rn_owns_buf ? new_total_segment_size - np->rn_total_segments_size : new_total_segment_size;
+    ramfs_file_segment new_segment = {
+        .size = new_segment_size,
+        .data = (char*) malloc(new_segment_size)
+    };
+    if (!new_segment.data)
+        return EIO;
+
+    auto new_segment_file_offset = np->rn_total_segments_size;
+    if (!np->rn_owns_buf) {
+        // This is a file from bootfs and we cannot simply enlarge same way
+	// as regular one because because original segment is not be page-aligned.
+	// Therefore we need to created new segment and copy content of the old one
+        memcpy(new_segment.data, (*np->rn_file_segments_by_offset)[0].data, np->rn_size);
+        new_segment_file_offset = 0;
+    }
+
+    // Insert new segment with the file offset it starts at which happends
+    // to be old total segments size
+    (*np->rn_file_segments_by_offset)[new_segment_file_offset] = new_segment;
+    np->rn_total_segments_size = new_total_segment_size;
+    np->rn_owns_buf = true;
+
+    return 0;
+}
+
 /* Truncate file */
 static int
 ramfs_truncate(struct vnode *vp, off_t length)
 {
     struct ramfs_node *np;
-    void *new_buf;
-    size_t new_size;
 
     DPRINTF(("truncate %s length=%d\n", vp->v_path, length));
     np = (ramfs_node *) vp->v_data;
 
+    //TODO: Shall we free segments id new length < np->total_segments_size
     if (length == 0) {
-        if (np->rn_buf != NULL) {
-            if(np->rn_owns_buf)
-                free(np->rn_buf);
-            np->rn_buf = NULL;
-            np->rn_bufsize = 0;
+        if (np->rn_owns_buf) {
+            for (auto it = (*np->rn_file_segments_by_offset).begin(); it != (*np->rn_file_segments_by_offset).end(); ++it) {
+                free(it->second.data);
+            }
         }
-    } else if (size_t(length) > np->rn_bufsize) {
-        // XXX: this could use a page level allocator
-        new_size = round_page(length);
-        new_buf = malloc(new_size);
-        if (!new_buf)
-            return EIO;
-        if (np->rn_size != 0) {
-            memcpy(new_buf, np->rn_buf, vp->v_size);
-            if(np->rn_owns_buf)
-                free(np->rn_buf);
+
+        (*np->rn_file_segments_by_offset).clear();
+        np->rn_total_segments_size = 0;
+    } else if (size_t(length) > np->rn_total_segments_size) {
+        auto ret = ramfs_enlarge_data_buffer(np, length);
+        if (ret) {
+            return ret;
         }
-        np->rn_buf = (char *) new_buf;
-        np->rn_bufsize = new_size;
-        np->rn_owns_buf = true;
     }
+
     np->rn_size = length;
     vp->v_size = length;
+
     set_times_to_now(&(np->rn_mtime), &(np->rn_ctime));
     return 0;
 }
@@ -392,6 +438,38 @@ ramfs_create(struct vnode *dvp, char *name, mode_t mode)
     np = ramfs_add_node((ramfs_node *) dvp->v_data, name, VREG);
     if (np == NULL)
         return ENOMEM;
+    return 0;
+}
+
+static int
+ramfs_read_or_write_file_data(std::map<off_t,struct ramfs_file_segment> &file_segments_by_offset, struct uio *uio, size_t bytes_to_read_or_write)
+{
+    // Find the segment where we need to start reading from or writing to based on uio_offset
+    auto segment_to_read_or_write = file_segments_by_offset.lower_bound(uio->uio_offset);
+    if( segment_to_read_or_write == file_segments_by_offset.end()) {
+        segment_to_read_or_write = --file_segments_by_offset.end();
+    }
+    else if (segment_to_read_or_write->first > uio->uio_offset) {
+        segment_to_read_or_write--;
+    }
+
+    // Simply iterate starting with initial identified segment above to read or write
+    // until we have read all bytes or have iterated all segments
+    uint64_t file_offset = uio->uio_offset;
+    for (; segment_to_read_or_write != file_segments_by_offset.end() && bytes_to_read_or_write > 0; segment_to_read_or_write++) {
+        // First calculate where we need to start in this segment ...
+        auto offset_in_segment = file_offset - segment_to_read_or_write->first;
+        // .. then calculate how many bytes to read or write in this segment
+        auto maximum_bytes_to_read_or_write_in_segment = segment_to_read_or_write->second.size - offset_in_segment;
+        auto bytes_to_read_or_write_in_segment = std::min<uint64_t>(bytes_to_read_or_write,maximum_bytes_to_read_or_write_in_segment);
+        auto ret = uiomove(segment_to_read_or_write->second.data + offset_in_segment, bytes_to_read_or_write_in_segment, uio);
+        if (ret) {
+            return ret;
+        }
+        bytes_to_read_or_write -= bytes_to_read_or_write_in_segment;
+        file_offset += bytes_to_read_or_write;
+    }
+
     return 0;
 }
 
@@ -424,7 +502,7 @@ ramfs_read(struct vnode *vp, struct file *fp, struct uio *uio, int ioflag)
 
     set_times_to_now(&(np->rn_atime));
 
-    return uiomove(np->rn_buf + uio->uio_offset, len, uio);
+    return ramfs_read_or_write_file_data(*(np->rn_file_segments_by_offset),uio,len);
 }
 
 int
@@ -438,15 +516,21 @@ ramfs_set_file_data(struct vnode *vp, const void *data, size_t size)
     if (vp->v_type != VREG) {
         return EINVAL;
     }
-    if (np->rn_buf) {
+    if (!(*np->rn_file_segments_by_offset).empty()) {
         return EINVAL;
     }
 
-    np->rn_buf = (char *) data;
-    np->rn_bufsize = size;
+    ramfs_file_segment new_segment = {
+        .size = size,
+        .data = (char *) data
+    };
+    (*np->rn_file_segments_by_offset)[0] = new_segment;
+    np->rn_total_segments_size = size;
+
     np->rn_size = size;
-    vp->v_size = size;
     np->rn_owns_buf = false;
+
+    vp->v_size = size;
 
     return 0;
 }
@@ -478,27 +562,19 @@ ramfs_write(struct vnode *vp, struct uio *uio, int ioflag)
     if (size_t(uio->uio_offset + uio->uio_resid) > (size_t) vp->v_size) {
         /* Expand the file size before writing to it */
         off_t end_pos = uio->uio_offset + uio->uio_resid;
-        if (end_pos > (off_t) np->rn_bufsize) {
-            // XXX: this could use a page level allocator
-            size_t new_size = round_page(end_pos);
-            void *new_buf = malloc(new_size);
-            if (!new_buf)
-                return EIO;
-            if (np->rn_size != 0) {
-                memcpy(new_buf, np->rn_buf, vp->v_size);
-                if(np->rn_owns_buf)
-                    free(np->rn_buf);
+        if (end_pos > (off_t) np->rn_total_segments_size) {
+            auto ret = ramfs_enlarge_data_buffer(np, end_pos);
+            if (ret) {
+                return ret;
             }
-            np->rn_buf = (char *) new_buf;
-            np->rn_bufsize = new_size;
         }
         np->rn_size = end_pos;
         vp->v_size = end_pos;
-        np->rn_owns_buf = true;
     }
 
     set_times_to_now(&(np->rn_mtime), &(np->rn_ctime));
-    return uiomove(np->rn_buf + uio->uio_offset, uio->uio_resid, uio);
+
+    return ramfs_read_or_write_file_data(*(np->rn_file_segments_by_offset),uio,uio->uio_resid);
 }
 
 static int
@@ -527,16 +603,14 @@ ramfs_rename(struct vnode *dvp1, struct vnode *vp1, char *name1,
         if (np == NULL)
             return ENOMEM;
 
-        if (old_np->rn_buf) {
-            /* Copy file data */
-            np->rn_buf = old_np->rn_buf;
-            np->rn_size = old_np->rn_size;
-            np->rn_bufsize = old_np->rn_bufsize;
-            np->rn_owns_buf = old_np->rn_owns_buf;
-            np->rn_ref_count = old_np->rn_ref_count;
-            np->rn_removed = old_np->rn_removed;
-            old_np->rn_buf = NULL;
-        }
+        np->rn_size = old_np->rn_size;
+        np->rn_file_segments_by_offset = old_np->rn_file_segments_by_offset;
+        np->rn_total_segments_size = old_np->rn_total_segments_size;
+        np->rn_owns_buf = old_np->rn_owns_buf;
+
+        old_np->rn_file_segments_by_offset = NULL;
+        old_np->rn_owns_buf = false;
+
         /* Remove source file */
         ramfs_remove_node((ramfs_node *) dvp1->v_data, (ramfs_node *) vp1->v_data);
     }
@@ -655,11 +729,7 @@ int ramfs_close(struct vnode *dvp, struct file *file)
     struct vnode *vp = file_dentry(file)->d_vnode;
     struct ramfs_node *np = (ramfs_node *) vp->v_data;
     np->rn_ref_count--;
-
-    if (np->rn_removed && np->rn_ref_count <= 0) {
-        ramfs_free_node(np);
-    }
-
+    ramfs_free_node(np);
     return 0;
 }
 

@@ -31,6 +31,7 @@
 #define _RAMFS_H
 
 #include <osv/prex.h>
+#include <map>
 
 /* #define DEBUG_RAMFS 1 */
 
@@ -42,6 +43,11 @@
 
 #define ASSERT(e)    assert(e)
 
+struct ramfs_file_segment {
+    size_t size;
+    char *data;
+};
+
 /*
  * File/directory node for RAMFS
  */
@@ -52,11 +58,24 @@ struct ramfs_node {
     char *rn_name;    /* name (null-terminated) */
     size_t rn_namelen;    /* length of name not including terminator */
     size_t rn_size;    /* file size */
-    char *rn_buf;    /* buffer to the file data */
-    size_t rn_bufsize;    /* allocated buffer size */
+
+    /* Holds data for both symlinks and regular files.
+     * Each ramfs_file_segment holds single chunk of file and is keyed
+     * in the map by its offset in that file; the first entry will have a key 0
+     * and hold the very first chunk of the file. This way as file grows
+     * we do not need to free old and allocate new memory buffer, instead
+     * we only allocate new file segment for new chunk of the file and add
+     * it to the map */
+    std::map<off_t,struct ramfs_file_segment> *rn_file_segments_by_offset;
+    /* Sum of sizes of all segments - typically bigger than actual file size
+     * We could have iterated over all entries in the map to calculate it
+     * but it is faster to cache it as a field */
+    size_t rn_total_segments_size;
+
     struct timespec rn_ctime;
     struct timespec rn_atime;
     struct timespec rn_mtime;
+
     int rn_mode;
     bool rn_owns_buf;
     int rn_ref_count;
