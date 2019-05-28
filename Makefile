@@ -1568,6 +1568,7 @@ libc += stdlib/strtod.o
 libc += stdlib/wcstol.o
 
 libc += string/__memcpy_chk.o
+libc += string/__explicit_bzero_chk.o
 musl += string/bcmp.o
 musl += string/bcopy.o
 musl += string/bzero.o
