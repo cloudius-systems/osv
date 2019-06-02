@@ -353,18 +353,6 @@ static int pselect6(int nfds, fd_set *readfds, fd_set *writefds,
     return pselect(nfds, readfds, writefds, exceptfds, timeout_ts, NULL);
 }
 
-static int epoll_pwait(int epfd, struct epoll_event *events, int maxevents,
-                       int timeout_ms, void *sig)
-{
-    if(sig) {
-        WARN_ONCE("epoll_pwait(): unimplemented with not-null sigmask\n");
-        errno = ENOSYS;
-        return -1;
-    }
-
-    return epoll_wait(epfd, events, maxevents, timeout_ms);
-}
-
 long syscall(long number, ...)
 {
     // Save FPU state and restore it at the end of this function
@@ -424,7 +412,7 @@ long syscall(long number, ...)
     SYSCALL4(pread64, int, void *, size_t, off_t);
     SYSCALL2(ftruncate, int, off_t);
     SYSCALL1(fsync, int);
-    SYSCALL5(epoll_pwait, int, struct epoll_event *, int, int, void*);
+    SYSCALL5(epoll_pwait, int, struct epoll_event *, int, int, const sigset_t*);
     SYSCALL3(getrandom, char *, size_t, unsigned int);
     SYSCALL2(nanosleep, const struct timespec*, struct timespec *);
     SYSCALL4(fstatat, int, const char *, struct stat *, int);

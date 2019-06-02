@@ -12,6 +12,7 @@
 #include <memory>
 #include <stdio.h>
 #include <errno.h>
+#include <signal.h>
 
 #include <osv/file.h>
 #include <osv/poll.h>
@@ -336,6 +337,16 @@ int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout_
     }
 
     return epo->wait(events, maxevents, timeout_ms);
+}
+
+int epoll_pwait(int epfd, struct epoll_event *events, int maxevents, int timeout_ms,
+            const sigset_t *sigmask)
+{
+    sigset_t origmask;
+    sigprocmask(SIG_SETMASK, sigmask, &origmask);
+    auto ret = epoll_wait(epfd, events, maxevents, timeout_ms);
+    sigprocmask(SIG_SETMASK, &origmask, NULL);
+    return ret;
 }
 
 void epoll_file_closed(epoll_ptr ptr)
