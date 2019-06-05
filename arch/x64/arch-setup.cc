@@ -130,7 +130,7 @@ void arch_setup_free_memory()
     // freed.
     for_each_e820_entry(e820_buffer, e820_size, [] (e820ent ent) {
         // can't free anything below edata, it's core code.
-        // FIXME: can free below 2MB.
+        // can't free anything below kernel at this moment
         if (ent.addr + ent.size <= edata) {
             return;
         }
@@ -159,6 +159,16 @@ void arch_setup_free_memory()
     // now that we have some free memory, we can start mapping the rest
     mmu::switch_to_runtime_page_tables();
     for_each_e820_entry(e820_buffer, e820_size, [] (e820ent ent) {
+        //
+        // Free the memory below elf_start which we could not before
+        if (ent.addr < (u64)elf_start) {
+            if (ent.addr + ent.size >= (u64)elf_start) {
+                ent = truncate_above(ent, (u64) elf_start);
+            }
+            mmu::free_initial_memory_range(ent.addr, ent.size);
+            return;
+        }
+        //
         // Ignore memory already freed above
         if (ent.addr + ent.size <= initial_map) {
             return;
@@ -167,7 +177,7 @@ void arch_setup_free_memory()
             ent = truncate_below(ent, initial_map);
         }
         for (auto&& area : mmu::identity_mapped_areas) {
-        auto base = reinterpret_cast<void*>(get_mem_area_base(area));
+            auto base = reinterpret_cast<void*>(get_mem_area_base(area));
             mmu::linear_map(base + ent.addr, ent.addr, ent.size, ~0);
         }
         mmu::free_initial_memory_range(ent.addr, ent.size);
