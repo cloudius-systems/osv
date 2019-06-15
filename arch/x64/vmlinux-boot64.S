@@ -3,54 +3,35 @@
 # This work is open source software, licensed under the terms of the
 # BSD license as described in the LICENSE file in the top-level directory.
 
-#include "processor-flags.h"
-
-#define BOOT_CR0 ( X86_CR0_PE \
-                 | X86_CR0_WP \
-                 | X86_CR0_PG )
-
-#define BOOT_CR4 ( X86_CR4_DE         \
-                 | X86_CR4_PSE        \
-                 | X86_CR4_PAE        \
-                 | X86_CR4_PGE        \
-                 | X86_CR4_PCE        \
-                 | X86_CR4_OSFXSR     \
-                 | X86_CR4_OSXMMEXCPT )
-
 .text
 .code64
 .global vmlinux_entry64
 vmlinux_entry64:
-    # The address of boot_params structed is passed in RSI
-    # register so pass it to extract_linux_boot_params fuction
-    # which will extract cmdline and memory information and verify
-    # that loader.elf was indeed called as Linux 64-bit vmlinux ELF
+    # The address of the boot_params structure is passed in the RSI
+    # register so store it in RDI register so that it can be received
+    # by the extract_linux_boot_params fuction later
     mov %rsi, %rdi
-    call extract_linux_boot_params
 
-    # Even though we are in 64-bit long mode we need to reset
-    # page tables and other CPU settings the way OSv expects it
+    # Load the 64-bit version of the GDT
+    lgdt gdt64_desc
 
-    # Enable PAE (Physical Address Extension) - ability to address 64GB
-    # TODO: Add more comments to processor-flags.h what each flag does
-    mov $BOOT_CR4, %rax
-    mov %rax, %cr4
-
-    # Set root of a page table in cr3
-    lea ident_pt_l4, %rax
-    mov %rax, %cr3
-
-    # Set long mode
-    mov $0xc0000080, %ecx // EFER MSR number
-    mov $0x00000900, %eax // Set LME = 1
-    xor %edx, %edx
-    wrmsr // Write contents of EDX:EAX (0:to Model Specific Register specified by ECX register
-
-    # Activate paging and ...?
-    # TODO: Add more comments to processor-flags.h what each flag does
-    mov $BOOT_CR0, %rax
-    mov %rax, %cr0
-
-    mov $OSV_KERNEL_BASE, %rbp
-    mov $0x1000, %rbx
-    jmp start64
+    # Setup the stack to switch back to 32-bit mode in order
+    # to converge with the code that sets up transiton to 64-bit mode later.
+    # Switching back to 32-bit when we are already in 64-bit seems
+    # counter intuitive but in fact it allows us to remove code duplication
+    # around setting up 64-bit mode of CPU the OSv-way. Besides setting up
+    # paging and other control registers this also makes sure that the segment
+    # registers are setup correctly as well.
+    #
+    # The transition from 64-bit back to 32-bit mode is unfortunately not very
+    # well documented. For details please read
+    # http://blog.dolezel.info/2017/02/running-32-bit-code-in-64-bit-linux.html
+    # In short we need to push the 32-bit code segment descriptor GDT offset (0x18)
+    # and the address of the instruction (start32_from_64) we want to jump to
+    # The lret instruction pops the address and the segment descriptor and jumpt
+    # to start32_from_64 which is where the boot process converges.
+    subq $8, %rsp
+    movl $0x18, 4(%rsp)
+    movl $start32_from_64, %eax
+    movl %eax, (%rsp)
+    lret
