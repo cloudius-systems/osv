@@ -91,12 +91,12 @@ phys pte_level_mask(unsigned level)
     return ~((phys(1) << shift) - 1);
 }
 
+static void *elf_phys_start = (void*)OSV_KERNEL_BASE;
 void* phys_to_virt(phys pa)
 {
-    // The ELF is mapped 1:1
     void* phys_addr = reinterpret_cast<void*>(pa);
-    if ((phys_addr >= elf_start) && (phys_addr < elf_start + elf_size)) {
-        return phys_addr;
+    if ((phys_addr >= elf_phys_start) && (phys_addr < elf_phys_start + elf_size)) {
+        return (void*)(phys_addr + OSV_KERNEL_VM_SHIFT);
     }
 
     return phys_mem + pa;
@@ -106,9 +106,8 @@ phys virt_to_phys_pt(void* virt);
 
 phys virt_to_phys(void *virt)
 {
-    // The ELF is mapped 1:1
     if ((virt >= elf_start) && (virt < elf_start + elf_size)) {
-        return reinterpret_cast<phys>(virt);
+        return reinterpret_cast<phys>((void*)(virt - OSV_KERNEL_VM_SHIFT));
     }
 
 #if CONF_debug_memory

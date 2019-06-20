@@ -24,13 +24,28 @@
 .align 4096
 .global ident_pt_l4
 ident_pt_l4:
-    .quad ident_pt_l3 + 0x67
+    # The addresses of the paging tables have to be the physical ones, so we have to
+    # manually subtract OSV_KERNEL_VM_SHIFT in all relevant places
+    .quad ident_pt_l3 + 0x67 - OSV_KERNEL_VM_SHIFT
     .rept 511
     .quad 0
     .endr
+#if OSV_KERNEL_VM_SHIFT != 0x40000000 && OSV_KERNEL_VM_SHIFT != 0
+#error This code only works correctly for OSV_KERNEL_VM_SHIFT = 0x40000000 or 0
+#endif
 ident_pt_l3:
-    .quad ident_pt_l2 + 0x67
-    .rept 511
+    # Each of the 512 entries in this table maps the very 1st 512 GiB of
+    # virtual address space 1 GiB at a time
+    # The very 1st entry maps 1st GiB 1:1 by pointing to ident_pt_l2 table
+    # that specifies addresses of every one of 512 2MiB slots of physical memory
+    .quad ident_pt_l2 + 0x67 - OSV_KERNEL_VM_SHIFT
+    # The 2nd entry maps 2nd GiB to the same 1st GiB of physical memory by pointing
+    # to the same ident_pt_l2 table as the 1st entry above
+    # This way we effectively provide correct mapping for the kernel linked
+    # to start at 1 GiB + 2 MiB (0x40200000) in virtual memory and point to
+    # 2 MiB address (0x200000) where it starts in physical memory
+    .quad ident_pt_l2 + 0x67 - OSV_KERNEL_VM_SHIFT
+    .rept 510
     .quad 0
     .endr
 ident_pt_l2:
@@ -42,7 +57,8 @@ ident_pt_l2:
 
 gdt_desc:
     .short gdt_end - gdt - 1
-    .long gdt
+     # subtract OSV_KERNEL_VM_SHIFT because when gdt_desc is referenced, the memory is mapped 1:1
+    .long gdt - OSV_KERNEL_VM_SHIFT
 
 # Set up the 64-bit compatible version of GDT description structure
 # that points to the same GDT (Global segments Descriptors Table) and
@@ -53,7 +69,8 @@ gdt_desc:
 .align 8
 gdt64_desc:
     .short gdt_end - gdt - 1
-    .quad gdt
+     # subtract OSV_KERNEL_VM_SHIFT because when gdt64_desc is referenced, the memory is mapped 1:1
+    .quad gdt - OSV_KERNEL_VM_SHIFT
 
 .align 8
 gdt = . - 8
@@ -77,10 +94,12 @@ init_stack_top = .
 .globl start32
 .globl start32_from_64
 start32:
+    # Because the memory is mapped 1:1 at this point, we have to manualy
+    # subtract OSV_KERNEL_VM_SHIFT from virtual addresses in all relevant places
     # boot16.S set %eax to ELF start address, we'll use it later
     mov %eax, %ebp
     mov $0x0, %edi
-    lgdt gdt_desc
+    lgdt gdt_desc-OSV_KERNEL_VM_SHIFT
 
 # Add an address the vmlinux_entry64 will jump to when
 # switching from 64-bit to 32-bit mode
@@ -91,7 +110,7 @@ start32_from_64:
     mov %eax, %fs
     mov %eax, %gs
     mov %eax, %ss
-    ljmp $0x18, $1f
+    ljmp $0x18, $1f-OSV_KERNEL_VM_SHIFT
 1:
     and $~7, %esp
     # Enable PAE (Physical Address Extension) - ability to address 64GB
@@ -101,6 +120,9 @@ start32_from_64:
 
     # Set root of a page table in cr3
     lea ident_pt_l4, %eax
+    # The address of the root paging table has to be physical
+    # so substract OSV_KERNEL_VM_SHIFT from ident_pt_l4
+    sub $OSV_KERNEL_VM_SHIFT, %eax
     mov %eax, %cr3
 
     # Set long mode
@@ -128,7 +150,7 @@ start64:
     jz start64_continue
     call extract_linux_boot_params
     mov $0x1000, %rbx
-    mov $0x200000, %rbp
+    mov $OSV_KERNEL_BASE, %rbp
 
 start64_continue:
     lea .bss, %rdi
@@ -168,6 +190,7 @@ smpboot:
     mov smpboot_cr4-smpboot, %eax
     mov %eax, %cr4
     lea ident_pt_l4, %eax
+    sub $OSV_KERNEL_VM_SHIFT, %eax
     mov %eax, %cr3
     mov smpboot_efer-smpboot, %eax
     mov smpboot_efer+4-smpboot, %edx
@@ -181,7 +204,7 @@ smpboot:
 
 smpboot_gdt_desc:
     .short gdt_end - gdt - 1
-    .long gdt
+    .long gdt - OSV_KERNEL_VM_SHIFT
 .global smpboot_cr0
 smpboot_cr0:
     .long 0

@@ -102,7 +102,8 @@ void premain()
 
     arch_init_premain();
 
-    auto inittab = elf::get_init(elf_header);
+    auto inittab = elf::get_init(reinterpret_cast<elf::Elf64_Ehdr*>(
+        (void*)elf_header + OSV_KERNEL_VM_SHIFT));
 
     if (inittab.tls.start == nullptr) {
         debug_early("premain: failed to get TLS data from ELF\n");

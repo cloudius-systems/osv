@@ -85,12 +85,15 @@ extern boot_time_chart boot_time;
 // it by placing address of start32 at the known offset at memory
 // as defined by section .start32_address in loader.ld
 extern "C" void start32();
-void * __attribute__((section (".start32_address"))) start32_address = reinterpret_cast<void*>(&start32);
+void * __attribute__((section (".start32_address"))) start32_address =
+  reinterpret_cast<void*>((long)&start32 - OSV_KERNEL_VM_SHIFT);
 
 void arch_setup_free_memory()
 {
-    static ulong edata;
+    static ulong edata, edata_phys;
     asm ("movl $.edata, %0" : "=rm"(edata));
+    edata_phys = edata - OSV_KERNEL_VM_SHIFT;
+
     // copy to stack so we don't free it now
     auto omb = *osv_multiboot_info;
     auto mb = omb.mb;
@@ -129,13 +132,13 @@ void arch_setup_free_memory()
     // page tables have been set up, so we can't reference the memory being
     // freed.
     for_each_e820_entry(e820_buffer, e820_size, [] (e820ent ent) {
-        // can't free anything below edata, it's core code.
+        // can't free anything below edata_phys, it's core code.
         // can't free anything below kernel at this moment
-        if (ent.addr + ent.size <= edata) {
+        if (ent.addr + ent.size <= edata_phys) {
             return;
         }
-        if (intersects(ent, edata)) {
-            ent = truncate_below(ent, edata);
+        if (intersects(ent, edata_phys)) {
+            ent = truncate_below(ent, edata_phys);
         }
         // ignore anything above 1GB, we haven't mapped it yet
         if (intersects(ent, initial_map)) {
@@ -149,21 +152,27 @@ void arch_setup_free_memory()
         auto base = reinterpret_cast<void*>(get_mem_area_base(area));
         mmu::linear_map(base, 0, initial_map, initial_map);
     }
-    // map the core, loaded 1:1 by the boot loader
-    mmu::phys elf_phys = reinterpret_cast<mmu::phys>(elf_header);
-    elf_start = reinterpret_cast<void*>(elf_header);
-    elf_size = edata - elf_phys;
-    mmu::linear_map(elf_start, elf_phys, elf_size, OSV_KERNEL_BASE);
+    // Map the core, loaded by the boot loader
+    // In order to properly setup mapping between virtual
+    // and physical we need to take into account where kernel
+    // is loaded in physical memory - elf_phys_start - and
+    // where it is linked to start in virtual memory - elf_start
+    static mmu::phys elf_phys_start = reinterpret_cast<mmu::phys>(elf_header);
+    // There is simple invariant between elf_phys_start and elf_start
+    // as expressed by the assignment below
+    elf_start = reinterpret_cast<void*>(elf_phys_start + OSV_KERNEL_VM_SHIFT);
+    elf_size = edata_phys - elf_phys_start;
+    mmu::linear_map(elf_start, elf_phys_start, elf_size, OSV_KERNEL_BASE);
     // get rid of the command line, before low memory is unmapped
     parse_cmdline(mb);
     // now that we have some free memory, we can start mapping the rest
     mmu::switch_to_runtime_page_tables();
     for_each_e820_entry(e820_buffer, e820_size, [] (e820ent ent) {
         //
-        // Free the memory below elf_start which we could not before
-        if (ent.addr < (u64)elf_start) {
-            if (ent.addr + ent.size >= (u64)elf_start) {
-                ent = truncate_above(ent, (u64) elf_start);
+        // Free the memory below elf_phys_start which we could not before
+        if (ent.addr < (u64)elf_phys_start) {
+            if (ent.addr + ent.size >= (u64)elf_phys_start) {
+                ent = truncate_above(ent, (u64) elf_phys_start);
             }
             mmu::free_initial_memory_range(ent.addr, ent.size);
             return;

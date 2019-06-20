@@ -23,7 +23,7 @@
 
 elfnote_val(XEN_ELFNOTE_ENTRY, xen_start)
 elfnote_val(XEN_ELFNOTE_HYPERCALL_PAGE, hypercall_page)
-elfnote_val(XEN_ELFNOTE_VIRT_BASE, 0)
+elfnote_val(XEN_ELFNOTE_VIRT_BASE, OSV_KERNEL_VM_SHIFT)
 elfnote_str(XEN_ELFNOTE_XEN_VERSION, "xen-3.0")
 elfnote_str(XEN_ELFNOTE_GUEST_OS, "osv")
 elfnote_str(XEN_ELFNOTE_GUEST_VERSION, "?.?")
@@ -50,4 +50,5 @@ xen_start:
     mov %rsp, xen_bootstrap_end
     mov %rsi, %rdi
     call xen_init
+    mov $0x0, %rdi
     jmp start64

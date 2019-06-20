@@ -172,7 +172,7 @@ void xen_init(processor::features_type &features, unsigned base)
     // Base + 1 would have given us the version number, it is mostly
     // uninteresting for us now
     auto x = processor::cpuid(base + 2);
-    processor::wrmsr(x.b, cast_pointer(&hypercall_page));
+    processor::wrmsr(x.b, cast_pointer(&hypercall_page) - OSV_KERNEL_VM_SHIFT);
 
     struct xen_feature_info info;
     // To fill up the array used by C code
@@ -192,7 +192,7 @@ void xen_init(processor::features_type &features, unsigned base)
     map.domid = DOMID_SELF;
     map.idx = 0;
     map.space = 0;
-    map.gpfn = cast_pointer(&xen_shared_info) >> 12;
+    map.gpfn = (cast_pointer(&xen_shared_info) - OSV_KERNEL_VM_SHIFT) >> 12;
 
     // 7 => add to physmap
     if (memory_hypercall(XENMEM_add_to_physmap, &map))

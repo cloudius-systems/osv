@@ -13,7 +13,9 @@ vmlinux_entry64:
     mov %rsi, %rdi
 
     # Load the 64-bit version of the GDT
-    lgdt gdt64_desc
+    # Because the memory is mapped 1:1 at this point, we have to manualy
+    # subtract OSV_KERNEL_VM_SHIFT from the gdt address
+    lgdt gdt64_desc-OSV_KERNEL_VM_SHIFT
 
     # Setup the stack to switch back to 32-bit mode in order
     # to converge with the code that sets up transiton to 64-bit mode later.
@@ -32,6 +34,6 @@ vmlinux_entry64:
     # to start32_from_64 which is where the boot process converges.
     subq $8, %rsp
     movl $0x18, 4(%rsp)
-    movl $start32_from_64, %eax
+    movl $start32_from_64-OSV_KERNEL_VM_SHIFT, %eax # Because memory is mapped 1:1 subtract OSV_KERNEL_VM_SHIFT
     movl %eax, (%rsp)
     lret
