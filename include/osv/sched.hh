@@ -25,6 +25,7 @@
 #include <osv/rcu.hh>
 #include <osv/clock.hh>
 #include <osv/timer-set.hh>
+#include <string.h>
 
 typedef float runtime_t;
 
