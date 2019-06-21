@@ -34,6 +34,9 @@ TRACEPOINT(trace_elf_unload, "%s", const char *);
 TRACEPOINT(trace_elf_lookup, "%s", const char *);
 TRACEPOINT(trace_elf_lookup_addr, "%p", const void *);
 
+extern void* elf_start;
+extern size_t elf_size;
+
 using namespace boost::range;
 
 namespace {
@@ -224,7 +227,6 @@ memory_image::memory_image(program& prog, void* base)
     auto p = static_cast<Elf64_Phdr*>(base + _ehdr.e_phoff);
     assert(_ehdr.e_phentsize == sizeof(*p));
     _phdrs.assign(p, p + _ehdr.e_phnum);
-    set_base(base);
 }
 
 void memory_image::load_segment(const Elf64_Phdr& phdr)
@@ -267,14 +269,9 @@ void file::load_elf_header()
           || _ehdr.e_ident[EI_OSABI] == 0)) {
         throw osv::invalid_elf_error("bad os abi");
     }
-    // We currently only support running ET_DYN objects (shared library or
-    // position-independent executable). In the future we can add support for
-    // ET_EXEC (ordinary, position-dependent executables) but it will require
-    // loading them at their specified address and moving the kernel out of
-    // their way.
-    if (_ehdr.e_type != ET_DYN) {
+    if (!(_ehdr.e_type == ET_DYN || _ehdr.e_type == ET_EXEC)) {
         throw osv::invalid_elf_error(
-                "bad executable type (only shared-object or PIE supported)");
+                "bad executable type (only shared-object, PIE or non-PIE executable supported)");
     }
 }
 
@@ -297,17 +294,37 @@ void* align(void* addr, ulong align, ulong offset)
 
 }
 
+static bool intersects_with_kernel(Elf64_Addr elf_addr)
+{
+    void *addr = reinterpret_cast<void*>(elf_addr);
+    return addr >= elf_start && addr < elf_start + elf_size;
+}
+
 void object::set_base(void* base)
 {
     auto p = std::min_element(_phdrs.begin(), _phdrs.end(),
                               [](Elf64_Phdr a, Elf64_Phdr b)
                                   { return a.p_type == PT_LOAD
                                         && a.p_vaddr < b.p_vaddr; });
-    _base = align(base, p->p_align, p->p_vaddr & (p->p_align - 1)) - p->p_vaddr;
     auto q = std::min_element(_phdrs.begin(), _phdrs.end(),
                               [](Elf64_Phdr a, Elf64_Phdr b)
                                   { return a.p_type == PT_LOAD
                                         && a.p_vaddr > b.p_vaddr; });
+
+    if (!is_core() && is_non_pie_executable()) {
+        // Verify non-PIE executable does not collide with the kernel
+        if (intersects_with_kernel(p->p_vaddr) || intersects_with_kernel(q->p_vaddr + q->p_memsz)) {
+            abort("Non-PIE executable [%s] collides with kernel: [%p-%p] !\n",
+                    pathname().c_str(), p->p_vaddr, q->p_vaddr + q->p_memsz);
+        }
+        // Override the passed in value as the base for non-PIEs (Position Dependant Executables)
+        // needs to be set to 0 because all the addresses in it are absolute
+        _base = 0x0;
+    } else {
+        // Otherwise for kernel, PIEs and shared libraries set the base as requested by caller
+        _base = align(base, p->p_align, p->p_vaddr & (p->p_align - 1)) - p->p_vaddr;
+    }
+
     _end = _base + q->p_vaddr + q->p_memsz;
 }
 
@@ -446,6 +463,9 @@ void object::load_segments()
         default:
             abort("Unknown p_type in executable %s: %d\n", pathname(), phdr.p_type);
         }
+    }
+    if (!is_core() && _ehdr.e_type == ET_EXEC && !_is_executable) {
+        abort("Statically linked executables are not supported!\n");
     }
     // As explained in issue #352, we currently don't correctly support TLS
     // used in PIEs.
@@ -1099,7 +1119,9 @@ void create_main_program()
 program::program(void* addr)
     : _next_alloc(addr)
 {
-    _core = std::make_shared<memory_image>(*this, (void*)(ELF_IMAGE_START + OSV_KERNEL_VM_SHIFT));
+    void *program_base = (void*)(ELF_IMAGE_START + OSV_KERNEL_VM_SHIFT);
+    _core = std::make_shared<memory_image>(*this, program_base);
+    _core->set_base(program_base);
     assert(_core->module_index() == core_module_index);
     _core->load_segments();
     set_search_path({"/", "/usr/lib"});
@@ -1223,7 +1245,8 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         _modules_rcu.assign(new_modules.release());
         osv::rcu_dispose(old_modules);
         ef->load_segments();
-        _next_alloc = ef->end();
+        if (!ef->is_non_pie_executable())
+           _next_alloc = ef->end();
         add_debugger_obj(ef.get());
         loaded_objects.push_back(ef);
         ef->load_needed(loaded_objects);

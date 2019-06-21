@@ -365,6 +365,7 @@ public:
     void init_static_tls();
     size_t initial_tls_size() { return _initial_tls_size; }
     void* initial_tls() { return _initial_tls.get(); }
+    bool is_non_pie_executable() { return _ehdr.e_type == ET_EXEC; }
     std::vector<ptrdiff_t>& initial_tls_offsets() { return _initial_tls_offsets; }
 protected:
     virtual void load_segment(const Elf64_Phdr& segment) = 0;
