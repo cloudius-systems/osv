@@ -23,36 +23,60 @@ using boost::intrusive::get_parent_from_member;
 
 class hpetclock : public clock {
 public:
-    hpetclock(uint64_t hpet_address);
-    virtual s64 time() __attribute__((no_instrument_function));
-    virtual s64 uptime() override __attribute__((no_instrument_function));
+    hpetclock(mmioaddr_t hpet_mmio_address);
     virtual s64 boot_time() override __attribute__((no_instrument_function));
-private:
+protected:
     mmioaddr_t _addr;
     uint64_t _wall;
     uint64_t _period;
+};
+
+#define HPET_COUNTER    0x0f0
+
+//FIXME: Enhance this class to handle wrap-around
+class hpet_32bit_clock : public hpetclock {
+public:
+    hpet_32bit_clock(mmioaddr_t hpet_mmio_address) : hpetclock(hpet_mmio_address) {
+        debug_early_u64("WARNING: hpet with 32-bit counter will wrap around in seconds: ",
+            (_period * (1UL << 32)) / 1000000000UL);
+    }
+protected:
+    virtual s64 time() override __attribute__((no_instrument_function)) {
+        return _wall + mmio_getl(_addr + HPET_COUNTER) * _period;
+    }
+
+    virtual s64 uptime() override __attribute__((no_instrument_function)) {
+        return mmio_getl(_addr + HPET_COUNTER) * _period;
+    }
+};
+
+class hpet_64bit_clock : public hpetclock {
+public:
+    hpet_64bit_clock(mmioaddr_t hpet_mmio_address) : hpetclock(hpet_mmio_address) {}
+protected:
+    virtual s64 time() override __attribute__((no_instrument_function)) {
+        return _wall + mmio_getq(_addr + HPET_COUNTER) * _period;;
+    }
+
+    virtual s64 uptime() override __attribute__((no_instrument_function)) {
+        return mmio_getq(_addr + HPET_COUNTER) * _period;;
+    }
 };
 
 #define HPET_CAP        0x000
 #define HPET_CAP_COUNT_SIZE (1<<13)
 #define HPET_PERIOD     0x004
 #define HPET_CONFIG     0x010
-#define HPET_COUNTER    0x0f0
 
 #define MAX_PERIOD     100000000UL
 #define MIN_PERIOD     1000000UL
 
-hpetclock::hpetclock(uint64_t hpet_address)
+hpetclock::hpetclock(mmioaddr_t hpet_mmio_address)
 {
+    _addr = hpet_mmio_address;
     // If we ever need another rtc user, it should be global. But
     // we should really, really avoid it. So let it local.
     auto r = new rtc();
-    _addr = mmio_map(hpet_address, 4096);
-
-    // Verify that a 64-bit counter is supported, and we're not forced to
-    // operate in 32-bit mode (which has interrupt on every wrap-around).
-    auto cap = mmio_getl(_addr + HPET_CAP);
-    assert(cap & HPET_CAP_COUNT_SIZE);
 
     unsigned int cfg = mmio_getl(_addr + HPET_CONFIG);
     // Stop the HPET First, so we can make sure the counter is at 0 when we
@@ -81,16 +105,6 @@ hpetclock::hpetclock(uint64_t hpet_address)
         cfg |= 0x1;
         mmio_setl(_addr + HPET_CONFIG, cfg);
     };
-}
-
-s64 hpetclock::time()
-{
-    return _wall + (mmio_getq(_addr + HPET_COUNTER) * _period);
-}
-
-s64 hpetclock::uptime()
-{
-    return mmio_getq(_addr + HPET_COUNTER) * _period;
 }
 
 s64 hpetclock::boot_time()
@@ -122,6 +136,16 @@ void __attribute__((constructor(init_prio::hpet))) hpet_init()
         auto h = get_parent_from_member(hpet_header, &ACPI_TABLE_HPET::Header);
         auto hpet_address = h->Address;
 
-        clock::register_clock(new hpetclock(hpet_address.Address));
+        // Check what type of main counter - 32-bit or 64-bit - is available and
+        // construct relevant hpet clock instance
+        mmioaddr_t hpet_mmio_address = mmio_map(hpet_address.Address, 4096);
+
+        auto cap = mmio_getl(hpet_mmio_address + HPET_CAP);
+        if (cap & HPET_CAP_COUNT_SIZE) {
+            clock::register_clock(new hpet_64bit_clock(hpet_mmio_address));
+        }
+        else {
+            clock::register_clock(new hpet_32bit_clock(hpet_mmio_address));
+        }
     }, {});
 }
