@@ -88,11 +88,12 @@ int mprotect(void *addr, size_t len, int prot)
         abort("mprotect() on linear map not supported\n");
     }
 
-    if (!mmu::is_page_aligned(addr) || !mmu::is_page_aligned(len)) {
+    if (!mmu::is_page_aligned(addr)) {
         // address not page aligned
         return libc_error(EINVAL);
     }
 
+    len = align_up(len, mmu::page_size);
     return mmu::mprotect(addr, len, libc_prot_to_perm(prot)).to_libc();
 }
 
