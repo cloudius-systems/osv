@@ -136,7 +136,8 @@ def find_firecracker(dirname):
     firecracker_version = 'v0.16.0'
     if not os.path.exists(firecracker_path):
         url_base = 'https://github.com/firecracker-microvm/firecracker/releases/download'
-        download_url = '%s/%s/firecracker' % (url_base, firecracker_version)
+        download_url = '%s/%s/firecracker-%s' % (url_base, firecracker_version,
+                firecracker_version)
         answer = raw_input("Firecracker executable has not been found under %s. "
                            "Would you like to download it from %s and place it under %s? [y|n]" %
                            (firecracker_path, download_url, firecracker_path))
