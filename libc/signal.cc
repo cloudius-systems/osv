@@ -345,6 +345,9 @@ int kill(pid_t pid, int sig)
         // very Unix-like behavior, but if we assume that the program doesn't
         // care which of its threads handle the signal - why not just create
         // a completely new thread and run it there...
+        // The newly created thread is tagged as an application one
+        // to make sure that user provided signal handler code has access to all
+        // the features like syscall stack which matters for Golang apps
         const auto sa = signal_actions[sig];
         auto t = sched::thread::make([=] {
             if (sa.sa_flags & SA_RESETHAND) {
@@ -357,7 +360,8 @@ int kill(pid_t pid, int sig)
             } else {
                 sa.sa_handler(sig);
             }
-        }, sched::thread::attr().detached().stack(65536).name("signal_handler"));
+        }, sched::thread::attr().detached().stack(65536).name("signal_handler"),
+                false, true);
         t->start();
     }
     return 0;
