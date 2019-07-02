@@ -93,7 +93,8 @@ class ApiClient(object):
     def configure_machine(self, vcpu_count, mem_size_in_mb):
         self.make_put_call('/machine-config', {
             'vcpu_count': vcpu_count,
-            'mem_size_mib': mem_size_in_mb
+            'mem_size_mib': mem_size_in_mb,
+            'ht_enabled' : False
         })
 
 
@@ -133,10 +134,10 @@ def find_firecracker(dirname):
         firecracker_path = os.environ.get('FIRECRACKER_PATH')
 
     # And offer to install if not found
-    firecracker_version = 'v0.16.0'
+    firecracker_version = 'v0.17.0'
     if not os.path.exists(firecracker_path):
         url_base = 'https://github.com/firecracker-microvm/firecracker/releases/download'
-        download_url = '%s/%s/firecracker' % (url_base, firecracker_version)
+        download_url = '%s/%s/firecracker-%s' % (url_base, firecracker_version, firecracker_version)
         answer = raw_input("Firecracker executable has not been found under %s. "
                            "Would you like to download it from %s and place it under %s? [y|n]" %
                            (firecracker_path, download_url, firecracker_path))
