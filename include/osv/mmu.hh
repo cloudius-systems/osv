@@ -94,11 +94,13 @@ public:
     fileref file() const { return _file; }
     f_offset offset() const { return _offset; }
     u64 file_inode() const { return _file_inode; }
+    dev_t file_dev_id() const { return _file_dev_id; }
 private:
     f_offset offset(uintptr_t addr);
     fileref _file;
     f_offset _offset;
     u64 _file_inode;
+    dev_t _file_dev_id;
 };
 
 ulong map_jvm(unsigned char* addr, size_t size, size_t align, balloon_ptr b);

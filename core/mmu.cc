@@ -1687,6 +1687,7 @@ file_vma::file_vma(addr_range range, unsigned perm, unsigned flags, fileref file
     }
 
     _file_inode = st.st_ino;
+    _file_dev_id = st.st_dev;
 }
 
 void file_vma::fault(uintptr_t addr, exception_frame *ef)
@@ -1918,7 +1919,9 @@ std::string procfs_maps()
             osv::fprintf(os, "%x-%x %c%c%c%c ", vma.start(), vma.end(), read, write, execute, priv);
             if (vma.flags() & mmap_file) {
                 const file_vma &f_vma = static_cast<file_vma&>(vma);
-                osv::fprintf(os, "%08x 00:00 %ld %s\n", f_vma.offset(), f_vma.file_inode(), f_vma.file()->f_dentry->d_path);
+                unsigned dev_id_major = major(f_vma.file_dev_id());
+                unsigned dev_id_minor = minor(f_vma.file_dev_id());
+                osv::fprintf(os, "%08x %02x:%02x %ld %s\n", f_vma.offset(), dev_id_major, dev_id_minor, f_vma.file_inode(), f_vma.file()->f_dentry->d_path);
             } else {
                 osv::fprintf(os, "00000000 00:00 0\n");
             }
