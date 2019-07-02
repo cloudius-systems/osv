@@ -22,6 +22,13 @@ SECTIONS
     .start32_address : AT(ADDR(.start32_address) - OSV_KERNEL_VM_SHIFT) {
         *(.start32_address)
     }
+    . = OSV_KERNEL_VM_BASE + 0x900;
+	/*
+	 * Place address of start32_from_vmlinuz routine at predefined offset in memory
+	 */
+    .start32_from_vmlinuz_address : AT(ADDR(.start32_from_vmlinuz_address) - OSV_KERNEL_VM_SHIFT) {
+        *(.start32_from_vmlinuz_address)
+    }
     . = OSV_KERNEL_VM_BASE + 0x1000;
     .dynamic : AT(ADDR(.dynamic) - OSV_KERNEL_VM_SHIFT) { *(.dynamic) } :dynamic :text
     .text : AT(ADDR(.text) - OSV_KERNEL_VM_SHIFT) {

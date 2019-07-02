@@ -92,6 +92,7 @@ init_stack_top = .
 .text
 
 .globl start32
+.globl start32_from_vmlinuz
 .globl start32_from_64
 start32:
     # Because the memory is mapped 1:1 at this point, we have to manualy
@@ -99,6 +100,8 @@ start32:
     # boot16.S set %eax to ELF start address, we'll use it later
     mov %eax, %ebp
     mov $0x0, %edi
+
+start32_from_vmlinuz:
     lgdt gdt_desc-OSV_KERNEL_VM_SHIFT
 
 # Add an address the vmlinux_entry64 will jump to when

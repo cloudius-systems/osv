@@ -88,6 +88,10 @@ extern "C" void start32();
 void * __attribute__((section (".start32_address"))) start32_address =
   reinterpret_cast<void*>((long)&start32 - OSV_KERNEL_VM_SHIFT);
 
+extern "C" void start32_from_vmlinuz();
+void * __attribute__((section (".start32_from_vmlinuz_address"))) start32_from_vmlinuz_address =
+  reinterpret_cast<void*>((long)&start32_from_vmlinuz - OSV_KERNEL_VM_SHIFT);
+
 void arch_setup_free_memory()
 {
     static ulong edata, edata_phys;

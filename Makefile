@@ -133,7 +133,7 @@ very-quiet = $(if $V, $1, @$1)
 
 all: $(out)/loader.img links
 ifeq ($(arch),x64)
-all: $(out)/loader.bin
+all: $(out)/loader.bin $(out)/vmlinuz.bin
 endif
 .PHONY: all
 
@@ -438,12 +438,25 @@ $(out)/loader.img: $(out)/boot.bin $(out)/lzloader.elf
 	$(call quiet, scripts/imgedit.py setargs "-f raw $@" $(cmdline), IMGEDIT $@)
 
 $(out)/arch/x64/boot32.o: $(out)/lzloader.elf
+$(out)/arch/x64/boot32.o: ASFLAGS += -I$(out)
+
 $(out)/loader.bin: $(out)/arch/x64/boot32.o arch/x64/loader32.ld
 	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
 	                $(filter-out %.bin, $(^:%.ld=-T %.ld)), LD $@)
 
-$(out)/arch/x64/boot32.o: $(out)/lzloader.elf
-$(out)/arch/x64/boot32.o: ASFLAGS += -I$(out)
+kernel_size = $(shell stat --printf %s $(out)/loader-stripped.elf)
+
+$(out)/arch/x64/vmlinuz-boot32.o: $(out)/loader-stripped.elf
+$(out)/arch/x64/vmlinuz-boot32.o: ASFLAGS += -I$(out) -DOSV_KERNEL_SIZE=$(kernel_size)
+
+$(out)/vmlinuz-boot.bin: $(out)/arch/x64/vmlinuz-boot32.o arch/x64/vmlinuz-boot.ld
+	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -T arch/x64/vmlinuz-boot.ld -o $@ \
+	                $(filter-out %.bin, $(^:%.ld=-T %.ld)), LD $@)
+
+$(out)/vmlinuz.bin: $(out)/vmlinuz-boot.bin $(out)/loader-stripped.elf
+	$(call quiet, dd if=$(out)/vmlinuz-boot.bin of=$@ > /dev/null 2>&1, DD vmlinuz.bin vmlinuz-boot.bin)
+	$(call quiet, dd if=$(out)/loader-stripped.elf of=$@ conv=notrunc seek=4 > /dev/null 2>&1, \
+		DD vmlinuz.bin loader-stripped.elf)
 
 $(out)/fastlz/fastlz.o:
 	$(makedir)
