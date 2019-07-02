@@ -418,6 +418,7 @@ long syscall(long number, ...)
     SYSCALL4(fstatat, int, const char *, struct stat *, int);
     SYSCALL1(sys_exit_group, int);
     SYSCALL4(readlinkat, int, const char *, char *, size_t);
+    SYSCALL0(getpid);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
