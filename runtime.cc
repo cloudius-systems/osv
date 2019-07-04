@@ -375,18 +375,24 @@ long fpathconf(int, int)
 
 size_t confstr(int name, char* buf, size_t len)
 {
-    char tmp[1];
-    if (!buf) {
-        buf = tmp;
-        len = 1;
-    }
-    auto set = [=] (const char* v) { return snprintf(buf, len, "%s", v); };
+    const char* v = nullptr;
     switch (name) {
-    case _CS_GNU_LIBC_VERSION: return set("glibc 2.16");
-    case _CS_GNU_LIBPTHREAD_VERSION: return set("NPTL 2.16");
+    case _CS_GNU_LIBC_VERSION: v = "glibc 2.16";
+    case _CS_GNU_LIBPTHREAD_VERSION: v = "NPTL 2.16";
+    // Skip _CS_PATH as it does not make sense in OSv
     }
-    debug(fmt("confstr: unknown parameter %1%\n") % name);
-    abort();
+
+    if (v) {
+        // Return how many bytes needed to store the value including the null terminator
+        auto ret = strlen(v) + 1;
+        if (len > 0 && buf) {
+            snprintf(buf, len, "%s", v);
+        }
+        return ret;
+    } else {
+        errno = EINVAL;
+        return 0;
+    }
 }
 
 FILE *popen(const char *command, const char *type)
@@ -397,7 +403,7 @@ FILE *popen(const char *command, const char *type)
 
 int pclose(FILE *stream)
 {
-	return 0;
+    return 0;
 }
 
 void exit(int status)
