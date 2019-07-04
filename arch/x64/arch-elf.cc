@@ -12,6 +12,8 @@
 
 namespace elf {
 
+// This function is solely used to relocate symbols in OSv kernel ELF
+// and is indirectly called by loader premain() function
 bool arch_init_reloc_dyn(struct init_table *t, u32 type, u32 sym,
                          void *addr, void *base, Elf64_Sxword addend)
 {
@@ -33,7 +35,7 @@ bool arch_init_reloc_dyn(struct init_table *t, u32 type, u32 sym,
     case R_X86_64_GLOB_DAT:
         *static_cast<u64*>(addr) = t->dyn_tabs.lookup(sym)->st_value;
         break;
-    case R_X86_64_DPTMOD64:
+    case R_X86_64_DTPMOD64:
         abort();
         //*static_cast<u64*>(addr) = symbol_module(sym);
         break;
@@ -53,6 +55,10 @@ bool arch_init_reloc_dyn(struct init_table *t, u32 type, u32 sym,
     return true;
 }
 
+//
+// This method is used when relocating symbols in all ELF objects
+// except for OSv kernel ELF itself which is relocated by
+// the function arch_init_reloc_dyn() above
 bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
                                 Elf64_Sxword addend)
 {
@@ -74,23 +80,45 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
     case R_X86_64_GLOB_DAT:
         *static_cast<void**>(addr) = symbol(sym).relocated_addr();
         break;
-    case R_X86_64_DPTMOD64:
+    // The next 3 types are intended to relocate symbols of thread local variables
+    // defined with __thread modifier
+    //
+    // Please note that thread local variables accessed in so called local-exec mode
+    // are never relocated as their negative offsets relative to the TCB address in FS register,
+    // are placed by static linker into the final code as in this example:
+    //    mov %fs:0xfffffffffffffffc,%eax
+    //
+    case R_X86_64_DTPMOD64:
+        // This type and next R_X86_64_DTPOFF64 are intended to prepare execution of __tls_get_addr()
+        // which provides dynamic access of thread local variable
+        // This calculates the module index of the ELF containing the variable
         if (sym == STN_UNDEF) {
+            // The thread-local variable being accessed is within
+            // the SAME shared object as the caller
             *static_cast<u64*>(addr) = _module_index;
+            // No need to calculate the offset to the beginning
         } else {
+            // The thread-local variable being accessed is located
+            // in DIFFERENT shared object that the caller
             *static_cast<u64*>(addr) = symbol(sym).obj->_module_index;
         }
         break;
     case R_X86_64_DTPOFF64:
+        // The thread-local variable being accessed is located
+        // in DIFFERENT shared object that the caller
         *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
         break;
     case R_X86_64_TPOFF64:
+        // This type is intended to resolve symbols of thread-local variables in static TLS
+        // accessed in initial-exec mode and is handled to calculate the virtual address of
+        // target thread-local variable
         if (sym) {
             auto sm = symbol(sym);
             sm.obj->alloc_static_tls();
             auto tls_offset = sm.obj->static_tls_end() + sched::kernel_tls_size();
             *static_cast<u64*>(addr) = sm.symbol->st_value + addend - tls_offset;
         } else {
+            // TODO: Which case does this handle?
             alloc_static_tls();
             auto tls_offset = static_tls_end() + sched::kernel_tls_size();
             *static_cast<u64*>(addr) = addend - tls_offset;

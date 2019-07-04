@@ -18,7 +18,7 @@ enum {
     R_X86_64_PC16 = 13, //  word16 S + A - P
     R_X86_64_8 = 14, //  word8 S + A
     R_X86_64_PC8 = 15, //  word8 S + A - P
-    R_X86_64_DPTMOD64 = 16, //  word64
+    R_X86_64_DTPMOD64 = 16, //  word64
     R_X86_64_DTPOFF64 = 17, //  word64
     R_X86_64_TPOFF64 = 18, //  word64
     R_X86_64_TLSGD = 19, //  word32
