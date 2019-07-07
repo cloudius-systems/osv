@@ -30,6 +30,7 @@ elfnote_str(XEN_ELFNOTE_GUEST_VERSION, "?.?")
 elfnote_str(XEN_ELFNOTE_LOADER, "generic")
 elfnote_str(XEN_ELFNOTE_FEATURES, "!writable_page_tables")
 elfnote_str(XEN_ELFNOTE_BSD_SYMTAB, "yes")
+elfnote_val(XEN_ELFNOTE_PHYS32_ENTRY, hvm_xen_start-OSV_KERNEL_VM_SHIFT)
 
 .data
 
@@ -51,3 +52,10 @@ xen_start:
     call xen_init
     mov $0x0, %rdi
     jmp start64
+
+.code32
+hvm_xen_start:
+    mov %ebx, hvm_xen_start_info-OSV_KERNEL_VM_SHIFT
+    mov $0x7c00, %esp # Allocate some temporary stack -> TODO: Probably unnecessary
+    mov $start32-OSV_KERNEL_VM_SHIFT, %eax
+    jmp *%eax

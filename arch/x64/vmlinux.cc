@@ -78,16 +78,5 @@ extern "C" void extract_linux_boot_params(void *boot_params)
         mb_info->mb.mmap_length += sizeof(e820ent);
     }
 
-    auto now = processor::ticks();
-    u32 now_high = (u32)(now >> 32);
-    u32 now_low = (u32)now;
-
-    mb_info->tsc_init_hi = now_high;
-    mb_info->tsc_init = now_low;
-
-    mb_info->tsc_disk_done_hi = now_high;
-    mb_info->tsc_disk_done = now_low;
-
-    mb_info->tsc_uncompress_done_hi = now_high;
-    mb_info->tsc_uncompress_done = now_low;
+    reset_bootchart(mb_info);
 }

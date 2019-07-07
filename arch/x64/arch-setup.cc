@@ -316,3 +316,19 @@ bool arch_setup_console(std::string opt_console)
     }
     return true;
 }
+
+void reset_bootchart(osv_multiboot_info_type* mb_info)
+{
+    auto now = processor::ticks();
+    u32 now_high = (u32)(now >> 32);
+    u32 now_low = (u32)now;
+
+    mb_info->tsc_init_hi = now_high;
+    mb_info->tsc_init = now_low;
+
+    mb_info->tsc_disk_done_hi = now_high;
+    mb_info->tsc_disk_done = now_low;
+
+    mb_info->tsc_uncompress_done_hi = now_high;
+    mb_info->tsc_uncompress_done = now_low;
+}

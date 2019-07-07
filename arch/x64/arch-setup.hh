@@ -60,4 +60,6 @@ void arch_setup_free_memory();
 void arch_init_drivers();
 bool arch_setup_console(std::string opt_console);
 
+void reset_bootchart(osv_multiboot_info_type* mb_info);
+
 #endif /* ARCH_SETUP_HH_ */

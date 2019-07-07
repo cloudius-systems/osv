@@ -148,8 +148,15 @@ start64:
     # it contains the address of the boot_params structure
     # that would be set if we came here from vmlinux_entry64
     cmp $0x0, %rdi
-    jz start64_continue
+    jz detect_pvh_boot
     call extract_linux_boot_params
+    mov $0x1000, %rbx
+
+detect_pvh_boot:
+    mov hvm_xen_start_info, %rdi
+    cmp $0x0, %rdi
+    jz start64_continue
+    call hvm_xen_extract_boot_params
     mov $0x1000, %rbx
 
 start64_continue:
