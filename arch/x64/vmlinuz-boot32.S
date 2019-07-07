@@ -60,6 +60,5 @@ handover_offset:       .4byte 0                     /* Offset of handover entry 
     # register so store it in RDI register so that it can be received
     # by the extract_linux_boot_params fuction later
     mov %esi, %edi
-    mov $OSV_KERNEL_BASE, %ebp
     mov $0x7c00, %esp # Allocate some temporary stack
     jmp *start32_from_vmlinuz

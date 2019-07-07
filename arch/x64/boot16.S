@@ -166,7 +166,6 @@ done_e820:
     rdtsc
     mov %eax, mb_uncompress_lo
     mov %edx, mb_uncompress_hi
-    mov $loader, %eax
     mov $mb_info, %ebx
     call *start32
 

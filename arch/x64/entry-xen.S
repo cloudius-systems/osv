@@ -46,7 +46,6 @@ hypercall_page:
 .align 4096
 
 xen_start:
-    mov OSV_KERNEL_BASE, %ebp  // elf header; FIXME: determine dynamically
     mov %rsp, xen_bootstrap_end
     mov %rsi, %rdi
     call xen_init

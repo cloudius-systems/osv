@@ -95,13 +95,11 @@ init_stack_top = .
 .globl start32_from_vmlinuz
 .globl start32_from_64
 start32:
-    # Because the memory is mapped 1:1 at this point, we have to manualy
-    # subtract OSV_KERNEL_VM_SHIFT from virtual addresses in all relevant places
-    # boot16.S set %eax to ELF start address, we'll use it later
-    mov %eax, %ebp
     mov $0x0, %edi
 
 start32_from_vmlinuz:
+    # Because the memory is mapped 1:1 at this point, we have to manualy
+    # subtract OSV_KERNEL_VM_SHIFT from virtual addresses in all relevant places
     lgdt gdt_desc-OSV_KERNEL_VM_SHIFT
 
 # Add an address the vmlinux_entry64 will jump to when
@@ -153,7 +151,6 @@ start64:
     jz start64_continue
     call extract_linux_boot_params
     mov $0x1000, %rbx
-    mov $OSV_KERNEL_BASE, %rbp
 
 start64_continue:
     lea .bss, %rdi
@@ -161,6 +158,7 @@ start64_continue:
     sub %rdi, %rcx
     xor %eax, %eax
     rep stosb
+    mov $OSV_KERNEL_BASE, %rbp
     mov %rbp, elf_header
     # %ebx is set by boot16.S before running the loader
     mov %rbx, osv_multiboot_info
