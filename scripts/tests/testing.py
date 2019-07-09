@@ -17,9 +17,13 @@ class Test(object):
     def __init__(self, name):
         self.name = name
         self.run_py_args = []
+        self.hypervisor = 'qemu'
 
     def set_run_py_args(self, args):
         self.run_py_args = args
+
+    def set_hypervisor(self, hypervisor):
+        self.hypervisor = hypervisor
 
     def run(self):
         pass
@@ -30,7 +34,7 @@ class SingleCommandTest(Test):
         self.command = command
 
     def run(self):
-        run_command_in_guest(self.command, run_py_args=self.run_py_args).join()
+        run_command_in_guest(self.command, hypervisor=self.hypervisor, run_py_args=self.run_py_args).join()
 
 class test(Test):
     """
@@ -182,24 +186,31 @@ class SupervisedProcess:
         return self.has_errors or self.process.returncode
 
 def run_command_in_guest(command, **kwargs):
-    return Guest(["-s", "-e", "--power-off-on-abort " + command], **kwargs)
+    common_parameters = ["-e", "--power-off-on-abort " + command]
+    if 'hypervisor' in kwargs.keys() and kwargs['hypervisor'] == 'firecracker':
+        return Guest(["-m 1024M", "-n", "-c 4"] + common_parameters, **kwargs)
+    else:
+        return Guest(["-s"] + common_parameters, **kwargs)
 
 class Guest(SupervisedProcess):
     def __init__(self, args, forward=[], hold_with_poweroff=False, show_output_on_error=True,
-                 scan_for_failed_to_load_object_error=True, run_py_args=[]):
+                 scan_for_failed_to_load_object_error=True, run_py_args=[], hypervisor='qemu'):
 
-        run_script = os.path.join(osv_base, "scripts/run.py")
+        if hypervisor == 'firecracker':
+            run_script = os.path.join(osv_base, "scripts/firecracker.py")
+        else:
+            run_script = os.path.join(osv_base, "scripts/run.py")
 
-        if hold_with_poweroff:
-            args.append('-H')
+            if hold_with_poweroff:
+                args.append('-H')
 
-        self.monitor_socket = 'qemu-monitor'
-        args.extend(['--pass-args=-monitor unix:%s,server,nowait' % self.monitor_socket])
+            self.monitor_socket = 'qemu-monitor'
+            args.extend(['--pass-args=-monitor unix:%s,server,nowait' % self.monitor_socket])
 
-        for rule in forward:
-            args.extend(['--forward', 'tcp::%s-:%s' % rule])
+            for rule in forward:
+                args.extend(['--forward', 'tcp::%s-:%s' % rule])
 
-        args.extend(['--unsafe-cache'])
+            args.extend(['--unsafe-cache'])
 
         SupervisedProcess.__init__(self, [run_script] + run_py_args + args,
             show_output=_verbose_output,

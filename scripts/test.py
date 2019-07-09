@@ -22,6 +22,11 @@ blacklist= [
     "tst-feexcept.so",
 ]
 
+firecracker_blacklist= [
+    "tracing_smoke_test",
+    "tcp_close_without_reading", #This test is flaky under firecracker due to a bug possibly in firecracker itself
+]
+
 add_tests([
     SingleCommandTest('java_isolated', '/java_isolated.so -cp /tests/java/tests.jar:/tests/java/isolates.jar \
         -Disolates.jar=/tests/java/isolates.jar org.junit.runner.JUnitCore io.osv.AllTestsThatTestIsolatedApp'),
@@ -58,6 +63,7 @@ def run_test(test):
     start = time.time()
     try:
         test.set_run_py_args(run_py_args)
+        test.set_hypervisor(cmdargs.hypervisor)
         test.run()
     except:
         sys.stdout.write("Test %s FAILED\n" % test.name)
@@ -182,6 +188,7 @@ if __name__ == "__main__":
     parser.add_argument("-r", "--repeat", action="store_true", help="repeat until test fails")
     parser.add_argument("-s", "--single", action="store_true", help="run as much tests as possible in a single OSv instance")
     parser.add_argument("-n", "--nfs",    action="store_true", help="run nfs test in a single OSv instance")
+    parser.add_argument("-p", "--hypervisor", action="store", default="qemu", help="choose hypervisor to run: qemu, firecracker")
     parser.add_argument("--name", action="store", help="run all tests whose names match given regular expression")
     parser.add_argument("--run_options", action="store", help="pass extra options to run.py")
     cmdargs = parser.parse_args()
@@ -190,4 +197,6 @@ if __name__ == "__main__":
         run_py_args = cmdargs.run_options.split()
     else:
         run_py_args = []
+    if cmdargs.hypervisor == 'firecracker':
+        blacklist.extend(firecracker_blacklist)
     main()
