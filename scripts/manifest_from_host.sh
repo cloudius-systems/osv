@@ -15,17 +15,18 @@ usage() {
 	cat <<-EOF
 	Produce manifest referencing files on the host filesystem
 
-	Usage: ${argv0} [options] <ELF file> | <directory path>
+	Usage: ${argv0} [options] <ELF file> | <directory path> [<subdirectory path>]
 
 	Options:
 	  -l              Look for a shared library
 	  -r              Resolve all SO dependencies in directory
+	  -R              Make guest root path match the host, otherwise assume '/'; applies with directory path input
 	  -h              Show this help output
 	  -w              Write output to ./build/last/append.manifest
 
 	Examples:
 	  ./scripts/manifest_from_host.sh ls                 # Create manifest for 'ls' executable
-	  ./scripts/manifest_from_host.sh -r /some/directory # Create manifest out of file in the directory
+	  ./scripts/manifest_from_host.sh -r /some/directory # Create manifest out of the files in the directory
 	  ./scripts/manifest_from_host.sh -l libz.so.1       # Create manifest for libz.so.1 library
 	  ./scripts/manifest_from_host.sh -w ls && \
           ./script/build --append-manifest                   # Create manifest for 'ls' executable
@@ -61,7 +62,7 @@ output_manifest()
 	echo "# --------------------" | tee -a $OUTPUT
 	lddtree $so_path | grep -v "$so_path" | grep -v 'ld-linux-x86-64' | \
 		grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|stdc\+\+|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
-		sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | tee -a $OUTPUT
+		sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
 }
 
 detect_elf()
@@ -94,11 +95,13 @@ MODE="EXEC"
 RESOLVE=false
 OUTPUT="/dev/null"
 DEFAULT_OUTPUT_FILE="$(dirname $0)/../build/last/append.manifest"
+GUEST_ROOT=true
 
-while getopts lrwh: OPT ; do
+while getopts lrRwh: OPT ; do
 	case ${OPT} in
 	l) MODE="LIB";;
 	r) RESOLVE=true;;
+	R) GUEST_ROOT=false;;
 	w) OUTPUT="$DEFAULT_OUTPUT_FILE";;
 	h) usage;;
 	?) usage 1;;
@@ -109,18 +112,23 @@ shift $((OPTIND - 1))
 [[ -z $1 ]] && usage 1
 
 NAME_OR_PATH=$1
+SUBDIRECTORY_PATH=$2
 
 # Check if directory and disregard LIB mode if requested
 if [[ -d $NAME_OR_PATH ]]; then
-	echo "/**: $NAME_OR_PATH/**" | tee $OUTPUT
+	GUEST_PATH_ROOT=""
+	if [[ $GUEST_ROOT == false ]]; then
+		GUEST_PATH_ROOT="$(realpath $NAME_OR_PATH)"
+	fi
+	echo "$GUEST_PATH_ROOT/$SUBDIRECTORY_PATH**: $(realpath $NAME_OR_PATH)/$SUBDIRECTORY_PATH**" | tee $OUTPUT
 	if [[ $RESOLVE == true ]]; then
-		SO_FILES=$(find $NAME_OR_PATH -type f -name \*so)
+		SO_FILES=$(find $NAME_OR_PATH/$SUBDIRECTORY_PATH -type f -name \*so)
 		echo "# --------------------" | tee -a $OUTPUT
 		echo "# Dependencies" | tee -a $OUTPUT
 		echo "# --------------------" | tee -a $OUTPUT
-		lddtree $SO_FILES | grep -v "not found" | grep -v "$NAME_OR_PATH" | grep -v 'ld-linux-x86-64' | \
+		lddtree $SO_FILES | grep -v "not found" | grep -v "$NAME_OR_PATH/$SUBDIRECTORY_PATH" | grep -v 'ld-linux-x86-64' | \
 			grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|stdc\+\+|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
-			sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | uniq | tee -a $OUTPUT
+			sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
 	fi
 	exit 0
 fi
@@ -135,9 +143,9 @@ if [[ -f $NAME_OR_PATH ]]; then
 		# Detect if ELF is an executable
 		if [[ $FILE_TYPE == "SL" ]]; then
 			# Library
-			echo "/usr/lib/$NAME: $NAME_OR_PATH" | tee -a $OUTPUT
+			echo "/usr/lib/$NAME: $(realpath $NAME_OR_PATH)" | tee -a $OUTPUT
 		else
-			echo "/$NAME: $NAME_OR_PATH" | tee -a $OUTPUT
+			echo "/$NAME: $(realpath $NAME_OR_PATH)" | tee -a $OUTPUT
 		fi
 		REAL_PATH=$(realpath $NAME_OR_PATH)
 		output_manifest "$REAL_PATH"
