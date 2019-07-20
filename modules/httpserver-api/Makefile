@@ -1,5 +1,6 @@
-INCLUDES = -I. -I../../include -I../../arch/$(ARCH) -I../.. \
-	-I../../build/$(mode)/gen/include
+SRC = $(shell readlink -f ../..)
+include $(SRC)/modules/java-base/common.gmk
+INCLUDES += -I. -I $(SRC)/libc/internal
 
 # compiler flags:
 #  -g    adds debugging information to the executable file
@@ -95,8 +96,8 @@ obj/%.o: %.cc
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -MMD  -o $@ $<, CXX $@)
 
 clean:
-	$(call quiet, $(RM) $(TARGET), CLEAN)
-	$(call very-quiet, $(RM) lib*.so)
+	$(call quiet, $(RM) -f $(TARGET), CLEAN)
+	$(call very-quiet, $(RM) -f lib*.so)
 	$(call very-quiet, $(RM) -rf obj)
 	$(call very-quiet, $(RM) -rf autogen)
 	$(call very-quiet, $(RM) -f *usr*.manifest)

@@ -13,7 +13,6 @@ autodepend = -MD -MT $@ -MP
 COMMON_FLAGS  = -g -Wall -fPIC $(INCLUDES) -O2 $(autodepend) -DCONF_debug_memory=0 -D_KERNEL
 CXXFLAGS  = -std=c++11 $(COMMON_FLAGS)
 CFLAGS = -std=gnu99 $(COMMON_FLAGS)
-#CXXFLAGS  = -g -Wall -std=c++11 -fPIC $(INCLUDES) -O2 $(autodepend) $(configuration) 
 src = $(shell readlink -f ../..)
 
 RM := /bin/rm

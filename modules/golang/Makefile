@@ -1,5 +1,5 @@
-INCLUDES = -I. -I../../include -I../../arch/$(ARCH) -I../.. \
-        -I../../build/$(mode)/gen/include
+SRC = $(shell readlink -f ../..)
+include $(SRC)/modules/java-base/common.gmk
 
 autodepend = -MD -MT $@ -MP
 CXXFLAGS  = -g -rdynamic -Wall -std=c++11 -fPIC $(INCLUDES) $(autodepend)
@@ -9,8 +9,6 @@ TARGET = go
 CPP_FILES := $(TARGET).cc
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 DEPS := $(OBJ_FILES:.o=.d)
-
-LIBS = -lpthread
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)

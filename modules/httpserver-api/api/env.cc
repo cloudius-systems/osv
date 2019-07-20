@@ -8,6 +8,7 @@
 #include "env.hh"
 #include "autogen/env.json.hh"
 #include <stdlib.h>
+#include <libc.h>
 
 namespace httpserver {
 
