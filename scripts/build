@@ -161,10 +161,28 @@ if [[ ${vars[append_manifest]} == "true" && $modules == "!default" ]]; then
 	modules="empty"
 fi
 
-fs_type=$fs_type jdkbase=$jdkbase ARCH=$arch mode=$mode OSV_BASE=$SRC OSV_BUILD_PATH=$OSV_BUILD_PATH scripts/module.py $j_arg build -c "$modules" $usrskel_arg $no_required_arg
+# The parentheses start a subshell. Whatever is exported there, doesn't effect the external shell
+(
+	# Note: the double-quotes and almost everything in the line below is important to correctly allow spaces
+	# This specifically allows us to pass extra arguments to the modules/apps makefiles
+	for i in "${args[@]}"
+	do
+		case $i in
+		*=*)
+			# again, the double-quotes is important in case the variable's value contains spaces
+			export "$i" ;;
+		esac
+	done
+	# Export the variables we already have. This makes it unnecessary to do "fs__type=$fstype jdkbase $jdkbase ..."
+	export fs_type jdkbase mode OSV_BUILD_PATH
+	# Other variables we wanted to rename, I don't know why
+	export ARCH=$arch OSV_BASE=$SRC
+	# Run what we wanted to run. It will inherit everything we exported above.
+	scripts/module.py $j_arg build -c "$modules" $usrskel_arg $no_required_arg
+)
 
 if [[ ${vars[append_manifest]} == "true" && -f "$OSV_BUILD_PATH/append.manifest" ]]; then
-   cat "$OSV_BUILD_PATH/append.manifest" >> "$OSV_BUILD_PATH/usr.manifest"
+	cat "$OSV_BUILD_PATH/append.manifest" >> "$OSV_BUILD_PATH/usr.manifest"
 fi
 
 bootfs_manifest=$manifest make "${args[@]}" | tee -a build.out
