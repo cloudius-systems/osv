@@ -503,13 +503,13 @@ if __name__ == "__main__":
     parser.add_argument("--cloud-init-image", action="store",
                         help="Path to the optional cloud-init image that should be attached to the instance")
     parser.add_argument("-k", "--kernel", action="store_true",
-                        help="Run OSv in QEMU kernel mode as multiboot.")
+                        help="Run OSv in QEMU kernel mode as PVH.")
     parser.add_argument("--virtio", action="store", choices=["legacy","transitional","modern"], default="transitional",
                         help="specify virtio version: legacy, transitional or modern")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
     cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
-    cmdargs.kernel_file = "build/%s/loader.bin" % cmdargs.opt_path
+    cmdargs.kernel_file = "build/%s/loader-stripped.elf" % cmdargs.opt_path
     if not os.path.exists(cmdargs.image_file):
         raise Exception('Image file %s does not exist.' % cmdargs.image_file)
     if cmdargs.cloud_init_image:

@@ -133,7 +133,7 @@ very-quiet = $(if $V, $1, @$1)
 
 all: $(out)/loader.img links
 ifeq ($(arch),x64)
-all: $(out)/loader.bin $(out)/vmlinuz.bin
+all: $(out)/vmlinuz.bin
 endif
 .PHONY: all
 
@@ -436,13 +436,6 @@ $(out)/loader.img: $(out)/boot.bin $(out)/lzloader.elf
 		DD loader.img lzloader.elf)
 	$(call quiet, scripts/imgedit.py setsize "-f raw $@" $(image-size), IMGEDIT $@)
 	$(call quiet, scripts/imgedit.py setargs "-f raw $@" $(cmdline), IMGEDIT $@)
-
-$(out)/arch/x64/boot32.o: $(out)/lzloader.elf
-$(out)/arch/x64/boot32.o: ASFLAGS += -I$(out)
-
-$(out)/loader.bin: $(out)/arch/x64/boot32.o arch/x64/loader32.ld
-	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
-	                $(filter-out %.bin, $(^:%.ld=-T %.ld)), LD $@)
 
 kernel_size = $(shell stat --printf %s $(out)/loader-stripped.elf)
 
