@@ -4,6 +4,52 @@
 # This first runs "make" with the same parameters, and then builds
 # the requested image.
 
+usage() {
+	cat <<-EOF
+	Build OSv kernel and specified modules/apps and package them together into a runnable image
+
+	This bash shell script acts as a top level orchestration tool intended to build
+	OSv images. It does so by invoking a make against the main OSv makefile to
+	build the kernel and then delegates to various Python scripts (scripts/module.py)
+	to orchestrate building of explicitly specified apps and modules as well as any
+	implicitly dependant ones. The end result is the build/<mode>/usr.img file that
+	is composed of OSv kernel (loader-stripped.elf) and application files and can be
+	executed using ./scripts/run.py.
+
+	Usage:
+	  scripts/build [options] image=<app1>[,<app2[.run_conf]>[,<module1>,..]] modules=<module1>[,..] | check
+	  scripts/build clean
+
+	Options:
+	  --help|-h                     Print this help message
+	  arch=x64|aarch64              Specify the build architecture; default is x64
+	  mode=release|debug            Specify the build mode; default is release
+	  export=none|selected|all      If 'selected' or 'all' export the app files to build/export
+	  fs=zfs|rofs|ramfs             Specify the filesystem of the image partition
+	  fs_size=N                     Specify the size of the image in bytes
+	  fs_size_mb=N                  Specify the size of the image in MiB
+	  usrskel=<*.skel>              Specify the base manifest for the image
+	  <module_makefile_arg>=<value> Pass value of module_makefile_arg to an app/module makefile
+	                                (can be used to customize specific app/module build process)
+	  -j<N>                         Set number of parallel jobs for make
+	  --append-manifest             Append build/<mode>/append.manifest to usr.manifest
+
+	Examples:
+	  ./scripts/build -j4 fs=rofs image=native-example   # Create image with native-example app
+
+	  ./scripts/build JAVA_VERSION=10 image=openjdk-zulu-9-and-above,spring-boot-example
+	                                                     # Create image with spring boot app with Java 10 jdk
+
+	  ./scripts/manifest_from_host.sh -w ls && ./script/build --append-manifest
+	                                                     # Create manifest for 'ls' executable
+
+	  ./script/build check                               # Create test image and run all tests in it
+
+	  ./script/build clean                               # Clean the build tree
+	EOF
+	exit ${1:-0}
+}
+
 trap 'echo "$0 failed: $BASH_COMMAND" >&2; exit $?' ERR
 
 # If "MAKEFLAGS" is set, we've been run from "make". The following hacks
@@ -26,6 +72,8 @@ stage1_args="stage1"
 for i
 do
 	case $i in
+	--help|-h)
+		usage ;;
 	image=*|modules=*|fs=*|usrskel=*|check|--append-manifest) ;;
 	clean)
 		stage1_args=clean ;;
@@ -161,7 +209,7 @@ if [[ ${vars[append_manifest]} == "true" && $modules == "!default" ]]; then
 	modules="empty"
 fi
 
-# The parentheses start a subshell. Whatever is exported there, doesn't effect the external shell
+# The parentheses start a subshell. Whatever is exported there, doesn't affect the external shell
 (
 	# Note: the double-quotes and almost everything in the line below is important to correctly allow spaces
 	# This specifically allows us to pass extra arguments to the modules/apps makefiles
@@ -226,7 +274,7 @@ zfs)
 	;;
 rofs)
 	rm -rf rofs.img
-	"$SRC"/scripts/gen-${fs_type}-img.py -o rofs.img -m usr.manifest -D jdkbase="$jdkbase" -D gccbase="$gccbase" -D glibcbase="$glibcbase" -D miscbase="$miscbase"
+	"$SRC"/scripts/gen-rofs-img.py -o rofs.img -m usr.manifest -D jdkbase="$jdkbase" -D gccbase="$gccbase" -D glibcbase="$glibcbase" -D miscbase="$miscbase"
 	rofs_size=`stat --printf %s rofs.img`
 	img_size=$((kernel_end + rofs_size))
 	cp loader.img bare.raw
