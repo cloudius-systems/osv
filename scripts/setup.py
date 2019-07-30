@@ -94,7 +94,7 @@ class Fedora(object):
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
-        version = '28'
+        version = '29'
 
     versions = [Fedora_25, Fedora_26, Fedora_27, Fedora_28, Fedora_29]
 
