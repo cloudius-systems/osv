@@ -69,7 +69,7 @@ detect_elf()
 {
 	local file_path=$1
 	local file_desc=$(file -L $file_path)
-	local elf_filter=$(echo $file_desc | grep -P 'LSB shared object|LSB executable' | wc -l)
+	local elf_filter=$(echo $file_desc | grep -P 'LSB shared object|LSB.*executable' | wc -l)
 	if [[ $elf_filter == 1 ]]; then
 		local shared_object_filter=$(echo $file_desc | grep -P 'LSB shared object' | wc -l)
 		if [[ $shared_object_filter == 1 ]]; then
@@ -110,6 +110,12 @@ done
 
 shift $((OPTIND - 1))
 [[ -z $1 ]] && usage 1
+
+LDDTREE_INSTALLED=$(command -v lddtree)
+if [ -z "$LDDTREE_INSTALLED" ]; then
+	echo "Please install lddtree which is part of pax-utils package"
+	exit 1
+fi
 
 NAME_OR_PATH=$1
 SUBDIRECTORY_PATH=$2
