@@ -20,8 +20,6 @@ endif
 ifndef OSV_BUILD_PATH
 	OSV_BUILD_PATH = $(src)/build/$(mode).$(ARCH)
 endif
-miscbase = $(src)/external/$(ARCH)/misc.bin
-libs-dir = $(miscbase)/usr/lib64
 boost-libs := -lboost_system -lboost_filesystem
 
 # the build target executable:
@@ -35,12 +33,7 @@ STUB_FILES := $(addprefix obj/,$(STUB_CPP_FILES:.cc=.o))
 
 DYN_LIBS = -lpthread -ldl -L../libtools -ltools $(boost-libs) -lyaml-cpp
 
-ifeq ($(use_host),y)
-	DYN_LIBS += -lssl -lcrypto
-else
-	DYN_LIBS += $(libs-dir)/libssl.so.10 \
-		$(libs-dir)/libcrypto.so.10
-endif
+DYN_LIBS += -lssl -lcrypto
 
 LIBS = $(DYN_LIBS) $(STATIC_LIBS)
 
