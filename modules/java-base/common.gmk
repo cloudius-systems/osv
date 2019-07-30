@@ -5,7 +5,7 @@ INCLUDES += -isystem $(src)/external/$(arch)/acpica/source/include
 INCLUDES += $(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^ .*c\+\+/ {print "-isystem" $$0}')
 INCLUDES += -isystem $(src)/include/api
 INCLUDES += -isystem $(src)/include/api/$(arch)
-INCLUDES += -I$(src)/build/$(mode)/gen/include -isystem $(miscbase)/usr/include 
+INCLUDES += -I$(src)/build/$(mode)/gen/include
 INCLUDES += -I$(src)/java 
 INCLUDES += -I$(jdkbase)/include -I$(jdkbase)/include/linux
 
@@ -24,8 +24,6 @@ endif
 ifndef mode
 	mode = release
 endif
-
-miscbase = $(src)/external/$(arch)/misc.bin
 
 configuration-defines = conf-preempt conf-debug_memory conf-logger_debug
 

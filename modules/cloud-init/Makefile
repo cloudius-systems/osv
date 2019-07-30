@@ -44,9 +44,8 @@ obj/%.o: %.cc
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $@)
 
 clean:
-	$(call quiet, $(RM) $(TARGET), CLEAN)
-	$(call very-quiet, $(RM) $(TARGET).so)
-	$(call very-quiet, $(RM) -rf obj/*)
+	$(call quiet, $(RM) -f $(TARGET).so tst-template, CLEAN)
+	$(call very-quiet, $(RM) -rf obj)
 
 ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPS)
