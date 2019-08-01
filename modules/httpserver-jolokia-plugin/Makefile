@@ -1,8 +1,6 @@
-
-INCLUDES = -isystem $(miscbase)/usr/include -I$(src)/build/$(mode)/gen/include
-INCLUDES += -I../../include -I. -I../../java -I../../arch/$(ARCH) -I../..
-INCLUDES += -I$(jdkbase)/include -I$(jdkbase)/include/linux
-INCLUDES += -I../httpserver-api
+SRC = $(shell readlink -f ../..)
+include $(SRC)/modules/java-base/common.gmk
+INCLUDES += -I. -I../httpserver-api
 
 # compiler flags:
 #  -g    adds debugging information to the executable file
@@ -25,10 +23,6 @@ endif
 ifndef OSV_BUILD_PATH
 	OSV_BUILD_PATH = $(src)/build/$(mode).$(ARCH)
 endif
-miscbase = $(src)/external/$(ARCH)/misc.bin
-libs-dir = $(miscbase)/usr/lib64
-boost-libs := $(libs-dir)/libboost_system.so \
-              $(libs-dir)/libboost_filesystem.so
 
 # the build target executable:
 TARGET = jolokia
@@ -37,15 +31,21 @@ JSON_CC_FILES := $(subst .json,.json.cc,$(subst api-doc/listings/,autogen/,$(JSO
 CPP_FILES := $(JSON_CC_FILES) $(wildcard *.cc)
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 
-STATIC_LIBS = $(libs-dir)/libboost_program_options.a
+# link with -mt if present, else the base version (and hope it is multithreaded)
+boost-mt := -mt
+boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system$(boost-mt).a))
+ifeq ($(filter /%,$(boost-lib-dir)),)
+    boost-mt :=
+    boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system$(boost-mt).a))
+    ifeq ($(filter /%,$(boost-lib-dir)),)
+        $(error Error: libboost_system.a needs to be installed.)
+    endif
+endif
+
+STATIC_LIBS = $(boost-lib-dir)/libboost_program_options$(boost-mt).a
 DYN_LIBS = -lpthread -ldl -L$(libs-dir) -lyaml-cpp $(boost-libs)
 
-ifeq ($(use_host),y)
-	DYN_LIBS += -lssl -lcrypto
-else
-	DYN_LIBS += $(libs-dir)/libssl.so.10 \
-		$(libs-dir)/libcrypto.so.10
-endif
+DYN_LIBS += -lssl -lcrypto
 
 LIBS = $(DYN_LIBS) $(STATIC_LIBS)
 

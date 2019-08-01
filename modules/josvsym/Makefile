@@ -1,7 +1,6 @@
-INCLUDES	= $(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^ .*c\+\+/ {print "-isystem" $$0}')
-INCLUDES 	+= -isystem $(miscbase)/usr/include
-INCLUDES 	+= -I../../include -I. -I../../java -I../../arch/$(ARCH) -I../..
-INCLUDES 	+= -I$(jdkbase)/include -I$(jdkbase)/include/linux
+SRC = $(shell readlink -f ../..)
+include $(SRC)/modules/java-base/common.gmk
+INCLUDES += -I.
 
 # compiler flags:
 #  -g    adds debugging information to the executable file
@@ -22,11 +21,6 @@ endif
 ifndef OSV_BUILD_PATH
 	OSV_BUILD_PATH = $(src)/build/$(mode).$(ARCH)
 endif
-
-#miscbase = $(src)/external/$(ARCH)/misc.bin
-#libs-dir = $(miscbase)/usr/lib64
-#boost-libs := $(libs-dir)/libboost_system.so \
-#              $(libs-dir)/libboost_filesystem.so
 
 MODULE		= josvsym
 OUTDIR		:= $(OSV_BUILD_PATH)/modules/$(MODULE)
@@ -61,6 +55,6 @@ $(OUTDIR)/%.o	: %.cc
 		$(call quiet, $(CXX) $(CXXFLAGS) -c -MMD  -o $@ $<, CXX $@)
 
 clean		:
-		$(call quiet, $(RM) $(TARGET), CLEAN)
+		$(call quiet, $(RM) -f $(TARGET), CLEAN)
 		$(call very-quiet, $(RM) -rf $(OUTDIR/*.o))
 		$(call very-quiet, $(RM) -rf $(OUTDIR/*.d))

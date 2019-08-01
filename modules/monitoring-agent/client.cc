@@ -93,7 +93,7 @@ client& client::upload(const std::string& server, const std::string& path,
     connect_with_timeout(io_service, _socket, _endpoint, ec,
                          boost::posix_time::seconds(time_out));
 
-    if (ec != 0) {
+    if (ec) {
         throw connection_exception(
             std::string("connect failed ") + ec.message());
     }
