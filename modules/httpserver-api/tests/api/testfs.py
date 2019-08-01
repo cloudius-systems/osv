@@ -7,10 +7,10 @@ class testfs(basetest.Basetest):
         ls = self.curl(get_path)
         val = ls[0]
         self.assertEqual(val["mount"], "/")
-        self.assertGreaterEqual(val["ffree"], 20000000)
-        self.assertGreaterEqual(val["ftotal"], 20000000)
-        self.assertGreaterEqual(val["bfree"], 20000000)
-        self.assertGreaterEqual(val["btotal"], 20000000)
+        self.assertGreaterEqual(val["ffree"], 200000)
+        self.assertGreaterEqual(val["ftotal"], 200000)
+        self.assertGreaterEqual(val["bfree"], 200000)
+        self.assertGreaterEqual(val["btotal"], 200000)
         self.assertEqual(val["filesystem"], "/dev/vblk0.1")
 
     @classmethod
