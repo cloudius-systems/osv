@@ -36,18 +36,18 @@ usage() {
 
 find_library()
 {
-	local pattern=$1
-	local count=$(ldconfig -p | grep $pattern | wc -l)
+	local pattern="$1"
+	local count=$(ldconfig -p | grep -P "$pattern" | grep 'x86-64' | wc -l)
 
 	if [[ $count == 0 ]]; then
 		echo "Could not find any so file matching $pattern"
 		return -1
 	elif [[ $count > 1 ]]; then
 		echo 'Found more than one alternative:'
-		ldconfig -p | grep $pattern
+		ldconfig -p | grep -P "$pattern"
 		return -1
 	else
-		local so_name_path=$(ldconfig -p | grep $pattern)
+		local so_name_path=$(ldconfig -p | grep -P "$pattern" | grep 'x86-64')
 		so_name=$(echo $so_name_path | grep -Po 'lib[^ ]+.+?(?= \()')
 		so_path=$(echo $so_name_path | grep -Po '(?<=> )/[^ ]+')
 		return 0
@@ -56,20 +56,20 @@ find_library()
 
 output_manifest()
 {
-	local so_path=$1
+	local so_path="$1"
 	echo "# --------------------" | tee -a $OUTPUT
 	echo "# Dependencies" | tee -a $OUTPUT
 	echo "# --------------------" | tee -a $OUTPUT
-	lddtree $so_path | grep -v "$so_path" | grep -v 'ld-linux-x86-64' | \
+	lddtree $so_path | grep -v "not found" | grep -v "$so_path" | grep -v 'ld-linux-x86-64' | \
 		grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|stdc\+\+|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
 		sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
 }
 
 detect_elf()
 {
-	local file_path=$1
+	local file_path="$1"
 	local file_desc=$(file -L $file_path)
-	local elf_filter=$(echo $file_desc | grep -P 'LSB shared object|LSB.*executable' | wc -l)
+	local elf_filter=$(echo $file_desc | grep -P 'LSB shared object|LSB.*executable' | grep 'x86-64' | wc -l)
 	if [[ $elf_filter == 1 ]]; then
 		local shared_object_filter=$(echo $file_desc | grep -P 'LSB shared object' | wc -l)
 		if [[ $shared_object_filter == 1 ]]; then
@@ -117,8 +117,8 @@ if [ -z "$LDDTREE_INSTALLED" ]; then
 	exit 1
 fi
 
-NAME_OR_PATH=$1
-SUBDIRECTORY_PATH=$2
+NAME_OR_PATH="$1"
+SUBDIRECTORY_PATH="$2"
 
 # Check if directory and disregard LIB mode if requested
 if [[ -d $NAME_OR_PATH ]]; then
@@ -162,7 +162,7 @@ if [[ -f $NAME_OR_PATH ]]; then
 else
 	# Do not assume ELF shared library unless mode specifies it
 	if [[ $MODE == "LIB" ]]; then
-		find_library $NAME_OR_PATH
+		find_library "$NAME_OR_PATH"
 		if [[ $? == 0 ]]; then
 			echo "# Shared library" | tee $OUTPUT
 			echo "/usr/lib/$so_name: $so_path" | tee -a $OUTPUT
