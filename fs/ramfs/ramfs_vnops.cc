@@ -452,6 +452,8 @@ ramfs_read_or_write_file_data(std::map<off_t,struct ramfs_file_segment> &file_se
     else if (segment_to_read_or_write->first > uio->uio_offset) {
         segment_to_read_or_write--;
     }
+    assert(uio->uio_offset >= segment_to_read_or_write->first &&
+           uio->uio_offset < (off_t)(segment_to_read_or_write->first + segment_to_read_or_write->second.size));
 
     // Simply iterate starting with initial identified segment above to read or write
     // until we have read all bytes or have iterated all segments
@@ -462,12 +464,13 @@ ramfs_read_or_write_file_data(std::map<off_t,struct ramfs_file_segment> &file_se
         // .. then calculate how many bytes to read or write in this segment
         auto maximum_bytes_to_read_or_write_in_segment = segment_to_read_or_write->second.size - offset_in_segment;
         auto bytes_to_read_or_write_in_segment = std::min<uint64_t>(bytes_to_read_or_write,maximum_bytes_to_read_or_write_in_segment);
+        assert(offset_in_segment >= 0 && offset_in_segment < segment_to_read_or_write->second.size);
         auto ret = uiomove(segment_to_read_or_write->second.data + offset_in_segment, bytes_to_read_or_write_in_segment, uio);
         if (ret) {
             return ret;
         }
         bytes_to_read_or_write -= bytes_to_read_or_write_in_segment;
-        file_offset += bytes_to_read_or_write;
+        file_offset += bytes_to_read_or_write_in_segment;
     }
 
     return 0;
@@ -574,6 +577,7 @@ ramfs_write(struct vnode *vp, struct uio *uio, int ioflag)
 
     set_times_to_now(&(np->rn_mtime), &(np->rn_ctime));
 
+    assert(uio->uio_offset + uio->uio_resid <= (off_t)(np->rn_total_segments_size));
     return ramfs_read_or_write_file_data(*(np->rn_file_segments_by_offset),uio,uio->uio_resid);
 }
 
