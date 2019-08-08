@@ -677,7 +677,7 @@ private:
     struct detached_state {
         explicit detached_state(thread* t) : t(t) {}
         thread* t;
-        cpu* _cpu;
+        cpu* _cpu = nullptr;
         bool lock_sent = false;   // send_lock() was called for us
         std::atomic<status> st = { status::unstarted };
     };
