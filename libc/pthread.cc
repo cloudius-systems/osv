@@ -639,6 +639,13 @@ int pthread_getattr_np(pthread_t thread, pthread_attr_t *attr)
     return 0;
 }
 
+int pthread_attr_getdetachstate(const pthread_attr_t *attr, int *detachstate)
+{
+    auto a = from_libc(attr);
+    *detachstate = a->detached;
+    return 0;
+}
+
 int pthread_attr_setdetachstate(pthread_attr_t *attr, int detachstate)
 {
     auto a = from_libc(attr);
