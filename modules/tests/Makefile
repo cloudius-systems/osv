@@ -128,7 +128,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-ttyname.so tst-pthread-barrier.so tst-feexcept.so tst-math.so \
 	tst-sigaltstack.so tst-fread.so tst-tcp-cork.so tst-tcp-v6.so \
 	tst-calloc.so tst-crypt.so tst-non-fpic.so tst-small-malloc.so \
-	tst-mmx-fpu.so tst-getopt.so tst-getopt-pie.so tst-non-pie.so
+	tst-mmx-fpu.so tst-getopt.so tst-getopt-pie.so tst-non-pie.so tst-semaphore.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
 tests += testrunner.so

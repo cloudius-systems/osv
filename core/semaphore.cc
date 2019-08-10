@@ -62,7 +62,7 @@ bool semaphore::trywait(unsigned units)
 {
     bool ok = false;
     WITH_LOCK(_mtx) {
-        if (_val > units) {
+        if (_val >= units) {
             _val -= units;
             ok = true;
         }
