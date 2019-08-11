@@ -642,7 +642,7 @@ int pthread_getattr_np(pthread_t thread, pthread_attr_t *attr)
 int pthread_attr_getdetachstate(const pthread_attr_t *attr, int *detachstate)
 {
     auto a = from_libc(attr);
-    *detachstate = a->detached;
+    *detachstate = a->detached ? PTHREAD_CREATE_DETACHED : PTHREAD_CREATE_JOINABLE;
     return 0;
 }
 
