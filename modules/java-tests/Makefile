@@ -15,9 +15,9 @@ init:
 	$(call very-quiet, mkdir -p obj)
 
 module: $(java-targets)
-	cd $(SRC)/modules/java-tests && mvn package -DskipTests=true
+	cd $(SRC)/modules/java-tests && mvn -q package -DskipTests=true
 
 clean:
-	cd $(SRC)/modules/java-tests && mvn clean
+	cd $(SRC)/modules/java-tests && mvn -q clean
 	-rm -f dependency-reduced-pom.xml
 	$(call very-quiet, $(RM) -rf obj)

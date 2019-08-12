@@ -57,7 +57,7 @@ DEPS := $(OBJ_FILES:.o=.d)
 module: all
 
 all: $(TARGET).so
-	cd jolokia-agent && mvn package -DskipTests=true
+	cd jolokia-agent && mvn -q package -DskipTests=true
 
 init:
 	@echo "  MKDIRS"
@@ -90,5 +90,5 @@ clean:
 	$(call very-quiet, $(RM) -f usr.manifest)
 	$(call very-quiet, $(RM) -rf obj)
 	$(call very-quiet, $(RM) -rf autogen)
-	cd jolokia-agent && mvn clean
+	cd jolokia-agent && mvn -q clean
 	-rm -f dependency-reduced-pom.xml

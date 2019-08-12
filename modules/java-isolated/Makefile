@@ -16,9 +16,9 @@ init:
 	$(call very-quiet, mkdir -p obj)
 
 module: $(java-targets)
-	cd $(SRC)/modules/java-base && mvn --projects :runjava-common,:runjava-isolated  package -DskipTests=true
+	cd $(SRC)/modules/java-base && mvn -q --projects :runjava-common,:runjava-isolated  package -DskipTests=true
 
 clean:
-	cd $(SRC)/modules/java-base && mvn clean
+	cd $(SRC)/modules/java-base && mvn -q clean
 	-rm -f dependency-reduced-pom.xml
 	$(call very-quiet, $(RM) -rf obj)
