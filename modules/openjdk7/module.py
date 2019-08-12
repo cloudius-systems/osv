@@ -12,6 +12,7 @@ jdkdir = os.path.basename(os.path.expandvars('${jdkbase}'))
 usr_files.add('${jdkbase}').to('/usr/lib/jvm/java') \
     .include('lib/**') \
     .include('jre/**') \
+    .include('bin/java') \
     .exclude('jre/lib/security/cacerts') \
     .exclude('jre/lib/audio/**')
 
