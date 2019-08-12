@@ -32,7 +32,7 @@ add_tests([
         -Disolates.jar=/tests/java/isolates.jar org.junit.runner.JUnitCore io.osv.AllTestsThatTestIsolatedApp'),
     SingleCommandTest('java_non_isolated', '/java.so -cp /tests/java/tests.jar:/tests/java/isolates.jar \
         -Disolates.jar=/tests/java/isolates.jar org.junit.runner.JUnitCore io.osv.AllTestsThatTestNonIsolatedApp'),
-    SingleCommandTest('java_no_wrapper', '/usr/lib/jvm/java/bin/java -cp /tests/java/tests.jar \
+    SingleCommandTest('java_no_wrapper', '/usr/bin/java -cp /tests/java/tests.jar \
         org.junit.runner.JUnitCore io.osv.BasicTests !'),
     SingleCommandTest('java-perms', '/java_isolated.so -cp /tests/java/tests.jar io.osv.TestDomainPermissions'),
 ])

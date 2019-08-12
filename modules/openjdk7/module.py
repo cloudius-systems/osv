@@ -19,3 +19,4 @@ usr_files.add('${jdkbase}').to('/usr/lib/jvm/java') \
 usr_files.link('/usr/lib/jvm/' + jdkdir).to('java')
 usr_files.link('/usr/lib/jvm/jre').to('java/jre')
 usr_files.link('/usr/lib/jvm/java/jre/lib/security/cacerts').to('/etc/pki/java/cacerts')
+usr_files.link('/usr/bin/java').to('/usr/lib/jvm/java/bin/java')
