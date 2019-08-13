@@ -1,5 +1,3 @@
-build
-download
-out
-src/*
-!src/Makefile
+install
+upstream
+usr.manifest

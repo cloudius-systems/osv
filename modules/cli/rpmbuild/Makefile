@@ -5,7 +5,7 @@ VERSION=1.0
 
 MAIN=rpm
 CLI_DIR=osv-cli-$(VERSION)/usr/lib64/osv-cli
-LOC_MAIN=cli
+LUA_LIB_PATH = $(shell ldconfig -p | grep -Po "/.*liblua*.5\.3.so" | head -1)
 
 module: clean all
 
@@ -30,9 +30,9 @@ copy-files:
 	cp $(CLI_ROOT)/cli.lua $(CLI_DIR)
 	cp $(CLI_ROOT)/lib/*.lua $(CLI_DIR)/lib
 	cp -r $(CLI_ROOT)/commands $(CLI_DIR)
-	cp -r $(LUA_DIR)/out/share $(CLI_DIR)/lib
-	cp -r $(LUA_DIR)/out/lib $(CLI_DIR)/lib
-	cp $(LUA_DIR)/src/liblua.so $(CLI_DIR)/lib
+	cp -r $(LUA_DIR)/install/lua_modules/share $(CLI_DIR)/lib
+	cp -r $(LUA_DIR)/install/lua_modules/lib $(CLI_DIR)/lib
+	cp $(LUA_LIB_PATH) $(CLI_DIR)/lib
 
 clean:
 	rm -rf BUILD

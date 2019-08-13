@@ -13,7 +13,6 @@ usr_files.add(os.path.join(_module, 'api-doc')).to('/usr/mgmt/api')
 
 api.require('openssl')
 api.require('libtools')
-api.require('libyaml')
 
 # only require next 3 modules if java (jre) is included in the list of modules
 api.require_if_other_module_present('josvsym','java')

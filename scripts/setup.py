@@ -22,6 +22,7 @@ standard_ec2_post_install = ['pip install awscli &&'
 
 class Fedora(object):
     name = 'Fedora'
+    pre_install = '(yum list installed compat-openssl10-devel 2>/dev/null && yum -y remove compat-openssl10-devel) || echo "package compat-openssl10-devel not found -> no need to remove it"'
     install = 'yum -y install --allowerasing'
     packages = [
                 'ant',
@@ -63,35 +64,35 @@ class Fedora(object):
     ec2_post_install = standard_ec2_post_install
 
     class Fedora_25(object):
-        packages = ['java-1.8.0-openjdk', 'python2-requests', 'openssl-devel']
+        packages = ['java-1.8.0-openjdk', 'python2-requests', 'openssl-devel', 'lua-5.3.*', 'lua-devel-5.3.*']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '25'
 
     class Fedora_26(object):
-        packages = ['java-1.8.0-openjdk', 'python2-requests', 'compat-openssl10-devel']
+        packages = ['java-1.8.0-openjdk', 'python2-requests', 'openssl-devel', 'lua-5.3.*', 'lua-devel-5.3.*']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '26'
 
     class Fedora_27(object):
-        packages = ['java-1.8.0-openjdk', 'python2-requests', 'compat-openssl10-devel']
+        packages = ['java-1.8.0-openjdk', 'python2-requests', 'openssl-devel', 'lua-5.3.*', 'lua-devel-5.3.*']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '27'
 
     class Fedora_28(object):
-        packages = ['java-1.8.0-openjdk', 'python2-requests', 'compat-openssl10-devel']
+        packages = ['java-1.8.0-openjdk', 'python2-requests', 'openssl-devel', 'lua-5.3.*', 'lua-devel-5.3.*']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '28'
 
     class Fedora_29(object):
-        packages = ['java-1.8.0-openjdk', 'python2-requests', 'compat-openssl10-devel']
+        packages = ['java-1.8.0-openjdk', 'python2-requests', 'openssl-devel', 'lua-5.3.*', 'lua-devel-5.3.*']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
@@ -221,6 +222,8 @@ class Ubuntu(object):
                 'tcpdump',
                 'unzip',
                 'wget',
+                'lua5.3',
+                'liblua5.3',
                 'pax-utils',
                 ]
 
@@ -312,6 +315,8 @@ for distro in distros:
     if name.startswith(distro.name):
         for dver in distro.versions:
             if dver.version == version or version.startswith(dver.version+'.'):
+                if hasattr(distro, 'pre_install'):
+                    subprocess.check_call(distro.pre_install, shell=True)
                 pkg = distro.packages + dver.packages
                 if cmdargs.ec2:
                     pkg += distro.ec2_packages + dver.ec2_packages

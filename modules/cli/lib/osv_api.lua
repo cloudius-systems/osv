@@ -91,12 +91,12 @@ local function create_ssl_socket()
 
   local params = {
     mode = "client",
-    protocol = "tlsv1",
+    protocol = "any",
     key = context.ssl_key,
     certificate = context.ssl_cert,
     cafile = context.ssl_cacert,
     verify = context.ssl_verify,
-    options = "all"
+    options = {"all", "no_sslv3"}
   }
 
   local st = getmetatable(conn.sock).__index.settimeout

@@ -46,6 +46,7 @@ module: all
 
 all: lib$(TARGET).so api_api api_app api_env api_file api_fs api_hardware api_network api_os api_trace
 	$(call quiet, cat _usr_*.manifest | sort | uniq > usr.manifest, CREATE_MANIFEST)
+	$(call very-quiet, $(SRC)/scripts/manifest_from_host.sh lib$(TARGET).so >> usr.manifest)
 
 add_api_to_manifest = \
 	echo "/usr/mgmt/plugins/libhttpserver-$(1).so: `pwd`/libhttpserver-$(1).so" > _usr_$(1).manifest

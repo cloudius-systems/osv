@@ -5,6 +5,7 @@
 #include <signal.h>
 #include <getopt.h>
 #include <signal.h>
+#include <gnu/libc-version.h>
 
 #include <lua.h>
 #include <lauxlib.h>
@@ -16,17 +17,15 @@
 #include <sys/poll.h>
 #include <termios.h>
 
-#ifdef OSV_CLI
-#define CLI_LUA "/cli/cli.lua"
-#define CLI_LUA_PATH "/usr/share/lua/5.2/?.lua;/cli/lib/?.lua;/cli/lua/share/?.lua"
-#define CLI_LUA_CPATH "/usr/lib/lua/5.2/?.so;/cli/lua/lib/?.so"
-#define CLI_COMMANDS_PATH "/cli/commands"
-#else
-#define CLI_LUA "cli.lua"
-#define CLI_LUA_PATH "lib/?.lua;../lua/out/share/lua/5.2/?.lua;./lib/share/lua/5.2/?.lua"
-#define CLI_LUA_CPATH "../lua/out/lib/lua/5.2/?.so;./lib/lib/lua/5.2/?.so"
-#define CLI_COMMANDS_PATH "./commands"
-#endif
+#define OSV_CLI_LUA "/cli-app/cli.lua"
+#define OSV_CLI_LUA_PATH "/usr/share/lua/5.3/?.lua;/usr/share/lua/5.3/?/init.lua;/cli-app/lib/?.lua;/cli-app/lua/share/?.lua"
+#define OSV_CLI_LUA_CPATH "/usr/lib/lua/5.3/?.so;/cli-app/lua/lib/?.so"
+#define OSV_CLI_COMMANDS_PATH "/cli-app/commands"
+
+#define HOST_CLI_LUA "cli.lua"
+#define HOST_CLI_LUA_PATH "lib/?.lua;./lib/share/lua/5.3/?.lua;../lua/install/lua_modules/share/lua/5.3/?.lua;../lua/install/lua_modules/share/lua/5.3/?/init.lua"
+#define HOST_CLI_LUA_CPATH "./lib/lib/lua/5.3/?.so;../lua/install/lua_modules/lib/lua/5.3/?.so"
+#define HOST_CLI_COMMANDS_PATH "./commands"
 
 #define PROMPT_MAXLEN 128
 static char sprompt[PROMPT_MAXLEN];
@@ -66,22 +65,26 @@ static struct {
 /* Misc */
 void print_usage();
 
+static int is_osv() {
+  return strcmp("OSv", gnu_get_libc_release()) == 0;
+}
+
 int main (int argc, char* argv[]) {
-#ifdef OSV_CLI
-  putenv("TERM=vt100-qemu");
+  if (is_osv()) {
+    putenv("TERM=vt100-qemu");
 
-  cli_console_size_dirty();
-#else
-  struct winsize sz;
-  ioctl(0, TIOCGWINSZ, &sz);
+    cli_console_size_dirty();
+  } else {
+    struct winsize sz;
+    ioctl(0, TIOCGWINSZ, &sz);
 
-  if (sz.ws_col > 0 && sz.ws_row > 0) {
-    con_width = sz.ws_col;
-    con_height = sz.ws_row;
+    if (sz.ws_col > 0 && sz.ws_row > 0) {
+      con_width = sz.ws_col;
+      con_height = sz.ws_row;
 
-    signal(SIGWINCH, cli_sigwinch_handler);
+      signal(SIGWINCH, cli_sigwinch_handler);
+    }
   }
-#endif
 
   int i;
 
@@ -137,6 +140,9 @@ int main (int argc, char* argv[]) {
 
   /* Lua state */
   L = cli_luaL_newstate();
+  if (L == NULL) {
+    exit(2);
+  }
 
   if (test_command != NULL) {
     if (L == NULL) {
@@ -292,10 +298,15 @@ lua_State *cli_luaL_newstate() {
   lua_State *L = luaL_newstate();
   luaL_openlibs(L);
 
-  cli_lua_settable(L, "package", "path", CLI_LUA_PATH);
-  cli_lua_settable(L, "package", "cpath", CLI_LUA_CPATH);
+  if (is_osv()) {
+    cli_lua_settable(L, "package", "path", OSV_CLI_LUA_PATH);
+    cli_lua_settable(L, "package", "cpath", OSV_CLI_LUA_CPATH);
+  } else {
+    cli_lua_settable(L, "package", "path", HOST_CLI_LUA_PATH);
+    cli_lua_settable(L, "package", "cpath", HOST_CLI_LUA_CPATH);
+  }
 
-  int error = luaL_loadfile(L, CLI_LUA) || lua_pcall(L, 0, 0, 0);
+  int error = luaL_loadfile(L, is_osv() ? OSV_CLI_LUA : HOST_CLI_LUA) || lua_pcall(L, 0, 0, 0);
   if (error) {
     fprintf(stderr, "Failed to load shell: %s\n", lua_tostring(L, -1));
     lua_pop(L, 1);
@@ -304,7 +315,7 @@ lua_State *cli_luaL_newstate() {
     return NULL;
   }
 
-  cli_lua_settable(L, "context", "commands_path", CLI_COMMANDS_PATH);
+  cli_lua_settable(L, "context", "commands_path", is_osv() ? OSV_CLI_COMMANDS_PATH : HOST_CLI_COMMANDS_PATH);
   for (int i=0; i<CTXC; i++) {
     if (ctxv[i]) {
       cli_lua_settable(L, "context", ctx[i].name, ctxv[i]);
@@ -443,6 +454,6 @@ void print_usage(char* program) {
 "-T, --test=[COMMAND]  run tests for a specifiec command\n"
 "-h, --help            print this help and exit\n\n"
 "For more help on the CLI, see "
-"https://github.com/cloudius-systems/osv/wiki/Command-line-interface\n",
+"https://github.com/cloudius-systems/osv/wiki/Command-Line-Interface-(CLI)\n",
   program);
 }

@@ -1,34 +1,27 @@
+LUA_LIB = $(shell pkg-config --libs lua53 2>/dev/null || pkg-config --libs lua || echo 'ERROR: Could not find lua, please run ./scripts/setup.py')
+LUA_INCLUDES = $(shell pkg-config --cflags lua53 2>/dev/null || pkg-config --cflags lua || echo 'ERROR: Could not find lua, please run ./scripts/setup.py')
+
 CC=gcc
 CFLAGS=-O2 -g -Wall -std=gnu99
-INCLUDES=-I../lua/src \
-	-I$(lastword $(wildcard ../ncurses/build/*/include)) \
-	-I$(lastword $(wildcard ../libedit/build/*/src))
-LFLAGS=-L../lua/src \
-	-L$(lastword $(wildcard ../ncurses/build/*/lib)) \
-	-L$(lastword $(wildcard ../libedit/build/*/src/.libs))
-LIBS=-ledit -ltinfo -llua
+LIBS=-ledit -ltinfo $(LUA_LIB)
 SRCS=cli.c
-MAIN=cli.so
+MAIN=cli
 
-# For compiling executable running locally
-LOC_INCLUDES=-I../lua/src
-LOC_LFLAGS=-L../lua/src
-LOC_LDFLAGS=-Wl,-rpath,$(abspath ../lua/src)
-LOC_MAIN=cli
+INCLUDES = $(LUA_INCLUDES)
+
+SRC = $(shell readlink -f ../..)
 
 module: $(MAIN)
+	$(SRC)/scripts/manifest_from_host.sh $(MAIN) > usr.manifest
 
 $(MAIN): $(SRCS)
-	$(CC) -DOSV_CLI $(CFLAGS) $(INCLUDES) -fPIC -shared -o $@ $(SRCS) $(LFLAGS) $(LIBS)
+	$(CC) $(CFLAGS) $(INCLUDES) $^ -fPIC -pie -o $@ $(LIBS)
 
-$(LOC_MAIN): $(SRCS)
-	$(CC) $(CFLAGS) $(LOC_INCLUDES) $^ -o $@ $(LOC_LDFLAGS) $(LOC_LFLAGS) $(LIBS)
+rpm: $(MAIN)
+	make -C rpmbuild
 
 clean:
-	rm -f $(MAIN) $(LOC_MAIN)
+	rm -f $(MAIN)
 	make -f rpmbuild/Makefile clean
-
-rpm: $(LOC_MAIN)
-	make -C rpmbuild
 
 .PHONY: module clean rpm
