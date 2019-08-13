@@ -56,6 +56,7 @@ class Fedora(object):
                 'unzip',
                 'wget',
                 'yaml-cpp-devel',
+                'pax-utils',
                  ]
     ec2_packages = standard_ec2_packages
     test_packages = ['openssl-devel']
@@ -220,6 +221,7 @@ class Ubuntu(object):
                 'tcpdump',
                 'unzip',
                 'wget',
+                'pax-utils',
                 ]
 
     ec2_packages = standard_ec2_packages
