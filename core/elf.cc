@@ -624,7 +624,7 @@ symbol_module object::symbol(unsigned idx, bool ignore_missing)
     }
     if (!ret.symbol) {
         if (ignore_missing) {
-            debug("%s: failed looking up symbol %s\n", pathname().c_str(), demangle(name).c_str());
+            debug("%s: ignoring missing symbol %s\n", pathname().c_str(), demangle(name).c_str());
         } else {
             abort("%s: failed looking up symbol %s\n", pathname().c_str(), demangle(name).c_str());
         }
