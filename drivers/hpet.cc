@@ -18,6 +18,7 @@ extern "C" {
 #include <osv/xen.hh>
 #include <osv/irqlock.hh>
 #include "rtc.hh"
+#include <osv/percpu.hh>
 
 using boost::intrusive::get_parent_from_member;
 
@@ -33,22 +34,52 @@ protected:
 
 #define HPET_COUNTER    0x0f0
 
-//FIXME: Enhance this class to handle wrap-around
+// The hpet clocks are tricky to implement right. Ideally hpet clocks,
+// especially those with 32-bit main counter, should be avoided in
+// virtualized environments. Unfortunately some hypervisors like
+// hyperkit and other bhyve derivatives provide 32-bit hpet clock only and
+// we would like to support those hypervisors as well to let potential
+// users test OSv on OSX and FreeBSD.
+// The implementation below is a compromise that delivers monotonic
+// reads but may suffer from inaccurate time reads especially when
+// OSv guest gets suspended by host. In essence it maintains it own
+// upper 32-bit counter per cpu which gets incremented every time
+// it gets less than previously saved main counter read from the host.
+// In future we can improve it by handling wrap-around interrupts but
+// but it is not clear if it would be better and especially worth the effort.
 class hpet_32bit_clock : public hpetclock {
 public:
-    hpet_32bit_clock(mmioaddr_t hpet_mmio_address) : hpetclock(hpet_mmio_address) {
-        debug_early_u64("WARNING: hpet with 32-bit counter will wrap around in seconds: ",
-            (_period * (1UL << 32)) / 1000000000UL);
-    }
+    hpet_32bit_clock(mmioaddr_t hpet_mmio_address) : hpetclock(hpet_mmio_address) {}
+
 protected:
     virtual s64 time() override __attribute__((no_instrument_function)) {
-        return _wall + mmio_getl(_addr + HPET_COUNTER) * _period;
+        return _wall + fetch_counter() * _period;
     }
 
     virtual s64 uptime() override __attribute__((no_instrument_function)) {
-        return mmio_getl(_addr + HPET_COUNTER) * _period;
+        return fetch_counter() * _period;
     }
+private:
+    s64 fetch_counter() {
+        auto last_valid_counter = (*_last_read_counter).load(std::memory_order_relaxed);
+        auto upper_counter = (*_upper_32bit_counter).load(std::memory_order_relaxed);
+
+        s64 counter = mmio_getl(_addr + HPET_COUNTER);
+        if (counter < last_valid_counter) {
+            // Wrap-around - increment upper counter
+            (*_upper_32bit_counter).compare_exchange_strong(upper_counter, upper_counter + 1);
+        }
+
+        (*_last_read_counter).store(counter, std::memory_order_relaxed);
+        return ((*_upper_32bit_counter).load(std::memory_order_relaxed) << 32) + counter;
+    }
+
+    static percpu<std::atomic<s64>> _upper_32bit_counter;
+    static percpu<std::atomic<s64>> _last_read_counter;
 };
+
+PERCPU(std::atomic<s64>, hpet_32bit_clock::_upper_32bit_counter);
+PERCPU(std::atomic<s64>, hpet_32bit_clock::_last_read_counter);
 
 class hpet_64bit_clock : public hpetclock {
 public:
