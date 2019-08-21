@@ -175,11 +175,15 @@ void arch_setup_free_memory()
         //
         // Free the memory below elf_phys_start which we could not before
         if (ent.addr < (u64)elf_phys_start) {
+            auto ent_below_kernel = ent;
             if (ent.addr + ent.size >= (u64)elf_phys_start) {
-                ent = truncate_above(ent, (u64) elf_phys_start);
+                ent_below_kernel = truncate_above(ent, (u64) elf_phys_start);
             }
-            mmu::free_initial_memory_range(ent.addr, ent.size);
-            return;
+            mmu::free_initial_memory_range(ent_below_kernel.addr, ent_below_kernel.size);
+            // If there is nothing left below elf_phys_start return
+            if (ent.addr + ent.size <= (u64)elf_phys_start) {
+               return;
+            }
         }
         //
         // Ignore memory already freed above
