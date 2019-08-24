@@ -1852,6 +1852,10 @@ void linear_map(void* _virt, phys addr, size_t size,
 
 void free_initial_memory_range(uintptr_t addr, size_t size)
 {
+    if (!addr) {
+        ++addr;
+        --size;
+    }
     memory::free_initial_memory_range(phys_cast<void>(addr), size);
 }
 

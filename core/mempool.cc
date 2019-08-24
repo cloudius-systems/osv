@@ -1626,10 +1626,6 @@ void free_initial_memory_range(void* addr, size_t size)
     if (!size) {
         return;
     }
-    if (addr == nullptr) {
-        ++addr;
-        --size;
-    }
     auto a = reinterpret_cast<uintptr_t>(addr);
     auto delta = align_up(a, page_size) - a;
     if (delta > size) {
