@@ -1852,6 +1852,14 @@ void linear_map(void* _virt, phys addr, size_t size,
 
 void free_initial_memory_range(uintptr_t addr, size_t size)
 {
+    if (!size) {
+        return;
+    }
+    // Most of the time the kernel code references memory using
+    // virtual addresses. However some allocated system structures
+    // like page tables use physical addresses.
+    // For that reason we skip the very 1st page of physical memory
+    // so that allocated memory areas NEVER map to physical address 0.
     if (!addr) {
         ++addr;
         --size;
