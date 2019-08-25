@@ -928,30 +928,45 @@ void pthread_exit(void *retval)
     t->_thread->exit();
 }
 
-int sched_get_priority_max(int policy)
-{
-    WARN_STUBBED();
-    return EINVAL;
-}
-
+// Following 4 functions provide minimal implementation
+// that ONLY covers default Linux SCHED_OTHER policy
 int sched_get_priority_min(int policy)
 {
-    WARN_STUBBED();
-    return EINVAL;
+    switch (policy) {
+        case SCHED_OTHER:
+            return 0;
+        default:
+            return EINVAL;
+    }
+}
+
+int sched_get_priority_max(int policy)
+{
+    switch (policy) {
+        case SCHED_OTHER:
+            return 0;
+        default:
+            return EINVAL;
+    }
 }
 
 int pthread_setschedparam(pthread_t thread, int policy,
         const struct sched_param *param)
 {
-    WARN_STUBBED();
-    return EINVAL;
+    switch (policy) {
+        case SCHED_OTHER:
+            return 0;
+        default:
+            return EINVAL;
+    }
 }
 
 int pthread_getschedparam(pthread_t thread, int *policy,
         struct sched_param *param)
 {
-    WARN_STUBBED();
-    return EINVAL;
+    *policy = SCHED_OTHER;
+    param->sched_priority = 0;
+    return 0;
 }
 
 int pthread_kill(pthread_t thread, int sig)
