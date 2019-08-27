@@ -591,6 +591,7 @@ void main_cont(int loader_argc, char** loader_argv)
         enable_backtraces();
     }
     sched::init_detached_threads_reaper();
+    elf::setup_missing_symbols_detector();
 
     bsd_init();
 

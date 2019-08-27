@@ -1114,6 +1114,20 @@ void object::init_static_tls()
     }
 }
 
+// This allocates single page of memory and sets its permissions so
+// that any read, write or execution attempt would trigger a page fault
+// to indicate to user that application tried to access missing symbol
+// ignored by relocate_rela().
+// TODO: In future this page can store the name addresses for each missing symbol
+// and allow informing user which particular symbol was missing
+void *missing_symbols_page_addr;
+void setup_missing_symbols_detector()
+{
+    missing_symbols_page_addr = mmu::map_anon(nullptr, mmu::page_size, mmu::mmap_populate, mmu::perm_rw);
+    assert(missing_symbols_page_addr);
+    mmu::mprotect(missing_symbols_page_addr, mmu::page_size, 0);
+}
+
 program* s_program;
 
 void create_main_program()

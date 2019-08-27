@@ -13,6 +13,7 @@
 #include <osv/interrupt.hh>
 #include <osv/migration-lock.hh>
 #include <osv/prio.hh>
+#include <osv/elf.hh>
 #include "exceptions.hh"
 
 void page_fault(exception_frame *ef)
@@ -27,6 +28,9 @@ void page_fault(exception_frame *ef)
     auto pc = reinterpret_cast<void*>(ef->rip);
     if (!pc) {
         abort("trying to execute null pointer");
+    }
+    if (reinterpret_cast<void*>(addr & ~(mmu::page_size - 1)) == elf::missing_symbols_page_addr) {
+        abort("trying to execute or access missing symbol");
     }
     // The following code may sleep. So let's verify the fault did not happen
     // when preemption was disabled, or interrupts were disabled.

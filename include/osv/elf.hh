@@ -635,6 +635,9 @@ private:
     std::stack<std::vector<std::shared_ptr<object>>> _loaded_objects_stack;
 };
 
+extern void *missing_symbols_page_addr;
+void setup_missing_symbols_detector();
+
 void create_main_program();
 
 /**

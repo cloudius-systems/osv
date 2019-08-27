@@ -70,16 +70,28 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
         memcpy(addr, sm.relocated_addr(), sm.size());
         break;
     }
-    case R_X86_64_64:
-        *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
+    case R_X86_64_64: {
+        auto _sym = symbol(sym, true);
+        if (_sym.symbol) {
+            *static_cast<void**>(addr) = _sym.relocated_addr() + addend;
+        } else {
+            *static_cast<void**>(addr) = missing_symbols_page_addr;
+        }
         break;
+    }
     case R_X86_64_RELATIVE:
         *static_cast<void**>(addr) = _base + addend;
         break;
     case R_X86_64_JUMP_SLOT:
-    case R_X86_64_GLOB_DAT:
-        *static_cast<void**>(addr) = symbol(sym).relocated_addr();
+    case R_X86_64_GLOB_DAT: {
+        auto _sym = symbol(sym, true);
+        if (_sym.symbol) {
+            *static_cast<void**>(addr) = _sym.relocated_addr();
+        } else {
+            *static_cast<void**>(addr) = missing_symbols_page_addr;
+        }
         break;
+    }
     // The next 3 types are intended to relocate symbols of thread local variables
     // defined with __thread modifier
     //
