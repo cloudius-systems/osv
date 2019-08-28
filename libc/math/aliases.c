@@ -5,6 +5,11 @@ double __exp_finite(double x)
 	return exp(x);
 }
 
+double __exp2_finite(double x)
+{
+	return exp2(x);
+}
+
 double __log10_finite(double x)
 {
 	return log10(x);
