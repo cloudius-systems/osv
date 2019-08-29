@@ -194,6 +194,7 @@ enum {
     DT_RUNPATH = 29, // d_val The string table offset of a shared library search path string.
     DT_FLAGS = 30, // value is various flags, bits from DF_*.
     DT_FLAGS_1 = 0x6ffffffb, // value is various flags, bits from DF_1_*.
+    DT_VERSYM = 0x6ffffff0, // d_ptr Address of the version symbol table.
     DT_LOOS = 0x60000000, // Defines a range of dynamic table tags that are reserved for
       // environment-specific use.
     DT_HIOS = 0x6FFFFFFF, //

@@ -789,6 +789,8 @@ elf64_hash(const char *name)
     return h;
 }
 
+constexpr Elf64_Versym old_version_symbol_mask = Elf64_Versym(1) << 15;
+
 Elf64_Sym* object::lookup_symbol_old(const char* name)
 {
     auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
@@ -842,8 +844,12 @@ Elf64_Sym* object::lookup_symbol_gnu(const char* name)
     if (idx == 0) {
         return nullptr;
     }
+    auto version_symtab = dynamic_exists(DT_VERSYM) ? dynamic_ptr<Elf64_Versym>(DT_VERSYM) : nullptr;
     do {
         if ((chains[idx] & ~1) != (hashval & ~1)) {
+            continue;
+        }
+        if (version_symtab && version_symtab[idx] & old_version_symbol_mask) { //Ignore old version symbols
             continue;
         }
         if (strcmp(&strtab[symtab[idx].st_name], name) == 0) {
