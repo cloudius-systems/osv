@@ -156,6 +156,14 @@ static long get_mempolicy(int *policy, unsigned long *nmask,
     return 0;
 }
 
+static long set_mempolicy(int policy, unsigned long *nmask,
+        unsigned long maxnode)
+{
+    // OSv has very minimal support for NUMA - merely exposes
+    // all cpus as a single node0 and cannot really apply any meaningful policy
+    // Therefore we implement this as noop, ignore all arguments and return success
+    return 0;
+}
 
 // As explained in the sched_getaffinity(2) manual page, the interface of the
 // sched_getaffinity() function is slightly different than that of the actual
@@ -178,6 +186,14 @@ static int sched_getaffinity_syscall(
             ret = std::min(len, sched::max_cpus / 8);
         }
         return ret;
+}
+
+#define __NR_sched_setaffinity_syscall __NR_sched_setaffinity
+static int sched_setaffinity_syscall(
+        pid_t pid, unsigned len, unsigned long *mask)
+{
+    return sched_setaffinity(
+            pid, len, reinterpret_cast<cpu_set_t *>(mask));
 }
 
 // Only void* return value of mmap is type casted, as syscall returns long.
@@ -419,6 +435,8 @@ long syscall(long number, ...)
     SYSCALL1(sys_exit_group, int);
     SYSCALL4(readlinkat, int, const char *, char *, size_t);
     SYSCALL0(getpid);
+    SYSCALL3(set_mempolicy, int, unsigned long *, unsigned long);
+    SYSCALL3(sched_setaffinity_syscall, pid_t, unsigned, unsigned long *);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
