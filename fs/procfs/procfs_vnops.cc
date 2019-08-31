@@ -328,7 +328,29 @@ static std::string procfs_stats()
                      exit_signal, cpu, rt_priority, policy
                 );
     return os.str();
+}
 
+static std::string procfs_status()
+{
+    // The /proc/self/status in Linux contains most of the same
+    // information /proc/self/stat does but presented to a human user
+    // OSv version exposes only bare minimum of it which is NUMA-related
+    // information about cpus and memory intended for numa library
+    // For details about the format read here: http://man7.org/linux/man-pages/man5/proc.5.html
+    // and here: http://man7.org/linux/man-pages/man7/cpuset.7.html (mask and list format)
+    auto cpu_count = sched::cpus.size();
+    uint32_t first_set = 0xffffffff >> (32 - cpu_count % 32);
+    int remaining_cpus_sets = cpu_count / 32;
+
+    std::ostringstream os;
+    osv::fprintf(os, "Cpus_allowed:\t%08x", first_set);
+    for (; remaining_cpus_sets > 0; remaining_cpus_sets--) {
+        osv::fprintf(os, ",%08x", 0xffffffff);
+    }
+    osv::fprintf(os, "\nCpus_allowed_list:\t0-%d\n"
+                       "Mems_allowed:\t00000001\n"
+                       "Mems_allowed_list:\t0\n", cpu_count - 1);
+    return os.str();
 }
 
 static std::string procfs_mounts()
@@ -371,6 +393,7 @@ procfs_mount(mount* mp, const char *dev, int flags, const void* data)
     auto self = make_shared<proc_dir_node>(inode_count++);
     self->add("maps", inode_count++, mmu::procfs_maps);
     self->add("stat", inode_count++, procfs_stats);
+    self->add("status", inode_count++, procfs_status);
 
     auto kernel = make_shared<proc_dir_node>(inode_count++);
     kernel->add("hostname", inode_count++, procfs_hostname);
