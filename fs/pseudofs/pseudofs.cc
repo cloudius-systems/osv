@@ -7,6 +7,7 @@
  */
 
 #include "pseudofs.hh"
+#include <osv/sched.hh>
 
 namespace pseudofs {
 
@@ -155,5 +156,19 @@ int getattr(vnode *vp, vattr *attr)
     attr->va_nodeid = vp->v_ino;
     attr->va_size = vp->v_size;
     return 0;
+}
+
+string cpumap()
+{
+    auto cpu_count = sched::cpus.size();
+    uint32_t first_set = 0xffffffff >> (32 - cpu_count % 32);
+    int remaining_cpus_sets = cpu_count / 32;
+
+    std::ostringstream os;
+    osv::fprintf(os, "%08x", first_set);
+    for (; remaining_cpus_sets > 0; remaining_cpus_sets--) {
+        osv::fprintf(os, ",%08x", 0xffffffff);
+    }
+    return os.str();
 }
 }

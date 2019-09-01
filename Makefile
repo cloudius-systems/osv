@@ -1804,6 +1804,7 @@ fs_objs += rofs/rofs_vfsops.o \
 
 fs_objs += pseudofs/pseudofs.o
 fs_objs += procfs/procfs_vnops.o
+fs_objs += sysfs/sysfs_vnops.o
 
 objects += $(addprefix fs/, $(fs_objs))
 objects += $(addprefix libc/, $(libc))

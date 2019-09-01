@@ -15,4 +15,5 @@
 /&/etc/fstab: ../../static/&
 /dev: ../../static
 /proc: ../../static
+/sys: ../../static
 /tmp: ../../static

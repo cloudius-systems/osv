@@ -10,4 +10,5 @@
 /etc/fstab: ../../static/etc/fstab_rofs
 /dev: ../../static
 /proc: ../../static
+/sys: ../../static
 /tmp: ../../static

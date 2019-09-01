@@ -121,6 +121,8 @@ int lookup(vnode *dvp, char *name, vnode **vpp);
 int readdir(vnode *vp, file *fp, dirent *dir);
 
 int getattr(vnode *vp, vattr *attr);
+
+string cpumap();
 }
 
 #endif

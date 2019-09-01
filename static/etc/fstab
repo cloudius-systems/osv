@@ -1,3 +1,4 @@
 /dev/vblk0.1 /          zfs       defaults 0 0
 none         /dev       devfs     defaults 0 0
 none         /proc      procfs    defaults 0 0
+none         /sys       sysfs     defaults 0 0
