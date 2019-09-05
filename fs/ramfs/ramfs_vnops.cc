@@ -137,6 +137,7 @@ ramfs_add_node(struct ramfs_node *dnp, char *name, int type)
         return NULL;
 
     mutex_lock(&ramfs_lock);
+    np->inode_no = inode_count++;
 
     /* Link to the directory list */
     if (dnp->rn_child == NULL) {
@@ -245,7 +246,7 @@ ramfs_lookup(struct vnode *dvp, char *name, struct vnode **vpp)
         mutex_unlock(&ramfs_lock);
         return ENOENT;
     }
-    if (vget(dvp->v_mount, inode_count++, &vp)) {
+    if (vget(dvp->v_mount, np->inode_no, &vp)) {
         /* found in cache */
         *vpp = vp;
         mutex_unlock(&ramfs_lock);

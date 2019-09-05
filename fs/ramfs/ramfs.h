@@ -58,6 +58,7 @@ struct ramfs_node {
     char *rn_name;    /* name (null-terminated) */
     size_t rn_namelen;    /* length of name not including terminator */
     size_t rn_size;    /* file size */
+    uint64_t inode_no;
 
     /* Holds data for both symlinks and regular files.
      * Each ramfs_file_segment holds single chunk of file and is keyed
