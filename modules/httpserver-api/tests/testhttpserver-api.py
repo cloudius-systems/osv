@@ -17,6 +17,7 @@ parser.add_argument('--run_script', help='path to the run image script', default
 parser.add_argument('--cmd', help='the command to execute')
 parser.add_argument('--use_sudo', help='Use sudo with -n option instead of port forwarding', action='store_true')
 parser.add_argument('--jsondir', help='location of the json files', default=os.path.join(module_base, 'api-doc/listings/'))
+parser.add_argument('--test_image', help='the path to the test image')
 client.Client.add_arguments(parser)
 
 class test_httpserver(basetest.Basetest):

@@ -130,6 +130,9 @@ class Basetest(unittest.TestCase):
         if cls.config.cmd:
             args += ["-e", cls.config.cmd]
 
+        if cls.config.test_image:
+            args += ["-i", cls.config.test_image]
+
         return subprocess.Popen(args)
 
     @classmethod
