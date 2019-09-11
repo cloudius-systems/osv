@@ -18,6 +18,8 @@ def export_package(manifest, dest):
     files = list(expand(manifest))
     files = [(x, unsymlink(y % defines)) for (x, y) in files]
 
+    host_symlinks = []
+
     for name, hostname in files:
         name = name[1:] if name.startswith("/") else name
         name = os.path.join(abs_dest, name)
@@ -40,8 +42,12 @@ def export_package(manifest, dest):
             print "[INFO] added link %s -> %s" % (name, link_source)
 
         else:
+            # If it is a symlink, then resolve it add to the list of host symlinks to be created later
+            if os.path.islink(hostname):
+                link_source = os.readlink(hostname)
+                host_symlinks.append((link_source,name))
             # If it is a file, copy it to the target directory.
-            if os.path.isfile(hostname):
+            elif os.path.isfile(hostname):
                 # Make sure the target dir exists
                 dirname = os.path.dirname(name)
                 if not os.path.exists(dirname):
@@ -63,6 +69,12 @@ def export_package(manifest, dest):
                 # Inform the user that the rule cannot be applied. For example, this happens for links in OSv.
                 print "[ERR] unable to export %s" % hostname
 
+    for link_source, name in host_symlinks:
+        target_dir = os.path.dirname(name)
+        if not os.path.exists(target_dir):
+            os.makedirs(target_dir)
+        os.symlink(link_source, name)
+        print "[INFO] added link %s -> %s" % (name, link_source)
 
 def main():
     make_option = optparse.make_option
