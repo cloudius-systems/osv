@@ -310,6 +310,7 @@ std::vector<std::vector<std::string> > prepare_commands(char* app_cmdline)
     std::vector<std::vector<std::string> > commands;
     bool ok;
 
+    printf("Cmdline: %s\n", app_cmdline);
     commands = osv::parse_command_line(app_cmdline, ok);
 
     if (!ok) {

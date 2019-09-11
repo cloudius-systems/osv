@@ -249,7 +249,7 @@ runscript_expand(const std::vector<std::string>& cmd, bool &ok, bool &is_runscri
             getline(in, line);
             bool ok2;
             result3 = parse_command_line_min(line, ok2);
-            debug("runscript expand fn='%s' line=%d '%s'\n", fn.c_str(), line_num, line.c_str());
+            printf("runscript expand fn='%s' line=%d '%s'\n", fn.c_str(), line_num, line.c_str());
             if (ok2 == false) {
                 printf("Failed expanding runscript file='%s' line=%d '%s'.\n", fn.c_str(), line_num, line.c_str());
                 result2.clear();
