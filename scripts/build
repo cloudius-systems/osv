@@ -231,6 +231,9 @@ fi
 
 if [[ ${vars[append_manifest]} == "true" && -f "$OSV_BUILD_PATH/append.manifest" ]]; then
 	cat "$OSV_BUILD_PATH/append.manifest" >> "$OSV_BUILD_PATH/usr.manifest"
+	if [[ -f "$OSV_BUILD_PATH/append_cmdline" && $(cat "$OSV_BUILD_PATH/cmdline") == "" ]]; then
+		cp $OSV_BUILD_PATH/append_cmdline $OSV_BUILD_PATH/cmdline
+	fi
 fi
 
 bootfs_manifest=$manifest make "${args[@]}" | tee -a build.out

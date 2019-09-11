@@ -96,13 +96,15 @@ RESOLVE=false
 OUTPUT="/dev/null"
 DEFAULT_OUTPUT_FILE="$(dirname $0)/../build/last/append.manifest"
 GUEST_ROOT=true
+WRITE_CMD=false
 
 while getopts lrRwh: OPT ; do
 	case ${OPT} in
 	l) MODE="LIB";;
 	r) RESOLVE=true;;
 	R) GUEST_ROOT=false;;
-	w) OUTPUT="$DEFAULT_OUTPUT_FILE";;
+	w) WRITE_CMD=true
+           OUTPUT="$DEFAULT_OUTPUT_FILE";;
 	h) usage;;
 	?) usage 1;;
 	esac
@@ -152,6 +154,9 @@ if [[ -f $NAME_OR_PATH ]]; then
 			echo "/usr/lib/$NAME: $(realpath $NAME_OR_PATH)" | tee -a $OUTPUT
 		else
 			echo "/$NAME: $(realpath $NAME_OR_PATH)" | tee -a $OUTPUT
+			if [[ $WRITE_CMD == true ]]; then
+				printf "/$NAME --help" | tee "$(dirname $0)/../build/last/append_cmdline"
+			fi
 		fi
 		REAL_PATH=$(realpath $NAME_OR_PATH)
 		output_manifest "$REAL_PATH"
@@ -182,6 +187,9 @@ else
 				echo "# $LONG_NAME" | tee $OUTPUT
 				echo "/$NAME_OR_PATH: $FULL_PATH" | tee -a $OUTPUT
 				output_manifest $FULL_PATH
+				if [[ $WRITE_CMD == true ]]; then
+					printf "/$NAME_OR_PATH --help" | tee "$(dirname $0)/../build/last/append_cmdline"
+				fi
 			fi
 		else
 			echo "Failed to find '$NAME_OR_PATH'!"
