@@ -1,0 +1,4 @@
+name: osv.unit-tests
+title: OSv Unit Tests
+require:
+- osv.openjdk8-zulu-compact3-with-java-beans

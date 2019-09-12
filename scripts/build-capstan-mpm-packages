@@ -1,0 +1,381 @@
+#!/bin/bash
+
+# This script is an enhanced version of the original scripts found at
+# https://github.com/wkozaczuk/docker_osv_builder/tree/master/packages/scripts
+# and intended to automate process of building capstan MPM packages
+# (https://github.com/cloudius-systems/capstan/blob/master/Documentation/ApplicationManagement.md#package-management).
+#
+# Capstan package is a compressed tarball with an extension *.mpm containing application specific binaries plus
+# optional meta/run.yaml specifying command line to run it on OSv. Library packages typically do not have run.yaml.
+# For package to have any meaning it also needs an external YAML descriptor with extension .yaml. As an example
+# here is a package mpm file and its descriptor found in local repository:
+#
+#  $HOME/.capstan/packages/osv.iperf3.mpm
+#  $HOME/.capstan/packages/osv.iperf3.yaml
+#
+# Please note that mpm package files built by this script contain an internal copy of the descriptor inside of the tarball.
+#
+# Packages can be pulled from a remote repository like OSv git releases or S3 based one or can
+# be built and published locally. This script builds and copies packages to the local capstan repository
+# at $HOME/.capstan/packages.
+#
+# The script accepts two types of the arguments - name of an OSv app or module found under OSv
+# apps or modules subdirectory or name of predefined set of standard packages.
+#
+# If an app or module name passed in, the script does following:
+# 1. Calls ./script/build with appropriate arguments to build and export corresponding
+#    OSv app or module files.
+# 2. Creates a temporary package build directory where package files and descriptors will be placed.
+# 3. Attempts to locate and read package.yaml under apps/<name>/mpm or modules/<name>/mpm
+#    directory to identify package name, title, version and names of any required packages.
+#    If package.yaml not found it assumes defaults for those value.
+# 4. Calls 'capstan package init' with values identified in the step above to create
+#    package descriptor - meta/package.yaml - in the temp directory.
+# 5. Generates meta/run.yaml if the build/release/cmdline is not empty.
+# 6. Copies files exported by ./scripts/build to the temporary directory.
+# 7. Lastly calls 'capstan package build' to build an mpm package that gets
+#    copied along with the descriptor to $HOME/.capstan/packages.
+#
+if [ "$1" == "" ]
+then
+  echo "Usage: build-capstan-mpm-packages <OSv_app_or_module>|<package_group>"
+  exit 1
+fi
+
+OSV_ROOT=$(realpath "$(dirname $0)/..")
+OSV_BUILD=$OSV_ROOT/build/release
+
+OSV_VERSION=$($OSV_ROOT/scripts/osv-version.sh | cut -d - -f 1 | grep -Po "[^v]*")
+OSV_COMMIT=$($OSV_ROOT/scripts/osv-version.sh | grep -Po "\-g.*" | grep -oP "[^-g]*")
+
+if [ "$OSV_COMMIT" != "" ]; then
+  OSV_VERSION="$OSV_VERSION-$OSV_COMMIT"
+fi
+
+PACKAGES=/tmp/capstan-packages
+CAPSTAN=capstan
+
+CAPSTAN_LOCAL_REPO=$HOME/.capstan
+OUTPUT=$CAPSTAN_LOCAL_REPO/packages
+mkdir -p $OUTPUT
+
+ASK=0
+
+clean_osv() {
+  cd "$OSV_ROOT" && ./scripts/build clean
+}
+
+build_osv_image() {
+  local image="$1"
+  local export_mode="$2"
+  local usrskel="$3"
+
+  echo "-------------------------------------"
+  echo "- Building OSv image: "
+  echo "  ./scripts/build -j4 image=$image export=$export_mode usrskel=$usrskel"
+  echo "-------------------------------------"
+
+  cd "$OSV_ROOT" && ./scripts/build -j4 image="$image" export="$export_mode" usrskel="$usrskel"
+
+  RET_VAL=$?
+  if [[ "$RET_VAL" -ne 0 ]]; then
+    echo "-------------------------------------"
+    echo " !!! Failed to build OSv image $image -> aborting !!!"
+    echo "-------------------------------------"
+    exit 1
+  fi
+
+  echo "-------------------------------------"
+  echo "- Built OSv image $image             "
+  echo "-------------------------------------"
+}
+
+prepare_package() {
+  local app_or_module_name="$1"
+  local package_dir="$PACKAGES/$app_or_module_name"
+
+  local module_yaml="$OSV_ROOT/modules/$app_or_module_name/mpm/package.yaml"
+  local app_yaml="$OSV_ROOT/apps/$app_or_module_name/mpm/package.yaml"
+
+  local package_name
+  local package_title
+  local package_version
+  local platform
+
+  if [ -f "$module_yaml" ]; then
+    package_name=$(echo $(grep 'name:' $module_yaml | cut -f 2 -d :))
+    package_title=$(echo $(grep 'title:' $module_yaml | cut -f 2 -d :))
+    package_version=$OSV_VERSION
+  elif [ -f "$app_yaml" ]; then
+    package_name=$(echo $(grep 'name:' $app_yaml | cut -f 2 -d :))
+    package_title=$(echo $(grep 'title:' $app_yaml | cut -f 2 -d :))
+    package_version=$(echo $(grep 'version:' $app_yaml | cut -f 2 -d :))
+  fi
+
+  if [ "$package_name" == "" ]; then
+    package_name="osv.$app_or_module_name"
+  fi
+
+  if [ "$package_title" == "" ]; then
+    package_title="$app_or_module_name"
+  fi
+
+  if [ "$package_version" == "" ]; then
+    package_version="1.0.0"
+  fi
+
+  if [ -f /etc/os-release ]; then
+    platform=$(grep PRETTY_NAME /etc/os-release | cut -d = -f 2 | grep -o -P "[^\"]+")
+  elif [ -f /etc/lsb-release ]; then
+    platform=$(grep DISTRIB_DESCRIPTION /etc/lsb-release | cut -d = -f 2 | grep -o -P "[^\"]+")
+  else
+    platform="Unknown Linux"
+  fi
+ 
+  rm -rf $package_dir
+  mkdir -p $package_dir
+
+  cd $package_dir && $CAPSTAN package init --name "$package_name" --title "$package_title" \
+     --author "Anonymous" --version "$package_version" --platform "$platform"
+
+  if [ -f "$module_yaml" ]; then
+    grep -P '^require:|^-' $module_yaml >> $package_dir/meta/package.yaml
+  elif [ -f "$app_yaml" ]; then
+    grep -P '^require:|^-' $app_yaml >> $package_dir/meta/package.yaml
+  fi
+
+  cp $package_dir/meta/package.yaml $OUTPUT/${package_name}.yaml
+}
+
+set_package_command_line() {
+  local app_or_module_name="$1"
+  local package_dir="$PACKAGES/$app_or_module_name"
+
+  local command_line=$(cat $OSV_BUILD/cmdline)
+
+  if [ "$command_line" != "" ]; then
+    mkdir -p $package_dir/meta
+    cat << EOF > $package_dir/meta/run.yaml
+runtime: native
+config_set:
+  default:
+    bootcmd: "$command_line"
+config_set_default: default
+EOF
+    echo "Set package command like to: $command_line"
+  fi
+}
+
+build_package() {
+  local app_or_module_name="$1"
+  local package_dir="$PACKAGES/$app_or_module_name"
+
+  # Copy content
+  cp -rf $OSV_ROOT/build/export/. $package_dir
+
+  cd $package_dir && $CAPSTAN package build
+  mv $package_dir/*.mpm $OUTPUT
+
+  echo "-------------------------------------"
+  echo "- Built package $app_or_module_name"
+  echo "-------------------------------------"
+}
+
+build_mpm() {
+  local app_or_module_name="$1"
+  local package_dir="$PACKAGES/$app_or_module_name"
+
+  prepare_package $app_or_module_name
+  set_package_command_line $app_or_module_name
+  build_package $app_or_module_name
+
+  if [[ $ASK -ne 0 ]]; then
+    read -p "Continue building next package [y/N]? :" -n 1 -t 30 -s
+    echo
+    if [[ ! "$REPLY" =~ ^[Yy]$ && "$REPLY" != "" ]]; then
+      echo "Aborted."
+      rm -rf $package_dir
+      exit 1
+    fi
+  fi
+
+  rm -rf $package_dir
+}
+
+build_and_publish_mpm() {
+  local app_or_module_name="$1"
+  local osv_image_suffix="$2"
+ 
+  if [ "$osv_image_suffix" == "" ]; then
+    build_osv_image $app_or_module_name selected none
+  else
+    build_osv_image "$app_or_module_name,$app_or_module_name.$osv_image_suffix" selected none
+  fi
+  build_mpm $app_or_module_name
+}
+
+# -----------------------
+# Kernel and OSv modules
+# -----------------------
+
+build_osv_image_loader_and_bootstrap_package() {
+  # Build osv.loader and files that will make up bootstrap package
+  build_osv_image empty all default
+
+  #Copy loader.img as osv-loader.qemu
+  mkdir -p $CAPSTAN_LOCAL_REPO/repository/osv-loader/
+  cp $OSV_BUILD/loader.img $CAPSTAN_LOCAL_REPO/repository/osv-loader/osv-loader.qemu
+
+  # Create bootstrap package
+  prepare_package empty
+  build_package empty
+}
+
+build_httpserver_api_package() {
+  build_osv_image "httpserver-api.fg" all none
+  build_mpm "httpserver-api"
+}
+
+build_httpserver_html5_gui_package() {
+  build_osv_image "httpserver-html5-gui,httpserver-html5-gui.fg" selected none
+  build_mpm "httpserver-html5-gui"
+}
+
+build_httpserver_html5_cli_package() {
+  build_osv_image "httpserver-html5-cli,httpserver-html5-cli.fg" selected none
+  build_mpm "httpserver-html5-cli"
+}
+
+build_cli_package() {
+  build_osv_image "lua,terminfo,cli" selected none
+  build_mpm "cli"
+}
+
+build_unit_tests_package() {
+  build_osv_image "fonts,java-base,java-non-isolated,java-cmd,java-tests,tests" selected none
+  build_mpm "tests"
+}
+
+build_http_server_tests_package() {
+  build_osv_image "josvsym,httpserver-jolokia-plugin,httpserver-jvm-plugin,certs" selected none
+  build_mpm "httpserver-api-tests"
+}
+
+# -----------------------
+# JAVA - java run wrapper and prebuilt JDK images for 8 and 11
+# -----------------------
+build_run_java_package() {
+  build_osv_image "java-base,java-non-isolated" selected none
+  build_mpm "java-non-isolated"
+}
+
+build_openjdk8-zulu-compact3-with-java-beans_package() {
+  build_osv_image "openjdk8-zulu-compact3-with-java-beans,ca-certificates" selected none
+  build_mpm "openjdk8-zulu-compact3-with-java-beans"
+}
+
+build_openjdk11-zulu-package() {
+  export JAVA_VERSION=11 
+  build_osv_image "openjdk-zulu-9-and-above,ca-certificates" selected none
+  build_mpm "openjdk-zulu-9-and-above"
+}
+
+#----------------
+# OTHER
+#----------------
+
+build_kernel_and_standard_osv_apps() {
+  ASK=1
+  build_osv_image_loader_and_bootstrap_package
+
+  build_httpserver_api_package
+  build_httpserver_html5_gui_package
+  build_httpserver_html5_cli_package
+  build_cli_package
+
+  build_run_java_package
+  build_and_publish_mpm golang
+  ASK=0
+  build_and_publish_mpm libz
+}
+
+build_java_jdk_packages() {
+  ASK=1
+  build_openjdk8-zulu-compact3-with-java-beans_package
+  ASK=0
+  build_openjdk11-zulu-package
+}
+
+build_java_example_apps() {
+  ASK=1
+  build_and_publish_mpm jetty
+  build_and_publish_mpm elasticsearch
+  build_and_publish_mpm apache-derby
+  build_and_publish_mpm spring-boot-example
+  build_and_publish_mpm apache-kafka native
+  ASK=0
+  build_and_publish_mpm vertx native
+}
+
+build_other_example_apps() {
+  ASK=1
+  build_and_publish_mpm lighttpd
+  PYTHON_VERSION=2 build_and_publish_mpm python-from-host
+  PYTHON_VERSION=3 build_and_publish_mpm python-from-host
+  build_and_publish_mpm nginx
+  build_and_publish_mpm node-from-host
+  build_and_publish_mpm stream
+  build_and_publish_mpm iperf3
+  build_and_publish_mpm netperf
+  build_and_publish_mpm redis-memonly
+  build_and_publish_mpm memcached
+  build_and_publish_mpm mysql
+  build_and_publish_mpm lua-hello-from-host
+  ASK=0
+  build_and_publish_mpm ffmpeg
+
+  #Add core utils
+}
+
+# ---- TESTS 
+build_test_apps() {
+  ASK=1
+  build_unit_tests_package
+  build_http_server_tests_package
+
+  build_and_publish_mpm rust-example
+  build_and_publish_mpm rust-httpserver
+
+  build_and_publish_mpm golang-example
+  build_and_publish_mpm golang-httpserver
+  build_and_publish_mpm golang-pie-example
+  build_and_publish_mpm golang-pie-httpserver
+
+  build_and_publish_mpm graalvm-example
+  build_and_publish_mpm graalvm-httpserver
+  build_and_publish_mpm graalvm-netty-plot
+
+  ASK=0
+  build_and_publish_mpm node-express-example
+}
+
+case "$1" in
+  kernel)
+    echo "Building kernel and standard apps ..."
+    build_kernel_and_standard_osv_apps;;
+  jdk)
+    echo "Building Java 8 and 11 JREs ..."
+    build_java_jdk_packages;;
+  java_examples)
+    echo "Building Java examples ..."
+    build_java_example_apps;;
+  other_examples)
+    echo "Building other examples ..."
+    build_other_example_apps;;
+  tests)
+    echo "Building test apps ..."
+    build_test_apps;;
+  *)
+    echo "Building package $1 ..."
+    build_and_publish_mpm $1 $2
+esac

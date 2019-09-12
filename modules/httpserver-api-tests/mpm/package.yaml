@@ -1,0 +1,8 @@
+title: OSv httpserver API tests
+require:
+- osv.openjdk8-zulu-compact3-with-java-beans
+#- osv.openjdk11-zulu
+- osv.run-java
+- osv.jetty
+- osv.httpserver-api
+- osv.libz

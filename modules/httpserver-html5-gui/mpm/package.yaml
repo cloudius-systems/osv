@@ -1,0 +1,3 @@
+title: OSv HTML5 GUI (frontend)
+require:
+- osv.httpserver-api
