@@ -1,0 +1,89 @@
+#!/bin/bash
+
+program=$(basename $0)
+
+set -e
+
+if [ $# -lt 2 ]; then
+    echo "Build capstan base image"
+    echo "Usage: $program [image-name] [(<app|module>)(,<app|module>)*] [description]"
+    echo "Examples:"
+    echo " ./scripts/build-capstan-base-image cloudius/osv-base empty 'OSv base image for developers'"
+    echo " ./scripts/build-capstan-base-image cloudius/java8 openjdk8-zulu-full 'OSv base with Java 8'"
+    echo " ./scripts/build-capstan-base-image cloudius/python3 python3x 'OSv base with Python 3'"
+    exit 1
+fi
+
+name=$1
+image=$2
+description=$3
+
+if [ -f /etc/os-release ]; then
+  platform=$(grep PRETTY_NAME /etc/os-release | cut -d = -f 2 | grep -o -P "[^\"]+")
+elif [ -f /etc/lsb-release ]; then
+  platform=$(grep DISTRIB_DESCRIPTION /etc/lsb-release | cut -d = -f 2 | grep -o -P "[^\"]+")
+else
+  platform="Unknown Linux"
+fi
+
+OSV_VERSION=$(scripts/osv-version.sh | cut -d - -f 1 | grep -Po "[^v]*")
+OSV_COMMIT=$(scripts/osv-version.sh | grep -Po "\-g.*" | grep -oP "[^-g]*")
+
+if [ "$OSV_COMMIT" != "" ]; then
+  version="$OSV_VERSION-$OSV_COMMIT"
+fi
+
+now=$(date +"%Y-%m-%dT%R:%S")
+
+out=build/capstan/$name
+qemuimage=build/release/osv.qcow2
+vboximage=build/release/osv.vdi
+gceimage=build/release/osv.tar.gz
+vmwimage=build/release/osv.vmdk
+index=$out/index.yaml
+build="scripts/build image=$image"
+capstan_local_repository=$HOME/.capstan/repository
+
+mkdir -p $out
+
+echo "==> Building '$name'..."
+
+echo "format_version: 1" > $index
+echo "version: $version" >> $index
+echo "created: $now" >> $index
+echo "description: $description" >> $index
+echo "build: $build" >> $index
+echo "platform: $platform" >> $index
+
+$build
+
+# Generate QEMU image
+scripts/convert vdi
+scripts/convert vmdk
+
+# Generate GCE image
+scripts/gen-gce-tarball.sh
+
+read -p "Copy base images into capstan local repository [y/N]? :" -n 1 -t 15 -s
+echo
+if [[ "$REPLY" =~ ^[Yy]$ ]]; then
+  mkdir -p $capstan_local_repository/$name
+  cp $index $capstan_local_repository/$name/
+  cp $qemuimage $capstan_local_repository/$name/$(basename $name).qemu
+  cp $vboximage $capstan_local_repository/$name/$(basename $name).vbox
+  cp $vmwimage $capstan_local_repository/$name/$(basename $name).vmw
+  echo "Copied base images into $capstan_local_repository/$name/"
+fi
+
+gzip < $qemuimage > $out/$(basename $name).qemu.gz
+gzip < $vboximage > $out/$(basename $name).vbox.gz
+gzip < $vmwimage  > $out/$(basename $name).vmw.gz
+
+gce_url_file=$out/$(basename $name).gce
+gce_tar_ball=$out/$(basename $name).gce.tar.gz
+echo "gs://osv/$version/$(basename $name).gce.tar.gz" > $gce_url_file
+gzip <$gce_url_file > $gce_url_file.gz
+rm -f $gce_url_file  $gce_tar_ball
+mv -f $gceimage $gce_tar_ball
+
+echo "==> '$name' image built to '$out'."
