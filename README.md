@@ -1,3 +1,5 @@
+***OSv was originally designed and implemented by Cloudius Systems (now ScyllaDB) however currently it is being maintained and enhanced by a small community of volunteers. If you are into systems programming or want to learn and help us improve OSv please contact us on [OSv Google Group forum](https://groups.google.com/forum/#!forum/osv-dev).***
+
 # OSv
 
 OSv is an open-source versatile modular **unikernel** designed to run **unmodified
@@ -9,7 +11,7 @@ OSv has new APIs for new applications, but also runs unmodified x86-64 Linux
 binaries **as is**, which effectively makes it a **Linux binary compatible unikernel**
 (for more details about Linux ABI compatibility please read
 [this doc](https://github.com/cloudius-systems/osv/wiki/OSv-Linux-ABI-Compatibility)).
-In particular OSv can run many managed language runtimes including unmodified
+In particular OSv can run many managed language runtimes including
 [**JVM**](https://github.com/cloudius-systems/osv-apps/tree/master/java-example),
 **Python** [**2**](https://github.com/cloudius-systems/osv-apps/tree/master/python2x) and
 [**3**](https://github.com/cloudius-systems/osv-apps/tree/master/python3x),
@@ -65,7 +67,7 @@ cd osv && git submodule update --init --recursive
 ./scripts/setup.py
 ```
 
-The ```setup.py``` recognizes and installs packages for number of Linux distributions including Fedora, Ubuntu, [Debian](https://github.com/cloudius-systems/osv/wiki/Building-OSv-on-Debian-stable), LinuxMint and RedHat ones (Scientific Linux, NauLinux, CentOS Linux, Red Hat Enterprise Linux, Oracle Linux). Please note that only Ubuntu and Fedora support is actively maintained and tested so your milage with other distributions may vary.
+The `setup.py` recognizes and installs packages for number of Linux distributions including Fedora, Ubuntu, [Debian](https://github.com/cloudius-systems/osv/wiki/Building-OSv-on-Debian-stable), LinuxMint and RedHat ones (Scientific Linux, NauLinux, CentOS Linux, Red Hat Enterprise Linux, Oracle Linux). Please note that only Ubuntu and Fedora support is actively maintained and tested so your milage with other distributions may vary.
 
 ## Building OSv kernel and creating images
 
@@ -106,10 +108,10 @@ export MAKEFLAGS=-j$(nproc)
 
 In that case, make and scripts/build do not need the parameter -j.
 
-For details on how to use the build script, please run ```./scripts/build --help```.
+For details on how to use the build script, please run `./scripts/build --help`.
 
-The ```.scripts/build``` creates the image ```build/last/usr.img``` in qcow2 format.
-To convert this image to other formats, use the ```scripts/convert```
+The `.scripts/build` creates the image `build/last/usr.img` in qcow2 format.
+To convert this image to other formats, use the `scripts/convert`
 tool, which can create an image in the vmdk, vdi or raw formats.
 For example:
 
@@ -125,18 +127,18 @@ Please note that even though the **aarch64** version of OSv kernel should build 
 
 ## Running OSv
 
-Running an OSv image, built by ```scripts/build```, is as easy as:
+Running an OSv image, built by `scripts/build`, is as easy as:
 ```bash
 ./scripts/run.py
 ```
 
-By default, the ```run.py``` runs OSv under KVM, with 4 VCPUs and 2GB of memory. You can control these and tens of other ones by passing relevant parameters to the ```run.py```. For details on how to use the script please run ```./scripts/run.py --help```.
+By default, the `run.py` runs OSv under KVM, with 4 VCPUs and 2GB of memory. You can control these and tens of other ones by passing relevant parameters to the `run.py`. For details on how to use the script please run `./scripts/run.py --help`.
 
-The ```run.py``` can run OSv image on QEMU/KVM, Xen and VMware. If running under KVM you can terminate by hitting Ctrl+A X.
+The `run.py` can run OSv image on QEMU/KVM, Xen and VMware. If running under KVM you can terminate by hitting Ctrl+A X.
 
-Alternatively you can use ```./scripts/firecracker.py``` to run OSv on [Firecracker](https://firecracker-microvm.github.io/). This script automatically downloads firecracker and accepts number of parameters like number ot VCPUs, memory named exactly like ```run.py``` does.
+Alternatively you can use `./scripts/firecracker.py` to run OSv on [Firecracker](https://firecracker-microvm.github.io/). This script automatically downloads firecracker and accepts number of parameters like number ot VCPUs, memory named exactly like `run.py` does.
 
-Please note that in order to run OSv with best performance on Linux under QEMU or Firecracker you need KVM enabled (this is only possible on *physical* Linux machines, EC2 bare metal instances or VMs that support nested virtualization with KVM on). The easiest way to verify KVM is enabled is to check if ```/dev/kvm``` is present and your user can read from and write to it. Adding your user to the kvm group may be necessary like so:
+Please note that in order to run OSv with best performance on Linux under QEMU or Firecracker you need KVM enabled (this is only possible on *physical* Linux machines, EC2 bare metal instances or VMs that support nested virtualization with KVM on). The easiest way to verify KVM is enabled is to check if `/dev/kvm` is present and your user can read from and write to it. Adding your user to the kvm group may be necessary like so:
 ```bash
 usermod -aG kvm <user name>
 ```
@@ -145,7 +147,7 @@ For more information about building and running JVM, Node.JS, Python and other m
 
 ### Networking
 
-By default the ```run.py```  starts OSv with [user networking/SLIRP](https://wiki.qemu.org/Documentation/Networking#User_Networking_.28SLIRP.29) on. To start OSv with more performant external networking:
+By default the `run.py`  starts OSv with [user networking/SLIRP](https://wiki.qemu.org/Documentation/Networking#User_Networking_.28SLIRP.29) on. To start OSv with more performant external networking:
 
 ```
 sudo ./scripts/run.py -n -v
