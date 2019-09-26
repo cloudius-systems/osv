@@ -40,10 +40,10 @@ find_library()
 	local count=$(ldconfig -p | grep -P "$pattern" | grep 'x86-64' | wc -l)
 
 	if [[ $count == 0 ]]; then
-		echo "Could not find any so file matching $pattern"
+		echo "Could not find any so file matching $pattern" >&2
 		return -1
 	elif [[ $count > 1 ]]; then
-		echo 'Found more than one alternative:'
+		echo 'Found more than one alternative:' >&2
 		ldconfig -p | grep -P "$pattern"
 		return -1
 	else
@@ -115,7 +115,7 @@ shift $((OPTIND - 1))
 
 LDDTREE_INSTALLED=$(command -v lddtree)
 if [ -z "$LDDTREE_INSTALLED" ]; then
-	echo "Please install lddtree which is part of pax-utils package"
+	echo "Please install lddtree which is part of pax-utils package" >&2
 	exit 1
 fi
 
@@ -161,7 +161,7 @@ if [[ -f $NAME_OR_PATH ]]; then
 		REAL_PATH=$(realpath $NAME_OR_PATH)
 		output_manifest "$REAL_PATH"
 	else
-		echo "The $NAME_OR_PATH is not ELF"
+		echo "The $NAME_OR_PATH is not ELF" >&2
 		exit 1
 	fi
 else
@@ -181,7 +181,7 @@ else
 			FULL_PATH=$(realpath $APP_PATH)
 			detect_elf $FULL_PATH
 			if [[ $FILE_TYPE == "NON_ELF" ]]; then
-				echo "The file $FULL_PATH is not an ELF"
+				echo "The file $FULL_PATH is not an ELF" >&2
 				exit 1
 			else
 				echo "# $LONG_NAME" | tee $OUTPUT
@@ -192,7 +192,7 @@ else
 				fi
 			fi
 		else
-			echo "Failed to find '$NAME_OR_PATH'!"
+			echo "Failed to find '$NAME_OR_PATH'!" >&2
 			exit 1
 		fi
 	fi
