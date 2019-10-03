@@ -955,6 +955,7 @@ objects += core/app.o
 objects += core/libaio.o
 objects += core/osv_execve.o
 objects += core/osv_c_wrappers.o
+objects += core/options.o
 
 #include $(src)/libc/build.mk:
 libc =

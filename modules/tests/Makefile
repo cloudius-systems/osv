@@ -109,7 +109,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-dns-resolver.so tst-kill.so tst-truncate.so \
 	misc-panic.so tst-utimes.so tst-utimensat.so tst-futimesat.so \
 	misc-tcp.so tst-strerror_r.so misc-random.so misc-urandom.so \
-	tst-commands.so tst-threadcomplete.so tst-timerfd.so \
+	tst-commands.so tst-options.so tst-threadcomplete.so tst-timerfd.so \
 	tst-nway-merger.so tst-memmove.so tst-pthread-clock.so misc-procfs.so \
 	tst-chdir.so tst-chmod.so tst-hello.so misc-concurrent-io.so \
 	tst-concurrent-init.so tst-ring-spsc-wraparound.so tst-shm.so \
