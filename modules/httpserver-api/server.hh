@@ -17,7 +17,6 @@
 #include "connection.hh"
 #include "transport.hh"
 
-#include <boost/program_options/variables_map.hpp>
 #include <boost/asio.hpp>
 #include <string>
 #include <memory>
@@ -43,7 +42,7 @@ public:
      * @param config a configuration object
      * @param routes the routes object
      */
-    explicit server(const boost::program_options::variables_map* config,
+    explicit server(std::map<std::string,std::vector<std::string>> &config,
                     httpserver::routes* routes);
 
     server(const server&) = delete;

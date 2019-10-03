@@ -20,6 +20,7 @@
 #include <fstream>
 #include <sstream>
 #include <string>
+#include <osv/options.hh>
 
 namespace http {
 
@@ -62,13 +63,13 @@ size_t request_handler::update_parameters(request& req)
     return par;
 }
 
-request_handler::request_handler(httpserver::routes* routes, const boost::program_options::variables_map& _config)
+request_handler::request_handler(httpserver::routes* routes, std::map<std::string,std::vector<std::string>>& _config)
     : routes(routes),
       config(_config)
 
 {
-    if (config.count("access-allow")) {
-        const auto s = config["access-allow"].as<std::string>();
+    if (options::option_value_exists(_config, "access-allow")) {
+        const auto s = options::extract_option_value(_config, "access-allow");
 
         std::string::size_type b = 0;
         do {

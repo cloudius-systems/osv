@@ -14,7 +14,6 @@
 #include "common.hh"
 #include "reply.hh"
 
-#include <boost/program_options/variables_map.hpp>
 #include <unordered_map>
 #include <vector>
 

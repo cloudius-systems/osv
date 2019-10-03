@@ -17,6 +17,7 @@
 
 #include <utility>
 #include <openssl/ssl.h>
+#include <osv/options.hh>
 
 namespace http {
 
@@ -28,17 +29,17 @@ static bool exists(const std::string& path)
     return stat(path.c_str(), &s) == 0;
 }
 
-server::server(const boost::program_options::variables_map* config,
+server::server(std::map<std::string,std::vector<std::string>> &config,
                httpserver::routes* routes)
     : io_service_()
     , connection_manager_()
-    , request_handler_(routes, *config)
+    , request_handler_(routes, config)
 {
     // Open the acceptor with the option to reuse the address (i.e. SO_REUSEADDR).
     boost::asio::ip::tcp::resolver resolver(io_service_);
     boost::asio::ip::tcp::endpoint endpoint = *resolver.resolve({
-        (*config)["ipaddress"].as<std::string>(),
-        (*config)["port"].as<std::string>()
+        options::extract_option_value(config, "ipaddress"),
+        options::extract_option_value(config, "port")
     });
 
     tcp::acceptor tcp_acceptor(io_service_);
@@ -47,12 +48,22 @@ server::server(const boost::program_options::variables_map* config,
     tcp_acceptor.bind(endpoint);
     tcp_acceptor.listen();
 
-    if (config->count("ssl")) {
+    if (options::extract_option_flag(config, "ssl", [](const std::string &message) {
+            std::cerr << message << std::endl;
+            throw std::runtime_error("invalid configuration");
+        })) {
         ensure_openssl_initialized();
 
-        auto ca_cert_path = (*config)["cacert"].as<std::string>();
-        auto cert_path = (*config)["cert"].as<std::string>();
-        auto key_path = (*config)["key"].as<std::string>();
+        auto ca_cert_path = options::extract_option_value(config,"cacert");
+        auto cert_path = options::extract_option_value(config,"cert");
+        auto key_path = options::extract_option_value(config,"key");
+
+        if (!config.empty()) {
+            for (auto option : config) {
+                std::cout << "Unrecognized option: " << option.first << std::endl;
+            }
+            throw std::runtime_error("invalid configuration");
+        }
 
         bool valid = true;
         for (auto& path : {ca_cert_path, cert_path, key_path}) {
@@ -70,6 +81,13 @@ server::server(const boost::program_options::variables_map* config,
         ssl::context ctx = make_ssl_context(ca_cert_path, cert_path, key_path);
         acceptor_.reset(new ssl_acceptor(io_service_, std::move(ctx), std::move(tcp_acceptor)));
     } else {
+        if (!config.empty()) {
+            for (auto option : config) {
+                std::cout << "Unrecognized option: " << option.first << std::endl;
+            }
+            throw std::runtime_error("invalid configuration");
+        }
+
         acceptor_.reset(new plain_acceptor(io_service_, std::move(tcp_acceptor)));
     }
 

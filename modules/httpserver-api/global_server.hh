@@ -10,12 +10,9 @@
 #include "routes.hh"
 #include "server.hh"
 #include <vector>
-#include <boost/program_options/variables_map.hpp>
 #include <mutex>
 #include <condition_variable>
 #include <external/x64/misc.bin/usr/include/yaml-cpp/node/iterator.h>
-
-namespace po = boost::program_options;
 
 namespace httpserver {
 /**
@@ -46,7 +43,7 @@ public:
      *
      * @return false if the server already running
      */
-    static bool run(po::variables_map& config);
+    static bool run(std::map<std::string,std::vector<std::string>>& config);
 
     /**
      * set an entry in the configuration
@@ -73,7 +70,7 @@ private:
     static global_server* instance;
     routes _routes;
     http::server::server* s;
-    po::variables_map config;
+    std::map<std::string,std::vector<std::string>> config;
     std::vector<void*> plugins;
 
     /**
@@ -81,7 +78,7 @@ private:
      * @param config a variable map
      * @return a reference to the server
      */
-    static global_server& set(po::variables_map& config);
+    static global_server& set(std::map<std::string,std::vector<std::string>>& config);
 
 };
 

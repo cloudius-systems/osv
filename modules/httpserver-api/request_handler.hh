@@ -15,7 +15,6 @@
 
 #include "routes.hh"
 
-#include <boost/program_options/variables_map.hpp>
 #include <string>
 
 namespace http {
@@ -40,7 +39,7 @@ public:
      *
      * @param routes the routes object
      */
-    explicit request_handler(httpserver::routes* routes, const boost::program_options::variables_map& _config);
+    explicit request_handler(httpserver::routes* routes, std::map<std::string,std::vector<std::string>>& _config);
 
     request_handler(const request_handler&) = delete;
 
@@ -74,7 +73,7 @@ public:
 private:
     httpserver::routes* routes;
     std::vector<std::string> allowed_domains;
-    const boost::program_options::variables_map& config;
+    const std::map<std::string,std::vector<std::string>>& config;
 
 };
 

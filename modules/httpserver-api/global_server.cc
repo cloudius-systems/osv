@@ -17,6 +17,7 @@
 #include "json/api_docs.hh"
 #include <osv/debug.h>
 #include "transformers.hh"
+#include <osv/options.hh>
 
 namespace httpserver {
 
@@ -30,12 +31,15 @@ global_server& global_server::get()
     return *instance;
 }
 
-bool global_server::run(po::variables_map& _config)
+bool global_server::run(std::map<std::string,std::vector<std::string>>& _config)
 {
     if (get().s != nullptr) {
         return false;
     }
-    std::string config_file_path = _config["config-file"].as<std::string>();
+    std::string config_file_path = "/tmp/httpserver.conf";
+    if (options::option_value_exists(_config, "config-file")) {
+        config_file_path = options::extract_option_value(_config, "config-file");
+    }
     std::ifstream f(config_file_path);
     if (f.is_open()) {
         try {
@@ -79,11 +83,15 @@ bool global_server::run(po::variables_map& _config)
     set(_config);
     get().set("ipaddress", "0.0.0.0");
     get().set("port", "8000");
-    get().set("cert", "/etc/pki/server.pem");
-    get().set("key", "/etc/pki/private/server.key");
-    get().set("cacert", "/etc/pki/CA/cacert.pem");
 
-    get().s = new http::server::server(&get().config, &get()._routes);
+    if (get().config.count("ssl")) {
+        get().set("cert", "/etc/pki/server.pem");
+        get().set("key", "/etc/pki/private/server.key");
+        get().set("cacert", "/etc/pki/CA/cacert.pem");
+    }
+
+    auto port = get().config["port"][0];
+    get().s = new http::server::server(get().config, &get()._routes);
 
     osv::this_application::on_termination_request([&] {
         get().s->close();
@@ -92,7 +100,7 @@ bool global_server::run(po::variables_map& _config)
         }
     });
 
-    std::cout << "Rest API server running on port " << get().config["port"].as<std::string>() << std::endl;
+    std::cout << "Rest API server running on port " << port << std::endl;
     get().s->run();
     return true;
 }
@@ -153,7 +161,7 @@ global_server::global_server()
     set_routes();
 }
 
-global_server& global_server::set(po::variables_map& _config)
+global_server& global_server::set(std::map<std::string,std::vector<std::string>> &_config)
 {
     for (auto i : _config) {
         get().config.insert(std::make_pair(i.first, i.second));
@@ -164,9 +172,9 @@ global_server& global_server::set(po::variables_map& _config)
 global_server& global_server::set(const std::string& key,
                                   const std::string& _value)
 {
-    boost::any val(_value);
-    boost::program_options::variable_value v(val, false);
-    config.insert(std::make_pair(std::string(key), v));
+    std::vector<std::string> values;
+    values.push_back(_value);
+    config.insert(std::make_pair(std::string(key), values));
     return *this;
 }
 

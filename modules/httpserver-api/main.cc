@@ -10,43 +10,47 @@
 
 #include "server.hh"
 
-#include <boost/program_options/options_description.hpp>
-#include <boost/program_options/variables_map.hpp>
-#include <boost/program_options/parsers.hpp>
 #include <boost/asio.hpp>
 #include "global_server.hh"
 #include <osv/exception_utils.hh>
+#include <osv/options.hh>
 
 using namespace httpserver;
 
-namespace po = boost::program_options;
+static void usage()
+{
+    std::cout << "Allowed options:\n";
+    std::cout << "  --help                                produce help message\n";
+    std::cout << "  --config-file arg (=/tmp/httpserver.conf)\n";
+    std::cout << "                                        configuration file path\n";
+    std::cout << "  --access-allow arg                    Set the Access-Control-Allow-Origin to\n";
+    std::cout << "                                        *. Note the security risk\n";
+    std::cout << "  --ipaddress arg                       set the ip address\n";
+    std::cout << "  --port arg                            set the port\n";
+    std::cout << "  --cert arg                            path to server's SSL certificate\n";
+    std::cout << "  --key arg                             path to server's private key\n";
+    std::cout << "  --cacert arg                          path to CA certificate\n";
+    std::cout << "  --ssl                                 enable SSL\n\n";
+}
+
+static void handle_parse_error(const std::string &message)
+{
+    std::cout << message << std::endl;
+    usage();
+    exit(1);
+}
 
 int main(int argc, char* argv[])
 {
-    po::options_description desc("Allowed options");
-    desc.add_options()
-        ("help", "produce help message")
-        ("config-file", po::value<std::string>()->default_value("/tmp/httpserver.conf"), "configuration file path")
-        ("access-allow", po::value<std::string>(),
-             "Set the Access-Control-Allow-Origin to *. Note the security risk")
-        ("ipaddress", po::value<std::string>(), "set the ip address")
-        ("port", po::value<std::string>(), "set the port")
-        ("cert", po::value<std::string>(), "path to server's SSL certificate")
-        ("key", po::value<std::string>(), "path to server's private key")
-        ("cacert", po::value<std::string>(), "path to CA certificate")
-        ("ssl", "enable SSL");
+    auto options_values = options::parse_options_values(argc - 1, argv + 1, handle_parse_error);
 
-    po::variables_map config;
-    po::store(po::parse_command_line(argc, argv, desc), config);
-    po::notify(config);
-
-    if (config.count("help")) {
-        std::cerr << desc << "\n";
+    if (options::extract_option_flag(options_values, "help", handle_parse_error)) {
+        usage();
         return 1;
     }
 
     try {
-        global_server::run(config);
+        global_server::run(options_values);
     } catch (...) {
         std::cerr << "httpserver failed: " << current_what() << std::endl;
         return 1;
