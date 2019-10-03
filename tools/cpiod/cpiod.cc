@@ -11,17 +11,16 @@
 #include <string>
 #include <system_error>
 #include <boost/asio.hpp>
-#include <boost/program_options.hpp>
 #include "cpio.hh"
 #include <sys/mount.h>
 #include <errno.h>
 #include <stdio.h>
 #include <sys/stat.h>
+#include <osv/options.hh>
 
 using namespace osv;
 using namespace std;
 using namespace boost::asio::ip;
-namespace po = boost::program_options;
 
 // Want to use boost::filesystem, but too much effort to integrate
 extern "C" { int mkdirp(const char *d, mode_t mode); }
@@ -127,31 +126,55 @@ private:
     }
 };
 
+static void usage()
+{
+    std::cout << "Allowed options:\n";
+    std::cout << "  --help                produce help message\n";
+    std::cout << "  --port arg (=10000)   set listening port\n";
+    std::cout << "  --verbose arg (=1)    disable verbose output\n";
+    std::cout << "  --prefix arg (=/)     set prefix\n\n";
+}
+
+static void handle_parse_error(const std::string &message)
+{
+    std::cout << message << std::endl;
+    usage();
+    exit(1);
+}
+
 int main(int ac, char** av)
 {
-    int port;
-    std::string prefix;
-    bool verbose;
-    // Declare the supported options.
-    po::options_description desc("Allowed options");
-    desc.add_options()
-        ("help", "produce help message")
-        ("port", po::value<int>()->default_value(10000), "set listening port")
-        ("verbose", po::value<bool>()->default_value(true), "disable verbose output")
-        ("prefix", po::value<std::string>()->default_value(std::string("/")), "set prefix");
+    int port = 10000;
+    std::string prefix("/");
+    bool verbose = true;
 
-    po::variables_map vm;
-    po::store(po::parse_command_line(ac, av, desc), vm);
-    po::notify(vm);
+    auto options_values = options::parse_options_values(ac - 1, av + 1, handle_parse_error);
 
-    if (vm.count("help")) {
-        cout << desc << "\n";
-        return 1;
+    if (options::extract_option_flag(options_values, "help", handle_parse_error)) {
+        usage();
+	return 1;
     }
 
-    port = vm["port"].as<int>();
-    prefix = vm["prefix"].as<std::string>();
-    verbose = vm["verbose"].as<bool>();
+    if (options::option_value_exists(options_values, "port")) {
+        port = options::extract_option_int_value(options_values, "port", handle_parse_error);
+    }
+
+    if (options::option_value_exists(options_values, "prefix")) {
+        prefix = options::extract_option_value(options_values, "prefix");
+    }
+
+    if (options::option_value_exists(options_values, "verbose")) {
+        verbose = options::extract_option_int_value(options_values, "verbose", handle_parse_error) != 0;
+    }
+
+    if (!options_values.empty()) {
+        for (auto other_option : options_values) {
+            std::cout << "Unrecognized option: " << other_option.first << std::endl;
+        }
+
+        usage();
+        return 1;
+    }
 
     boost::asio::io_service io_service;
     tcp::acceptor acceptor(io_service, tcp::endpoint(tcp::v4(), port));
