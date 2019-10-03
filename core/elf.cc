@@ -1154,12 +1154,10 @@ program::program(void* addr)
 #ifdef __x86_64__
           "ld-linux-x86-64.so.2",
           "libboost_system.so.1.55.0",
-          "libboost_program_options.so.1.55.0",
 #endif /* __x86_64__ */
 #ifdef __aarch64__
           "ld-linux-aarch64.so.1",
           "libboost_system-mt.so.1.55.0",
-          "libboost_program_options-mt.so.1.55.0",
 #endif /* __aarch64__ */
           "libpthread.so.0",
           "libdl.so.2",

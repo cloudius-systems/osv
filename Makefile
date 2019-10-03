@@ -1862,8 +1862,7 @@ else
     boost-includes = -isystem $(miscbase)/usr/include
 endif
 
-boost-libs := $(boost-lib-dir)/libboost_program_options$(boost-mt).a \
-              $(boost-lib-dir)/libboost_system$(boost-mt).a
+boost-libs := $(boost-lib-dir)/libboost_system$(boost-mt).a
 
 ifeq ($(nfs), true)
 	nfs-lib = $(out)/libnfs.a
