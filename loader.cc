@@ -9,7 +9,6 @@
 #include <bsd/init.hh>
 #include <bsd/net.hh>
 #include <boost/format.hpp>
-#include <boost/program_options.hpp>
 #include <boost/algorithm/string.hpp>
 #include <cctype>
 #include <osv/elf.hh>
@@ -45,6 +44,7 @@
 #include <osv/app.hh>
 #include <osv/firmware.hh>
 #include <osv/xen.hh>
+#include <osv/options.hh>
 #include <dirent.h>
 #include <iostream>
 #include <fstream>
@@ -150,100 +150,98 @@ bool opt_pci_disabled = false;
 static int sampler_frequency;
 static bool opt_enable_sampler = false;
 
-void parse_options(int loader_argc, char** loader_argv)
+static void usage()
 {
-    namespace bpo = boost::program_options;
-    namespace bpos = boost::program_options::command_line_style;
+    std::cout << "OSv options:\n";
+    std::cout << "  --help                show help text\n";
+    std::cout << "  --sampler=arg         start stack sampling profiler\n";
+    std::cout << "  --trace=arg           tracepoints to enable\n";
+    std::cout << "  --trace-backtrace     log backtraces in the tracepoint log\n";
+    std::cout << "  --leak                start leak detector after boot\n";
+    std::cout << "  --nomount             don't mount the ZFS file system\n";
+    std::cout << "  --nopivot             do not pivot the root from bootfs to the ZFS\n";
+    std::cout << "  --assign-net          assign virtio network to the application\n";
+    std::cout << "  --maxnic=arg          maximum NIC number\n";
+    std::cout << "  --norandom            don't initialize any random device\n";
+    std::cout << "  --noshutdown          continue running after main() returns\n";
+    std::cout << "  --power-off-on-abort  use poweroff instead of halt if it's aborted\n";
+    std::cout << "  --noinit              don't run commands from /init\n";
+    std::cout << "  --verbose             be verbose, print debug messages\n";
+    std::cout << "  --console=arg         select console driver\n";
+    std::cout << "  --env=arg             set Unix-like environment variable (putenv())\n";
+    std::cout << "  --cwd=arg             set current working directory\n";
+    std::cout << "  --bootchart           perform a test boot measuring a time distribution of\n";
+    std::cout << "                        the various operations\n\n";
+    std::cout << "  --ip=arg              set static IP on NIC\n";
+    std::cout << "  --defaultgw=arg       set default gateway address\n";
+    std::cout << "  --nameserver=arg      set nameserver address\n";
+    std::cout << "  --delay=arg (=0)      delay in seconds before boot\n";
+    std::cout << "  --redirect=arg        redirect stdout and stderr to file\n";
+    std::cout << "  --disable_rofs_cache  disable ROFS memory cache\n";
+    std::cout << "  --nopci               disable PCI enumeration\n\n";
+}
 
-    std::vector<const char*> args = { "osv" };
-    std::copy(loader_argv, loader_argv + loader_argc, std::back_inserter(args));
+static void handle_parse_error(const std::string &message)
+{
+    std::cout << message << std::endl;
+    usage();
+    osv::poweroff();
+}
 
-    bpo::options_description desc("OSv options");
-    desc.add_options()
-        ("help", "show help text")
-        ("sampler", bpo::value<int>(), "start stack sampling profiler")
-        ("trace", bpo::value<std::vector<std::string>>(), "tracepoints to enable")
-        ("trace-backtrace", "log backtraces in the tracepoint log")
-        ("leak", "start leak detector after boot")
-        ("nomount", "don't mount the ZFS file system")
-        ("nopivot", "do not pivot the root from bootfs to the ZFS")
-        ("assign-net", "assign virtio network to the application")
-        ("maxnic", bpo::value<int>(), "maximum NIC number")
-        ("norandom", "don't initialize any random device")
-        ("noshutdown", "continue running after main() returns")
-        ("power-off-on-abort", "use poweroff instead of halt if it's aborted")
-        ("noinit", "don't run commands from /init")
-        ("verbose", "be verbose, print debug messages")
-        ("console", bpo::value<std::vector<std::string>>(), "select console driver")
-        ("env", bpo::value<std::vector<std::string>>(), "set Unix-like environment variable (putenv())")
-        ("cwd", bpo::value<std::vector<std::string>>(), "set current working directory")
-        ("bootchart", "perform a test boot measuring a time distribution of the various operations\n")
-        ("ip", bpo::value<std::vector<std::string>>(), "set static IP on NIC")
-        ("defaultgw", bpo::value<std::string>(), "set default gateway address")
-        ("nameserver", bpo::value<std::string>(), "set nameserver address")
-        ("delay", bpo::value<float>()->default_value(0), "delay in seconds before boot")
-        ("redirect", bpo::value<std::string>(), "redirect stdout and stderr to file")
-        ("disable_rofs_cache", "disable ROFS memory cache")
-        ("nopci", "disable PCI enumeration")
-    ;
-    bpo::variables_map vars;
-    // don't allow --foo bar (require --foo=bar) so we can find the first non-option
-    // argument
-    int style = bpos::unix_style & ~(bpos::long_allow_next | bpos::short_allow_next);
-    try {
-        bpo::store(bpo::parse_command_line(args.size(), args.data(), desc, style), vars);
-    } catch(std::exception &e) {
-        std::cout << e.what() << '\n';
-        std::cout << desc << '\n';
-        osv::poweroff();
-    }
-    bpo::notify(vars);
+static bool extract_option_flag(std::map<std::string,std::vector<std::string>> &options_values, const std::string &name)
+{
+    return options::extract_option_flag(options_values, name, handle_parse_error);
+}
 
-    if (vars.count("help")) {
-        std::cout << desc << "\n";
+static void parse_options(int loader_argc, char** loader_argv)
+{
+    auto options_values = options::parse_options_values(loader_argc, loader_argv, handle_parse_error, false);
+
+    if (extract_option_flag(options_values, "help")) {
+        usage();
     }
 
-    if (vars.count("leak")) {
+    if (extract_option_flag(options_values, "leak")) {
         opt_leak = true;
     }
 
-    if (vars.count("disable_rofs_cache")) {
+    if (extract_option_flag(options_values, "disable_rofs_cache")) {
         opt_disable_rofs_cache = true;
     }
 
-    if (vars.count("noshutdown")) {
+    if (extract_option_flag(options_values, "noshutdown")) {
         opt_noshutdown = true;
     }
 
-    if (vars.count("power-off-on-abort")) {
+    if (extract_option_flag(options_values, "power-off-on-abort")) {
         opt_power_off_on_abort = true;
     }
 
-    if (vars.count("maxnic")) {
+    if (options::option_value_exists(options_values, "maxnic")) {
         opt_maxnic = true;
-        maxnic = vars["maxnic"].as<int>();
+        maxnic = options::extract_option_int_value(options_values, "maxnic", handle_parse_error);
     }
 
-    if (vars.count("trace-backtrace")) {
+    if (extract_option_flag(options_values, "trace-backtrace")) {
         opt_log_backtrace = true;
     }
 
-    if (vars.count("verbose")) {
+    if (extract_option_flag(options_values, "verbose")) {
         opt_verbose = true;
         enable_verbose();
     }
 
-    if (vars.count("sampler")) {
-        sampler_frequency = vars["sampler"].as<int>();
+    if (options::option_value_exists(options_values, "sampler")) {
+        sampler_frequency = options::extract_option_int_value(options_values, "sampler", handle_parse_error);
         opt_enable_sampler = true;
     }
 
-    if (vars.count("bootchart")) {
+    if (extract_option_flag(options_values, "bootchart")) {
         opt_bootchart = true;
     }
 
-    if (vars.count("trace")) {
-        auto tv = vars["trace"].as<std::vector<std::string>>();
+    if (options::option_value_exists(options_values, "trace")) {
+        auto tv = options::extract_option_values(options_values, "trace");
         for (auto t : tv) {
             std::vector<std::string> tmp;
             boost::split(tmp, t, boost::is_any_of(" ,"), boost::token_compress_on);
@@ -252,13 +250,14 @@ void parse_options(int loader_argc, char** loader_argv)
             }
         }
     }
-    opt_mount = !vars.count("nomount");
-    opt_pivot = !vars.count("nopivot");
-    opt_random = !vars.count("norandom");
-    opt_init = !vars.count("noinit");
 
-    if (vars.count("console")) {
-        auto v = vars["console"].as<std::vector<std::string>>();
+    opt_mount = !extract_option_flag(options_values, "nomount");
+    opt_pivot = !extract_option_flag(options_values, "nopivot");
+    opt_random = !extract_option_flag(options_values, "norandom");
+    opt_init = !extract_option_flag(options_values, "noinit");
+
+    if (options::option_value_exists(options_values, "console")) {
+        auto v = options::extract_option_values(options_values, "console");
         if (v.size() > 1) {
             printf("Ignoring '--console' options after the first.");
         }
@@ -266,41 +265,54 @@ void parse_options(int loader_argc, char** loader_argv)
         debug("console=%s\n", opt_console);
     }
 
-    if (vars.count("env")) {
-        for (auto t : vars["env"].as<std::vector<std::string>>()) {
+    if (options::option_value_exists(options_values, "env")) {
+        for (auto t : options::extract_option_values(options_values, "env")) {
             debug("Setting in environment: %s\n", t);
             putenv(strdup(t.c_str()));
         }
     }
 
-    if (vars.count("cwd")) {
-        auto v = vars["cwd"].as<std::vector<std::string>>();
+    if (options::option_value_exists(options_values, "cwd")) {
+        auto v = options::extract_option_values(options_values, "cwd");
         if (v.size() > 1) {
             printf("Ignoring '--cwd' options after the first.");
         }
         opt_chdir = v.front();
     }
 
-    if (vars.count("ip")) {
-        opt_ip = vars["ip"].as<std::vector<std::string>>();
+    if (options::option_value_exists(options_values, "ip")) {
+        opt_ip = options::extract_option_values(options_values, "ip");
     }
 
-    if (vars.count("defaultgw")) {
-        opt_defaultgw = vars["defaultgw"].as<std::string>();
+    if (options::option_value_exists(options_values, "defaultgw")) {
+        opt_defaultgw = options::extract_option_value(options_values, "defaultgw");
     }
 
-    if (vars.count("nameserver")) {
-        opt_nameserver = vars["nameserver"].as<std::string>();
+    if (options::option_value_exists(options_values, "nameserver")) {
+        opt_nameserver = options::extract_option_value(options_values, "nameserver");
     }
 
-    if (vars.count("redirect")) {
-        opt_redirect = vars["redirect"].as<std::string>();
+    if (options::option_value_exists(options_values, "redirect")) {
+        opt_redirect = options::extract_option_value(options_values, "redirect");
     }
 
-    boot_delay = std::chrono::duration_cast<std::chrono::nanoseconds>(1_s * vars["delay"].as<float>());
+    if (options::option_value_exists(options_values, "delay")) {
+        boot_delay = std::chrono::duration_cast<std::chrono::nanoseconds>(1_s * options::extract_option_float_value(options_values, "delay", handle_parse_error));
+    } else {
+        boot_delay = std::chrono::duration_cast<std::chrono::nanoseconds>(1_s * 0.0f);
+    }
 
-    if (vars.count("nopci")) {
+    if (extract_option_flag(options_values, "nopci")) {
         opt_pci_disabled = true;
+    }
+
+    if (!options_values.empty()) {
+        for (auto other_option : options_values) {
+            std::cout << "unrecognized option: " << other_option.first << std::endl;
+        }
+
+        usage();
+        osv::poweroff();
     }
 }
 
