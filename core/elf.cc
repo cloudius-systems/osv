@@ -26,6 +26,7 @@
 #include <osv/stubbing.hh>
 #include <sys/utsname.h>
 #include <osv/demangle.hh>
+#include <boost/version.hpp>
 
 #include "arch.hh"
 
@@ -1153,11 +1154,19 @@ program::program(void* addr)
           "libm.so.6",
 #ifdef __x86_64__
           "ld-linux-x86-64.so.2",
+          // As noted in issue #1040 Boost version 1.69.0 and above is
+          // compiled with hidden visibility, so even if the kernel uses
+          // this library, it will not be visible for the application and
+          // it will need to load its own version of this library.
+#if BOOST_VERSION < 106900
           "libboost_system.so.1.55.0",
+#endif
 #endif /* __x86_64__ */
 #ifdef __aarch64__
           "ld-linux-aarch64.so.1",
+#if BOOST_VERSION < 106900
           "libboost_system-mt.so.1.55.0",
+#endif
 #endif /* __aarch64__ */
           "libpthread.so.0",
           "libdl.so.2",
