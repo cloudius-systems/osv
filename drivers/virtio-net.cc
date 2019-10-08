@@ -374,7 +374,16 @@ void net::read_config()
     net_i("Features: %s=%d,%s=%d", "Status", _status, "TSO_ECN", _tso_ecn);
     net_i("Features: %s=%d,%s=%d", "Host TSO ECN", _host_tso_ecn, "CSUM", _csum);
     net_i("Features: %s=%d,%s=%d", "Guest_csum", _guest_csum, "guest tso4", _guest_tso4);
-    net_i("Features: %s=%d", "host tso4", _host_tso4);
+    net_i("Features: %s=%d,%s=%d", "host tso4", _host_tso4, "MRG_RX_BUF", _mergeable_bufs);
+
+    // If VIRTIO_NET_F_MRG_RXBUF is not negotiated and VIRTIO_NET_F_GUEST_TSO4
+    // or VIRTIO_NET_F_GUEST_UFO are, the VirtIO spec mandates the guest to use
+    // large receive buffers
+    // For details please see "5.1.6.3.1 Driver Requirements: Setting Up Receive Buffers" in VirtIO spec
+    if (!_mergeable_bufs && (_guest_tso4 || _guest_ufo)) {
+        net_i("Set up to use large receive buffers");
+        _use_large_buffers = true;
+    }
 }
 
 /**
@@ -463,7 +472,7 @@ void net::receiver()
         // truncating it.
         net_hdr_mrg_rxbuf* mhdr;
 
-        while (void* page = vq->get_buf_elem(&len)) {
+        while (void* buffer = vq->get_buf_elem(&len)) {
 
             vq->get_buf_finalize();
 
@@ -473,12 +482,11 @@ void net::receiver()
             // Bad packet/buffer - discard and continue to the next one
             if (len < _hdr_size + ETHER_HDR_LEN) {
                 rx_drops++;
-                memory::free_page(page);
-
+                free_buffer(buffer);
                 continue;
             }
 
-            mhdr = static_cast<net_hdr_mrg_rxbuf*>(page);
+            mhdr = static_cast<net_hdr_mrg_rxbuf*>(buffer);
 
             if (!_mergeable_bufs) {
                 nbufs = 1;
@@ -486,19 +494,19 @@ void net::receiver()
                 nbufs = mhdr->num_buffers;
             }
 
-            packet.push_back({page + _hdr_size, len - _hdr_size});
+            packet.push_back({buffer + _hdr_size, len - _hdr_size});
 
-            // Read the fragments
+            // Read the fragments - only applies if _mergeable_bufs is ON
             while (--nbufs > 0) {
-                page = vq->get_buf_elem(&len);
-                if (!page) {
+                buffer = vq->get_buf_elem(&len);
+                if (!buffer) {
                     rx_drops++;
                     for (auto&& v : packet) {
                         free_buffer(v);
                     }
                     break;
                 }
-                packet.push_back({page, len});
+                packet.push_back({buffer, len});
                 vq->get_buf_finalize();
             }
 
@@ -546,7 +554,8 @@ mbuf* net::packet_to_mbuf(const std::vector<iovec>& packet)
     auto refcnt = new unsigned;
     m->M_dat.MH.MH_dat.MH_ext.ref_cnt = refcnt;
     m_extadd(m, static_cast<char*>(packet[0].iov_base), packet[0].iov_len,
-            &net::free_buffer_and_refcnt, packet[0].iov_base, refcnt, M_PKTHDR, EXT_EXTREF);
+            _use_large_buffers ? &net::free_large_buffer_and_refcnt : &net::free_buffer_and_refcnt,
+            packet[0].iov_base, refcnt, M_PKTHDR, EXT_EXTREF);
     m->M_dat.MH.MH_pkthdr.len = packet[0].iov_len;
     m->M_dat.MH.MH_pkthdr.rcvif = _ifn;
     m->M_dat.MH.MH_pkthdr.csum_flags = 0;
@@ -561,7 +570,8 @@ mbuf* net::packet_to_mbuf(const std::vector<iovec>& packet)
         refcnt = new unsigned;
         m->M_dat.MH.MH_dat.MH_ext.ref_cnt = refcnt;
         m_extadd(m, static_cast<char*>(iov.iov_base), iov.iov_len,
-                &net::free_buffer_and_refcnt, iov.iov_base, refcnt, 0, EXT_EXTREF);
+                _use_large_buffers ? &net::free_large_buffer_and_refcnt : &net::free_buffer_and_refcnt,
+                iov.iov_base, refcnt, 0, EXT_EXTREF);
         m->m_hdr.mh_len = iov.iov_len;
         m->m_hdr.mh_next = nullptr;
         m_tail->m_hdr.mh_next = m;
@@ -578,10 +588,22 @@ void net::free_buffer_and_refcnt(void* buffer, void* refcnt)
     delete static_cast<unsigned*>(refcnt);
 }
 
+void net::free_large_buffer_and_refcnt(void* buffer, void* refcnt)
+{
+    do_free_large_buffer(buffer);
+    delete static_cast<unsigned*>(refcnt);
+}
+
 void net::do_free_buffer(void* buffer)
 {
     buffer = align_down(buffer, page_size);
     memory::free_page(buffer);
+}
+
+void net::do_free_large_buffer(void* buffer)
+{
+    buffer = align_down(buffer, page_size);
+    memory::free_phys_contiguous_aligned(buffer);
 }
 
 void net::fill_rx_ring()
@@ -590,13 +612,19 @@ void net::fill_rx_ring()
     int added = 0;
     vring* vq = _rxq.vqueue;
 
+    int size_in_pages = _use_large_buffers ? LARGE_BUFFER_SIZE_IN_PAGES : 1;
     while (vq->avail_ring_not_empty()) {
-        auto page = memory::alloc_page();
+        void *buffer;
+        if (_use_large_buffers) {
+            buffer = memory::alloc_phys_contiguous_aligned(size_in_pages * memory::page_size, memory::page_size);
+        } else {
+            buffer = memory::alloc_page();
+        }
 
         vq->init_sg();
-        vq->add_in_sg(page, memory::page_size);
-        if (!vq->add_buf(page)) {
-            memory::free_page(page);
+        vq->add_in_sg(buffer, size_in_pages * memory::page_size);
+        if (!vq->add_buf(buffer)) {
+            free_buffer(buffer);
             break;
         }
         added++;
