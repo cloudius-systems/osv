@@ -151,33 +151,81 @@ void thread::init_stack()
 }
 
 void thread::setup_tcb()
-{
-    assert(tls.size);
+{   //
+    // Most importantly this method allocates TLS memory region and
+    // sets up TCB (Thread Control Block) that points to that allocated
+    // memory region. The TLS memory region is designated to a specific thread
+    // and holds thread local variables (with __thread modifier) defined
+    // in OSv kernel and the application ELF objects including dependant ones
+    // through DT_NEEDED tag.
+    //
+    // Each ELF object and OSv kernel gets its own TLS block with offsets
+    // specified in DTV structure (the offsets get calculated as ELF is loaded and symbols
+    // resolved before we get to this point).
+    //
+    // Because both OSv kernel and position-in-dependant (pie) or position-dependant
+    // executable (non library) are compiled to use local-exec mode to access the thread
+    // local variables, we need to setup the offsets and TLS blocks in a special way
+    // to avoid any collisions. Specifically we define OSv TLS segment
+    // (see arch/x64/loader.ld for specifics) with an extra buffer at
+    // the end of the kernel TLS to accommodate TLS block of pies and
+    // position-dependant executables.
+
+    // (1) - TLS memory area layout with app shared library
+    // |-----|-----|-----|--------------|------|
+    // |SO_3 |SO_2 |SO_1 |KERNEL        |<NONE>|
+    // |-----|-----|-----|--------------|------|
+
+    // (2) - TLS memory area layout with pie or
+    // position dependant executable
+    //       |-----|-----|---------------------|
+    //       |SO_3 |SO_2 |KERNEL        | EXE  |
+    //       |-----|-----|--------------|------|
+
+    assert(sched::tls.size);
 
     void* user_tls_data;
     size_t user_tls_size = 0;
+    size_t executable_tls_size = 0;
     if (_app_runtime) {
         auto obj = _app_runtime->app.lib();
         assert(obj);
         user_tls_size = obj->initial_tls_size();
         user_tls_data = obj->initial_tls();
+        if (obj->is_executable()) {
+           executable_tls_size = obj->get_tls_size();
+        }
     }
 
     // In arch/x64/loader.ld, the TLS template segment is aligned to 64
     // bytes, and that's what the objects placed in it assume. So make
     // sure our copy is allocated with the same 64-byte alignment, and
     // verify that object::init_static_tls() ensured that user_tls_size
-    // also doesn't break this alignment .
-    assert(align_check(tls.size, (size_t)64));
+    // also doesn't break this alignment.
+    auto kernel_tls_size = sched::tls.size;
+    assert(align_check(kernel_tls_size, (size_t)64));
     assert(align_check(user_tls_size, (size_t)64));
-    void* p = aligned_alloc(64, sched::tls.size + user_tls_size + sizeof(*_tcb));
+
+    auto total_tls_size = kernel_tls_size + user_tls_size;
+    void* p = aligned_alloc(64, total_tls_size + sizeof(*_tcb));
+    // First goes user TLS data
     if (user_tls_size) {
         memcpy(p, user_tls_data, user_tls_size);
     }
-    memcpy(p + user_tls_size, sched::tls.start, sched::tls.filesize);
-    memset(p + user_tls_size + sched::tls.filesize, 0,
-           sched::tls.size - sched::tls.filesize);
-    _tcb = static_cast<thread_control_block*>(p + tls.size + user_tls_size);
+    // Next goes kernel TLS data
+    auto kernel_tls_offset = user_tls_size;
+    memcpy(p + kernel_tls_offset, sched::tls.start, sched::tls.filesize);
+    memset(p + kernel_tls_offset + sched::tls.filesize, 0,
+           kernel_tls_size - sched::tls.filesize);
+
+    if (executable_tls_size) {
+        // If executable copy its TLS block data at the designated offset
+        // at the end of area as described in the ascii art for executables
+        // TLS layout
+        auto executable_tls_offset = total_tls_size - executable_tls_size;
+        _app_runtime->app.lib()->copy_local_tls(p + executable_tls_offset);
+    }
+    _tcb = static_cast<thread_control_block*>(p + total_tls_size);
     _tcb->self = _tcb;
     _tcb->tls_base = p + user_tls_size;
 

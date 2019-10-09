@@ -90,7 +90,11 @@ SECTIONS
     .tdata : AT(ADDR(.tdata) - OSV_KERNEL_VM_SHIFT) { *(.tdata .tdata.* .gnu.linkonce.td.*) } :tls :text
     .tbss : AT(ADDR(.tbss) - OSV_KERNEL_VM_SHIFT) {
         *(.tbss .tbss.* .gnu.linkonce.tb.*)
+        _pie_static_tls_start = .;
+        /* This is a reserve intended for executables' (pie or non-pie) TLS block */
+        . = . + 64;
         . = ALIGN(64);
+        _pie_static_tls_end = .;
     } :tls :text
     .tls_template_size = SIZEOF(.tdata) + SIZEOF(.tbss);
     .bss : AT(ADDR(.bss) - OSV_KERNEL_VM_SHIFT) { *(.bss .bss.*) } :text

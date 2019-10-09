@@ -126,8 +126,21 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
         // target thread-local variable
         if (sym) {
             auto sm = symbol(sym);
-            sm.obj->alloc_static_tls();
-            auto tls_offset = sm.obj->static_tls_end() + sched::kernel_tls_size();
+            ulong tls_offset;
+            if (sm.obj->is_executable()) {
+                tls_offset = sm.obj->get_tls_size();
+                // If this is an executable (pie or position-dependant one)
+                // then the variable is located in the reserved slot of the TLS
+                // right where the kernel TLS lives
+                // So the offset is negative size of this ELF TLS block
+            } else {
+                // If shared library, the variable is located in one of TLS
+                // blocks that are part of the static TLS before kernel part
+                // so the offset needs to shift by sum of kernel and size of the user static
+                // TLS so far
+                sm.obj->alloc_static_tls();
+                tls_offset = sm.obj->static_tls_end() + sched::kernel_tls_size();
+            }
             *static_cast<u64*>(addr) = sm.symbol->st_value + addend - tls_offset;
         } else {
             // TODO: Which case does this handle?
@@ -166,7 +179,25 @@ void object::prepare_initial_tls(void* buffer, size_t size,
     memset(ptr + _tls_init_size, 0, _tls_uninit_size);
 
     offsets.resize(std::max(_module_index + 1, offsets.size()));
-    offsets[_module_index] = - _static_tls_offset - tls_size - sched::kernel_tls_size();
+    auto offset = - _static_tls_offset - tls_size - sched::kernel_tls_size();
+    offsets[_module_index] = offset;
+}
+
+void object::prepare_local_tls(std::vector<ptrdiff_t>& offsets)
+{
+    if (!_static_tls && !is_executable()) {
+        return;
+    }
+
+    offsets.resize(std::max(_module_index + 1, offsets.size()));
+    auto offset = - get_tls_size();
+    offsets[_module_index] = offset;
+}
+
+void object::copy_local_tls(void* to_addr)
+{
+    memcpy(to_addr, _tls_segment, _tls_init_size); //file size - 48 (0x30) for example and 80 (0x50) for httpserver
+    memset(to_addr + _tls_init_size, 0, _tls_uninit_size);
 }
 
 }

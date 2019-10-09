@@ -404,6 +404,7 @@ Elf64_Note::Elf64_Note(void *_base, char *str)
     }
 }
 
+extern "C" char _pie_static_tls_start, _pie_static_tls_end;
 void object::load_segments()
 {
     for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
@@ -471,9 +472,14 @@ void object::load_segments()
     // As explained in issue #352, we currently don't correctly support TLS
     // used in PIEs.
     if (_is_executable && _tls_segment) {
-        std::cout << "WARNING: " << pathname() << " is a PIE using TLS. This "
-                  << "is currently unsupported (see issue #352). Link with "
-                  << "'-shared' instead of '-pie'.\n";
+        auto tls_size = _tls_init_size + _tls_uninit_size;
+        ulong pie_static_tls_maximum_size = &_pie_static_tls_end - &_pie_static_tls_start;
+        if (tls_size > pie_static_tls_maximum_size) {
+            std::cout << "WARNING: " << pathname() << " is a PIE using TLS of size " << tls_size
+                  << " which is greater than " << pie_static_tls_maximum_size << " bytes limit. "
+                  << "Either increase the size of TLS reserve in arch/x64/loader.ld or "
+                  << "link with '-shared' instead of '-pie'.\n";
+        }
     }
 }
 
@@ -1110,8 +1116,13 @@ void object::init_static_tls()
         if (obj->is_core()) {
             continue;
         }
-        obj->prepare_initial_tls(_initial_tls.get(), _initial_tls_size,
-                                 _initial_tls_offsets);
+        if (obj->is_executable()) {
+            obj->prepare_local_tls(_initial_tls_offsets);
+        }
+        else {
+            obj->prepare_initial_tls(_initial_tls.get(), _initial_tls_size,
+                                     _initial_tls_offsets);
+        }
     }
 }
 

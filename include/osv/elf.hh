@@ -366,8 +366,12 @@ public:
     void init_static_tls();
     size_t initial_tls_size() { return _initial_tls_size; }
     void* initial_tls() { return _initial_tls.get(); }
+    void* get_tls_segment() { return _tls_segment; }
     bool is_non_pie_executable() { return _ehdr.e_type == ET_EXEC; }
     std::vector<ptrdiff_t>& initial_tls_offsets() { return _initial_tls_offsets; }
+    bool is_executable() { return _is_executable; }
+    ulong get_tls_size();
+    void copy_local_tls(void* to_addr);
 protected:
     virtual void load_segment(const Elf64_Phdr& segment) = 0;
     virtual void unload_segment(const Elf64_Phdr& segment) = 0;
@@ -392,9 +396,9 @@ private:
     void relocate_rela();
     void relocate_pltgot();
     unsigned symtab_len();
-    ulong get_tls_size();
     void collect_dependencies(std::unordered_set<elf::object*>& ds);
     void prepare_initial_tls(void* buffer, size_t size, std::vector<ptrdiff_t>& offsets);
+    void prepare_local_tls(std::vector<ptrdiff_t>& offsets);
     void alloc_static_tls();
     void make_text_writable(bool flag);
 protected:
@@ -441,7 +445,7 @@ protected:
                             Elf64_Sxword addend);
     bool arch_relocate_jump_slot(u32 sym, void *addr, Elf64_Sxword addend, bool ignore_missing = false);
     size_t static_tls_end() {
-        if (is_core()) {
+        if (is_core() || is_executable()) {
             return 0;
         }
         return _static_tls_offset + get_tls_size();
