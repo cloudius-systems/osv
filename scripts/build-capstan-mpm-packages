@@ -144,7 +144,7 @@ prepare_package() {
     grep -P '^require:|^-' $app_yaml >> $package_dir/meta/package.yaml
   fi
 
-  cp $package_dir/meta/package.yaml $OUTPUT/${package_name}.yaml
+  cp -a $package_dir/meta/package.yaml $OUTPUT/${package_name}.yaml
 }
 
 set_package_command_line() {
@@ -171,7 +171,7 @@ build_package() {
   local package_dir="$PACKAGES/$app_or_module_name"
 
   # Copy content
-  cp -rf $OSV_ROOT/build/export/. $package_dir
+  cp -a $OSV_ROOT/build/export/. $package_dir
 
   cd $package_dir && $CAPSTAN package build
   mv $package_dir/*.mpm $OUTPUT
@@ -224,7 +224,7 @@ build_osv_image_loader_and_bootstrap_package() {
 
   #Copy loader.img as osv-loader.qemu
   mkdir -p $CAPSTAN_LOCAL_REPO/repository/osv-loader/
-  cp $OSV_BUILD/loader.img $CAPSTAN_LOCAL_REPO/repository/osv-loader/osv-loader.qemu
+  cp -a $OSV_BUILD/loader.img $CAPSTAN_LOCAL_REPO/repository/osv-loader/osv-loader.qemu
 
   # Create bootstrap package
   prepare_package empty
@@ -257,8 +257,13 @@ build_unit_tests_package() {
 }
 
 build_http_server_tests_package() {
-  build_osv_image "josvsym,httpserver-jolokia-plugin,httpserver-jvm-plugin,certs" selected none
+  build_osv_image "josvsym,httpserver-jolokia-plugin,httpserver-jvm-plugin,certs,httpserver-api-tests" selected none
   build_mpm "httpserver-api-tests"
+}
+
+build_http_server_https_tests_package() {
+  build_osv_image "httpserver-api-https-tests" selected none
+  build_mpm "httpserver-api-https-tests"
 }
 
 # -----------------------
@@ -309,6 +314,7 @@ build_java_jdk_packages() {
 build_java_example_apps() {
   ASK=1
   build_and_publish_mpm jetty
+  build_and_publish_mpm tomcat
   build_and_publish_mpm elasticsearch
   build_and_publish_mpm apache-derby
   build_and_publish_mpm spring-boot-example
@@ -342,6 +348,7 @@ build_test_apps() {
   ASK=1
   build_unit_tests_package
   build_http_server_tests_package
+  build_http_server_https_tests_package
 
   build_and_publish_mpm rust-example
   build_and_publish_mpm rust-httpserver
@@ -357,6 +364,7 @@ build_test_apps() {
 
   ASK=0
   build_and_publish_mpm node-express-example
+  build_and_publish_mpm node-socketio-example
 }
 
 case "$1" in
