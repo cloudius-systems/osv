@@ -8,7 +8,7 @@ import socket
 tests = []
 _verbose_output = False
 
-osv_base = '.'
+osv_base = os.path.join(os.path.dirname(os.path.abspath(__file__)), '../..')
 
 class TestFailed(Exception):
     pass
@@ -93,8 +93,12 @@ def scan_errors(s,scan_for_failed_to_load_object_error=True):
     return False
 
 class SupervisedProcess:
-    def __init__(self, args, show_output=False, show_output_on_error=True, scan_for_failed_to_load_object_error=True):
-        self.process = subprocess.Popen(args, stdout=subprocess.PIPE)
+    def __init__(self, args, show_output=False, show_output_on_error=True, scan_for_failed_to_load_object_error=True, pipe_stdin=False):
+        if pipe_stdin:
+            self.process = subprocess.Popen(args, stdout=subprocess.PIPE, stdin=subprocess.PIPE)
+        else:
+            self.process = subprocess.Popen(args, stdout=subprocess.PIPE)
+        self.pipe_stdin = pipe_stdin
         self.cv = threading.Condition()
         self.lines = []
         self.output_collector_done = False
@@ -105,6 +109,7 @@ class SupervisedProcess:
         self.output_collector_thread = threading.Thread(target=self._output_collector)
         self.output_collector_thread.start()
         self.scan_for_failed_to_load_object_error = scan_for_failed_to_load_object_error
+        self.line_with_err = ""
 
     def _output_collector(self):
         def append_line(line):
@@ -112,6 +117,7 @@ class SupervisedProcess:
 
             if not self.has_errors and scan_errors(line,self.scan_for_failed_to_load_object_error):
                 self.has_errors = True
+                self.line_with_err = line
                 if self.show_output_on_error and not self.show_output:
                     sys.stdout.write(self.output)
                     sys.stdout.flush()
@@ -126,14 +132,20 @@ class SupervisedProcess:
             self.cv.release()
 
         line = ''
+        ch_bytes = ''
         while True:
-            ch = self.process.stdout.read(1).decode()
-            if ch == '' and self.process.poll() != None:
-                break
-            line += ch
-            if ch == '\n':
-                append_line(line)
-                line = ''
+            ch_bytes = ch_bytes + self.process.stdout.read(1)
+            try:
+                ch = ch_bytes.decode('utf-8')
+                if ch == '' and self.process.poll() != None:
+                    break
+                line += ch
+                if ch == '\n':
+                    append_line(line)
+                    line = ''
+                ch_bytes = ''
+            except UnicodeError:
+                continue
 
         if line:
             append_line(line)
@@ -165,6 +177,8 @@ class SupervisedProcess:
 
     def join(self):
         self.output_collector_thread.join()
+        if self.pipe_stdin:
+            self.process.stdin.close()
         if self.process.returncode:
             raise Exception('Guest failed (returncode=%d)' % self.proces.returncode)
         if self.failed:
@@ -185,6 +199,13 @@ class SupervisedProcess:
         assert not self.output_collector_thread.isAlive()
         return self.has_errors or self.process.returncode
 
+    def write_line_to_input(self, line):
+        self.process.stdin.write(line + "\n")
+        self.process.stdin.flush()
+
+    def line_with_error(self):
+        return self.line_with_err
+
 def run_command_in_guest(command, **kwargs):
     common_parameters = ["-e", "--power-off-on-abort " + command]
     if 'hypervisor' in kwargs.keys() and kwargs['hypervisor'] == 'firecracker':
@@ -194,7 +215,7 @@ def run_command_in_guest(command, **kwargs):
 
 class Guest(SupervisedProcess):
     def __init__(self, args, forward=[], hold_with_poweroff=False, show_output_on_error=True,
-                 scan_for_failed_to_load_object_error=True, run_py_args=[], hypervisor='qemu'):
+                 scan_for_failed_to_load_object_error=True, run_py_args=[], hypervisor='qemu', pipe_stdin=False):
 
         if hypervisor == 'firecracker':
             run_script = os.path.join(osv_base, "scripts/firecracker.py")
@@ -215,7 +236,8 @@ class Guest(SupervisedProcess):
         SupervisedProcess.__init__(self, [run_script] + run_py_args + args,
             show_output=_verbose_output,
             show_output_on_error=show_output_on_error,
-            scan_for_failed_to_load_object_error=scan_for_failed_to_load_object_error)
+            scan_for_failed_to_load_object_error=scan_for_failed_to_load_object_error,
+            pipe_stdin=pipe_stdin)
 
     def kill(self):
         s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
@@ -225,8 +247,17 @@ class Guest(SupervisedProcess):
         s.close()
 
 def wait_for_line(guest, text):
+    return _wait_for_line(guest, lambda line: line == text, text)
+
+def wait_for_line_starts(guest, text):
+    return _wait_for_line(guest, lambda line: line.startswith(text), text)
+
+def wait_for_line_contains(guest, text):
+    return _wait_for_line(guest, lambda line: text in line, text)
+
+def _wait_for_line(guest, predicate, text):
     for line in guest.read_lines():
-        if line == text:
+        if predicate(line):
             return
     raise Exception('Text not found in output: ' + text)
 
