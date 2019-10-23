@@ -1,0 +1,2 @@
+[manifest]
+/init/30-auto-00: ${MODULE_DIR}/init/30-auto-00
