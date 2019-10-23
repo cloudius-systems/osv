@@ -12,6 +12,8 @@ stty_params = None
 
 devnull = open('/dev/null', 'w')
 
+osv_base = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+
 def stty_save():
     global stty_params
     p = subprocess.Popen(["stty", "-g"], stdout=subprocess.PIPE, stderr=devnull)
@@ -64,7 +66,7 @@ def set_imgargs(options):
         execute = '--sampler=%d %s' % (int(options.sampler), execute)
 
     options.osv_cmdline = execute
-    cmdline = ["scripts/imgedit.py", "setargs", options.image_file, execute]
+    cmdline = [os.path.join(osv_base, "scripts/imgedit.py"), "setargs", options.image_file, execute]
     if options.dry_run:
         print(format_args(cmdline))
     else:
@@ -157,7 +159,7 @@ def start_osv_qemu(options):
 
         if options.networking:
             if options.vhost:
-                args += ["-netdev", "tap,id=hn%d,script=scripts/qemu-ifup.sh,vhost=on" % idx]
+                args += ["-netdev", "tap,id=hn%d,script=%s,vhost=on" % (idx, os.path.join(osv_base, "scripts/qemu-ifup.sh"))]
             else:
                 for bridge_helper_dir in ['/usr/libexec', '/usr/lib/qemu']:
                     bridge_helper = bridge_helper_dir + '/qemu-bridge-helper'
@@ -508,8 +510,8 @@ if __name__ == "__main__":
                         help="specify virtio version: legacy, transitional or modern")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
-    cmdargs.image_file = os.path.abspath(cmdargs.image or "build/%s/usr.img" % cmdargs.opt_path)
-    cmdargs.kernel_file = "build/%s/loader-stripped.elf" % cmdargs.opt_path
+    cmdargs.image_file = os.path.abspath(cmdargs.image or os.path.join(osv_base, "build/%s/usr.img" % cmdargs.opt_path))
+    cmdargs.kernel_file = os.path.join(osv_base, "build/%s/loader-stripped.elf" % cmdargs.opt_path)
     if not os.path.exists(cmdargs.image_file):
         raise Exception('Image file %s does not exist.' % cmdargs.image_file)
     if cmdargs.cloud_init_image:
