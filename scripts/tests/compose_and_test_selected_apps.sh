@@ -3,6 +3,13 @@
 OSV_DIR=$(readlink -f $(dirname $0)/../..)
 CAPSTAN_REPO=$HOME/.capstan
 
+OSV_VERSION=$($OSV_DIR/scripts/osv-version.sh | cut -d - -f 1 | grep -Po "[^v]*")
+OSV_COMMIT=$($OSV_DIR/scripts/osv-version.sh | grep -Po "\-g.*" | grep -oP "[^-g]*")
+
+if [ "$OSV_COMMIT" != "" ]; then
+  OSV_VERSION="$OSV_VERSION-$OSV_COMMIT"
+fi
+
 argv0=${0##*/}
 usage() {
 	cat <<-EOF
@@ -40,6 +47,16 @@ shift $((OPTIND - 1))
 TEST_APP_PACKAGE_NAME="$1"
 TEST_OSV_APP_NAME="$2"
 
+determine_platform() {
+  if [ -f /etc/os-release ]; then
+    PLATFORM=$(grep PRETTY_NAME /etc/os-release | cut -d = -f 2 | grep -o -P "[^\"]+")
+  elif [ -f /etc/lsb-release ]; then
+    PLATFORM=$(grep DISTRIB_DESCRIPTION /etc/lsb-release | cut -d = -f 2 | grep -o -P "[^\"]+")
+  else
+    PLATFORM="Unknown Linux"
+  fi
+}
+
 compose_test_app()
 {
   local APP_NAME=$1
@@ -66,6 +83,14 @@ compose_test_app()
     if [ "$LOADER" != "osv-loader" ]; then
       mkdir -p "$CAPSTAN_REPO/repository/$LOADER"
       cp -a $OSV_DIR/build/last/loader.img "$CAPSTAN_REPO/repository/$LOADER/$LOADER.qemu"
+      determine_platform
+      cat << EOF > $CAPSTAN_REPO/repository/$LOADER/index.yaml
+format_version: "1"
+version: "$OSV_VERSION"
+created: $(date +'%Y-%m-%d %H:%M')
+description: "OSv kernel"
+platform: "$PLATFORM"
+EOF
       LOADER_OPTION="--loader_image $LOADER"
       echo "Using latest OSv kernel from $OSV_DIR/build/last/loader.img !"
     fi

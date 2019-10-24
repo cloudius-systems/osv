@@ -90,6 +90,16 @@ build_osv_image() {
   echo "-------------------------------------"
 }
 
+determine_platform() {
+  if [ -f /etc/os-release ]; then
+    PLATFORM=$(grep PRETTY_NAME /etc/os-release | cut -d = -f 2 | grep -o -P "[^\"]+")
+  elif [ -f /etc/lsb-release ]; then
+    PLATFORM=$(grep DISTRIB_DESCRIPTION /etc/lsb-release | cut -d = -f 2 | grep -o -P "[^\"]+")
+  else
+    PLATFORM="Unknown Linux"
+  fi
+}
+
 prepare_package() {
   local app_or_module_name="$1"
   local package_dir="$PACKAGES/$app_or_module_name"
@@ -124,19 +134,13 @@ prepare_package() {
     package_version="1.0.0"
   fi
 
-  if [ -f /etc/os-release ]; then
-    platform=$(grep PRETTY_NAME /etc/os-release | cut -d = -f 2 | grep -o -P "[^\"]+")
-  elif [ -f /etc/lsb-release ]; then
-    platform=$(grep DISTRIB_DESCRIPTION /etc/lsb-release | cut -d = -f 2 | grep -o -P "[^\"]+")
-  else
-    platform="Unknown Linux"
-  fi
+  determine_platform
  
   rm -rf $package_dir
   mkdir -p $package_dir
 
   cd $package_dir && $CAPSTAN package init --name "$package_name" --title "$package_title" \
-     --author "Anonymous" --version "$package_version" --platform "$platform"
+     --author "Anonymous" --version "$package_version" --platform "$PLATFORM"
 
   if [ -f "$module_yaml" ]; then
     grep -P '^require:|^-' $module_yaml >> $package_dir/meta/package.yaml
@@ -225,6 +229,14 @@ build_osv_image_loader_and_bootstrap_package() {
   #Copy loader.img as osv-loader.qemu
   mkdir -p $CAPSTAN_LOCAL_REPO/repository/osv-loader/
   cp -a $OSV_BUILD/loader.img $CAPSTAN_LOCAL_REPO/repository/osv-loader/osv-loader.qemu
+  determine_platform
+  cat << EOF > $CAPSTAN_LOCAL_REPO/repository/osv-loader/index.yaml
+format_version: "1"
+version: "$OSV_VERSION"
+created: $(date +'%Y-%m-%d %H:%M')
+description: "OSv kernel"
+platform: "$PLATFORM"
+EOF
 
   # Create bootstrap package
   prepare_package empty
@@ -289,7 +301,7 @@ build_openjdk11-zulu-package() {
 # OTHER
 #----------------
 
-build_kernel_and_standard_osv_apps() {
+build_kernel_and_standard_osv_modules() {
   ASK=1
   build_osv_image_loader_and_bootstrap_package
 
@@ -369,8 +381,11 @@ build_test_apps() {
 
 case "$1" in
   kernel)
-    echo "Building kernel and standard apps ..."
-    build_kernel_and_standard_osv_apps;;
+    echo "Building kernel ..."
+    build_osv_image_loader_and_bootstrap_package;;
+  kernel_and_modules)
+    echo "Building kernel and standard modules ..."
+    build_kernel_and_standard_osv_modules;;
   jdk)
     echo "Building Java 8 and 11 JREs ..."
     build_java_jdk_packages;;
