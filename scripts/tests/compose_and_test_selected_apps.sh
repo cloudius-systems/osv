@@ -113,7 +113,7 @@ compose_and_run_test_app()
 
 test_simple_apps()
 {
-  compose_test_app "golang-example" "run-go" && run_test_app "golang-example"
+  compose_and_run_test_app "golang-example"
   compose_and_run_test_app "golang-pie-example"
   compose_and_run_test_app "graalvm-example"
   compose_and_run_test_app "graalvm-example"
@@ -126,7 +126,7 @@ test_simple_apps()
 
 test_http_apps()
 {
-  compose_test_app "golang-httpserver" "run-go" && run_test_app "golang-httpserver"
+  compose_and_run_test_app "golang-httpserver"
   compose_and_run_test_app "golang-pie-httpserver"
   compose_and_run_test_app "graalvm-httpserver"
   compose_and_run_test_app "lighttpd"
@@ -159,7 +159,7 @@ run_unit_tests()
 {
   compose_test_app "unit-tests" && run_test_app "tests"
   compose_test_app "httpserver-api-tests" && run_test_app "httpserver-api" "http"
-  compose_test_app "httpserver-api-https-tests" "httpserver-api-tests" && run_test_app "httpserver-api" "https"
+  #compose_test_app "httpserver-api-https-tests" "httpserver-api-tests" && run_test_app "httpserver-api" "https"
 }
 
 
