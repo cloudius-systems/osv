@@ -58,6 +58,7 @@ def run(command, hypervisor_name, host_port, guest_port, http_path, expected_htt
     if expected_http_line != None:
         check_with_curl(app_url, expected_http_line)
 
+    success = True
     try:
         app.kill()
         app.join()
@@ -66,12 +67,19 @@ def run(command, hypervisor_name, host_port, guest_port, http_path, expected_htt
             print("Ignorring error from guest on kill: %s" % app.line_with_error())
         else:
             print("ERROR: Guest failed on kill() or join(): %s" % str(ex))
+            success = False
 
     if failed_requests > 0:
         print("FAILED ab - encountered failed requests: %d" % failed_requests) 
+        success = False
 
     if complete_requests < count:
         print("FAILED ab - too few complete requests : %d ? %d" % (complete_requests, count)) 
+        success = False
+
+    if success:
+        print('----------')
+        print('SUCCESS')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='test_app')

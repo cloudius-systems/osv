@@ -15,14 +15,18 @@ def run(command, hypervisor_name, host_port, guest_port, script_path, image_path
 
     print("-----------------------------------")
     script_out = runpy.run_path(script_path)
-    print("-----------------------------------")
-    print("Success: %s" % script_out['success'])
 
     if end_line != None:
         wait_for_line_contains(app, end_line)
 
     app.kill()
     app.join()
+
+    print("-----------------------------------")
+    if script_out['success'] == True:
+        print("SUCCESS")
+    else:
+        print("FAILURE")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='test_app')
