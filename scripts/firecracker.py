@@ -9,8 +9,9 @@ import subprocess
 import time
 import argparse
 import re
+import json
+import tempfile
 from datetime import datetime
-import requests_unixsocket
 
 
 verbose = False
@@ -21,9 +22,16 @@ class ApiException(Exception):
 
 
 class ApiClient(object):
-    def __init__(self, domain_socket_path):
-        self.socket_path = domain_socket_path
-        self.session = requests_unixsocket.Session()
+    def __init__(self, domain_socket_path = None):
+        if domain_socket_path != None:
+           import requests_unixsocket
+           self.socket_less = False
+           self.socket_path = domain_socket_path
+           self.session = requests_unixsocket.Session()
+        else:
+           self.socket_less = True
+           self.firecracker_config = {}
+        print_time("API socket-less: %s" % self.socket_less)
 
     def api_socket_url(self, path):
         return "http+unix://%s%s" % (self.socket_path, path)
@@ -36,21 +44,29 @@ class ApiClient(object):
         return res.status_code
 
     def create_instance(self, kernel_image_path, cmdline):
-        self.make_put_call('/boot-source', {
+        boot_source = {
             'kernel_image_path': kernel_image_path,
             'boot_args': cmdline
-        })
+        }
+        if self.socket_less:
+            self.firecracker_config['boot-source'] = boot_source
+        else:
+            self.make_put_call('/boot-source', boot_source)
 
     def add_disk(self, disk_image_path):
-        self.make_put_call('/drives/rootfs', {
+        drive = {
             'drive_id': 'rootfs',
             'path_on_host': disk_image_path,
             'is_root_device': False,
             'is_read_only': False
-        })
+        }
+        if self.socket_less:
+            self.firecracker_config['drives'] = [drive]
+        else:
+            self.make_put_call('/drives/rootfs', drive)
 
-    def add_network_interface(self, interface_name, host_interface_name, ):
-        self.make_put_call('/network-interfaces/%s' % interface_name, {
+    def add_network_interface(self, interface_name, host_interface_name):
+        interface = {
             'iface_id': interface_name,
             'host_dev_name': host_interface_name,
             'guest_mac': "52:54:00:12:34:56",
@@ -74,29 +90,44 @@ class ApiClient(object):
                   'refill_time': 0
                }
             }
-        })
+        }
+        if self.socket_less:
+            self.firecracker_config['network-interfaces'] = [interface]
+        else:
+            self.make_put_call('/network-interfaces/%s' % interface_name, interface)
 
     def start_instance(self):
-        self.make_put_call('/actions', {
-            'action_type': 'InstanceStart'
-        })
+        if self.socket_less == False:
+            self.make_put_call('/actions', {
+                'action_type': 'InstanceStart'
+            })
 
     def configure_logging(self):
-        self.make_put_call('/logger', {
+        log_config = {
             "log_fifo": "log.fifo",
             "metrics_fifo": "metrics.fifo",
             "level": "Info",
             "show_level": True,
             "show_log_origin": True
-        })
+        }
+        if self.socket_less:
+            self.firecracker_config['logger'] = log_config
+        else:
+            self.make_put_call('/logger', log_config)
 
     def configure_machine(self, vcpu_count, mem_size_in_mb):
-        self.make_put_call('/machine-config', {
+        machine_config = {
             'vcpu_count': vcpu_count,
             'mem_size_mib': mem_size_in_mb,
             'ht_enabled' : False
-        })
+        }
+        if self.socket_less:
+            self.firecracker_config['machine-config'] = machine_config
+        else:
+            self.make_put_call('/machine-config', machine_config)
 
+    def firecracker_config_json(self):
+        return json.dumps(self.firecracker_config, indent=3)
 
 def print_time(msg):
     if verbose:
@@ -134,7 +165,7 @@ def find_firecracker(dirname):
         firecracker_path = os.environ.get('FIRECRACKER_PATH')
 
     # And offer to install if not found
-    firecracker_version = 'v0.18.0'
+    firecracker_version = 'v0.19.0'
     if not os.path.exists(firecracker_path):
         url_base = 'https://github.com/firecracker-microvm/firecracker/releases/download'
         download_url = '%s/%s/firecracker-%s' % (url_base, firecracker_version, firecracker_version)
@@ -185,6 +216,13 @@ def start_firecracker(firecracker_path, socket_path):
     return subprocess.Popen([firecracker_path, '--api-sock', socket_path],
                            stdout=sys.stdout, stderr=subprocess.STDOUT)
 
+def start_firecracker_with_no_api(firecracker_path, firecracker_config_json):
+    #  Start firecracker process and pass configuration JSON as a file
+    api_file = tempfile.NamedTemporaryFile(delete=False)
+    api_file.write(firecracker_config_json)
+    return subprocess.Popen([firecracker_path, "--no-api", "--config-file", api_file.name],
+                           stdout=sys.stdout, stderr=subprocess.STDOUT), api_file.name
+
 
 def get_memory_size_in_mb(options):
     memory_in_mb = 128
@@ -206,16 +244,17 @@ def main(options):
     # Firecracker is installed so lets start
     print_time("Start")
     socket_path = '/tmp/firecracker.socket'
-    firecracker = start_firecracker(firecracker_path, socket_path)
+    if not options.api_less:
+        firecracker = start_firecracker(firecracker_path, socket_path)
 
     # Prepare arguments we are going to pass when creating VM instance
     kernel_path = options.kernel
     if not kernel_path:
-       kernel_path = os.path.join(dirname, '../build/release/loader-stripped.elf')
+        kernel_path = os.path.join(dirname, '../build/release/loader-stripped.elf')
 
     qemu_disk_path = options.image
     if not qemu_disk_path:
-       qemu_disk_path = os.path.join(dirname, '../build/release/usr.img')
+        qemu_disk_path = os.path.join(dirname, '../build/release/usr.img')
     raw_disk_path = disk_path(qemu_disk_path)
 
     cmdline = options.execute
@@ -235,15 +274,19 @@ def main(options):
         cmdline = '--verbose ' + cmdline
 
     # Create API client and make API calls
-    client = ApiClient(socket_path.replace("/", "%2F"))
+    if options.api_less:
+        client = ApiClient()
+    else:
+        client = ApiClient(socket_path.replace("/", "%2F"))
 
     try:
         # Very often on the very first run firecracker process
         # is not ready yet to accept calls over socket file
         # so we poll existence of this file as a good
         # enough indicator if firecracker is ready
-        while not os.path.exists(socket_path):
-            time.sleep(0.01)
+        if not options.api_less:
+            while not os.path.exists(socket_path):
+                time.sleep(0.01)
         print_time("Firecracker ready")
 
         memory_in_mb = get_memory_size_in_mb(options)
@@ -259,8 +302,11 @@ def main(options):
         client.create_instance(kernel_path, cmdline)
         print_time("Created OSv VM with cmdline: %s" % cmdline)
 
-        client.start_instance()
-        print_time("Booted OSv VM")
+        if options.api_less:
+            firecracker, config_file_path = start_firecracker_with_no_api(firecracker_path, client.firecracker_config_json())
+        else:
+            client.start_instance()
+            print_time("Booted OSv VM")
 
     except ApiException as e:
         print("Failed to make firecracker API call: %s." % e)
@@ -274,6 +320,8 @@ def main(options):
 
     print_time("Waiting for firecracker process to terminate")
     firecracker.wait()
+    if options.api_less:
+        os.unlink(config_file_path)
     print_time("End")
 
 
@@ -296,6 +344,8 @@ if __name__ == "__main__":
                         help="bridge name for tap networking")
     parser.add_argument("-V", "--verbose", action="store_true",
                         help="pass --verbose to OSv, to display more debugging information on the console")
+    parser.add_argument("-l", "--api_less", action="store_true",
+                        help="do NOT use socket-based API to configure and start OSv on firecracker")
 
     cmd_args = parser.parse_args()
     if cmd_args.verbose:
