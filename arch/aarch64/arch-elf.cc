@@ -75,4 +75,9 @@ void object::prepare_initial_tls(void* buffer, size_t size,
     abort();
 }
 
+void object::prepare_local_tls(std::vector<ptrdiff_t>& offsets)
+{
+    abort();
+}
+
 }

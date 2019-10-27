@@ -104,7 +104,13 @@ SECTIONS
     /* do not align tdata, tbss with .tdata : ALIGN (64),
        or the linker will offset the TLS loads accordingly! */
     .tdata : { *(.tdata .tdata.* .gnu.linkonce.td.*) } : tls : text
-    .tbss : { *(.tbss .tbss.* .gnu.linkonce.tb.*) *(.tcommon) } : tls : text
+    .tbss : {
+        *(.tbss .tbss.* .gnu.linkonce.tb.*) *(.tcommon)
+        _pie_static_tls_start = .;
+        /* This is a reserve intended for executables' (pie or non-pie) TLS block */
+        . = . + 64;
+        _pie_static_tls_end = .;
+    } : tls : text
     .tls_template_size = SIZEOF(.tdata) + SIZEOF(.tbss);
     .bss : { *(.dynbss .bss .bss.* .gnu.linkonce.b.*) } : text
 
