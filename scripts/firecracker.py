@@ -135,29 +135,28 @@ def print_time(msg):
         print("%s: %s" % (now.isoformat(), msg))
 
 
-def setup_tap_interface(tap_interface_name, tap_ip, bridge_name):
+def setup_tap_interface(mode, tap_interface_name, tap_ip=None, physical_nic=None, bridge_name=None):
     # Setup tun tap interface if does not exist
     # sudo ip link delete fc_tap0 - this deletes the tap device
     tuntap_interfaces = subprocess.check_output(['ip', 'tuntap'])
     if tuntap_interfaces.find(tap_interface_name) < 0:
         print("The tap interface %s not found -> needs to set it up!" % tap_interface_name)
+        dirname = os.path.dirname(os.path.abspath(__file__))
+        setup_networking_script = os.path.join(dirname, 'setup_fc_networking.sh')
         # Check if the bridge exists if user specified it
-        if bridge_name:
+        if mode == 'bridged' and bridge_name:
             bridges = subprocess.check_output(['brctl', 'show'])
             if bridges.find(bridge_name) < 0:
                 print("The bridge %s does not exist per brctl. Please create one!" % bridge_name)
                 exit(-1)
-
-        subprocess.call(['sudo', 'ip', 'tuntap', 'add', 'dev', tap_interface_name, 'mode', 'tap'])
-        subprocess.call(['sudo', 'sysctl', '-q', '-w', 'net.ipv4.conf.%s.proxy_arp=1' % tap_interface_name])
-        subprocess.call(['sudo', 'sysctl', '-q', '-w', 'net.ipv6.conf.%s.disable_ipv6=1' % tap_interface_name])
-        subprocess.call(['sudo', 'ip', 'link', 'set', 'dev', tap_interface_name, 'up'])
-
-        if bridge_name:
-            subprocess.call(['sudo', 'brctl', 'addif', bridge_name, tap_interface_name])
+            print("Setting up TAP device in bridged mode!")
+            subprocess.call([setup_networking_script, 'bridged', tap_interface_name, bridge_name])
         else:
-            subprocess.call(['sudo', 'ip', 'addr', 'add', '%s/30' % tap_ip, 'dev', tap_interface_name])
-
+            print("Setting up TAP device in natted mode!")
+            if physical_nic is not None:
+                subprocess.call([setup_networking_script, 'natted', tap_interface_name, tap_ip, physical_nic])
+            else:
+                subprocess.call([setup_networking_script, 'natted', tap_interface_name, tap_ip])
 
 def find_firecracker(dirname):
     firecracker_path = os.path.join(dirname, '../.firecracker/firecracker')
@@ -264,11 +263,14 @@ def main(options):
     cmdline = "--nopci %s" % cmdline
 
     if options.networking:
-        tap_ip = '172.16.0.1'
-        setup_tap_interface('fc_tap0', tap_ip, options.bridge)
+        tap_device = 'fc_tap0'
         if not options.bridge:
+            tap_ip = '172.16.0.1'
             client_ip = '172.16.0.2'
-            cmdline = '--ip=eth0,%s,255.255.255.252 --defaultgw=%s %s' % (client_ip, tap_ip, cmdline)
+            cmdline = '--ip=eth0,%s,255.255.255.252 --defaultgw=%s --nameserver=%s %s' % (client_ip, tap_ip, tap_ip, cmdline)
+            setup_tap_interface('natted', tap_device, tap_ip, options.physical_nic)
+        else:
+            setup_tap_interface('bridged', tap_device, None, None, options.bridge)
 
     if options.verbose:
         cmdline = '--verbose ' + cmdline
@@ -346,6 +348,8 @@ if __name__ == "__main__":
                         help="pass --verbose to OSv, to display more debugging information on the console")
     parser.add_argument("-l", "--api_less", action="store_true",
                         help="do NOT use socket-based API to configure and start OSv on firecracker")
+    parser.add_argument("-p", "--physical_nic", action="store", default=None,
+                        help="name of the physical NIC (wired or wireless) to forward to if in natted mode")
 
     cmd_args = parser.parse_args()
     if cmd_args.verbose:
