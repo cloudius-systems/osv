@@ -30,7 +30,11 @@ def run(command, hypervisor_name, host_port, guest_port, http_path, expected_htt
        print(pre_script)
        subprocess.check_output([pre_script])
 
-    app_url = "http://localhost:%s%s" % (host_port, http_path)
+    if hypervisor_name == 'firecracker':
+       app_url = "http://172.16.0.2:%s%s" % (guest_port, http_path)
+    else:
+       app_url = "http://localhost:%s%s" % (host_port, http_path)
+
     if expected_http_line != None:
         check_with_curl(app_url, expected_http_line)
 
@@ -85,7 +89,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='test_app')
     parser.add_argument("-i", "--image", action="store", default=None, metavar="IMAGE",
                         help="path to disk image file. defaults to build/$mode/usr.img")
-    parser.add_argument("-p", "--hypervisor", action="store", default="qemu", 
+    parser.add_argument("-p", "--hypervisor", action="store", default=None,
                         help="choose hypervisor to run: qemu, firecracker")
     parser.add_argument("--line", action="store", default=None,
                         help="expect line in guest output")
@@ -105,7 +109,21 @@ if __name__ == "__main__":
                         help="error line to ignore on kill")
 
     cmdargs = parser.parse_args()
+
+    hypervisor_name = 'qemu'
+    if cmdargs.hypervisor != None:
+        hypervisor_name = cmdargs.hypervisor
+    else:
+        hypervisor_from_env = os.getenv('OSV_HYPERVISOR')
+        if hypervisor_from_env != None:
+            hypervisor_name = hypervisor_from_env
+
+    if hypervisor_name == 'firecracker':
+        os.environ['OSV_HOSTNAME'] = '172.16.0.2'
+    else:
+        os.environ['OSV_HOSTNAME'] = 'localhost'
+        
     set_verbose_output(True)
-    run(cmdargs.execute, cmdargs.hypervisor, cmdargs.host_port, cmdargs.guest_port,
+    run(cmdargs.execute, hypervisor_name, cmdargs.host_port, cmdargs.guest_port,
        cmdargs.http_path ,cmdargs.http_line, cmdargs.image, cmdargs.line,
        cmdargs.concurrency, cmdargs.count, cmdargs.pre_script, cmdargs.no_keep_alive, cmdargs.error_line_to_ignore_on_kill)

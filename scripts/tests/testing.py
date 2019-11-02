@@ -1,6 +1,7 @@
 import re
 import os
 import sys
+import signal
 import subprocess
 import threading
 import socket
@@ -180,7 +181,7 @@ class SupervisedProcess:
         if self.pipe_stdin:
             self.process.stdin.close()
         if self.process.returncode:
-            raise Exception('Guest failed (returncode=%d)' % self.proces.returncode)
+            raise Exception('Guest failed (returncode=%d)' % self.process.returncode)
         if self.failed:
             raise Exception('Guest failed')
 
@@ -208,10 +209,13 @@ class SupervisedProcess:
 
 def run_command_in_guest(command, **kwargs):
     common_parameters = ["-e", "--power-off-on-abort " + command]
-    if 'hypervisor' in kwargs.keys() and kwargs['hypervisor'] == 'firecracker':
-        return Guest(["-m 1024M", "-n", "-c 4"] + common_parameters, **kwargs)
+
+    if kwargs.get('hypervisor') == 'firecracker':
+        parameters = ["-l", "-m 2048M", "-n", "-c 4"] + common_parameters
     else:
-        return Guest(["-s"] + common_parameters, **kwargs)
+        parameters = ["-s"] + common_parameters
+
+    return Guest(parameters, **kwargs)
 
 class Guest(SupervisedProcess):
     def __init__(self, args, forward=[], hold_with_poweroff=False, show_output_on_error=True,
@@ -219,6 +223,10 @@ class Guest(SupervisedProcess):
 
         if hypervisor == 'firecracker':
             run_script = os.path.join(osv_base, "scripts/firecracker.py")
+            self.monitor_socket = None
+            physical_nic = os.getenv('OSV_FC_NIC')
+            if physical_nic:
+               args.extend(['-p', physical_nic])
         else:
             run_script = os.path.join(osv_base, "scripts/run.py")
 
@@ -233,6 +241,9 @@ class Guest(SupervisedProcess):
 
             args.extend(['--unsafe-cache'])
 
+        if _verbose_output:
+            print('Running OSv on %s with parameters: [%s]' % (hypervisor, " ".join(args)))
+
         SupervisedProcess.__init__(self, [run_script] + run_py_args + args,
             show_output=_verbose_output,
             show_output_on_error=show_output_on_error,
@@ -240,11 +251,15 @@ class Guest(SupervisedProcess):
             pipe_stdin=pipe_stdin)
 
     def kill(self):
-        s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-        s.connect(self.monitor_socket)
-        s.send('quit\n'.encode())
-        self.join()
-        s.close()
+        if self.monitor_socket != None:
+            s = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
+            s.connect(self.monitor_socket)
+            s.send('quit\n'.encode())
+            self.join()
+            s.close()
+        else:
+            os.kill(self.process.pid, signal.SIGINT)
+            self.join()
 
 def wait_for_line(guest, text):
     return _wait_for_line(guest, lambda line: line == text, text)

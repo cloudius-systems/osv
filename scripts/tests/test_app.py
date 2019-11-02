@@ -35,7 +35,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='test_app')
     parser.add_argument("-i", "--image", action="store", default=None, metavar="IMAGE",
                         help="path to disk image file. defaults to build/$mode/usr.img")
-    parser.add_argument("-p", "--hypervisor", action="store", default="qemu",
+    parser.add_argument("-p", "--hypervisor", action="store", default=None,
                         help="choose hypervisor to run: qemu, firecracker")
     parser.add_argument("--line", action="store", default=None,
                         help="expect line in guest output")
@@ -47,6 +47,15 @@ if __name__ == "__main__":
     parser.add_argument("--kill", action="store_true", help="kill the app instead of waiting until terminates itself")
 
     cmdargs = parser.parse_args()
+
+    hypervisor_name = 'qemu'
+    if cmdargs.hypervisor != None:
+        hypervisor_name = cmdargs.hypervisor
+    else:
+        hypervisor_from_env = os.getenv('OSV_HYPERVISOR')
+        if hypervisor_from_env != None:
+            hypervisor_name = hypervisor_from_env
+
     set_verbose_output(True)
-    run(cmdargs.execute, cmdargs.hypervisor, cmdargs.image, cmdargs.line,
+    run(cmdargs.execute, hypervisor_name, cmdargs.image, cmdargs.line,
         cmdargs.guest_port, cmdargs.host_port, cmdargs.input_line, cmdargs.kill)

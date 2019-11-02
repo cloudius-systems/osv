@@ -21,6 +21,7 @@ usage() {
 	  -r              Run test app only (must have been composed earlier)
 	  -R              Compose test app image with RoFS (ZFS is the default)
 	  -l              Use latest OSv kernel from build/last to build test image
+	  -f              Run OSv on firecracker
 	EOF
 	exit ${1:-0}
 }
@@ -29,17 +30,21 @@ FS=zfs
 COMPOSE_ONLY=false
 RUN_ONLY=false
 LOADER="osv-loader"
+OSV_HYPERVISOR="qemu"
 
-while getopts crRlh: OPT ; do
+while getopts crRlfh: OPT ; do
 	case ${OPT} in
 	c) COMPOSE_ONLY=true;;
 	r) RUN_ONLY=true;;
 	R) FS=rofs;;
         l) LOADER="osv-latest-loader";;
+        f) OSV_HYPERVISOR="firecracker";;
 	h) usage;;
 	?) usage 1;;
 	esac
 done
+
+export OSV_HYPERVISOR
 
 shift $((OPTIND - 1))
 [[ -z $1 ]] && usage 1
@@ -171,7 +176,7 @@ test_apps_with_tester()
 {
   compose_and_run_test_app "iperf3"
   compose_and_run_test_app "graalvm-netty-plot"
-  compose_test_app "ffmpeg" "libz" && run_test_app "ffmpeg" "video_subclip" && run_test_app "ffmpeg" "video_transcode"
+  compose_test_app "ffmpeg" && run_test_app "ffmpeg" "video_subclip" && run_test_app "ffmpeg" "video_transcode"
   compose_and_run_test_app "redis-memonly"
   compose_and_run_test_app "cli"
   compose_and_run_test_app "mysql"
@@ -182,6 +187,9 @@ test_apps_with_tester()
 
 run_unit_tests()
 {
+  # Unit tests are special as the unit tests runner depends on usr.manifest which
+  # needs to be placed in the tests module. So let us gegnerate it on the fly from the unit tests mpm
+  capstan package describe osv.unit-tests -c | grep "/tests/tst-" | grep -o "/tests/tst-.*" | sed 's/$/: dummy/' > $OSV_DIR/modules/tests/usr.manifest
   compose_test_app "unit-tests" && run_test_app "tests"
   compose_test_app "httpserver-api-tests" && run_test_app "httpserver-api" "http"
   #compose_test_app "httpserver-api-https-tests" "httpserver-api-tests" && run_test_app "httpserver-api" "https"

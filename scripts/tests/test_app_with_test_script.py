@@ -32,7 +32,7 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='test_app')
     parser.add_argument("-i", "--image", action="store", default=None, metavar="IMAGE",
                         help="path to disk image file. defaults to build/$mode/usr.img")
-    parser.add_argument("-p", "--hypervisor", action="store", default="qemu",
+    parser.add_argument("-p", "--hypervisor", action="store", default=None,
                         help="choose hypervisor to run: qemu, firecracker")
     parser.add_argument("--start_line", action="store", default=None,
                         help="expect line in guest output before executing test script")
@@ -46,5 +46,19 @@ if __name__ == "__main__":
                         help="edit command line before execution")
 
     cmdargs = parser.parse_args()
+
+    hypervisor_name = 'qemu'
+    if cmdargs.hypervisor != None:
+        hypervisor_name = cmdargs.hypervisor
+    else:
+        hypervisor_from_env = os.getenv('OSV_HYPERVISOR')
+        if hypervisor_from_env != None:
+            hypervisor_name = hypervisor_from_env
+
+    if hypervisor_name == 'firecracker':
+        os.environ['OSV_HOSTNAME'] = '172.16.0.2'
+    else:
+        os.environ['OSV_HOSTNAME'] = 'localhost'
+
     set_verbose_output(True)
-    run(cmdargs.execute, cmdargs.hypervisor, cmdargs.host_port, cmdargs.guest_port, cmdargs.script_path, cmdargs.image, cmdargs.start_line, cmdargs.end_line)
+    run(cmdargs.execute, hypervisor_name, cmdargs.host_port, cmdargs.guest_port, cmdargs.script_path, cmdargs.image, cmdargs.start_line, cmdargs.end_line)

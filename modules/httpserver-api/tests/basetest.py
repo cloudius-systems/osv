@@ -17,6 +17,10 @@ class Basetest(unittest.TestCase):
     @classmethod
     def set_config(cls, parser):
         cls.config = parser.parse_args()
+        if cls.config.hypervisor == 'firecracker':
+            module_base = os.path.join(os.path.realpath(os.path.dirname(__file__)), '..')
+            cls.config.run_script = os.path.join(module_base, "..", "..", "scripts", "firecracker.py")
+            cls.config.host = '172.16.0.2'
         cls._client = client.Client(cls.config)
 
     @classmethod
@@ -91,7 +95,7 @@ class Basetest(unittest.TestCase):
             raise Exception('Expected failure but request succeeded')
 
     @classmethod
-    def curl(cls, api, method='GET', data=None):
+    def curl(cls, api, method='GET', data=None, timeout=None):
         url = cls.get_url(api)
 
         r = {
@@ -99,7 +103,7 @@ class Basetest(unittest.TestCase):
             'POST': requests.post,
             'DELETE': requests.delete,
             'PUT': requests.put,
-        }[method](url, data=data, **cls._client.get_request_kwargs())
+        }[method](url, data=data, timeout=timeout, **cls._client.get_request_kwargs())
 
         if r.status_code != 200:
             raise HttpError(r.status_code)
@@ -122,7 +126,9 @@ class Basetest(unittest.TestCase):
     @classmethod
     def exec_os(cls):
         args = []
-        if cls.config.use_sudo:
+        if cls.config.hypervisor == 'firecracker':
+            args += [cls.config.run_script, "-l", "-m 2048M", "-n", "-c 4"]
+        elif cls.config.use_sudo:
             args += ["/usr/bin/sudo", cls.config.run_script, "-n"]
         else:
             args += [cls.config.run_script, "--forward", "tcp::" + str(cls._client.get_port()) + "-:" + str(cls._client.get_port())]
@@ -142,7 +148,7 @@ class Basetest(unittest.TestCase):
 
         path = cls.path_by_nick(cls.os_api, "os_poweroff")
         try:
-            cls.curl(path, method='POST')
+            cls.curl(path, method='POST', timeout=0.5)
         except:
             pass
         retry = 10
