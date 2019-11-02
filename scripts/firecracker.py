@@ -6,6 +6,7 @@ import os
 import stat
 import json
 import subprocess
+import signal
 import time
 import argparse
 import re
@@ -16,6 +17,19 @@ from datetime import datetime
 
 verbose = False
 
+stty_params = None
+
+devnull = open('/dev/null', 'w')
+
+def stty_save():
+    global stty_params
+    p = subprocess.Popen(["stty", "-g"], stdout=subprocess.PIPE, stderr=devnull)
+    stty_params, err = p.communicate()
+    stty_params = stty_params.strip()
+
+def stty_restore():
+    if stty_params:
+        subprocess.call(["stty", stty_params], stderr=devnull)
 
 class ApiException(Exception):
     pass
@@ -212,6 +226,7 @@ def start_firecracker(firecracker_path, socket_path):
         os.unlink(socket_path)
 
     # Start firecracker process to communicate over specified UNIX socket file
+    stty_save()
     return subprocess.Popen([firecracker_path, '--api-sock', socket_path],
                            stdout=sys.stdout, stderr=subprocess.STDOUT)
 
@@ -219,6 +234,7 @@ def start_firecracker_with_no_api(firecracker_path, firecracker_config_json):
     #  Start firecracker process and pass configuration JSON as a file
     api_file = tempfile.NamedTemporaryFile(delete=False)
     api_file.write(firecracker_config_json)
+    stty_save()
     return subprocess.Popen([firecracker_path, "--no-api", "--config-file", api_file.name],
                            stdout=sys.stdout, stderr=subprocess.STDOUT), api_file.name
 
@@ -313,15 +329,23 @@ def main(options):
     except ApiException as e:
         print("Failed to make firecracker API call: %s." % e)
         firecracker.kill()
+        stty_restore()
         exit(-1)
 
     except Exception as e:
         print("Failed to run OSv on firecracker due to: ({0}): {1} !!!".format(e.errno, e.strerror))
         firecracker.kill()
+        stty_restore()
         exit(-1)
 
     print_time("Waiting for firecracker process to terminate")
-    firecracker.wait()
+    try:
+        firecracker.wait()
+    except KeyboardInterrupt:
+        os.kill(firecracker.pid, signal.SIGINT)
+
+    stty_restore()
+
     if options.api_less:
         os.unlink(config_file_path)
     print_time("End")
