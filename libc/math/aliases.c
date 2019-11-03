@@ -20,6 +20,11 @@ double __log2_finite(double x)
 	return log2(x);
 }
 
+double __log2f_finite(double x)
+{
+	return log2f(x);
+}
+
 double __log_finite(double x)
 {
 	return log(x);
