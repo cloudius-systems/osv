@@ -187,6 +187,7 @@ void thread::setup_tcb()
     void* user_tls_data;
     size_t user_tls_size = 0;
     size_t executable_tls_size = 0;
+    size_t aligned_executable_tls_size = 0;
     if (_app_runtime) {
         auto obj = _app_runtime->app.lib();
         assert(obj);
@@ -194,6 +195,7 @@ void thread::setup_tcb()
         user_tls_data = obj->initial_tls();
         if (obj->is_executable()) {
            executable_tls_size = obj->get_tls_size();
+           aligned_executable_tls_size = obj->get_aligned_tls_size();
         }
     }
 
@@ -222,7 +224,7 @@ void thread::setup_tcb()
         // If executable copy its TLS block data at the designated offset
         // at the end of area as described in the ascii art for executables
         // TLS layout
-        auto executable_tls_offset = total_tls_size - executable_tls_size;
+        auto executable_tls_offset = total_tls_size - aligned_executable_tls_size;
         _app_runtime->app.lib()->copy_local_tls(p + executable_tls_offset);
     }
     _tcb = static_cast<thread_control_block*>(p + total_tls_size);

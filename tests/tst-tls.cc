@@ -42,8 +42,10 @@ extern __thread int ex3 __attribute__ ((tls_model ("initial-exec")));
 // builds all tests as shared objects (.so), and the linker will report an
 // error, because local-exec is not allowed in shared libraries, just in
 // executables (including PIE).
-__thread int v7 __attribute__ ((tls_model ("local-exec"))) = 789;
-__thread int v8 __attribute__ ((tls_model ("local-exec")));
+__thread long v7 __attribute__ ((tls_model ("local-exec"))) = 987UL;
+__thread int v8 __attribute__ ((tls_model ("local-exec"))) = 789;
+__thread int v9 __attribute__ ((tls_model ("local-exec")));
+__thread int v10 __attribute__ ((tls_model ("local-exec"))) = 1111;
 #endif
 
 extern void external_library();
@@ -67,7 +69,9 @@ int main(int argc, char** argv)
     report(v6 == 678, "v6");
     report(ex3 == 765, "ex3");
 #ifndef __SHARED_OBJECT__
-    report(v7 == 789, "v7");
+    report(v7 == 987UL, "v7");
+    report(v8 == 789, "v8");
+    report(v10 == 1111, "v10");
 #endif
 
     external_library();
@@ -101,7 +105,7 @@ int main(int argc, char** argv)
             report(v6 == 678, "v6 in new thread");
             report(ex3 == 765, "ex3 in new thread");
 #ifndef __SHARED_OBJECT__
-            report(v7 == 789, "v7 in new thread");
+            report(v7 == 987UL, "v7 in new thread");
 #endif
 
             external_library();
@@ -120,8 +124,8 @@ int main(int argc, char** argv)
 static void before_main(void) __attribute__((constructor));
 static void before_main(void)
 {
-    report(v7 == 789, "v7 in init function");
-    report(v8 == 0, "v8 in init function");
+    report(v7 == 987UL, "v7 in init function");
+    report(v9 == 0, "v8 in init function");
 }
 #endif
 

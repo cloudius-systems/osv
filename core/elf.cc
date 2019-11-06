@@ -461,6 +461,7 @@ void object::load_segments()
             _tls_segment = _base + phdr.p_vaddr;
             _tls_init_size = phdr.p_filesz;
             _tls_uninit_size = phdr.p_memsz - phdr.p_filesz;
+            _tls_alignment = phdr.p_align;
             break;
         default:
             abort("Unknown p_type in executable %s: %d\n", pathname(), phdr.p_type);
@@ -469,13 +470,11 @@ void object::load_segments()
     if (!is_core() && _ehdr.e_type == ET_EXEC && !_is_executable) {
         abort("Statically linked executables are not supported!\n");
     }
-    // As explained in issue #352, we currently don't correctly support TLS
-    // used in PIEs.
     if (_is_executable && _tls_segment) {
-        auto tls_size = _tls_init_size + _tls_uninit_size;
+        auto needed_tls_size = get_aligned_tls_size();
         ulong pie_static_tls_maximum_size = &_pie_static_tls_end - &_pie_static_tls_start;
-        if (tls_size > pie_static_tls_maximum_size) {
-            std::cout << "WARNING: " << pathname() << " is a PIE using TLS of size " << tls_size
+        if (needed_tls_size > pie_static_tls_maximum_size) {
+            std::cout << "WARNING: " << pathname() << " is a PIE using TLS of size " << needed_tls_size
                   << " which is greater than " << pie_static_tls_maximum_size << " bytes limit. "
                   << "Either increase the size of TLS reserve in arch/x64/loader.ld or "
                   << "link with '-shared' instead of '-pie'.\n";
@@ -1001,6 +1000,11 @@ void object::unload_needed()
 ulong object::get_tls_size()
 {
     return _tls_init_size + _tls_uninit_size;
+}
+
+ulong object::get_aligned_tls_size()
+{
+    return align_up(_tls_init_size + _tls_uninit_size, _tls_alignment);
 }
 
 void object::collect_dependencies(std::unordered_set<elf::object*>& ds)
