@@ -28,6 +28,7 @@ usage() {
 	  fs=zfs|rofs|ramfs             Specify the filesystem of the image partition
 	  fs_size=N                     Specify the size of the image in bytes
 	  fs_size_mb=N                  Specify the size of the image in MiB
+	  app_local_exec_tls_size=N     Specify the size of app local TLS in bytes; the default is 64
 	  usrskel=<*.skel>              Specify the base manifest for the image
 	  <module_makefile_arg>=<value> Pass value of module_makefile_arg to an app/module makefile
 	                                (can be used to customize specific app/module build process)

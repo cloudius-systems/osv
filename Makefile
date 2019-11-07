@@ -424,6 +424,10 @@ kernel_base := 0x200000
 lzkernel_base := 0x100000
 kernel_vm_base := 0x40200000
 
+# the default of 64 bytes can be overridden by passing the app_local_exec_tls_size
+# environment variable to the make or scripts/build
+app_local_exec_tls_size := 0x40
+
 $(out)/arch/x64/boot16.o: $(out)/lzloader.elf
 $(out)/boot.bin: arch/x64/boot16.ld $(out)/arch/x64/boot16.o
 	$(call quiet, $(LD) -o $@ -T $^, LD $@)
@@ -1886,7 +1890,7 @@ stage1: $(stage1_targets) links
 
 $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o
 	$(call quiet, $(LD) -o $@ --defsym=OSV_KERNEL_BASE=$(kernel_base) \
-	    --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) \
+	    --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) --defsym=APP_LOCAL_EXEC_TLS_SIZE=$(app_local_exec_tls_size) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
 	    $(^:%.ld=-T %.ld) \
 	    --whole-archive \

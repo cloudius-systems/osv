@@ -471,13 +471,20 @@ void object::load_segments()
         abort("Statically linked executables are not supported!\n");
     }
     if (_is_executable && _tls_segment) {
-        auto needed_tls_size = get_aligned_tls_size();
+        auto app_tls_size = get_aligned_tls_size();
         ulong pie_static_tls_maximum_size = &_pie_static_tls_end - &_pie_static_tls_start;
-        if (needed_tls_size > pie_static_tls_maximum_size) {
-            std::cout << "WARNING: " << pathname() << " is a PIE using TLS of size " << needed_tls_size
-                  << " which is greater than " << pie_static_tls_maximum_size << " bytes limit. "
-                  << "Either increase the size of TLS reserve in arch/x64/loader.ld or "
-                  << "link with '-shared' instead of '-pie'.\n";
+        if (app_tls_size > pie_static_tls_maximum_size) {
+            // The reservation at the end of the kernel TLS is NOT big enough
+            // to hold the app static TLS. Let us calculate what the reservation should be
+            // and inform user how to relink kernel
+            auto kernel_tls_size = sched::kernel_tls_size();
+            auto kernel_tls_used_size = kernel_tls_size - pie_static_tls_maximum_size;
+            auto kernel_tls_needed_size = align_up(kernel_tls_used_size + app_tls_size, 64UL);
+            auto app_tls_needed_size = kernel_tls_needed_size - kernel_tls_used_size;
+            std::cout << "WARNING: " << pathname() << " is a PIE using TLS of size " << app_tls_size
+                  << " which is greater than the " << pie_static_tls_maximum_size << " bytes limit. "
+                  << "Either re-link the kernel by adding 'app_local_exec_tls_size=" << app_tls_needed_size
+                  << "' to ./scripts/build or re-link the app with '-shared' instead of '-pie'.\n";
         }
     }
 }

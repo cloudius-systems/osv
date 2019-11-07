@@ -92,7 +92,7 @@ SECTIONS
         *(.tbss .tbss.* .gnu.linkonce.tb.*)
         _pie_static_tls_start = .;
         /* This is a reserve intended for executables' (pie or non-pie) TLS block */
-        . = . + 64;
+        . = . + APP_LOCAL_EXEC_TLS_SIZE;
         . = ALIGN(64);
         _pie_static_tls_end = .;
     } :tls :text
