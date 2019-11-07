@@ -109,7 +109,7 @@ scripts/build -j$(nproc)
 
 to build an image of the OSv kernel and the default application.
 
-Command nproc (embedded in bash/core-utils) will calculte the number of jobs/threads for make and scripts/build automatically.
+Command nproc (embedded in bash/core-utils) will calculate the number of jobs/threads for make and scripts/build automatically.
 Alternatively, the environment variable MAKEFLAGS can be exported as follows:
 
 ```
