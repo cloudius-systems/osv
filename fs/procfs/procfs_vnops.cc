@@ -7,6 +7,7 @@
 
 #include <unistd.h>
 
+#include <osv/app.hh>
 #include <osv/mount.h>
 #include <osv/prex.h>
 #include <osv/sched.hh>
@@ -144,6 +145,17 @@ static std::string procfs_hostname()
     return std::string(hostname);
 }
 
+static std::string procfs_exe()
+{
+    auto app = sched::thread::current_app();
+
+    if (app && app->lib()) {
+        return app->lib()->pathname();
+    } else {
+        return "";
+    }
+}
+
 static int
 procfs_mount(mount* mp, const char *dev, int flags, const void* data)
 {
@@ -153,6 +165,9 @@ procfs_mount(mount* mp, const char *dev, int flags, const void* data)
     self->add("maps", inode_count++, mmu::procfs_maps);
     self->add("stat", inode_count++, procfs_stats);
     self->add("status", inode_count++, procfs_status);
+
+    auto exe = make_shared<pseudo_symlink_node>(inode_count++, procfs_exe);
+    self->add("exe", exe);
 
     auto kernel = make_shared<pseudo_dir_node>(inode_count++);
     kernel->add("hostname", inode_count++, procfs_hostname);
@@ -216,7 +231,7 @@ vnops procfs_vnops = {
     (vnop_link_t)     vop_eperm,  // vop_link
     (vnop_cache_t)     nullptr,   // vop_arc
     (vnop_fallocate_t) vop_nullop, // vop_fallocate
-    (vnop_readlink_t)  vop_nullop, // vop_readlink
+    pseudofs::readlink,            // vop_readlink
     (vnop_symlink_t)   vop_nullop, // vop_symlink
 };
 

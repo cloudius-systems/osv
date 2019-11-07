@@ -27,6 +27,12 @@ static pseudo_file_node *to_file_node(vnode *vp) {
     return dynamic_cast<pseudo_file_node *>(np);
 }
 
+static pseudo_symlink_node *to_symlink_node(vnode *vp) {
+    auto *np = to_node(vp);
+
+    return dynamic_cast<pseudo_symlink_node *>(np);
+}
+
 int open(file *fp) {
     auto *np = to_file_node(fp->f_dentry->d_vnode);
     if (np) {
@@ -63,6 +69,18 @@ int read(vnode *vp, file *fp, uio *uio, int ioflags) {
         len = uio->uio_resid;
 
     return uiomove(const_cast<char *>(data->data()) + uio->uio_offset, len, uio);
+}
+
+int readlink(vnode *vp, uio *uio) {
+    if (vp->v_type != VLNK)
+        return EINVAL;
+
+    auto *np = to_symlink_node(vp);
+    auto *target_path = np->target_path();
+    if (uio->uio_offset >= (off_t) target_path->size())
+        return 0;
+
+    return uiomove(const_cast<char *>(target_path->data()) + uio->uio_offset, target_path->size(), uio);
 }
 
 int write(vnode *vp, uio *uio, int ioflags) {
@@ -135,6 +153,8 @@ int readdir(vnode *vp, file *fp, dirent *dir) {
         auto np = dir_entry->second;
         if (np->type() == VDIR) {
             dir->d_type = DT_DIR;
+        } else if (np->type() == VLNK) {
+            dir->d_type = DT_LNK;
         } else {
             dir->d_type = DT_REG;
         }

@@ -62,6 +62,27 @@ private:
     function<string()> _gen;
 };
 
+class pseudo_symlink_node : public pseudo_node {
+public:
+    pseudo_symlink_node(uint64_t ino, function<string()> gen)
+            : pseudo_node(ino, VLNK), _target_path_gen(gen) {}
+
+    virtual off_t size() const override {
+        return 0;
+    }
+
+    virtual mode_t mode() const override {
+        return S_IRUSR | S_IRGRP | S_IROTH;
+    }
+
+    string *target_path() const {
+        return new string(_target_path_gen());
+    }
+
+private:
+    function<string()> _target_path_gen;
+};
+
 class pseudo_dir_node : public pseudo_node {
 public:
     pseudo_dir_node(uint64_t ino) : pseudo_node(ino, VDIR) {}
@@ -111,6 +132,8 @@ int open(file *fp);
 int close(vnode *vp, file *fp);
 
 int read(vnode *vp, file *fp, uio *uio, int ioflags);
+
+int readlink(vnode *vp, uio *uio);
 
 int write(vnode *vp, uio *uio, int ioflags);
 
