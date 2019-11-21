@@ -1,4 +1,4 @@
-***OSv was originally designed and implemented by Cloudius Systems (now ScyllaDB) however currently it is being maintained and enhanced by a small community of volunteers. If you are into systems programming or want to learn and help us improve OSv please contact us on [OSv Google Group forum](https://groups.google.com/forum/#!forum/osv-dev).***
+***OSv was originally designed and implemented by Cloudius Systems (now ScyllaDB) however currently it is being maintained and enhanced by a small community of volunteers. If you are into systems programming or want to learn and help us improve OSv please contact us on [OSv Google Group forum](https://groups.google.com/forum/#!forum/osv-dev). For details on how to format and send patches, please read [this wiki](https://github.com/cloudius-systems/osv/wiki/Formatting-and-sending-patches) (__we do NOT accept pull requests__).***
 
 # OSv
 
