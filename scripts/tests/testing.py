@@ -239,7 +239,7 @@ class Guest(SupervisedProcess):
             for rule in forward:
                 args.extend(['--forward', 'tcp::%s-:%s' % rule])
 
-            args.extend(['--unsafe-cache'])
+            args.extend(['--block-device-cache', 'unsafe'])
 
         if _verbose_output:
             print('Running OSv on %s with parameters: [%s]' % (hypervisor, " ".join(args)))

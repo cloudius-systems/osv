@@ -90,8 +90,10 @@ def is_direct_io_supported(path):
 
 def start_osv_qemu(options):
 
-    if options.unsafe_cache or not is_direct_io_supported(options.image_file):
+    if not is_direct_io_supported(options.image_file):
         aio = 'cache=unsafe,aio=threads'
+    elif options.block_device_cache != None:
+        aio = 'cache=%s,aio=threads'% options.block_device_cache
     else:
         aio = 'cache=none,aio=native'
 
@@ -464,8 +466,8 @@ if __name__ == "__main__":
                         help="don't restart qemu automatically (allow debugger to connect on early errors)")
     parser.add_argument("-s", "--with-signals", action="store_true", default=False,
                         help="qemu only. handle signals instead of passing keys to the guest. pressing ctrl+c from console will kill the emulator")
-    parser.add_argument("-u", "--unsafe-cache", action="store_true",
-                        help="Set cache to unsafe. Use it at your own risk.")
+    parser.add_argument("--block-device-cache", action="store", default=None,
+                        help="Set QEMU block device cache to: none, writethrough, writeback, directsync or unsafe.")
     parser.add_argument("-g", "--graphics", action="store_true",
                         help="Enable graphics mode.")
     parser.add_argument("-V", "--verbose", action="store_true",
