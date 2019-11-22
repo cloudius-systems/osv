@@ -44,10 +44,11 @@ void poweroff(void)
         // On hypervisors that do not support ACPI like firecracker we
         // resort to a reset using the 8042 PS/2 Controller ("keyboard controller")
         // as a way to shutdown the VM
-        //TODO: Figure out if there is another method we could try
-        // first to to power off on non-firecracker platforms
-        // without using ACPI
         processor::outb(0xfe, 0x64);
+        // If the above did not work which would be the case on qemu microvm,
+        // then cause triple fault by loading a broken IDT and triggering an interrupt.
+        processor::lidt(processor::desc_ptr(0, 0));
+        __asm__ __volatile__("int3");
     }
 
     // We shouldn't get here on x86.
