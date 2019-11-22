@@ -32,7 +32,10 @@ def format_args(args):
     def format_arg(arg):
         if ' ' in arg:
             return '"%s"' % arg
-        return arg
+        elif arg[0] == '-':
+            return '\\\n' + arg
+        else:
+            return arg
 
     return ' '.join(map(format_arg, args))
 
