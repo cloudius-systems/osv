@@ -493,6 +493,7 @@ ifeq ($(arch),aarch64)
 
 kernel_base := 0x40080000
 kernel_vm_base := 0x40080000
+app_local_exec_tls_size := 0x0
 
 include $(libfdt_base)/Makefile.libfdt
 libfdt-source := $(patsubst %.c, $(libfdt_base)/%.c, $(LIBFDT_SRCS))
@@ -1888,10 +1889,16 @@ stage1_targets = $(out)/arch/$(arch)/boot.o $(out)/loader.o $(out)/runtime.o $(d
 stage1: $(stage1_targets) links
 .PHONY: stage1
 
-$(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o
+loader_options_dep = $(out)/arch/$(arch)/options/loader_options.ld
+$(loader_options_dep): stage1
+	@if [ '$(shell cat $(loader_options_dep) 2>&1)' != 'APP_LOCAL_EXEC_TLS_SIZE = $(app_local_exec_tls_size);' ]; then \
+		mkdir -p $(out)/arch/$(arch)/options && echo -n "APP_LOCAL_EXEC_TLS_SIZE = $(app_local_exec_tls_size);" > $(loader_options_dep) ; \
+	fi
+
+$(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(loader_options_dep)
 	$(call quiet, $(LD) -o $@ --defsym=OSV_KERNEL_BASE=$(kernel_base) \
-	    --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) --defsym=APP_LOCAL_EXEC_TLS_SIZE=$(app_local_exec_tls_size) \
-		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags \
+	    --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) \
+		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch)/options \
 	    $(^:%.ld=-T %.ld) \
 	    --whole-archive \
 	      $(libstdc++.a) $(libgcc_eh.a) \

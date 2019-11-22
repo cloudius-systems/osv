@@ -7,6 +7,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+INCLUDE "loader_options.ld"
 SECTIONS
 {
 	/* Set the initial program counter to one page beyond the minimal
