@@ -57,7 +57,7 @@ void virtio_driver::setup_features()
     //to the virtio spec
     for (int i = 0; i < 64; i++)
         if (subset & (1 << i))
-            virtio_d("%s: found feature intersec of bit %d", __FUNCTION__,  i);
+            virtio_d("%s: found feature intersec of bit %d\n", __FUNCTION__,  i);
 
     if (subset & (1 << VIRTIO_RING_F_INDIRECT_DESC))
         set_indirect_buf_cap(true);
@@ -135,15 +135,13 @@ void virtio_driver::probe_virt_queues()
 
         // Activate queue
         _dev.setup_queue(queue);
+        _dev.activate_queue(_num_queues);
         _num_queues++;
 
         // Debug print
-        virtio_d("Queue[%d] -> size %d, paddr %x", (_num_queues-1), qsize, queue->get_paddr());
+        virtio_d("Queue[%d] -> size %d, paddr %x\n", (_num_queues-1), qsize, queue->get_paddr());
 
     } while (true);
-
-    for (u32 _q = 0; _q < _num_queues; _q++)
-        _dev.activate_queue(_q);
 }
 
 vring* virtio_driver::get_virt_queue(unsigned idx)

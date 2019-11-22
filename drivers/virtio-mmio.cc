@@ -86,7 +86,6 @@ void mmio_device::setup_queue(vring* queue)
 void mmio_device::activate_queue(int queue)
 {   //
     // Make it ready
-    select_queue(queue);
     mmio_setl(_addr_mmio + VIRTIO_MMIO_QUEUE_READY, 1 );
 }
 

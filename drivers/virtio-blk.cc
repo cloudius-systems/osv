@@ -117,7 +117,7 @@ blk::blk(virtio_device& virtio_dev)
 {
     _driver_name = "virtio-blk";
     _id = _instance++;
-    virtio_i("VIRTIO BLK INSTANCE %d", _id);
+    virtio_i("VIRTIO BLK INSTANCE %d\n", _id);
 
     // Steps 4, 5 & 6 - negotiate and confirm features
     setup_features();

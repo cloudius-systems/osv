@@ -200,7 +200,6 @@ void virtio_modern_pci_device::setup_queue(vring *queue)
 
 void virtio_modern_pci_device::activate_queue(int queue)
 {
-    select_queue(queue);
     _common_cfg->virtio_conf_writew(COMMON_CFG_OFFSET_OF(queue_enable), 1);
 }
 
