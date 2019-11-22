@@ -118,7 +118,7 @@ bool mmio_device::parse_config()
 
     // Check device version
     u32 version = mmio_getl(_addr_mmio + VIRTIO_MMIO_VERSION);
-    if (version < 1 || version > 2) {
+    if (version != 2) {
         debugf( "Version %ld not supported!\n", version);
         return false;
     }
