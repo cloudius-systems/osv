@@ -68,7 +68,13 @@ def set_imgargs(options):
     if options.sampler:
         execute = '--sampler=%d %s' % (int(options.sampler), execute)
 
+    if options.hypervisor == 'qemu_microvm':
+        execute = '--nopci ' + execute
+
     options.osv_cmdline = execute
+    if options.kernel or options.hypervisor == 'qemu_microvm':
+        return
+
     cmdline = [os.path.join(osv_base, "scripts/imgedit.py"), "setargs", options.image_file, execute]
     if options.dry_run:
         print(format_args(cmdline))
@@ -101,7 +107,7 @@ def start_osv_qemu(options):
         "-m", options.memsize,
         "-smp", options.vcpus]
 
-    if not options.novnc:
+    if not options.novnc and options.hypervisor != 'qemu_microvm':
         args += [
         "-vnc", options.vnc]
     else:
@@ -116,7 +122,7 @@ def start_osv_qemu(options):
         args += [
         "-display", "sdl"]
 
-    if options.kernel:
+    if options.kernel or options.hypervisor == 'qemu_microvm':
         boot_index = ""
         args += [
         "-kernel", options.kernel_file,
@@ -124,7 +130,13 @@ def start_osv_qemu(options):
     else:
         boot_index = ",bootindex=0"
 
-    if options.sata:
+    if options.hypervisor == 'qemu_microvm':
+        args += [
+        "-M", "microvm,x-option-roms=off,pit=off,pic=off,rtc=off",
+        "-nodefaults", "-no-user-config", "-no-reboot", "-global", "virtio-mmio.force-legacy=off",
+        "-device", "virtio-blk-device,id=blk0,drive=hd0,scsi=off%s%s" % (boot_index, options.virtio_device_suffix),
+        "-drive", "file=%s,if=none,id=hd0,%s" % (options.image_file, aio)]
+    elif options.sata:
         args += [
         "-machine", "q35",
         "-drive", "file=%s,if=none,id=hd0,media=disk,%s" % (options.image_file, aio),
@@ -156,6 +168,8 @@ def start_osv_qemu(options):
     for idx in range(int(options.nics)):
         if options.vmxnet3:
             net_device_options = ['vmxnet3']
+        elif options.hypervisor == 'qemu_microvm':
+            net_device_options = ['virtio-net-device']
         else:
             net_device_options = ['virtio-net-pci']
 
@@ -193,14 +207,17 @@ def start_osv_qemu(options):
 
         args += ["-device", net_device_options_str]
 
-    args += ["-device", "virtio-rng-pci%s" % options.virtio_device_suffix]
+    if options.hypervisor != 'qemu_microvm':
+        args += ["-device", "virtio-rng-pci%s" % options.virtio_device_suffix]
 
-    if options.hypervisor == "kvm":
+    if options.hypervisor == "kvm" or options.hypervisor == 'qemu_microvm':
         args += ["-enable-kvm", "-cpu", "host,+x2apic"]
     elif options.hypervisor == "none" or options.hypervisor == "qemu":
         pass
 
-    if options.detach:
+    if options.hypervisor == 'qemu_microvm':
+        args += ["-serial", "stdio"]
+    elif options.detach:
         args += ["-daemonize"]
     else:
         signal_option = ('off', 'on')[options.with_signals]
@@ -405,6 +422,7 @@ def start_osv(options):
             "xenpv" : start_osv_xen,
             "none" : start_osv_qemu,
             "qemu" : start_osv_qemu,
+            "qemu_microvm" : start_osv_qemu,
             "kvm" : start_osv_qemu,
             "vmware" : start_osv_vmware,
     }
@@ -459,7 +477,7 @@ if __name__ == "__main__":
     parser.add_argument("-e", "--execute", action="store", default=None, metavar="CMD",
                         help="edit command line before execution")
     parser.add_argument("-p", "--hypervisor", action="store", default="auto",
-                        help="choose hypervisor to run: kvm, xen, xenpv, vmware, none (plain qemu)")
+                        help="choose hypervisor to run: kvm, qemu_microvm, xen, xenpv, vmware, none (plain qemu)")
     parser.add_argument("-D", "--detach", action="store_true",
                         help="run in background, do not connect the console")
     parser.add_argument("-H", "--no-shutdown", action="store_true",
