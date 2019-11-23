@@ -1889,16 +1889,17 @@ stage1_targets = $(out)/arch/$(arch)/boot.o $(out)/loader.o $(out)/runtime.o $(d
 stage1: $(stage1_targets) links
 .PHONY: stage1
 
-loader_options_dep = $(out)/arch/$(arch)/options/loader_options.ld
+loader_options_dep = $(out)/arch/$(arch)/loader_options.ld
 $(loader_options_dep): stage1
+	$(makedir)
 	@if [ '$(shell cat $(loader_options_dep) 2>&1)' != 'APP_LOCAL_EXEC_TLS_SIZE = $(app_local_exec_tls_size);' ]; then \
-		mkdir -p $(out)/arch/$(arch)/options && echo -n "APP_LOCAL_EXEC_TLS_SIZE = $(app_local_exec_tls_size);" > $(loader_options_dep) ; \
+		echo -n "APP_LOCAL_EXEC_TLS_SIZE = $(app_local_exec_tls_size);" > $(loader_options_dep) ; \
 	fi
 
 $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(loader_options_dep)
 	$(call quiet, $(LD) -o $@ --defsym=OSV_KERNEL_BASE=$(kernel_base) \
 	    --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) \
-		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch)/options \
+		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
 	    $(^:%.ld=-T %.ld) \
 	    --whole-archive \
 	      $(libstdc++.a) $(libgcc_eh.a) \
