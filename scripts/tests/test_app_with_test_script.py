@@ -3,12 +3,15 @@ from testing import *
 import argparse
 import runpy
 
-def run(command, hypervisor_name, host_port, guest_port, script_path, image_path=None, start_line=None, end_line=None):
+def run(command, hypervisor_name, host_port, guest_port, script_path, image_path=None, start_line=None, end_line=None, use_vhost_networking=False):
     py_args = []
     if image_path != None:
         py_args = ['--image', image_path]
 
-    app = run_command_in_guest(command, hypervisor=hypervisor_name, run_py_args=py_args, forward=[(host_port, guest_port)])
+    if use_vhost_networking and hypervisor_name != 'firecracker':
+        app = run_command_in_guest(command, hypervisor=hypervisor_name, run_py_args=py_args + ['-nv'])
+    else:
+        app = run_command_in_guest(command, hypervisor=hypervisor_name, run_py_args=py_args, forward=[(host_port, guest_port)])
 
     if start_line != None:
         wait_for_line_contains(app, start_line)
@@ -44,6 +47,7 @@ if __name__ == "__main__":
                         help="path to test script path")
     parser.add_argument("-e", "--execute", action="store", default='runscript /run/default;', metavar="CMD",
                         help="edit command line before execution")
+    parser.add_argument("-n", "--vhost", action="store_true", help="setup tap/vhost networking")
 
     cmdargs = parser.parse_args()
 
@@ -57,8 +61,10 @@ if __name__ == "__main__":
 
     if hypervisor_name == 'firecracker':
         os.environ['OSV_HOSTNAME'] = '172.16.0.2'
+    elif cmdargs.vhost:
+        os.environ['OSV_HOSTNAME'] = '192.168.122.76'
     else:
         os.environ['OSV_HOSTNAME'] = 'localhost'
 
     set_verbose_output(True)
-    run(cmdargs.execute, hypervisor_name, cmdargs.host_port, cmdargs.guest_port, cmdargs.script_path, cmdargs.image, cmdargs.start_line, cmdargs.end_line)
+    run(cmdargs.execute, hypervisor_name, cmdargs.host_port, cmdargs.guest_port, cmdargs.script_path, cmdargs.image, cmdargs.start_line, cmdargs.end_line, cmdargs.vhost)
