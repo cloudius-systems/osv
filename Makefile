@@ -447,7 +447,7 @@ $(out)/arch/x64/vmlinuz-boot32.o: $(out)/loader-stripped.elf
 $(out)/arch/x64/vmlinuz-boot32.o: ASFLAGS += -I$(out) -DOSV_KERNEL_SIZE=$(kernel_size)
 
 $(out)/vmlinuz-boot.bin: $(out)/arch/x64/vmlinuz-boot32.o arch/x64/vmlinuz-boot.ld
-	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -T arch/x64/vmlinuz-boot.ld -o $@ \
+	$(call quiet, $(LD) -nostartfiles -static -nodefaultlibs -o $@ \
 	                $(filter-out %.bin, $(^:%.ld=-T %.ld)), LD $@)
 
 $(out)/vmlinuz.bin: $(out)/vmlinuz-boot.bin $(out)/loader-stripped.elf
