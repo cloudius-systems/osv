@@ -65,7 +65,7 @@ BOOST_AUTO_TEST_CASE(test_connections_get_accepted_even_when_backlog_gets_overfl
     BOOST_REQUIRE(bind(listen_s, (struct sockaddr *) &laddr, sizeof(laddr)) == 0);
     BOOST_REQUIRE(listen(listen_s, backlog_size) == 0);
 
-    BOOST_MESSAGE("listening...");
+    BOOST_TEST_MESSAGE("listening...");
 
     for (int i = 0; i < n_connections; i++) {
         int s = socket(AF_INET, SOCK_STREAM, 0);
@@ -76,23 +76,23 @@ BOOST_AUTO_TEST_CASE(test_connections_get_accepted_even_when_backlog_gets_overfl
         inet_aton("127.0.0.1", &raddr.sin_addr);
         raddr.sin_port = htons(LISTEN_PORT);
 
-        BOOST_MESSAGE("connecting...");
+        BOOST_TEST_MESSAGE("connecting...");
 
         BOOST_REQUIRE(connect(s, (struct sockaddr *)&raddr, sizeof(raddr)) == 0);
         sockets_to_close.push_back(s);
     }
 
-    BOOST_MESSAGE("starting to accept...");
+    BOOST_TEST_MESSAGE("starting to accept...");
 
     for (int i = 0; i < n_connections; i++) {
         int client_s = accept_with_timeout(listen_s, 3);
         BOOST_REQUIRE(client_s >= 0);
-        BOOST_MESSAGE("accepted");
+        BOOST_TEST_MESSAGE("accepted");
 
         sockets_to_close.push_back(client_s);
     }
 
-    BOOST_MESSAGE("closing...");
+    BOOST_TEST_MESSAGE("closing...");
 
     for (auto& fd : sockets_to_close) {
         close(fd);
@@ -127,7 +127,7 @@ BOOST_AUTO_TEST_CASE(test_clients_are_not_reset_when_backlog_is_full_and_they_wr
 
     BOOST_REQUIRE(listen(listen_s, backlog_size) == 0);
 
-    BOOST_MESSAGE("listening...");
+    BOOST_TEST_MESSAGE("listening...");
 
     std::vector<std::thread*> threads;
 
@@ -172,7 +172,7 @@ BOOST_AUTO_TEST_CASE(test_clients_are_not_reset_when_backlog_is_full_and_they_wr
 
     for (int i = 0; i < n_connections; i++) {
         int client_s = accept_with_timeout(listen_s, 3);
-        BOOST_MESSAGE("accepted");
+        BOOST_TEST_MESSAGE("accepted");
 
         threads.push_back(new std::thread([client_s] {
             auto close_at = _clock::now() + std::chrono::milliseconds(50);

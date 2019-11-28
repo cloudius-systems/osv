@@ -85,7 +85,7 @@ BOOST_AUTO_TEST_CASE(test_typical_timer_insertion_and_expiry)
     test_timer t2(m2);
     test_timer t3(m4);
 
-    BOOST_MESSAGE("Expire when no timers inserted yet");
+    BOOST_TEST_MESSAGE("Expire when no timers inserted yet");
     _timers.expire(m3);
     BOOST_REQUIRE(_timers.pop_expired() == nullptr);
     BOOST_REQUIRE(_timers.get_next_timeout() == Clock::time_point::max());
@@ -94,12 +94,12 @@ BOOST_AUTO_TEST_CASE(test_typical_timer_insertion_and_expiry)
     BOOST_REQUIRE_EQUAL(_timers.insert(t3), false);
     BOOST_REQUIRE_EQUAL(_timers.insert(t1), true);
 
-    BOOST_MESSAGE("Expiring now should yield the first two timers");
+    BOOST_TEST_MESSAGE("Expiring now should yield the first two timers");
     _timers.expire(m3);
     BOOST_REQUIRE(get_expired(_timers) == timer_ptr_set({&t1, &t2}));
     BOOST_REQUIRE(_timers.get_next_timeout() == m4);
 
-    BOOST_MESSAGE("Expiring at the same moment again yields no timers");
+    BOOST_TEST_MESSAGE("Expiring at the same moment again yields no timers");
     _timers.expire(m3);
     BOOST_REQUIRE(_timers.pop_expired() == nullptr);
     BOOST_REQUIRE(_timers.get_next_timeout() == m4);
@@ -110,12 +110,12 @@ BOOST_AUTO_TEST_CASE(test_typical_timer_insertion_and_expiry)
     BOOST_REQUIRE_EQUAL(_timers.insert(t5), false);
     BOOST_REQUIRE_EQUAL(_timers.insert(t4), false);
 
-    BOOST_MESSAGE("Expire two timers at the same time point");
+    BOOST_TEST_MESSAGE("Expire two timers at the same time point");
     _timers.expire(m4);
     BOOST_REQUIRE(get_expired(_timers) == timer_ptr_set({&t3, &t4}));
     BOOST_REQUIRE(_timers.get_next_timeout() == m5);
 
-    BOOST_MESSAGE("Expire last timer");
+    BOOST_TEST_MESSAGE("Expire last timer");
     _timers.expire(m6);
     BOOST_REQUIRE(get_expired(_timers) == timer_ptr_set({&t5}));
     BOOST_REQUIRE(_timers.get_next_timeout() == Clock::time_point::max());
@@ -137,12 +137,12 @@ BOOST_AUTO_TEST_CASE(test_next_timeout_is_updated_correctly_after_expiry_when_th
     _timers.insert(t1);
     _timers.insert(t3);
 
-    BOOST_MESSAGE("Expiring in a way that there should be still active timers in higher buckets");
+    BOOST_TEST_MESSAGE("Expiring in a way that there should be still active timers in higher buckets");
     _timers.expire(m1);
     BOOST_REQUIRE(get_expired(_timers) == timer_ptr_set({&t1}));
     BOOST_REQUIRE(_timers.get_next_timeout() == m3);
 
-    BOOST_MESSAGE("Checking that it is signalled that timer 2 is now the earliest timer");
+    BOOST_TEST_MESSAGE("Checking that it is signalled that timer 2 is now the earliest timer");
     BOOST_REQUIRE_EQUAL(_timers.insert(t2), true);
 
     _timers.clear();
@@ -236,12 +236,12 @@ BOOST_AUTO_TEST_CASE(test_expiry_when_some_timers_remain_in_the_expired_bucket)
     _timers.insert(t4);
     _timers.insert(t5);
 
-    BOOST_MESSAGE("timers t1-t6 share a bucket, expire only some");
+    BOOST_TEST_MESSAGE("timers t1-t6 share a bucket, expire only some");
     _timers.expire(m4);
     BOOST_REQUIRE(get_expired(_timers) == timer_ptr_set({&t1, &t2}));
     BOOST_REQUIRE(_timers.get_next_timeout() == m5);
 
-    BOOST_MESSAGE("now check if the remaining timers will expire when we expire after their bucket");
+    BOOST_TEST_MESSAGE("now check if the remaining timers will expire when we expire after their bucket");
     _timers.expire(m7);
     BOOST_REQUIRE(get_expired(_timers) == timer_ptr_set({&t3, &t4}));
     BOOST_REQUIRE(_timers.get_next_timeout() == m8);

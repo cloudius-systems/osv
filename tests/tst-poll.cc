@@ -29,13 +29,13 @@ BOOST_AUTO_TEST_CASE(test_polling_on_negative_fd_yields_no_events)
         pfd.events = POLLIN;
     }
 
-    BOOST_MESSAGE("test 1 file case");
+    BOOST_TEST_MESSAGE("test 1 file case");
     pfd_array[0].revents = POLLIN;
     BOOST_REQUIRE(poll(pfd_array, 1, 0) == 0);
     BOOST_REQUIRE(pfd_array[0].revents == 0);
 
 
-    BOOST_MESSAGE("test many files case");
+    BOOST_TEST_MESSAGE("test many files case");
     pfd_array[0].revents = POLLIN;
     pfd_array[1].revents = POLLIN;
     BOOST_REQUIRE(poll(pfd_array, 2, 0) == 0);
@@ -52,12 +52,12 @@ BOOST_AUTO_TEST_CASE(test_polling_on_invalid_fd_yields_pollnval_event)
         pfd.events = POLLIN;
     }
 
-    BOOST_MESSAGE("test 1 file case");
+    BOOST_TEST_MESSAGE("test 1 file case");
     pfd_array[0].revents = 0;
     BOOST_REQUIRE(poll(pfd_array, 1, 0) == 1);
     BOOST_REQUIRE(pfd_array[0].revents == POLLNVAL);
 
-    BOOST_MESSAGE("test many files case");
+    BOOST_TEST_MESSAGE("test many files case");
     pfd_array[0].revents = 0;
     pfd_array[1].revents = 0;
     BOOST_REQUIRE(poll(pfd_array, 2, 0) == 2);
@@ -92,7 +92,7 @@ BOOST_AUTO_TEST_CASE(test_polling_on_one_socket)
         raddr.sin_port = htons(LISTEN_PORT);
 
         std::this_thread::sleep_for(std::chrono::milliseconds(50));
-        BOOST_MESSAGE("connecting...");
+        BOOST_TEST_MESSAGE("connecting...");
         auto ret = connect(s, (struct sockaddr *)&raddr, sizeof(raddr));
         BOOST_REQUIRE(ret == 0 || errno == EINPROGRESS);
 
@@ -101,29 +101,29 @@ BOOST_AUTO_TEST_CASE(test_polling_on_one_socket)
         pfd.events = POLLOUT;
         BOOST_REQUIRE(poll(&pfd, 1, -1) == 1);
 
-        BOOST_MESSAGE("conected...");
+        BOOST_TEST_MESSAGE("conected...");
 
         can_write.await();
 
-        BOOST_MESSAGE("writing...");
+        BOOST_TEST_MESSAGE("writing...");
         BOOST_REQUIRE(write(s, "!", 1) == 1);
 
         can_read.await();
 
-        BOOST_MESSAGE("reading...");
+        BOOST_TEST_MESSAGE("reading...");
 
         char buf[16];
         do {} while (read(s, buf, sizeof(buf)) > 0);
 
-        BOOST_MESSAGE("done...");
+        BOOST_TEST_MESSAGE("done...");
 
         can_close.await();
 
-        BOOST_MESSAGE("closing...");
+        BOOST_TEST_MESSAGE("closing...");
         close(s);
     });
 
-    BOOST_MESSAGE("checking that poll will return POLLIN when accept() is ready");
+    BOOST_TEST_MESSAGE("checking that poll will return POLLIN when accept() is ready");
     struct pollfd pfd;
     pfd.fd = s;
     pfd.events = POLLIN;
@@ -137,19 +137,19 @@ BOOST_AUTO_TEST_CASE(test_polling_on_one_socket)
     pfd.events = POLLOUT;
     BOOST_REQUIRE(poll(&pfd, 1, 500) == 1);
 
-    BOOST_MESSAGE("checking that poll will not return POLLIN when nothing to read");
+    BOOST_TEST_MESSAGE("checking that poll will not return POLLIN when nothing to read");
     pfd.events = POLLIN;
     BOOST_REQUIRE(poll(&pfd, 1, 0) == 0);
     BOOST_REQUIRE(pfd.revents == 0);
 
     can_write.count_down();
 
-    BOOST_MESSAGE("checking that poll will return POLLIN when read() is ready");
+    BOOST_TEST_MESSAGE("checking that poll will return POLLIN when read() is ready");
     pfd.events = POLLIN;
     BOOST_REQUIRE(poll(&pfd, 1, 500) == 1);
     BOOST_REQUIRE(pfd.revents == POLLIN);
 
-    BOOST_MESSAGE("checking that poll will return both POLLIN and POLLOUT");
+    BOOST_TEST_MESSAGE("checking that poll will return both POLLIN and POLLOUT");
     pfd.events = POLLIN | POLLOUT;
     BOOST_REQUIRE(poll(&pfd, 1, 0) == 1);
     BOOST_REQUIRE(pfd.revents == (POLLIN | POLLOUT));
@@ -157,24 +157,24 @@ BOOST_AUTO_TEST_CASE(test_polling_on_one_socket)
     char buf[16];
     BOOST_REQUIRE(read(client_socket, buf, 1) == 1);
 
-    BOOST_MESSAGE("checking no events after read");
+    BOOST_TEST_MESSAGE("checking no events after read");
     pfd.events = POLLIN;
     BOOST_REQUIRE(poll(&pfd, 1, 0) == 0);
     BOOST_REQUIRE(pfd.revents == 0);
 
-    BOOST_MESSAGE("filling up socket buffer...");
+    BOOST_TEST_MESSAGE("filling up socket buffer...");
     do {} while (write(client_socket, buf, sizeof(buf)) > 0);
 
     can_read.count_down();
 
-    BOOST_MESSAGE("checking socket is unblocked for write");
+    BOOST_TEST_MESSAGE("checking socket is unblocked for write");
     pfd.events = POLLOUT;
     BOOST_REQUIRE(poll(&pfd, 1, 500) == 1);
     BOOST_REQUIRE(pfd.revents == POLLOUT);
 
     can_close.count_down();
 
-    BOOST_MESSAGE("checking that poll will return POLLIN when close() is ready");
+    BOOST_TEST_MESSAGE("checking that poll will return POLLIN when close() is ready");
     pfd.events = POLLIN;
     BOOST_REQUIRE(poll(&pfd, 1, 500) == 1);
     BOOST_REQUIRE(pfd.revents == POLLIN);
