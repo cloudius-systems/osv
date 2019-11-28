@@ -55,16 +55,32 @@ void poweroff(void)
     halt();
 }
 
+static void pci_reboot(void) {
+    u8 v = processor::inb(0x0cf9) & ~6;
+    processor::outb(v|2, 0x0cf9); // request hard reset
+    usleep(50);
+    processor::outb(v|6, 0x0cf9); // actually do the reset
+    usleep(50);
+}
+
+static void kbd_reboot(void) {
+    while (processor::inb(0x64) & 0x02); // clear all keyboard buffers
+    processor::outb(0xfe, 0x64);
+    usleep(50);
+}
+
 void reboot(void)
 {
-    // It would be nice if AcpiReset() worked, but it doesn't seem to work
-    // (on qemu & kvm), so let's resort to other techniques, which appear
-    // to work. Hopefully one of them will work on any hypervisor.
-    // Method 1: "fast reset" via System Control Port A (port 0x92)
+    // Method 1: AcpiReset, does not work on qemu or kvm now because the reset
+    // register is not supported. Nevertheless, we should try it first
+    AcpiReset();
+    // Method 2: "fast reset" via System Control Port A (port 0x92)
     processor::outb(1, 0x92);
-    // Method 2: Reset using the 8042 PS/2 Controller ("keyboard controller")
-    processor::outb(0xfe, 0x64);
-    // Method 3: Cause triple fault by loading a broken IDT and triggering an
+    // Method 3: Reset using the 8042 PS/2 Controller ("keyboard controller")
+    kbd_reboot();
+    // Method 4: PCI reboot
+    pci_reboot();
+    // Method 5: Cause triple fault by loading a broken IDT and triggering an
     // interrupt.
     processor::lidt(processor::desc_ptr(0, 0));
     __asm__ __volatile__("int3");
