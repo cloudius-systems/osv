@@ -73,8 +73,8 @@ static inline bool try_write(void *addr)
 static inline bool try_write(int (*func)())
 {
     catch_segv();
-    char byte = **(volatile char**)&func;
-    **(volatile char**)&func = byte;
+    char byte = *(volatile char*)func;
+    *(volatile char*)func = byte;
     return !caught_segv();
 }
 
