@@ -44,7 +44,7 @@ int main(int ac, char** av)
         osv::run("/nonexistant.so", 0, nullptr, nullptr);
         // should throw and not get here
         report(false, "Run nonexistant");
-    } catch(osv::launch_error) {
+    } catch(osv::launch_error&) {
         report(true, "Run nonexistant");
     }
 
