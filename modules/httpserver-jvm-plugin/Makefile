@@ -1,5 +1,5 @@
 
-INCLUDES = -isystem $(miscbase)/usr/include -I$(src)/build/$(mode)/gen/include
+INCLUDES = -I$(src)/build/$(mode)/gen/include
 INCLUDES += -I../../include -I. -I../../java -I../../arch/$(ARCH) -I../..
 INCLUDES += -I$(jdkbase)/include -I$(jdkbase)/include/linux
 INCLUDES += -I../httpserver-api
@@ -25,10 +25,6 @@ endif
 ifndef OSV_BUILD_PATH
 	OSV_BUILD_PATH = $(src)/build/$(mode).$(ARCH)
 endif
-miscbase = $(src)/external/$(ARCH)/misc.bin
-libs-dir = $(miscbase)/usr/lib64
-boost-libs := $(libs-dir)/libboost_system.so \
-              $(libs-dir)/libboost_filesystem.so
 
 # the build target executable:
 TARGET = jvm
@@ -36,18 +32,6 @@ JSON_FILES := $(wildcard api-doc/listings/*.json)
 JSON_CC_FILES := $(subst .json,.json.cc,$(subst api-doc/listings/,autogen/,$(JSON_FILES)))
 CPP_FILES := $(JSON_CC_FILES) $(wildcard *.cc)
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
-
-STATIC_LIBS = $(libs-dir)/libboost_program_options.a
-DYN_LIBS = -lpthread -ldl -L../libtools -ltools -L$(libs-dir) -lyaml-cpp $(boost-libs)
-
-ifeq ($(use_host),y)
-	DYN_LIBS += -lssl -lcrypto
-else
-	DYN_LIBS += $(libs-dir)/libssl.so.10 \
-		$(libs-dir)/libcrypto.so.10
-endif
-
-LIBS = $(DYN_LIBS) $(STATIC_LIBS)
 
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
@@ -67,7 +51,7 @@ init:
 .PHONY: init
 
 $(TARGET).so: $(OBJ_FILES)
-	$(call quiet, $(CXX) $(CXXFLAGS) -shared $(STATIC_LIBS) -o $@ $^ $(DYN_LIBS), LINK $@)
+	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $^, LINK $@)
 
 ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPS)
