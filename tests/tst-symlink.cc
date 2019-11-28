@@ -269,7 +269,7 @@ int main(int argc, char **argv)
     report(rc < 0, "symlink");
     report(error == ENAMETOOLONG, "ENAMETOOLONG expected 1");
 
-    fill_buf(path, 4097);
+    fill_buf(path, PATH_MAX);
     unlink(N1);
     rc = symlink(path, N1);
     error = errno;
