@@ -1454,6 +1454,10 @@ int fcntl(int fd, int cmd, int arg)
     // ignored in OSv anyway, as it doesn't support exec().
     switch (cmd) {
     case F_DUPFD:
+    // On Linux F_DUPFD_CLOEXEC is used to affect behavior of duplicated file descriptor
+    // across execve() boundaries, but on OSv there is single process so we make it
+    // behave exactly like F_DUPFD does
+    case F_DUPFD_CLOEXEC:
         error = _fdalloc(fp, &ret, arg);
         if (error)
             goto out_errno;
