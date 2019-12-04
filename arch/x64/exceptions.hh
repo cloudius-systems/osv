@@ -117,6 +117,7 @@ private:
                     break;
                 }
             }
+            gsi = -1u;
         }
 
         handler(handler *h,
@@ -131,6 +132,7 @@ private:
             ids.push_back(id++);
             pre_eois.push_back(_pre_eoi);
             post_eois.push_back(_post_eoi);
+            gsi = -1u;
         }
 
         unsigned size()
