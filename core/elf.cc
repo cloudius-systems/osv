@@ -1000,8 +1000,10 @@ void object::load_needed(std::vector<std::shared_ptr<object>>& loaded_objects)
 
 void object::unload_needed()
 {
-    _needed.clear();
     _used_by_resolve_plt_got.clear();
+    while (!_needed.empty()) {
+        _needed.pop_back();
+    }
 }
 
 ulong object::get_tls_size()
