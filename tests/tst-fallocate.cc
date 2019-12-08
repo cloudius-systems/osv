@@ -49,10 +49,9 @@ int main(int argc, char *argv[])
     struct statfs fs;
 
     strcpy(path, "/tmp/tst-fallocateXXXXXX");
-    mktemp(path);
 
     // Create a temporary file that's used in testing.
-    auto fd = open(path, O_CREAT|O_TRUNC|O_RDWR, 0666);
+    auto fd = mkstemp(path);
     assert(fd > 0);
 
     ret = fallocate(fd, 0, 0, 0);
