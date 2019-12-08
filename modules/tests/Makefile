@@ -65,13 +65,13 @@ $(out)/tests/tst-non-fpic.o: CXXFLAGS:=$(subst -fPIC,-mcmodel=large,$(CXXFLAGS))
 $(out)/tests/tst-getopt-pie.o: CXXFLAGS:=$(subst -fPIC,-fpie,$(CXXFLAGS))
 $(out)/tests/tst-getopt-pie.o: $(src)/tests/tst-getopt.cc
 	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX tests/tst-getopt-pie.cc)
 $(out)/tests/tst-getopt-pie.so: $(out)/tests/tst-getopt-pie.o
-	$(call quiet, $(CXX) $(CXXFLAGS) -pie -o $@ $< $(LIBS), LD $@)
+	$(call quiet, $(CXX) $(CXXFLAGS) -pie -o $@ $< $(LIBS), LD tests/tst-getopt-pie.so)
 
 $(out)/tests/tst-non-pie.so: CXXFLAGS:=$(subst -fPIC,-no-pie,$(CXXFLAGS))
 $(out)/tests/tst-non-pie.so: $(src)/tests/tst-non-pie.cc
-	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ $< $(LIBS), LD $@)
+	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ $< $(LIBS), LD tests/tst-non-pie.so)
 
 # The rofs test image mounts /tmp as ramfs and 4 tests that exercise file system
 # fail due to some unresolved bugs or other shortcomings of the ramfs implementation
@@ -150,17 +150,17 @@ $(out)/tests/tst-tls.so: \
 		$(src)/tests/tst-tls.cc \
 		$(out)/tests/libtls.so
 	$(makedir)
-	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -D__SHARED_OBJECT__=1 -shared -o $@ $< tests/libtls.so, CXX tst-tls.so)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -D__SHARED_OBJECT__=1 -shared -o $@ $< tests/libtls.so, CXX tests/tst-tls.cc)
 
 $(out)/tests/tst-tls-pie.o: CXXFLAGS:=$(subst -fPIC,-fpie,$(CXXFLAGS))
 $(out)/tests/tst-tls-pie.o: $(src)/tests/tst-tls.cc
 	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX tests/tst-tls-pie.cc)
 $(out)/tests/tst-tls-pie.so: \
 		$(out)/tests/tst-tls-pie.o \
 		$(out)/tests/libtls.so
 	$(makedir)
-	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -fuse-ld=bfd -pthread -pie -o $@ $< tests/libtls.so, LD tst-tls-pie.so)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -fuse-ld=bfd -pthread -pie -o $@ $< tests/libtls.so, LD tests/tst-tls-pie.so)
 
 boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	misc-bdev-write.so misc-bdev-wlatency.so misc-bdev-rw.so \
