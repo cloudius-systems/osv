@@ -1,16 +1,19 @@
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
 
 int main(int argc, char const *argv[])
 {
-	const char *path = strdup(tmpnam(NULL));
-	int fd = open(path, O_RDWR | O_CREAT, 0644);
+	char path[64];
+
+	strcpy(path, "/tmp/tst-truncateXXXXXX");
+	int fd = mkstemp(path);
 	if (fd < 0) {
-		perror("open");
+		perror("mkstemp");
 		return 1;
 	}
 
