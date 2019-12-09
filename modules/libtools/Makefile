@@ -40,6 +40,9 @@ lsroute.so: lsroute.o libtools.so
 ifconfig.so: ifconfig.o libtools.so
 	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $^, LINK ifconfig.so)
 
+%.o: %.cc
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+
 clean:
 	-rm -f libtools.so network_interface.o route_info.o ifconfig.o \
 		ifconfig.so lsroute.o lsroute.so
