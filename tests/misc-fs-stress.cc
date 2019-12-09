@@ -51,7 +51,14 @@ int main(int argc, char const *argv[])
     if (argc == 2) {
         fname = argv[1];
     } else {
-        mktemp(default_fname);
+        // Use mkstemp to capture name of a temporary file
+        auto fd = mkstemp(default_fname);
+        if (fd <= 0) {
+            perror("mkstemp");
+            return -1;
+        }
+        close(fd);
+        unlink(default_fname);
         fname = reinterpret_cast<const char *>(default_fname);
     }
 
