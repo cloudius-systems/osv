@@ -33,15 +33,13 @@ static int check_vnode_duplicity(void)
 {
     int err = 0;
     char oldpath[64] = "/tmp/tst-fs-linkXXXXXX";
-    char newpath[64] = "/tmp/tst-fs-linkXXXXXX";
     struct dentry *olddp, *newdp;
 
-    mktemp(oldpath);
-    mktemp(newpath);
-
-    auto fd = open(oldpath, O_CREAT | O_TRUNC | O_RDWR, 0666);
+    auto fd = mkstemp(oldpath);
     close(fd);
 
+    char newpath[64];
+    sprintf(newpath, "%s_new", oldpath);
     if (link(oldpath, newpath) != 0) {
         unlink(oldpath);
         perror("link");
@@ -85,30 +83,34 @@ int main(int argc, char *argv[])
     struct stat st[2];
     char buf[4] = {0};
     char buf2[4] = {0};
+    int fd;
 
     if (argc > 2) {
         oldpath = argv[1];
         newpath = argv[2];
+
+        fd = open(oldpath, O_CREAT | O_TRUNC | O_RDWR, 0666);
+        report(fd > 0, "create a file");
     } else {
-
+        //
+        // Create a temporary file that's used in testing.
         strcpy(oldp, "/tmp/tst-fs-linkXXXXXX");
-        mktemp(oldp);
+        fd = mkstemp(oldp);
+        report(fd > 0, "create a file");
 
-        strcpy(newp, "/tmp/tst-fs-linkXXXXXX");
-        mktemp(newp);
+        sprintf(newp, "%s_new", oldp);
 
         oldpath = oldp;
         newpath = newp;
     }
 
-    report(link(oldpath, newpath) < 0 && errno == ENOENT, "link returns ENOENT if source path does not exists");
+    char missing_file_path[64];
+    sprintf(missing_file_path, "%s_missing", oldpath);
+    report(link(missing_file_path, newpath) < 0 && errno == ENOENT, "link returns ENOENT if source path does not exists");
 
-    // Create a temporary file that's used in testing.
-    auto fd = open(oldpath, O_CREAT | O_TRUNC | O_RDWR, 0666);
     write(fd, "test", 4);
     lseek(fd, 0, SEEK_SET);
     read(fd, buf, 4);
-    report(fd > 0, "create a file");
     report(close(fd) == 0, "close the file");
 
     // Create a hard link
