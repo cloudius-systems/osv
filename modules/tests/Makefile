@@ -162,6 +162,8 @@ $(out)/tests/tst-tls-pie.so: \
 	$(makedir)
 	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -fuse-ld=bfd -pthread -pie -o $@ $< tests/libtls.so, LD tests/tst-tls-pie.so)
 
+boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system.so))
+
 boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	misc-bdev-write.so misc-bdev-wlatency.so misc-bdev-rw.so \
 	tst-promise.so tst-dlfcn.so tst-stat.so tst-wait-for.so \
@@ -177,12 +179,9 @@ zfs-only-boost-tests := tst-rename.so
 
 boost-tests += $($(fs_type)-only-boost-tests)
 
-BOOSTLIBS=$(src)/external/$(ARCH)/misc.bin/usr/lib64
 $(boost-tests:%=$(out)/tests/%): LIBS += \
-	 $(BOOSTLIBS)/libboost_unit_test_framework.so \
-	 $(BOOSTLIBS)/libboost_filesystem.so
-$(boost-tests:%=$(out)/tests/%): CXXFLAGS += -D_GLIBCXX_USE_CXX11_ABI=0 \
-	-isystem $(src)/external/$(ARCH)/misc.bin/usr/include
+	-lboost_unit_test_framework \
+	-lboost_filesystem
 
 tests += $(boost-tests)
 
@@ -220,9 +219,10 @@ build_all_tests: $(all_tests:%=$(out)/%)
 .PHONY: build_all_tests clean
 
 # Automatically generate usr.manifest which includes all tests.
-usr.manifest: $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FORCE
+usr.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FORCE
 	@echo "  generating modules/tests/usr.manifest"
 	@cat $@.skel > $@
+	@ldd $(addprefix $(out)/tests/,$(boost-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@
 	@echo $(all_tests) | tr ' ' '\n' | grep -v "tests/rofs/tst-.*.so" | awk '{print "/" $$0 ": ./" $$0}' >> $@
 	@echo $(all_tests) | tr ' ' '\n' | grep "tests/rofs/tst-.*.so" | sed 's/\.so//' | awk 'BEGIN { FS = "/" } ; { print "/tests/" $$3 "-rofs.so: ./tests/" $$2 "/" $$3 ".so"}' >> $@
 	./create_static.sh $(out) $(fs_type)
