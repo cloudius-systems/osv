@@ -50,8 +50,14 @@ int check_zfs_refcnt_behavior(void)
     }
     old_mcount = mp->m_count;
 
+    // Use mkstemp to capture path of a temporary file used later
     snprintf(file, 64, "%sfileXXXXXX", mount_path);
-    mktemp(file);
+    fd = mkstemp(file);
+    if (fd <= 0) {
+        return -1;
+    }
+    close(fd);
+    unlink(file);
 
     /* Create hard links, and remove them afterwards to exercise the refcount code */
     for (i = 0; i < 10; i++) {
@@ -69,8 +75,7 @@ int check_zfs_refcnt_behavior(void)
     }
     close(fd);
 
-    snprintf(newfile, 64, "%snewfileXXXXXX", mount_path);
-    mktemp(newfile);
+    snprintf(newfile, 64, "%snewfile", file);
 
     /* Create a link to file into newfile */
     ret = link(file, newfile);
