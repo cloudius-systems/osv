@@ -11,6 +11,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <unistd.h>
+#include <stdlib.h>
 #include <boost/filesystem.hpp>
 #include <boost/test/unit_test.hpp>
 #include <boost/filesystem/fstream.hpp>
@@ -22,8 +23,13 @@ typedef boost::format fmt;
 class TempDir : public fs::path
 {
 public:
-	TempDir() : fs::path(tmpnam(NULL)) {
-		fs::create_directories(*this);
+	TempDir() : fs::path() {
+	    char path[64] = "/tmp/dirXXXXXX";
+	    auto dir_path = mkdtemp(path);
+	    if (!dir_path) {
+            throw std::system_error(std::error_code(errno, std::system_category()), "error creating temp directory");
+	    }
+	    *this += dir_path;
 	}
 
 	virtual ~TempDir() {
