@@ -41,6 +41,10 @@
 #include <bsd/sys/sys/socket.h>
 #include <bsd/sys/sys/socketvar.h>
 #include <bsd/sys/sys/sysctl.h>
+#ifdef INET6
+#include <bsd/sys/netinet6/in6.h>
+#include <bsd/sys/netinet6/in6_var.h>
+#endif
 
 int sysctl_rtsock(SYSCTL_HANDLER_ARGS) ;
 
@@ -172,6 +176,59 @@ static struct mbuf*  osv_route_arp_rtmsg(int if_idx, int cmd, const char* ip,
     return (m);
 }
 
+static int osv_sockaddr_from_string(struct bsd_sockaddr_storage *addr, const char *str)
+{
+    struct bsd_sockaddr_in *sa4 = (struct bsd_sockaddr_in*)addr;
+    if (inet_pton(AF_INET, str, (void*)&sa4->sin_addr)) { 
+        sa4->sin_len = sizeof(*sa4);
+        sa4->sin_family = AF_INET;
+        sa4->sin_port = 0;
+        return 1;
+    }
+#ifdef INET6
+    struct bsd_sockaddr_in6 *sa6 = (struct bsd_sockaddr_in6*)addr;
+    if (inet_pton(AF_INET6, str, (void*)&sa6->sin6_addr)) {
+        sa6->sin6_len = sizeof(*sa6);
+        sa6->sin6_family = AF_INET6;
+        sa6->sin6_port = 0;
+        sa6->sin6_flowinfo = 0;
+        sa6->sin6_scope_id = 0;
+        return 1;
+    }
+#endif
+    return 0;
+}
+
+static int osv_sockaddr_from_prefix_len(int af, struct bsd_sockaddr_storage *addr, int prefix_len)
+{
+    switch(af){
+    case AF_INET:
+        {
+            struct bsd_sockaddr_in *sa4 = (struct bsd_sockaddr_in *)addr;
+            sa4->sin_len = sizeof(*sa4);
+            sa4->sin_family = AF_INET;
+            sa4->sin_port = 0;
+            in_prefixlen2mask(&sa4->sin_addr, prefix_len);
+        }
+        return 1;
+#ifdef INET6
+    case AF_INET6:
+        {
+            struct bsd_sockaddr_in6 *sa6 = (struct bsd_sockaddr_in6 *)addr;
+            sa6->sin6_len = sizeof(*sa6);
+            sa6->sin6_family = AF_INET6;
+            sa6->sin6_port = 0;
+            sa6->sin6_flowinfo = 0;
+            sa6->sin6_scope_id = 0;
+            in6_prefixlen2mask(&sa6->sin6_addr, prefix_len);
+        }
+        return 1;
+#endif
+    default:
+        return 0;
+    }
+}
+
 /* Compose a routing message to be sent on socket */
 static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
     const char* gateway, const char* netmask, int flags, gw_type type)
@@ -185,10 +242,10 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
     struct bsd_ifaddr *ifa;
     bool is_link = type == gw_type::link;
 
-    /* IPv4: Addresses */
-    struct bsd_sockaddr_in dst;
-    struct bsd_sockaddr_in gw;
-    struct bsd_sockaddr_in mask;
+    /* IP: Addresses */
+    struct bsd_sockaddr_storage dst;
+    struct bsd_sockaddr_storage gw;
+    struct bsd_sockaddr_storage mask;
 
     /* Link: Address*/
     struct bsd_sockaddr_dl sdl;
@@ -215,9 +272,7 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
     bzero(&sdl, sizeof(sdl));
     bzero(&mask, sizeof(mask));
 
-    dst.sin_family = AF_INET;
-    dst.sin_len = sizeof(struct bsd_sockaddr_in);
-    inet_aton(destination, &dst.sin_addr);
+    osv_sockaddr_from_string(&dst, destination);
 
     if (is_link) {
         /* Get ifindex from name */
@@ -234,15 +289,20 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
         memcpy(ea, IF_LLADDR(ifp), ETHER_ADDR_LEN);
         if_rele(ifp);
     } else {
-        gw.sin_family = AF_INET;
-        gw.sin_len = sizeof(struct bsd_sockaddr_in);
-        inet_aton(gateway, &gw.sin_addr);
+        osv_sockaddr_from_string(&gw, gateway);
     }
 
     if (netmask) {
-        mask.sin_family = AF_INET;
-        mask.sin_len = sizeof(struct bsd_sockaddr_in);
-        inet_aton(netmask, &mask.sin_addr);
+        if (osv_sockaddr_from_string(&mask, netmask) == 0) {
+            // Try parsing it as a prefix length
+            char *p_end = NULL;
+            long prefix_len = strtol(netmask, &p_end, 0);
+            if (p_end == netmask) {
+                 // Bad netmask string.  Probably safer to treat it as a host route.
+                 prefix_len = (((struct bsd_sockaddr *)&dst)->sa_family == AF_INET6) ? 128 : 32;
+            }
+            osv_sockaddr_from_prefix_len(((struct bsd_sockaddr *)&dst)->sa_family, &mask, prefix_len);
+        }
     }
 
     /*
