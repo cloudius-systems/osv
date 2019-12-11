@@ -22,6 +22,13 @@ makedir = $(call very-quiet, mkdir -p $(dir $@))
 
 autodepend = -MD -MT $@ -MP
 
+include $(OSV_BASE)/conf/base.mk
+
+configuration-defines = conf-preempt conf-debug_memory conf-logger_debug conf-INET6
+configuration = $(foreach cf,$(configuration-defines), \
+                      -D$(cf:conf-%=CONF_%)=$($(cf)))
+
+
 INCLUDES = -I$(src)/arch/$(ARCH) -I$(src) -I$(src)/include \
 	-I$(src)/arch/common -isystem $(src)/include/glibc-compat \
 	$(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^ .*c\+\+/ {print "-isystem" $$0}') \
@@ -29,7 +36,7 @@ INCLUDES = -I$(src)/arch/$(ARCH) -I$(src) -I$(src)/include \
 	-isystem $(out)/gen/include
 
 COMMON = $(autodepend) $(INCLUDES) -g -O2 -fPIC -DBOOST_TEST_DYN_LINK \
-	-U _FORTIFY_SOURCE -D_KERNEL -D__OSV__ -DCONF_debug_memory=0 \
+	-U _FORTIFY_SOURCE -D_KERNEL -D__OSV__ $(configuration) \
 	-Wall -Wno-pointer-arith -Wformat=0 -Wno-format-security
 
 LIBS =
@@ -128,7 +135,8 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-ttyname.so tst-pthread-barrier.so tst-feexcept.so tst-math.so \
 	tst-sigaltstack.so tst-fread.so tst-tcp-cork.so tst-tcp-v6.so \
 	tst-calloc.so tst-crypt.so tst-non-fpic.so tst-small-malloc.so \
-	tst-mmx-fpu.so tst-getopt.so tst-getopt-pie.so tst-non-pie.so tst-semaphore.so
+	tst-mmx-fpu.so tst-getopt.so tst-getopt-pie.so tst-non-pie.so tst-semaphore.so \
+	tst-socket-timestamp.so tst-pktinfo.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
 tests += testrunner.so
@@ -169,7 +177,7 @@ boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	tst-bsd-tcp1-zsndrcv.so tst-async.so tst-rcu-list.so tst-tcp-listen.so \
 	tst-poll.so tst-bitset-iter.so tst-timer-set.so tst-clock.so \
 	tst-rcu-hashtable.so tst-unordered-ring-mpsc.so \
-	tst-seek.so
+	tst-seek.so tst-tcp-v6.so
 
 rofs-only-boost-tests :=
 
