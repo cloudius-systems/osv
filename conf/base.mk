@@ -9,3 +9,8 @@ conf-logger_debug=0
 # This macro controls the NDEBUG macro that is used to identify the debug
 # build variant in the code.
 conf-DEBUG_BUILD=0
+
+# Set to 1 to enable IPV6
+# This macro controls the FreeBSD INET6 macro defined in bsd/porting/netport.h
+conf-INET6=1
+

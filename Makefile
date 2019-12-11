@@ -351,7 +351,7 @@ $(out)/bsd/%.o: INCLUDES += -isystem bsd/
 # for machine/
 $(out)/bsd/%.o: INCLUDES += -isystem bsd/$(arch)
 
-configuration-defines = conf-preempt conf-debug_memory conf-logger_debug
+configuration-defines = conf-preempt conf-debug_memory conf-logger_debug conf-INET6
 
 configuration = $(foreach cf,$(configuration-defines), \
                       -D$(cf:conf-%=CONF_%)=$($(cf)))
@@ -626,6 +626,31 @@ bsd += bsd/sys/netinet/cc/cc_cubic.o
 bsd += bsd/sys/netinet/cc/cc_htcp.o
 bsd += bsd/sys/netinet/cc/cc_newreno.o
 bsd += bsd/sys/netinet/arpcache.o
+ifeq ($(conf-INET6), 1)
+bsd += bsd/sys/netinet6/dest6.o
+bsd += bsd/sys/netinet6/frag6.o
+bsd += bsd/sys/netinet6/icmp6.o
+bsd += bsd/sys/netinet6/in6.o
+bsd += bsd/sys/netinet6/in6_cksum.o
+bsd += bsd/sys/netinet6/in6_ifattach.o
+bsd += bsd/sys/netinet6/in6_mcast.o
+bsd += bsd/sys/netinet6/in6_pcb.o
+bsd += bsd/sys/netinet6/in6_proto.o
+bsd += bsd/sys/netinet6/in6_rmx.o
+bsd += bsd/sys/netinet6/in6_src.o
+bsd += bsd/sys/netinet6/ip6_forward.o
+bsd += bsd/sys/netinet6/ip6_id.o
+bsd += bsd/sys/netinet6/ip6_input.o
+bsd += bsd/sys/netinet6/ip6_output.o
+bsd += bsd/sys/netinet6/mld6.o
+bsd += bsd/sys/netinet6/nd6.o
+bsd += bsd/sys/netinet6/nd6_nbr.o
+bsd += bsd/sys/netinet6/nd6_rtr.o
+bsd += bsd/sys/netinet6/raw_ip6.o
+bsd += bsd/sys/netinet6/route6.o
+bsd += bsd/sys/netinet6/scope6.o
+bsd += bsd/sys/netinet6/udp6_usrreq.o
+endif
 bsd += bsd/sys/xdr/xdr.o
 bsd += bsd/sys/xdr/xdr_array.o
 bsd += bsd/sys/xdr/xdr_mem.o
