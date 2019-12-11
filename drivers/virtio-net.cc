@@ -526,7 +526,7 @@ void net::receiver()
             rx_packets++;
             rx_bytes += m_head->M_dat.MH.MH_pkthdr.len;
 
-            bool fast_path = _ifn->if_classifier.post_packet(m_head);
+            bool fast_path = if_net_channel_input(_ifn, m_head);
             if (!fast_path) {
                 (*_ifn->if_input)(_ifn, m_head);
             }

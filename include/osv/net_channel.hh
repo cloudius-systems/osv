@@ -20,6 +20,10 @@
 #include <bsd/sys/netinet/ip.h>
 #include <osv/file.h>
 
+#ifdef INET6
+#include <bsd/sys/netinet/ip6.h>
+#endif /* INET6 */
+
 struct mbuf;
 struct pollreq;
 
@@ -80,9 +84,6 @@ public:
 }
 
 struct ipv4_tcp_conn_id {
-    ipv4_tcp_conn_id(in_addr src_addr, in_addr dst_addr, in_port_t src_port, in_port_t dst_port)
-        : src_addr(src_addr), dst_addr(dst_addr), src_port(src_port), dst_port(dst_port) {}
-
     in_addr src_addr;
     in_addr dst_addr;
     in_port_t src_port;
@@ -100,6 +101,32 @@ struct ipv4_tcp_conn_id {
     }
 };
 
+#ifdef INET6
+
+struct ipv6_tcp_conn_id {
+    in6_addr src_addr;
+    in6_addr dst_addr;
+    in_port_t src_port;
+    in_port_t dst_port;
+
+    static uint32_t hash_in6_addr(const in6_addr &addr) {
+        uint32_t *a = (uint32_t*) &addr.s6_addr;
+        return ( a[0] ^ a[1] ^ a[2] ^ a[3] );
+    }
+    size_t hash() const {
+        // FIXME: protection against hash attacks?
+        return hash_in6_addr(src_addr) ^ hash_in6_addr(dst_addr) ^ src_port ^ dst_port;
+    }
+    bool operator==(const ipv6_tcp_conn_id& x) const {
+        return memcmp(&src_addr, &x.src_addr, sizeof(src_addr)) == 0
+            && memcmp(&dst_addr, &x.dst_addr, sizeof(dst_addr)) == 0
+            && src_port == x.src_port
+            && dst_port == x.dst_port;
+    }
+};
+
+#endif /* INET6 */
+
 namespace std {
 
 template <>
@@ -107,35 +134,61 @@ struct hash<ipv4_tcp_conn_id> {
     size_t operator()(ipv4_tcp_conn_id x) const { return x.hash(); }
 };
 
+#ifdef INET6
+
+template <>
+struct hash<ipv6_tcp_conn_id> {
+    size_t operator()(ipv6_tcp_conn_id x) const { return x.hash(); }
+};
+
+#endif /* INET6 */
+
 }
 
 class classifier {
 public:
     classifier();
     // consumer side operations
-    void add(ipv4_tcp_conn_id id, net_channel* channel);
-    void remove(ipv4_tcp_conn_id id);
+    void add(const ipv4_tcp_conn_id& id, net_channel* channel);
+    void remove(const ipv4_tcp_conn_id& id);
+#ifdef INET6
+    void add(const ipv6_tcp_conn_id& id, net_channel* channel);
+    void remove(const ipv6_tcp_conn_id& id);
+#endif /* INET6 */
+
     // producer side operations
     bool post_packet(mbuf* m);
 private:
-    net_channel* classify_ipv4_tcp(mbuf* m);
+    net_channel* classify_packet(mbuf* m);
+    net_channel* classify_ipv4_tcp(mbuf* m, struct ip* ip, size_t ip_len);
+#ifdef INET6
+    net_channel* classify_ipv6_tcp(mbuf* m, struct ip6_hdr* ip, size_t ip_len);
+#endif /* INET6 */
+
 private:
+    template <class KeyType>
     struct item {
-        item(const ipv4_tcp_conn_id& key, net_channel* chan) : key(key), chan(chan) {}
-        ipv4_tcp_conn_id key;
+        item(const KeyType& key, net_channel* chan) : key(key), chan(chan) {}
+        KeyType key;
         net_channel* chan;
     };
-    struct item_hash : private std::hash<ipv4_tcp_conn_id> {
-        size_t operator()(const item& i) const { return std::hash<ipv4_tcp_conn_id>::operator()(i.key); }
+    template <class KeyType>
+    struct item_hash : private std::hash<KeyType> {
+        size_t operator()(const item<KeyType>& i) const { return std::hash<KeyType>::operator()(i.key); }
     };
+    template <class KeyType>
     struct key_item_compare {
-        bool operator()(const ipv4_tcp_conn_id& key, const item& item) const {
+        bool operator()(const KeyType& key, const item<KeyType>& item) const {
             return key == item.key;
         }
     };
-    using ipv4_tcp_channels = osv::rcu_hashtable<item, item_hash>;
     mutex _mtx;
+    using ipv4_tcp_channels = osv::rcu_hashtable<item<ipv4_tcp_conn_id>, item_hash<ipv4_tcp_conn_id>>;
     ipv4_tcp_channels _ipv4_tcp_channels;
+#ifdef INET6
+    using ipv6_tcp_channels = osv::rcu_hashtable<item<ipv6_tcp_conn_id>, item_hash<ipv6_tcp_conn_id>>;
+    ipv6_tcp_channels _ipv6_tcp_channels;
+#endif /* INET6 */
 };
 
 #endif /* NETCHANNEL_HH_ */

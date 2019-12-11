@@ -925,7 +925,7 @@ void vmxnet3_rxqueue::input(vmxnet3_rx_compdesc *rxcd, struct mbuf *m)
         checksum(rxcd, m);
     stats.rx_packets++;
     stats.rx_bytes += m->M_dat.MH.MH_pkthdr.len;
-    bool fast_path = _ifn->if_classifier.post_packet(m);
+    bool fast_path = if_net_channel_input(_ifn, m);
     if (!fast_path) {
         (*_ifn->if_input)(_ifn, m);
     }
