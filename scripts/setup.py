@@ -1,8 +1,8 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 
 # set up a development environment for OSv.  Run as root.
 
-import sys, platform, argparse
+import sys, distro, argparse
 import subprocess
 
 standard_ec2_packages = ['python-pip', 'wget']
@@ -319,11 +319,11 @@ parser.add_argument("-t", "--test", action="store_true",
                     help="install packages required by testing tools")
 cmdargs = parser.parse_args()
 
-(name, version, id) = platform.linux_distribution()
+(name, version, id) = distro.linux_distribution()
 
 for distro in distros:
     if type(distro.name) == type([]):
-        dname = filter(lambda n: name.startswith(n), distro.name)
+        dname = [n for n in distro.name if name.startswith(n)]
         if len(dname):
             distro.name = dname[0]
         else:
@@ -349,5 +349,5 @@ for distro in distros:
         print ('Your distribution %s version %s is not supported by this script' % (name, version))
         sys.exit(1)
 
-print 'Your distribution is not supported by this script.'
+print('Your distribution is not supported by this script.')
 sys.exit(2)

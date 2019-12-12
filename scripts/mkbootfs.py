@@ -1,10 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import os, struct, optparse, io
-try:
-    import configparser
-except ImportError:
-    import ConfigParser as configparser
+import configparser
 from manifest_common import add_var, expand, unsymlink, read_manifest, defines, strip_file
 
 def main():

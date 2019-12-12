@@ -1,17 +1,11 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import optparse, os, subprocess, socket, threading, stat, sys
 from manifest_common import add_var, expand, unsymlink, read_manifest, defines, strip_file
 from contextlib import closing
 
-try:
-    import StringIO
-    # This works on Python 2
-    StringIO = StringIO.StringIO
-except ImportError:
-    import io
-    # This works on Python 3
-    StringIO = io.StringIO
+import io
+StringIO = io.StringIO
 
 def find_free_port():
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
