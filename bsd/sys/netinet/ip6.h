@@ -94,6 +94,8 @@ struct ip6_hdr {
 #define ip6_hlim	ip6_ctlun.ip6_un1.ip6_un1_hlim
 #define ip6_hops	ip6_ctlun.ip6_un1.ip6_un1_hlim
 
+#define IP6_HDR_FIELD_ADDR(hdr,field,ftype) (reinterpret_cast<ftype*>(static_cast<void*>(&hdr) + offsetof(ip6_hdr, field)))
+
 #define IPV6_VERSION		0x60
 #define IPV6_VERSION_MASK	0xf0
 

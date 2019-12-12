@@ -239,9 +239,9 @@ icmp6_error2(struct mbuf *m, int type, int code, int param,
 
 	ip6 = mtod(m, struct ip6_hdr *);
 
-	if (in6_setscope(&ip6->ip6_src, ifp, NULL) != 0)
+	if (in6_setscope(IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr), ifp, NULL) != 0)
 		return;
-	if (in6_setscope(&ip6->ip6_dst, ifp, NULL) != 0)
+	if (in6_setscope(IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr), ifp, NULL) != 0)
 		return;
 
 	icmp6_error(m, type, code, param);
@@ -347,7 +347,7 @@ icmp6_error(struct mbuf *m, int type, int code, int param)
 	oip6 = mtod(m, struct ip6_hdr *); /* adjust pointer */
 
 	/* Finally, do rate limitation check. */
-	if (icmp6_ratelimit(&oip6->ip6_src, type, code)) {
+	if (icmp6_ratelimit(IP6_HDR_FIELD_ADDR(oip6, ip6_src, in6_addr), type, code)) {
 		ICMP6STAT_INC(icp6s_toofreq);
 		goto freeit;
 	}
@@ -372,8 +372,8 @@ icmp6_error(struct mbuf *m, int type, int code, int param)
 	nip6->ip6_src  = oip6->ip6_src;
 	nip6->ip6_dst  = oip6->ip6_dst;
 
-	in6_clearscope(&oip6->ip6_src);
-	in6_clearscope(&oip6->ip6_dst);
+	in6_clearscope(IP6_HDR_FIELD_ADDR(oip6, ip6_src, in6_addr));
+	in6_clearscope(IP6_HDR_FIELD_ADDR(oip6, ip6_dst, in6_addr));
 
 	icmp6 = (struct icmp6_hdr *)(nip6 + 1);
 	icmp6->icmp6_type = type;
@@ -443,7 +443,7 @@ icmp6_input(struct mbuf **mp, int *offp, int proto)
 	if (IN6_IS_ADDR_MULTICAST(&ip6->ip6_dst)) {
 		struct in6_multi	*inm;
 
-		inm = in6m_lookup(ifp, &ip6->ip6_dst);
+		inm = in6m_lookup(ifp, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr));
 		if (inm == NULL) {
 			IP6STAT_INC(ip6s_notmember);
 			in6_ifstat_inc(m->M_dat.MH.MH_pkthdr.rcvif, ifs6_in_discard);
@@ -469,12 +469,12 @@ icmp6_input(struct mbuf **mp, int *offp, int proto)
 		nd6log((LOG_ERR,
 		    "ICMP6 checksum error(%d|%x) %s\n",
 		    icmp6->icmp6_type, sum,
-		    ip6_sprintf(ip6bufs, &ip6->ip6_src)));
+		    ip6_sprintf(ip6bufs, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr))));
 		ICMP6STAT_INC(icp6s_checksum);
 		goto freeit;
 	}
 
-	if (faithprefix_p != NULL && (*faithprefix_p)(&ip6->ip6_dst)) {
+	if (faithprefix_p != NULL && (*faithprefix_p)(IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr))) {
 		/*
 		 * Deliver very specific ICMP6 type only.
 		 * This is important to deliver TOOBIG.  Otherwise PMTUD
@@ -932,8 +932,8 @@ icmp6_input(struct mbuf **mp, int *offp, int proto)
 	default:
 		nd6log((LOG_DEBUG,
 		    "icmp6_input: unknown type %d(src=%s, dst=%s, ifid=%d)\n",
-		    icmp6->icmp6_type, ip6_sprintf(ip6bufs, &ip6->ip6_src),
-		    ip6_sprintf(ip6bufd, &ip6->ip6_dst),
+		    icmp6->icmp6_type, ip6_sprintf(ip6bufs, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr)),
+		    ip6_sprintf(ip6bufd, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr)),
 		    ifp ? ifp->if_index : 0));
 		if (icmp6->icmp6_type < ICMP6_ECHO_REQUEST) {
 			/* ICMPv6 error: MUST deliver it by spec... */
@@ -1170,7 +1170,7 @@ icmp6_notify_error(struct mbuf **mp, int off, int icmp6len, int code)
 		    (eip6->ip6_flow & IPV6_FLOWLABEL_MASK);
 
 		if (finaldst == NULL)
-			finaldst = &eip6->ip6_dst;
+			finaldst = IP6_HDR_FIELD_ADDR(eip6, ip6_dst, in6_addr);
 		ip6cp.ip6c_m = m;
 		ip6cp.ip6c_icmp6 = icmp6;
 		ip6cp.ip6c_ip6 = (struct ip6_hdr *)(icmp6 + 1);
@@ -2588,7 +2588,7 @@ icmp6_redirect_output(struct mbuf *m0, struct rtentry *rt)
 		goto fail;	/* what should we do here? */
 
 	/* rate limit */
-	if (icmp6_ratelimit(&sip6->ip6_src, ND_REDIRECT, 0))
+	if (icmp6_ratelimit(IP6_HDR_FIELD_ADDR(sip6, ip6_src, in6_addr), ND_REDIRECT, 0))
 		goto fail;
 
 	/*
@@ -2802,10 +2802,10 @@ noredhdropt:;
 	}
 
 	/* XXX: clear embedded link IDs in the inner header */
-	in6_clearscope(&sip6->ip6_src);
-	in6_clearscope(&sip6->ip6_dst);
-	in6_clearscope(&nd_rd->nd_rd_target);
-	in6_clearscope(&nd_rd->nd_rd_dst);
+	in6_clearscope(IP6_HDR_FIELD_ADDR(sip6, ip6_src, in6_addr));
+	in6_clearscope(IP6_HDR_FIELD_ADDR(sip6, ip6_dst, in6_addr));
+	in6_clearscope(ND_RDT_FIELD_ADDR(nd_rd, nd_rd_target, in6_addr));
+	in6_clearscope(ND_RDT_FIELD_ADDR(nd_rd, nd_rd_dst, in6_addr));
 
 	ip6->ip6_plen = htons(m->M_dat.MH.MH_pkthdr.len - sizeof(struct ip6_hdr));
 

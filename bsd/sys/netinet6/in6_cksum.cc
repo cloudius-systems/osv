@@ -110,16 +110,16 @@ _in6_cksum_pseudo(struct ip6_hdr *ip6, uint32_t len, uint8_t nxt, uint16_t csum)
 	sum += uph.phs[2];  sum += uph.phs[3];
 
 	/* IPv6 source address. */
-	scope = in6_getscope(&ip6->ip6_src);
-	w = (u_int16_t *)&ip6->ip6_src;
+	scope = in6_getscope(IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr));
+	w = (u_int16_t *)(IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr));
 	sum += w[0]; sum += w[1]; sum += w[2]; sum += w[3];
 	sum += w[4]; sum += w[5]; sum += w[6]; sum += w[7];
 	if (scope != 0)
 		sum -= scope;
 
 	/* IPv6 destination address. */
-	scope = in6_getscope(&ip6->ip6_dst);
-	w = (u_int16_t *)&ip6->ip6_dst;
+	scope = in6_getscope(IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr));
+	w = (u_int16_t *)(IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr));
 	sum += w[0]; sum += w[1]; sum += w[2]; sum += w[3];
 	sum += w[4]; sum += w[5]; sum += w[6]; sum += w[7];
 	if (scope != 0)
@@ -190,16 +190,16 @@ in6_cksum(struct mbuf *m, u_int8_t nxt, u_int32_t off, u_int32_t len)
 	ip6 = mtod(m, struct ip6_hdr *);
 
 	/* IPv6 source address. */
-	scope = in6_getscope(&ip6->ip6_src);
-	w = (u_int16_t *)&ip6->ip6_src;
+	scope = in6_getscope(IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr));
+	w = (u_int16_t *)(IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr));
 	sum += w[0]; sum += w[1]; sum += w[2]; sum += w[3];
 	sum += w[4]; sum += w[5]; sum += w[6]; sum += w[7];
 	if (scope != 0)
 		sum -= scope;
 
 	/* IPv6 destination address. */
-	scope = in6_getscope(&ip6->ip6_dst);
-	w = (u_int16_t *)&ip6->ip6_dst;
+	scope = in6_getscope(IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr));
+	w = (u_int16_t *)(IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr));
 	sum += w[0]; sum += w[1]; sum += w[2]; sum += w[3];
 	sum += w[4]; sum += w[5]; sum += w[6]; sum += w[7];
 	if (scope != 0)

@@ -662,12 +662,12 @@ passin:
 	 * dst are the loopback address and the receiving interface
 	 * is not loopback.
 	 */
-	if (in6_clearscope(&ip6->ip6_src) || in6_clearscope(&ip6->ip6_dst)) {
+	if (in6_clearscope(IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr)) || in6_clearscope(IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr))) {
 		V_ip6stat.ip6s_badscope++; /* XXX */
 		goto bad;
 	}
-	if (in6_setscope(&ip6->ip6_src, m->M_dat.MH.MH_pkthdr.rcvif, NULL) ||
-	    in6_setscope(&ip6->ip6_dst, m->M_dat.MH.MH_pkthdr.rcvif, NULL)) {
+	if (in6_setscope(IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr), m->M_dat.MH.MH_pkthdr.rcvif, NULL) ||
+	    in6_setscope(IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr), m->M_dat.MH.MH_pkthdr.rcvif, NULL)) {
 		V_ip6stat.ip6s_badscope++;
 		goto bad;
 	}
@@ -733,8 +733,8 @@ passin:
 			/* address is not ready, so discard the packet. */
 			nd6log((LOG_INFO,
 			    "ip6_input: packet to an unready address %s->%s\n",
-			    ip6_sprintf(ip6bufs, &ip6->ip6_src),
-			    ip6_sprintf(ip6bufd, &ip6->ip6_dst)));
+			    ip6_sprintf(ip6bufs, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr)),
+			    ip6_sprintf(ip6bufd, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr))));
 		}
 		IF_ADDR_RUNLOCK(ifp);
 		LLE_RUNLOCK(lle);
@@ -845,8 +845,8 @@ passin:
 			/* address is not ready, so discard the packet. */
 			nd6log((LOG_INFO,
 			    "ip6_input: packet to an unready address %s->%s\n",
-			    ip6_sprintf(ip6bufs, &ip6->ip6_src),
-			    ip6_sprintf(ip6bufd, &ip6->ip6_dst)));
+			    ip6_sprintf(ip6bufs, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr)),
+			    ip6_sprintf(ip6bufd, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr))));
 
 			if (ia6 != NULL && free_ia6 != 0)
 				ifa_free(&ia6->ia_ifa);
@@ -890,7 +890,7 @@ passin:
  		if ((ia6 = ip6_getdstifaddr(m)) != NULL) {
 			ifa_free(&ia6->ia_ifa);
 		} else {
-			ia6 = in6_ifawithifp(deliverifp, &ip6->ip6_dst);
+			ia6 = in6_ifawithifp(deliverifp, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr));
 			if (ia6) {
 				if (!ip6_setdstifaddr(m, ia6)) {
 					/*

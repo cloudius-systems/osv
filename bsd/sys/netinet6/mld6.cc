@@ -683,7 +683,7 @@ mld_v1_input_query(struct ifnet *ifp, const struct ip6_hdr *ip6,
 		 * Embed scope ID of receiving interface in MLD query for
 		 * lookup whilst we don't hold other locks.
 		 */
-		in6_setscope(&mld->mld_addr, ifp, NULL);
+		in6_setscope(MLD_HDR_FIELD_ADDR(mld, mld_addr, in6_addr), ifp, NULL);
 	}
 
 	IN6_MULTI_LOCK();
@@ -721,7 +721,7 @@ mld_v1_input_query(struct ifnet *ifp, const struct ip6_hdr *ip6,
 		 * If this is a group-specific MLDv1 query, we need only
 		 * look up the single group to process it.
 		 */
-		inm = in6m_lookup_locked(ifp, &mld->mld_addr);
+		inm = in6m_lookup_locked(ifp, MLD_HDR_FIELD_ADDR(mld, mld_addr, in6_addr));
 		if (inm != NULL) {
 			CTR3(KTR_MLD, "process v1 query %s on ifp %p(%s)",
 			    ip6_sprintf(ip6tbuf, &mld->mld_addr),
@@ -729,7 +729,7 @@ mld_v1_input_query(struct ifnet *ifp, const struct ip6_hdr *ip6,
 			mld_v1_update_group(inm, timer);
 		}
 		/* XXX Clear embedded scope ID as userland won't expect it. */
-		in6_clearscope(&mld->mld_addr);
+		in6_clearscope(MLD_HDR_FIELD_ADDR(mld, mld_addr, in6_addr));
 	}
 
 	IF_ADDR_RUNLOCK(ifp);
@@ -885,7 +885,7 @@ mld_v2_input_query(struct ifnet *ifp, const struct ip6_hdr *ip6,
 		 * lookup whilst we don't hold other locks (due to KAME
 		 * locking lameness). We own this mbuf chain just now.
 		 */
-		in6_setscope(&mld->mld_addr, ifp, NULL);
+		in6_setscope(MLD_HDR_FIELD_ADDR(mld, mld_addr, in6_addr), ifp, NULL);
 	}
 
 	IN6_MULTI_LOCK();
@@ -938,7 +938,7 @@ mld_v2_input_query(struct ifnet *ifp, const struct ip6_hdr *ip6,
 		 * link are simply ignored.
 		 */
 		IF_ADDR_RLOCK(ifp);
-		inm = in6m_lookup_locked(ifp, &mld->mld_addr);
+		inm = in6m_lookup_locked(ifp, MLD_HDR_FIELD_ADDR(mld, mld_addr, in6_addr));
 		if (inm == NULL) {
 			IF_ADDR_RUNLOCK(ifp);
 			goto out_locked;
@@ -965,7 +965,7 @@ mld_v2_input_query(struct ifnet *ifp, const struct ip6_hdr *ip6,
 			mld_v2_process_group_query(inm, mli, timer, m, off);
 
 		/* XXX Clear embedded scope ID as userland won't expect it. */
-		in6_clearscope(&mld->mld_addr);
+		in6_clearscope(MLD_HDR_FIELD_ADDR(mld, mld_addr, in6_addr));
 		IF_ADDR_RUNLOCK(ifp);
 	}
 
@@ -1172,7 +1172,7 @@ mld_v1_input_report(struct ifnet *ifp, const struct ip6_hdr *ip6,
 	 * whilst we don't hold other locks (due to KAME locking lameness).
 	 */
 	if (!IN6_IS_ADDR_UNSPECIFIED(&mld->mld_addr))
-		in6_setscope(&mld->mld_addr, ifp, NULL);
+		in6_setscope(MLD_HDR_FIELD_ADDR(mld, mld_addr, in6_addr), ifp, NULL);
 
 	IN6_MULTI_LOCK();
 	MLD_LOCK();
@@ -1184,7 +1184,7 @@ mld_v1_input_report(struct ifnet *ifp, const struct ip6_hdr *ip6,
 	 * reported, and our group timer is pending or about to be reset,
 	 * stop our group timer by transitioning to the 'lazy' state.
 	 */
-	inm = in6m_lookup_locked(ifp, &mld->mld_addr);
+	inm = in6m_lookup_locked(ifp, MLD_HDR_FIELD_ADDR(mld, mld_addr, in6_addr));
 	if (inm != NULL) {
 		struct mld_ifinfo *mli;
 
@@ -1229,7 +1229,7 @@ out_locked:
 	IN6_MULTI_UNLOCK();
 
 	/* XXX Clear embedded scope ID as userland won't expect it. */
-	in6_clearscope(&mld->mld_addr);
+	in6_clearscope(MLD_HDR_FIELD_ADDR(mld, mld_addr, in6_addr));
 
 	return (0);
 }
@@ -1845,7 +1845,7 @@ mld_v1_transmit_report(struct in6_multi *in6m, const int type)
 	mld->mld_maxdelay = 0;
 	mld->mld_reserved = 0;
 	mld->mld_addr = in6m->in6m_addr;
-	in6_clearscope(&mld->mld_addr);
+	in6_clearscope(MLD_HDR_FIELD_ADDR(mld, mld_addr, in6_addr));
 	mld->mld_cksum = in6_cksum(mh, IPPROTO_ICMPV6,
 	    sizeof(struct ip6_hdr), sizeof(struct mld_hdr));
 
@@ -2472,7 +2472,7 @@ mld_v2_enqueue_group_record(struct ifqueue *ifq, struct in6_multi *inm,
 	mr.mr_datalen = 0;
 	mr.mr_numsrc = 0;
 	mr.mr_addr = inm->in6m_addr;
-	in6_clearscope(&mr.mr_addr);
+	in6_clearscope(MLD_V2_REC_FIELD_ADDR(mr, mr_addr, in6_addr));
 	if (!m_append(m, sizeof(struct mldv2_record), (c_caddr_t)&mr)) {
 		if (m != m0)
 			m_freem(m);
@@ -2758,7 +2758,7 @@ mld_v2_enqueue_filter_change(struct ifqueue *ifq, struct in6_multi *inm)
 			 */
 			memset(&mr, 0, sizeof(mr));
 			mr.mr_addr = inm->in6m_addr;
-			in6_clearscope(&mr.mr_addr);
+			in6_clearscope(MLD_V2_REC_FIELD_ADDR(mr, mr_addr, in6_addr));
 			if (!m_append(m, sizeof(mr), (c_caddr_t)&mr)) {
 				if (m != m0)
 					m_freem(m);

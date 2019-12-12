@@ -836,8 +836,8 @@ again:
 	 * clear embedded scope identifiers if necessary.
 	 * in6_clearscope will touch the addresses only when necessary.
 	 */
-	in6_clearscope(&ip6->ip6_src);
-	in6_clearscope(&ip6->ip6_dst);
+	in6_clearscope(IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr));
+	in6_clearscope(IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr));
 
 	/*
 	 * If the outgoing packet contains a hop-by-hop options header,
@@ -887,7 +887,7 @@ again:
 	if (!IN6_ARE_ADDR_EQUAL(&odst, &ip6->ip6_dst)) {
 		m->m_hdr.mh_flags |= M_SKIP_FIREWALL;
 		/* If destination is now ourself drop to ip6_input(). */
-		if (in6_localip(&ip6->ip6_dst)) {
+		if (in6_localip(IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr))) {
 			m->m_hdr.mh_flags |= M_FASTFWD_OURS;
 			if (m->M_dat.MH.MH_pkthdr.rcvif == NULL)
 				m->M_dat.MH.MH_pkthdr.rcvif = V_loif;
@@ -1016,7 +1016,7 @@ passout:
 		struct in6_ifaddr *ia6;
 
 		ip6 = mtod(m, struct ip6_hdr *);
-		ia6 = in6_ifawithifp(ifp, &ip6->ip6_src);
+		ia6 = in6_ifawithifp(ifp, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr));
 		if (ia6) {
 			/* Record statistics for this interface address. */
 			ia6->ia_ifa.if_opackets++;
@@ -3016,8 +3016,8 @@ ip6_mloopback(struct ifnet *ifp, struct mbuf *m, struct bsd_sockaddr_in6 *dst)
 	 * clear embedded scope identifiers if necessary.
 	 * in6_clearscope will touch the addresses only when necessary.
 	 */
-	in6_clearscope(&ip6->ip6_src);
-	in6_clearscope(&ip6->ip6_dst);
+	in6_clearscope(IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr));
+	in6_clearscope(IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr));
 
 	(void)if_simloop(ifp, copym, dst->sin6_family, 0);
 }

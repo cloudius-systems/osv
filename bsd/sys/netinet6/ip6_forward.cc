@@ -140,8 +140,8 @@ ip6_forward(struct mbuf *m, int srcrt)
 			bsd_log(LOG_DEBUG,
 			    "cannot forward "
 			    "from %s to %s nxt %d received on %s\n",
-			    ip6_sprintf(ip6bufs, &ip6->ip6_src),
-			    ip6_sprintf(ip6bufd, &ip6->ip6_dst),
+			    ip6_sprintf(ip6bufs, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr)),
+			    ip6_sprintf(ip6bufd, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr)),
 			    ip6->ip6_nxt,
 			    if_name(m->M_dat.MH.MH_pkthdr.rcvif));
 		}
@@ -410,8 +410,8 @@ skip_routing:
 			bsd_log(LOG_DEBUG,
 			    "cannot forward "
 			    "src %s, dst %s, nxt %d, rcvif %s, outif %s\n",
-			    ip6_sprintf(ip6bufs, &ip6->ip6_src),
-			    ip6_sprintf(ip6bufd, &ip6->ip6_dst),
+			    ip6_sprintf(ip6bufs, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr)),
+			    ip6_sprintf(ip6bufd, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr)),
 			    ip6->ip6_nxt,
 			    if_name(m->M_dat.MH.MH_pkthdr.rcvif), if_name(rt->rt_ifp));
 		}
@@ -538,8 +538,8 @@ skip_routing:
 		{
 			printf("ip6_forward: outgoing interface is loopback. "
 			       "src %s, dst %s, nxt %d, rcvif %s, outif %s\n",
-			       ip6_sprintf(ip6bufs, &ip6->ip6_src),
-			       ip6_sprintf(ip6bufd, &ip6->ip6_dst),
+			       ip6_sprintf(ip6bufs, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr)),
+			       ip6_sprintf(ip6bufd, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr)),
 			       ip6->ip6_nxt, if_name(m->M_dat.MH.MH_pkthdr.rcvif),
 			       if_name(rt->rt_ifp));
 		}
@@ -553,8 +553,8 @@ skip_routing:
 	 * clear embedded scope identifiers if necessary.
 	 * in6_clearscope will touch the addresses only when necessary.
 	 */
-	in6_clearscope(&ip6->ip6_src);
-	in6_clearscope(&ip6->ip6_dst);
+	in6_clearscope(IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr));
+	in6_clearscope(IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr));
 
 	/* Jump over all PFIL processing if hooks are not active. */
 	if (!PFIL_HOOKED(&V_inet6_pfil_hook))
@@ -573,7 +573,7 @@ skip_routing:
 	if (!IN6_ARE_ADDR_EQUAL(&odst, &ip6->ip6_dst)) {
 		m->m_hdr.mh_flags |= M_SKIP_FIREWALL;
 		/* If destination is now ourself drop to ip6_input(). */
-		if (in6_localip(&ip6->ip6_dst)) {
+		if (in6_localip(IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr))) {
 			m->m_hdr.mh_flags |= M_FASTFWD_OURS;
 			if (m->M_dat.MH.MH_pkthdr.rcvif == NULL)
 				m->M_dat.MH.MH_pkthdr.rcvif = V_loif;

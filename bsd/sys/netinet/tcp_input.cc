@@ -724,8 +724,8 @@ findpcb:
 
 #ifdef INET6
 	if (isipv6) {
-		inp = in6_pcblookup_mbuf(&V_tcbinfo, &ip6->ip6_src,
-			th->th_sport, &ip6->ip6_dst, th->th_dport,
+		inp = in6_pcblookup_mbuf(&V_tcbinfo, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr),
+			th->th_sport, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr), th->th_dport,
 			INPLOOKUP_WILDCARD | INPLOOKUP_LOCKPCB,
 			m->M_dat.MH.MH_pkthdr.rcvif, m);
 	}
@@ -1325,7 +1325,7 @@ tcp_do_segment(struct mbuf *m, struct tcphdr *th, struct socket *so,
 	 * have to drop packets.
 	 */
 	if ((tp->get_state() != TCPS_ESTABLISHED
-       || (thflags & (TH_SYN | TH_FIN | TH_RST) != 0))
+       || ((thflags & (TH_SYN | TH_FIN | TH_RST)) != 0))
 	   && ti_locked == TI_UNLOCKED) {
 		if (INP_INFO_TRY_WLOCK(&V_tcbinfo)) {
 			ti_locked = TI_WLOCKED;

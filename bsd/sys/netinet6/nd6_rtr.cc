@@ -140,8 +140,8 @@ nd6_rs_input(struct mbuf *m, int off, int icmp6len)
 	if (ip6->ip6_hlim != 255) {
 		nd6log((LOG_ERR,
 		    "nd6_rs_input: invalid hlim (%d) from %s to %s on %s\n",
-		    ip6->ip6_hlim, ip6_sprintf(ip6bufs, &ip6->ip6_src),
-		    ip6_sprintf(ip6bufd, &ip6->ip6_dst), if_name(ifp)));
+		    ip6->ip6_hlim, ip6_sprintf(ip6bufs, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr)),
+		    ip6_sprintf(ip6bufd, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr)), if_name(ifp)));
 		goto bad;
 	}
 
@@ -227,8 +227,8 @@ nd6_ra_input(struct mbuf *m, int off, int icmp6len)
 	if (ip6->ip6_hlim != 255) {
 		nd6log((LOG_ERR,
 		    "nd6_ra_input: invalid hlim (%d) from %s to %s on %s\n",
-		    ip6->ip6_hlim, ip6_sprintf(ip6bufs, &ip6->ip6_src),
-		    ip6_sprintf(ip6bufd, &ip6->ip6_dst), if_name(ifp)));
+		    ip6->ip6_hlim, ip6_sprintf(ip6bufs, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr)),
+		    ip6_sprintf(ip6bufd, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr)), if_name(ifp)));
 		goto bad;
 	}
 
@@ -340,7 +340,7 @@ nd6_ra_input(struct mbuf *m, int off, int icmp6len)
 				    "nd6_ra_input: invalid prefix "
 				    "%s, ignored\n",
 				    ip6_sprintf(ip6bufs,
-					&pi->nd_opt_pi_prefix)));
+					ND_OPT_PI_FIELD_ADDR(pi, nd_opt_pi_prefix, in6_addr))));
 				continue;
 			}
 
@@ -374,7 +374,7 @@ nd6_ra_input(struct mbuf *m, int off, int icmp6len)
 		if (mtu < IPV6_MMTU) {
 			nd6log((LOG_INFO, "nd6_ra_input: bogus mtu option "
 			    "mtu=%lu sent from %s, ignoring\n",
-			    mtu, ip6_sprintf(ip6bufs, &ip6->ip6_src)));
+			    mtu, ip6_sprintf(ip6bufs, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr))));
 			goto skip;
 		}
 
@@ -391,7 +391,7 @@ nd6_ra_input(struct mbuf *m, int off, int icmp6len)
 			nd6log((LOG_INFO, "nd6_ra_input: bogus mtu "
 			    "mtu=%lu sent from %s; "
 			    "exceeds maxmtu %lu, ignoring\n",
-			    mtu, ip6_sprintf(ip6bufs, &ip6->ip6_src), maxmtu));
+			    mtu, ip6_sprintf(ip6bufs, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr)), maxmtu));
 		}
 	}
 

@@ -182,8 +182,8 @@ in6_ifaddloop(struct bsd_ifaddr *ifa)
 	rt.rt_gateway = (struct bsd_sockaddr *)&gateway;
 	memcpy(&mask, &ia->ia_prefixmask, sizeof(ia->ia_prefixmask));
 	memcpy(&addr, &ia->ia_addr, sizeof(ia->ia_addr));
-	rt_mask(&rt) = (struct bsd_sockaddr *)&mask;
-	rt_key(&rt) = (struct bsd_sockaddr *)&addr;
+	rt_mask(&rt) = reinterpret_cast<struct bsd_sockaddr*>(&mask);
+	rt_key(&rt) = reinterpret_cast<struct bsd_sockaddr*>(&addr);
 	rt.rt_flags = RTF_UP | RTF_HOST | RTF_STATIC;
 	/* Announce arrival of local address to all FIBs. */
 	rt_newaddrmsg(RTM_ADD, ifa, 0, &rt);
@@ -887,7 +887,7 @@ in6_update_ifa_join_mc(struct ifnet *ifp, struct in6_aliasreq *ifra,
 	if (rt != NULL) {
 		/* XXX: only works in !SCOPEDROUTING case. */
 		if (memcmp(&mltaddr.sin6_addr,
-		    &((struct bsd_sockaddr_in6 *)rt_key(rt))->sin6_addr,
+		    &(reinterpret_cast<struct bsd_sockaddr_in6*>(rt_key(rt)))->sin6_addr,
 		    MLTMASK_LEN)) {
 			RTFREE_LOCKED(rt);
 			rt = NULL;

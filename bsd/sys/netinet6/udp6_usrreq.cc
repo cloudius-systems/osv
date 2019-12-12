@@ -185,7 +185,7 @@ udp6_input(struct mbuf **mp, int *offp, int proto)
 	ifp = m->M_dat.MH.MH_pkthdr.rcvif;
 	ip6 = mtod(m, struct ip6_hdr *);
 
-	if (faithprefix_p != NULL && (*faithprefix_p)(&ip6->ip6_dst)) {
+	if (faithprefix_p != NULL && (*faithprefix_p)(IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr))) {
 		/* XXX send icmp6 host/port unreach? */
 		m_freem(m);
 		return (IPPROTO_DONE);
@@ -403,7 +403,7 @@ udp6_input(struct mbuf **mp, int *offp, int proto)
 		 * Already got one like this?
 		 */
 		inp = in6_pcblookup_mbuf(&V_udbinfo,
-		    &ip6->ip6_src, uh->uh_sport, &ip6->ip6_dst, uh->uh_dport,
+		    IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr), uh->uh_sport, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr), uh->uh_dport,
 		    INPLOOKUP_LOCKPCB, m->M_dat.MH.MH_pkthdr.rcvif, m);
 		if (!inp) {
 			/*
@@ -411,7 +411,7 @@ udp6_input(struct mbuf **mp, int *offp, int proto)
 			 * Because we've rewritten the destination address,
 			 * any hardware-generated hash is ignored.
 			 */
-			inp = in6_pcblookup(&V_udbinfo, &ip6->ip6_src,
+			inp = in6_pcblookup(&V_udbinfo, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr),
 			    uh->uh_sport, &next_hop6->sin6_addr,
 			    next_hop6->sin6_port ? htons(next_hop6->sin6_port) :
 			    uh->uh_dport, INPLOOKUP_WILDCARD |
@@ -421,8 +421,8 @@ udp6_input(struct mbuf **mp, int *offp, int proto)
 		m_tag_delete(m, fwd_tag);
 		m->m_hdr.mh_flags &= ~M_IP6_NEXTHOP;
 	} else
-		inp = in6_pcblookup_mbuf(&V_udbinfo, &ip6->ip6_src,
-		    uh->uh_sport, &ip6->ip6_dst, uh->uh_dport,
+		inp = in6_pcblookup_mbuf(&V_udbinfo, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr),
+		    uh->uh_sport, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr), uh->uh_dport,
 		    INPLOOKUP_WILDCARD | INPLOOKUP_LOCKPCB,
 		    m->M_dat.MH.MH_pkthdr.rcvif, m);
 	if (inp == NULL) {
@@ -432,9 +432,9 @@ udp6_input(struct mbuf **mp, int *offp, int proto)
 
 			bsd_log(LOG_INFO,
 					"Connection attempt to UDP [%s]:%d from [%s]:%d\n",
-					ip6_sprintf(ip6bufd, &ip6->ip6_dst),
+					ip6_sprintf(ip6bufd, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr)),
 					ntohs(uh->uh_dport),
-					ip6_sprintf(ip6bufs, &ip6->ip6_src),
+					ip6_sprintf(ip6bufs, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr)),
 					ntohs(uh->uh_sport));
 		}
 		UDPSTAT_INC(udps_noport);

@@ -199,7 +199,7 @@ int if_add_ipv6_addr(std::string if_name, std::string ip_addr, std::string netma
     ifra.ifra_lifetime.ia6t_pltime = ND6_INFINITE_LIFETIME;
 
     /* IF Name */
-    strncpy(ifra.ifra_name, if_name.c_str(), IFNAMSIZ);
+    strncpy(ifra.ifra_name, if_name.c_str(), IFNAMSIZ-1);
     ifp = ifunit_ref(if_name.c_str());
     if (!ifp) {
         return (ENOENT);
@@ -227,7 +227,7 @@ int if_add_ipv6_addr(std::string if_name, std::string ip_addr, std::string netma
     mask->sin6_family = AF_INET6;
     mask->sin6_len = sizeof(struct bsd_sockaddr_in6);
 
-    strncpy(oldaddr.ifr_name, if_name.c_str(), IFNAMSIZ);
+    strncpy(oldaddr.ifr_name, if_name.c_str(), IFNAMSIZ-1);
     error = in6_control(NULL, SIOCGIFADDR_IN6, (caddr_t)&oldaddr, ifp, NULL);
     if (!error) {
         in6_control(NULL, SIOCDIFADDR_IN6, (caddr_t)&oldaddr, ifp, NULL);
@@ -253,7 +253,7 @@ int if_del_ipv6_addr(std::string if_name, std::string ip_addr, std::string netma
     bzero(&ifra, sizeof(struct in6_aliasreq));
 
     /* IF Name */
-    strncpy(ifra.ifra_name, if_name.c_str(), IFNAMSIZ);
+    strncpy(ifra.ifra_name, if_name.c_str(), IFNAMSIZ-1);
     ifp = ifunit_ref(if_name.c_str());
     if (!ifp) {
         return (ENOENT);

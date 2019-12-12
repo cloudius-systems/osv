@@ -78,6 +78,7 @@ struct mldv2_record {
 	struct in6_addr		mr_addr;	/* address being reported */
 	/* followed by 1..numsrc source addresses */
 } __packed;
+#define MLD_V2_REC_FIELD_ADDR(rec,field,ftype) (reinterpret_cast<ftype*>(static_cast<void*>(&rec) + offsetof(mldv2_record, field)))
 #define MLD_V2_REPORT_MAXRECS		65535
 
 /*

@@ -183,7 +183,7 @@ in6_pcbbind(register struct inpcb *inp, struct bsd_sockaddr *nam,
 			    priv_check_cred(cred, PRIV_NETINET_RESERVEDPORT,
 			    0))
 				return (EACCES);
-				if (!IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr)) {
+			if (!IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr)) {
 				t = in6_pcblookup_local(pcbinfo,
 				    &sin6->sin6_addr, lport,
 				    INPLOOKUP_WILDCARD, cred);

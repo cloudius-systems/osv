@@ -138,8 +138,8 @@ nd6_ns_input(struct mbuf *m, int off, int icmp6len)
 	if (ip6->ip6_hlim != 255) {
 		nd6log((LOG_ERR,
 		    "nd6_ns_input: invalid hlim (%d) from %s to %s on %s\n",
-		    ip6->ip6_hlim, ip6_sprintf(ip6bufs, &ip6->ip6_src),
-		    ip6_sprintf(ip6bufd, &ip6->ip6_dst), if_name(ifp)));
+		    ip6->ip6_hlim, ip6_sprintf(ip6bufs, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr)),
+		    ip6_sprintf(ip6bufd, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr)), if_name(ifp)));
 		goto bad;
 	}
 
@@ -461,7 +461,7 @@ nd6_ns_output(struct ifnet *ifp, const struct in6_addr *daddr6,
 		ip6->ip6_dst.s6_addr32[2] = IPV6_ADDR_INT32_ONE;
 		ip6->ip6_dst.s6_addr32[3] = taddr6->s6_addr32[3];
 		ip6->ip6_dst.s6_addr8[12] = 0xff;
-		if (in6_setscope(&ip6->ip6_dst, ifp, NULL) != 0)
+		if (in6_setscope(IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr), ifp, NULL) != 0)
 			goto bad;
 	}
 	if (!dad) {
@@ -498,7 +498,7 @@ nd6_ns_output(struct ifnet *ifp, const struct in6_addr *daddr6,
 				/* XXX pullup? */
 				if (sizeof(*hip6) < ln->la_hold->m_hdr.mh_len) {
 					ip6->ip6_src = hip6->ip6_src;
-					hsrc = &hip6->ip6_src;
+					hsrc = IP6_HDR_FIELD_ADDR(hip6, ip6_src, in6_addr);
 				}
 			}
 			LLE_RUNLOCK(ln);
@@ -547,7 +547,7 @@ nd6_ns_output(struct ifnet *ifp, const struct in6_addr *daddr6,
 	nd_ns->nd_ns_code = 0;
 	nd_ns->nd_ns_reserved = 0;
 	nd_ns->nd_ns_target = *taddr6;
-	in6_clearscope(&nd_ns->nd_ns_target); /* XXX */
+	in6_clearscope(ND_NBR_FIELD_ADDR(nd_ns, nd_ns_target, in6_addr)); /* XXX */
 
 	/*
 	 * Add source link-layer address option.
@@ -644,8 +644,8 @@ nd6_na_input(struct mbuf *m, int off, int icmp6len)
 	if (ip6->ip6_hlim != 255) {
 		nd6log((LOG_ERR,
 		    "nd6_na_input: invalid hlim (%d) from %s to %s on %s\n",
-		    ip6->ip6_hlim, ip6_sprintf(ip6bufs, &ip6->ip6_src),
-		    ip6_sprintf(ip6bufd, &ip6->ip6_dst), if_name(ifp)));
+		    ip6->ip6_hlim, ip6_sprintf(ip6bufs, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr)),
+		    ip6_sprintf(ip6bufd, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr)), if_name(ifp)));
 		goto bad;
 	}
 
@@ -882,7 +882,7 @@ nd6_na_input(struct mbuf *m, int off, int icmp6len)
 				 * (e.g. redirect case). So we must
 				 * call rt6_flush explicitly.
 				 */
-				rt6_flush(&ip6->ip6_src, ifp);
+				rt6_flush(IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr), ifp);
 			}
 		}
 		ln->ln_router = is_router;
@@ -1054,7 +1054,7 @@ nd6_na_output_fib(struct ifnet *ifp, const struct in6_addr *daddr6_0,
 	nd_na->nd_na_type = ND_NEIGHBOR_ADVERT;
 	nd_na->nd_na_code = 0;
 	nd_na->nd_na_target = *taddr6;
-	in6_clearscope(&nd_na->nd_na_target); /* XXX */
+	in6_clearscope(ND_NBA_FIELD_ADDR(nd_na, nd_na_target, in6_addr)); /* XXX */
 
 	/*
 	 * "tlladdr" indicates NS's condition for adding tlladdr or not.

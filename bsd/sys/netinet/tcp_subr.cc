@@ -2255,11 +2255,11 @@ tcp_log_addr(struct in_conninfo *inc, struct tcphdr *th, void *ip4hdr,
 		sp = s + strlen(s);
 		sprintf(sp, "]:%i", ntohs(inc->inc_lport));
 	} else if (ip6 && th) {
-		ip6_sprintf(sp, &ip6->ip6_src);
+		ip6_sprintf(sp, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr));
 		sp = s + strlen(s);
 		sprintf(sp, "]:%i to [", ntohs(th->th_sport));
 		sp = s + strlen(s);
-		ip6_sprintf(sp, &ip6->ip6_dst);
+		ip6_sprintf(sp, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr));
 		sp = s + strlen(s);
 		sprintf(sp, "]:%i", ntohs(th->th_dport));
 #endif /* INET6 */
