@@ -721,7 +721,7 @@ mld_v1_input_query(struct ifnet *ifp, const struct ip6_hdr *ip6,
 		 * If this is a group-specific MLDv1 query, we need only
 		 * look up the single group to process it.
 		 */
-		inm = in6m_lookup_locked(ifp, MLD_HDR_FIELD_ADDR(mld, mld_addr, in6_addr));
+		inm = in6m_lookup_locked(ifp, &mld->mld_addr);
 		if (inm != NULL) {
 			CTR3(KTR_MLD, "process v1 query %s on ifp %p(%s)",
 			    ip6_sprintf(ip6tbuf, &mld->mld_addr),
@@ -938,7 +938,7 @@ mld_v2_input_query(struct ifnet *ifp, const struct ip6_hdr *ip6,
 		 * link are simply ignored.
 		 */
 		IF_ADDR_RLOCK(ifp);
-		inm = in6m_lookup_locked(ifp, MLD_HDR_FIELD_ADDR(mld, mld_addr, in6_addr));
+		inm = in6m_lookup_locked(ifp, &mld->mld_addr);
 		if (inm == NULL) {
 			IF_ADDR_RUNLOCK(ifp);
 			goto out_locked;
@@ -1184,7 +1184,7 @@ mld_v1_input_report(struct ifnet *ifp, const struct ip6_hdr *ip6,
 	 * reported, and our group timer is pending or about to be reset,
 	 * stop our group timer by transitioning to the 'lazy' state.
 	 */
-	inm = in6m_lookup_locked(ifp, MLD_HDR_FIELD_ADDR(mld, mld_addr, in6_addr));
+	inm = in6m_lookup_locked(ifp, &mld->mld_addr);
 	if (inm != NULL) {
 		struct mld_ifinfo *mli;
 

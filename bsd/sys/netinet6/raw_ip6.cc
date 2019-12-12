@@ -180,10 +180,10 @@ rip6_input(struct mbuf **mp, int *offp, int proto)
 		    in6p->inp_ip_p != proto)
 			continue;
 		if (!IN6_IS_ADDR_UNSPECIFIED(&in6p->in6p_laddr) &&
-		    !IN6_ARE_ADDR_EQUAL(&in6p->in6p_laddr, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr)))
+		    !IN6_ARE_ADDR_EQUAL(&in6p->in6p_laddr, &ip6->ip6_dst))
 			continue;
 		if (!IN6_IS_ADDR_UNSPECIFIED(&in6p->in6p_faddr) &&
-		    !IN6_ARE_ADDR_EQUAL(&in6p->in6p_faddr, IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr)))
+		    !IN6_ARE_ADDR_EQUAL(&in6p->in6p_faddr, &ip6->ip6_src))
 			continue;
 
 		if (in6p->in6p_cksum != -1) {

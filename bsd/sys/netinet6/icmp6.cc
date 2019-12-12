@@ -443,7 +443,7 @@ icmp6_input(struct mbuf **mp, int *offp, int proto)
 	if (IN6_IS_ADDR_MULTICAST(&ip6->ip6_dst)) {
 		struct in6_multi	*inm;
 
-		inm = in6m_lookup(ifp, IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr));
+		inm = in6m_lookup(ifp, &ip6->ip6_dst);
 		if (inm == NULL) {
 			IP6STAT_INC(ip6s_notmember);
 			in6_ifstat_inc(m->M_dat.MH.MH_pkthdr.rcvif, ifs6_in_discard);
