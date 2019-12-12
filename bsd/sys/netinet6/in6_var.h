@@ -65,7 +65,7 @@
 #define _NETINET6_IN6_VAR_H_
 
 #include <bsd/sys/netinet6/in6.h>
-#include <bsd/sys/tree.h>
+#include <bsd/sys/sys/tree.h>
 
 #ifdef _KERNEL
 #include <sys/libkern.h>

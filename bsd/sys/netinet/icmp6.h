@@ -180,7 +180,7 @@ struct mld_hdr {
 	struct in6_addr		mld_addr; /* multicast address */
 } __packed;
 
-#define MLD_HDR_FIELD_ADDR(hdr,field,ftype) (reinterpret_cast<ftype*>(static_cast<void*>(&hdr) + offsetof(mld_hdr, field)))
+#define MLD_HDR_FIELD_ADDR(hdr,field,ftype) (reinterpret_cast<ftype*>(static_cast<void*>(hdr) + offsetof(mld_hdr, field)))
 
 /* definitions to provide backward compatibility to old KAME applications */
 #ifndef _KERNEL
@@ -250,7 +250,7 @@ struct nd_neighbor_solicit {	/* neighbor solicitation */
 	struct in6_addr		nd_ns_target;	/*target address */
 	/* could be followed by options */
 } __packed;
-#define ND_NBR_FIELD_ADDR(nns,field,ftype) (reinterpret_cast<ftype*>(static_cast<void*>(&nns) + offsetof(nd_neighbor_solicit, field)))
+#define ND_NBR_FIELD_ADDR(nns,field,ftype) (reinterpret_cast<ftype*>(static_cast<void*>(nns) + offsetof(nd_neighbor_solicit, field)))
 
 #define nd_ns_type		nd_ns_hdr.icmp6_type
 #define nd_ns_code		nd_ns_hdr.icmp6_code
@@ -262,7 +262,7 @@ struct nd_neighbor_advert {	/* neighbor advertisement */
 	struct in6_addr		nd_na_target;	/* target address */
 	/* could be followed by options */
 } __packed;
-#define ND_NBA_FIELD_ADDR(nna,field,ftype) (reinterpret_cast<ftype*>(static_cast<void*>(&nna) + offsetof(nd_neighbor_advert, field)))
+#define ND_NBA_FIELD_ADDR(nna,field,ftype) (reinterpret_cast<ftype*>(static_cast<void*>(nna) + offsetof(nd_neighbor_advert, field)))
 
 #define nd_na_type		nd_na_hdr.icmp6_type
 #define nd_na_code		nd_na_hdr.icmp6_code
@@ -286,7 +286,7 @@ struct nd_redirect {		/* redirect */
 	struct in6_addr		nd_rd_dst;	/* destination address */
 	/* could be followed by options */
 } __packed;
-#define ND_RDT_FIELD_ADDR(rdt,field,ftype) (reinterpret_cast<ftype*>(static_cast<void*>(&rdt) + offsetof(nd_redirect, field)))
+#define ND_RDT_FIELD_ADDR(rdt,field,ftype) (reinterpret_cast<ftype*>(static_cast<void*>(rdt) + offsetof(nd_redirect, field)))
 
 #define nd_rd_type		nd_rd_hdr.icmp6_type
 #define nd_rd_code		nd_rd_hdr.icmp6_code
@@ -319,7 +319,7 @@ struct nd_opt_prefix_info {	/* prefix information */
 	struct in6_addr	nd_opt_pi_prefix;
 } __packed;
 
-#define ND_OPT_PI_FIELD_ADDR(info,field,ftype) (reinterpret_cast<ftype*>(static_cast<void*>(&info) + offsetof(nd_opt_prefix_info, field)))
+#define ND_OPT_PI_FIELD_ADDR(info,field,ftype) (reinterpret_cast<ftype*>(static_cast<void*>(info) + offsetof(nd_opt_prefix_info, field)))
 
 #define ND_OPT_PI_FLAG_ONLINK		0x80
 #define ND_OPT_PI_FLAG_AUTO		0x40

@@ -2472,7 +2472,7 @@ mld_v2_enqueue_group_record(struct ifqueue *ifq, struct in6_multi *inm,
 	mr.mr_datalen = 0;
 	mr.mr_numsrc = 0;
 	mr.mr_addr = inm->in6m_addr;
-	in6_clearscope(MLD_V2_REC_FIELD_ADDR(mr, mr_addr, in6_addr));
+	in6_clearscope(MLD_V2_REC_FIELD_ADDR(&mr, mr_addr, in6_addr));
 	if (!m_append(m, sizeof(struct mldv2_record), (c_caddr_t)&mr)) {
 		if (m != m0)
 			m_freem(m);
@@ -2758,7 +2758,7 @@ mld_v2_enqueue_filter_change(struct ifqueue *ifq, struct in6_multi *inm)
 			 */
 			memset(&mr, 0, sizeof(mr));
 			mr.mr_addr = inm->in6m_addr;
-			in6_clearscope(MLD_V2_REC_FIELD_ADDR(mr, mr_addr, in6_addr));
+			in6_clearscope(MLD_V2_REC_FIELD_ADDR(&mr, mr_addr, in6_addr));
 			if (!m_append(m, sizeof(mr), (c_caddr_t)&mr)) {
 				if (m != m0)
 					m_freem(m);
