@@ -2358,7 +2358,7 @@ extern "C" int mount_rofs_rootfs(bool pivot_root)
     return 0;
 }
 
-extern "C" void mount_zfs_rootfs(bool pivot_root)
+extern "C" void mount_zfs_rootfs(bool pivot_root, bool extra_zfs_pools)
 {
     if (mkdir("/zfs", 0755) < 0)
         kprintf("failed to create /zfs, error = %s\n", strerror(errno));
@@ -2374,7 +2374,9 @@ extern "C" void mount_zfs_rootfs(bool pivot_root)
 
     pivot_rootfs("/zfs");
 
-    import_extra_zfs_pools();
+    if (extra_zfs_pools) {
+        import_extra_zfs_pools();
+    }
 }
 
 extern "C" void unmount_rootfs(void)
