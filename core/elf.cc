@@ -642,10 +642,13 @@ symbol_module object::symbol(unsigned idx, bool ignore_missing)
     auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
     assert(dynamic_val(DT_SYMENT) == sizeof(Elf64_Sym));
     auto sym = &symtab[idx];
+    auto binding = symbol_binding(*sym);
+    if (binding == STB_LOCAL) {
+        return symbol_module(sym, this);
+    }
     auto nameidx = sym->st_name;
     auto name = dynamic_ptr<const char>(DT_STRTAB) + nameidx;
     auto ret = _prog.lookup(name);
-    auto binding = symbol_binding(*sym);
     if (!ret.symbol && binding == STB_WEAK) {
         return symbol_module(sym, this);
     }

@@ -119,7 +119,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-sendfile.so misc-lock-perf.so tst-uio.so tst-printf.so \
 	tst-pthread-affinity.so tst-pthread-tsd.so tst-thread-local.so \
 	tst-zfs-mount.so tst-regex.so tst-tcp-siocoutq.so \
-	libtls.so tst-tls.so tst-tls-pie.so tst-select-timeout.so tst-faccessat.so \
+	libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so tst-select-timeout.so tst-faccessat.so \
 	tst-fstatat.so misc-reboot.so tst-fcntl.so payload-namespace.so \
 	tst-namespace.so tst-without-namespace.so payload-env.so \
 	payload-merge-env.so misc-execve.so misc-execve-payload.so misc-mutex2.so \
@@ -161,6 +161,18 @@ $(out)/tests/tst-tls-pie.so: \
 		$(out)/tests/libtls.so
 	$(makedir)
 	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -fuse-ld=bfd -pthread -pie -o $@ $< tests/libtls.so, LD tests/tst-tls-pie.so)
+
+$(out)/tests/libtls_gold.so: COMMON += -fuse-ld=gold
+$(out)/tests/libtls_gold.so: $(out)/tests/libtls.o
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $< $(LIBS), LD tests/libtls_gold.so)
+
+$(out)/tests/tst-tls-gold.so: COMMON += -fuse-ld=gold
+$(out)/tests/tst-tls-gold.so: \
+		$(src)/tests/tst-tls.cc \
+		$(out)/tests/libtls_gold.so
+	$(makedir)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -D__SHARED_OBJECT__=1 -shared -o $@ $< tests/libtls_gold.so, CXX tests/tst-tls.cc)
 
 boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system.so))
 
