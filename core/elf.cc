@@ -745,7 +745,8 @@ void object::relocate_pltgot()
             // binding), try to resolve all the PLT entries now.
             // If symbol cannot be resolved warn about it instead of aborting
             u32 sym = info >> 32;
-            if (arch_relocate_jump_slot(sym, addr, p->r_addend, true))
+            auto _sym = symbol(sym, true);
+            if (arch_relocate_jump_slot(_sym, addr, p->r_addend))
                   continue;
         }
         if (original_plt) {
@@ -788,7 +789,7 @@ void* object::resolve_pltgot(unsigned index)
         }
     }
 
-    if (!arch_relocate_jump_slot(sym, addr, slot.r_addend)) {
+    if (!arch_relocate_jump_slot(sm, addr, slot.r_addend)) {
         debug_early("resolve_pltgot(): failed jump slot relocation\n");
         abort();
     }

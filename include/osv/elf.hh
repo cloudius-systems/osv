@@ -444,7 +444,7 @@ protected:
     // The return value is true on success, false on failure.
     bool arch_relocate_rela(u32 type, u32 sym, void *addr,
                             Elf64_Sxword addend);
-    bool arch_relocate_jump_slot(u32 sym, void *addr, Elf64_Sxword addend, bool ignore_missing = false);
+    bool arch_relocate_jump_slot(symbol_module& sym, void *addr, Elf64_Sxword addend);
     size_t static_tls_end() {
         if (is_core() || is_executable()) {
             return 0;

@@ -58,14 +58,13 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
     return true;
 }
 
-bool object::arch_relocate_jump_slot(u32 sym, void *addr, Elf64_Sxword addend, bool ignore_missing)
+bool object::arch_relocate_jump_slot(symbol_module& sym, void *addr, Elf64_Sxword addend)
 {
-    auto _sym = symbol(sym, ignore_missing);
-    if (_sym.symbol) {
-        *static_cast<void**>(addr) = _sym.relocated_addr() + addend;
-         return true;
+    if (sym.symbol) {
+        *static_cast<void**>(addr) = sym.relocated_addr() + addend;
+        return true;
     } else {
-         return false;
+        return false;
     }
 }
 
