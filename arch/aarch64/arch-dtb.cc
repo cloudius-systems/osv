@@ -192,8 +192,8 @@ u64 dtb_get_uart(int *irqid)
 /* this gets the virtual timer irq, we are not interested
  * about the other timers.
  */
-
-int dtb_get_timer_irq()
+static int dtb_timer_irq = -1;
+static int dtb_parse_timer_irq()
 {
     int node;
     struct dtb_int_spec int_spec[4];
@@ -209,6 +209,11 @@ int dtb_get_timer_irq()
         return 0;
 
     return int_spec[2].irq_id;
+}
+
+int dtb_get_timer_irq()
+{
+    return dtb_timer_irq;
 }
 
 /* this gets the GIC distributor and cpu interface addresses */
@@ -236,7 +241,8 @@ bool dtb_get_gic_v2(u64 *dist, size_t *dist_len, u64 *cpu, size_t *cpu_len)
 }
 
 /* this gets the cpus node and returns the number of cpu elements in it. */
-int dtb_get_cpus_count()
+static int dtb_cpu_count = -1;
+static int dtb_parse_cpus_count()
 {
     int node, subnode, count;
     if (!dtb)
@@ -253,10 +259,21 @@ int dtb_get_cpus_count()
     return count;
 }
 
+int dtb_get_cpus_count()
+{
+    return dtb_cpu_count;
+}
+
 /* this gets the cpu mpidr values for all cpus */
-bool dtb_get_cpus_mpid(u64 *mpids, int n)
+#define DTB_MAX_CPU_COUNT 32
+static u64 dtb_cpus_mpids[DTB_MAX_CPU_COUNT];
+bool dtb_parse_cpus_mpid(u64 *mpids, int n)
 {
     int node, subnode;
+
+    if (n > DTB_MAX_CPU_COUNT) {
+        abort("dtb_parse_cpus_mpid: number of cpus greater than maximum. Increase the DTB_MAX_CPU_COUNT!\n");
+    }
 
     if (!dtb)
         return false;
@@ -270,6 +287,13 @@ bool dtb_get_cpus_mpid(u64 *mpids, int n)
          subnode = fdt_next_subnode(dtb, subnode), n--, mpids++) {
 
         (void)dtb_get_reg(subnode, mpids);
+    }
+    return true;
+}
+
+bool dtb_get_cpus_mpid(u64 *mpids, int n) {
+    for (auto i = 0; i < n; i++) {
+        mpids[i] = dtb_cpus_mpids[i];
     }
     return true;
 }
@@ -387,7 +411,8 @@ static int dtb_get_pua_cells(u32 phandle)
 }
 
 /* get the number of mappings between pci devices and platform IRQs. */
-int dtb_get_pci_irqmap_count()
+static int dtb_pci_irqmap_count = -1;
+static int dtb_parse_pci_irqmap_count()
 {
     int count;
     if (!dtb)
@@ -426,8 +451,14 @@ int dtb_get_pci_irqmap_count()
     return count;
 }
 
+int dtb_get_pci_irqmap_count()
+{
+    return dtb_pci_irqmap_count;
+}
+
 /* gets the mask for just the slot member of the pci address. */
-u32 dtb_get_pci_irqmask()
+static int dtb_pci_irqmask = -1;
+u32 dtb_parse_pci_irqmask()
 {
     u32 *prop;
     int node, size;
@@ -450,8 +481,20 @@ u32 dtb_get_pci_irqmask()
     return (fdt32_to_cpu(prop[0]) & DTB_PHYSHI_BDF_MASK) | DTB_PIN_MASK;
 }
 
-bool dtb_get_pci_irqmap(u32 *bdfs, int *irq_ids, int n)
+u32 dtb_get_pci_irqmask()
 {
+    return dtb_pci_irqmask;
+}
+
+#define DTB_MAX_IRQ_COUNT 32
+static u32 dtb_pci_bdfs[DTB_MAX_IRQ_COUNT];
+static int dtb_pci_irq_ids[DTB_MAX_IRQ_COUNT];
+static bool dtb_parse_pci_irqmap(u32 *bdfs, int *irq_ids, int n)
+{
+    if (n > DTB_MAX_IRQ_COUNT) {
+        abort("dtb_parse_pci_irqmap: number of iqrs greater than maximum. Increase the DTB_MAX_IRQ_COUNT!\n");
+    }
+
     if (!dtb)
         return false;
 
@@ -502,6 +545,15 @@ bool dtb_get_pci_irqmap(u32 *bdfs, int *irq_ids, int n)
     return true;
 }
 
+bool dtb_get_pci_irqmap(u32 *bdfs, int *irq_ids, int n)
+{
+    for (auto i = 0; i < n; i++) {
+        bdfs[i] = dtb_pci_bdfs[i];
+        irq_ids[i] = dtb_pci_irq_ids[i];
+    }
+    return true;
+}
+
 bool dtb_get_vmm_is_xen()
 {
     if (fdt_check_header(dtb) != 0)
@@ -512,7 +564,6 @@ bool dtb_get_vmm_is_xen()
 
 void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
 {
-    void *olddtb;
     int node;
     char *cmdline_override;
     int len;
@@ -551,17 +602,24 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
     if ((size_t)len > max_cmdline) {
         abort("dtb_setup: command line too long.\n");
     }
-    olddtb = dtb;
-    dtb = (void *)OSV_KERNEL_BASE;
-
-    if (fdt_move(olddtb, dtb, 0x10000) != 0) {
-        abort("dtb_setup: failed to move dtb (dtb too large?)\n");
-    }
 
     cmdline = (char *)fdt_getprop(dtb, node, "bootargs", NULL);
     if (!cmdline) {
         abort("dtb_setup: cannot find cmdline after dtb move.\n");
     }
+    // Parse some dtb configuration ahead of time
+    dtb_cpu_count = dtb_parse_cpus_count();
+    if (!dtb_parse_cpus_mpid(dtb_cpus_mpids, dtb_cpu_count)) {
+        abort("dtb_setup: failed to parse cpu mpid.\n");
+    }
+
+    dtb_timer_irq = dtb_parse_timer_irq();
+    dtb_pci_irqmask = dtb_parse_pci_irqmask();
+    dtb_pci_irqmap_count = dtb_parse_pci_irqmap_count();
+    if (!dtb_parse_pci_irqmap(dtb_pci_bdfs, dtb_pci_irq_ids, dtb_pci_irqmap_count)) {
+        abort("dtb_setup: failed to parse pci_irq_map.\n");
+    }
+
     register u64 edata;
     asm volatile ("adrp %0, .edata" : "=r"(edata));
 
