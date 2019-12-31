@@ -149,74 +149,6 @@ static bool dtb_get_int_spec(int node, struct dtb_int_spec *s, int n)
     return true;
 }
 
-void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
-{
-    void *olddtb;
-    int node;
-    char *cmdline_override;
-    int len;
-
-    if (fdt_check_header(dtb) != 0) {
-        abort("dtb_setup: device tree blob invalid.\n");
-    }
-
-    memory::phys_mem_size = dtb_get_phys_memory(&mmu::mem_addr);
-    if (!memory::phys_mem_size) {
-        abort("dtb_setup: failed to parse memory information.\n");
-    }
-
-    /* command line will be overwritten with DTB: move it inside DTB */
-
-    node = fdt_path_offset(dtb, "/chosen");
-    if (node < 0) {
-        node = fdt_path_offset(dtb, "/");
-        if (node >= 0) {
-            node = fdt_add_subnode(dtb, node, "chosen");
-        }
-    }
-    if (node < 0) {
-        abort("dtb_setup: failed to add node /chosen for cmdline.\n");
-    }
-
-    cmdline_override = (char *)fdt_getprop(dtb, node, "bootargs", &len);
-    if (cmdline_override) {
-        cmdline = cmdline_override;
-    } else {
-        len = strlen(cmdline) + 1;
-        if (fdt_setprop(dtb, node, "bootargs", cmdline, len) < 0) {
-            abort("dtb_setup: failed to set bootargs in /chosen.\n");
-        }
-    }
-    if ((size_t)len > max_cmdline) {
-        abort("dtb_setup: command line too long.\n");
-    }
-    olddtb = dtb;
-    dtb = (void *)OSV_KERNEL_BASE;
-
-    if (fdt_move(olddtb, dtb, 0x10000) != 0) {
-        abort("dtb_setup: failed to move dtb (dtb too large?)\n");
-    }
-
-    cmdline = (char *)fdt_getprop(dtb, node, "bootargs", NULL);
-    if (!cmdline) {
-        abort("dtb_setup: cannot find cmdline after dtb move.\n");
-    }
-    register u64 edata;
-    asm volatile ("adrp %0, .edata" : "=r"(edata));
-
-    /* import from loader.cc */
-    extern elf::Elf64_Ehdr *elf_header;
-    extern size_t elf_size;
-    extern void *elf_start;
-
-    elf_start = reinterpret_cast<void *>(elf_header);
-    elf_size = (u64)edata - (u64)elf_start;
-
-    /* remove amount of memory used for ELF from avail memory */
-    mmu::phys addr = (mmu::phys)elf_start + elf_size;
-    memory::phys_mem_size -= addr - mmu::mem_addr;
-}
-
 size_t dtb_get_phys_memory(u64 *addr)
 {
     size_t retval;
@@ -576,4 +508,72 @@ bool dtb_get_vmm_is_xen()
         return false; /* broken header will be handled later */
 
     return fdt_node_offset_by_compatible(dtb, -1, "xen,xen") >= 0;
+}
+
+void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
+{
+    void *olddtb;
+    int node;
+    char *cmdline_override;
+    int len;
+
+    if (fdt_check_header(dtb) != 0) {
+        abort("dtb_setup: device tree blob invalid.\n");
+    }
+
+    memory::phys_mem_size = dtb_get_phys_memory(&mmu::mem_addr);
+    if (!memory::phys_mem_size) {
+        abort("dtb_setup: failed to parse memory information.\n");
+    }
+
+    /* command line will be overwritten with DTB: move it inside DTB */
+
+    node = fdt_path_offset(dtb, "/chosen");
+    if (node < 0) {
+        node = fdt_path_offset(dtb, "/");
+        if (node >= 0) {
+            node = fdt_add_subnode(dtb, node, "chosen");
+        }
+    }
+    if (node < 0) {
+        abort("dtb_setup: failed to add node /chosen for cmdline.\n");
+    }
+
+    cmdline_override = (char *)fdt_getprop(dtb, node, "bootargs", &len);
+    if (cmdline_override) {
+        cmdline = cmdline_override;
+    } else {
+        len = strlen(cmdline) + 1;
+        if (fdt_setprop(dtb, node, "bootargs", cmdline, len) < 0) {
+            abort("dtb_setup: failed to set bootargs in /chosen.\n");
+        }
+    }
+    if ((size_t)len > max_cmdline) {
+        abort("dtb_setup: command line too long.\n");
+    }
+    olddtb = dtb;
+    dtb = (void *)OSV_KERNEL_BASE;
+
+    if (fdt_move(olddtb, dtb, 0x10000) != 0) {
+        abort("dtb_setup: failed to move dtb (dtb too large?)\n");
+    }
+
+    cmdline = (char *)fdt_getprop(dtb, node, "bootargs", NULL);
+    if (!cmdline) {
+        abort("dtb_setup: cannot find cmdline after dtb move.\n");
+    }
+    register u64 edata;
+    asm volatile ("adrp %0, .edata" : "=r"(edata));
+
+    /* import from loader.cc */
+    extern elf::Elf64_Ehdr *elf_header;
+    extern size_t elf_size;
+    extern void *elf_start;
+
+    elf_start = reinterpret_cast<void *>(elf_header);
+    elf_size = (u64)edata - (u64)elf_start;
+
+    /* remove amount of memory used for ELF from avail memory */
+    mmu::phys addr = (mmu::phys)elf_start + elf_size;
+    memory::phys_mem_size -= addr - mmu::mem_addr;
 }
