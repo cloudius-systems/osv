@@ -913,6 +913,8 @@ objects += arch/x64/entry-xen.o
 objects += arch/x64/vmlinux.o
 objects += arch/x64/vmlinux-boot64.o
 objects += core/sampler.o
+objects += arch/x64/trampoline.o
+objects += arch/x64/vmfunc.o
 objects += $(acpi)
 endif # x64
 

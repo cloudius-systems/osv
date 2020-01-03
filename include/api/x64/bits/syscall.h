@@ -314,6 +314,8 @@
 #define __NR_finit_module			313
 #define __NR_getrandom				318
 
+#define __NR_vmfunc             326
+
 #undef __NR_fstatat
 #undef __NR_pread
 #undef __NR_pwrite

@@ -13,6 +13,7 @@
 #include <osv/mutex.h>
 #include <osv/waitqueue.hh>
 #include <osv/stubbing.hh>
+#include <osv/vmfunc.hh>
 #include <memory>
 
 #include <syscall.h>
@@ -437,6 +438,7 @@ long syscall(long number, ...)
     SYSCALL0(getpid);
     SYSCALL3(set_mempolicy, int, unsigned long *, unsigned long);
     SYSCALL3(sched_setaffinity_syscall, pid_t, unsigned, unsigned long *);
+    SYSCALL6(vmfunc, long, long, long, long, long, long);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
