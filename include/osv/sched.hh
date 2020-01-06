@@ -364,6 +364,13 @@ public:
             return *this;
         }
     };
+    // Simple single-linked list that allows to keep track of
+    // "parent-child" relationship between threads. The "parent" is
+    // the thread that constructs given "child" thread
+    struct thread_list {
+        std::atomic<thread*> _self;
+        thread_list *_parent;
+    };
 
 private:
     // Unlike the detached user visible attribute, those are internal to
@@ -633,6 +640,7 @@ public:
     {
         return static_cast<T*>(do_remote_thread_local_var(var));
     }
+    thread *parent();
 private:
     virtual void timer_fired() override;
     struct detached_state;
@@ -769,6 +777,7 @@ private:
     inline void cputime_estimator_get(
             osv::clock::uptime::time_point &running_since,
             osv::clock::uptime::duration &total_cpu_time);
+    thread_list *_parent_link;
 };
 
 class thread_handle {
@@ -1293,6 +1302,12 @@ inline cpu* thread::tcpu() const
 inline thread_handle thread::handle()
 {
     return thread_handle(*this);
+}
+
+inline thread* thread::parent()
+{
+    auto _parent = _parent_link->_parent;
+    return _parent ? _parent->_self.load(std::memory_order_acquire) : nullptr;
 }
 
 inline void* thread::get_tls(ulong module)

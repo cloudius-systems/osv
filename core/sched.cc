@@ -1001,6 +1001,12 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
         strlcpy(_attr._name.data()+1, s_current->_attr._name.data(),
                 sizeof(_attr._name) - 1);
     }
+
+    // Note that we never delete _parent_link. This is intentional as it lets us track
+    // parent-child relationship safely even when given thread is destroyed.
+    _parent_link = new thread_list();
+    _parent_link->_self.store(this);
+    _parent_link->_parent = (s_current && !main) ? s_current->_parent_link : nullptr;
 }
 
 static std::list<std::function<void ()>> exit_notifiers
@@ -1037,6 +1043,8 @@ osv::application *thread::current_app() {
 thread::~thread()
 {
     cancel_this_thread_alarm();
+
+    _parent_link->_self.store(nullptr, std::memory_order_release);
 
     if (!_attr._detached) {
         join();

@@ -141,7 +141,15 @@ ulong object::module_index() const
 bool object::visible(void) const
 {
     auto v = _visibility.load(std::memory_order_acquire);
-    return (v == nullptr) || (v == sched::thread::current());
+    if (v == nullptr) {
+        return true;
+    }
+    for (auto t = sched::thread::current(); t != nullptr; t = t->parent()) {
+        if (t == v) {
+            return true;
+        }
+    }
+    return false;
 }
 
 void object::setprivate(bool priv)
