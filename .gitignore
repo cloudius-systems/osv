@@ -46,4 +46,6 @@ modules/httpserver-jvm-plugin/obj/
 modules/libtools/*.so
 modules/libtools/*.o
 modules/libyaml/usr.manifest
+modules/dl_tests/bionic/
+modules/dl_tests/usr.manifest
 .idea
