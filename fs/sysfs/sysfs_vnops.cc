@@ -8,7 +8,6 @@
 #include <unistd.h>
 #include <osv/mount.h>
 #include <mntent.h>
-#include <sys/sysinfo.h>
 
 #include "fs/pseudofs/pseudofs.hh"
 
@@ -20,18 +19,6 @@ using namespace pseudofs;
 static uint64_t inode_count = 1; /* inode 0 is reserved to root */
 
 static mutex_t sysfs_mutex;
-
-static string sysfs_meminfo()
-{
-    struct sysinfo info;
-    sysinfo(&info);
-
-    char total_line[200];
-    sprintf(total_line, "Node 0 MemTotal:\t%ld kB\nNode 0 MemFree: \t%ld kB\n",
-            info.totalram >> 10, info.freeram >> 10);
-
-    return std::string(total_line);
-}
 
 static string sysfs_cpumap()
 {
@@ -49,7 +36,7 @@ sysfs_mount(mount* mp, const char *dev, int flags, const void* data)
     auto* vp = mp->m_root->d_vnode;
 
     auto node0 = make_shared<pseudo_dir_node>(inode_count++);
-    node0->add("meminfo", inode_count++, sysfs_meminfo);
+    node0->add("meminfo", inode_count++, [] { return pseudofs::meminfo("Node 0 MemTotal:\t%ld kB\nNode 0 MemFree: \t%ld kB\n"); });
     node0->add("cpumap", inode_count++, sysfs_cpumap);
     node0->add("distance", inode_count++, sysfs_distance);
 

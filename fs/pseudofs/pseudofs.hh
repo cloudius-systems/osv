@@ -146,6 +146,8 @@ int readdir(vnode *vp, file *fp, dirent *dir);
 int getattr(vnode *vp, vattr *attr);
 
 string cpumap();
+
+string meminfo(const char* format);
 }
 
 #endif

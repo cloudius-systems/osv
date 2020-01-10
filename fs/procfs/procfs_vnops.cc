@@ -182,6 +182,7 @@ procfs_mount(mount* mp, const char *dev, int flags, const void* data)
     root->add("sys", sys);
 
     root->add("cpuinfo", inode_count++, [] { return processor::features_str(); });
+    root->add("meminfo", inode_count++, [] { return pseudofs::meminfo("MemTotal:\t%ld kB\nMemFree: \t%ld kB\n"); });
 
     vp->v_data = static_cast<void*>(root);
 
