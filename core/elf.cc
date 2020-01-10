@@ -1218,6 +1218,7 @@ program::program(void* addr)
           "libm.so.6",
 #ifdef __x86_64__
           "ld-linux-x86-64.so.2",
+          "libc.musl-x86_64.so.1",
           // As noted in issue #1040 Boost version 1.69.0 and above is
           // compiled with hidden visibility, so even if the kernel uses
           // this library, it will not be visible for the application and
