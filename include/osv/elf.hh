@@ -329,6 +329,12 @@ struct [[gnu::packed]] Elf64_Shdr {
     Elf64_Xword sh_entsize; /* Size of entries, if section has table */
 };
 
+enum VisibilityLevel {
+    Public,
+    ThreadOnly,
+    ThreadAndItsChildren
+};
+
 class object: public std::enable_shared_from_this<elf::object> {
 public:
     explicit object(program& prog, std::string pathname);
@@ -452,10 +458,11 @@ protected:
         return _static_tls_offset + get_tls_size();
     }
 private:
-    std::atomic<void*> _visibility;
+    std::atomic<void*> _visibility_thread;
+    std::atomic<VisibilityLevel> _visibility_level;
     bool visible(void) const;
 public:
-    void setprivate(bool);
+    void set_visibility(VisibilityLevel);
 };
 
 class file : public object {

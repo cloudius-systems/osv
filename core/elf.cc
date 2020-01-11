@@ -122,7 +122,8 @@ object::object(program& prog, std::string pathname)
     , _dynamic_table(nullptr)
     , _module_index(_prog.register_dtv(this))
     , _is_executable(false)
-    , _visibility(nullptr)
+    , _visibility_thread(nullptr)
+    , _visibility_level(VisibilityLevel::Public)
 {
     elf_debug("Instantiated\n");
 }
@@ -140,22 +141,34 @@ ulong object::module_index() const
 
 bool object::visible(void) const
 {
-    auto v = _visibility.load(std::memory_order_acquire);
-    if (v == nullptr) {
+    auto level = _visibility_level.load(std::memory_order_acquire);
+    if (level == VisibilityLevel::Public) {
         return true;
     }
+
+    auto thread = _visibility_thread.load(std::memory_order_acquire);
+    if (!thread) { //Unlikely, but ...
+        return true;
+    }
+
+    if (level == VisibilityLevel::ThreadOnly) {
+        return thread == sched::thread::current();
+    }
+
+    // Is current thread the same as "thread" or is it a child ?`
     for (auto t = sched::thread::current(); t != nullptr; t = t->parent()) {
-        if (t == v) {
+        if (t == thread) {
             return true;
         }
     }
     return false;
 }
 
-void object::setprivate(bool priv)
+void object::set_visibility(elf::VisibilityLevel visibilityLevel)
 {
-     _visibility.store(priv ? sched::thread::current() : nullptr,
+    _visibility_thread.store(visibilityLevel == VisibilityLevel::Public ? nullptr : sched::thread::current(),
              std::memory_order_release);
+    _visibility_level.store(visibilityLevel, std::memory_order_release);
 }
 
 
@@ -1323,7 +1336,7 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         auto ef = std::shared_ptr<object>(new file(*this, f, name),
                 [=](object *obj) { remove_object(obj); });
         ef->set_base(_next_alloc);
-        ef->setprivate(true);
+        ef->set_visibility(ThreadOnly);
         // We need to push the object at the end of the list (so that the main
         // shared object gets searched before the shared libraries it uses),
         // with one exception: the kernel needs to remain at the end of the
@@ -1395,13 +1408,13 @@ void program::init_library(int argc, char** argv)
         // first) and finally make the loaded objects visible in search order.
         auto size = loaded_objects.size();
         for (unsigned i = 0; i < size; i++) {
-            loaded_objects[i]->setprivate(true);
+            loaded_objects[i]->set_visibility(ThreadAndItsChildren);
         }
         for (int i = size - 1; i >= 0; i--) {
             loaded_objects[i]->run_init_funcs(argc, argv);
         }
         for (unsigned i = 0; i < size; i++) {
-            loaded_objects[i]->setprivate(false);
+            loaded_objects[i]->set_visibility(Public);
         }
         _loaded_objects_stack.pop();
     }
