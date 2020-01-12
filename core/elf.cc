@@ -151,17 +151,29 @@ bool object::visible(void) const
         return true;
     }
 
+    auto current_thread = sched::thread::current();
     if (level == VisibilityLevel::ThreadOnly) {
-        return thread == sched::thread::current();
+        return thread == current_thread;
     }
 
-    // Is current thread the same as "thread" or is it a child ?`
-    for (auto t = sched::thread::current(); t != nullptr; t = t->parent()) {
-        if (t == thread) {
-            return true;
-        }
+    // Is current thread the same as "thread" or is it a child of it?
+    if (thread == current_thread) {
+        return true;
     }
-    return false;
+
+    bool visible = false;
+    auto next_parent_id = current_thread->parent_id();
+    while (next_parent_id) {
+        sched::with_thread_by_id(next_parent_id, [&next_parent_id, &visible, thread] (sched::thread *t) {
+            if (t == thread) {
+                visible = true;
+                next_parent_id = 0;
+            } else {
+                next_parent_id = t ? t->parent_id() : 0;
+            }
+        });
+    }
+    return visible;
 }
 
 void object::set_visibility(elf::VisibilityLevel visibilityLevel)
@@ -170,7 +182,6 @@ void object::set_visibility(elf::VisibilityLevel visibilityLevel)
              std::memory_order_release);
     _visibility_level.store(visibilityLevel, std::memory_order_release);
 }
-
 
 template <>
 void* object::lookup(const char* symbol)
