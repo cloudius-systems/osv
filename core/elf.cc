@@ -454,11 +454,19 @@ void object::load_segments()
     elf_debug("Loading segments\n");
     for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
         auto &phdr = _phdrs[i];
+        if (phdr.p_type == PT_LOAD) {
+            load_segment(phdr);
+        }
+    }
+}
+
+void object::process_headers()
+{
+    elf_debug("Processing headers\n");
+    for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
+        auto &phdr = _phdrs[i];
         switch (phdr.p_type) {
         case PT_NULL:
-            break;
-        case PT_LOAD:
-            load_segment(phdr);
             break;
         case PT_DYNAMIC:
             _dynamic_table = reinterpret_cast<Elf64_Dyn*>(_base + phdr.p_vaddr);
@@ -495,6 +503,7 @@ void object::load_segments()
             }
             break;
         }
+        case PT_LOAD:
         case PT_PHDR:
         case PT_GNU_STACK:
         case PT_GNU_RELRO:
@@ -1233,6 +1242,7 @@ program::program(void* addr)
     _core->set_base(program_base);
     assert(_core->module_index() == core_module_index);
     _core->load_segments();
+    _core->process_headers();
     set_search_path({"/", "/usr/lib"});
     // Our kernel already supplies the features of a bunch of traditional
     // shared libraries:
@@ -1361,6 +1371,7 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         _modules_rcu.assign(new_modules.release());
         osv::rcu_dispose(old_modules);
         ef->load_segments();
+        ef->process_headers();
         if (!ef->is_non_pie_executable())
            _next_alloc = ef->end();
         add_debugger_obj(ef.get());

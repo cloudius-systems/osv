@@ -348,6 +348,7 @@ public:
     void* end() const;
     Elf64_Sym* lookup_symbol(const char* name, bool self_lookup);
     void load_segments();
+    void process_headers();
     void unload_segments();
     void fix_permissions();
     void* resolve_pltgot(unsigned index);
