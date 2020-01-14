@@ -22,5 +22,6 @@ int __shgetc(FILE *f)
 	else
 		f->shend = f->rend;
 	if (f->rend) f->shcnt += f->rend - f->rpos + 1;
+	if (f->rpos[-1] != c) f->rpos[-1] = c;
 	return c;
 }
