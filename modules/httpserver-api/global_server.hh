@@ -12,7 +12,7 @@
 #include <vector>
 #include <mutex>
 #include <condition_variable>
-#include <external/x64/misc.bin/usr/include/yaml-cpp/node/iterator.h>
+#include <yaml-cpp/node/iterator.h>
 
 namespace httpserver {
 /**
