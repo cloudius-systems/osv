@@ -231,7 +231,6 @@ local-includes =
 INCLUDES = $(local-includes) -Iarch/$(arch) -I. -Iinclude  -Iarch/common
 INCLUDES += -isystem include/glibc-compat
 
-glibcbase = external/$(arch)/glibc.bin
 gccbase = external/$(arch)/gcc.bin
 miscbase = external/$(arch)/misc.bin
 jdkbase := $(shell find external/$(arch)/openjdk.bin/usr/lib/jvm \
@@ -1941,8 +1940,8 @@ $(bootfs_manifest_dep): phony
 $(out)/bootfs.bin: scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep) $(tools:%=$(out)/%) \
 		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so $(out)/libvdso.so
 	$(call quiet, olddir=`pwd`; cd $(out); "$$olddir"/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m "$$olddir"/$(bootfs_manifest) \
-		-D jdkbase="$$olddir"/$(jdkbase) -D gccbase="$$olddir"/$(gccbase) -D \
-		glibcbase="$$olddir"/$(glibcbase) -D miscbase="$$olddir"/$(miscbase), MKBOOTFS $@)
+		-D jdkbase="$$olddir"/$(jdkbase) -D gccbase="$$olddir"/$(gccbase) \
+		-D miscbase="$$olddir"/$(miscbase), MKBOOTFS $@)
 
 $(out)/bootfs.o: $(out)/bootfs.bin
 $(out)/bootfs.o: ASFLAGS += -I$(out)
