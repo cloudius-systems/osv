@@ -8,17 +8,20 @@ else
 java-targets := obj/java.so
 endif
 
-obj/java.o: $(SRC)/modules/java-base/java.cc | init
-	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ -c $(SRC)/modules/java-base/java.cc -MMD, CXX $@)
+obj/java.o: $(java-base-path)/java.cc | init
+	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ -c $(java-base-path)/java.cc -MMD, CXX $@)
+
+obj/java.so: obj/java.o $(java-base-path)/obj/jvm/java_api.o $(java-base-path)/obj/jvm/jni_helpers.o
+	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $^, LINK $@)
 
 init:
 	@echo "  MKDIRS"
 	$(call very-quiet, mkdir -p obj)
 
 module: $(java-targets)
-	cd $(SRC)/modules/java-base && mvn -q --projects :runjava-common,:runjava-isolated  package -DskipTests=true
+	cd $(java-base-path) && mvn -q --projects :runjava-common,:runjava-isolated  package -DskipTests=true
 
 clean:
-	cd $(SRC)/modules/java-base && mvn -q clean
+	cd $(java-base-path) && mvn -q clean
 	-rm -f dependency-reduced-pom.xml
 	$(call very-quiet, $(RM) -rf obj)

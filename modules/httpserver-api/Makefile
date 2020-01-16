@@ -107,7 +107,7 @@ check-http:
 check-ssl:
 	# Test SSL
 	cd $(src) && \
-	make image=httpserver-api.fg_ssl,certs,openjdk8-zulu-full,jetty && \
+	make image=httpserver-api.daemon_ssl,certs,openjdk8-zulu-full,jetty && \
 	PYTHONPATH=$(src)/scripts modules/httpserver-api/tests/testhttpserver-api.py \
 		--cert modules/certs/build/client.pem \
 		--key modules/certs/build/client.key \

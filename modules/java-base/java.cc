@@ -14,9 +14,9 @@
 #include <osv/debug.hh>
 #include <java/jvm/jvm_balloon.hh>
 #include <osv/mempool.hh>
-#include <java/jvm/java_api.hh>
+#include "jvm/java_api.hh"
 #include "osv/version.hh"
-#include <java/jvm/jni_helpers.hh>
+#include "jvm/jni_helpers.hh"
 #include <osv/defer.hh>
 #include <osv/app.hh>
 

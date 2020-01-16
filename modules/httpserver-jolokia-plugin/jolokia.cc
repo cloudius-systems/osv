@@ -15,7 +15,7 @@
 #include <mutex>
 #include <memory>
 #include <regex>
-#include <java/jvm/jni_helpers.hh>
+#include "../java-base/jvm/jni_helpers.hh"
 #include "exception.hh"
 
 using namespace httpserver::json;

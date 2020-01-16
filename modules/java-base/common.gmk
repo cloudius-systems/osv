@@ -1,7 +1,5 @@
-
 INCLUDES = -I$(src)/arch/$(arch) -I$(src) -I$(src)/include -I$(src)/arch/common
 INCLUDES += -I$(src)/include/glibc-compat
-INCLUDES += -isystem $(src)/external/$(arch)/acpica/source/include
 INCLUDES += $(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^ .*c\+\+/ {print "-isystem" $$0}')
 INCLUDES += -isystem $(src)/include/api
 INCLUDES += -isystem $(src)/include/api/$(arch)
@@ -13,7 +11,9 @@ autodepend = -MD -MT $@ -MP
 COMMON_FLAGS  = -g -Wall -fPIC $(INCLUDES) -O2 $(autodepend) -DCONF_debug_memory=0 -D_KERNEL
 CXXFLAGS  = -std=c++11 $(COMMON_FLAGS)
 CFLAGS = -std=gnu99 $(COMMON_FLAGS)
+
 src = $(shell readlink -f ../..)
+java-base-path := $(src)/modules/java-base
 
 RM := /bin/rm
 

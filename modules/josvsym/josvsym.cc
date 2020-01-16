@@ -5,7 +5,7 @@
 #include <thread>
 #include <initializer_list>
 #include <osv/tracecontrol.hh>
-#include <java/jvm/jni_helpers.hh>
+#include "../java-base/jvm/jni_helpers.hh"
 
 static jvmtiEnv * jvmti;
 static trace::generator_id id;
