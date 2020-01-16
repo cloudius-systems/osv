@@ -6,14 +6,6 @@
 	path = external/x64/gcc.bin
 	url = ../../cloudius-systems/gcc.bin
 	ignore = dirty
-[submodule "external/x64/glibc.bin"]
-	path = external/x64/glibc.bin
-	url = ../../cloudius-systems/glibc.bin
-	ignore = dirty
-[submodule "external/x64/glibc-testsuite"]
-	path = external/x64/glibc-testsuite
-	url = ../../cloudius-systems/glibc-testsuite
-	ignore = dirty
 [submodule "external/x64/acpica"]
 	path = external/x64/acpica
 	url = ../../cloudius-systems/acpica
