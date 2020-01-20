@@ -585,6 +585,7 @@ public:
     void set_search_path(std::initializer_list<std::string> path);
 
     symbol_module lookup(const char* symbol, object* seeker);
+    symbol_module lookup_next(const char* name, const void* retaddr);
     template <typename T>
     T* lookup_function(const char* symbol);
 

@@ -42,6 +42,7 @@
 TRACEPOINT(trace_elf_load, "%s", const char *);
 TRACEPOINT(trace_elf_unload, "%s", const char *);
 TRACEPOINT(trace_elf_lookup, "%s", const char *);
+TRACEPOINT(trace_elf_lookup_next, "%s", const char *);
 TRACEPOINT(trace_elf_lookup_addr, "%p", const void *);
 
 extern void* elf_start;
@@ -1551,6 +1552,38 @@ symbol_module program::lookup(const char* name, object* seeker)
             if (auto sym = module->lookup_symbol(name, seeker == module)) {
                 ret = symbol_module(sym, module);
                 return;
+            }
+        }
+    });
+    return ret;
+}
+
+symbol_module program::lookup_next(const char* name, const void* retaddr)
+{
+    trace_elf_lookup_next(name);
+    symbol_module ret(nullptr,nullptr);
+    if (retaddr == nullptr) {
+        return ret;
+    }
+    with_modules([&](const elf::program::modules_list &ml)
+    {
+        auto start = ml.objects.end();
+        for (auto it = ml.objects.begin(), end = ml.objects.end(); it != end; ++it) {
+            auto module = *it;
+            if (module->contains_addr(retaddr)) {
+                start = it;
+                break;
+            }
+        }
+        if (start == ml.objects.end()) {
+            return;
+        }
+        start = ++start;
+        for (auto it = start, end = ml.objects.end(); it != end; ++it) {
+            auto module = *it;
+            if (auto sym = module->lookup_symbol(name, false)) {
+                ret = symbol_module(sym, module);
+                break;
             }
         }
     });

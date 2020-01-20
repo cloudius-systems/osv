@@ -12,7 +12,7 @@
 #include <boost/test/unit_test.hpp>
 namespace utf = boost::unit_test;
 
-const bool rtld_next = false;
+const bool rtld_next = true;
 const bool deep_lookup = true;
 
 static bool called = false;

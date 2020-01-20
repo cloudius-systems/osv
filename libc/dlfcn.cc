@@ -70,8 +70,8 @@ void* dlsym(void* handle, const char* name)
     if ((program == handle) || (handle == RTLD_DEFAULT)) {
         sym = program->lookup(name, nullptr);
     } else if (handle == RTLD_NEXT) {
-        // FIXME: implement
-        abort();
+        auto retaddr = __builtin_extract_return_addr(__builtin_return_address(0));
+        sym = program->lookup_next(name, retaddr);
     } else {
         auto obj = *reinterpret_cast<std::shared_ptr<elf::object>*>(handle);
         sym = obj->lookup_symbol_deep(name);
