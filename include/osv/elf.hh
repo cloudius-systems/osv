@@ -347,6 +347,7 @@ public:
     void* base() const;
     void* end() const;
     Elf64_Sym* lookup_symbol(const char* name, bool self_lookup);
+    symbol_module lookup_symbol_deep(const char* name);
     void load_segments();
     void process_headers();
     void unload_segments();
@@ -405,6 +406,7 @@ private:
     void relocate_pltgot();
     unsigned symtab_len();
     void collect_dependencies(std::unordered_set<elf::object*>& ds);
+    std::deque<elf::object*> collect_dependencies_bfs();
     void prepare_initial_tls(void* buffer, size_t size, std::vector<ptrdiff_t>& offsets);
     void prepare_local_tls(std::vector<ptrdiff_t>& offsets);
     void alloc_static_tls();

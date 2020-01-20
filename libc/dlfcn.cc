@@ -74,7 +74,7 @@ void* dlsym(void* handle, const char* name)
         abort();
     } else {
         auto obj = *reinterpret_cast<std::shared_ptr<elf::object>*>(handle);
-        sym = { obj->lookup_symbol(name, false), obj.get() };
+        sym = obj->lookup_symbol_deep(name);
     }
     if (!sym.obj || !sym.symbol) {
         dlerror_fmt("dlsym: symbol %s not found", name);

@@ -27,6 +27,7 @@
 #include <sys/utsname.h>
 #include <osv/demangle.hh>
 #include <boost/version.hpp>
+#include <deque>
 
 #include "arch.hh"
 
@@ -950,6 +951,22 @@ Elf64_Sym* object::lookup_symbol(const char* name, bool self_lookup)
     return sym;
 }
 
+symbol_module object::lookup_symbol_deep(const char* name)
+{
+    symbol_module sym = { lookup_symbol(name, false), this };
+    if (!sym.symbol) {
+        auto deps = this->collect_dependencies_bfs();
+        for (auto&& _obj : deps) {
+            auto symbol = _obj->lookup_symbol(name, false);
+            if (symbol) {
+                sym = { symbol, _obj };
+                break;
+            }
+        }
+    }
+    return sym;
+}
+
 unsigned object::symtab_len()
 {
     if (dynamic_exists(DT_HASH)) {
@@ -1087,6 +1104,28 @@ void object::collect_dependencies(std::unordered_set<elf::object*>& ds)
             d->collect_dependencies(ds);
         }
     }
+}
+
+std::deque<elf::object*> object::collect_dependencies_bfs()
+{
+    std::unordered_set<object*> deps_set;
+    std::deque<object*> operate_queue;
+    std::deque<object*> deps;
+    operate_queue.push_back(this);
+    deps_set.insert(this);
+
+    while (!operate_queue.empty()) {
+        object* obj = operate_queue.front();
+        operate_queue.pop_front();
+        deps.push_back(obj);
+        for (auto&& d : obj->_needed) {
+            if (!deps_set.count(d.get())) {
+                deps_set.insert(d.get());
+                operate_queue.push_back(d.get());
+            }
+        }
+    }
+    return deps;
 }
 
 std::string object::soname()

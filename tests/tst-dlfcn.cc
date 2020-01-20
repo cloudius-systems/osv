@@ -13,7 +13,7 @@
 namespace utf = boost::unit_test;
 
 const bool rtld_next = false;
-const bool deep_lookup = false;
+const bool deep_lookup = true;
 
 static bool called = false;
 extern "C" void DlSymTestFunction()
