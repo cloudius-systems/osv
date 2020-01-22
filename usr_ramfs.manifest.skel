@@ -3,7 +3,7 @@
 /libvdso.so: libvdso.so
 /tools/mount-nfs.so: tools/mount/mount-nfs.so
 /tools/umount.so: tools/mount/umount.so
-/usr/lib/libgcc_s.so.1: %(gccbase)s/lib64/libgcc_s.so.1
+/usr/lib/libgcc_s.so.1: %(libgcc_s_dir)s/libgcc_s.so.1
 /&/etc/hosts: ../../static/&
 
 /etc/mnttab: ->/proc/mounts

@@ -1923,10 +1923,16 @@ $(bootfs_manifest_dep): phony
 		echo -n $(bootfs_manifest) > $(bootfs_manifest_dep) ; \
 	fi
 
+ifeq ($(arch),x64)
+libgcc_s_dir := $(dir $(shell $(CC) -print-file-name=libgcc_s.so.1))
+else
+libgcc_s_dir := ../../$(gccbase)/lib64
+endif
+
 $(out)/bootfs.bin: scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep) $(tools:%=$(out)/%) \
 		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so $(out)/libvdso.so
 	$(call quiet, olddir=`pwd`; cd $(out); "$$olddir"/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m "$$olddir"/$(bootfs_manifest) \
-		-D gccbase="$$olddir"/$(gccbase), MKBOOTFS $@)
+		-D libgcc_s_dir=$(libgcc_s_dir), MKBOOTFS $@)
 
 $(out)/bootfs.o: $(out)/bootfs.bin
 $(out)/bootfs.o: ASFLAGS += -I$(out)

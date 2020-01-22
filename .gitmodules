@@ -1,7 +1,3 @@
-[submodule "external/x64/gcc.bin"]
-	path = external/x64/gcc.bin
-	url = ../../cloudius-systems/gcc.bin
-	ignore = dirty
 [submodule "external/x64/acpica"]
 	path = external/x64/acpica
 	url = ../../cloudius-systems/acpica

@@ -169,9 +169,6 @@ aarch64) image=${vars[image]-uush};;
 esac
 modules=${vars[modules]-!$image}
 
-# TODO: some modules need these... Would be better if they wouldn't...
-gccbase=${vars[gccbase]-"$SRC"/external/$arch/gcc.bin}
-
 case $OUT in
 /*)	OSV_BUILD_PATH=$OUT;;
 *)	OSV_BUILD_PATH=`pwd`/$OUT;;
@@ -256,6 +253,7 @@ kernel_end=$(($loader_size+2097151 & ~2097151))
 # the case in our old build.mk).
 cd $OUT
 
+libgcc_s_dir=$(dirname $(readlink -f $(gcc -print-file-name=libgcc_s.so.1)))
 case $fs_type in
 zfs)
 	cp loader.img bare.raw
@@ -267,15 +265,15 @@ zfs)
 
 	if [ "$export" == "none" ]
 	then
-		"$SRC"/scripts/upload_manifest.py -o usr.img -m usr.manifest -D gccbase="$gccbase"
+		"$SRC"/scripts/upload_manifest.py -o usr.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
 	else
 		export_dir=${vars[export_dir]-$SRC/build/export}
-		"$SRC"/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D gccbase="$gccbase"
+		"$SRC"/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
 	fi
 	;;
 rofs)
 	rm -rf rofs.img
-	"$SRC"/scripts/gen-rofs-img.py -o rofs.img -m usr.manifest -D gccbase="$gccbase"
+	"$SRC"/scripts/gen-rofs-img.py -o rofs.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
 	rofs_size=`stat --printf %s rofs.img`
 	img_size=$((kernel_end + rofs_size))
 	cp loader.img bare.raw
