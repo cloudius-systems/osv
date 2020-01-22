@@ -19,7 +19,7 @@
 #include <api/unistd.h>
 #include <osv/commands.hh>
 #include <algorithm>
-#include "java/jvm/balloon_api.hh"
+#include "../java-base/balloon/balloon_api.hh"
 
 extern char debug_buffer[DEBUG_BUFFER_SIZE];
 

@@ -319,7 +319,6 @@ COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -
 	$(kernel-defines) \
 	-fno-omit-frame-pointer $(compiler-specific) \
 	-include compiler/include/intrinsics.hh \
-	$(do-sys-includes) \
 	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) $(gcc-sysroot) \
 	$(configuration) -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207" -DARCH_STRING=$(ARCH_STR) $(EXTRA_FLAGS)
 ifeq ($(gcc_include_env), external)
@@ -383,10 +382,7 @@ $(out)/%.o: %.s
 	$(makedir)
 	$(q-build-so)
 
-sys-includes = $(jdkbase)/include $(jdkbase)/include/linux
 autodepend = -MD -MT $@ -MP
-
-do-sys-includes = $(foreach inc, $(sys-includes), -isystem $(inc))
 
 tools := tools/mkfs/mkfs.so tools/cpiod/cpiod.so
 
@@ -816,7 +812,6 @@ drivers += drivers/clock.o
 drivers += drivers/clock-common.o
 drivers += drivers/clockevent.o
 drivers += core/elf.o
-drivers += java/jvm/jvm_balloon.o
 drivers += drivers/random.o
 drivers += drivers/zfs.o
 drivers += drivers/null.o

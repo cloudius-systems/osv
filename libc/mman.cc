@@ -15,7 +15,6 @@
 #include "osv/mount.h"
 #include "libc/libc.hh"
 #include <safe-ptr.hh>
-#include <java/jvm/jvm_balloon.hh>
 
 TRACEPOINT(trace_memory_mmap, "addr=%p, length=%d, prot=%d, flags=%d, fd=%d, offset=%d", void *, size_t, int, int, int, off_t);
 TRACEPOINT(trace_memory_mmap_err, "%d", int);
@@ -150,7 +149,9 @@ void *mmap(void *addr, size_t length, int prot, int flags,
             // it this way now because it is simpler and I don't expect that to
             // ever be harmful.
             mmap_flags |= mmu::mmap_jvm_heap;
-            memory::return_jvm_heap(length);
+            if (memory::balloon_api) {
+                memory::balloon_api->return_heap(length);
+            }
         }
         try {
             ret = mmu::map_anon(addr, length, mmap_flags, mmap_perm);

@@ -12,7 +12,7 @@
 #include <unistd.h>
 #include <regex>
 #include <osv/debug.hh>
-#include <java/jvm/jvm_balloon.hh>
+#include "balloon/jvm_balloon.hh"
 #include <osv/mempool.hh>
 #include "jvm/java_api.hh"
 #include "osv/version.hh"
@@ -174,9 +174,9 @@ static int java_main(int argc, char **argv)
     size_t auto_heap = 0;
 #if 0
     // Do not use total(), since that won't reflect the whole memory for the
-    // machine. It then becomes counterintuitive to tell the user what is the
+    // machine. It then becomes counter intuitive to tell the user what is the
     // minimum he has to set to balloon
-    if (!has_xmx && (memory::phys_mem_size >= balloon_min_memory)) {
+    if (!has_xmx && (memory::phys_mem_size >= memory::balloon_min_memory)) {
         auto_heap = std::min(memory::stats::free(), memory::stats::max_no_reclaim()) >> 20;
         options.push_back(mkoption("-Xmx%dM", auto_heap));
         if (!has_xms) {
@@ -252,8 +252,8 @@ static int java_main(int argc, char **argv)
     // Manually setting the heap size is viewed as a declaration of intent. In
     // that case, we'll leave the user alone. This may be revisited in the
     // future, but it is certainly the safest option.
-    std::unique_ptr<jvm_balloon_shrinker>
-        balloon(auto_heap == 0 ? nullptr : new jvm_balloon_shrinker(jvm));
+    std::unique_ptr<memory::jvm_balloon_api_impl>
+        balloon(auto_heap == 0 ? nullptr : new memory::jvm_balloon_api_impl(jvm));
 
     env->CallStaticVoidMethod(mainclass, mainmethod, args);
 

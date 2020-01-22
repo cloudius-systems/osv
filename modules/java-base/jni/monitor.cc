@@ -1,6 +1,6 @@
 #include <jni.h>
 #include "monitor.hh"
-#include "java/jvm/jvm_balloon.hh"
+#include "../balloon/jvm_balloon.hh"
 
 /*
  * Class:     io_osv_OSvGCMonitor
@@ -10,5 +10,5 @@
 JNIEXPORT void JNICALL Java_io_osv_OSvGCMonitor_NotifyOSv(JNIEnv *env, jclass mon, jlong handle, jlong qty)
 {
     jvm_balloon_shrinker *shrinker = (jvm_balloon_shrinker *)handle;
-    shrinker->release_memory((qty / balloon_size) + !!(qty % balloon_size));
+    shrinker->release_memory((qty / memory::balloon_size) + !!(qty % memory::balloon_size));
 }

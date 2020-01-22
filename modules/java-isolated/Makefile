@@ -11,7 +11,7 @@ endif
 obj/java.o: $(java-base-path)/java.cc | init
 	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ -c $(java-base-path)/java.cc -MMD, CXX $@)
 
-obj/java.so: obj/java.o $(java-base-path)/obj/jvm/java_api.o $(java-base-path)/obj/jvm/jni_helpers.o
+obj/java.so: obj/java.o $(java-base-path)/obj/jvm/java_api.o $(java-base-path)/obj/jvm/jni_helpers.o $(java-base-path)/obj/balloon/jvm_balloon.o
 	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $^, LINK $@)
 
 init:

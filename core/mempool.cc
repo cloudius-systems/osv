@@ -31,7 +31,6 @@
 #include <osv/shrinker.h>
 #include <osv/defer.hh>
 #include <osv/dbg-alloc.hh>
-#include "java/jvm/jvm_balloon.hh"
 #include <boost/dynamic_bitset.hpp>
 #include <boost/lockfree/stack.hpp>
 #include <boost/lockfree/policies.hpp>
@@ -442,7 +441,9 @@ static void on_free(size_t mem)
 static void on_alloc(size_t mem)
 {
     free_memory.fetch_sub(mem);
-    jvm_balloon_adjust_memory(min_emergency_pool_size);
+    if (balloon_api) {
+        balloon_api->adjust_memory(min_emergency_pool_size);
+    }
     if ((stats::free() + stats::jvm_heap()) < watermark_lo) {
         reclaimer_thread.wake();
     }
@@ -1030,7 +1031,9 @@ void reclaimer::_do_reclaim()
                 }
             }
 
-            jvm_balloon_voluntary_return();
+            if (balloon_api) {
+                balloon_api->voluntary_return();
+            }
         }
     }
 }
@@ -1976,4 +1979,14 @@ void free_phys_contiguous_aligned(void* p)
     free_large(p);
 }
 
+bool throttling_needed()
+{
+    if (!balloon_api) {
+        return false;
+    }
+
+    return balloon_api->ballooning();
+}
+
+jvm_balloon_api *balloon_api = nullptr;
 }

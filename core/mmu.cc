@@ -22,7 +22,6 @@
 #include <osv/error.h>
 #include <osv/trace.hh>
 #include <stack>
-#include "java/jvm/jvm_balloon.hh"
 #include <fs/fs.hh>
 #include <osv/file.h>
 #include "dump.hh"
@@ -1551,7 +1550,7 @@ error jvm_balloon_vma::sync(uintptr_t start, uintptr_t end)
 
 void jvm_balloon_vma::fault(uintptr_t fault_addr, exception_frame *ef)
 {
-    if (jvm_balloon_fault(_balloon, ef, this)) {
+    if (memory::balloon_api && memory::balloon_api->fault(_balloon, ef, this)) {
         return;
     }
     // Can only reach this case if we are doing partial copies
@@ -1578,8 +1577,8 @@ jvm_balloon_vma::~jvm_balloon_vma()
     if (_effective_jvm_addr) {
         // Can't just use size(), because although rare, the source and destination can
         // have different alignments
-        auto end = align_down(_effective_jvm_addr + balloon_size, balloon_alignment);
-        auto s = end - align_up(_effective_jvm_addr, balloon_alignment);
+        auto end = align_down(_effective_jvm_addr + memory::balloon_size, memory::balloon_alignment);
+        auto s = end - align_up(_effective_jvm_addr, memory::balloon_alignment);
         mmu::map_jvm(_effective_jvm_addr, s, mmu::huge_page_size, _balloon);
     }
 }
