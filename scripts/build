@@ -171,7 +171,6 @@ modules=${vars[modules]-!$image}
 
 # TODO: some modules need these... Would be better if they wouldn't...
 gccbase=${vars[gccbase]-"$SRC"/external/$arch/gcc.bin}
-miscbase=${vars[miscbase]-"$SRC"/external/$arch/misc.bin}
 
 case $OUT in
 /*)	OSV_BUILD_PATH=$OUT;;
@@ -268,15 +267,15 @@ zfs)
 
 	if [ "$export" == "none" ]
 	then
-		"$SRC"/scripts/upload_manifest.py -o usr.img -m usr.manifest -D gccbase="$gccbase" -D miscbase="$miscbase"
+		"$SRC"/scripts/upload_manifest.py -o usr.img -m usr.manifest -D gccbase="$gccbase"
 	else
 		export_dir=${vars[export_dir]-$SRC/build/export}
-		"$SRC"/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D gccbase="$gccbase" -D miscbase="$miscbase"
+		"$SRC"/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D gccbase="$gccbase"
 	fi
 	;;
 rofs)
 	rm -rf rofs.img
-	"$SRC"/scripts/gen-rofs-img.py -o rofs.img -m usr.manifest -D gccbase="$gccbase" -D miscbase="$miscbase"
+	"$SRC"/scripts/gen-rofs-img.py -o rofs.img -m usr.manifest -D gccbase="$gccbase"
 	rofs_size=`stat --printf %s rofs.img`
 	img_size=$((kernel_end + rofs_size))
 	cp loader.img bare.raw

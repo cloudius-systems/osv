@@ -1926,8 +1926,7 @@ $(bootfs_manifest_dep): phony
 $(out)/bootfs.bin: scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep) $(tools:%=$(out)/%) \
 		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so $(out)/libvdso.so
 	$(call quiet, olddir=`pwd`; cd $(out); "$$olddir"/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m "$$olddir"/$(bootfs_manifest) \
-		-D gccbase="$$olddir"/$(gccbase) \
-		-D miscbase="$$olddir"/$(miscbase), MKBOOTFS $@)
+		-D gccbase="$$olddir"/$(gccbase), MKBOOTFS $@)
 
 $(out)/bootfs.o: $(out)/bootfs.bin
 $(out)/bootfs.o: ASFLAGS += -I$(out)
