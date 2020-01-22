@@ -170,7 +170,6 @@ esac
 modules=${vars[modules]-!$image}
 
 # TODO: some modules need these... Would be better if they wouldn't...
-jdkbase=${vars[jdkbase]-`find "$SRC"/external/$arch/openjdk.bin/usr/lib/jvm -maxdepth 1 -type d -name 'java*'`}
 gccbase=${vars[gccbase]-"$SRC"/external/$arch/gcc.bin}
 miscbase=${vars[miscbase]-"$SRC"/external/$arch/misc.bin}
 
@@ -221,8 +220,8 @@ fi
 			export "$i" ;;
 		esac
 	done
-	# Export the variables we already have. This makes it unnecessary to do "fs__type=$fstype jdkbase $jdkbase ..."
-	export fs_type jdkbase mode OSV_BUILD_PATH
+	# Export the variables we already have. This makes it unnecessary to do "fs__type=$fstype ..."
+	export fs_type mode OSV_BUILD_PATH
 	# Other variables we wanted to rename, I don't know why
 	export ARCH=$arch OSV_BASE=$SRC
 	# Run what we wanted to run. It will inherit everything we exported above.
@@ -269,15 +268,15 @@ zfs)
 
 	if [ "$export" == "none" ]
 	then
-		"$SRC"/scripts/upload_manifest.py -o usr.img -m usr.manifest -D jdkbase="$jdkbase" -D gccbase="$gccbase" -D miscbase="$miscbase"
+		"$SRC"/scripts/upload_manifest.py -o usr.img -m usr.manifest -D gccbase="$gccbase" -D miscbase="$miscbase"
 	else
 		export_dir=${vars[export_dir]-$SRC/build/export}
-		"$SRC"/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D jdkbase="$jdkbase" -D gccbase="$gccbase" -D miscbase="$miscbase"
+		"$SRC"/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D gccbase="$gccbase" -D miscbase="$miscbase"
 	fi
 	;;
 rofs)
 	rm -rf rofs.img
-	"$SRC"/scripts/gen-rofs-img.py -o rofs.img -m usr.manifest -D jdkbase="$jdkbase" -D gccbase="$gccbase" -D miscbase="$miscbase"
+	"$SRC"/scripts/gen-rofs-img.py -o rofs.img -m usr.manifest -D gccbase="$gccbase" -D miscbase="$miscbase"
 	rofs_size=`stat --printf %s rofs.img`
 	img_size=$((kernel_end + rofs_size))
 	cp loader.img bare.raw

@@ -1,7 +1,3 @@
-[submodule "external/x64/openjdk.bin"]
-	path = external/x64/openjdk.bin
-	url = ../../cloudius-systems/openjdk.bin
-	ignore = dirty
 [submodule "external/x64/gcc.bin"]
 	path = external/x64/gcc.bin
 	url = ../../cloudius-systems/gcc.bin
@@ -24,9 +20,6 @@
 [submodule "external/aarch64/misc.bin"]
 	path = external/aarch64/misc.bin
 	url = ../../cloudius-systems/aarch64-misc.bin.git
-[submodule "external/aarch64/openjdk.bin"]
-	path = external/aarch64/openjdk.bin
-	url = ../../cloudius-systems/aarch64-openjdk.bin.git
 [submodule "modules/httpserver/swagger-ui"]
 	path = modules/httpserver-html5-gui/swagger-ui
 	url = ../../cloudius-systems/swagger-ui.git

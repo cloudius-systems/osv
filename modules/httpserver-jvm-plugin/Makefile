@@ -1,7 +1,6 @@
 
 INCLUDES = -I$(src)/build/$(mode)/gen/include
-INCLUDES += -I../../include -I. -I../../java -I../../arch/$(ARCH) -I../..
-INCLUDES += -I$(jdkbase)/include -I$(jdkbase)/include/linux
+INCLUDES += -I../../include -I. -I../../arch/$(ARCH) -I../..
 INCLUDES += -I../httpserver-api
 
 # compiler flags:

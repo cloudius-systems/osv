@@ -1,3 +1,5 @@
+jdkbase = $(dir $(shell readlink -f $$(which javac)))/..
+
 INCLUDES = -I$(src)/arch/$(arch) -I$(src) -I$(src)/include -I$(src)/arch/common
 INCLUDES += -I$(src)/include/glibc-compat
 INCLUDES += $(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^ .*c\+\+/ {print "-isystem" $$0}')
