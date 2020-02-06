@@ -23,7 +23,7 @@ standard_ec2_post_install = ['pip install awscli &&'
 class Fedora(object):
     name = 'Fedora'
     pre_install = '(yum list installed compat-openssl10-devel 2>/dev/null && yum -y remove compat-openssl10-devel) || echo "package compat-openssl10-devel not found -> no need to remove it"'
-    install = 'yum -y install --allowerasing'
+    install = 'yum -y install --allowerasing --forcearch x86_64'
     packages = [
                 'ant',
                 'autoconf',
@@ -99,7 +99,21 @@ class Fedora(object):
         ec2_post_install = None
         version = '29'
 
-    versions = [Fedora_25, Fedora_26, Fedora_27, Fedora_28, Fedora_29]
+    class Fedora_30(object):
+        packages = ['java-1.8.0-openjdk', 'python2-requests', 'openssl-devel', 'lua-5.3.*', 'lua-devel-5.3.*']
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '30'
+
+    class Fedora_31(object):
+        packages = ['java-1.8.0-openjdk', 'python2-requests', 'openssl-devel', 'lua-5.3.*', 'lua-devel-5.3.*']
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '31'
+
+    versions = [Fedora_25, Fedora_26, Fedora_27, Fedora_28, Fedora_29, Fedora_30, Fedora_31]
 
 class RHELbased(Fedora):
     name = ['Scientific Linux', 'NauLinux', 'CentOS Linux', 'Red Hat Enterprise Linux', 'Oracle Linux']
