@@ -52,9 +52,11 @@ extern struct vfsops nfs_vfsops;
 extern struct vfsops procfs_vfsops;
 extern struct vfsops sysfs_vfsops;
 extern struct vfsops zfs_vfsops;
+extern struct vfsops virtiofs_vfsops;
 
 extern int ramfs_init(void);
 extern int rofs_init(void);
+extern int virtiofs_init(void);
 extern int devfs_init(void);
 extern int nfs_init(void);
 extern int procfs_init(void);
@@ -72,5 +74,6 @@ const struct vfssw vfssw[] = {
     {"sysfs",	sysfs_init,	&sysfs_vfsops},
 	{"zfs",		zfs_init,	&zfs_vfsops},
 	{"rofs", 	rofs_init, 	&rofs_vfsops},
+	{"virtiofs", 	virtiofs_init, 	&virtiofs_vfsops},
 	{nullptr,	fs_noop,	nullptr},
 };

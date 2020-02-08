@@ -829,6 +829,7 @@ drivers += drivers/vmxnet3-queues.o
 drivers += drivers/virtio-blk.o
 drivers += drivers/virtio-scsi.o
 drivers += drivers/virtio-rng.o
+drivers += drivers/virtio-fs.o
 drivers += drivers/kvmclock.o drivers/xenclock.o drivers/hypervclock.o
 drivers += drivers/acpi.o
 drivers += drivers/hpet.o
@@ -1793,6 +1794,9 @@ fs_objs += rofs/rofs_vfsops.o \
 	rofs/rofs_vnops.o \
 	rofs/rofs_cache.o \
 	rofs/rofs_common.o
+
+fs_objs += virtiofs/virtiofs_vfsops.o \
+	virtiofs/virtiofs_vnops.o
 
 fs_objs += pseudofs/pseudofs.o
 fs_objs += procfs/procfs_vnops.o
