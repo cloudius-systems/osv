@@ -852,6 +852,7 @@ drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-rng.o
 drivers += drivers/virtio-blk.o
 drivers += drivers/virtio-net.o
+drivers += drivers/virtio-fs.o
 endif # aarch64
 
 objects += arch/$(arch)/arch-trace.o
