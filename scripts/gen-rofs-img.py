@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 
 #
 # Copyright (c) 2015 Carnegie Mellon University.
@@ -218,13 +218,13 @@ def write_dir(fp, manifest, dirpath, parent_dir):
                 inode.data_offset = symlinks_count
                 inode.count = 1
                 next_symlink(val[2:],manifest)
-                print('Link %s to %s' % (dirpath + '/' + entry, val[2:]))
+                print 'Link %s to %s' % (dirpath + '/' + entry, val[2:])
             else: #file
                 inode.mode = REG_MODE
                 global block
                 inode.data_offset = block
                 inode.count = write_file(fp, val)
-                print('Adding %s' % (dirpath + '/' + entry))
+                print 'Adding %s' % (dirpath + '/' + entry)
 
     # This needs to be added so that later we can walk the tree
     # when fining symlinks
@@ -264,7 +264,7 @@ def write_fs(fp, manifest):
     return (block_no, bytes_written)
 
 def gen_image(out, manifest):
-    print('Writing image')
+    print 'Writing image'
     fp = open(out, 'wb')
 
     # write the initial superblock
@@ -272,7 +272,7 @@ def gen_image(out, manifest):
 
     system_structure_block, bytes_written = write_fs(fp, manifest)
     structure_info_last_block_bytes = bytes_written % OSV_BLOCK_SIZE
-    structure_info_blocks_count = bytes_written // OSV_BLOCK_SIZE + (1 if structure_info_last_block_bytes > 0 else 0)
+    structure_info_blocks_count = bytes_written / OSV_BLOCK_SIZE + (1 if structure_info_last_block_bytes > 0 else 0)
 
     pad(fp,OSV_BLOCK_SIZE - structure_info_last_block_bytes)
 
@@ -290,10 +290,10 @@ def gen_image(out, manifest):
     sb.symlinks_count = len(symlinks)
     sb.inodes_count = len(inodes)
 
-    print('First block: %d, blocks count: %d' % (sb.structure_info_first_block, sb.structure_info_blocks_count))
-    print('Directory entries count %d' % sb.directory_entries_count)
-    print('Symlinks count %d' % sb.symlinks_count)
-    print('Inodes count %d' % sb.inodes_count)
+    print 'First block: %d, blocks count: %d' % (sb.structure_info_first_block, sb.structure_info_blocks_count)
+    print 'Directory entries count %d' % sb.directory_entries_count
+    print 'Symlinks count %d' % sb.symlinks_count
+    print 'Inodes count %d' % sb.inodes_count
 
     fp.seek(0)
     fp.write(sb)

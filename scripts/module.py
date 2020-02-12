@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python
 
 import re
 import os
@@ -226,7 +226,7 @@ def build(args):
         else:
             print(prefix)
 
-    for module, run_config_name in list(modules_to_run.items()):
+    for module, run_config_name in modules_to_run.items():
         run_config = resolve.get_run_config(module, run_config_name)
         if run_config:
             run_list.append(run_config)

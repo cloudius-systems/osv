@@ -1,4 +1,4 @@
-#!/usr/bin/env python3
+#!/usr/bin/env python
 import atexit
 import subprocess
 import argparse
@@ -81,7 +81,7 @@ def is_not_skipped(test):
     return test.name not in blacklist
 
 def run_tests_in_single_instance():
-    run([test for test in tests if not isinstance(test, TestRunnerTest)])
+    run(filter(lambda test: not isinstance(test, TestRunnerTest), tests))
 
     blacklist_tests = ' '.join(blacklist)
     args = run_py_args + ["-s", "-e", "/testrunner.so -b %s" % (blacklist_tests)]
@@ -103,7 +103,7 @@ def pluralize(word, count):
 
 def make_export_and_conf():
     export_dir = tempfile.mkdtemp(prefix='share')
-    os.chmod(export_dir, 0o777)
+    os.chmod(export_dir, 0777)
     (conf_fd, conf_path) = tempfile.mkstemp(prefix='export')
     conf = os.fdopen(conf_fd, "w")
     conf.write("%s 127.0.0.1(insecure,rw)\n" % export_dir)

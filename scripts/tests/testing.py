@@ -133,7 +133,7 @@ class SupervisedProcess:
             self.cv.release()
 
         line = ''
-        ch_bytes = bytes()
+        ch_bytes = ''
         while True:
             ch_bytes = ch_bytes + self.process.stdout.read(1)
             try:
@@ -144,7 +144,7 @@ class SupervisedProcess:
                 if ch == '\n':
                     append_line(line)
                     line = ''
-                ch_bytes = bytes()
+                ch_bytes = ''
             except UnicodeError:
                 continue
 

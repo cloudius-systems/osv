@@ -1,7 +1,7 @@
+import SimpleHTTPServer as http
+import SocketServer
 import subprocess
 import os
-import http.server as http
-import socketserver
 
 METADATA_IP = '169.254.169.254'
 port = 80
@@ -32,7 +32,7 @@ def start_server(path):
     try:
         os.chdir(path)
         handler = http.SimpleHTTPRequestHandler
-        server = socketserver.TCPServer(("", port), handler, False)
+        server = SocketServer.TCPServer(("", port), handler, False)
         server.allow_reuse_address = True
         server.server_bind()
         server.server_activate()

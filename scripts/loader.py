@@ -1,4 +1,4 @@
-#!/usr/bin/python3
+#!/usr/bin/python2
 
 import gdb
 import re
@@ -37,8 +37,8 @@ def phys_cast(addr, type):
 
 def values(_dict):
     if hasattr(_dict, 'viewvalues'):
-        return _dict.values()
-    return list(_dict.values())
+        return _dict.viewvalues()
+    return _dict.values()
 
 def read_vector(v):
     impl = v['_M_impl']
@@ -426,19 +426,19 @@ class osv_zfs(gdb.Command):
 
         print ("\n:: ARC SIZES ::")
         print ("\tCurrent size:    %d (%d MB)" %
-               (arc_size, arc_size // 1024 // 1024))
+               (arc_size, arc_size / 1024 / 1024))
         print ("\tTarget size:     %d (%d MB)" %
-               (arc_target_size, arc_target_size // 1024 // 1024))
+               (arc_target_size, arc_target_size / 1024 / 1024))
         print ("\tMin target size: %d (%d MB)" %
-               (arc_min_size, arc_min_size // 1024 // 1024))
+               (arc_min_size, arc_min_size / 1024 / 1024))
         print ("\tMax target size: %d (%d MB)" %
-               (arc_max_size, arc_max_size // 1024 // 1024))
+               (arc_max_size, arc_max_size / 1024 / 1024))
 
         print ("\n:: ARC SIZE BREAKDOWN ::")
         print ("\tMost recently used cache size:   %d (%d MB) (%.2f%%)" %
-               (arc_mru_size, arc_mru_size // 1024 // 1024, arc_mru_perc))
+               (arc_mru_size, arc_mru_size / 1024 / 1024, arc_mru_perc))
         print ("\tMost frequently used cache size: %d (%d MB) (%.2f%%)" %
-               (arc_mfu_size, arc_mfu_size // 1024 // 1024, arc_mfu_perc))
+               (arc_mfu_size, arc_mfu_size / 1024 / 1024, arc_mfu_perc))
 
         # Cache efficiency
         arc_hits = get_stat_by_name(arc_stats_struct, arc_stats_cast, 'arcstat_hits')
@@ -618,7 +618,7 @@ class osv_mmap(gdb.Command):
             end = ulong(vma['_range']['_end'])
             flags = flagstr(ulong(vma['_flags']))
             perm = permstr(ulong(vma['_perm']))
-            size = '{:<16}'.format('[%s kB]' % (ulong(end - start)//1024))
+            size = '{:<16}'.format('[%s kB]' % (ulong(end - start)/1024))
 
             if 'F' in flags:
                 file_vma = vma.cast(gdb.lookup_type('mmu::file_vma').pointer())
@@ -648,7 +648,7 @@ class osv_vma_find(gdb.Command):
                 if start <= addr and end > addr:
                     flags = flagstr(ulong(vma['_flags']))
                     perm = permstr(ulong(vma['_perm']))
-                    size = '{:<16}'.format('[%s kB]' % (ulong(end - start)//1024))
+                    size = '{:<16}'.format('[%s kB]' % (ulong(end - start)/1024))
                     print('0x%016x -> vma 0x%016x' % (addr, vma_addr))
                     print('0x%016x 0x%016x %s flags=%s perm=%s' % (start, end, size, flags, perm))
                     break
@@ -671,7 +671,7 @@ def ulong(x):
 def to_int(gdb_value):
     if hasattr(globals()['__builtins__'], 'long'):
         # For GDB with python2
-        return int(gdb_value)
+        return long(gdb_value)
     return int(gdb_value)
 
 class osv_syms(gdb.Command):
@@ -685,9 +685,9 @@ class osv_syms(gdb.Command):
             obj_path = obj['_pathname']['_M_dataplus']['_M_p'].string()
             path = translate(obj_path)
             if not path:
-                print(('ERROR: Unable to locate object file for:', obj_path, hex(base)))
+                print('ERROR: Unable to locate object file for:', obj_path, hex(base))
             else:
-                print((path, hex(base)))
+                print(path, hex(base))
                 load_elf(path, base)
 
 class osv_load_elf(gdb.Command):
@@ -751,7 +751,7 @@ def get_base_class_offset(gdb_type, base_class_name):
     name_pattern = re.escape(base_class_name) + "(<.*>)?$"
     for field in gdb_type.fields():
         if field.is_base_class and re.match(name_pattern, field.name):
-            return field.bitpos // 8
+            return field.bitpos / 8
 
 def derived_from(type, base_class):
     return len([x for x in type.fields()
@@ -808,8 +808,11 @@ class intrusive_list:
             yield node_ptr.cast(self.node_type.pointer()).dereference()
             hook = hook['next_']
 
-    def __bool__(self):
+    def __nonzero__(self):
         return self.root['next_'] != self.root.address
+
+    def __bool__(self):
+        return self.__nonzero__()
 
 class vmstate(object):
     def __init__(self):
@@ -829,7 +832,7 @@ class vmstate(object):
         self.cpu_list = cpu_list
 
     def load_thread_list(self):
-        threads = list(map(gdb.Value.dereference, unordered_map(gdb.lookup_global_symbol('sched::thread_map').value())))
+        threads = map(gdb.Value.dereference, unordered_map(gdb.lookup_global_symbol('sched::thread_map').value()))
         self.thread_list = sorted(threads, key=lambda x: int(x["_id"]))
 
     def cpu_from_thread(self, thread):
@@ -893,7 +896,7 @@ def show_thread_timers(t):
         gdb.write('  timers:')
         for timer in timer_list:
             expired = '*' if timer['_state'] == timer_state_expired else ''
-            expiration = int(timer['_time']['__d']['__r']) // 1.0e9
+            expiration = int(timer['_time']['__d']['__r']) / 1.0e9
             gdb.write(' %11.9f%s' % (expiration, expired))
         gdb.write('\n')
 
@@ -908,7 +911,7 @@ class ResolvedFrame:
         self.frame = frame
         self.file_name = file_name
         self.line = line
-        self.__name__ = func_name
+        self.func_name = func_name
 
 def traverse_resolved_frames(frame):
     while frame:
@@ -986,14 +989,14 @@ class osv_info_threads(gdb.Command):
                 function_whitelist = [sched_thread_join]
 
                 def is_interesting(resolved_frame):
-                    is_whitelisted = resolved_frame.__name__ in function_whitelist
+                    is_whitelisted = resolved_frame.func_name in function_whitelist
                     is_blacklisted = os.path.basename(resolved_frame.file_name) in file_blacklist
                     return is_whitelisted or not is_blacklisted
 
                 fr = find_or_give_last(is_interesting, traverse_resolved_frames(newest_frame))
 
                 if fr:
-                    location = '%s at %s:%s' % (fr.__name__, strip_dotdot(fr.file_name), fr.line)
+                    location = '%s at %s:%s' % (fr.func_name, strip_dotdot(fr.file_name), fr.line)
                 else:
                     location = '??'
 
@@ -1006,7 +1009,7 @@ class osv_info_threads(gdb.Command):
                            )
                           )
 
-                if fr and fr.__name__ == sched_thread_join:
+                if fr and fr.func_name == sched_thread_join:
                     gdb.write("\tjoining on %s\n" % fr.frame.read_var("this"))
 
                 show_thread_timers(t)
@@ -1211,7 +1214,7 @@ def all_traces():
             unpacker.align_up(8)
             yield Trace(tp, Thread(thread, thread_name), time, cpu, data, backtrace=backtrace)
 
-    iters = [one_cpu_trace(cpu) for cpu in values(state.cpu_list)]
+    iters = map(lambda cpu: one_cpu_trace(cpu), values(state.cpu_list))
     return heapq.merge(*iters)
 
 def save_traces_to_file(filename):
@@ -1278,7 +1281,7 @@ def show_leak():
     gdb.flush()
     allocs = []
     for i in range(size_allocations):
-        newpercent = '%2d%%' % round(100.0*i//(size_allocations-1))
+        newpercent = '%2d%%' % round(100.0*i/(size_allocations-1))
         if newpercent != percent:
             percent = newpercent
             gdb.write('\b\b\b%s' % newpercent)
@@ -1340,10 +1343,10 @@ def show_leak():
                    allocations=cur_n,
                    minsize=cur_min_size,
                    maxsize=cur_max_size,
-                   avgsize=cur_total_size//cur_n,
+                   avgsize=cur_total_size/cur_n,
                    minbirth=cur_first_seq,
                    maxbirth=cur_last_seq,
-                   avgbirth=cur_total_seq//cur_n,
+                   avgbirth=cur_total_seq/cur_n,
                    callchain=callchain)
         records.append(r)
         cur_n = 0
@@ -1535,7 +1538,7 @@ class osv_percpu(gdb.Command):
             gdb.write('%s\n'%e)
             return
         percpu_addr = percpu.address
-        for cpu in list(vmstate().cpu_list.values()):
+        for cpu in vmstate().cpu_list.values():
             gdb.write("CPU %d:\n" % cpu.id)
             base = cpu.obj['percpu_base']
             addr = base+to_int(percpu_addr)
