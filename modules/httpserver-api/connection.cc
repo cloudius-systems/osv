@@ -246,8 +246,11 @@ void connection::do_read()
                 request_.content.append(buffer_.data(), buffer_.data() + bytes_transferred);
                 if (request_.content.size() < request_.content_length) {
                     do_read();
-                    return;
+                } else {
+                    request_handler_.handle_request(request_, reply_);
+                    do_write();
                 }
+                return;
             }
 
             auto r = request_parser_.parse(
