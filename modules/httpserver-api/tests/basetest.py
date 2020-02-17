@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import json
 import os
 import subprocess
@@ -33,7 +33,7 @@ class Basetest(unittest.TestCase):
 
     @classmethod
     def get_json_api_from_directory(cls, directory, name):
-	json_data = open(os.path.join(directory, name))
+        json_data = open(os.path.join(directory, name))
         data = json.load(json_data)
         json_data.close()
         return data
@@ -83,7 +83,7 @@ class Basetest(unittest.TestCase):
 
     def validate_path_regex(self, api_definition, nickname, expr):
         path = self.path_by_nick(api_definition, nickname)
-        self.assertRegexpMatches(self.curl(path), expr)
+        self.assertRegex(self.curl(path), expr)
 
     def assertHttpError(self, url, code=404):
         try:

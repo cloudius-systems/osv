@@ -1,7 +1,7 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import time
 import basetest
-import urllib
+import urllib.request, urllib.parse, urllib.error
 
 class testjvm(basetest.Basetest):
     def test_jvm_version(self):
@@ -31,14 +31,14 @@ class testjvm(basetest.Basetest):
 
     def test_get_mbean(self):
         mbean = self.curl(self.path_by_nick(self.jvm_api, "getMbeanList") +
-                       urllib.quote("java.lang:name=PS Old Gen,type=MemoryPool"))
+                       urllib.parse.quote("java.lang:name=PS Old Gen,type=MemoryPool"))
         self.assertGreaterEqual(len(mbean), 15)
         self.assert_key_in("type", mbean[0])
         self.assert_key_in("name", mbean[0])
         self.assert_key_in("value", mbean[0])
 
     def test_set_mbean(self):
-        path = self.path_by_nick(self.jvm_api, "getMbeanList") + urllib.quote("java.lang:name=PS Old Gen,type=MemoryPool")
+        path = self.path_by_nick(self.jvm_api, "getMbeanList") + urllib.parse.quote("java.lang:name=PS Old Gen,type=MemoryPool")
         mbean = self.curl(path)
         usage = next((item for item in mbean if item["name"] == "UsageThreshold"), None)
         self.assertTrue(usage != None)

@@ -1,11 +1,11 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import time
 import basetest
 
 class testos(basetest.Basetest):
     def test_os_version(self):
         path = self.path_by_nick(self.os_api, "os_version")
-        self.assertRegexpMatches(self.curl(path), r"v0\.\d+(-rc\d+)?(-\d+-[0-9a-z]+)?" , path)
+        self.assertRegex(self.curl(path), r"v0\.\d+(-rc\d+)?(-\d+-[0-9a-z]+)?" , path)
 
     def test_vendor(self):
         self.validate_path(self.os_api, "os_vendor", "Cloudius Systems")
@@ -18,8 +18,8 @@ class testos(basetest.Basetest):
 
     def test_os_date(self):
         path = self.path_by_nick(self.os_api, "os_date")
-        val = self.curl(path).encode('ascii', 'ignore')
-        self.assertRegexpMatches(val, "...\\s+...\\s+\\d+\\s+\\d\\d:\\d\\d:\\d\\d\\s+UTC\\s+20..", path)
+        val = self.curl(path)
+        self.assertRegex(val, "...\\s+...\\s+\\d+\\s+\\d\\d:\\d\\d:\\d\\d\\s+UTC\\s+20..", path)
 
     def test_os_total_memory(self):
         path = self.path_by_nick(self.os_api, "os_memory_total")
