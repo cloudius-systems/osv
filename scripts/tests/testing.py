@@ -59,8 +59,7 @@ def scan_errors(s,scan_for_failed_to_load_object_error=True):
         # The test writer should not assume these patterns are going to
         # supported in the future and should indicate a test status as described
         # below.
-        "failures detected in test",
-        "failure detected in test",
+        "failure.*detected.*in.*test",
         "FAIL",
         "cannot execute ",
 
