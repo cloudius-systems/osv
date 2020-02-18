@@ -31,18 +31,9 @@ tests := libtest_simple.so libtest_empty.so libtest_dlsym_from_this_grandchild.s
 	libtest_dlsym_from_this_child.so libtest_dlsym_from_this.so libdlext_test.so \
 	libtest_with_dependency.so libtest_check_rtld_next_from_library.so
 
-.PHONY: get_file
-get_file:
-	if cd $(src)/modules/dl_tests/bionic; then \
-		git pull; \
-	else \
-		git clone --depth=1 https://android.googlesource.com/platform/bionic $(src)/modules/dl_tests/bionic; \
-	fi
-
 all_tests := $(tests:%=dl_tests/%)
 
 build_all:
-	$(MAKE) get_file
 	$(MAKE) $(all_tests:%=$(out)/%)
 .PHONY: build_all
 
