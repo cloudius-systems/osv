@@ -19,15 +19,26 @@ def _pattern_to_regex(path):
              % bad_token.group(1))
 
     path = '^' + re.escape(path) + '$'
+    # Python 3.7 and above does NOT escape '/' so we need to detect it and handle accordingly
+    slash_escaped = '\\/' in path
 
     # Normalize path
-    path = re.sub(r'(\\/)+', '\/', path)
+    if slash_escaped:
+        path = re.sub(r'(\\/)+', '\/', path)
+    else:
+        path = re.sub(r'(/)+', '/', path)
 
     # Merge consecutive **/ components
-    path = _reduce_path(path, r'\\\*\\\*\\/\\\*\\\*', '\*\*')
+    if slash_escaped:
+        path = _reduce_path(path, r'\\\*\\\*\\/\\\*\\\*', '\*\*')
+    else:
+        path = _reduce_path(path, r'\\\*\\\*/\\\*\\\*', '\*\*')
 
     # Transform ** component
-    path = re.sub(r'(\^|\\/)\\\*\\\*(\\/|\$)', '((^|\/).*($|\/|^))', path)
+    if slash_escaped:
+        path = re.sub(r'(\^|\\/)\\\*\\\*(\\/|\$)', '((^|\/).*($|\/|^))', path)
+    else:
+        path = re.sub(r'(\^|/)\\\*\\\*(/|\$)', '((^|/).*($|\|^))', path)
 
     path = path.replace('\\*', '[^/]*')
     path = path.replace('\\?', '.')

@@ -1,7 +1,6 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 from testing import *
 import argparse
-import subprocess
 from time import sleep
 
 def run(command, hypervisor_name, image_path=None, line=None, guest_port=None, host_port=None, input_lines=[], kill_app=False):

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import atexit
 import subprocess
 import argparse
@@ -81,7 +81,7 @@ def is_not_skipped(test):
     return test.name not in blacklist
 
 def run_tests_in_single_instance():
-    run(filter(lambda test: not isinstance(test, TestRunnerTest), tests))
+    run([test for test in tests if not isinstance(test, TestRunnerTest)])
 
     blacklist_tests = ' '.join(blacklist)
     args = run_py_args + ["-s", "-e", "/testrunner.so -b %s" % (blacklist_tests)]
@@ -103,7 +103,7 @@ def pluralize(word, count):
 
 def make_export_and_conf():
     export_dir = tempfile.mkdtemp(prefix='share')
-    os.chmod(export_dir, 0777)
+    os.chmod(export_dir, 0o777)
     (conf_fd, conf_path) = tempfile.mkstemp(prefix='export')
     conf = os.fdopen(conf_fd, "w")
     conf.write("%s 127.0.0.1(insecure,rw)\n" % export_dir)
@@ -155,12 +155,12 @@ def run_tests():
             "/tst-nfs.so --server 192.168.122.1 --share %s" %
             export_dir) ]
 
-        line = proc.stdout.readline()
+        line = proc.stdout.readline().decode()
         while line:
              print(line)
              if "/tmp" in line:
                 break
-             line = proc.stdout.readline()
+             line = proc.stdout.readline().decode()
              
 
         run(tests_to_run)

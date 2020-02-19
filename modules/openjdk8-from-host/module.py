@@ -11,12 +11,12 @@ if subprocess.call(['which', 'javac']) != 0:
      print('Could not find any jdk on the host. Please install openjdk8!')
      os.exit(-1)
 
-java_version = subprocess.check_output(['java', '-version'], stderr=subprocess.STDOUT)
+java_version = subprocess.check_output(['java', '-version'], stderr=subprocess.STDOUT).decode('utf-8')
 if not 'openjdk version "1.8.0' in java_version:
     print('Could not find openjdk version 8 on the host. Please install openjdk8!')
     os.exit(-1)
 
-javac_path = subprocess.check_output(['which', 'javac']).split('\n')[0]
+javac_path = subprocess.check_output(['which', 'javac']).decode('utf-8').split('\n')[0]
 javac_real_path = os.path.realpath(javac_path)
 jdk_path = os.path.dirname(os.path.dirname(javac_real_path))
 

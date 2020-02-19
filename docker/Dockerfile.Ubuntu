@@ -16,7 +16,7 @@ ENV TERM=linux
 COPY ./etc/keyboard /etc/default/keyboard
 COPY ./etc/console-setup /etc/default/console-setup
 
-RUN apt-get update -y && apt-get install -y git python2
+RUN apt-get update -y && apt-get install -y git python2 python3
 
 #
 # PREPARE ENVIRONMENT

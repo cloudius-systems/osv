@@ -8,10 +8,9 @@
 # This Docker file defines a container intended to build, test and publish
 # OSv kernel as well as many applications ...
 #
-#FROM fedora:27 #On Jenkins build machine
 FROM fedora:29
 
-RUN yum install -y git python2 file which
+RUN yum install -y git python2 python3 file which
 
 #
 # PREPARE ENVIRONMENT
