@@ -210,7 +210,7 @@ def run_command_in_guest(command, **kwargs):
     common_parameters = ["-e", "--power-off-on-abort " + command]
 
     if kwargs.get('hypervisor') == 'firecracker':
-        parameters = ["-l", "-m 2048M", "-n", "-c 4"] + common_parameters
+        parameters = ["-m 2048M", "-n", "-c 4"] + common_parameters
     else:
         parameters = ["-s"] + common_parameters
 

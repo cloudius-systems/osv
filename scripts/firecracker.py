@@ -178,10 +178,10 @@ def find_firecracker(dirname):
         firecracker_path = os.environ.get('FIRECRACKER_PATH')
 
     # And offer to install if not found
-    firecracker_version = 'v0.19.0'
+    firecracker_version = 'v0.21.0'
     if not os.path.exists(firecracker_path):
         url_base = 'https://github.com/firecracker-microvm/firecracker/releases/download'
-        download_url = '%s/%s/firecracker-%s' % (url_base, firecracker_version, firecracker_version)
+        download_url = '%s/%s/firecracker-%s-x86_64' % (url_base, firecracker_version, firecracker_version)
         answer = input("Firecracker executable has not been found under %s. "
                            "Would you like to download it from %s and place it under %s? [y|n]" %
                            (firecracker_path, download_url, firecracker_path))
@@ -234,6 +234,7 @@ def start_firecracker_with_no_api(firecracker_path, firecracker_config_json):
     #  Start firecracker process and pass configuration JSON as a file
     api_file = tempfile.NamedTemporaryFile(delete=False)
     api_file.write(bytes(firecracker_config_json, 'utf-8'))
+    api_file.flush()
     stty_save()
     return subprocess.Popen([firecracker_path, "--no-api", "--config-file", api_file.name],
                            stdout=sys.stdout, stderr=subprocess.STDOUT), api_file.name
@@ -259,7 +260,7 @@ def main(options):
     # Firecracker is installed so lets start
     print_time("Start")
     socket_path = '/tmp/firecracker.socket'
-    if not options.api_less:
+    if options.api:
         firecracker = start_firecracker(firecracker_path, socket_path)
 
     # Prepare arguments we are going to pass when creating VM instance
@@ -292,17 +293,17 @@ def main(options):
         cmdline = '--verbose ' + cmdline
 
     # Create API client and make API calls
-    if options.api_less:
-        client = ApiClient()
-    else:
+    if options.api:
         client = ApiClient(socket_path.replace("/", "%2F"))
+    else:
+        client = ApiClient()
 
     try:
         # Very often on the very first run firecracker process
         # is not ready yet to accept calls over socket file
         # so we poll existence of this file as a good
         # enough indicator if firecracker is ready
-        if not options.api_less:
+        if options.api:
             while not os.path.exists(socket_path):
                 time.sleep(0.01)
         print_time("Firecracker ready")
@@ -320,7 +321,7 @@ def main(options):
         client.create_instance(kernel_path, cmdline)
         print_time("Created OSv VM with cmdline: %s" % cmdline)
 
-        if options.api_less:
+        if not options.api:
             firecracker, config_file_path = start_firecracker_with_no_api(firecracker_path, client.firecracker_config_json())
         else:
             client.start_instance()
@@ -346,7 +347,7 @@ def main(options):
 
     stty_restore()
 
-    if options.api_less:
+    if not options.api:
         os.unlink(config_file_path)
     print_time("End")
 
@@ -370,8 +371,8 @@ if __name__ == "__main__":
                         help="bridge name for tap networking")
     parser.add_argument("-V", "--verbose", action="store_true",
                         help="pass --verbose to OSv, to display more debugging information on the console")
-    parser.add_argument("-l", "--api_less", action="store_true",
-                        help="do NOT use socket-based API to configure and start OSv on firecracker")
+    parser.add_argument("-a", "--api", action="store_true",
+                        help="use socket-based API to configure and start OSv on firecracker")
     parser.add_argument("-p", "--physical_nic", action="store", default=None,
                         help="name of the physical NIC (wired or wireless) to forward to if in natted mode")
 
