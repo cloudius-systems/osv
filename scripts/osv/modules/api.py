@@ -47,11 +47,7 @@ class java_app(object):
         return []
 
 def get_string_object():
-    import sys
-    if sys.version < '3':
-        return basestring
-    else:
-        return str
+    return str
 
 def _to_args_list(text_or_list):
     if not text_or_list:
