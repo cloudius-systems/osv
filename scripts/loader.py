@@ -1,4 +1,4 @@
-#!/usr/bin/python2
+#!/usr/bin/python
 
 import gdb
 import re
@@ -1034,7 +1034,7 @@ class osv_info_callouts(gdb.Command):
             fname = callout['c_fn']
 
             # time
-            t = int(callout['c_to_ns'])
+            t = int(callout['c_to_ns']['__d']['__r'])
 
             # flags
             CALLOUT_ACTIVE = 0x0002
@@ -1176,6 +1176,7 @@ def all_traces():
         max_trace = ulong(trace_buffer['_size'])
 
         if not trace_log_base:
+            print('!!! Could not find any trace data! Make sure "--trace" option matches some tracepoints.')
             raise StopIteration
 
         trace_log = inf.read_memory(trace_log_base, max_trace)

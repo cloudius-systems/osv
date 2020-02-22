@@ -1,4 +1,4 @@
-#!/usr/bin/env python2
+#!/usr/bin/env python3
 import sys
 import errno
 import argparse
@@ -13,6 +13,7 @@ from collections import defaultdict
 from osv import trace, debug, prof
 from osv.client import Client
 import memory_analyzer
+from functools import reduce
 
 class InvalidArgumentsException(Exception):
     def __init__(self, message):
@@ -114,7 +115,7 @@ def list_trace(args):
     with get_trace_reader(args) as reader:
         for t in reader.get_traces():
             if t.time in time_range:
-                print t.format(backtrace_formatter, data_formatter=data_formatter)
+                print(t.format(backtrace_formatter, data_formatter=data_formatter))
 
 def mem_analys(args):
     mallocs = {}
@@ -276,7 +277,7 @@ def extract(args):
             stderr=subprocess.STDOUT)
         _stdout, _ = proc.communicate()
         if proc.returncode or not os.path.exists(args.tracefile):
-            print(_stdout)
+            print(_stdout.decode())
             sys.exit(1)
     else:
         print("error: %s not found" % (elf_path))
@@ -332,8 +333,10 @@ def write_sample_to_pcap(sample, pcap_writer):
         }
 
         pkt = dpkt.ethernet.Ethernet()
-        pkt.data = sample.data[1]
         pkt.type = eth_types[proto]
+        pkt.src = b''
+        pkt.dst = b''
+        pkt.data = sample.data[1]
         pcap_writer.writepkt(pkt, ts=ts)
 
 def format_packet_sample(sample):
@@ -343,7 +346,7 @@ def format_packet_sample(sample):
     pcap = dpkt.pcap.Writer(proc.stdin)
     write_sample_to_pcap(sample, pcap)
     pcap.close()
-    assert(proc.stdout.readline() == "reading from file -, link-type EN10MB (Ethernet)\n")
+    assert(proc.stdout.readline().decode() == "reading from file -, link-type EN10MB (Ethernet)\n")
     packet_line = proc.stdout.readline().rstrip()
     proc.wait()
     return packet_line
@@ -361,7 +364,7 @@ def pcap_dump(args, target=None):
     needs_dpkt()
 
     if not target:
-        target = sys.stdout
+        target = sys.stdout.buffer
 
     pcap_file = dpkt.pcap.Writer(target)
     try:
@@ -439,7 +442,10 @@ def print_summary(args, printer=sys.stdout.write):
                 else:
                     min_time = min(min_time, t.time)
 
-                max_time = max(max_time, t.time)
+                if not max_time:
+                    max_time = t.time
+                else:
+                    max_time = max(max_time, t.time)
 
             if args.timed:
                 timed = timed_producer(t)
@@ -450,42 +456,42 @@ def print_summary(args, printer=sys.stdout.write):
         timed_samples.extend((timed_producer.finish()))
 
     if count == 0:
-        print "No samples"
+        print("No samples")
         return
 
-    print "Collected %d samples spanning %s" % (count, prof.format_time(max_time - min_time))
+    print("Collected %d samples spanning %s" % (count, prof.format_time(max_time - min_time)))
 
-    print "\nTime ranges:\n"
-    for cpu, r in sorted(cpu_time_ranges.items(), key=lambda (c, r): r.min):
-        print "  CPU 0x%02d: %s - %s = %10s" % (cpu,
+    print("\nTime ranges:\n")
+    for cpu, r in sorted(list(cpu_time_ranges.items()), key=lambda c_r: c_r[1].min):
+        print("  CPU 0x%02d: %s - %s = %10s" % (cpu,
             trace.format_time(r.min),
             trace.format_time(r.max),
-            prof.format_time(r.max - r.min))
+            prof.format_time(r.max - r.min)))
 
-    max_name_len = reduce(max, map(lambda tp: len(tp.name), count_per_tp.iterkeys()))
+    max_name_len = reduce(max, [len(tp.name) for tp in iter(count_per_tp.keys())])
     format = "  %%-%ds %%8s" % (max_name_len)
-    print "\nTracepoint statistics:\n"
-    print format % ("name", "count")
-    print format % ("----", "-----")
+    print("\nTracepoint statistics:\n")
+    print(format % ("name", "count"))
+    print(format % ("----", "-----"))
 
-    for tp, count in sorted(count_per_tp.iteritems(), key=lambda (tp, count): tp.name):
-        print format % (tp.name, count)
+    for tp, count in sorted(iter(count_per_tp.items()), key=lambda tp_count: tp_count[0].name):
+        print(format % (tp.name, count))
 
     if args.timed:
         format = "  %-20s %8s %8s %8s %8s %8s %8s %8s %15s"
-        print "\nTimed tracepoints [ms]:\n"
+        print("\nTimed tracepoints [ms]:\n")
 
-        timed_samples = filter(lambda t: t.time_range.intersection(time_range), timed_samples)
+        timed_samples = [t for t in timed_samples if t.time_range.intersection(time_range)]
 
         if not timed_samples:
-            print "  None"
+            print("  None")
         else:
-            print format % ("name", "count", "min", "50%", "90%", "99%", "99.9%", "max", "total")
-            print format % ("----", "-----", "---", "---", "---", "---", "-----", "---", "-----")
+            print(format % ("name", "count", "min", "50%", "90%", "99%", "99.9%", "max", "total"))
+            print(format % ("----", "-----", "---", "---", "---", "---", "-----", "---", "-----"))
 
-            for name, traces in get_timed_traces_per_function(timed_samples).iteritems():
+            for name, traces in get_timed_traces_per_function(timed_samples).items():
                 samples = sorted(list((t.time_range.intersection(time_range).length() for t in traces)))
-                print format % (
+                print(format % (
                     name,
                     len(samples),
                     format_duration(get_percentile(samples, 0)),
@@ -494,9 +500,9 @@ def print_summary(args, printer=sys.stdout.write):
                     format_duration(get_percentile(samples, 0.99)),
                     format_duration(get_percentile(samples, 0.999)),
                     format_duration(get_percentile(samples, 1)),
-                    format_duration(sum(samples)))
+                    format_duration(sum(samples))))
 
-    print
+    print()
 
 def list_cpu_load(args):
     load_per_cpu = {}
@@ -550,7 +556,7 @@ def list_timed(args):
 
         for timed in timed_traces:
             t = timed.trace
-            print '0x%016x %-15s %2d %20s %7s %-20s %s%s' % (
+            print('0x%016x %-15s %2d %20s %7s %-20s %s%s' % (
                             t.thread.ptr,
                             t.thread.name,
                             t.cpu,
@@ -558,7 +564,7 @@ def list_timed(args):
                             trace.format_duration(timed.duration),
                             t.name,
                             trace.Trace.format_data(t),
-                            bt_formatter(t.backtrace))
+                            bt_formatter(t.backtrace)))
 
 def list_wakeup_latency(args):
     bt_formatter = get_backtrace_formatter(args)
@@ -575,9 +581,9 @@ def list_wakeup_latency(args):
         return "%4.6f" % (float(nanos) / 1e6)
 
     if not args.no_header:
-        print '%-18s %-15s %3s %20s %13s %9s %s' % (
+        print('%-18s %-15s %3s %20s %13s %9s %s' % (
             "THREAD", "THREAD-NAME", "CPU", "TIMESTAMP[s]", "WAKEUP[ms]", "WAIT[ms]", "BACKTRACE"
-        )
+        ))
 
     with get_trace_reader(args) as reader:
         for t in reader.get_traces():
@@ -594,14 +600,14 @@ def list_wakeup_latency(args):
                     if t.cpu == waiting_thread.wait.cpu:
                         wakeup_delay = t.time - waiting_thread.wake.time
                         wait_time = t.time - waiting_thread.wait.time
-                        print '0x%016x %-15s %3d %20s %13s %9s %s' % (
+                        print('0x%016x %-15s %3d %20s %13s %9s %s' % (
                                     t.thread.ptr,
                                     t.thread.name,
                                     t.cpu,
                                     trace.format_time(t.time),
                                     format_wakeup_latency(wakeup_delay),
                                     trace.format_duration(wait_time),
-                                    bt_formatter(t.backtrace))
+                                    bt_formatter(t.backtrace)))
 
 def add_trace_listing_options(parser):
     add_time_slicing_options(parser)
@@ -615,7 +621,7 @@ def convert_dump(args):
         if os.path.exists(args.tracefile):
             os.remove(args.tracefile)
             assert(not os.path.exists(args.tracefile))
-        print "Converting dump %s -> %s" % (args.dumpfile, args.tracefile)
+        print("Converting dump %s -> %s" % (args.dumpfile, args.tracefile))
         td = trace.TraceDumpReader(args.dumpfile)
         trace.write_to_file(args.tracefile, list(td.traces()))
     else:
@@ -631,7 +637,7 @@ def download_dump(args):
     client = Client(args)
     url = client.get_url() + "/trace/buffers"
 
-    print "Downloading %s -> %s" % (url, file)
+    print("Downloading %s -> %s" % (url, file))
 
     r = requests.get(url, stream=True, **client.get_request_kwargs())
     size = int(r.headers['content-length'])
@@ -641,7 +647,7 @@ def download_dump(args):
         for chunk in r.iter_content(8192):
             out_file.write(chunk)
             current += len(chunk)
-            sys.stdout.write("[{0:8d} / {1:8d} k] {3} {2:.2f}%\r".format(current/1024, size/1024, 100.0*current/size, ('='*32*(current/size)) + '>'))
+            sys.stdout.write("[{0:8d} / {1:8d} k] {3} {2:.2f}%\r".format(current//1024, size//1024, 100.0*current//size, ('='*32*(current//size)) + '>'))
             if current >= size:
                 sys.stdout.write("\n")
             sys.stdout.flush()
@@ -789,7 +795,7 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     if getattr(args, 'paginate', False):
-        less_process = subprocess.Popen(['less', '-FX'], stdin=subprocess.PIPE)
+        less_process = subprocess.Popen(['less', '-FX'], stdin=subprocess.PIPE, text=True)
         sys.stdout = less_process.stdin
     else:
         less_process = None
@@ -797,7 +803,7 @@ if __name__ == "__main__":
     try:
         args.func(args)
     except InvalidArgumentsException as e:
-        print "Invalid arguments:", e.message
+        print("Invalid arguments:", e.message)
     except IOError as e:
         if e.errno != errno.EPIPE:
             raise

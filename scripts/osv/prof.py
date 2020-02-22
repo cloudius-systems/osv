@@ -51,7 +51,7 @@ time_units = [
 ]
 
 def parse_time_as_nanos(text, default_unit='ns'):
-    for level, name in sorted(time_units, key=lambda (level, name): -len(name)):
+    for level, name in sorted(time_units, key=lambda level_name: -len(level_name[1])):
         if text.endswith(name):
             return float(text.rstrip(name)) * level
     for level, name in time_units:
@@ -60,7 +60,7 @@ def parse_time_as_nanos(text, default_unit='ns'):
     raise Exception('Unknown unit: ' + default_unit)
 
 def format_time(time, format="%.2f %s"):
-    for level, name in sorted(time_units, key=lambda (level, name): -level):
+    for level, name in sorted(time_units, key=lambda level_name1: -level_name1[0]):
         if time >= level:
             return format % (float(time) / level, name)
     return str(time)
@@ -207,10 +207,16 @@ class timed_trace_producer(object):
         self.last_time = None
 
     def __call__(self, sample):
+        if not sample.time:
+            return
+
         if not sample.cpu in self.earliest_trace_per_cpu:
             self.earliest_trace_per_cpu[sample.cpu] = sample
 
-        self.last_time = max(self.last_time, sample.time)
+        if not self.last_time:
+            self.last_time = sample.time
+        else:
+            self.last_time = max(self.last_time, sample.time)
 
         matcher = self.matcher_by_name.get(sample.name, None)
         if not matcher:
@@ -239,7 +245,7 @@ class timed_trace_producer(object):
             return trace.TimedTrace(entry_trace, duration)
 
     def finish(self):
-        for sample in self.open_samples.itervalues():
+        for sample in self.open_samples.values():
             duration = self.last_time - sample.time
             yield trace.TimedTrace(sample, duration)
 
@@ -402,7 +408,7 @@ def print_profile(samples, symbol_resolver, caller_oriented=False,
     if not order:
         order = lambda node: (-node.resident_time, -node.hit_count)
 
-    for group, tree_root in sorted(groups.iteritems(), key=lambda (thread, node): order(node)):
+    for group, tree_root in sorted(iter(groups.items()), key=lambda thread_node: order(thread_node[1])):
         collapse_similar(tree_root)
 
         if max_levels:

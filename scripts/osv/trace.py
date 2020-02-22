@@ -65,7 +65,12 @@ class TimeRange(object):
         return self.end - self.begin
 
     def intersection(self, other):
-        begin = max(self.begin, other.begin)
+        if not self.begin:
+            begin = other.begin
+        elif not other.begin:
+            begin = self.begin
+        else:
+            begin = max(self.begin, other.begin)
 
         if self.end is None:
             end = other.end
@@ -143,11 +148,11 @@ class Trace:
 class TimedTrace:
     def __init__(self, trace, duration=None):
         self.trace = trace
-        self.duration = duration
+        self.duration_ = duration
 
     @property
     def duration(self):
-        return self.duration
+        return self.duration_
 
     @property
     def time(self):
@@ -183,6 +188,8 @@ def do_split_format(format_str):
 
 _split_cache = {}
 def split_format(format_str):
+    if not format_str:
+        return []
     result = _split_cache.get(format_str, None)
     if not result:
         result = list(do_split_format(format_str))
@@ -190,7 +197,7 @@ def split_format(format_str):
     return result
 
 formatters = {
-    '*': lambda bytes: '{' + ' '.join('%02x' % ord(b) for b in bytes) + '}'
+    '*': lambda bytes: '{' + ' '.join('%02x' % b for b in bytes) + '}'
 }
 
 def get_alignment_of(fmt):
@@ -238,16 +245,15 @@ class SlidingUnpacker:
                 size = struct.calcsize(fmt)
                 val, = struct.unpack_from(fmt, self.buffer[self.offset:self.offset+size])
                 self.offset += size
-                values.append(val)
+                if fmt.startswith('50p'):
+                   values.append(val.decode('utf-8'))
+                else:
+                   values.append(val)
 
         return tuple(values)
 
-    def __nonzero__(self):
-        return self.offset < len(self.buffer)
-
-    # Python3
     def __bool__(self):
-        return self.__nonzero__()
+        return self.offset < len(self.buffer)
 
 class WritingPacker:
     def __init__(self, writer):
@@ -270,7 +276,10 @@ class WritingPacker:
             if fmt == '*':
                 self.pack_blob(arg)
             else:
-                self.writer(struct.pack(fmt, arg))
+                if fmt == '50p':
+                    self.writer(struct.pack(fmt, arg.encode('utf-8')))
+                else:
+                    self.writer(struct.pack(fmt, arg))
                 self.offset += struct.calcsize(fmt)
 
     def pack_blob(self, arg):
@@ -298,7 +307,7 @@ class TraceDumpReaderBase :
         self.endian = '<'
         self.file = open(filename, 'rb')
         try:
-            tag = self.file.read(4)
+            tag = self.file.read(4).decode()
             if tag == "OSVT":
                 endian = '>'
             elif tag != "TVSO":
@@ -347,7 +356,7 @@ class TraceDumpReaderBase :
 
     def readString(self):
         len = self.read('H')
-        return self.file.read(len)
+        return self.file.read(len).decode()
 
 class TraceDumpReader(TraceDumpReaderBase) :
     def __init__(self, filename):
@@ -378,7 +387,7 @@ class TraceDumpReader(TraceDumpReaderBase) :
             sig = ""
             for j in range(0, n_args):
                 arg_name = self.readString()
-                arg_sig = self.file.read(1)
+                arg_sig = self.file.read(1).decode()
                 if arg_sig == 'p':
                     arg_sig = '50p'
                 sig += arg_sig
@@ -405,7 +414,7 @@ class TraceDumpReader(TraceDumpReaderBase) :
 
             backtrace = None
             if flags & 1:
-                backtrace = filter(None, unpacker.unpack('Q' * self.backtrace_len))
+                backtrace = [_f for _f in unpacker.unpack('Q' * self.backtrace_len) if _f]
 
             data = unpacker.unpack(tp.signature)
             unpacker.align_up(8)
@@ -414,7 +423,7 @@ class TraceDumpReader(TraceDumpReaderBase) :
             yield last_trace
 
     def traces(self):
-        iters = map(lambda data: self.oneTrace(data), self.trace_buffers)
+        iters = [self.oneTrace(data) for data in self.trace_buffers]
         return heapq.merge(*iters)
 
 
@@ -523,7 +532,7 @@ def read(buffer_view):
 
     while unpacker:
         tp_key, thread_ptr, thread_name, time, cpu = unpacker.unpack('QQ16sQI')
-        thread_name = thread_name.rstrip('\0')
+        thread_name = thread_name.rstrip(b'\0').decode('utf-8')
         tp = tracepoints[tp_key]
 
         backtrace = []
@@ -551,7 +560,7 @@ def write(traces, writer):
                     trace.time, trace.cpu)
 
         if trace.backtrace:
-            for frame in filter(None, trace.backtrace):
+            for frame in [_f for _f in trace.backtrace if _f]:
                 packer.pack('Q', frame)
         packer.pack('Q', 0)
 

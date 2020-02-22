@@ -18,11 +18,11 @@ class TreeNode(object):
 
     def squash_child(self):
         assert self.has_only_one_child()
-        self.children_by_key = next(self.children_by_key.itervalues()).children_by_key
+        self.children_by_key = next(iter(self.children_by_key.values())).children_by_key
 
     @property
     def children(self):
-        return self.children_by_key.itervalues()
+        return iter(self.children_by_key.values())
 
     def has_only_one_child(self):
         return len(self.children_by_key) == 1
