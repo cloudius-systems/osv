@@ -22,9 +22,13 @@ blacklist= [
     "tst-feexcept.so",
 ]
 
+qemu_blacklist= [
+    "tcp_close_without_reading_on_firecracker"
+]
+
 firecracker_blacklist= [
     "tracing_smoke_test",
-    "tcp_close_without_reading", #This test is flaky under firecracker due to a bug possibly in firecracker itself
+    "tcp_close_without_reading_on_qemu"
 ]
 
 add_tests([
@@ -201,4 +205,6 @@ if __name__ == "__main__":
         run_py_args = []
     if cmdargs.hypervisor == 'firecracker':
         blacklist.extend(firecracker_blacklist)
+    else:
+        blacklist.extend(qemu_blacklist)
     main()

@@ -5,16 +5,15 @@ import errno
 def is_broken_pipe_error(e):
     return isinstance(e, IOError) and e.errno == errno.EPIPE
 
-@test
-def tcp_close_without_reading():
+def tcp_close_without_reading(hypervisor, host_name):
     host_port = 7777
     server = run_command_in_guest('/tests/misc-tcp-close-without-reading.so',
-        forward=[(host_port, 7777)])
+        forward=[(host_port, 7777)], hypervisor=hypervisor)
 
     wait_for_line(server, 'listening...')
 
     s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(('localhost', host_port))
+    s.connect((host_name, host_port))
     try:
         while server.is_alive():
             s.sendall(b'.' * 1024)
@@ -23,3 +22,11 @@ def tcp_close_without_reading():
             raise
 
     server.join()
+
+@test
+def tcp_close_without_reading_on_qemu():
+    tcp_close_without_reading('qemu', 'localhost')
+
+@test
+def tcp_close_without_reading_on_firecracker():
+    tcp_close_without_reading('firecracker', '172.16.0.2')
