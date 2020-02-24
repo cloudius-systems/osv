@@ -1034,7 +1034,10 @@ class osv_info_callouts(gdb.Command):
             fname = callout['c_fn']
 
             # time
-            t = int(callout['c_to_ns']['__d']['__r'])
+            try:
+                t = int(callout['c_to_ns']['__d']['__r'])
+            except gdb.error:
+                t = int(callout['c_to_ns'])
 
             # flags
             CALLOUT_ACTIVE = 0x0002
