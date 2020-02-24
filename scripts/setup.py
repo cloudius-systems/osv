@@ -51,7 +51,7 @@ class Fedora(object):
                 'openssl-libs',
                 'p11-kit',
                 'patch',
-                'python-dpkt',
+                'python3-dpkt',
                 'qemu-img',
                 'qemu-system-x86',
                 'tcpdump',
