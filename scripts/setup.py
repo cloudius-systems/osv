@@ -4,6 +4,7 @@
 
 import sys, argparse
 import subprocess, os
+from linux_distro import linux_distribution
 
 standard_ec2_packages = ['python-pip', 'wget']
 standard_ec2_post_install = ['pip install awscli &&'
@@ -68,40 +69,6 @@ class Fedora(object):
     ec2_packages = standard_ec2_packages
     test_packages = ['openssl-devel']
     ec2_post_install = standard_ec2_post_install
-
-    def aarch64_download(self, version):
-        gcc_packages = ['gcc',
-                        'glibc',
-                        'glibc-devel',
-                        'libgcc',
-                        'libstdc++',
-                        'libstdc++-devel',
-                        'libstdc++-static']
-        boost_packages = ['boost-devel',
-                          'boost-static',
-                          'boost-system']
-        osv_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
-        script_path = '%s/scripts/download_rpm_package.sh' % osv_root
-        destination = '%s/downloaded_packages/aarch64' % osv_root
-        ##
-        # The setup.py is typically run as root to allow yum properly install packages
-        # This however would cause all files downloaded to downloaded_packages/aarch64 directory
-        # get created and owned by the root user which in most cases is not desirable
-        # To prevent that let us compare current process user id with the owner id of osv root
-        # directory and if different run all download command with the same user as the one owning
-        # the root directory
-        current_user_id = os.getuid()
-        osv_root_owner_id = os.stat(osv_root).st_uid
-        if current_user_id != osv_root_owner_id and current_user_id == 0:
-            command_prefix = "sudo -u '#%d'" % osv_root_owner_id # Most likely setup.py is run by root so let us use sudo
-        else:
-            command_prefix = ''
-
-        install_commands = ['%s %s %s %s %s/gcc' % (command_prefix, script_path, package, version, destination) for package in gcc_packages]
-        install_commands += ['%s %s %s %s %s/boost' % (command_prefix, script_path, package, version, destination) for package in boost_packages]
-        install_commands = ['%s rm -rf %s/gcc/install' % (command_prefix, destination),
-                            '%s rm -rf %s/boost/install' % (command_prefix, destination)] + install_commands
-        return ' && '.join(install_commands)
 
     class Fedora_25(object):
         packages = []
@@ -351,27 +318,6 @@ class LinuxMint(Ubuntu):
 
     versions = [LinuxMint_18_03, LinuxMint_19]
 
-def linux_distribution():
-    def parse_file(f):
-        res = {}
-        for line in f:
-            k, v = line.rstrip().split('=')
-            res[k] = v.strip('"')
-        return res
-
-    try:
-        with open('/etc/os-release') as f:
-            info = parse_file(f)
-            return (info['NAME'], info['VERSION_ID'])
-    except FileNotFoundError:
-        try:
-            with open('/etc/lsb-release') as f:
-                info = parse_file(f)
-                return (info['DISTRIB_ID'], info['DISTRIB_RELEASE'])
-        except FileNotFoundError:
-            print('Could not find linux distribution file!')
-            return ('Unknown', 'Unknown')
-
 distros = [
            Debian(),
            Fedora(),
@@ -408,10 +354,6 @@ for distro in distros:
                 if cmdargs.test:
                     pkg += distro.test_packages + dver.test_packages
                 subprocess.check_call(distro.install + ' ' + str.join(' ', pkg), shell=True)
-                if 'aarch64_download' in dir(distro):
-                    print('Downloading aarch64 packages to cross-compile ARM version ...')
-                    subprocess.check_call(distro.aarch64_download(dver.version), shell=True)
-                    print('Downloaded all aarch64 packages!')
                 if cmdargs.ec2:
                     if distro.ec2_post_install:
                         subprocess.check_call(distro.ec2_post_install, shell=True)
