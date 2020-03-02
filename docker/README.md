@@ -4,8 +4,12 @@ There are two versions of it - one based on Ubuntu and another on Fedora.
 
 Build container image
 ```
-docker build -t osv/builder .                      # Use default Fedora-base file 
-docker build -t osv/builder -f Dockerfile.Ubuntu . # Use specific docker file
+docker build -t osv/builder-ubuntu -f Dockerfile.builder-ubuntu . # Use specific docker file
+```
+
+Build container image for specific version of linux distribution and git repo owner (if forker)
+```
+docker build -t osv/builder-fedora-31 -f Dockerfile.builder-fedora --build-arg FEDORA_VERSION=31 --build-arg GIT_ORG_OR_USER=a_user .
 ```
 
 Run container
@@ -39,3 +43,19 @@ To update Fedora/Ubuntu packages run this in /git-repos/osv directory:
 ```bash
 ./script/setup.py
 ```
+# Docker OSv runner
+Docker files intended to help setup OSv environment to run and test OSv.
+There are two versions of it - one based on Ubuntu and another on Fedora.
+
+Build container image
+```
+docker build -t osv/runner-ubuntu -f Dockerfile.runner-ubuntu . # Use specific docker file
+```
+
+Build container image for specific version of linux distribution and git repo owner (if forker)
+```
+docker build -t osv/runner-fedora-31 -f Dockerfile.runner-fedora --build-arg FEDORA_VERSION=31 --build-arg GIT_ORG_OR_USER=a_user .
+```
+
+After starting you will end up in /git-repos/osv directory
+where you can build OSv image using capstan and run it using capstan or ./scripts/run.py

@@ -3,7 +3,7 @@ language: c
 services:
   - docker
 before_install:
-  - cd docker && docker build -t osv/builder -f ./Dockerfile.Ubuntu .
+  - cd docker && docker build -t osv/builder -f ./Dockerfile.builder-ubuntu .
   - docker run -it --privileged -d --name build osv/builder
 script:
-  - docker exec build ./scripts/build 
+  - docker exec build ./scripts/build image=tests

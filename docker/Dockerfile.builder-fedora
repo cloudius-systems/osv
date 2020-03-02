@@ -8,9 +8,10 @@
 # This Docker file defines a container intended to build, test and publish
 # OSv kernel as well as many applications ...
 #
-FROM fedora:29
+ARG FEDORA_VERSION=29
+FROM fedora:${FEDORA_VERSION}
 
-RUN yum install -y git python2 python3 file which
+RUN yum install -y git python3 file which
 
 #
 # PREPARE ENVIRONMENT
@@ -21,7 +22,8 @@ RUN mkdir /git-repos /result
 
 # - clone OSv
 WORKDIR /git-repos
-RUN git clone https://github.com/cloudius-systems/osv.git
+ARG GIT_ORG_OR_USER=cloudius-systems
+RUN git clone https://github.com/${GIT_ORG_OR_USER}/osv.git
 WORKDIR /git-repos/osv
 RUN git submodule update --init --recursive
 
@@ -38,7 +40,10 @@ CMD /bin/bash
 # NOTES
 #
 # Build the container example:
-# docker build -t osv/builder-fedora -f Dockerfile.Fedora .
+# docker build -t osv/builder-fedora -f Dockerfile.builder-fedora .
+#
+# Build the container based of specific Fedora version and git repo owner (if forked) example:
+# docker build -t osv/builder-fedora -f Dockerfile.builder-fedora --build-arg FEDORA_VERSION=31 --build-arg GIT_ORG_OR_USER=a_user .
 #
 # Run the container FIRST time example:
 # docker run -it --privileged osv/builder-fedora
