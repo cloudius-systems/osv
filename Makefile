@@ -205,34 +205,25 @@ cscope:
 
 ###########################################################################
 
-
-# The user can override the build_env variable (or one or more of *_env
-# variables below) to decide if to take the host's C/C++ libraries, or
-# those from the external/ directory.
-build_env ?= $(if $(filter $(host_arch), $(arch)),host,external)
-ifeq ($(build_env), host)
-    gcc_lib_env ?= host
-    cxx_lib_env ?= host
-    gcc_include_env ?= host
-    boost_env ?= host
-else
-    gcc_lib_env ?= external
-    cxx_lib_env ?= external
-    gcc_include_env ?= external
-    boost_env ?= external
-endif
-
-
 local-includes =
 INCLUDES = $(local-includes) -Iarch/$(arch) -I. -Iinclude  -Iarch/common
 INCLUDES += -isystem include/glibc-compat
 
-gccbase = external/$(arch)/gcc.bin
-miscbase = external/$(arch)/misc.bin
+aarch64_gccbase = build/downloaded_packages/aarch64/gcc/install
+aarch64_boostbase = build/downloaded_packages/aarch64/boost/install
 
-ifeq ($(gcc_include_env), external)
-  gcc-inc-base := $(dir $(shell find $(gccbase)/ -name vector | grep -v -e debug/vector$$ -e profile/vector$$))
-  gcc-inc-base3 := $(dir $(shell dirname `find $(gccbase)/ -name c++config.h | grep -v /32/`))
+ifeq ($(arch),aarch64)
+ifeq (,$(wildcard $(aarch64_gccbase)))
+    $(error Missing $(aarch64_gccbase) directory. Please run "./scripts/download_fedora_aarch64_packages.py")
+endif
+ifeq (,$(wildcard $(aarch64_boostbase)))
+    $(error Missing $(aarch64_boostbase) directory. Please run "./scripts/download_fedora_aarch64_packages.py")
+endif
+endif
+
+ifeq ($(arch),aarch64)
+  gcc-inc-base := $(dir $(shell find $(aarch64_gccbase)/ -name vector | grep -v -e debug/vector$$ -e profile/vector$$ -e experimental/vector$$))
+  gcc-inc-base3 := $(dir $(shell dirname `find $(aarch64_gccbase)/ -name c++config.h | grep -v /32/`))
   INCLUDES += -isystem $(gcc-inc-base)
   INCLUDES += -isystem $(gcc-inc-base3)
 endif
@@ -247,7 +238,7 @@ INCLUDES += -isystem $(libfdt_base)
 endif
 
 INCLUDES += $(boost-includes)
-ifeq ($(gcc_include_env), host)
+ifeq ($(arch),x64)
 # Starting in Gcc 6, the standard C++ header files (which we do not change)
 # must precede in the include path the C header files (which we replace).
 # This is explained in https://gcc.gnu.org/bugzilla/show_bug.cgi?id=70722.
@@ -257,8 +248,8 @@ INCLUDES += $(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^
 endif
 INCLUDES += -isystem include/api
 INCLUDES += -isystem include/api/$(arch)
-ifeq ($(gcc_include_env), external)
-  gcc-inc-base2 := $(dir $(shell find $(gccbase)/ -name unwind.h))
+ifeq ($(arch),aarch64)
+  gcc-inc-base2 := $(dir $(shell find $(aarch64_gccbase)/ -name unwind.h))
   # must be after include/api, since it includes some libc-style headers:
   INCLUDES += -isystem $(gcc-inc-base2)
 endif
@@ -289,7 +280,7 @@ $(out)/musl/%.o: source-dialects =
 
 kernel-defines = -D_KERNEL $(source-dialects)
 
-gcc-sysroot = $(if $(CROSS_PREFIX), --sysroot external/$(arch)/gcc.bin) \
+gcc-sysroot = $(if $(CROSS_PREFIX), --sysroot $(aarch64_gccbase)) \
 
 # This play the same role as "_KERNEL", but _KERNEL unfortunately is too
 # overloaded. A lot of files will expect it to be set no matter what, specially
@@ -314,10 +305,8 @@ COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -
 	-include compiler/include/intrinsics.hh \
 	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) $(gcc-sysroot) \
 	$(configuration) -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207" -DARCH_STRING=$(ARCH_STR) $(EXTRA_FLAGS)
-ifeq ($(gcc_include_env), external)
-ifeq ($(boost_env), external)
+ifeq ($(arch),aarch64)
   COMMON += -nostdinc
-endif
 endif
 
 tracing-flags-0 =
@@ -1807,7 +1796,7 @@ objects += $(addprefix fs/, $(fs_objs))
 objects += $(addprefix libc/, $(libc))
 objects += $(addprefix musl/src/, $(musl))
 
-ifeq ($(cxx_lib_env), host)
+ifeq ($(arch),x64)
     libstdc++.a := $(shell $(CXX) -print-file-name=libstdc++.a)
     ifeq ($(filter /%,$(libstdc++.a)),)
         $(error Error: libstdc++.a needs to be installed.)
@@ -1818,11 +1807,11 @@ ifeq ($(cxx_lib_env), host)
         $(error Error: libsupc++.a needs to be installed.)
     endif
 else
-    libstdc++.a := $(shell find $(gccbase)/ -name libstdc++.a)
-    libsupc++.a := $(shell find $(gccbase)/ -name libsupc++.a)
+    libstdc++.a := $(shell find $(aarch64_gccbase)/ -name libstdc++.a)
+    libsupc++.a := $(shell find $(aarch64_gccbase)/ -name libsupc++.a)
 endif
 
-ifeq ($(gcc_lib_env), host)
+ifeq ($(arch),x64)
     libgcc.a := $(shell $(CC) -print-libgcc-file-name)
     ifeq ($(filter /%,$(libgcc.a)),)
         $(error Error: libgcc.a needs to be installed.)
@@ -1833,11 +1822,11 @@ ifeq ($(gcc_lib_env), host)
         $(error Error: libgcc_eh.a needs to be installed.)
     endif
 else
-    libgcc.a := $(shell find $(gccbase)/ -name libgcc.a |  grep -v /32/)
-    libgcc_eh.a := $(shell find $(gccbase)/ -name libgcc_eh.a |  grep -v /32/)
+    libgcc.a := $(shell find $(aarch64_gccbase)/ -name libgcc.a |  grep -v /32/)
+    libgcc_eh.a := $(shell find $(aarch64_gccbase)/ -name libgcc_eh.a |  grep -v /32/)
 endif
 
-ifeq ($(boost_env), host)
+ifeq ($(arch),x64)
     # link with -mt if present, else the base version (and hope it is multithreaded)
     boost-mt := -mt
     boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system$(boost-mt).a))
@@ -1853,9 +1842,9 @@ ifeq ($(boost_env), host)
     # special for Boost.
     boost-includes =
 else
-    boost-lib-dir := $(firstword $(dir $(shell find $(miscbase)/ -name libboost_system*.a)))
+    boost-lib-dir := $(firstword $(dir $(shell find $(aarch64_boostbase)/ -name libboost_system*.a)))
     boost-mt := $(if $(filter %-mt.a, $(wildcard $(boost-lib-dir)/*.a)),-mt)
-    boost-includes = -isystem $(miscbase)/usr/include
+    boost-includes = -isystem $(aarch64_boostbase)/usr/include
 endif
 
 boost-libs := $(boost-lib-dir)/libboost_system$(boost-mt).a
@@ -1931,7 +1920,7 @@ $(bootfs_manifest_dep): phony
 ifeq ($(arch),x64)
 libgcc_s_dir := $(dir $(shell $(CC) -print-file-name=libgcc_s.so.1))
 else
-libgcc_s_dir := ../../$(gccbase)/lib64
+libgcc_s_dir := ../../$(aarch64_gccbase)/lib64
 endif
 
 $(out)/bootfs.bin: scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep) $(tools:%=$(out)/%) \

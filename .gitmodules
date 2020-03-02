@@ -6,12 +6,6 @@
 	path = apps
 	url = ../../cloudius-systems/osv-apps
 	ignore = dirty
-[submodule "external/aarch64/gcc.bin"]
-	path = external/aarch64/gcc.bin
-	url = ../../cloudius-systems/aarch64-gcc.bin.git
-[submodule "external/aarch64/misc.bin"]
-	path = external/aarch64/misc.bin
-	url = ../../cloudius-systems/aarch64-misc.bin.git
 [submodule "modules/httpserver/swagger-ui"]
 	path = modules/httpserver-html5-gui/swagger-ui
 	url = ../../cloudius-systems/swagger-ui.git
