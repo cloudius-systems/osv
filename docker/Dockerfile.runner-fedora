@@ -8,8 +8,8 @@
 # This Docker file defines a container intended to run and test OSv
 # It comes with capstan that can pull kernel and pre-built MPM packages
 #
-ARG FEDORA_VERSION=29
-FROM fedora:${FEDORA_VERSION}
+ARG DIST_VERSION=29
+FROM fedora:${DIST_VERSION}
 
 RUN yum install -y \
 git \
@@ -43,7 +43,7 @@ CMD /bin/bash
 # docker build -t osv/runner-fedora -f Dockerfile.runner-fedora .
 #
 # Build the container based of specific Fedora version and git repo owner (if forked) example:
-# docker build -t osv/runner-fedora -f Dockerfile.runner-fedora --build-arg FEDORA_VERSION=31 --build-arg GIT_ORG_OR_USER=a_user .
+# docker build -t osv/runner-fedora -f Dockerfile.runner-fedora --build-arg DIST_VERSION=31 --build-arg GIT_ORG_OR_USER=a_user .
 #
 # Run the container FIRST time example:
 # docker run -it --privileged osv/runner-fedora

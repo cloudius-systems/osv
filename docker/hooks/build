@@ -1,0 +1,2 @@
+#!/bin/bash
+docker build --build-arg DIST_VERSION=$DIST_VERSION -f $DOCKERFILE_PATH -t $IMAGE_NAME .

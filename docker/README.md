@@ -9,7 +9,7 @@ docker build -t osv/builder-ubuntu -f Dockerfile.builder-ubuntu . # Use specific
 
 Build container image for specific version of linux distribution and git repo owner (if forker)
 ```
-docker build -t osv/builder-fedora-31 -f Dockerfile.builder-fedora --build-arg FEDORA_VERSION=31 --build-arg GIT_ORG_OR_USER=a_user .
+docker build -t osv/builder-fedora-31 -f Dockerfile.builder-fedora --build-arg DIST_VERSION=31 --build-arg GIT_ORG_OR_USER=a_user .
 ```
 
 Run container
@@ -54,7 +54,7 @@ docker build -t osv/runner-ubuntu -f Dockerfile.runner-ubuntu . # Use specific d
 
 Build container image for specific version of linux distribution and git repo owner (if forker)
 ```
-docker build -t osv/runner-fedora-31 -f Dockerfile.runner-fedora --build-arg FEDORA_VERSION=31 --build-arg GIT_ORG_OR_USER=a_user .
+docker build -t osv/runner-fedora-31 -f Dockerfile.runner-fedora --build-arg DIST_VERSION=31 --build-arg GIT_ORG_OR_USER=a_user .
 ```
 
 After starting you will end up in /git-repos/osv directory
