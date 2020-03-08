@@ -553,7 +553,6 @@ if __name__ == "__main__":
     parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default="x86_64",
                         help="specify QEMU architecture: x86_64, aarch64")
     cmdargs = parser.parse_args()
-    cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
     cmdargs.image_file = os.path.abspath(cmdargs.image or os.path.join(osv_base, "build/%s/usr.img" % cmdargs.opt_path))
     if cmdargs.arch == 'aarch64':
