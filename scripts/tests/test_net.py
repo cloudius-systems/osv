@@ -28,5 +28,5 @@ def tcp_close_without_reading_on_qemu():
     tcp_close_without_reading('qemu', 'localhost')
 
 @test
-def tcp_close_without_reading_on_firecracker():
+def tcp_close_without_reading_on_fc():
     tcp_close_without_reading('firecracker', '172.16.0.2')

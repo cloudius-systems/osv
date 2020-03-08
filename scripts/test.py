@@ -23,7 +23,7 @@ blacklist= [
 ]
 
 qemu_blacklist= [
-    "tcp_close_without_reading_on_firecracker"
+    "tcp_close_without_reading_on_fc"
 ]
 
 firecracker_blacklist= [
@@ -51,16 +51,18 @@ class TestRunnerTest(SingleCommandTest):
 test_files = []
 is_comment = re.compile("^[ \t]*(|#.*|\[manifest])$")
 is_test = re.compile("^/tests/tst-.*.so")
-with open('modules/tests/usr.manifest', 'r') as f:
-    for line in f:
-        line = line.rstrip();
-        if is_comment.match(line): continue;
-        components = line.split(": ", 2);
-        guestpath = components[0].strip();
-        hostpath = components[1].strip()
-        if is_test.match(guestpath):
-            test_files.append(guestpath);
-add_tests((TestRunnerTest(os.path.basename(x)) for x in test_files))
+
+def collect_tests():
+    with open(cmdargs.manifest, 'r') as f:
+        for line in f:
+            line = line.rstrip();
+            if is_comment.match(line): continue;
+            components = line.split(": ", 2);
+            guestpath = components[0].strip();
+            hostpath = components[1].strip()
+            if is_test.match(guestpath):
+                test_files.append(guestpath);
+    add_tests((TestRunnerTest(os.path.basename(x)) for x in test_files))
 
 def run_test(test):
     sys.stdout.write("  TEST %-35s" % test.name)
@@ -183,6 +185,7 @@ def run_tests():
     print(("OK (%d %s run, %.3f s)" % (len(tests_to_run), pluralize("test", len(tests_to_run)), duration)))
 
 def main():
+    collect_tests()
     while True:
         run_tests()
         if not cmdargs.repeat:
@@ -197,6 +200,8 @@ if __name__ == "__main__":
     parser.add_argument("-p", "--hypervisor", action="store", default="qemu", help="choose hypervisor to run: qemu, firecracker")
     parser.add_argument("--name", action="store", help="run all tests whose names match given regular expression")
     parser.add_argument("--run_options", action="store", help="pass extra options to run.py")
+    parser.add_argument("-m", "--manifest", action="store", default="modules/tests/usr.manifest", help="test manifest")
+    parser.add_argument("-b", "--blacklist", action="append", help="test to be blacklisted", default=[])
     cmdargs = parser.parse_args()
     set_verbose_output(cmdargs.verbose)
     if cmdargs.run_options != None:
@@ -207,4 +212,5 @@ if __name__ == "__main__":
         blacklist.extend(firecracker_blacklist)
     else:
         blacklist.extend(qemu_blacklist)
+    blacklist.extend(cmdargs.blacklist)
     main()
