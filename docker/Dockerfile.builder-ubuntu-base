@@ -1,0 +1,44 @@
+#
+# Copyright (C) 2020 Waldemar Kozaczuk
+#
+# This work is open source software, licensed under the terms of the
+# BSD license as described in the LICENSE file in the top-level directory.
+#
+# This Docker file defines an image based on Ubuntu distribution and provides
+# all packages necessary to build and run kernel and applications.
+#
+ARG DIST_VERSION=19.04
+FROM ubuntu:${DIST_VERSION}
+
+ENV DEBIAN_FRONTEND noninteractive
+ENV TERM=linux
+
+COPY ./etc/keyboard /etc/default/keyboard
+COPY ./etc/console-setup /etc/default/console-setup
+
+RUN apt-get update -y && apt-get install -y git python3
+
+#
+# PREPARE ENVIRONMENT
+#
+
+# - prepare directories
+RUN mkdir /git-repos
+
+# - clone OSv
+WORKDIR /git-repos
+ARG GIT_ORG_OR_USER=cloudius-systems
+RUN git clone --depth 1 -b master --single-branch https://github.com/${GIT_ORG_OR_USER}/osv.git
+WORKDIR /git-repos/osv
+
+# - install all required packages and delete OSv repo
+RUN scripts/setup.py
+RUN rm -rf /git-repos
+
+RUN update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+
+# - install Capstan
+RUN wget https://github.com/cloudius-systems/capstan/releases/latest/download/capstan -O /usr/local/bin/capstan
+RUN chmod u+x /usr/local/bin/capstan
+
+CMD /bin/bash
