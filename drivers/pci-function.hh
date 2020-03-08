@@ -77,19 +77,16 @@ namespace pci {
         mmioaddr_t get_mmio();
 
         // Access the pio or mmio bar
-        u64 readq(u32 offset);
-        u32 readl(u32 offset);
-        u16 readw(u32 offset);
-        u8 readb(u32 offset);
-        void writeq(u32 offset, u64 val);
-        void writel(u32 offset, u32 val);
-        void writew(u32 offset, u16 val);
-        void writeb(u32 offset, u8 val);
+        u64 readq(u64 offset);
+        u32 readl(u64 offset);
+        u16 readw(u64 offset);
+        u8 readb(u64 offset);
+        void writeq(u64 offset, u64 val);
+        void writel(u64 offset, u32 val);
+        void writew(u64 offset, u16 val);
+        void writeb(u64 offset, u8 val);
 
     private:
-
-        void init();
-
         /* Architecture-specific hook on bar creation, which allows
          * rewriting the bar registers. Returns the bar register.
          */

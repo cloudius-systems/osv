@@ -21,16 +21,6 @@ namespace pci {
           _addr_mmio(mmio_nullptr),
           _is_mmio(false), _is_64(false), _is_prefetchable(false)
     {
-        init();
-    }
-
-    bar::~bar()
-    {
-
-    }
-
-    void bar::init()
-    {
         u32 val = _dev->pci_readl(_pos);
 
         _is_mmio = ((val & PCI_BAR_MEMORY_INDICATOR_MASK) == PCI_BAR_MMIO);
@@ -54,6 +44,11 @@ namespace pci {
         }
 
         _addr_64 = ((u64)_addr_hi << 32) | (u64)(_addr_lo);
+    }
+
+    bar::~bar()
+    {
+
     }
 
     u64 bar::read_bar_size()
@@ -110,7 +105,7 @@ namespace pci {
         return _addr_mmio;
     }
 
-    u64 bar::readq(u32 offset)
+    u64 bar::readq(u64 offset)
     {
         if (_is_mmio) {
             return mmio_getq(_addr_mmio + offset);
@@ -119,7 +114,7 @@ namespace pci {
         }
     }
 
-    u32 bar::readl(u32 offset)
+    u32 bar::readl(u64 offset)
     {
         if (_is_mmio) {
             return mmio_getl(_addr_mmio + offset);
@@ -128,7 +123,7 @@ namespace pci {
         }
     }
 
-    u16 bar::readw(u32 offset)
+    u16 bar::readw(u64 offset)
     {
         if (_is_mmio) {
             return mmio_getw(_addr_mmio + offset);
@@ -137,7 +132,7 @@ namespace pci {
         }
     }
 
-    u8 bar::readb(u32 offset)
+    u8 bar::readb(u64 offset)
     {
         if (_is_mmio) {
             return mmio_getb(_addr_mmio + offset);
@@ -146,7 +141,7 @@ namespace pci {
         }
     }
 
-    void bar::writeq(u32 offset, u64 val)
+    void bar::writeq(u64 offset, u64 val)
     {
         if (_is_mmio) {
             mmio_setq(_addr_mmio + offset, val);
@@ -155,7 +150,7 @@ namespace pci {
         }
     }
 
-    void bar::writel(u32 offset, u32 val)
+    void bar::writel(u64 offset, u32 val)
     {
         if (_is_mmio) {
             mmio_setl(_addr_mmio + offset, val);
@@ -164,7 +159,7 @@ namespace pci {
         }
     }
 
-    void bar::writew(u32 offset, u16 val)
+    void bar::writew(u64 offset, u16 val)
     {
         if (_is_mmio) {
             mmio_setw(_addr_mmio + offset, val);
@@ -173,7 +168,7 @@ namespace pci {
         }
     }
 
-    void bar::writeb(u32 offset, u8 val)
+    void bar::writeb(u64 offset, u8 val)
     {
         if (_is_mmio) {
             mmio_setb(_addr_mmio + offset, val);
