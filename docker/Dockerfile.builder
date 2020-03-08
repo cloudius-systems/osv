@@ -21,7 +21,7 @@ RUN mkdir -p /git-repos
 # - clone OSv
 WORKDIR /git-repos
 ARG GIT_ORG_OR_USER=cloudius-systems
-RUN git clone --depth 50 https://github.com/${GIT_ORG_OR_USER}/osv.git
+RUN git clone https://github.com/${GIT_ORG_OR_USER}/osv.git
 WORKDIR /git-repos/osv
 RUN git submodule update --init --recursive
 
