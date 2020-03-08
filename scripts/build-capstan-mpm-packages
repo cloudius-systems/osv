@@ -264,7 +264,7 @@ build_cli_package() {
 }
 
 build_unit_tests_package() {
-  build_osv_image "fonts,java-base,java-non-isolated,java-cmd,java-tests,tests" selected none
+  build_osv_image "java-base,java-non-isolated,java-cmd,java-tests,tests,dl_tests,libz" selected none
   build_mpm "tests"
 }
 
@@ -395,6 +395,9 @@ case "$1" in
   other_examples)
     echo "Building other examples ..."
     build_other_example_apps;;
+  unit_tests)
+    echo "Building unit tests mpm..."
+    build_unit_tests_package;;
   tests)
     echo "Building test apps ..."
     build_test_apps;;
