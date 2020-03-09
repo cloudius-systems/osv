@@ -9,7 +9,7 @@
 # OSv kernel as well as many applications ...
 #
 ARG DIST="fedora-29"
-FROM osv/builder-${DIST}-base
+FROM osvunikernel/osv-${DIST}-builder-base
 
 #
 # PREPARE ENVIRONMENT
