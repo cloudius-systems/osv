@@ -25,6 +25,8 @@ COMMON = $(autodepend) $(INCLUDES) -g -O2 -fPIC -DBOOST_TEST_DYN_LINK \
 LIBS =
 
 CXXFLAGS = -std=gnu++11 $(COMMON)
+CXXFLAGS2 = -Wl,--no-as-needed -L=$(out)/dl_tests -L=/usr/lib -Wl,-rpath . -Wl,-rpath / -Wl,-rpath /usr/lib $(CXXFLAGS)
+
 CFLAGS = -std=gnu99 $(COMMON)
 
 tests := libtest_simple.so libtest_empty.so libtest_dlsym_from_this_grandchild.so \
@@ -53,33 +55,25 @@ $(out)/dl_tests/libtest_dlsym_from_this_grandchild.so: $(bionic_test_libs)/dlsym
 	$(makedir)
 	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -D__SHARED_OBJECT__=1 -shared -o $@ $<, CXX dl_tests/libtest_dlsym_from_this_grandchild.so)
 
-$(out)/dl_tests/libtest_dlsym_from_this_child.so: COMMON += -Wl,--no-as-needed -ltest_dlsym_from_this_grandchild -L=$(out)/dl_tests -L=/usr/lib -Wl,-rpath . -Wl,-rpath / -Wl,-rpath /usr/lib
-$(out)/dl_tests/libtest_dlsym_from_this_child.so: \
-		$(bionic_test_libs)/dlsym_from_this_functions.cpp
-	$(MAKE) $(out)/dl_tests/libtest_dlsym_from_this_grandchild.so
+$(out)/dl_tests/libtest_dlsym_from_this_child.so: $(bionic_test_libs)/dlsym_from_this_functions.cpp \
+	$(out)/dl_tests/libtest_dlsym_from_this_grandchild.so
 	$(makedir)
-	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -D__SHARED_OBJECT__=1 -shared -o $@ $<, CXX dl_tests/libtest_dlsym_from_this_child.so)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS2) -ltest_dlsym_from_this_grandchild -D__SHARED_OBJECT__=1 -shared -o $@ $<, CXX dl_tests/libtest_dlsym_from_this_child.so)
 
-$(out)/dl_tests/libtest_dlsym_from_this.so: COMMON += -Wl,--no-as-needed -ltest_dlsym_from_this_child -L=$(out)/dl_tests -L=/usr/lib -Wl,-rpath . -Wl,-rpath / -Wl,-rpath /usr/lib
-$(out)/dl_tests/libtest_dlsym_from_this.so: \
-		$(bionic_test_libs)/dlsym_from_this_symbol.cpp
-	$(MAKE) $(out)/dl_tests/libtest_dlsym_from_this_child.so
+$(out)/dl_tests/libtest_dlsym_from_this.so: $(bionic_test_libs)/dlsym_from_this_symbol.cpp \
+	$(out)/dl_tests/libtest_dlsym_from_this_child.so
 	$(makedir)
-	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -D__SHARED_OBJECT__=1 -shared -o $@ $<, CXX dl_tests/libtest_dlsym_from_this.so)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS2) -ltest_dlsym_from_this_child -D__SHARED_OBJECT__=1 -shared -o $@ $<, CXX dl_tests/libtest_dlsym_from_this.so)
 
-$(out)/dl_tests/libdlext_test.so: COMMON += -Wl,-z,relro -Wl,--no-as-needed -ltest_simple -L=$(out)/dl_tests -L=/usr/lib -Wl,-rpath . -Wl,-rpath / -Wl,-rpath /usr/lib
-$(out)/dl_tests/libdlext_test.so: \
-		$(bionic_test_libs)/dlext_test_library.cpp
-	$(MAKE) $(out)/dl_tests/libtest_simple.so
+$(out)/dl_tests/libdlext_test.so: $(bionic_test_libs)/dlext_test_library.cpp \
+	$(out)/dl_tests/libtest_simple.so
 	$(makedir)
-	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -D__SHARED_OBJECT__=1 -shared -o $@ $<, CXX dl_tests/libdlext_test.so)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS2) -ltest_simple -D__SHARED_OBJECT__=1 -shared -o $@ $<, CXX dl_tests/libdlext_test.so)
 
-$(out)/dl_tests/libtest_with_dependency.so: COMMON += -Wl,--no-as-needed -ldlext_test -L=$(out)/dl_tests -L=/usr/lib -Wl,-rpath . -Wl,-rpath / -Wl,-rpath /usr/lib
-$(out)/dl_tests/libtest_with_dependency.so: \
-		$(bionic_test_libs)/dlopen_testlib_simple.cpp
-	$(MAKE) $(out)/dl_tests/libdlext_test.so
+$(out)/dl_tests/libtest_with_dependency.so: $(bionic_test_libs)/dlopen_testlib_simple.cpp \
+	$(out)/dl_tests/libdlext_test.so
 	$(makedir)
-	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -D__SHARED_OBJECT__=1 -shared -o $@ $<, CXX dl_tests/libtest_with_dependency.so)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS2) -ldlext_test -D__SHARED_OBJECT__=1 -shared -o $@ $<, CXX dl_tests/libtest_with_dependency.so)
 
 usr.manifest: build_all FORCE
 	@echo "/usr/lib/libtest_simple.so: ./dl_tests/libtest_simple.so" > $@
