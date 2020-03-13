@@ -19,6 +19,7 @@ jobs:
   include:
     - stage: build
       script:
+        - docker exec build ./scripts/build clean
         - docker exec build ./scripts/build-capstan-mpm-packages kernel
         - docker exec build ./scripts/build-capstan-mpm-packages unit_tests
         - docker exec build ./scripts/osv-version.sh > /tmp/osv-version
