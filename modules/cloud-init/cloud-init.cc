@@ -171,7 +171,10 @@ void script_module::handle(const YAML::Node& doc)
         yaml_to_request(node, req);
         if (req.uri == "/open-rest-api") {
             should_wait = true;
-            t = std::thread([=] {boost::program_options::variables_map c; httpserver::global_server::run(c); });
+            t = std::thread([=] {
+                std::map<std::string,std::vector<std::string>> c;
+                httpserver::global_server::run(c);
+            });
         } else if (!req.uri.empty()) {
             do_api(req);
         }
