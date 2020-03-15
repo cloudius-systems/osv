@@ -205,7 +205,7 @@ again:
                 ret = 1 + count;
             } else {
                 // Clock is REALTIME and now < _expiration (clock may have jumped backwards)
-                _wakeup_due = _expiration + _interval;
+                _wakeup_due = _expiration;
                 _wakeup_change_cond.wake_one();
                 goto again;
             }
