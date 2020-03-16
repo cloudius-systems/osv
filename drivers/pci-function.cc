@@ -807,11 +807,15 @@ namespace pci {
         write_pci_config(_bus, _device, _func, offset, val);
     }
 
+    // Returns the offset of the first capability with id matching @cap_id, or
+    // 0xFF if none found.
     u8 function::find_capability(u8 cap_id)
     {
-        return this->find_capability(cap_id, [](function *fun, u8 off) { return true; } );
+        return find_capability(cap_id, [](function *fun, u8 off) { return true; } );
     }
 
+    // Returns the offset of the first capability with id matching @cap_id and
+    // satisfying @predicate (if specified). If none found, returns 0xFF.
     u8 function::find_capability(u8 cap_id, std::function<bool (function*, u8)> predicate)
     {
         u8 capabilities_base = pci_readb(PCI_CAPABILITIES_PTR);
@@ -837,6 +841,36 @@ namespace pci {
         }
 
         return bad_offset;
+    }
+
+    // Append to @cap_offs the offsets of all capabilities with id matching
+    // @cap_id. Returns whether any such capabilities were found.
+    bool function::find_capabilities(std::vector<u8>& cap_offs, u8 cap_id)
+    {
+        u8 capabilities_base = pci_readb(PCI_CAPABILITIES_PTR);
+        u8 off = capabilities_base;
+        u8 max_capabilities = 0xF0;
+        u8 ctr = 0;
+        bool found = false;
+
+        while (off != 0) {
+            // Read capability
+            u8 capability = pci_readb(off + PCI_CAP_OFF_ID);
+            if (capability == cap_id) {
+                cap_offs.push_back(off);
+                found = true;
+            }
+
+            ctr++;
+            if (ctr > max_capabilities) {
+                return found;
+            }
+
+            // Next
+            off = pci_readb(off + PCI_CAP_OFF_NEXT);
+        }
+
+        return found;
     }
 
     bar * function::get_bar(int idx)

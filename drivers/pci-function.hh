@@ -342,6 +342,7 @@ namespace pci {
         // Capability parsing
         u8 find_capability(u8 cap_id);
         u8 find_capability(u8 cap_id, std::function<bool (function*, u8)> predicate);
+        bool find_capabilities(std::vector<u8>& caps, u8 cap_id);
 
         bar * get_bar(int idx);
         void add_bar(int idx, bar* bar);
