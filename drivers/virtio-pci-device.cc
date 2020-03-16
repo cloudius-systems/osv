@@ -253,6 +253,30 @@ u8 virtio_modern_pci_device::read_and_ack_isr()
     return _isr_cfg->virtio_conf_readb(0);
 }
 
+// Stores the address and length of the shared memory region identified by @id
+// in @addr and @length respectively. Returns false and doesn't modify @addr and
+// @length if no region with a matching id is found.
+bool virtio_modern_pci_device::get_shm(u8 id, mmioaddr_t &addr, u64 &length)
+{
+    auto cap = std::find_if(_shm_cfgs.cbegin(), _shm_cfgs.cend(),
+        [id, this] (const std::unique_ptr<virtio_capability>& cap) {
+            u8 cap_id = _dev->pci_readb(cap->get_cfg_offset() +
+                offsetof(virtio_pci_cap, id));
+            return cap_id == id;
+        });
+    if (cap == _shm_cfgs.cend()) {
+        return false;
+    }
+
+    auto bar = cap->get()->get_bar();
+    if (!bar->is_mmio()) {
+        return false;
+    }
+    addr = bar->get_mmio();
+    length = bar->get_size();
+    return true;
+}
+
 bool virtio_modern_pci_device::parse_pci_config()
 {
     // Check ABI version

@@ -76,6 +76,8 @@ public:
     virtual u8 read_config(u32 offset) = 0;
     virtual void dump_config() = 0;
 
+    virtual bool get_shm(u8 id, mmioaddr_t &addr, u64 &length) = 0;
+
     virtual bool is_modern() = 0;
     virtual size_t get_vring_alignment() = 0;
 };

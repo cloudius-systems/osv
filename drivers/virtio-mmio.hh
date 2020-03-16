@@ -136,6 +136,7 @@ public:
 
     bool parse_config();
 
+    virtual bool get_shm(u8 id, mmioaddr_t &addr, u64 &length) { /* TODO */ return false; }
 private:
     mmio_device_info _dev_info;
     //u64 _id;

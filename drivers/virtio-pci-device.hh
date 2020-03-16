@@ -116,6 +116,8 @@ public:
     virtual u8 read_and_ack_isr();
 
     virtual bool is_modern() { return false; }
+
+    virtual bool get_shm(u8 id, mmioaddr_t &addr, u64 &length) { return false; }
 protected:
     virtual bool parse_pci_config();
 
@@ -243,6 +245,7 @@ public:
             _bar->writel(_bar_offset + offset, val);
         };
         u32 get_cfg_offset() { return _cfg_offset; }
+        pci::bar* get_bar() { return _bar; }
 
         void print(const char *prefix) {
             virtio_d("%s bar=%d, offset=%x, size=%x", prefix, _bar_no, _bar_offset, _length);
@@ -284,6 +287,7 @@ public:
 
     virtual bool is_modern() { return true; };
 
+    virtual bool get_shm(u8 id, mmioaddr_t &addr, u64 &length);
 protected:
     virtual bool parse_pci_config();
 private:
