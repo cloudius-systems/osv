@@ -269,19 +269,24 @@ bool virtio_modern_pci_device::parse_pci_config()
         return false;
     }
 
+    // TODO: Consider consolidating these (they duplicate work)
     parse_virtio_capability(_common_cfg, VIRTIO_PCI_CAP_COMMON_CFG);
     parse_virtio_capability(_isr_cfg, VIRTIO_PCI_CAP_ISR_CFG);
     parse_virtio_capability(_notify_cfg, VIRTIO_PCI_CAP_NOTIFY_CFG);
     parse_virtio_capability(_device_cfg, VIRTIO_PCI_CAP_DEVICE_CFG);
+    parse_virtio_capabilities(_shm_cfgs, VIRTIO_PCI_CAP_SHARED_MEMORY_CFG);
 
     if (_notify_cfg) {
         _notify_offset_multiplier =_dev->pci_readl(_notify_cfg->get_cfg_offset() +
                 offsetof(virtio_pci_notify_cap, notify_offset_multiplier));
     }
 
-    return _common_cfg && _isr_cfg && _notify_cfg && _device_cfg;
+    // The common, isr and notifications configurations are mandatory
+    return _common_cfg && _isr_cfg && _notify_cfg;
 }
 
+// Parse a single virtio PCI capability, whose type must match @type and store
+// it in @ptr.
 void virtio_modern_pci_device::parse_virtio_capability(std::unique_ptr<virtio_capability> &ptr, u8 type)
 {
     u8 cfg_offset = _dev->find_capability(pci::function::PCI_CAP_VENDOR, [type] (pci::function *fun, u8 offset) {
@@ -291,16 +296,58 @@ void virtio_modern_pci_device::parse_virtio_capability(std::unique_ptr<virtio_ca
 
     if (cfg_offset != 0xFF) {
         u8 bar_index = _dev->pci_readb(cfg_offset + offsetof(struct virtio_pci_cap, bar));
-        u32 offset = _dev->pci_readl(cfg_offset + offsetof(struct virtio_pci_cap, offset));
-        u32 length = _dev->pci_readl(cfg_offset + offsetof(struct virtio_pci_cap, length));
-
         auto bar_no = bar_index + 1;
         auto bar = _dev->get_bar(bar_no);
         if (bar && bar->is_mmio() && !bar->is_mapped()) {
             bar->map();
         }
 
+        u64 offset = _dev->pci_readl(cfg_offset + offsetof(struct virtio_pci_cap, offset));
+        u64 length = _dev->pci_readl(cfg_offset + offsetof(struct virtio_pci_cap, length));
+
         ptr.reset(new virtio_modern_pci_device::virtio_capability(cfg_offset, bar, bar_no, offset, length));
+    }
+}
+
+// Parse all virtio PCI capabilities whose types match @type and append them to
+// @caps.
+// From the spec: "The device MAY offer more than one structure of any type -
+// this makes it possible for the device to expose multiple interfaces to
+// drivers. The order of the capabilities in the capability list specifies the
+// order of preference suggested by the device. A device may specify that this
+// ordering mechanism be overridden by the use of the id field."
+void virtio_modern_pci_device::parse_virtio_capabilities(
+    std::vector<std::unique_ptr<virtio_capability>>& caps, u8 type)
+{
+    std::vector<u8> cap_offs;
+    _dev->find_capabilities(cap_offs, pci::function::PCI_CAP_VENDOR);
+
+    for (auto cfg_offset: cap_offs) {
+        u8 cfg_type = _dev->pci_readb(cfg_offset + offsetof(virtio_pci_cap, cfg_type));
+        if (cfg_type != type) {
+            continue;
+        }
+
+        u8 bar_index = _dev->pci_readb(cfg_offset + offsetof(struct virtio_pci_cap, bar));
+        auto bar_no = bar_index + 1;
+        auto bar = _dev->get_bar(bar_no);
+        if (bar && bar->is_mmio() && !bar->is_mapped()) {
+            bar->map();
+        }
+
+        u64 offset = _dev->pci_readl(cfg_offset + offsetof(struct virtio_pci_cap, offset));
+        u64 length = _dev->pci_readl(cfg_offset + offsetof(struct virtio_pci_cap, length));
+        if (type == VIRTIO_PCI_CAP_SHARED_MEMORY_CFG) {
+            // The shared memory region capability is defined by a struct
+            // virtio_pci_cap64
+            u32 offset_hi = _dev->pci_readl(cfg_offset + offsetof(virtio_pci_cap64, offset_hi));
+            u32 length_hi = _dev->pci_readl(cfg_offset + offsetof(virtio_pci_cap64, length_hi));
+            offset |= ((u64)offset_hi << 32);
+            length |= ((u64)length_hi << 32);
+        }
+
+        caps.emplace_back(new virtio_modern_pci_device::virtio_capability(
+            cfg_offset, bar, bar_no, offset, length));
     }
 }
 
