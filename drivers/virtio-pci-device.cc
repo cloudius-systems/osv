@@ -322,6 +322,17 @@ bool virtio_modern_pci_device::parse_pci_config()
     return _common_cfg && _isr_cfg && _notify_cfg;
 }
 
+pci::bar* virtio_modern_pci_device::map_capability_bar(u8 cap_offset, u8 &bar_no)
+{
+    u8 bar_index = _dev->pci_readb(cap_offset + offsetof(struct virtio_pci_cap, bar));
+    bar_no = bar_index + 1;
+    auto bar = _dev->get_bar(bar_no);
+    if (bar && bar->is_mmio() && !bar->is_mapped()) {
+        bar->map();
+    }
+    return bar;
+}
+
 // Parse a single virtio PCI capability, whose type must match @type and store
 // it in @ptr.
 void virtio_modern_pci_device::parse_virtio_capability(std::vector<std::pair<u8,u8>> &offsets_and_types,
@@ -337,12 +348,8 @@ void virtio_modern_pci_device::parse_virtio_capability(std::vector<std::pair<u8,
     }
 
     if (cfg_offset != 0xFF) {
-        u8 bar_index = _dev->pci_readb(cfg_offset + offsetof(struct virtio_pci_cap, bar));
-        auto bar_no = bar_index + 1;
-        auto bar = _dev->get_bar(bar_no);
-        if (bar && bar->is_mmio() && !bar->is_mapped()) {
-            bar->map();
-        }
+        u8 bar_no;
+        auto bar = map_capability_bar(cfg_offset, bar_no);
 
         u64 offset = _dev->pci_readl(cfg_offset + offsetof(struct virtio_pci_cap, offset));
         u64 length = _dev->pci_readl(cfg_offset + offsetof(struct virtio_pci_cap, length));
@@ -368,12 +375,8 @@ void virtio_modern_pci_device::parse_virtio_capabilities( std::vector<std::pair<
         }
 
         auto cfg_offset = cfg_offset_and_type.first;
-        u8 bar_index = _dev->pci_readb(cfg_offset + offsetof(struct virtio_pci_cap, bar));
-        auto bar_no = bar_index + 1;
-        auto bar = _dev->get_bar(bar_no);
-        if (bar && bar->is_mmio() && !bar->is_mapped()) {
-            bar->map();
-        }
+        u8 bar_no;
+        auto bar = map_capability_bar(cfg_offset, bar_no);
 
         u64 offset = _dev->pci_readl(cfg_offset + offsetof(struct virtio_pci_cap, offset));
         u64 length = _dev->pci_readl(cfg_offset + offsetof(struct virtio_pci_cap, length));

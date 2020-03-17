@@ -292,6 +292,7 @@ protected:
     virtual bool parse_pci_config();
 private:
     void find_vendor_capabilities(std::vector<std::pair<u8,u8>>& offsets_and_types);
+    pci::bar* map_capability_bar(u8 cap_offset, u8 &bar_no);
     void parse_virtio_capability(std::vector<std::pair<u8,u8>> &offsets_and_types,
             std::unique_ptr<virtio_capability> &ptr, u8 type);
     void parse_virtio_capabilities(std::vector<std::pair<u8,u8>> &offsets_and_types,
