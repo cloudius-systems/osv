@@ -277,6 +277,17 @@ bool virtio_modern_pci_device::get_shm(u8 id, mmioaddr_t &addr, u64 &length)
     return true;
 }
 
+void virtio_modern_pci_device::find_vendor_capabilities(std::vector<std::pair<u8,u8>>& offsets_and_types)
+{
+    std::vector<u8> cap_offsets;
+    if (_dev->find_capabilities(pci::function::PCI_CAP_VENDOR, cap_offsets)) {
+        for (auto offset : cap_offsets) {
+            u8 cfg_type = _dev->pci_readb(offset + offsetof(struct virtio_pci_cap, cfg_type));
+            offsets_and_types.emplace_back(std::pair<u8,u8>(offset, cfg_type));
+        }
+    }
+}
+
 bool virtio_modern_pci_device::parse_pci_config()
 {
     // Check ABI version
@@ -293,12 +304,14 @@ bool virtio_modern_pci_device::parse_pci_config()
         return false;
     }
 
-    // TODO: Consider consolidating these (they duplicate work)
-    parse_virtio_capability(_common_cfg, VIRTIO_PCI_CAP_COMMON_CFG);
-    parse_virtio_capability(_isr_cfg, VIRTIO_PCI_CAP_ISR_CFG);
-    parse_virtio_capability(_notify_cfg, VIRTIO_PCI_CAP_NOTIFY_CFG);
-    parse_virtio_capability(_device_cfg, VIRTIO_PCI_CAP_DEVICE_CFG);
-    parse_virtio_capabilities(_shm_cfgs, VIRTIO_PCI_CAP_SHARED_MEMORY_CFG);
+    std::vector<std::pair<u8,u8>> offsets_and_types;
+    find_vendor_capabilities(offsets_and_types);
+
+    parse_virtio_capability(offsets_and_types, _common_cfg, VIRTIO_PCI_CAP_COMMON_CFG);
+    parse_virtio_capability(offsets_and_types, _isr_cfg, VIRTIO_PCI_CAP_ISR_CFG);
+    parse_virtio_capability(offsets_and_types, _notify_cfg, VIRTIO_PCI_CAP_NOTIFY_CFG);
+    parse_virtio_capability(offsets_and_types, _device_cfg, VIRTIO_PCI_CAP_DEVICE_CFG);
+    parse_virtio_capabilities(offsets_and_types, _shm_cfgs, VIRTIO_PCI_CAP_SHARED_MEMORY_CFG);
 
     if (_notify_cfg) {
         _notify_offset_multiplier =_dev->pci_readl(_notify_cfg->get_cfg_offset() +
@@ -311,12 +324,17 @@ bool virtio_modern_pci_device::parse_pci_config()
 
 // Parse a single virtio PCI capability, whose type must match @type and store
 // it in @ptr.
-void virtio_modern_pci_device::parse_virtio_capability(std::unique_ptr<virtio_capability> &ptr, u8 type)
+void virtio_modern_pci_device::parse_virtio_capability(std::vector<std::pair<u8,u8>> &offsets_and_types,
+        std::unique_ptr<virtio_capability> &ptr, u8 type)
 {
-    u8 cfg_offset = _dev->find_capability(pci::function::PCI_CAP_VENDOR, [type] (pci::function *fun, u8 offset) {
-        u8 cfg_type = fun->pci_readb(offset + offsetof(struct virtio_pci_cap, cfg_type));
-        return type == cfg_type;
-    });
+    u8 cfg_offset = 0xFF;
+    for (auto cfg_offset_and_type: offsets_and_types) {
+        auto cfg_type = cfg_offset_and_type.second;
+        if (cfg_type == type) {
+            cfg_offset = cfg_offset_and_type.first;
+            break;
+        }
+    }
 
     if (cfg_offset != 0xFF) {
         u8 bar_index = _dev->pci_readb(cfg_offset + offsetof(struct virtio_pci_cap, bar));
@@ -340,18 +358,16 @@ void virtio_modern_pci_device::parse_virtio_capability(std::unique_ptr<virtio_ca
 // drivers. The order of the capabilities in the capability list specifies the
 // order of preference suggested by the device. A device may specify that this
 // ordering mechanism be overridden by the use of the id field."
-void virtio_modern_pci_device::parse_virtio_capabilities(
-    std::vector<std::unique_ptr<virtio_capability>>& caps, u8 type)
+void virtio_modern_pci_device::parse_virtio_capabilities( std::vector<std::pair<u8,u8>> &offsets_and_types,
+                                                          std::vector<std::unique_ptr<virtio_capability>>& caps, u8 type)
 {
-    std::vector<u8> cap_offs;
-    _dev->find_capabilities(cap_offs, pci::function::PCI_CAP_VENDOR);
-
-    for (auto cfg_offset: cap_offs) {
-        u8 cfg_type = _dev->pci_readb(cfg_offset + offsetof(virtio_pci_cap, cfg_type));
+    for (auto cfg_offset_and_type: offsets_and_types) {
+        auto cfg_type = cfg_offset_and_type.second;
         if (cfg_type != type) {
             continue;
         }
 
+        auto cfg_offset = cfg_offset_and_type.first;
         u8 bar_index = _dev->pci_readb(cfg_offset + offsetof(struct virtio_pci_cap, bar));
         auto bar_no = bar_index + 1;
         auto bar = _dev->get_bar(bar_no);

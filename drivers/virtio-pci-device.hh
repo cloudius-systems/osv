@@ -291,8 +291,11 @@ public:
 protected:
     virtual bool parse_pci_config();
 private:
-    void parse_virtio_capability(std::unique_ptr<virtio_capability> &ptr, u8 type);
-    void parse_virtio_capabilities(std::vector<std::unique_ptr<virtio_capability>>& caps, u8 type);
+    void find_vendor_capabilities(std::vector<std::pair<u8,u8>>& offsets_and_types);
+    void parse_virtio_capability(std::vector<std::pair<u8,u8>> &offsets_and_types,
+            std::unique_ptr<virtio_capability> &ptr, u8 type);
+    void parse_virtio_capabilities(std::vector<std::pair<u8,u8>> &offsets_and_types,
+            std::vector<std::unique_ptr<virtio_capability>>& caps, u8 type);
 
     std::unique_ptr<virtio_capability> _common_cfg;
     std::unique_ptr<virtio_capability> _isr_cfg;

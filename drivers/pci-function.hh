@@ -340,9 +340,7 @@ namespace pci {
         virtual void pci_writel(u8 offset, u32 val);
 
         // Capability parsing
-        u8 find_capability(u8 cap_id);
-        u8 find_capability(u8 cap_id, std::function<bool (function*, u8)> predicate);
-        bool find_capabilities(std::vector<u8>& caps, u8 cap_id);
+        bool find_capabilities(u8 cap_id, std::vector<u8>& cap_offs);
 
         bar * get_bar(int idx);
         void add_bar(int idx, bar* bar);
@@ -402,6 +400,11 @@ namespace pci {
         bool _have_msi;
         pcicfg_msi _msi;
         bool _msi_enabled;
+
+    private:
+        // Capability parsing
+        u8 find_capability(u8 cap_id);
+        bool find_capabilities(u8 cap_id, std::vector<u8>& cap_offs, bool all);
     };
 }
 
