@@ -24,9 +24,11 @@ using namespace std;
 using namespace json;
 using namespace hardware_json;
 
+#if !defined(MONITORING)
 extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
     httpserver::api::hardware::init(*routes);
 }
+#endif
 
 void init(routes& routes)
 {

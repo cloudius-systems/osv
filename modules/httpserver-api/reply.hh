@@ -17,6 +17,7 @@
 #include <vector>
 #include <boost/asio.hpp>
 
+#pragma GCC visibility push(default)
 namespace http {
 
 namespace server {
@@ -87,4 +88,5 @@ struct reply {
 
 } // namespace http
 
+#pragma GCC visibility pop
 #endif // HTTP_REPLY_HPP

@@ -32,6 +32,7 @@ typedef const http::server::request& const_req;
  * file_handler - map a url path to a file
  * function_handler - uses a lambda expression to handle a reqeust
  */
+#pragma GCC visibility push(default)
 class handler_base {
 public:
     /**
@@ -90,7 +91,7 @@ public:
     virtual void reply500(http::server::reply& rep,
                           const std::string& alternative_message = ERROR_500_PAGE);
 
-    /**
+        /**
      * Add a mandatory parameter
      * @param param a parameter name
      * @return a reference to the handler
@@ -107,6 +108,7 @@ public:
     std::vector<std::string> mandatory_param;
 
 };
+#pragma GCC visibility pop
 
 /**
  * This is a base class for file transformer.
@@ -132,6 +134,7 @@ public:
     virtual ~file_transformer() = default;
 };
 
+#pragma GCC visibility push(default)
 /**
  * A base class for handlers that interact with files.
  * directory and file handlers both share some common logic
@@ -188,6 +191,7 @@ protected:
               http::server::reply& rep);
     file_transformer* transformer;
 };
+#pragma GCC visibility pop
 
 /**
  * The directory handler get a disk path in the

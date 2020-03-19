@@ -87,8 +87,10 @@ struct api_docs : public json::json_base {
     }
 };
 
+#pragma GCC visibility push(default)
 void register_api(const std::string& api,
                   const std::string& description);
+#pragma GCC visibility pop
 
 /**
  * Initialize the routes object with specific routes mapping

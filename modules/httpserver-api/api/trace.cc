@@ -25,7 +25,7 @@ using namespace httpserver::json::trace_json;
 static std::unordered_map<tracepoint_base*,
     std::unique_ptr<tracepoint_counter>> counters;
 
-extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
+extern "C" void __attribute__((visibility("default"))) httpserver_plugin_register_routes(httpserver::routes* routes) {
     httpserver::api::trace::init(*routes);
 }
 

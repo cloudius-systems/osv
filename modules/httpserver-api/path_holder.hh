@@ -11,6 +11,7 @@
 #include "handlers.hh"
 #include "routes.hh"
 
+#pragma GCC visibility push(default)
 namespace httpserver {
 /**
  * Path holder glues handlers and implementation.
@@ -89,5 +90,5 @@ private:
 };
 
 }
-
+#pragma GCC visibility pop
 #endif /* PATH_HOLDER_HH_ */

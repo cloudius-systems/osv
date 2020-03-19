@@ -14,6 +14,7 @@
 #include <sstream>
 #include "formatter.hh"
 
+#pragma GCC visibility push(default)
 namespace httpserver {
 
 namespace json {
@@ -224,4 +225,5 @@ struct json_return_type {
 }
 
 }
+#pragma GCC visibility pop
 #endif /* JSON_ELEMENTS_HH_ */

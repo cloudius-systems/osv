@@ -11,6 +11,7 @@
 #include "reply.hh"
 #include <string>
 
+#pragma GCC visibility push(default)
 namespace http {
 
 namespace server {
@@ -239,3 +240,4 @@ reply& reply::add_header(const std::string& h, const std::string& value) {
 } // namespace server
 
 } // namespace http
+#pragma GCC visibility pop

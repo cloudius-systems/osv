@@ -20,9 +20,11 @@ using namespace json;
 using namespace std;
 using namespace env_json;
 
+#if !defined(MONITORING)
 extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
     httpserver::api::env::init(*routes);
 }
+#endif
 
 void init(routes& routes)
 {
@@ -46,6 +48,7 @@ void init(routes& routes)
         return res;
     });
 
+#if !defined(MONITORING)
     setEnv.set_handler([](const_req req) {
         string param = req.param.at("var").substr(1);
         if (setenv(param.c_str(),
@@ -62,7 +65,7 @@ void init(routes& routes)
             }
             return "";
         });
-
+#endif
 }
 
 }

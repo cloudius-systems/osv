@@ -33,9 +33,11 @@ using namespace std;
 using namespace json;
 using namespace os_json;
 
+#if !defined(MONITORING)
 extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
     httpserver::api::os::init(*routes);
 }
+#endif
 
 void init(routes& routes)
 {
@@ -83,6 +85,7 @@ void init(routes& routes)
         return memory::get_balloon_size();
     });
 
+#if !defined(MONITORING)
     os_shutdown.set_handler([](const_req req) {
         osv::shutdown();
         return "";
@@ -97,6 +100,7 @@ void init(routes& routes)
         osv::reboot();
         return "";
     });
+#endif
 
     os_dmesg.set_handler([](const_req req) {
         return debug_buffer;
@@ -109,11 +113,13 @@ void init(routes& routes)
         return json_return_type(hostname);
     });
 
+#if !defined(MONITORING)
     os_set_hostname.set_handler([](const_req req) {
         string hostname = req.get_query_param("name");
         sethostname(hostname.c_str(), hostname.size());
         return "";
     });
+#endif
 
     os_threads.set_handler([](const_req req) {
         using namespace std::chrono;
@@ -143,6 +149,7 @@ void init(routes& routes)
         return osv::getcmdline();
     });
 
+#if !defined(MONITORING)
     os_set_cmdline.set_handler([](const_req req) {
         string newcmd = req.get_query_param("cmdline");
 
@@ -157,6 +164,7 @@ void init(routes& routes)
         return osv::getcmdline();
 
     });
+#endif
 
 }
 

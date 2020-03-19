@@ -13,11 +13,21 @@
 #include <dlfcn.h>
 #include <boost/filesystem.hpp>
 #include <boost/foreach.hpp>
-#include "yaml-cpp/yaml.h"
 #include "json/api_docs.hh"
 #include <osv/debug.h>
 #include "transformers.hh"
 #include <osv/options.hh>
+#if !defined(MONITORING)
+#include "yaml-cpp/yaml.h"
+#else
+#include "api/os.hh"
+#include "api/fs.hh"
+#include "api/file.hh"
+#include "api/network.hh"
+#include "api/hardware.hh"
+#include "api/api.hh"
+#include "api/env.hh"
+#endif
 
 namespace httpserver {
 
@@ -36,6 +46,7 @@ bool global_server::run(std::map<std::string,std::vector<std::string>>& _config)
     if (get().s != nullptr) {
         return false;
     }
+#if !defined(MONITORING)
     std::string config_file_path = "/tmp/httpserver.conf";
     if (options::option_value_exists(_config, "config-file")) {
         config_file_path = options::extract_option_value(_config, "config-file");
@@ -79,16 +90,19 @@ bool global_server::run(std::map<std::string,std::vector<std::string>>& _config)
             throw e;
         }
     }
+#endif
 
     set(_config);
     get().set("ipaddress", "0.0.0.0");
     get().set("port", "8000");
 
+#if !defined(MONITORING)
     if (get().config.count("ssl")) {
         get().set("cert", "/etc/pki/server.pem");
         get().set("key", "/etc/pki/private/server.key");
         get().set("cacert", "/etc/pki/CA/cacert.pem");
     }
+#endif
 
     auto port = get().config["port"][0];
     get().s = new http::server::server(get().config, &get()._routes);
@@ -105,6 +119,7 @@ bool global_server::run(std::map<std::string,std::vector<std::string>>& _config)
     return true;
 }
 
+#if !defined(MONITORING)
 void global_server::setup_file_mappings(const YAML::Node& file_mappings_node) {
     for (auto node : file_mappings_node) {
         const YAML::Node path = node["path"];
@@ -154,6 +169,7 @@ void global_server::setup_redirects(const YAML::Node& redirects_node) {
         }
     }
 }
+#endif
 
 global_server::global_server()
     : s(nullptr)
@@ -182,7 +198,15 @@ void global_server::set_routes()
 {
     path_holder::set_routes(&_routes);
     json::api_doc_init(_routes);
-
+#if defined(MONITORING)
+    httpserver::api::api::init(_routes);
+    httpserver::api::fs::init(_routes);
+    httpserver::api::os::init(_routes);
+    httpserver::api::network::init(_routes);
+    httpserver::api::hardware::init(_routes);
+    httpserver::api::env::init(_routes);
+    httpserver::api::file::init(_routes);
+#endif
     {
         namespace fs = boost::filesystem;
         fs::path plugin_path("/usr/mgmt/plugins/");

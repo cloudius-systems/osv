@@ -11,23 +11,29 @@
 
 #include "server.hh"
 #include "connection.hh"
+#if !defined(MONITORING)
 #include "ssl_server.hh"
 #include "openssl-init.hh"
+#endif
 #include "plain_server.hh"
 
 #include <utility>
+#if !defined(MONITORING)
 #include <openssl/ssl.h>
+#endif
 #include <osv/options.hh>
 
 namespace http {
 
 namespace server {
 
+#if !defined(MONITORING)
 static bool exists(const std::string& path)
 {
     struct stat s;
     return stat(path.c_str(), &s) == 0;
 }
+#endif
 
 server::server(std::map<std::string,std::vector<std::string>> &config,
                httpserver::routes* routes)
@@ -48,6 +54,7 @@ server::server(std::map<std::string,std::vector<std::string>> &config,
     tcp_acceptor.bind(endpoint);
     tcp_acceptor.listen();
 
+#if !defined(MONITORING)
     if (options::extract_option_flag(config, "ssl", [](const std::string &message) {
             std::cerr << message << std::endl;
             throw std::runtime_error("invalid configuration");
@@ -81,6 +88,7 @@ server::server(std::map<std::string,std::vector<std::string>> &config,
         ssl::context ctx = make_ssl_context(ca_cert_path, cert_path, key_path);
         acceptor_.reset(new ssl_acceptor(io_service_, std::move(ctx), std::move(tcp_acceptor)));
     } else {
+#endif
         if (!config.empty()) {
             for (auto option : config) {
                 std::cout << "Unrecognized option: " << option.first << std::endl;
@@ -89,7 +97,9 @@ server::server(std::map<std::string,std::vector<std::string>> &config,
         }
 
         acceptor_.reset(new plain_acceptor(io_service_, std::move(tcp_acceptor)));
+#if !defined(MONITORING)
     }
+#endif
 
     acceptor_->do_accept(std::bind(&server::on_connected, this, std::placeholders::_1));
 }

@@ -30,7 +30,6 @@ static Interface get_interface(const string& name, ifnet* ifp, long time)
     Interface f;
     interface intf(name);
 
-
     if_data cur_data = { 0 };
     if (!set_interface_info(ifp, cur_data, intf)) {
         throw server_error_exception("Failed getting interface information");
@@ -43,9 +42,11 @@ static Interface get_interface(const string& name, ifnet* ifp, long time)
     return f;
 }
 
+#if !defined(MONITORING)
 extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
     httpserver::api::network::init(*routes);
 }
+#endif
 
 /**
  * Initialize the routes object with specific routes mapping

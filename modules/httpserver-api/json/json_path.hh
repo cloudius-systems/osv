@@ -14,6 +14,7 @@
 #include <tuple>
 #include "common.hh"
 
+#pragma GCC visibility push(default)
 namespace httpserver {
 
 namespace json {
@@ -142,4 +143,5 @@ struct path_description {
 
 }
 }
+#pragma GCC visibility pop
 #endif /* JSON_PATH_HH_ */

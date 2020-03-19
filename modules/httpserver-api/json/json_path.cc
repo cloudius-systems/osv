@@ -7,6 +7,7 @@
 
 #include "json_path.hh"
 
+#pragma GCC visibility push(default)
 namespace httpserver {
 
 namespace json {
@@ -36,3 +37,4 @@ path_description* path_description::get(string nickname)
 }
 
 }
+#pragma GCC visibility pop
