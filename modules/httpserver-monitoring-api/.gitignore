@@ -1,0 +1,4 @@
+*.so
+autogen/*
+obj/*
+*.manifest

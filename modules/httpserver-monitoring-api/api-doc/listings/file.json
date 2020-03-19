@@ -1,0 +1,187 @@
+{
+   "apiVersion":"0.0.1",
+   "swaggerVersion":"1.2",
+   "basePath":"{{Protocol}}://{{Host}}",
+   "resourcePath":"/file",
+   "produces":[
+      "application/json"
+   ],
+   "apis":[
+      {
+         "path":"/file/{path-par}",
+         "operations":[
+            {
+               "method":"GET",
+               "summary":"Get File/Directory information",
+               "notes":"return File or Directory related information",
+               "type":"string",
+               "errorResponses":[
+                  {
+                     "code":404,
+                     "reason":"File not found"
+                  },
+                  {
+                     "code":400,
+                     "reason":"Bad Request"
+                  }
+               ],
+               "nickname":"getFile",
+               "produces":[
+                  "application/json"
+               ],
+               "parameters":[
+                  {
+                     "name":"path-par",
+                     "description":"Full path of file or directory",
+                     "required":true,
+                     "allowMultiple":true,
+                     "type":"string",
+                     "paramType":"path"
+                  },
+                  {
+                     "name":"op",
+                     "description":"The operation to perform",
+                     "required":true,
+                     "allowMultiple":false,
+                     "type":"string",
+                     "paramType":"query",
+                     "enum":["GET", "LISTSTATUS", "GETFILESTATUS"]
+                  },
+                  {
+                     "name":"offset",
+                     "description":"Offset in a file",
+                     "required":false,
+                     "allowMultiple":false,
+                     "type":"long",
+                     "paramType":"query"
+                  },
+                  {
+                     "name":"length",
+                     "description":"The number of bytes to be processed.",
+                     "required":false,
+                     "allowMultiple":false,
+                     "type":"long",
+                     "paramType":"query"
+                  }
+               ]
+            }
+         ]
+      }
+   ],
+   "models":{
+      "ContentSummary":{
+         "id": "ContentSummary",
+         "properties":{
+            "directoryCount":{
+               "description":"The number of directories.",
+               "type":"int",
+               "required":true
+            },
+            "fileCount":{
+               "description":"The number of files.",
+               "type":"int",
+               "required":true
+            },
+            "length":{
+               "description":"The number of bytes used by the content.",
+               "type":"int",
+               "required":true
+            },
+            "quota":{
+               "description":"The namespace quota of this directory.",
+               "type":"int",
+               "required":true
+            },
+            "spaceConsumed":{
+               "description":"The disk space consumed by the content.",
+               "type":"int",
+               "required":true
+            },
+            "spaceQuota":{
+               "description":"The disk space quota.",
+               "type":"int",
+               "required":true
+            }
+         }
+      },
+      "FileChecksum":{
+         "id": "FileChecksum",
+         "properties":{
+            "algorithm":{
+               "description":"The name of the checksum algorithm.",
+               "type":"string",
+               "required":true
+            },
+            "bytes":{
+               "description":"The byte sequence of the checksum in hexadecimal.",
+               "type":"string",
+               "required":true
+            },
+            "length":{
+               "description":"The length of the bytes (not the length of the string).",
+               "type":"int",
+               "required":true
+            }
+         }
+      },
+      "FileStatusProperties":{
+         "id": "FileStatusProperties",
+         "properties":{
+            "accessTime":{
+               "description":"The access time.",
+               "type":"int",
+               "required":true
+            },
+            "blockSize":{
+               "description":"The block size of a file.",
+               "type":"int",
+               "required":true
+            },
+            "group":{
+               "description":"The group owner.",
+               "type":"string",
+               "required":true
+            },
+            "length":{
+               "description":"The number of bytes in a file.",
+               "type":"long",
+               "required":true
+            },
+            "modificationTime":{
+               "description":"The modification time.",
+               "type":"int",
+               "required":true
+            },
+            "owner":{
+               "description":"The user who is the owner.",
+               "type":"string",
+               "required":true
+            },
+            "pathSuffix":{
+               "description":"The path suffix.",
+               "type":"string",
+               "required":true
+            },
+            "permission":{
+               "description":"The permission represented as a octal string.",
+               "type":"string",
+               "required":true
+            },
+            "replication":{
+               "description":"The number of replication of a file.",
+               "type":"int",
+               "required":true
+            },
+            "symlink":{
+               "description":"The link target of a symlink.",
+               "type":"string"
+            },
+            "type":{
+               "description":"The type of the path object.",
+               "type":"string",
+               "required":true
+            }
+         }
+      }
+   }
+}
