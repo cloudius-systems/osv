@@ -4,8 +4,6 @@
 # This work is open source software, licensed under the terms of the
 # BSD license as described in the LICENSE file in the top-level directory.
 
-# The nfs=true flag will build in the NFS client filesystem support
-
 # Delete the builtin make rules, as if "make -r" was used.
 .SUFFIXES:
 
@@ -142,25 +140,10 @@ check:
 	./scripts/build check
 .PHONY: check
 
-libnfs-path = external/fs/libnfs/
-
-$(out)/libnfs.a:
-	cd $(libnfs-path) && \
-	$(call quiet, ./bootstrap) && \
-	$(call quiet, ./configure --enable-shared=no --enable-static=yes --enable-silent-rules) && \
-	$(call quiet, make)
-	$(call quiet, cp -a $(libnfs-path)/lib/.libs/libnfs.a $(out)/libnfs.a)
-
-clean-libnfs:
-	if [ -f $(out)/libnfs.a ] ; then \
-	cd $(libnfs-path) && \
-	make distclean; \
-	fi
-
 # Remember that "make clean" needs the same parameters that set $(out) in
 # the first place, so to clean the output of "make mode=debug" you need to
 # do "make mode=debug clean".
-clean: clean-libnfs
+clean:
 	rm -rf $(out)
 	rm -f $(outlink) $(outlink2)
 .PHONY: clean
@@ -374,7 +357,7 @@ tools += tools/uush/uush.so
 tools += tools/uush/ls.so
 tools += tools/uush/mkdir.so
 
-tools += tools/mount/mount-nfs.so
+tools += tools/mount/mount-fs.so
 tools += tools/mount/umount.so
 
 ifeq ($(arch),aarch64)
@@ -1849,14 +1832,7 @@ endif
 
 boost-libs := $(boost-lib-dir)/libboost_system$(boost-mt).a
 
-ifeq ($(nfs), true)
-	nfs-lib = $(out)/libnfs.a
-	nfs_o = nfs.o nfs_vfsops.o nfs_vnops.o
-else
-	nfs_o = nfs_null_vfsops.o
-endif
-
-objects += $(addprefix fs/nfs/, $(nfs_o))
+objects += fs/nfs/nfs_null_vfsops.o
 
 # ld has a known bug (https://sourceware.org/bugzilla/show_bug.cgi?id=6468)
 # where if the executable doesn't use shared libraries, its .dynamic section
@@ -1865,7 +1841,7 @@ objects += $(addprefix fs/nfs/, $(nfs_o))
 $(out)/dummy-shlib.so: $(out)/dummy-shlib.o
 	$(call quiet, $(CXX) -nodefaultlibs -shared $(gcc-sysroot) -o $@ $^, LINK $@)
 
-stage1_targets = $(out)/arch/$(arch)/boot.o $(out)/loader.o $(out)/runtime.o $(drivers:%=$(out)/%) $(objects:%=$(out)/%) $(out)/dummy-shlib.so $(nfs-lib)
+stage1_targets = $(out)/arch/$(arch)/boot.o $(out)/loader.o $(out)/runtime.o $(drivers:%=$(out)/%) $(objects:%=$(out)/%) $(out)/dummy-shlib.so
 stage1: $(stage1_targets) links
 .PHONY: stage1
 

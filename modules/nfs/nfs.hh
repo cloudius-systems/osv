@@ -27,7 +27,7 @@
 
 #include <osv/mutex.h>
 
-#include "../../external/fs/libnfs/include/nfsc/libnfs.h"
+#include "nfsc/libnfs.h"
 
 class mount_context {
 public:

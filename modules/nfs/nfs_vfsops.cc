@@ -69,15 +69,17 @@ int nfs_init(void)
 #define nfs_op_vget    ((vfsop_vget_t)vfs_nullop)
 #define nfs_op_statfs  ((vfsop_statfs_t)vfs_nullop)
 
-/*
- * File system operations
- */
-struct vfsops nfs_vfsops = {
-    nfs_op_mount,      /* mount */
-    nfs_op_unmount,    /* unmount */
-    nfs_op_sync,       /* sync */
-    nfs_op_vget,       /* vget */
-    nfs_op_statfs,     /* statfs */
-    &nfs_vnops,        /* vnops */
-};
+// We are relying on vfsops structure defined in kernel
+extern struct vfsops nfs_vfsops;
+
+// Overwrite "null" vfsops structure fields with "real"
+// functions upon loading nfs.so shared object
+void __attribute__((constructor)) initialize_vfsops() {
+    nfs_vfsops.vfs_mount = nfs_op_mount;
+    nfs_vfsops.vfs_unmount = nfs_op_unmount;
+    nfs_vfsops.vfs_sync = nfs_op_sync;
+    nfs_vfsops.vfs_vget = nfs_op_vget;
+    nfs_vfsops.vfs_statfs = nfs_op_statfs;
+    nfs_vfsops.vfs_vnops = &nfs_vnops;
+}
 

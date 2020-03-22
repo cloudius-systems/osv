@@ -1,7 +1,7 @@
 [manifest]
 /libenviron.so: libenviron.so
 /libvdso.so: libvdso.so
-/tools/mount-nfs.so: tools/mount/mount-nfs.so
+/tools/mount-fs.so: tools/mount/mount-fs.so
 /tools/umount.so: tools/mount/umount.so
 /usr/lib/libgcc_s.so.1: %(libgcc_s_dir)s/libgcc_s.so.1
 /&/etc/hosts: ../../static/&

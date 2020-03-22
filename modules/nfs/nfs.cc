@@ -31,7 +31,7 @@ mount_context::mount_context(const char *url)
     // parse the url while taking care of freeing it when needed
     _url.reset(nfs_parse_url_dir(_nfs.get(), url));
     if (!_url) {
-        debug(std::string("mount_context():g: ") +
+        debug(std::string("mount_context(): ") +
               nfs_get_error(_nfs.get()) + "\n");
         _errno = EINVAL;
         return;
