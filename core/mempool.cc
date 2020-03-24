@@ -702,10 +702,13 @@ page_range* page_range_allocator::alloc(size_t size)
         for (auto&& pr : _free[exact_order - 1]) {
             if (pr.size >= size) {
                 range = &pr;
+                remove_list(exact_order - 1, *range);
                 break;
             }
         }
-        return nullptr;
+        if (!range) {
+            return nullptr;
+        }
     } else if (order == max_order) {
         range = &*_free_huge.rbegin();
         if (range->size < size) {
