@@ -7,7 +7,7 @@ branches:
   - master
   - ipv6
 before_install:
-  - pushd docker && docker build -t osv/builder -f ./Dockerfile.builder --build-arg DIST="ubuntu-19.10" . && popd
+  - pushd docker && docker build -t osv/builder -f ./Dockerfile.builder --build-arg DIST="ubuntu-19.10" --build-arg GIT_BRANCH=$TRAVIS_BRANCH . && popd
   - docker run -it --privileged -d --name build osv/builder
 stages:
   - build

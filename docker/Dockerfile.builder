@@ -9,6 +9,7 @@
 # OSv kernel as well as many applications ...
 #
 ARG DIST="fedora-29"
+ARG GIT_BRANCH=master
 FROM osvunikernel/osv-${DIST}-builder-base
 
 #
@@ -23,6 +24,7 @@ WORKDIR /git-repos
 ARG GIT_ORG_OR_USER=cloudius-systems
 RUN git clone https://github.com/${GIT_ORG_OR_USER}/osv.git
 WORKDIR /git-repos/osv
+RUN git checkout ${GIT_BRANCH}
 RUN git submodule update --init --recursive
 
 # - update all required packages in case they have changed
