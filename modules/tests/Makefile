@@ -126,7 +126,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-sendfile.so misc-lock-perf.so tst-uio.so tst-printf.so \
 	tst-pthread-affinity.so tst-pthread-tsd.so tst-thread-local.so \
 	tst-zfs-mount.so tst-regex.so tst-tcp-siocoutq.so \
-	libtls.so tst-tls.so tst-tls-pie.so tst-select-timeout.so tst-faccessat.so \
+	libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so tst-select-timeout.so tst-faccessat.so \
 	tst-fstatat.so misc-reboot.so tst-fcntl.so payload-namespace.so \
 	tst-namespace.so tst-without-namespace.so payload-env.so \
 	payload-merge-env.so misc-execve.so misc-execve-payload.so misc-mutex2.so \
@@ -136,7 +136,8 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-sigaltstack.so tst-fread.so tst-tcp-cork.so tst-tcp-v6.so \
 	tst-calloc.so tst-crypt.so tst-non-fpic.so tst-small-malloc.so \
 	tst-mmx-fpu.so tst-getopt.so tst-getopt-pie.so tst-non-pie.so tst-semaphore.so \
-	tst-socket-timestamp.so tst-pktinfo.so
+	tst-elf-init.so tst-socket-timestamp.so tst-pktinfo.so
+
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
 tests += testrunner.so
@@ -154,6 +155,8 @@ $(out)/tests/tst-mmap.so: COMMON += -fuse-ld=bfd
 $(out)/tests/tst-elf-permissions.so: COMMON += -fuse-ld=bfd
 $(out)/tests/tst-tls.so: COMMON += -fuse-ld=bfd
 
+$(out)/tests/tst-dlfcn.so: COMMON += -rdynamic -ldl
+
 $(out)/tests/tst-tls.so: \
 		$(src)/tests/tst-tls.cc \
 		$(out)/tests/libtls.so
@@ -169,6 +172,18 @@ $(out)/tests/tst-tls-pie.so: \
 		$(out)/tests/libtls.so
 	$(makedir)
 	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -fuse-ld=bfd -pthread -pie -o $@ $< tests/libtls.so, LD tests/tst-tls-pie.so)
+
+$(out)/tests/libtls_gold.so: COMMON += -fuse-ld=gold
+$(out)/tests/libtls_gold.so: $(out)/tests/libtls.o
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $< $(LIBS), LD tests/libtls_gold.so)
+
+$(out)/tests/tst-tls-gold.so: COMMON += -fuse-ld=gold
+$(out)/tests/tst-tls-gold.so: \
+		$(src)/tests/tst-tls.cc \
+		$(out)/tests/libtls_gold.so
+	$(makedir)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -D__SHARED_OBJECT__=1 -shared -o $@ $< tests/libtls_gold.so, CXX tests/tst-tls.cc)
 
 boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system.so))
 

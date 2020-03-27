@@ -7,6 +7,7 @@
 #include "path_holder.hh"
 #include <assert.h>
 
+#pragma GCC visibility push(default)
 namespace httpserver {
 
 routes* path_holder::_routes = nullptr;
@@ -36,3 +37,4 @@ handler_base& path_holder::set_handler(const json_request_function& fun) const
 }
 
 }
+#pragma GCC visibility pop

@@ -1,0 +1,73 @@
+{
+    "apiVersion": "0.0.1",
+    "swaggerVersion": "1.2",
+    "basePath": "{{Protocol}}://{{Host}}",
+    "resourcePath": "/hardware",
+    "produces": [
+        "application/json"
+    ],
+    "apis": [
+        {
+            "path": "/hardware/processor/flags",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "list all present processor features",
+                    "type": "string",
+                    "nickname" : "processorFeatures",
+                    "produces": [
+                        "application/json"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/hardware/firmware/vendor",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Return the firmware vendor",
+                    "type": "string",
+                    "nickname" : "firmware_vendor",
+                    "produces": [
+                        "application/json"
+                    ]
+                }
+            ]
+        },
+        {
+            "path": "/hardware/hypervisor",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Returns name of the hypervisor OSv is running on.",
+                    "type": "string",
+                    "nickname" : "hypervisor_name",
+                    "produces": [
+                        "application/json"
+                    ]
+                }
+            ]
+        },
+        {
+            "path": "/hardware/processor/count",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "list the current number of processors",
+                    "type": "long",
+                    "nickname" : "processorCount",
+                    "produces": [
+                        "application/json"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        }
+    ]
+}

@@ -98,7 +98,7 @@ public:
     ~virtio_legacy_pci_device() {}
 
     virtual const char *get_version() { return "legacy"; }
-    virtual u16 get_type_id() { return _dev->get_subsystem_id(); };
+    virtual u16 get_type_id() { return _dev->get_subsystem_id(); }
 
     virtual void select_queue(int queue);
     virtual u16 get_queue_size();
@@ -115,7 +115,9 @@ public:
     virtual u8 read_config(u32 offset);
     virtual u8 read_and_ack_isr();
 
-    virtual bool is_modern() { return false; };
+    virtual bool is_modern() { return false; }
+
+    virtual bool get_shm(u8 id, mmioaddr_t &addr, u64 &length) { return false; }
 protected:
     virtual bool parse_pci_config();
 
@@ -145,6 +147,8 @@ enum VIRTIO_MODERN_PCI_CONFIG {
     VIRTIO_PCI_CAP_DEVICE_CFG = 4,
     /* PCI configuration access */
     VIRTIO_PCI_CAP_PCI_CFG = 5,
+    /* Shared memory region */
+    VIRTIO_PCI_CAP_SHARED_MEMORY_CFG = 8,
 };
 
 /* This is the PCI capability header: */
@@ -154,9 +158,18 @@ struct virtio_pci_cap {
     u8 cap_len;     /* Generic PCI field: capability length */
     u8 cfg_type;    /* Identifies the structure. */
     u8 bar;         /* Where to find it. */
-    u8 padding[3];  /* Pad to full dword. */
+    u8 id;          /* Multiple capabilities of the same type */
+    u8 padding[2];  /* Pad to full dword. */
     u32 offset;     /* Offset within bar. */
     u32 length;     /* Length of the structure, in bytes. */
+};
+
+/* A variant of virtio_pci_cap, for capabilities that require offsets or lengths
+ * larger than 4GiB */
+struct virtio_pci_cap64 {
+    struct virtio_pci_cap cap;
+    u32 offset_hi;
+    u32 length_hi;
 };
 
 /* The notification location is found using the VIRTIO_PCI_CAP_NOTIFY_CFG capability.
@@ -198,7 +211,7 @@ struct virtio_pci_common_cfg {
 class virtio_modern_pci_device : public virtio_pci_device {
 public:
     struct virtio_capability {
-        virtio_capability(u32 cfg_offset, pci::bar* bar, u32 bar_no, u32 bar_offset, u32 length) :
+        virtio_capability(u32 cfg_offset, pci::bar* bar, u32 bar_no, u64 bar_offset, u64 length) :
             _cfg_offset(cfg_offset),
             _bar(bar),
             _bar_no(bar_no),
@@ -207,45 +220,46 @@ public:
             assert(_length > 0 && _bar_offset >= 0 && _bar_offset + _length <= _bar->get_size());
         }
 
-        u8 virtio_conf_readb(u32 offset) {
+        u8 virtio_conf_readb(u64 offset) {
             verify_offset(offset, sizeof(u8));
             return _bar->readb(_bar_offset + offset);
         };
-        u16 virtio_conf_readw(u32 offset) {
+        u16 virtio_conf_readw(u64 offset) {
             verify_offset(offset, sizeof(u16));
             return _bar->readw(_bar_offset + offset);
         };
-        u32 virtio_conf_readl(u32 offset) {
+        u32 virtio_conf_readl(u64 offset) {
             verify_offset(offset, sizeof(u32));
             return _bar->readl(_bar_offset + offset);
         };
-        void virtio_conf_writeb(u32 offset, u8 val) {
+        void virtio_conf_writeb(u64 offset, u8 val) {
             verify_offset(offset, sizeof(u8));
             _bar->writeb(_bar_offset + offset, val);
         };
-        void virtio_conf_writew(u32 offset, u16 val) {
+        void virtio_conf_writew(u64 offset, u16 val) {
             verify_offset(offset, sizeof(u16));
             _bar->writew(_bar_offset + offset, val);
         };
-        void virtio_conf_writel(u32 offset, u32 val) {
+        void virtio_conf_writel(u64 offset, u32 val) {
             verify_offset(offset, sizeof(u32));
             _bar->writel(_bar_offset + offset, val);
         };
         u32 get_cfg_offset() { return _cfg_offset; }
+        pci::bar* get_bar() { return _bar; }
 
         void print(const char *prefix) {
             virtio_d("%s bar=%d, offset=%x, size=%x", prefix, _bar_no, _bar_offset, _length);
         }
     private:
-        inline void verify_offset(u32 offset, u32 size) {
+        inline void verify_offset(u64 offset, u32 size) {
             assert(offset >= 0 && offset + size <= _length);
         }
 
         u32 _cfg_offset;
         pci::bar* _bar;
         u32 _bar_no;
-        u32 _bar_offset;
-        u32 _length;
+        u64 _bar_offset;
+        u64 _length;
     };
 
     explicit virtio_modern_pci_device(pci::device *dev);
@@ -273,15 +287,22 @@ public:
 
     virtual bool is_modern() { return true; };
 
+    virtual bool get_shm(u8 id, mmioaddr_t &addr, u64 &length);
 protected:
     virtual bool parse_pci_config();
 private:
-    void parse_virtio_capability(std::unique_ptr<virtio_capability> &ptr, u8 type);
+    void find_vendor_capabilities(std::vector<std::pair<u8,u8>>& offsets_and_types);
+    pci::bar* map_capability_bar(u8 cap_offset, u8 &bar_no);
+    void parse_virtio_capability(std::vector<std::pair<u8,u8>> &offsets_and_types,
+            std::unique_ptr<virtio_capability> &ptr, u8 type);
+    void parse_virtio_capabilities(std::vector<std::pair<u8,u8>> &offsets_and_types,
+            std::vector<std::unique_ptr<virtio_capability>>& caps, u8 type);
 
     std::unique_ptr<virtio_capability> _common_cfg;
     std::unique_ptr<virtio_capability> _isr_cfg;
     std::unique_ptr<virtio_capability> _notify_cfg;
     std::unique_ptr<virtio_capability> _device_cfg;
+    std::vector<std::unique_ptr<virtio_capability>> _shm_cfgs;
 
     u32 _notify_offset_multiplier;
     u32 _queues_notify_offsets[64];

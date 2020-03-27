@@ -1,0 +1,4 @@
+*.so
+*.d
+unfsd.bin
+upstream

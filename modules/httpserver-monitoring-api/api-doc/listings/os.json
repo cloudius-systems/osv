@@ -1,0 +1,289 @@
+{
+    "apiVersion": "0.0.1",
+    "swaggerVersion": "1.2",
+    "basePath": "{{Protocol}}://{{Host}}",
+    "resourcePath": "/os",
+    "produces": [
+        "application/json"
+    ],
+    "apis": [
+        {
+            "path": "/os/name",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Returns name of the operating system",
+                    "type": "string",
+                    "nickname": "os_name",
+                    "produces": [
+                        "application/json"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/os/version",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Returns version of the operating system",
+                    "type": "string",
+                    "nickname": "os_version",
+                    "produces": [
+                        "application/json"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/os/vendor",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Returns the vendor of the operating system",
+                    "type": "string",
+                    "nickname": "os_vendor",
+                    "produces": [
+                        "application/json"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/os/uptime",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Returns the number of seconds since the system was booted",
+                    "type": "long",
+                    "nickname": "os_uptime",
+                    "produces": [
+                        "application/json"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/os/date",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Returns the current date and time",
+                    "type": "string",
+                    "nickname": "os_date",
+                    "produces": [
+                        "application/json"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/os/memory/total",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Returns total amount of memory usable by the system (in bytes)",
+                    "type": "long",
+                    "nickname": "os_memory_total",
+                    "produces": [
+                        "application/json"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/os/memory/free",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Returns the amount of free memory in the system (in bytes)",
+                    "type": "long",
+                    "nickname": "os_memory_free",
+                    "produces": [
+                        "application/json"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/os/memory/balloon",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Returns the JVM balloon size (in bytes)",
+                    "type": "long",
+                    "nickname": "os_memory_balloon",
+                    "produces": [
+                        "application/json"
+                    ],
+                    "parameters": [
+                    ]
+                }
+            ]
+        },
+        {
+            "path": "/os/dmesg",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Returns the operating system boot log",
+                    "type": "string",
+                    "nickname": "os_dmesg",
+                    "produces": [
+                        "application/json"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/os/hostname",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Returns the system host name",
+                    "type": "string",
+                    "nickname": "os_get_hostname",
+                    "produces": [
+                        "application/json"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/os/threads",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Returns a list of threads in the system",
+                    "type": "Threads",
+                    "nickname": "os_threads",
+                    "produces": [
+                        "application/json"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/os/cmdline",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Returns the current boot command line",
+                    "notes": "This operation retrieves the current OSv command line. The current command line is either the command line used for the current boot, or the one written by POST.",
+                    "type": "string",
+                    "nickname": "os_get_cmdline",
+                    "produces": [
+                        "application/json"
+                    ],
+                    "parameters": [
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        }
+    ],
+    "models": {
+        "Thread": {
+            "id": "Thread",
+            "description": "Information on one thread",
+            "properties": {
+                "id": {
+                    "type": "long",
+                    "description": "32-bit thread id"
+                },
+                "cpu": {
+                    "type": "long",
+                    "description": "CPU the thread is running on"
+                },
+                "cpu_ms": {
+                    "type": "long",
+                    "description": "Total CPU time used by the thread (in milliseconds)"
+                },
+                "switches": {
+                    "type": "long",
+                    "description": "Number of times this thread was context-switched in"
+                },
+                "migrations": {
+                    "type": "long",
+                    "description": "Number of times this thread was migrated between CPUs"
+                },
+                "preemptions": {
+                    "type": "long",
+                    "description": "Number of times this thread was preempted (still runnable, but switched out)"
+                },
+                "priority": {
+                    "type": "float"
+                },
+                "stack_size": {
+                    "type": "long"
+                },
+                "status": {
+                    "type": "string",
+                    "description": "thread status",
+                    "enum": [
+                        "invalid",
+                        "prestarted",
+                        "unstarted",
+                        "waiting",
+                        "running",
+                        "queued",
+                        "waking",
+                        "terminating",
+                        "terminated"
+                    ]
+                },
+                "name": {
+                    "type": "string",
+                    "description": "Thread description (not necessarily unique)"
+                }
+            }
+        },
+        "Threads": {
+            "id": "Threads",
+            "description": "List of threads",
+            "properties": {
+                "list": {
+                    "type": "array",
+                    "items": {
+                        "type": "Thread"
+                    },
+                    "description": "List of thread objects"
+                },
+                "time_ms": {
+                    "type": "long",
+                    "description": "Time when thread list was taken (milliseconds since epoche)"
+                }
+            }
+        }
+    }
+}

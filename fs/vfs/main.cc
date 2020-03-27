@@ -53,6 +53,7 @@
 #include <fcntl.h>
 #undef open
 #undef fcntl
+#include <dlfcn.h>
 
 #include <osv/prex.h>
 #include <osv/vnode.h>
@@ -2305,6 +2306,22 @@ void pivot_rootfs(const char* path)
     if (ret)
         kprintf("failed to pivot root, error = %s\n", strerror(ret));
 
+    // Initialize other filesystem libraries if present
+    auto fs_lib_dir = opendir("/usr/lib/fs");
+    if (fs_lib_dir) {
+        while (auto dirent = readdir(fs_lib_dir)) {
+            auto len = strlen(dirent->d_name);
+            if (len >= 3 && strcmp(dirent->d_name + (len - 3), ".so") == 0) {
+                auto lib_path = std::string("/usr/lib/fs/") + dirent->d_name;
+                auto module = dlopen(lib_path.c_str(), RTLD_LAZY);
+                if (module)
+                    debugf("VFS: Initialized filesystem library: %s\n", lib_path.c_str());
+            }
+        }
+
+        closedir(fs_lib_dir);
+    }
+
     auto ent = setmntent("/etc/fstab", "r");
     if (!ent) {
         return;
@@ -2358,7 +2375,7 @@ extern "C" int mount_rofs_rootfs(bool pivot_root)
     return 0;
 }
 
-extern "C" void mount_zfs_rootfs(bool pivot_root)
+extern "C" void mount_zfs_rootfs(bool pivot_root, bool extra_zfs_pools)
 {
     if (mkdir("/zfs", 0755) < 0)
         kprintf("failed to create /zfs, error = %s\n", strerror(errno));
@@ -2374,7 +2391,9 @@ extern "C" void mount_zfs_rootfs(bool pivot_root)
 
     pivot_rootfs("/zfs");
 
-    import_extra_zfs_pools();
+    if (extra_zfs_pools) {
+        import_extra_zfs_pools();
+    }
 }
 
 extern "C" void unmount_rootfs(void)

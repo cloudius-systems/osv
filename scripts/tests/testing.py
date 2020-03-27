@@ -59,8 +59,7 @@ def scan_errors(s,scan_for_failed_to_load_object_error=True):
         # The test writer should not assume these patterns are going to
         # supported in the future and should indicate a test status as described
         # below.
-        "failures detected in test",
-        "failure detected in test",
+        "failure.*detected.*in.*test",
         "FAIL",
         "cannot execute ",
 
@@ -133,7 +132,7 @@ class SupervisedProcess:
             self.cv.release()
 
         line = ''
-        ch_bytes = ''
+        ch_bytes = bytes()
         while True:
             ch_bytes = ch_bytes + self.process.stdout.read(1)
             try:
@@ -144,7 +143,7 @@ class SupervisedProcess:
                 if ch == '\n':
                     append_line(line)
                     line = ''
-                ch_bytes = ''
+                ch_bytes = bytes()
             except UnicodeError:
                 continue
 
@@ -211,7 +210,7 @@ def run_command_in_guest(command, **kwargs):
     common_parameters = ["-e", "--power-off-on-abort " + command]
 
     if kwargs.get('hypervisor') == 'firecracker':
-        parameters = ["-l", "-m 2048M", "-n", "-c 4"] + common_parameters
+        parameters = ["-m 2048M", "-n", "-c 4"] + common_parameters
     else:
         parameters = ["-s"] + common_parameters
 

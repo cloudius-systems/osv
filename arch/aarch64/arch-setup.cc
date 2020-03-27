@@ -112,9 +112,10 @@ void arch_setup_free_memory()
 
     arch_setup_pci();
 
-    mmu::switch_to_runtime_page_tables();
-
+    // get rid of the command line, before memory is unmapped
     osv::parse_cmdline(cmdline);
+
+    mmu::switch_to_runtime_page_tables();
 }
 
 void arch_setup_tls(void *tls, const elf::tls_data& info)

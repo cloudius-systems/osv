@@ -633,6 +633,10 @@ public:
     {
         return static_cast<T*>(do_remote_thread_local_var(var));
     }
+    unsigned int parent_id() const
+    {
+        return _parent_id;
+    }
 private:
     virtual void timer_fired() override;
     struct detached_state;
@@ -769,6 +773,7 @@ private:
     inline void cputime_estimator_get(
             osv::clock::uptime::time_point &running_since,
             osv::clock::uptime::duration &total_cpu_time);
+    unsigned int _parent_id;
 };
 
 class thread_handle {

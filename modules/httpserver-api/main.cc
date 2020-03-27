@@ -40,7 +40,7 @@ static void handle_parse_error(const std::string &message)
     exit(1);
 }
 
-int main(int argc, char* argv[])
+int __attribute__((visibility("default"))) main(int argc, char* argv[])
 {
     auto options_values = options::parse_options_values(argc - 1, argv + 1, handle_parse_error);
 

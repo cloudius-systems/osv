@@ -7,6 +7,7 @@
 
 #include <string.h>
 #include <iostream>
+#include <cassert>
 
 // This test assures that the "memmove" function works as expected in the various
 // situations it can be used at.
@@ -20,6 +21,48 @@ void pass_if(const char *got, const char *expected, int size)
         std::cerr << "\n";
         exit(1);
     }
+}
+
+// This is a naive implementation of memmove just to verify
+// that real memmove works correctly
+static void* memmove_model(void *dest, const void *src, size_t n)
+{
+    char *d = (char*)dest;
+    const char *s = (char*)src;
+
+    if (d==s || n <= 0) return d;
+    if (d<s) {
+        while (n--) {
+            *(d++) = *(s++);
+        }
+    } else {
+        s = s + n - 1;
+        d = d + n - 1;
+        while (n--) {
+            *(d--) = *(s--);
+        }
+    }
+    return dest;
+}
+
+#define BUF_SIZE 0x4000
+
+// Test memmove by comparing results of real memmove and the one above
+static void memmove_test(int dest_offset, int src_offset, size_t n)
+{
+    char *buf1 = (char*)malloc(BUF_SIZE);
+    char *buf2 = (char*)malloc(BUF_SIZE);
+
+    for (int i = 0; i < BUF_SIZE; i++) {
+        buf1[i] = buf2[i] = i % 256;
+    }
+
+    memmove_model(buf1 + dest_offset, buf1 + src_offset, n);
+    memmove(buf2 + dest_offset, buf2 + src_offset, n);
+    assert(0 == memcmp(buf1, buf2, BUF_SIZE));
+
+    free(buf2);
+    free(buf1);
 }
 
 int main()
@@ -109,6 +152,49 @@ int main()
         strncpy(buf_tmp, buf_loop2, 18);
         memmove(&buf_tmp[i], &buf_tmp[8], 8);
         pass_if(buf_tmp, loop_results[i], 16);
+    }
+
+    // Test some explicit cases where some of them would fail before a fix in memmove_backwards()
+    memmove_test(381, 0, 8);
+    memmove_test(4, 0, 2303);
+    memmove_test(40, 0, 2692);
+    memmove_test(10, 0, 2732);
+    memmove_test(424, 0, 2746);
+    memmove_test(10, 0, 3618);
+    memmove_test(415, 0, 3646);
+    memmove_test(6, 0, 4057);
+    memmove_test(6, 0, 4063);
+    memmove_test(115, 0, 4075);
+    memmove_test(4, 0, 4190);
+    memmove_test(761, 0, 4202);
+    memmove_test(587, 0, 5773);
+    memmove_test(47, 0, 6356);
+    memmove_test(6, 0, 403);
+    memmove_test(10, 0, 6417);
+    memmove_test(757, 0, 6600);
+    memmove_test(703, 0, 8585);
+    memmove_test(206, 0, 9284);
+    memmove_test(720, 0, 9494);
+    memmove_test(4, 0, 10210);
+    memmove_test(597, 0, 11855);
+    memmove_test(6, 0, 13520);
+    memmove_test(4, 0, 13526);
+    memmove_test(125, 0, 14572);
+
+    // Test random overlapping memmove scenarios
+    int n;
+    for (int i = 0; i < 1000; i++) {
+        int destOffset = rand() % BUF_SIZE;
+        int srcOffset = rand() % BUF_SIZE;
+        // Calculate number of bytes so that source and dest overlap
+        if (destOffset < srcOffset) {
+            n = std::min(srcOffset - destOffset + 128, BUF_SIZE - srcOffset);
+            assert(srcOffset + n <= BUF_SIZE);
+        } else {
+            n = std::min(destOffset - srcOffset + 128, BUF_SIZE - destOffset);
+            assert(destOffset + n <= BUF_SIZE);
+        }
+        memmove_test(destOffset, srcOffset, n);
     }
 
     std::cerr << "PASSED\n";

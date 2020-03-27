@@ -1,10 +1,7 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import os, struct, optparse, io
-try:
-    import configparser
-except ImportError:
-    import ConfigParser as configparser
+import configparser
 from manifest_common import add_var, expand, unsymlink, read_manifest, defines, strip_file
 
 def main():
@@ -80,7 +77,7 @@ def main():
         if hostname.startswith("->"):
             link = hostname[2:]
             out.write(link.encode())
-            out.write('\0')
+            out.write(b'\0')
         else:
             out.write(open(hostname, 'rb').read())
 

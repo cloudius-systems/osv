@@ -89,6 +89,7 @@ struct devops {
 #define	no_write	((devop_write_t)enodev)
 #define	no_ioctl	((devop_ioctl_t)enodev)
 #define	no_devctl	((devop_devctl_t)nullop)
+#define	no_strategy	((devop_strategy_t)nullop)
 
 /*
  * Driver object

@@ -1,6 +1,6 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import os
-import urllib
+import urllib.request, urllib.parse, urllib.error
 import basetest
 import subprocess
 
@@ -45,10 +45,10 @@ class testfile(basetest.Basetest):
 
     def test_put_file_cmd(self):
         path = "/file"
-        self.curl(path + "/etc/hosts?op=COPY&destination="+urllib.quote("/etc/hosts1"), method='PUT')
+        self.curl(path + "/etc/hosts?op=COPY&destination="+urllib.parse.quote("/etc/hosts1"), method='PUT')
         hosts = self.curl(path + "/etc/hosts1?op=GETFILESTATUS")
         self.assertEqual(hosts["type"], "FILE")
-        self.curl(path + "/etc/hosts1?op=RENAME&destination="+urllib.quote("/etc/hosts2"), method='PUT')
+        self.curl(path + "/etc/hosts1?op=RENAME&destination="+urllib.parse.quote("/etc/hosts2"), method='PUT')
         hosts = self.curl(path + "/etc/hosts2?op=GETFILESTATUS")
         self.assertEqual(hosts["type"], "FILE")
         self.assertHttpError(path + "/etc/hosts1?op=GETFILESTATUS")

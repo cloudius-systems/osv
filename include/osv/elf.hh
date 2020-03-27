@@ -329,6 +329,12 @@ struct [[gnu::packed]] Elf64_Shdr {
     Elf64_Xword sh_entsize; /* Size of entries, if section has table */
 };
 
+enum VisibilityLevel {
+    Public,
+    ThreadOnly,
+    ThreadAndItsChildren
+};
+
 class object: public std::enable_shared_from_this<elf::object> {
 public:
     explicit object(program& prog, std::string pathname);
@@ -340,8 +346,10 @@ public:
     void set_dynamic_table(Elf64_Dyn* dynamic_table);
     void* base() const;
     void* end() const;
-    Elf64_Sym* lookup_symbol(const char* name);
+    Elf64_Sym* lookup_symbol(const char* name, bool self_lookup);
+    symbol_module lookup_symbol_deep(const char* name);
     void load_segments();
+    void process_headers();
     void unload_segments();
     void fix_permissions();
     void* resolve_pltgot(unsigned index);
@@ -382,7 +390,7 @@ protected:
     unsigned get_segment_mmap_permissions(const Elf64_Phdr& phdr);
 private:
     Elf64_Sym* lookup_symbol_old(const char* name);
-    Elf64_Sym* lookup_symbol_gnu(const char* name);
+    Elf64_Sym* lookup_symbol_gnu(const char* name, bool self_lookup);
     template <typename T>
     T* dynamic_ptr(unsigned tag);
     Elf64_Xword dynamic_val(unsigned tag);
@@ -398,6 +406,7 @@ private:
     void relocate_pltgot();
     unsigned symtab_len();
     void collect_dependencies(std::unordered_set<elf::object*>& ds);
+    std::deque<elf::object*> collect_dependencies_bfs();
     void prepare_initial_tls(void* buffer, size_t size, std::vector<ptrdiff_t>& offsets);
     void prepare_local_tls(std::vector<ptrdiff_t>& offsets);
     void alloc_static_tls();
@@ -444,7 +453,7 @@ protected:
     // The return value is true on success, false on failure.
     bool arch_relocate_rela(u32 type, u32 sym, void *addr,
                             Elf64_Sxword addend);
-    bool arch_relocate_jump_slot(u32 sym, void *addr, Elf64_Sxword addend, bool ignore_missing = false);
+    bool arch_relocate_jump_slot(symbol_module& sym, void *addr, Elf64_Sxword addend);
     size_t static_tls_end() {
         if (is_core() || is_executable()) {
             return 0;
@@ -452,10 +461,11 @@ protected:
         return _static_tls_offset + get_tls_size();
     }
 private:
-    std::atomic<void*> _visibility;
+    std::atomic<void*> _visibility_thread;
+    std::atomic<VisibilityLevel> _visibility_level;
     bool visible(void) const;
 public:
-    void setprivate(bool);
+    void set_visibility(VisibilityLevel);
 };
 
 class file : public object {
@@ -574,7 +584,8 @@ public:
      */
     void set_search_path(std::initializer_list<std::string> path);
 
-    symbol_module lookup(const char* symbol);
+    symbol_module lookup(const char* symbol, object* seeker);
+    symbol_module lookup_next(const char* name, const void* retaddr);
     template <typename T>
     T* lookup_function(const char* symbol);
 

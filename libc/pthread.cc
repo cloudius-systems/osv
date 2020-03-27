@@ -39,6 +39,7 @@ namespace pthread_private {
     __thread void* tsd[tsd_nkeys];
     __thread pthread_t current_pthread;
     __thread int cancel_state = PTHREAD_CANCEL_ENABLE;
+    __thread int cancel_type = PTHREAD_CANCEL_DEFERRED;
 
     // NOTE: currently, the list of keys and destructor for each is global,
     // not per shared object or ELF namespace. So if a shared object uses
@@ -736,9 +737,16 @@ int pthread_setcancelstate(int state, int *oldstate)
     return 0;
 }
 
-int pthread_setcanceltype(int state, int *oldstate)
+int pthread_setcanceltype(int type, int *oldtype)
 {
-    WARN_STUBBED();
+    if (type != PTHREAD_CANCEL_ASYNCHRONOUS &&
+        type != PTHREAD_CANCEL_DEFERRED) {
+        return EINVAL;
+    }
+    if (oldtype) {
+        (*oldtype) = cancel_type;
+    }
+    cancel_type = type;
     return 0;
 }
 

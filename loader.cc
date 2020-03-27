@@ -88,7 +88,7 @@ extern "C" {
     void premain();
     void vfs_init(void);
     void unmount_devfs();
-    void mount_zfs_rootfs(bool);
+    void mount_zfs_rootfs(bool,bool);
     int mount_rofs_rootfs(bool);
     void rofs_disable_cache();
 }
@@ -127,6 +127,7 @@ int main(int loader_argc, char **loader_argv)
     sched::init([=] { main_cont(loader_argc, loader_argv); });
 }
 
+static bool opt_extra_zfs_pools = false;
 static bool opt_disable_rofs_cache = false;
 static bool opt_leak = false;
 static bool opt_noshutdown = false;
@@ -180,7 +181,8 @@ static void usage()
     std::cout << "  --delay=arg (=0)      delay in seconds before boot\n";
     std::cout << "  --redirect=arg        redirect stdout and stderr to file\n";
     std::cout << "  --disable_rofs_cache  disable ROFS memory cache\n";
-    std::cout << "  --nopci               disable PCI enumeration\n\n";
+    std::cout << "  --nopci               disable PCI enumeration\n";
+    std::cout << "  --extra-zfs-pools     import extra ZFS pools\n\n";
 }
 
 static void handle_parse_error(const std::string &message)
@@ -209,6 +211,10 @@ static void parse_options(int loader_argc, char** loader_argv)
 
     if (extract_option_flag(options_values, "disable_rofs_cache")) {
         opt_disable_rofs_cache = true;
+    }
+
+    if (extract_option_flag(options_values, "extra-zfs-pools")) {
+        opt_extra_zfs_pools = true;
     }
 
     if (extract_option_flag(options_values, "noshutdown")) {
@@ -380,7 +386,7 @@ void* do_main_thread(void *_main_args)
             //
             // Failed -> try to mount zfs
             zfsdev::zfsdev_init();
-            mount_zfs_rootfs(opt_pivot);
+            mount_zfs_rootfs(opt_pivot, opt_extra_zfs_pools);
             bsd_shrinker_init();
 
             boot_time.event("ZFS mounted");

@@ -98,6 +98,7 @@ static string file_name(const string& path)
     return path.substr(found + 1);
 }
 
+#if !defined(MONITORING)
 /**
  * Generate a temporary file name in a target directory
  * according to a file name
@@ -152,6 +153,7 @@ static void copy(const std::string& from, const std::string& to)
             + e.code().message());
     }
 }
+#endif
 
 class get_file_handler : public file_interaction_handler {
     virtual void handle(const std::string& path, parameters* params,
@@ -318,6 +320,7 @@ class get_file_handler : public file_interaction_handler {
     }
 };
 
+#if !defined(MONITORING)
 class del_file_handler : public handler_base {
     virtual void handle(const std::string& path, parameters* params,
                         const http::server::request& req, http::server::reply& rep)
@@ -442,18 +445,23 @@ class put_file_handler : public handler_base {
         set_headers(rep, "json");
     }
 };
+#endif
 
+#if !defined(MONITORING)
 extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
     httpserver::api::file::init(*routes);
 }
+#endif
 
 void init(routes& routes)
 {
     file_json_init_path("file API");
     getFile.set_handler(new get_file_handler());
+#if !defined(MONITORING)
     delFile.set_handler(new del_file_handler());
     putFile.set_handler(new put_file_handler());
     upload.set_handler(new post_file_handler());
+#endif
 }
 
 }

@@ -22,6 +22,7 @@ api.require_if_other_module_present('httpserver-jvm-plugin','java')
 # httpserver will run regardless of an explicit command line
 # passed with "run.py -e".
 daemon = api.run_on_init(_exe + ' &!')
+daemon_ssl = api.run_on_init(_exe + ' --ssl &!')
 
 fg = api.run(_exe)
 

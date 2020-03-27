@@ -77,19 +77,16 @@ namespace pci {
         mmioaddr_t get_mmio();
 
         // Access the pio or mmio bar
-        u64 readq(u32 offset);
-        u32 readl(u32 offset);
-        u16 readw(u32 offset);
-        u8 readb(u32 offset);
-        void writeq(u32 offset, u64 val);
-        void writel(u32 offset, u32 val);
-        void writew(u32 offset, u16 val);
-        void writeb(u32 offset, u8 val);
+        u64 readq(u64 offset);
+        u32 readl(u64 offset);
+        u16 readw(u64 offset);
+        u8 readb(u64 offset);
+        void writeq(u64 offset, u64 val);
+        void writel(u64 offset, u32 val);
+        void writew(u64 offset, u16 val);
+        void writeb(u64 offset, u8 val);
 
     private:
-
-        void init();
-
         /* Architecture-specific hook on bar creation, which allows
          * rewriting the bar registers. Returns the bar register.
          */
@@ -343,8 +340,7 @@ namespace pci {
         virtual void pci_writel(u8 offset, u32 val);
 
         // Capability parsing
-        u8 find_capability(u8 cap_id);
-        u8 find_capability(u8 cap_id, std::function<bool (function*, u8)> predicate);
+        bool find_capabilities(u8 cap_id, std::vector<u8>& cap_offs);
 
         bar * get_bar(int idx);
         void add_bar(int idx, bar* bar);
@@ -404,6 +400,11 @@ namespace pci {
         bool _have_msi;
         pcicfg_msi _msi;
         bool _msi_enabled;
+
+    private:
+        // Capability parsing
+        u8 find_capability(u8 cap_id);
+        bool find_capabilities(u8 cap_id, std::vector<u8>& cap_offs, bool all);
     };
 }
 

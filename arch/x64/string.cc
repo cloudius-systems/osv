@@ -400,7 +400,7 @@ void *memcpy_backwards(void *dst, const void *src, size_t n)
             if (!n--) {
                 return dst;
             }
-            *d-- = *s--;
+            *(--d) = *(--s);
         }
 
         long_backwards(d, s, n);

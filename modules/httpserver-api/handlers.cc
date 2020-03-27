@@ -19,6 +19,7 @@ const std::string handler_base::ERROR_500_PAGE("<h1>Something went wrong</h1>");
 const std::string handler_base::ERROR_404_PAGE(
     "<h1>We didn't find the page you were looking for</h1>");
 
+#pragma GCC visibility push(default)
 void handler_base::set_headers_explicit(http::server::reply& rep, const std::string& mime)
 {
     const int contentLength = rep.content.size();
@@ -53,6 +54,7 @@ void handler_base::reply500(http::server::reply& rep, const std::string& alterna
     rep = http::server::reply::stock_reply(http::server::reply::internal_server_error,
                                            &alternative_message);
 }
+#pragma GCC visibility pop
 
 directory_handler::directory_handler(const string& doc_root,
                                      file_transformer* transformer)
@@ -76,6 +78,7 @@ void directory_handler::handle(const string& path, parameters* parts,
     read(full_path, req, rep);
 }
 
+#pragma GCC visibility push(default)
 file_interaction_handler::~file_interaction_handler()
 {
     delete transformer;
@@ -128,6 +131,7 @@ bool file_interaction_handler::redirect_if_needed(
     }
     return false;
 }
+#pragma GCC visibility pop
 
 void file_handler::handle(const string& path, parameters* parts,
                           const http::server::request& req, http::server::reply& rep)

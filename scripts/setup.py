@@ -1,9 +1,10 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 
 # set up a development environment for OSv.  Run as root.
 
-import sys, platform, argparse
-import subprocess
+import sys, argparse
+import subprocess, os
+from linux_distro import linux_distribution
 
 standard_ec2_packages = ['python-pip', 'wget']
 standard_ec2_post_install = ['pip install awscli &&'
@@ -23,7 +24,7 @@ standard_ec2_post_install = ['pip install awscli &&'
 class Fedora(object):
     name = 'Fedora'
     pre_install = '(yum list installed compat-openssl10-devel 2>/dev/null && yum -y remove compat-openssl10-devel) || echo "package compat-openssl10-devel not found -> no need to remove it"'
-    install = 'yum -y install --allowerasing'
+    install = 'yum -y install --allowerasing --forcearch x86_64'
     packages = [
                 'ant',
                 'autoconf',
@@ -49,9 +50,11 @@ class Fedora(object):
                 'ncurses-devel',
                 'openssl',
                 'openssl-libs',
+                'openssl-devel',
                 'p11-kit',
                 'patch',
-                'python-dpkt',
+                'python3-dpkt',
+                'python3-requests',
                 'qemu-img',
                 'qemu-system-x86',
                 'tcpdump',
@@ -59,47 +62,64 @@ class Fedora(object):
                 'wget',
                 'yaml-cpp-devel',
                 'pax-utils',
+                'java-1.8.0-openjdk',
+                'lua-5.3.*',
+                'lua-devel-5.3.*',
                  ]
     ec2_packages = standard_ec2_packages
     test_packages = ['openssl-devel']
     ec2_post_install = standard_ec2_post_install
 
     class Fedora_25(object):
-        packages = ['java-1.8.0-openjdk', 'python2-requests', 'openssl-devel', 'lua-5.3.*', 'lua-devel-5.3.*']
+        packages = []
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '25'
 
     class Fedora_26(object):
-        packages = ['java-1.8.0-openjdk', 'python2-requests', 'openssl-devel', 'lua-5.3.*', 'lua-devel-5.3.*']
+        packages = []
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '26'
 
     class Fedora_27(object):
-        packages = ['java-1.8.0-openjdk', 'python2-requests', 'openssl-devel', 'lua-5.3.*', 'lua-devel-5.3.*']
+        packages = []
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '27'
 
     class Fedora_28(object):
-        packages = ['java-1.8.0-openjdk', 'python2-requests', 'openssl-devel', 'lua-5.3.*', 'lua-devel-5.3.*']
+        packages = []
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '28'
 
     class Fedora_29(object):
-        packages = ['java-1.8.0-openjdk', 'python2-requests', 'openssl-devel', 'lua-5.3.*', 'lua-devel-5.3.*']
+        packages = []
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '29'
 
-    versions = [Fedora_25, Fedora_26, Fedora_27, Fedora_28, Fedora_29]
+    class Fedora_30(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '30'
+
+    class Fedora_31(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '31'
+
+    versions = [Fedora_25, Fedora_26, Fedora_27, Fedora_28, Fedora_29, Fedora_30, Fedora_31]
 
 class RHELbased(Fedora):
     name = ['Scientific Linux', 'NauLinux', 'CentOS Linux', 'Red Hat Enterprise Linux', 'Oracle Linux']
@@ -218,8 +238,8 @@ class Ubuntu(object):
                 'maven',
                 'openssl',
                 'p11-kit',
-                'python-dpkt',
-                'python-requests',
+                'python3-dpkt',
+                'python3-requests',
                 'qemu-system-x86',
                 'qemu-utils',
                 'tcpdump',
@@ -228,48 +248,56 @@ class Ubuntu(object):
                 'lua5.3',
                 'liblua5.3',
                 'pax-utils',
+                'openjdk-8-jdk',
                 ]
 
     ec2_packages = standard_ec2_packages
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
 
+    class Ubuntu_19_10(object):
+        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients']
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '19.10'
+
     class Ubuntu_19_04(object):
-        packages = ['openjdk-8-jdk', 'bridge-utils', 'libvirt-daemon-system', 'libvirt-clients']
+        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '19.04'
 
     class Ubuntu_18_10(object):
-        packages = ['openjdk-8-jdk', 'bridge-utils', 'libvirt-daemon-system', 'libvirt-clients']
+        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '18.10'
 
     class Ubuntu_18_04(object):
-        packages = ['openjdk-8-jdk', 'bridge-utils', 'libvirt-bin']
+        packages = ['bridge-utils', 'libvirt-bin']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '18.04'
 
     class Ubuntu_17_04(object):
-        packages = ['openjdk-8-jdk', 'libvirt-bin']
+        packages = ['libvirt-bin']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '17.04'
 
     class Ubuntu_16_04(object):
-        packages = ['openjdk-8-jdk', 'libvirt-bin']
+        packages = ['libvirt-bin']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '16.04'
 
-    versions = [Ubuntu_19_04, Ubuntu_18_10, Ubuntu_18_04, Ubuntu_17_04, Ubuntu_16_04]
+    versions = [Ubuntu_19_10, Ubuntu_19_04, Ubuntu_18_10, Ubuntu_18_04, Ubuntu_17_04, Ubuntu_16_04]
 
 class LinuxMint(Ubuntu):
     name = 'LinuxMint'
@@ -305,11 +333,11 @@ parser.add_argument("-t", "--test", action="store_true",
                     help="install packages required by testing tools")
 cmdargs = parser.parse_args()
 
-(name, version, id) = platform.linux_distribution()
+(name, version) = linux_distribution()
 
 for distro in distros:
     if type(distro.name) == type([]):
-        dname = filter(lambda n: name.startswith(n), distro.name)
+        dname = [n for n in distro.name if name.startswith(n)]
         if len(dname):
             distro.name = dname[0]
         else:
@@ -335,5 +363,5 @@ for distro in distros:
         print ('Your distribution %s version %s is not supported by this script' % (name, version))
         sys.exit(1)
 
-print 'Your distribution is not supported by this script.'
+print('Your distribution is not supported by this script.')
 sys.exit(2)

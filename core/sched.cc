@@ -1001,6 +1001,8 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
         strlcpy(_attr._name.data()+1, s_current->_attr._name.data(),
                 sizeof(_attr._name) - 1);
     }
+
+    _parent_id = s_current ? s_current->id() : 0;
 }
 
 static std::list<std::function<void ()>> exit_notifiers

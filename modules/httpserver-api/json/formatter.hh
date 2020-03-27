@@ -12,6 +12,7 @@
 #include <time.h>
 #include <sstream>
 
+#pragma GCC visibility push(default)
 namespace httpserver {
 
 namespace json {
@@ -124,4 +125,5 @@ private:
 
 }
 }
+#pragma GCC visibility pop
 #endif /* FORMATTER_HH_ */

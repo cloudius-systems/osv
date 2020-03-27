@@ -13,6 +13,7 @@
 
 using namespace std;
 
+#pragma GCC visibility push(default)
 namespace httpserver {
 
 namespace json {
@@ -107,3 +108,4 @@ bool json_base::is_verify() const
 
 }
 }
+#pragma GCC visibility pop

@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import sys
 import argparse
 import os
@@ -17,6 +17,8 @@ parser.add_argument('--run_script', help='path to the run image script', default
 parser.add_argument('--cmd', help='the command to execute')
 parser.add_argument('--use_sudo', help='Use sudo with -n option instead of port forwarding', action='store_true')
 parser.add_argument('--jsondir', help='location of the json files', default=os.path.join(module_base, '../httpserver-api/api-doc/listings/'))
+parser.add_argument('--test_image', help='the path to the test image')
+parser.add_argument('--hypervisor', action="store", default="qemu", help="choose hypervisor to run: qemu, firecracker")
 client.Client.add_arguments(parser)
 
 if __name__ == '__main__':

@@ -43,9 +43,11 @@ public:
 const string api_registry::base_path = "/api-doc";
 static api_registry* registry = nullptr;
 
+#pragma GCC visibility push(default)
 void register_api(const std::string& api, const std::string& description) {
     registry->reg(api, description);
 }
+#pragma GCC visibility pop
 
 void api_doc_init(routes& _routes) {
     registry = new api_registry(_routes);

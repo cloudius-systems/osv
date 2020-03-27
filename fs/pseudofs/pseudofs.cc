@@ -8,6 +8,7 @@
 
 #include "pseudofs.hh"
 #include <osv/sched.hh>
+#include <sys/sysinfo.h>
 
 namespace pseudofs {
 
@@ -189,6 +190,16 @@ string cpumap()
     for (; remaining_cpus_sets > 0; remaining_cpus_sets--) {
         osv::fprintf(os, ",%08x", 0xffffffff);
     }
+    return os.str();
+}
+
+string meminfo(const char* format)
+{
+    struct sysinfo info;
+    sysinfo(&info);
+
+    std::ostringstream os;
+    osv::fprintf(os, format, info.totalram >> 10, info.freeram >> 10);
     return os.str();
 }
 }

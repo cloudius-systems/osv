@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-from __future__ import print_function
+#!/usr/bin/env python3
+
 import subprocess
 import sys
 import argparse
@@ -71,8 +71,11 @@ def set_imgargs(options):
     if options.hypervisor == 'qemu_microvm':
         execute = '--nopci ' + execute
 
+    if options.arch == 'aarch64':
+        execute = '--nomount --maxnic=0 ' + execute #TODO: Investigate why both virtio-blk and virtio-net does not seem to work
+
     options.osv_cmdline = execute
-    if options.kernel or options.hypervisor == 'qemu_microvm':
+    if options.kernel or options.hypervisor == 'qemu_microvm' or options.arch == 'aarch64':
         return
 
     cmdline = [os.path.join(osv_base, "scripts/imgedit.py"), "setargs", options.image_file, execute]
@@ -103,11 +106,16 @@ def start_osv_qemu(options):
     else:
         aio = 'cache=none,aio=native'
 
-    args = [
-        "-m", options.memsize,
-        "-smp", options.vcpus]
+    if options.arch == 'aarch64':
+        args = [
+            "-m", "1G",
+            "-smp", "2"]
+    else:
+        args = [
+            "-m", options.memsize,
+            "-smp", options.vcpus]
 
-    if not options.novnc and options.hypervisor != 'qemu_microvm':
+    if not options.novnc and options.hypervisor != 'qemu_microvm' and options.arch == 'x86_64':
         args += [
         "-vnc", options.vnc]
     else:
@@ -122,7 +130,7 @@ def start_osv_qemu(options):
         args += [
         "-display", "sdl"]
 
-    if options.kernel or options.hypervisor == 'qemu_microvm':
+    if options.kernel or options.hypervisor == 'qemu_microvm' or options.arch == 'aarch64':
         boot_index = ""
         args += [
         "-kernel", options.kernel_file,
@@ -130,7 +138,12 @@ def start_osv_qemu(options):
     else:
         boot_index = ",bootindex=0"
 
-    if options.hypervisor == 'qemu_microvm':
+    if options.arch == 'aarch64':
+        args += [
+        "-machine", "virt", "-machine", "gic-version=2", "-cpu", "cortex-a57",
+        "-device", "virtio-blk-device,id=blk0,drive=hd0,scsi=off%s%s" % (boot_index, options.virtio_device_suffix),
+        "-drive", "file=%s,if=none,id=hd0,%s" % (options.image_file, aio)]
+    elif options.hypervisor == 'qemu_microvm':
         args += [
         "-M", "microvm,x-option-roms=off,pit=off,pic=off,rtc=off",
         "-nodefaults", "-no-user-config", "-no-reboot", "-global", "virtio-mmio.force-legacy=off",
@@ -219,11 +232,13 @@ def start_osv_qemu(options):
         args += ["-serial", "stdio"]
     elif options.detach:
         args += ["-daemonize"]
-    else:
+    elif options.arch == 'x86_64':
         signal_option = ('off', 'on')[options.with_signals]
         args += ["-chardev", "stdio,mux=on,id=stdio,signal=%s" % signal_option]
         args += ["-mon", "chardev=stdio,mode=readline"]
         args += ["-device", "isa-serial,chardev=stdio"]
+    else:
+        pass
 
     for a in options.pass_args or []:
         args += a.split()
@@ -236,7 +251,11 @@ def start_osv_qemu(options):
         qemu_env = os.environ.copy()
 
         qemu_env['OSV_BRIDGE'] = options.bridge
-        cmdline = [options.qemu_path] + args
+        if options.arch == 'aarch64':
+            qemu_path = 'qemu-system-aarch64'
+        else:
+            qemu_path = options.qemu_path
+        cmdline = [qemu_path] + args
         if options.dry_run:
             print(format_args(cmdline))
         else:
@@ -245,7 +264,7 @@ def start_osv_qemu(options):
                 sys.exit("qemu failed.")
     except OSError as e:
         if e.errno == errno.ENOENT:
-            print("'qemu-system-x86_64' binary not found. Please install the qemu-system-x86 package.")
+            print("'%s' binary not found. Please install the qemu-system-x86 package." % qemu_path)
         else:
             print("OS error({0}): \"{1}\" while running qemu-system-x86_64 {2}".
                 format(e.errno, e.strerror, " ".join(args)))
@@ -432,8 +451,8 @@ def start_osv(options):
         print("Unrecognized hypervisor selected", file=sys.stderr)
         return
 
-def choose_hypervisor(external_networking):
-    if os.path.exists('/dev/kvm'):
+def choose_hypervisor(external_networking, arch):
+    if os.path.exists('/dev/kvm') and arch == 'x86_64':
         return 'kvm'
     if (os.path.exists('/proc/xen/capabilities')
         and 'control_d' in file('/proc/xen/capabilities').read()
@@ -531,10 +550,15 @@ if __name__ == "__main__":
                         help="Run OSv in QEMU kernel mode as PVH.")
     parser.add_argument("--virtio", action="store", choices=["legacy","transitional","modern"], default="transitional",
                         help="specify virtio version: legacy, transitional or modern")
+    parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default="x86_64",
+                        help="specify QEMU architecture: x86_64, aarch64")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
     cmdargs.image_file = os.path.abspath(cmdargs.image or os.path.join(osv_base, "build/%s/usr.img" % cmdargs.opt_path))
-    cmdargs.kernel_file = os.path.join(osv_base, "build/%s/loader-stripped.elf" % cmdargs.opt_path)
+    if cmdargs.arch == 'aarch64':
+        cmdargs.kernel_file = os.path.join(osv_base, "build/%s/loader.img" % cmdargs.opt_path)
+    else:
+        cmdargs.kernel_file = os.path.join(osv_base, "build/%s/loader-stripped.elf" % cmdargs.opt_path)
     if not os.path.exists(cmdargs.image_file):
         raise Exception('Image file %s does not exist.' % cmdargs.image_file)
     if cmdargs.cloud_init_image:
@@ -543,7 +567,7 @@ if __name__ == "__main__":
             raise Exception('Cloud-init image %s does not exist.' % cmdargs.cloud_init_image)
 
     if cmdargs.hypervisor == "auto":
-        cmdargs.hypervisor = choose_hypervisor(cmdargs.networking)
+        cmdargs.hypervisor = choose_hypervisor(cmdargs.networking,cmdargs.arch)
 
     if cmdargs.virtio == "legacy":
         cmdargs.virtio_device_suffix = ",disable-legacy=off,disable-modern=on"

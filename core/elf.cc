@@ -27,6 +27,7 @@
 #include <sys/utsname.h>
 #include <osv/demangle.hh>
 #include <boost/version.hpp>
+#include <deque>
 
 #include "arch.hh"
 
@@ -41,6 +42,7 @@
 TRACEPOINT(trace_elf_load, "%s", const char *);
 TRACEPOINT(trace_elf_unload, "%s", const char *);
 TRACEPOINT(trace_elf_lookup, "%s", const char *);
+TRACEPOINT(trace_elf_lookup_next, "%s", const char *);
 TRACEPOINT(trace_elf_lookup_addr, "%p", const void *);
 
 extern void* elf_start;
@@ -122,7 +124,8 @@ object::object(program& prog, std::string pathname)
     , _dynamic_table(nullptr)
     , _module_index(_prog.register_dtv(this))
     , _is_executable(false)
-    , _visibility(nullptr)
+    , _visibility_thread(nullptr)
+    , _visibility_level(VisibilityLevel::Public)
 {
     elf_debug("Instantiated\n");
 }
@@ -140,21 +143,52 @@ ulong object::module_index() const
 
 bool object::visible(void) const
 {
-    auto v = _visibility.load(std::memory_order_acquire);
-    return (v == nullptr) || (v == sched::thread::current());
+    auto level = _visibility_level.load(std::memory_order_acquire);
+    if (level == VisibilityLevel::Public) {
+        return true;
+    }
+
+    auto thread = _visibility_thread.load(std::memory_order_acquire);
+    if (!thread) { //Unlikely, but ...
+        return true;
+    }
+
+    auto current_thread = sched::thread::current();
+    if (level == VisibilityLevel::ThreadOnly) {
+        return thread == current_thread;
+    }
+
+    // Is current thread the same as "thread" or is it a child of it?
+    if (thread == current_thread) {
+        return true;
+    }
+
+    bool visible = false;
+    auto next_parent_id = current_thread->parent_id();
+    while (next_parent_id) {
+        sched::with_thread_by_id(next_parent_id, [&next_parent_id, &visible, thread] (sched::thread *t) {
+            if (t == thread) {
+                visible = true;
+                next_parent_id = 0;
+            } else {
+                next_parent_id = t ? t->parent_id() : 0;
+            }
+        });
+    }
+    return visible;
 }
 
-void object::setprivate(bool priv)
+void object::set_visibility(elf::VisibilityLevel visibilityLevel)
 {
-     _visibility.store(priv ? sched::thread::current() : nullptr,
+    _visibility_thread.store(visibilityLevel == VisibilityLevel::Public ? nullptr : sched::thread::current(),
              std::memory_order_release);
+    _visibility_level.store(visibilityLevel, std::memory_order_release);
 }
-
 
 template <>
 void* object::lookup(const char* symbol)
 {
-    symbol_module sm{lookup_symbol(symbol), this};
+    symbol_module sm{lookup_symbol(symbol, false), this};
     if (!sm.symbol || sm.symbol->st_shndx == SHN_UNDEF) {
         return nullptr;
     }
@@ -422,11 +456,19 @@ void object::load_segments()
     elf_debug("Loading segments\n");
     for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
         auto &phdr = _phdrs[i];
+        if (phdr.p_type == PT_LOAD) {
+            load_segment(phdr);
+        }
+    }
+}
+
+void object::process_headers()
+{
+    elf_debug("Processing headers\n");
+    for (unsigned i = 0; i < _ehdr.e_phnum; ++i) {
+        auto &phdr = _phdrs[i];
         switch (phdr.p_type) {
         case PT_NULL:
-            break;
-        case PT_LOAD:
-            load_segment(phdr);
             break;
         case PT_DYNAMIC:
             _dynamic_table = reinterpret_cast<Elf64_Dyn*>(_base + phdr.p_vaddr);
@@ -463,6 +505,7 @@ void object::load_segments()
             }
             break;
         }
+        case PT_LOAD:
         case PT_PHDR:
         case PT_GNU_STACK:
         case PT_GNU_RELRO:
@@ -642,10 +685,13 @@ symbol_module object::symbol(unsigned idx, bool ignore_missing)
     auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
     assert(dynamic_val(DT_SYMENT) == sizeof(Elf64_Sym));
     auto sym = &symtab[idx];
+    auto binding = symbol_binding(*sym);
+    if (binding == STB_LOCAL) {
+        return symbol_module(sym, this);
+    }
     auto nameidx = sym->st_name;
     auto name = dynamic_ptr<const char>(DT_STRTAB) + nameidx;
-    auto ret = _prog.lookup(name);
-    auto binding = symbol_binding(*sym);
+    auto ret = _prog.lookup(name, this);
     if (!ret.symbol && binding == STB_WEAK) {
         return symbol_module(sym, this);
     }
@@ -673,7 +719,7 @@ symbol_module object::symbol_other(unsigned idx)
         for (auto module : ml.objects) {
             if (module == this)
                 continue; // do not match this module
-            if (auto sym = module->lookup_symbol(name)) {
+            if (auto sym = module->lookup_symbol(name, false)) {
                 ret = symbol_module(sym, module);
                 break;
             }
@@ -742,7 +788,8 @@ void object::relocate_pltgot()
             // binding), try to resolve all the PLT entries now.
             // If symbol cannot be resolved warn about it instead of aborting
             u32 sym = info >> 32;
-            if (arch_relocate_jump_slot(sym, addr, p->r_addend, true))
+            auto _sym = symbol(sym, true);
+            if (arch_relocate_jump_slot(_sym, addr, p->r_addend))
                   continue;
         }
         if (original_plt) {
@@ -785,7 +832,7 @@ void* object::resolve_pltgot(unsigned index)
         }
     }
 
-    if (!arch_relocate_jump_slot(sym, addr, slot.r_addend)) {
+    if (!arch_relocate_jump_slot(sm, addr, slot.r_addend)) {
         debug_early("resolve_pltgot(): failed jump slot relocation\n");
         abort();
     }
@@ -849,7 +896,7 @@ dl_new_hash(const char *s)
     return h & 0xffffffff;
 }
 
-Elf64_Sym* object::lookup_symbol_gnu(const char* name)
+Elf64_Sym* object::lookup_symbol_gnu(const char* name, bool self_lookup)
 {
     auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
     auto strtab = dynamic_ptr<char>(DT_STRTAB);
@@ -873,7 +920,7 @@ Elf64_Sym* object::lookup_symbol_gnu(const char* name)
     if (idx == 0) {
         return nullptr;
     }
-    auto version_symtab = dynamic_exists(DT_VERSYM) ? dynamic_ptr<Elf64_Versym>(DT_VERSYM) : nullptr;
+    auto version_symtab = (!self_lookup && dynamic_exists(DT_VERSYM)) ? dynamic_ptr<Elf64_Versym>(DT_VERSYM) : nullptr;
     do {
         if ((chains[idx] & ~1) != (hashval & ~1)) {
             continue;
@@ -888,19 +935,35 @@ Elf64_Sym* object::lookup_symbol_gnu(const char* name)
     return nullptr;
 }
 
-Elf64_Sym* object::lookup_symbol(const char* name)
+Elf64_Sym* object::lookup_symbol(const char* name, bool self_lookup)
 {
     if (!visible()) {
         return nullptr;
     }
     Elf64_Sym* sym;
     if (dynamic_exists(DT_GNU_HASH)) {
-        sym = lookup_symbol_gnu(name);
+        sym = lookup_symbol_gnu(name, self_lookup);
     } else {
         sym = lookup_symbol_old(name);
     }
     if (sym && sym->st_shndx == SHN_UNDEF) {
         sym = nullptr;
+    }
+    return sym;
+}
+
+symbol_module object::lookup_symbol_deep(const char* name)
+{
+    symbol_module sym = { lookup_symbol(name, false), this };
+    if (!sym.symbol) {
+        auto deps = this->collect_dependencies_bfs();
+        for (auto&& _obj : deps) {
+            auto symbol = _obj->lookup_symbol(name, false);
+            if (symbol) {
+                sym = { symbol, _obj };
+                break;
+            }
+        }
     }
     return sym;
 }
@@ -1042,6 +1105,28 @@ void object::collect_dependencies(std::unordered_set<elf::object*>& ds)
             d->collect_dependencies(ds);
         }
     }
+}
+
+std::deque<elf::object*> object::collect_dependencies_bfs()
+{
+    std::unordered_set<object*> deps_set;
+    std::deque<object*> operate_queue;
+    std::deque<object*> deps;
+    operate_queue.push_back(this);
+    deps_set.insert(this);
+
+    while (!operate_queue.empty()) {
+        object* obj = operate_queue.front();
+        operate_queue.pop_front();
+        deps.push_back(obj);
+        for (auto&& d : obj->_needed) {
+            if (!deps_set.count(d.get())) {
+                deps_set.insert(d.get());
+                operate_queue.push_back(d.get());
+            }
+        }
+    }
+    return deps;
 }
 
 std::string object::soname()
@@ -1197,6 +1282,7 @@ program::program(void* addr)
     _core->set_base(program_base);
     assert(_core->module_index() == core_module_index);
     _core->load_segments();
+    _core->process_headers();
     set_search_path({"/", "/usr/lib"});
     // Our kernel already supplies the features of a bunch of traditional
     // shared libraries:
@@ -1206,6 +1292,7 @@ program::program(void* addr)
           "libm.so.6",
 #ifdef __x86_64__
           "ld-linux-x86-64.so.2",
+          "libc.musl-x86_64.so.1",
           // As noted in issue #1040 Boost version 1.69.0 and above is
           // compiled with hidden visibility, so even if the kernel uses
           // this library, it will not be visible for the application and
@@ -1310,7 +1397,7 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         auto ef = std::shared_ptr<object>(new file(*this, f, name),
                 [=](object *obj) { remove_object(obj); });
         ef->set_base(_next_alloc);
-        ef->setprivate(true);
+        ef->set_visibility(ThreadOnly);
         // We need to push the object at the end of the list (so that the main
         // shared object gets searched before the shared libraries it uses),
         // with one exception: the kernel needs to remain at the end of the
@@ -1324,6 +1411,7 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         _modules_rcu.assign(new_modules.release());
         osv::rcu_dispose(old_modules);
         ef->load_segments();
+        ef->process_headers();
         if (!ef->is_non_pie_executable())
            _next_alloc = ef->end();
         add_debugger_obj(ef.get());
@@ -1382,13 +1470,13 @@ void program::init_library(int argc, char** argv)
         // first) and finally make the loaded objects visible in search order.
         auto size = loaded_objects.size();
         for (unsigned i = 0; i < size; i++) {
-            loaded_objects[i]->setprivate(true);
+            loaded_objects[i]->set_visibility(ThreadAndItsChildren);
         }
         for (int i = size - 1; i >= 0; i--) {
             loaded_objects[i]->run_init_funcs(argc, argv);
         }
         for (unsigned i = 0; i < size; i++) {
-            loaded_objects[i]->setprivate(false);
+            loaded_objects[i]->set_visibility(Public);
         }
         _loaded_objects_stack.pop();
     }
@@ -1454,14 +1542,14 @@ void program::del_debugger_obj(object* obj)
     }
 }
 
-symbol_module program::lookup(const char* name)
+symbol_module program::lookup(const char* name, object* seeker)
 {
     trace_elf_lookup(name);
     symbol_module ret(nullptr,nullptr);
     with_modules([&](const elf::program::modules_list &ml)
     {
         for (auto module : ml.objects) {
-            if (auto sym = module->lookup_symbol(name)) {
+            if (auto sym = module->lookup_symbol(name, seeker == module)) {
                 ret = symbol_module(sym, module);
                 return;
             }
@@ -1470,9 +1558,41 @@ symbol_module program::lookup(const char* name)
     return ret;
 }
 
+symbol_module program::lookup_next(const char* name, const void* retaddr)
+{
+    trace_elf_lookup_next(name);
+    symbol_module ret(nullptr,nullptr);
+    if (retaddr == nullptr) {
+        return ret;
+    }
+    with_modules([&](const elf::program::modules_list &ml)
+    {
+        auto start = ml.objects.end();
+        for (auto it = ml.objects.begin(), end = ml.objects.end(); it != end; ++it) {
+            auto module = *it;
+            if (module->contains_addr(retaddr)) {
+                start = it;
+                break;
+            }
+        }
+        if (start == ml.objects.end()) {
+            return;
+        }
+        start = ++start;
+        for (auto it = start, end = ml.objects.end(); it != end; ++it) {
+            auto module = *it;
+            if (auto sym = module->lookup_symbol(name, false)) {
+                ret = symbol_module(sym, module);
+                break;
+            }
+        }
+    });
+    return ret;
+}
+
 void* program::do_lookup_function(const char* name)
 {
-    auto sym = lookup(name);
+    auto sym = lookup(name, nullptr);
     if (!sym.symbol) {
         throw std::runtime_error("symbol not found " + demangle(name));
     }

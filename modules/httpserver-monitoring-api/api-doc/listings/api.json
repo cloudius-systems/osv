@@ -1,0 +1,40 @@
+{
+   "apiVersion":"0.0.1",
+   "swaggerVersion":"1.2",
+   "basePath":"{{Protocol}}://{{Host}}",
+   "resourcePath":"/api",
+   "produces":[
+      "application/json"
+   ],
+   "apis":[
+      {
+         "path":"/api/batch",
+         "operations":[
+            {
+               "method":"POST",
+               "summary":"Batch process API calls",
+               "notes":"Perform batch API calls in a single command. Commands are performed sequentially and independently. Each command has its own response code",
+               "type":"string",
+               "errorResponses":[
+                  {
+                     "code":400,
+                     "reason":"Bad request"
+                  }
+               ],
+               "nickname":"api_batch",
+               "produces":[
+                  "application/json"
+               ],
+               "parameters":[
+                  {
+                  "name":"batch",
+                  "paramType":"form",
+                  "type":"string",
+                  "required":true
+                  }
+               ]
+            }
+         ]
+      }
+   ]
+}

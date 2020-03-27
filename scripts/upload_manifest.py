@@ -1,17 +1,11 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import optparse, os, subprocess, socket, threading, stat, sys
 from manifest_common import add_var, expand, unsymlink, read_manifest, defines, strip_file
 from contextlib import closing
 
-try:
-    import StringIO
-    # This works on Python 2
-    StringIO = StringIO.StringIO
-except ImportError:
-    import io
-    # This works on Python 3
-    StringIO = io.StringIO
+import io
+StringIO = io.StringIO
 
 def find_free_port():
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
@@ -53,8 +47,7 @@ def upload(osv, manifest, depends, port):
     def cpio_field(number, length):
         return ("%.*x" % (length, number)).encode()
     def cpio_header(filename, mode, filesize):
-        if sys.version_info >= (3, 0, 0):
-            filename = filename.encode("utf-8")
+        filename = filename.encode("utf-8")
         return (b"070701"                         # magic
                 + cpio_field(0, 8)                # inode
                 + cpio_field(mode, 8)             # mode

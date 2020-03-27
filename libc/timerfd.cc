@@ -179,6 +179,7 @@ int timerfd::read(uio *data, int flags)
     }
 
     WITH_LOCK(_mutex) {
+again:
         while (!_expiration || _wakeup_due) {
             if (f_flags & O_NONBLOCK) {
                 return EAGAIN;
@@ -193,14 +194,21 @@ int timerfd::read(uio *data, int flags)
             _expiration = 0;
         } else {
             auto now = time_now();
-            // set next wakeup for the next multiple of interval from
-            // _expiration which is after "now".
-            assert (now >= _expiration);
-            u64 count = (now - _expiration) / _interval;
-            _expiration = _expiration + (count+1) * _interval;
-            _wakeup_due = _expiration;
-            _wakeup_change_cond.wake_one();
-            ret = 1 + count;
+            if (_clockid == CLOCK_MONOTONIC || now >= _expiration) {
+                // set next wakeup for the next multiple of interval from
+                // _expiration which is after "now".
+                assert (now >= _expiration);
+                u64 count = (now - _expiration) / _interval;
+                _expiration = _expiration + (count+1) * _interval;
+                _wakeup_due = _expiration;
+                _wakeup_change_cond.wake_one();
+                ret = 1 + count;
+            } else {
+                // Clock is REALTIME and now < _expiration (clock may have jumped backwards)
+                _wakeup_due = _expiration;
+                _wakeup_change_cond.wake_one();
+                goto again;
+            }
         }
         copy_to_uio((const char *)&ret, sizeof(ret), data);
         return 0;

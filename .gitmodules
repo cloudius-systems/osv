@@ -1,40 +1,11 @@
-[submodule "external/x64/openjdk.bin"]
-	path = external/x64/openjdk.bin
-	url = ../../cloudius-systems/openjdk.bin
-	ignore = dirty
-[submodule "external/x64/gcc.bin"]
-	path = external/x64/gcc.bin
-	url = ../../cloudius-systems/gcc.bin
-	ignore = dirty
-[submodule "external/x64/glibc.bin"]
-	path = external/x64/glibc.bin
-	url = ../../cloudius-systems/glibc.bin
-	ignore = dirty
-[submodule "external/x64/glibc-testsuite"]
-	path = external/x64/glibc-testsuite
-	url = ../../cloudius-systems/glibc-testsuite
-	ignore = dirty
 [submodule "external/x64/acpica"]
 	path = external/x64/acpica
 	url = ../../cloudius-systems/acpica
-	ignore = dirty
-[submodule "external/x64/misc.bin"]
-	path = external/x64/misc.bin
-	url = ../../cloudius-systems/misc.bin.git
 	ignore = dirty
 [submodule "apps"]
 	path = apps
 	url = ../../cloudius-systems/osv-apps
 	ignore = dirty
-[submodule "external/aarch64/gcc.bin"]
-	path = external/aarch64/gcc.bin
-	url = ../../cloudius-systems/aarch64-gcc.bin.git
-[submodule "external/aarch64/misc.bin"]
-	path = external/aarch64/misc.bin
-	url = ../../cloudius-systems/aarch64-misc.bin.git
-[submodule "external/aarch64/openjdk.bin"]
-	path = external/aarch64/openjdk.bin
-	url = ../../cloudius-systems/aarch64-openjdk.bin.git
 [submodule "modules/httpserver/swagger-ui"]
 	path = modules/httpserver-html5-gui/swagger-ui
 	url = ../../cloudius-systems/swagger-ui.git
@@ -44,6 +15,3 @@
 [submodule "modules/httpserver/osv-gui"]
 	path = modules/httpserver-html5-gui/osv-gui
 	url = ../../cloudius-systems/osv-gui.git
-[submodule "external/fs/libnfs"]
-	path = external/fs/libnfs
-	url = https://github.com/sahlberg/libnfs.git

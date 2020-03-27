@@ -1,6 +1,6 @@
-#!/bin/env python2
+#!/usr/bin/env python3
 import socket
-from Queue import Queue
+from queue import Queue
 from threading import Thread
 import sys
 
@@ -16,7 +16,7 @@ class Worker(Thread):
         while True:
             func, args, kargs = self.tasks.get()
             try: func(*args, **kargs)
-            except Exception, e: print e
+            except Exception as e: print(e)
             self.tasks.task_done()
 
 class ThreadPool:
@@ -67,16 +67,16 @@ if __name__ == "__main__":
         nthreads = int(sys.argv[1])
         connections = int(sys.argv[2])
     except:
-        print "Usage: ./tst-tcp-hash-cli.py <nthreads> <connections>"
+        print("Usage: ./tst-tcp-hash-cli.py <nthreads> <connections>")
         sys.exit()
 
     #data = range(0, (4096**2)*2, 11)
-    data = range(0,4096, 11)
-    data = map(lambda x: chr(x % 256), data)
+    data = list(range(0,4096, 11))
+    data = [chr(x % 256) for x in data]
     expected = hash_function(data)
 
-    print "Sending %d bytes requests, expected hash: %d" % (len(data), expected)
-    print "Creating %d threads and making %d connections, please wait..." % (nthreads, connections)
+    print("Sending %d bytes requests, expected hash: %d" % (len(data), expected))
+    print("Creating %d threads and making %d connections, please wait..." % (nthreads, connections))
 
     drops = 0
     hash_errors = 0
@@ -88,6 +88,6 @@ if __name__ == "__main__":
     pool.wait_completion()
 
     # FIXME: these metrics may not be accurate as I didn't use locks and interfere with the test
-    print "Test completed with %d drops and %d hash errors" % (drops, hash_errors)
+    print("Test completed with %d drops and %d hash errors" % (drops, hash_errors))
 
 

@@ -1,11 +1,11 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 from testing import *
 import argparse
 import subprocess
 from time import sleep
 
 def check_with_curl(url, expected_http_line):
-    output = subprocess.check_output(["curl", "-s", url])
+    output = subprocess.check_output(["curl", "-s", url]).decode('utf-8')
     print(output)
     if expected_http_line not in output:
        print("FAILED curl: wrong output")
@@ -39,9 +39,9 @@ def run(command, hypervisor_name, host_port, guest_port, http_path, expected_htt
         check_with_curl(app_url, expected_http_line)
 
     if no_keep_alive:
-        output = subprocess.check_output(["ab", "-l", "-c", str(concurrency), "-n", str(count), app_url]).split('\n')
+        output = subprocess.check_output(["ab", "-l", "-c", str(concurrency), "-n", str(count), app_url]).decode('utf-8').split('\n')
     else:
-        output = subprocess.check_output(["ab", "-l", "-k", "-c", str(concurrency), "-n", str(count), app_url]).split('\n')
+        output = subprocess.check_output(["ab", "-l", "-k", "-c", str(concurrency), "-n", str(count), app_url]).decode('utf-8').split('\n')
 
     failed_requests = 1
     complete_requests = 0
@@ -74,11 +74,11 @@ def run(command, hypervisor_name, host_port, guest_port, http_path, expected_htt
             success = False
 
     if failed_requests > 0:
-        print("FAILED ab - encountered failed requests: %d" % failed_requests) 
+        print("FAILED ab - encountered failed requests: %d" % failed_requests)
         success = False
 
     if complete_requests < count:
-        print("FAILED ab - too few complete requests : %d ? %d" % (complete_requests, count)) 
+        print("FAILED ab - too few complete requests : %d ? %d" % (complete_requests, count))
         success = False
 
     if success:

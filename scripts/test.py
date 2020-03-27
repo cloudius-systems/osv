@@ -1,8 +1,6 @@
-#!/usr/bin/env python
-import atexit
+#!/usr/bin/env python3
 import subprocess
 import argparse
-import tempfile
 import glob
 import time
 import sys
@@ -22,9 +20,13 @@ blacklist= [
     "tst-feexcept.so",
 ]
 
+qemu_blacklist= [
+    "tcp_close_without_reading_on_fc"
+]
+
 firecracker_blacklist= [
     "tracing_smoke_test",
-    "tcp_close_without_reading", #This test is flaky under firecracker due to a bug possibly in firecracker itself
+    "tcp_close_without_reading_on_qemu"
 ]
 
 add_tests([
@@ -47,16 +49,18 @@ class TestRunnerTest(SingleCommandTest):
 test_files = []
 is_comment = re.compile("^[ \t]*(|#.*|\[manifest])$")
 is_test = re.compile("^/tests/tst-.*.so")
-with open('modules/tests/usr.manifest', 'r') as f:
-    for line in f:
-        line = line.rstrip();
-        if is_comment.match(line): continue;
-        components = line.split(": ", 2);
-        guestpath = components[0].strip();
-        hostpath = components[1].strip()
-        if is_test.match(guestpath):
-            test_files.append(guestpath);
-add_tests((TestRunnerTest(os.path.basename(x)) for x in test_files))
+
+def collect_tests():
+    with open(cmdargs.manifest, 'r') as f:
+        for line in f:
+            line = line.rstrip();
+            if is_comment.match(line): continue;
+            components = line.split(": ", 2);
+            guestpath = components[0].strip();
+            hostpath = components[1].strip()
+            if is_test.match(guestpath):
+                test_files.append(guestpath);
+    add_tests((TestRunnerTest(os.path.basename(x)) for x in test_files))
 
 def run_test(test):
     sys.stdout.write("  TEST %-35s" % test.name)
@@ -81,7 +85,7 @@ def is_not_skipped(test):
     return test.name not in blacklist
 
 def run_tests_in_single_instance():
-    run(filter(lambda test: not isinstance(test, TestRunnerTest), tests))
+    run([test for test in tests if not isinstance(test, TestRunnerTest)])
 
     blacklist_tests = ' '.join(blacklist)
     args = run_py_args + ["-s", "-e", "/testrunner.so -b %s" % (blacklist_tests)]
@@ -101,32 +105,10 @@ def pluralize(word, count):
         return word
     return word + 's'
 
-def make_export_and_conf():
-    export_dir = tempfile.mkdtemp(prefix='share')
-    os.chmod(export_dir, 0777)
-    (conf_fd, conf_path) = tempfile.mkstemp(prefix='export')
-    conf = os.fdopen(conf_fd, "w")
-    conf.write("%s 127.0.0.1(insecure,rw)\n" % export_dir)
-    conf.flush()
-    conf.close()
-    return (conf_path, export_dir)
-
-proc = None
-
-def kill_unfsd():
-    global proc
-    subprocess.call(["sudo", "kill", str(proc.pid + 1)])
-    proc.wait()
-
-UNFSD = "./modules/nfs-tests/unfsd.bin"
-
 def run_tests():
-    global proc
     start = time.time()
 
-    if cmdargs.nfs:
-        pass
-    elif cmdargs.name:
+    if cmdargs.name:
         tests_to_run = list((t for t in tests if re.match('^' + cmdargs.name + '$', t.name)))
         if not tests_to_run:
             print('No test matches: ' + cmdargs.name)
@@ -134,38 +116,7 @@ def run_tests():
     else:
         tests_to_run = tests
 
-    if cmdargs.nfs:
-        if not os.path.exists(UNFSD):
-            print("Please do:\n\tmake nfs-server")
-            sys.exit(1)
-        (conf_path, export_dir) = make_export_and_conf()
-        proc = subprocess.Popen([ "sudo",
-                                 os.path.join(os.getcwd(), UNFSD),
-                                 "-t",
-                                 "-d",
-                                 "-s",
-                                 "-l", "127.0.0.1",
-                                 "-e", conf_path ],
-                                 stdin = sys.stdin,
-                                 stdout = subprocess.PIPE,
-                                 stderr = sys.stderr,
-                                 shell = False)
-        atexit.register(kill_unfsd)
-        tests_to_run = [ SingleCommandTest('nfs-test',
-            "/tst-nfs.so --server 192.168.122.1 --share %s" %
-            export_dir) ]
-
-        line = proc.stdout.readline()
-        while line:
-             print(line)
-             if "/tmp" in line:
-                break
-             line = proc.stdout.readline()
-             
-
-        run(tests_to_run)
-        kill_unfsd()
-    elif cmdargs.single:
+    if cmdargs.single:
         if tests_to_run != tests:
             print('Cannot restrict the set of tests when --single option is used')
             exit(1)
@@ -179,6 +130,7 @@ def run_tests():
     print(("OK (%d %s run, %.3f s)" % (len(tests_to_run), pluralize("test", len(tests_to_run)), duration)))
 
 def main():
+    collect_tests()
     while True:
         run_tests()
         if not cmdargs.repeat:
@@ -189,10 +141,11 @@ if __name__ == "__main__":
     parser.add_argument("-v", "--verbose", action="store_true", help="verbose test output")
     parser.add_argument("-r", "--repeat", action="store_true", help="repeat until test fails")
     parser.add_argument("-s", "--single", action="store_true", help="run as much tests as possible in a single OSv instance")
-    parser.add_argument("-n", "--nfs",    action="store_true", help="run nfs test in a single OSv instance")
     parser.add_argument("-p", "--hypervisor", action="store", default="qemu", help="choose hypervisor to run: qemu, firecracker")
-    parser.add_argument("--name", action="store", help="run all tests whose names match given regular expression")
+    parser.add_argument("-n", "--name", action="store", help="run all tests whose names match given regular expression")
     parser.add_argument("--run_options", action="store", help="pass extra options to run.py")
+    parser.add_argument("-m", "--manifest", action="store", default="modules/tests/usr.manifest", help="test manifest")
+    parser.add_argument("-b", "--blacklist", action="append", help="test to be blacklisted", default=[])
     cmdargs = parser.parse_args()
     set_verbose_output(cmdargs.verbose)
     if cmdargs.run_options != None:
@@ -201,4 +154,7 @@ if __name__ == "__main__":
         run_py_args = []
     if cmdargs.hypervisor == 'firecracker':
         blacklist.extend(firecracker_blacklist)
+    else:
+        blacklist.extend(qemu_blacklist)
+    blacklist.extend(cmdargs.blacklist)
     main()

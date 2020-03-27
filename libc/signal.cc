@@ -496,11 +496,26 @@ void itimer::work()
     }
 }
 
+// alarm() wants to know which thread ran it, so when the alarm happens it
+// can interrupt a system call sleeping on this thread. But there's a special
+// case: if alarm() is called in a signal handler (which currently in OSv is
+// a separate thread), this probably means the alarm was re-set after the
+// previous alarm expired. In that case we obviously don't want to remember
+// the signal handler thread (which will go away almost immediately). What
+// we'll do in the is_signal_handler() case is to just keep remembering the
+// old owner thread, hoping it is still relevant...
+static bool is_signal_handler(){
+    // must be the same name used in kill() above
+    return sched::thread::current()->name() == "signal_handler";
+}
+
 void itimer::cancel()
 {
     _due = _no_alarm;
     _interval = decltype(_interval)::zero();
-    _owner_thread = nullptr;
+    if (!is_signal_handler()) {
+        _owner_thread = nullptr;
+    }
     _cond.wake_one();
 }
 
@@ -513,7 +528,9 @@ void itimer::set_value(const struct timeval *tv)
         _started = true;
     }
     _due = now + tv->tv_sec * 1_s + tv->tv_usec * 1_us;
-    _owner_thread = sched::thread::current();
+    if (!is_signal_handler()) {
+        _owner_thread = sched::thread::current();
+    }
     _cond.wake_one();
 }
 

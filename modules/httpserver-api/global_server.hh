@@ -12,7 +12,9 @@
 #include <vector>
 #include <mutex>
 #include <condition_variable>
-#include <external/x64/misc.bin/usr/include/yaml-cpp/node/iterator.h>
+#if !defined(MONITORING)
+#include <yaml-cpp/node/iterator.h>
+#endif
 
 namespace httpserver {
 /**
@@ -64,8 +66,10 @@ private:
 
     global_server();
     void set_routes();
+#if !defined(MONITORING)
     void setup_redirects(const YAML::Node& node);
     void setup_file_mappings(const YAML::Node& node);
+#endif
     void load_plugin(const std::string& path);
     static global_server* instance;
     routes _routes;

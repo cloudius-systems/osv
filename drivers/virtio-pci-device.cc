@@ -253,6 +253,41 @@ u8 virtio_modern_pci_device::read_and_ack_isr()
     return _isr_cfg->virtio_conf_readb(0);
 }
 
+// Stores the address and length of the shared memory region identified by @id
+// in @addr and @length respectively. Returns false and doesn't modify @addr and
+// @length if no region with a matching id is found.
+bool virtio_modern_pci_device::get_shm(u8 id, mmioaddr_t &addr, u64 &length)
+{
+    auto cap = std::find_if(_shm_cfgs.cbegin(), _shm_cfgs.cend(),
+        [id, this] (const std::unique_ptr<virtio_capability>& cap) {
+            u8 cap_id = _dev->pci_readb(cap->get_cfg_offset() +
+                offsetof(virtio_pci_cap, id));
+            return cap_id == id;
+        });
+    if (cap == _shm_cfgs.cend()) {
+        return false;
+    }
+
+    auto bar = cap->get()->get_bar();
+    if (!bar->is_mmio()) {
+        return false;
+    }
+    addr = bar->get_mmio();
+    length = bar->get_size();
+    return true;
+}
+
+void virtio_modern_pci_device::find_vendor_capabilities(std::vector<std::pair<u8,u8>>& offsets_and_types)
+{
+    std::vector<u8> cap_offsets;
+    if (_dev->find_capabilities(pci::function::PCI_CAP_VENDOR, cap_offsets)) {
+        for (auto offset : cap_offsets) {
+            u8 cfg_type = _dev->pci_readb(offset + offsetof(struct virtio_pci_cap, cfg_type));
+            offsets_and_types.emplace_back(std::pair<u8,u8>(offset, cfg_type));
+        }
+    }
+}
+
 bool virtio_modern_pci_device::parse_pci_config()
 {
     // Check ABI version
@@ -269,38 +304,93 @@ bool virtio_modern_pci_device::parse_pci_config()
         return false;
     }
 
-    parse_virtio_capability(_common_cfg, VIRTIO_PCI_CAP_COMMON_CFG);
-    parse_virtio_capability(_isr_cfg, VIRTIO_PCI_CAP_ISR_CFG);
-    parse_virtio_capability(_notify_cfg, VIRTIO_PCI_CAP_NOTIFY_CFG);
-    parse_virtio_capability(_device_cfg, VIRTIO_PCI_CAP_DEVICE_CFG);
+    std::vector<std::pair<u8,u8>> offsets_and_types;
+    find_vendor_capabilities(offsets_and_types);
+
+    parse_virtio_capability(offsets_and_types, _common_cfg, VIRTIO_PCI_CAP_COMMON_CFG);
+    parse_virtio_capability(offsets_and_types, _isr_cfg, VIRTIO_PCI_CAP_ISR_CFG);
+    parse_virtio_capability(offsets_and_types, _notify_cfg, VIRTIO_PCI_CAP_NOTIFY_CFG);
+    parse_virtio_capability(offsets_and_types, _device_cfg, VIRTIO_PCI_CAP_DEVICE_CFG);
+    parse_virtio_capabilities(offsets_and_types, _shm_cfgs, VIRTIO_PCI_CAP_SHARED_MEMORY_CFG);
 
     if (_notify_cfg) {
         _notify_offset_multiplier =_dev->pci_readl(_notify_cfg->get_cfg_offset() +
                 offsetof(virtio_pci_notify_cap, notify_offset_multiplier));
     }
 
-    return _common_cfg && _isr_cfg && _notify_cfg && _device_cfg;
+    // The common, isr and notifications configurations are mandatory
+    return _common_cfg && _isr_cfg && _notify_cfg;
 }
 
-void virtio_modern_pci_device::parse_virtio_capability(std::unique_ptr<virtio_capability> &ptr, u8 type)
+pci::bar* virtio_modern_pci_device::map_capability_bar(u8 cap_offset, u8 &bar_no)
 {
-    u8 cfg_offset = _dev->find_capability(pci::function::PCI_CAP_VENDOR, [type] (pci::function *fun, u8 offset) {
-        u8 cfg_type = fun->pci_readb(offset + offsetof(struct virtio_pci_cap, cfg_type));
-        return type == cfg_type;
-    });
+    u8 bar_index = _dev->pci_readb(cap_offset + offsetof(struct virtio_pci_cap, bar));
+    bar_no = bar_index + 1;
+    auto bar = _dev->get_bar(bar_no);
+    if (bar && bar->is_mmio() && !bar->is_mapped()) {
+        bar->map();
+    }
+    return bar;
+}
+
+// Parse a single virtio PCI capability, whose type must match @type and store
+// it in @ptr.
+void virtio_modern_pci_device::parse_virtio_capability(std::vector<std::pair<u8,u8>> &offsets_and_types,
+        std::unique_ptr<virtio_capability> &ptr, u8 type)
+{
+    u8 cfg_offset = 0xFF;
+    for (auto cfg_offset_and_type: offsets_and_types) {
+        auto cfg_type = cfg_offset_and_type.second;
+        if (cfg_type == type) {
+            cfg_offset = cfg_offset_and_type.first;
+            break;
+        }
+    }
 
     if (cfg_offset != 0xFF) {
-        u8 bar_index = _dev->pci_readb(cfg_offset + offsetof(struct virtio_pci_cap, bar));
-        u32 offset = _dev->pci_readl(cfg_offset + offsetof(struct virtio_pci_cap, offset));
-        u32 length = _dev->pci_readl(cfg_offset + offsetof(struct virtio_pci_cap, length));
+        u8 bar_no;
+        auto bar = map_capability_bar(cfg_offset, bar_no);
 
-        auto bar_no = bar_index + 1;
-        auto bar = _dev->get_bar(bar_no);
-        if (bar && bar->is_mmio() && !bar->is_mapped()) {
-            bar->map();
-        }
+        u64 offset = _dev->pci_readl(cfg_offset + offsetof(struct virtio_pci_cap, offset));
+        u64 length = _dev->pci_readl(cfg_offset + offsetof(struct virtio_pci_cap, length));
 
         ptr.reset(new virtio_modern_pci_device::virtio_capability(cfg_offset, bar, bar_no, offset, length));
+    }
+}
+
+// Parse all virtio PCI capabilities whose types match @type and append them to
+// @caps.
+// From the spec: "The device MAY offer more than one structure of any type -
+// this makes it possible for the device to expose multiple interfaces to
+// drivers. The order of the capabilities in the capability list specifies the
+// order of preference suggested by the device. A device may specify that this
+// ordering mechanism be overridden by the use of the id field."
+void virtio_modern_pci_device::parse_virtio_capabilities( std::vector<std::pair<u8,u8>> &offsets_and_types,
+                                                          std::vector<std::unique_ptr<virtio_capability>>& caps, u8 type)
+{
+    for (auto cfg_offset_and_type: offsets_and_types) {
+        auto cfg_type = cfg_offset_and_type.second;
+        if (cfg_type != type) {
+            continue;
+        }
+
+        auto cfg_offset = cfg_offset_and_type.first;
+        u8 bar_no;
+        auto bar = map_capability_bar(cfg_offset, bar_no);
+
+        u64 offset = _dev->pci_readl(cfg_offset + offsetof(struct virtio_pci_cap, offset));
+        u64 length = _dev->pci_readl(cfg_offset + offsetof(struct virtio_pci_cap, length));
+        if (type == VIRTIO_PCI_CAP_SHARED_MEMORY_CFG) {
+            // The shared memory region capability is defined by a struct
+            // virtio_pci_cap64
+            u32 offset_hi = _dev->pci_readl(cfg_offset + offsetof(virtio_pci_cap64, offset_hi));
+            u32 length_hi = _dev->pci_readl(cfg_offset + offsetof(virtio_pci_cap64, length_hi));
+            offset |= ((u64)offset_hi << 32);
+            length |= ((u64)length_hi << 32);
+        }
+
+        caps.emplace_back(new virtio_modern_pci_device::virtio_capability(
+            cfg_offset, bar, bar_no, offset, length));
     }
 }
 

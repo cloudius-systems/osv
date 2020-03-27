@@ -56,6 +56,7 @@ vdev_disk_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 {
 	struct vdev_disk *dvd;
 	int error;
+	char *device_name;
 
 	/*
 	 * We must have a pathname, and it must be absolute.
@@ -72,7 +73,11 @@ vdev_disk_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 	if (vd->vdev_tsd == NULL) {
 		dvd = vd->vdev_tsd = kmem_zalloc(sizeof(struct vdev_disk), KM_SLEEP);
 
-		error = device_open(vd->vdev_path + 5, DO_RDWR, &dvd->device);
+		device_name = vd->vdev_path + 5;
+		if (strncmp(device_name, "vblk", 4) != 0) {
+			device_name = "vblk0.1";
+		}
+		error = device_open(device_name, DO_RDWR, &dvd->device);
 		if (error) {
 			vd->vdev_stat.vs_aux = VDEV_AUX_OPEN_FAILED;
 			return error;

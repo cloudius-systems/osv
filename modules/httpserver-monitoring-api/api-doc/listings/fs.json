@@ -1,0 +1,98 @@
+{
+    "apiVersion": "0.0.1",
+    "swaggerVersion": "1.2",
+    "basePath": "{{Protocol}}://{{Host}}",
+    "resourcePath": "/fs",
+    "produces": [
+        "application/json"
+    ],
+    "apis": [
+        {
+            "path": "/fs/df/{mount}",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "report a file system usage",
+                    "type": "array",
+				    "items": {
+				        "type": "DFStat"
+				    },
+                    "errorResponses":[
+                     {
+                         "code":404,
+                         "reason":"File system not found"
+                     }
+                    ],
+                    "nickname" : "getDFStats",
+                    "produces": [
+                        "application/json"
+                    ],
+                    "parameters": [
+                     {
+                        "name":"mount",
+                        "description":"mount point",
+                        "required":false,
+                        "allowMultiple":true,
+                        "type":"string",
+                        "paramType":"path"
+                    }
+                    ],
+                    "deprecated": "false"
+                }
+            ]
+        },
+        {
+            "path": "/fs/df/",
+            "operations": [
+                {
+                    "method": "GET",
+                    "summary": "Return all file systems",
+                    "type": "array",
+				    "items": {
+				        "$ref": "DFStat"
+				    },
+                    "nickname" : "list_df_stats",
+                    "produces": [
+                        "application/json"
+                    ]
+                }
+            ]
+        }
+    ],
+    "models" : {
+        "DFStat": {
+           "description": "Information on one file system",
+           "id": "DFStat",
+           "properties": {
+                "filesystem" : {
+                     "type": "string",
+                    "description": "fs name"
+                },
+                "mount" : {
+                     "type": "string",
+                    "description": "mount point"
+                },
+                "btotal" : {
+                    "type": "long",
+                    "description": "total data blocks in file system"
+                },
+                "bfree" : {
+                    "type": "long",
+                    "description": "free blocks in file system"
+                },
+                "ftotal" : {
+                    "type": "long",
+                    "description": "total file nodes in file system"
+                },
+                "ffree" : {
+                    "type": "long",
+                    "description": "free file nodes in file system"
+                },
+                "blocksize" : {
+                    "type": "long",
+                    "description": "block size in bytes"
+                }
+            }
+        }
+    }
+}

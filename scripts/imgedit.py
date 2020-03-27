@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 
 import sys, struct
 import subprocess
@@ -31,14 +31,15 @@ def chs(x):
     return c, h, s
 
 def read_chars_up_to_null(file):
-    while True:
+    keep_reading = True
+    while keep_reading:
         try:
-            c = file.read(1)
+            c = file.read(1).decode()
             if c == '\0':
-                raise StopIteration
+                keep_reading = False
             yield c
         except ValueError:
-            raise StopIteration
+            keep_reading = False
 
 def read_cstr(file):
     return ''.join(read_chars_up_to_null(file))

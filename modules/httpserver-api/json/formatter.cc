@@ -13,6 +13,7 @@
 
 using namespace std;
 
+#pragma GCC visibility push(default)
 namespace httpserver {
 
 namespace json {
@@ -97,3 +98,4 @@ std::string formatter::json_escape_UTF8_string(const std::string& utf8_string) {
 
 }
 }
+#pragma GCC visibility pop

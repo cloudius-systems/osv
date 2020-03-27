@@ -283,6 +283,31 @@ public:
 /// Hold to mark self as a memory reclaimer
 extern reclaimer_lock_type reclaimer_lock;
 
+// We will divide the balloon in units of 128Mb. That should increase the likelyhood
+// of having hugepages mapped in and out of it.
+//
+// Using constant sized balloons should help with the process of giving memory
+// back to the JVM, since we don't need to search the list of balloons until
+// we find a balloon of the desired size: any will do.
+constexpr size_t balloon_size = (128ULL << 20);
+// FIXME: Can probably do better than this. We are counting 4Mb before 1Gb to
+// account for ROMs and the such. 4Mb is probably too much (in kvm with no vga
+// we lose around 400k), but it doesn't hurt.
+constexpr size_t balloon_min_memory = (1ULL << 30) - (4 << 20);
+constexpr size_t balloon_alignment = mmu::huge_page_size;
+
+class jvm_balloon_api {
+public:
+    jvm_balloon_api() {};
+    virtual ~jvm_balloon_api() {};
+    virtual void return_heap(size_t mem) = 0;
+    virtual void adjust_memory(size_t threshold) = 0;
+    virtual void voluntary_return() = 0;
+    virtual bool fault(balloon_ptr b, exception_frame *ef, mmu::jvm_balloon_vma *vma) = 0;
+    virtual bool ballooning() = 0;
+};
+
+extern jvm_balloon_api *balloon_api;
 }
 
 #endif

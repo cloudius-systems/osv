@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 import basetest
 
 class testtrace(basetest.Basetest):
@@ -17,14 +17,12 @@ class testtrace(basetest.Basetest):
 
     def test_get_status(self):
         status = self.curl(self.path + "/status")
-        self.assertGreaterEqual(status, 0)
         self.check_status_list(status)
 
     def test_set_status(self):
         for bt in [True, False]:
             for en in [True, False]:
                 status = self.curl(self.path + '/status?enabled=' + str(en) + '&backtrace=' + str(bt), method='POST')
-                self.assertGreaterEqual(status, 0)
                 self.check_status_list(status)
                 status = self.curl(self.path + "/status")
                 for s in status:

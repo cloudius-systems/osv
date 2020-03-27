@@ -10,13 +10,11 @@
 #include <fstream>
 #include <string>
 #include <thread>
-
-#include <boost/program_options.hpp>
+#include <set>
 
 #include <osv/app.hh>
 #include <osv/run.hh>
-
-namespace po = boost::program_options;
+#include <osv/options.hh>
 
 void assert_mount_error(int ret)
 {
@@ -121,7 +119,7 @@ static void test_rename(std::string mount_point, std::string src,
 static void test_truncate(std::string mount_point, std::string path)
 {
     std::string full_path = mount_point + "/" + path;
-    int fd = creat(full_path.c_str(), 0500);
+    int fd = creat(full_path.c_str(), 0700);
     struct stat st;
 
     assert(fd != -1);
@@ -305,37 +303,51 @@ void test_trunc(std::string mount_point, std::string path)
     assert(0 == fclose(ff));
 }
 
+static void usage()
+{
+    std::cout << "Allowed options:\n";
+    std::cout << "  --help         produce help message\n";
+    std::cout << "  --server arg   set server ip\n";
+    std::cout << "  --share arg    set remote share\n\n";
+}
+
+static void handle_parse_error(const std::string &message)
+{
+    std::cout << message << std::endl;
+    usage();
+    exit(1);
+}
+
 int main(int argc, char **argv)
 {
-    po::options_description desc("Allowed options");
-    desc.add_options()
-        ("help", "produce help message")
-        ("server", po::value<std::string>(), "set server ip")
-        ("share", po::value<std::string>(), "set remote share")
-    ;
+    auto options_values = options::parse_options_values(argc - 1, argv + 1, handle_parse_error);
 
-    po::variables_map vm;
-    po::store(po::parse_command_line(argc, argv, desc), vm);
-    po::notify(vm);
-
-    if (vm.count("help")) {
-        std::cout << desc << std::endl;
+    if (options::extract_option_flag(options_values, "help", handle_parse_error)) {
+        usage();
         return 1;
     }
 
-    std::string server;
-    if (vm.count("server")) {
-        server = vm["server"].as<std::string>();
+    std::string server, share;
+    if (options::option_value_exists(options_values, "server")) {
+        server = options::extract_option_value(options_values, "server");
     } else {
-        std::cout << desc << std::endl;
+        usage();
         return 1;
     }
 
-    std::string share;
-    if (vm.count("share")) {
-        share = vm["share"].as<std::string>();
+    if (options::option_value_exists(options_values, "share")) {
+        share = options::extract_option_value(options_values, "share");
     } else {
-        std::cout << desc << std::endl;
+        usage();
+        return 1;
+    }
+
+    if (!options_values.empty()) {
+        for (auto other_option : options_values) {
+            std::cout << "Unrecognized option: " << other_option.first << std::endl;
+        }
+
+        usage();
         return 1;
     }
 

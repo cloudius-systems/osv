@@ -13,16 +13,13 @@
 #include "server-module.hh"
 #include "cassandra-module.hh"
 #include "monitor-agent-module.hh"
-#include <boost/program_options/variables_map.hpp>
-#include <boost/program_options/options_description.hpp>
-#include <boost/program_options/parsers.hpp>
 #include <osv/debug.hh>
 #include <osv/exception_utils.hh>
 #include <osv/run.hh>
+#include <osv/options.hh>
 
 using namespace std;
 using namespace init;
-namespace po = boost::program_options;
 
 // config_disk() allows to use NoCloud VM configuration method - see
 // http://cloudinit.readthedocs.io/en/0.7.9/topics/datasources/nocloud.html.
@@ -80,30 +77,40 @@ static bool config_disk(const char* outfile) {
     return false;
 }
 
+static void usage()
+{
+    std::cout << "Allowed options:\n";
+    std::cout << "  --help                produce help message\n";
+    std::cout << "  --skip-error          do not stop on error\n";
+    std::cout << "  --force-probe         force data source probing\n";
+    std::cout << "  --file args           an init file\n";
+    std::cout << "  --server arg          a server to read the file from. must come with a --url\n";
+    std::cout << "  --url arg             a url at the server\n";
+    std::cout << "  --port arg (=80)      a port at the server\n\n";
+}
+
+static void handle_parse_error(const std::string &message)
+{
+    std::cout << message << std::endl;
+    usage();
+    exit(1);
+}
+
 int main(int argc, char* argv[])
 {
     try {
-        po::options_description desc("Allowed options");
-        desc.add_options()
-            ("help", "produce help message")
-            ("skip-error", "do not stop on error")
-            ("force-probe", "force data source probing")
-            ("file", po::value<std::string>(), "an init file")
-            ("server", po::value<std::string>(), "a server to read the file from. must come with a --url")
-            ("url", po::value<std::string>(), "a url at the server")
-            ("port", po::value<std::string>()->default_value("80"), "a port at the server")
-        ;
+        auto options_values = options::parse_options_values(argc - 1, argv + 1, handle_parse_error);
 
-        po::variables_map config;
-        po::store(po::parse_command_line(argc, argv, desc), config);
-        po::notify(config);
-
-        if (config.count("help")) {
-            std::cerr << desc << "\n";
+        if (options::extract_option_flag(options_values, "help", handle_parse_error)) {
+            usage();
             return 1;
         }
 
-        osvinit init(config.count("skip-error") > 0, config.count("force-probe") > 0);
+        osvinit init(
+            options::extract_option_flag(options_values, "skip-error", handle_parse_error),
+            options::extract_option_flag(options_values, "force-probe", handle_parse_error)
+            );
+
         auto scripts = make_shared<script_module>();
         init.add_module(scripts);
         init.add_module(make_shared<mount_module>());
@@ -114,16 +121,30 @@ int main(int argc, char* argv[])
         init.add_module(make_shared<cassandra_module>());
         init.add_module(make_shared<monitor_agent_module>());
 
-        if (config.count("file")) {
-            init.load_file(config["file"].as<std::string>());
-        } else if (config.count("server") > 0 && config.count("url") > 0) {
-            init.load_url(config["server"].as<std::string>(),
-                config["url"].as<std::string>(),
-                config["port"].as<std::string>());
+        std::string port("80");
+        if (options::option_value_exists(options_values, "port")) {
+            port = options::extract_option_value(options_values, "port");
+        }
+
+        if (options::option_value_exists(options_values, "file")) {
+            init.load_file(options::extract_option_value(options_values, "file"));
+        } else if (options::option_value_exists(options_values, "server") &&
+                   options::option_value_exists(options_values, "url")) {
+            init.load_url(options::extract_option_value(options_values, "server"),
+                options::extract_option_value(options_values, "url"),
+                port);
         } else if(config_disk("/tmp/config.yaml")) {
             init.load_file("/tmp/config.yaml");
         } else {
             init.load_from_cloud();
+        }
+
+        if (!options_values.empty()) {
+            for (auto other_option : options_values) {
+                std::cout << "Unrecognized option: " << other_option.first << std::endl;
+            }
+
+            usage();
         }
 
         scripts->wait();

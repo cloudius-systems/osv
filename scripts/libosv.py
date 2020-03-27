@@ -1,4 +1,4 @@
-#!/usr/bin/python
+#!/usr/bin/python3
 import sys
 import re
 
@@ -30,7 +30,7 @@ for line in f.readlines():
     try:
         value, tp, bnd, sym = elf.match(line).groups()
         out.write("%s = 0x%s;\n"%(sym, value))
-        print (".global %s\n.type %s,@%s"%(sym, sym, asm_type[tp]))
+        print(".global %s\n.type %s,@%s"%(sym, sym, asm_type[tp]))
     except AttributeError:
         pass
 
