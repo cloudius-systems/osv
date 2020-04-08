@@ -188,6 +188,8 @@ private:
     ssize_t bytes_until_normal() { return bytes_until_normal(pressure_level()); }
 };
 
+const unsigned page_ranges_max_order = 16;
+
 namespace stats {
     size_t free();
     size_t total();
@@ -195,6 +197,25 @@ namespace stats {
     size_t jvm_heap();
     void on_jvm_heap_alloc(size_t mem);
     void on_jvm_heap_free(size_t mem);
+
+    struct page_ranges_stats {
+        struct {
+            size_t bytes;
+            size_t ranges_num;
+        } order[page_ranges_max_order + 1];
+    };
+
+    void get_page_ranges_stats(page_ranges_stats &stats);
+
+    struct pool_stats {
+        size_t _max;
+        size_t _nr;
+        size_t _watermark_lo;
+        size_t _watermark_hi;
+    };
+
+    void get_global_l2_stats(pool_stats &stats);
+    void get_l1_stats(unsigned int cpu_id, stats::pool_stats &stats);
 }
 
 class phys_contiguous_memory final {
