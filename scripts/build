@@ -254,6 +254,13 @@ kernel_end=$(($loader_size+2097151 & ~2097151))
 cd $OUT
 
 libgcc_s_dir=$(dirname $(readlink -f $(gcc -print-file-name=libgcc_s.so.1)))
+
+if [ "$export" != "none" ]; then
+	export_dir=${vars[export_dir]-$SRC/build/export}
+	"$SRC"/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
+	exit 0
+fi
+
 case $fs_type in
 zfs)
 	cp loader.img bare.raw
@@ -263,14 +270,7 @@ zfs)
 	qemu-img convert -f raw -O qcow2 bare.raw usr.img
 	qemu-img resize usr.img ${fs_size}b >/dev/null 2>&1
 
-	if [ "$export" == "none" ]
-	then
-		"$SRC"/scripts/upload_manifest.py -o usr.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
-	else
-		export_dir=${vars[export_dir]-$SRC/build/export}
-		"$SRC"/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
-	fi
-	;;
+	"$SRC"/scripts/upload_manifest.py -o usr.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir" ;;
 rofs)
 	rm -rf rofs.img
 	"$SRC"/scripts/gen-rofs-img.py -o rofs.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
@@ -280,11 +280,9 @@ rofs)
 	"$SRC"/scripts/imgedit.py setpartition "-f raw bare.raw" 2 $kernel_end $rofs_size
 	qemu-img resize bare.raw ${img_size}b >/dev/null 2>&1
 	dd if=rofs.img of=bare.raw obs=${kernel_end} seek=1 >/dev/null 2>&1
-	qemu-img convert -f raw -O qcow2 bare.raw usr.img
-	;;
+	qemu-img convert -f raw -O qcow2 bare.raw usr.img ;;
 ramfs)
-	qemu-img convert -f raw -O qcow2 loader.img usr.img
-	;;
+	qemu-img convert -f raw -O qcow2 loader.img usr.img ;;
 esac
 
 "$SRC"/scripts/imgedit.py setargs usr.img `cat cmdline`
