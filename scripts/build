@@ -175,7 +175,7 @@ case $OUT in
 esac
 
 # Default manifest
-manifest=$OUT/bootfs.manifest
+manifest=bootfs.manifest.skel
 fs_type=${vars[fs]-zfs}
 usrskel_arg=
 case $fs_type in
