@@ -6,3 +6,4 @@
 /zfs.so: zfs.so
 /tools/mkfs.so: tools/mkfs/mkfs.so
 /tools/cpiod.so: tools/cpiod/cpiod.so
+/usr/lib/libgcc_s.so.1: %(libgcc_s_dir)s/libgcc_s.so.1
