@@ -132,16 +132,15 @@ def flatten_list(elememnts):
 
 def get_basic_apps(apps):
     basic_apps = []
-    java = resolve.require('java-base')
-    if hasattr(java,'non_isolated_jvm') and java.non_isolated_jvm:
-        _jvm = non_isolated_jvm()
-    else:
-        _jvm = isolated_jvm()
+    _jvm = isolated_jvm()
 
     for app in flatten_list(apps):
         if isinstance(app, api.basic_app):
             basic_apps.append(app)
         elif isinstance(app, api.java_app):
+            java = resolve.require('java-base')
+            if hasattr(java,'non_isolated_jvm') and java.non_isolated_jvm:
+                _jvm = non_isolated_jvm()
             _jvm.add(app)
         else:
             raise Exception("Unknown app type: " + str(app))
