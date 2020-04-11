@@ -134,6 +134,10 @@ def main():
                         metavar='VAR=DATA',
                         action='callback',
                         callback=add_var),
+            make_option('-k',
+                        dest='kernel',
+                        action='store_true',
+                        help='run OSv in direct kernel mode')
     ])
 
     (options, args) = opt.parse_args()
@@ -147,7 +151,11 @@ def main():
 
     image_path = os.path.abspath(options.output)
     upload_port = find_free_port()
-    osv = subprocess.Popen('cd ../..; scripts/run.py --vnc none -m 512 -c1 -i "%s" --block-device-cache unsafe -s -e "--norandom --nomount --noinit /tools/mkfs.so; /tools/cpiod.so --prefix /zfs/zfs/; /zfs.so set compression=off osv" --forward tcp:127.0.0.1:%s-:10000' % (image_path,upload_port), shell=True, stdout=subprocess.PIPE)
+    if options.kernel:
+        kernel_mode_flag = '-k --kernel-path build/release/loader-stripped.elf'
+    else:
+        kernel_mode_flag = ''
+    osv = subprocess.Popen('cd ../..; scripts/run.py %s --vnc none -m 512 -c1 -i "%s" --block-device-cache unsafe -s -e "--norandom --nomount --noinit /tools/mkfs.so; /tools/cpiod.so --prefix /zfs/zfs/; /zfs.so set compression=off osv" --forward tcp:127.0.0.1:%s-:10000' % (kernel_mode_flag,image_path,upload_port), shell=True, stdout=subprocess.PIPE)
 
     upload(osv, manifest, depends, upload_port)
 
