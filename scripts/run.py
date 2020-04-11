@@ -552,6 +552,8 @@ if __name__ == "__main__":
                         help="Path to the optional cloud-init image that should be attached to the instance")
     parser.add_argument("-k", "--kernel", action="store_true",
                         help="Run OSv in QEMU kernel mode as PVH.")
+    parser.add_argument("--kernel-path", action="store",
+                        help="path to kernel.elf. defaults to build/$mode/kernel.elf")
     parser.add_argument("--virtio", action="store", choices=["legacy","transitional","modern"], default="transitional",
                         help="specify virtio version: legacy, transitional or modern")
     parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default="x86_64",
@@ -562,7 +564,7 @@ if __name__ == "__main__":
     if cmdargs.arch == 'aarch64':
         cmdargs.kernel_file = os.path.join(osv_base, "build/%s/loader.img" % cmdargs.opt_path)
     else:
-        cmdargs.kernel_file = os.path.join(osv_base, "build/%s/loader-stripped.elf" % cmdargs.opt_path)
+        cmdargs.kernel_file = os.path.abspath(cmdargs.kernel_path or os.path.join(osv_base, "build/%s/kernel.elf" % cmdargs.opt_path))
     if not os.path.exists(cmdargs.image_file):
         raise Exception('Image file %s does not exist.' % cmdargs.image_file)
     if cmdargs.cloud_init_image:

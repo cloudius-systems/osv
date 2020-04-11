@@ -266,7 +266,7 @@ def main(options):
     # Prepare arguments we are going to pass when creating VM instance
     kernel_path = options.kernel
     if not kernel_path:
-        kernel_path = os.path.join(dirname, '../build/release/loader-stripped.elf')
+        kernel_path = os.path.join(dirname, '../build/release/kernel.elf')
 
     qemu_disk_path = options.image
     if not qemu_disk_path:
@@ -364,7 +364,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--image", action="store", default=None, metavar="CMD",
                         help="path to disk image file. defaults to ../build/release/usr.img")
     parser.add_argument("-k", "--kernel", action="store", default=None, metavar="CMD",
-                        help="path to kernel loader file. defaults to ../build/release/loader-stripped.elf")
+                        help="path to kernel loader file. defaults to ../build/release/kernel.elf")
     parser.add_argument("-n", "--networking", action="store_true",
                         help="needs root to setup tap networking first time")
     parser.add_argument("-b", "--bridge", action="store", default=None,
