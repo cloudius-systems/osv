@@ -190,7 +190,9 @@ def start_osv_qemu(options):
             net_device_options.append('mac=%s' % options.mac)
 
         if options.networking:
-            if options.vhost:
+            if options.tap:
+                args += ["-netdev", "tap,id=hn%d,ifname=%s,script=no,downscript=no" % (idx, options.tap)]
+            elif options.vhost:
                 args += ["-netdev", "tap,id=hn%d,script=%s,vhost=on" % (idx, os.path.join(osv_base, "scripts/qemu-ifup.sh"))]
             else:
                 for bridge_helper_dir in ['/usr/libexec', '/usr/lib/qemu']:
@@ -489,6 +491,8 @@ if __name__ == "__main__":
                         help="bridge name for tap networking")
     parser.add_argument("-v", "--vhost", action="store_true",
                         help="needs root. tap networking and vhost")
+    parser.add_argument("-t", "--tap", action="store",
+                        help="tap interface name")
     parser.add_argument("-m", "--memsize", action="store", default="2G",
                         help="specify memory: ex. 1G, 2G, ...")
     parser.add_argument("-c", "--vcpus", action="store", default="4",
