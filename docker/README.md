@@ -2,14 +2,14 @@
 Docker files intended to help setup OSv build environment.
 There are two versions of it - one based on Ubuntu and another on Fedora.
 
-Build container image
+Build container image (default, based on Fedora)
 ```
-docker build -t osv/builder-ubuntu -f Dockerfile.builder-ubuntu . # Use specific docker file
+docker build -t osv/builder -f Dockerfile.builder .
 ```
 
 Build container image for specific version of linux distribution and git repo owner (if forker)
 ```
-docker build -t osv/builder-fedora-31 -f Dockerfile.builder-fedora --build-arg DIST_VERSION=31 --build-arg GIT_ORG_OR_USER=a_user .
+docker build -t osv/builder-ubuntu-19.10 -f Dockerfile.builder --build-arg DIST="ubuntu-19.10" --build-arg GIT_ORG_OR_USER=a_user .
 ```
 
 Run container
@@ -41,8 +41,9 @@ git pull
 
 To update Fedora/Ubuntu packages run this in /git-repos/osv directory:
 ```bash
-./script/setup.py
+./scripts/setup.py
 ```
+
 # Docker OSv runner
 Docker files intended to help setup OSv environment to run and test OSv.
 There are two versions of it - one based on Ubuntu and another on Fedora.

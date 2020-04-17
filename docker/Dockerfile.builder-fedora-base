@@ -7,7 +7,7 @@
 # This Docker file defines an image based on Ubuntu distribution and provides
 # all packages necessary to build and run kernel and applications.
 #
-ARG DIST_VERSION=29
+ARG DIST_VERSION=31
 FROM fedora:${DIST_VERSION}
 
 RUN yum install -y git python3 file which
@@ -17,20 +17,20 @@ RUN yum install -y git python3 file which
 #
 
 # - prepare directories
-RUN mkdir /git-repos
+RUN mkdir -p /osv/scripts
 
-# - clone OSv just to get setup.py
-WORKDIR /git-repos
+# - get setup.py
 ARG GIT_ORG_OR_USER=cloudius-systems
-RUN git clone --depth 1 -b master --single-branch https://github.com/${GIT_ORG_OR_USER}/osv.git
-WORKDIR /git-repos/osv
+ARG GIT_BRANCH=master
+ADD https://raw.githubusercontent.com/${GIT_ORG_OR_USER}/osv/${GIT_BRANCH}/scripts/linux_distro.py /osv/scripts/
+ADD https://raw.githubusercontent.com/${GIT_ORG_OR_USER}/osv/${GIT_BRANCH}/scripts/setup.py /osv/scripts/
 
-# - install all required packages and remove OSv git repo
-RUN scripts/setup.py
-RUN rm -rf /git-repos
+# - install all required packages and remove scripts
+RUN python3 /osv/scripts/setup.py && rm -rf /osv/scripts
 
 # - install Capstan
-RUN wget https://github.com/cloudius-systems/capstan/releases/latest/download/capstan -O /usr/local/bin/capstan
+ADD https://github.com/cloudius-systems/capstan/releases/latest/download/capstan /usr/local/bin/capstan
 RUN chmod u+x /usr/local/bin/capstan
 
+WORKDIR /osv
 CMD /bin/bash

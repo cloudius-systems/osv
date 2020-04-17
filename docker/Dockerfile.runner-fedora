@@ -8,7 +8,7 @@
 # This Docker file defines a container intended to run and test OSv
 # It comes with capstan that can pull kernel and pre-built MPM packages
 #
-ARG DIST_VERSION=29
+ARG DIST_VERSION=31
 FROM fedora:${DIST_VERSION}
 
 RUN yum install -y \
