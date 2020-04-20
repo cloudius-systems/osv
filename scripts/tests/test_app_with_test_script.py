@@ -3,10 +3,19 @@ from testing import *
 import argparse
 import runpy
 
-def run(command, hypervisor_name, host_port, guest_port, script_path, image_path=None, start_line=None, end_line=None, use_vhost_networking=False):
+def run(command, hypervisor_name, host_port, guest_port, script_path, image_path=None,
+        start_line=None, end_line=None, use_vhost_networking=False, kernel_path=None):
+
     py_args = []
     if image_path != None:
         py_args = ['--image', image_path]
+
+    if kernel_path != None:
+       print('Using kernel at %s' % kernel_path)
+       if hypervisor_name == 'firecracker':
+          py_args += ['-k', kernel_path]
+       else:
+          py_args += ['-k', '--kernel-path', kernel_path]
 
     if use_vhost_networking and hypervisor_name != 'firecracker':
         app = run_command_in_guest(command, hypervisor=hypervisor_name, run_py_args=py_args + ['-nv'])
@@ -27,9 +36,17 @@ def run(command, hypervisor_name, host_port, guest_port, script_path, image_path
 
     print("-----------------------------------")
     if script_out['success'] == True:
-        print("SUCCESS")
+        print("  SUCCESS")
     else:
-        print("FAILURE")
+        print("  FAILURE")
+
+    status_file_name = os.getenv('STATUS_FILE')
+    if status_file_name:
+       with open(status_file_name, "a+") as status_file:
+         if script_out['success'] == True:
+            status_file.write("  SUCCESS\n")
+         else:
+            status_file.write("  FAILURE\n")
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='test_app')
@@ -48,6 +65,7 @@ if __name__ == "__main__":
     parser.add_argument("-e", "--execute", action="store", default='runscript /run/default;', metavar="CMD",
                         help="edit command line before execution")
     parser.add_argument("-n", "--vhost", action="store_true", help="setup tap/vhost networking")
+    parser.add_argument("--kernel_path", action="store", help="path to kernel.elf.")
 
     cmdargs = parser.parse_args()
 
@@ -64,7 +82,16 @@ if __name__ == "__main__":
     elif cmdargs.vhost:
         os.environ['OSV_HOSTNAME'] = '192.168.122.76'
     else:
-        os.environ['OSV_HOSTNAME'] = 'localhost'
+        os.environ['OSV_HOSTNAME'] = '127.0.0.1'
+
+    kernel_path = cmdargs.kernel_path
+    if not kernel_path and os.getenv('OSV_KERNEL'):
+        kernel_path = os.getenv('OSV_KERNEL')
+
+    if kernel_path and not os.path.exists(kernel_path):
+        print("The file %s does not exist!" % kernel_path)
+        sys.exit(-1)
 
     set_verbose_output(True)
-    run(cmdargs.execute, hypervisor_name, cmdargs.host_port, cmdargs.guest_port, cmdargs.script_path, cmdargs.image, cmdargs.start_line, cmdargs.end_line, cmdargs.vhost)
+    run(cmdargs.execute, hypervisor_name, cmdargs.host_port, cmdargs.guest_port, cmdargs.script_path,
+        cmdargs.image, cmdargs.start_line, cmdargs.end_line, cmdargs.vhost, kernel_path)
