@@ -2,3 +2,4 @@ name: osv.unit-tests
 title: OSv Unit Tests
 require:
 - osv.openjdk8-from-host
+- osv.common-tests
