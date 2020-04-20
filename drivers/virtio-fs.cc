@@ -180,6 +180,18 @@ void fs::read_config()
     virtio_conf_read(0, &_config, sizeof(_config));
     debugf("virtio-fs: Detected device with tag: [%s] and num_queues: %d\n",
         _config.tag, _config.num_queues);
+
+    // Query for DAX window
+    mmioaddr_t dax_addr;
+    u64 dax_len;
+    if (_dev.get_shm(0, dax_addr, dax_len)) {
+        _dax.addr = dax_addr;
+        _dax.len = dax_len;
+        debugf("virtio-fs: Detected DAX window with length %lld\n", dax_len);
+    } else {
+        _dax.addr = mmio_nullptr;
+        _dax.len = 0;
+    }
 }
 
 void fs::req_done()

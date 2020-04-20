@@ -28,6 +28,12 @@ public:
         u32 num_queues;
     } __attribute__((packed));
 
+    struct dax_window {
+        mmioaddr_t addr;
+        u64 len;
+        mutex lock;
+    };
+
     explicit fs(virtio_device& dev);
     virtual ~fs();
 
@@ -35,6 +41,9 @@ public:
     void read_config();
 
     int make_request(fuse_request*);
+    dax_window* get_dax() {
+        return (_dax.addr != mmio_nullptr) ? &_dax : nullptr;
+    }
 
     void req_done();
     int64_t size();
@@ -53,6 +62,7 @@ private:
 
     std::string _driver_name;
     fs_config _config;
+    dax_window _dax;
 
     // maintains the virtio instance number for multiple drives
     static int _instance;
