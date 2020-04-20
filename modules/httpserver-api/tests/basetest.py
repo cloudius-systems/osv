@@ -74,7 +74,8 @@ class Basetest(unittest.TestCase):
                 return cls.is_jvm_up()
             else:
                 return True
-        except socket.error:
+        except socket.error as e:
+            print(e)
             return False
 
     def validate_path(self, api_definition, nickname, value):
@@ -127,11 +128,18 @@ class Basetest(unittest.TestCase):
     def exec_os(cls):
         args = []
         if cls.config.hypervisor == 'firecracker':
-            args += [cls.config.run_script, "-l", "-m 2048M", "-n", "-c 4"]
+            args += [cls.config.run_script, "-m 2048M", "-n", "-c 4"]
+            if cls.config.kernel_path:
+               print('Using kernel at %s' % cls.config.kernel_path)
+               args += ['-k', cls.config.kernel_path]
         elif cls.config.use_sudo:
             args += ["/usr/bin/sudo", cls.config.run_script, "-n"]
         else:
             args += [cls.config.run_script, "--forward", "tcp::" + str(cls._client.get_port()) + "-:" + str(cls._client.get_port())]
+
+        if cls.config.kernel_path and cls.config.hypervisor != 'firecracker':
+            print('Using kernel at %s' % cls.config.kernel_path)
+            args += ['-k', '--kernel-path', cls.config.kernel_path]
 
         if cls.config.cmd:
             args += ["-e", cls.config.cmd]
