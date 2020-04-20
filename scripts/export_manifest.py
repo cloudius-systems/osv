@@ -28,13 +28,6 @@ def export_package(manifest, dest):
             link_source = hostname[2:]
             target_dir = os.path.dirname(name)
 
-            if link_source.startswith("/"):
-                link_source = os.path.join(abs_dest, link_source[1:])
-            else:
-                link_source = os.path.abspath(os.path.join(target_dir, link_source))
-
-            link_source = os.path.relpath(link_source, target_dir)
-
             if not os.path.exists(target_dir):
                 os.makedirs(target_dir)
 
