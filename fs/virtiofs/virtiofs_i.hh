@@ -12,15 +12,14 @@
 #include <osv/mutex.h>
 #include <osv/waitqueue.hh>
 
-struct fuse_request
-{
+struct fuse_request {
     struct fuse_in_header in_header;
     struct fuse_out_header out_header;
 
-    void *input_args_data;
+    void* input_args_data;
     size_t input_args_size;
 
-    void *output_args_data;
+    void* output_args_data;
     size_t output_args_size;
 
     mutex_t req_mutex;
@@ -28,14 +27,14 @@ struct fuse_request
 };
 
 struct fuse_strategy {
-    void *drv;
-    int (*make_request)(void*, struct fuse_request*);
+    void* drv;
+    int (*make_request)(void*, fuse_request*);
 };
 
-int fuse_req_send_and_receive_reply(fuse_strategy* strategy, uint32_t opcode, uint64_t nodeid,
-        void *input_args_data, size_t input_args_size,
-        void *output_args_data, size_t output_args_size);
+int fuse_req_send_and_receive_reply(fuse_strategy* strategy, uint32_t opcode,
+    uint64_t nodeid, void* input_args_data, size_t input_args_size,
+    void* output_args_data, size_t output_args_size);
 
-void fuse_req_wait(struct fuse_request* req);
+void fuse_req_wait(fuse_request* req);
 
 #endif

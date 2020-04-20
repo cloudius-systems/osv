@@ -32,7 +32,7 @@ struct virtiofs_file_data {
     uint64_t file_handle;
 };
 
-void virtiofs_set_vnode(struct vnode *vnode, struct virtiofs_inode *inode);
+void virtiofs_set_vnode(struct vnode* vnode, struct virtiofs_inode* inode);
 
 extern struct vfsops virtiofs_vfsops;
 extern struct vnops virtiofs_vnops;
