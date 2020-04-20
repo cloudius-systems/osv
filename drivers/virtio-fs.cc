@@ -28,7 +28,7 @@
 
 using namespace memory;
 
-void fuse_req_wait(struct fuse_request* req)
+void fuse_req_wait(fuse_request* req)
 {
     WITH_LOCK(req->req_mutex) {
         req->req_wait.wait(req->req_mutex);
@@ -37,37 +37,37 @@ void fuse_req_wait(struct fuse_request* req)
 
 namespace virtio {
 
-static int fuse_make_request(void *driver, struct fuse_request* req)
+static int fuse_make_request(void* driver, fuse_request* req)
 {
-    auto fs_driver = reinterpret_cast<fs*>(driver);
+    auto fs_driver = static_cast<fs*>(driver);
     return fs_driver->make_request(req);
 }
 
-static void fuse_req_done(struct fuse_request* req)
+static void fuse_req_done(fuse_request* req)
 {
     WITH_LOCK(req->req_mutex) {
         req->req_wait.wake_one(req->req_mutex);
     }
 }
 
-static void fuse_req_enqueue_input(vring* queue, struct fuse_request* req)
+static void fuse_req_enqueue_input(vring* queue, fuse_request* req)
 {
     // Header goes first
     queue->add_out_sg(&req->in_header, sizeof(struct fuse_in_header));
-    //
+
     // Add fuse in arguments as out sg
-    if (req->input_args_size) {
+    if (req->input_args_size > 0) {
         queue->add_out_sg(req->input_args_data, req->input_args_size);
     }
 }
 
-static void fuse_req_enqueue_output(vring* queue, struct fuse_request* req)
+static void fuse_req_enqueue_output(vring* queue, fuse_request* req)
 {
     // Header goes first
     queue->add_in_sg(&req->out_header, sizeof(struct fuse_out_header));
-    //
+
     // Add fuse out arguments as in sg
-    if (req->output_args_size) {
+    if (req->output_args_size > 0) {
         queue->add_in_sg(req->output_args_data, req->output_args_size);
     }
 }
@@ -93,14 +93,13 @@ struct driver fs_driver = {
 bool fs::ack_irq()
 {
     auto isr = _dev.read_and_ack_isr();
-    auto queue = get_virt_queue(VQ_REQUEST);
+    auto* queue = get_virt_queue(VQ_REQUEST);
 
     if (isr) {
         queue->disable_interrupts();
         return true;
-    } else {
-        return false;
     }
+    return false;
 }
 
 fs::fs(virtio_device& virtio_dev)
@@ -113,7 +112,6 @@ fs::fs(virtio_device& virtio_dev)
     // Steps 4, 5 & 6 - negotiate and confirm features
     setup_features();
     read_config();
-
     if (_config.num_queues < 1) {
         virtio_i("Expected at least one request queue -> baling out!\n");
         return;
@@ -122,18 +120,21 @@ fs::fs(virtio_device& virtio_dev)
     // Step 7 - generic init of virtqueues
     probe_virt_queues();
 
-    //register the single irq callback for the block
+    // register the single irq callback for the block
     sched::thread* t = sched::thread::make([this] { this->req_done(); },
-            sched::thread::attr().name("virtio-fs"));
+        sched::thread::attr().name("virtio-fs"));
     t->start();
-    auto queue = get_virt_queue(VQ_REQUEST);
+    auto* queue = get_virt_queue(VQ_REQUEST);
 
     interrupt_factory int_factory;
-    int_factory.register_msi_bindings = [queue, t](interrupt_manager &msi) {
-        msi.easy_register( {{ VQ_REQUEST, [=] { queue->disable_interrupts(); }, t }});
+    int_factory.register_msi_bindings = [queue, t](interrupt_manager& msi) {
+        msi.easy_register({
+            {VQ_HIPRIO, nullptr, nullptr},
+            {VQ_REQUEST, [=] { queue->disable_interrupts(); }, t}
+        });
     };
 
-    int_factory.create_pci_interrupt = [this,t](pci::device &pci_dev) {
+    int_factory.create_pci_interrupt = [this, t](pci::device& pci_dev) {
         return new pci_interrupt(
             pci_dev,
             [=] { return this->ack_irq(); },
@@ -141,10 +142,10 @@ fs::fs(virtio_device& virtio_dev)
     };
 
 #ifndef AARCH64_PORT_STUB
-    int_factory.create_gsi_edge_interrupt = [this,t]() {
+    int_factory.create_gsi_edge_interrupt = [this, t]() {
         return new gsi_edge_interrupt(
-                _dev.get_irq(),
-                [=] { if (this->ack_irq()) t->wake(); });
+            _dev.get_irq(),
+            [=] { if (this->ack_irq()) t->wake(); });
     };
 #endif
 
@@ -159,37 +160,40 @@ fs::fs(virtio_device& virtio_dev)
     std::string dev_name("virtiofs");
     dev_name += std::to_string(_disk_idx++);
 
-    struct device *dev = device_create(&fs_driver, dev_name.c_str(), D_BLK); //TODO Should it be really D_BLK?
-    struct fuse_strategy *strategy = reinterpret_cast<struct fuse_strategy*>(dev->private_data);
+    struct device* dev = device_create(&fs_driver, dev_name.c_str(), D_BLK); // TODO Should it be really D_BLK?
+    auto* strategy = static_cast<fuse_strategy*>(dev->private_data);
     strategy->drv = this;
     strategy->make_request = fuse_make_request;
 
-    debugf("virtio-fs: Add device instance %d as [%s]\n", _id, dev_name.c_str());
+    debugf("virtio-fs: Add device instance %d as [%s]\n", _id,
+        dev_name.c_str());
 }
 
 fs::~fs()
 {
-    //TODO: In theory maintain the list of free instances and gc it
+    // TODO: In theory maintain the list of free instances and gc it
     // including the thread objects and their stack
 }
 
 void fs::read_config()
 {
-    virtio_conf_read(0, &(_config.tag[0]), sizeof(_config.tag));
-    virtio_conf_read(offsetof(fs_config,num_queues), &(_config.num_queues), sizeof(_config.num_queues));
-    debugf("virtio-fs: Detected device with tag: [%s] and num_queues: %d\n", _config.tag, _config.num_queues);
+    virtio_conf_read(0, &_config, sizeof(_config));
+    debugf("virtio-fs: Detected device with tag: [%s] and num_queues: %d\n",
+        _config.tag, _config.num_queues);
 }
 
 void fs::req_done()
 {
     auto* queue = get_virt_queue(VQ_REQUEST);
-    fs_req* req;
 
-    while (1) {
+    while (true) {
         virtio_driver::wait_for_queue(queue, &vring::used_ring_not_empty);
 
+        fs_req* req;
         u32 len;
-        while((req = static_cast<fs_req*>(queue->get_buf_elem(&len))) != nullptr) {
+        while ((req = static_cast<fs_req*>(queue->get_buf_elem(&len))) !=
+            nullptr) {
+
             fuse_req_done(req->fuse_req);
             delete req;
             queue->get_buf_finalize();
@@ -200,12 +204,13 @@ void fs::req_done()
     }
 }
 
-int fs::make_request(struct fuse_request* req)
+int fs::make_request(fuse_request* req)
 {
     // The lock is here for parallel requests protection
     WITH_LOCK(_lock) {
-
-        if (!req) return EIO;
+        if (!req) {
+            return EIO;
+        }
 
         auto* queue = get_virt_queue(VQ_REQUEST);
 
@@ -214,7 +219,10 @@ int fs::make_request(struct fuse_request* req)
         fuse_req_enqueue_input(queue, req);
         fuse_req_enqueue_output(queue, req);
 
-        auto* fs_request = new fs_req(req);
+        auto* fs_request = new (std::nothrow) fs_req(req);
+        if (!fs_request) {
+            return ENOMEM;
+        }
         queue->add_buf_wait(fs_request);
         queue->kick();
 

@@ -17,8 +17,8 @@
 namespace virtio {
 
 enum {
-   VQ_HIPRIO,
-   VQ_REQUEST
+    VQ_HIPRIO = 0,
+    VQ_REQUEST = 1
 };
 
 class fs : public virtio_driver {
@@ -34,7 +34,7 @@ public:
     virtual std::string get_name() const { return _driver_name; }
     void read_config();
 
-    int make_request(struct fuse_request*);
+    int make_request(fuse_request*);
 
     void req_done();
     int64_t size();
@@ -42,18 +42,19 @@ public:
     bool ack_irq();
 
     static hw_driver* probe(hw_device* dev);
+
 private:
     struct fs_req {
-        fs_req(struct fuse_request* f) :fuse_req(f) {};
+        fs_req(fuse_request* f) : fuse_req(f) {};
         ~fs_req() {};
 
-        struct fuse_request* fuse_req;
+        fuse_request* fuse_req;
     };
 
     std::string _driver_name;
     fs_config _config;
 
-    //maintains the virtio instance number for multiple drives
+    // maintains the virtio instance number for multiple drives
     static int _instance;
     int _id;
     // This mutex protects parallel make_request invocations
