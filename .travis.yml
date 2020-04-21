@@ -30,9 +30,12 @@ jobs:
         - docker cp build:/root/.capstan/repository/osv-loader/index.yaml "$ARTIFACTS_DIR"
         - docker cp build:/root/.capstan/packages/osv.bootstrap.mpm "$ARTIFACTS_DIR"
         - docker cp build:/root/.capstan/packages/osv.bootstrap.yaml "$ARTIFACTS_DIR"
-        - docker cp build:/root/.capstan/packages/osv.unit-tests.mpm "$ARTIFACTS_DIR"
-        - docker cp build:/root/.capstan/packages/osv.unit-tests.yaml "$ARTIFACTS_DIR"
-        - docker cp build:/git-repos/osv/modules/tests/usr.manifest "$ARTIFACTS_DIR"/unit_tests.manifest
+        - docker cp build:/root/.capstan/packages/osv.common-tests.mpm "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.common-tests.yaml "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.zfs-tests.mpm "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.zfs-tests.yaml "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.rofs-tests.mpm "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.rofs-tests.yaml "$ARTIFACTS_DIR"
         - ./.travis/cirp/cleanup1.sh
         - ./.travis/cirp/store.sh "$ARTIFACTS_DIR"
         - ./.travis/cirp/cleanup2.sh
