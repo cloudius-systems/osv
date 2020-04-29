@@ -35,4 +35,5 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep<0> ptep);
 void sync(vfs_file* fp, off_t start, off_t end);
 void unmap_arc_buf(arc_buf_t* ab);
 void map_arc_buf(hashkey* key, arc_buf_t* ab, void* page);
+void map_read_cached_page(hashkey *key, void *page);
 }

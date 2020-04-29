@@ -14,6 +14,7 @@
 #include <osv/pagecache.hh>
 #include <osv/mempool.hh>
 #include <fs/vfs/vfs.h>
+#include <fs/vfs/vfs_id.h>
 #include <osv/trace.hh>
 #include <osv/prio.hh>
 #include <chrono>
@@ -161,7 +162,7 @@ protected:
 public:
     cached_page(hashkey key, void* page) : _key(key), _page(page) {
     }
-    ~cached_page() {
+    virtual ~cached_page() {
     }
 
     void map(mmu::hw_ptep<0> ptep) {
@@ -198,7 +199,7 @@ public:
         _vp = fp->f_dentry->d_vnode;
         vref(_vp);
     }
-    ~cached_page_write() {
+    virtual ~cached_page_write() {
         if (_page) {
             if (_dirty) {
                 writeback();
@@ -238,7 +239,7 @@ public:
 
 class cached_page_arc;
 
-unsigned drop_read_cached_page(cached_page_arc* cp, bool flush = true);
+static unsigned drop_arc_read_cached_page(cached_page_arc* cp, bool flush = true);
 
 class cached_page_arc : public cached_page {
 public:
@@ -267,7 +268,7 @@ private:
 
 public:
     cached_page_arc(hashkey key, void* page, arc_buf_t* ab) : cached_page(key, page), _ab(ref(ab, this)) {}
-    ~cached_page_arc() {
+    virtual ~cached_page_arc() {
         if (!_removed && unref(_ab, this)) {
             arc_unshare_buf(_ab);
         }
@@ -282,7 +283,7 @@ public:
         std::for_each(it.first, it.second, [&count](arc_map::value_type& p) {
                 auto cp = p.second;
                 cp->_removed = true;
-                count += drop_read_cached_page(cp, false);
+                count += drop_arc_read_cached_page(cp, false);
         });
         arc_cache_map.erase(ab);
         if (count) {
@@ -296,10 +297,14 @@ static bool operator==(const cached_page_arc::arc_map::value_type& l, const cach
 }
 
 std::unordered_multimap<arc_buf_t*, cached_page_arc*> cached_page_arc::arc_cache_map;
-static std::unordered_map<hashkey, cached_page_arc*> read_cache;
+//Map used to store read cache pages for ZFS filesystem interacting with ARC
+static std::unordered_map<hashkey, cached_page_arc*> arc_read_cache;
+//Map used to store read cache pages for non-ZFS filesystems
+static std::unordered_map<hashkey, cached_page*> read_cache;
 static std::unordered_map<hashkey, cached_page_write*> write_cache;
 static std::deque<cached_page_write*> write_lru;
-static mutex arc_lock; // protects against parallel access to the read cache
+static mutex arc_read_lock; // protects against parallel access to the ARC read cache
+static mutex read_lock; // protects against parallel access to the read cache
 static mutex write_lock; // protect against parallel access to the write cache
 
 template<typename T>
@@ -314,38 +319,76 @@ static T find_in_cache(std::unordered_map<hashkey, T>& cache, hashkey& key)
     }
 }
 
-TRACEPOINT(trace_add_read_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
-void add_read_mapping(cached_page_arc *cp, mmu::hw_ptep<0> ptep)
+static void add_read_mapping(cached_page *cp, mmu::hw_ptep<0> ptep)
 {
-    trace_add_read_mapping(cp->arcbuf(), cp->addr(), ptep.release());
     cp->map(ptep);
 }
 
-TRACEPOINT(trace_remove_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
-void remove_read_mapping(cached_page_arc* cp, mmu::hw_ptep<0> ptep)
+TRACEPOINT(trace_add_read_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
+static void add_arc_read_mapping(cached_page_arc *cp, mmu::hw_ptep<0> ptep)
 {
-    trace_remove_mapping(cp->arcbuf(), cp->addr(), ptep.release());
+    trace_add_read_mapping(cp->arcbuf(), cp->addr(), ptep.release());
+    add_read_mapping(cp, ptep);
+}
+
+template<typename T>
+static void remove_read_mapping(std::unordered_map<hashkey, T>& cache, cached_page* cp, mmu::hw_ptep<0> ptep)
+{
     if (cp->unmap(ptep) == 0) {
-        read_cache.erase(cp->key());
+        cache.erase(cp->key());
         delete cp;
     }
 }
 
+TRACEPOINT(trace_remove_mapping, "buf=%p, addr=%p, ptep=%p", void*, void*, void*);
+static void remove_arc_read_mapping(cached_page_arc* cp, mmu::hw_ptep<0> ptep)
+{
+    trace_remove_mapping(cp->arcbuf(), cp->addr(), ptep.release());
+    remove_read_mapping(arc_read_cache, cp, ptep);
+}
+
 void remove_read_mapping(hashkey& key, mmu::hw_ptep<0> ptep)
 {
-    SCOPE_LOCK(arc_lock);
-    cached_page_arc* cp = find_in_cache(read_cache, key);
+    SCOPE_LOCK(read_lock);
+    cached_page* cp = find_in_cache(read_cache, key);
     if (cp) {
-        remove_read_mapping(cp, ptep);
+        remove_read_mapping(read_cache, cp, ptep);
+        // The method remove_read_mapping() is called by pagecache::get()
+        // to handle MAP_PRIVATE COW (Copy-On-Write) scenario triggered by an attempt to write
+        // to read-only page in read_cache (write protection page-fault). To handle it properly
+        // we need to remove the existing mapping for specified file hash (ino, offset) so that
+        // the physical address of newly allocated read-write page with the exact copy of
+        // the original data can be placed in pte instead.
+        // Normally this works fine and the application continues after and reads from/writes to
+        // new allocated page. But sometimes when applications "mmap" same portions of the same file
+        // with MAP_PRIVATE flag at the same time from multiple threads under load,
+        // those threads get migrated to different CPUs so it is important we flush tlb
+        // on all cpus. Otherwise given thread after migrated to different CPU may still see old
+        // read-only page with stale data and cause spectacular crash.
+        // The fact we have to flush tlb is very unfortunate as it is pretty expensive operation.
+        // On positive side most applications loaded from Read-Only FS will experience pretty limited
+        // number of COW faults mostly caused by ELF linker writing to GOT or PLT section.
+        // TODO 1: Investigate if there is an alternative "cheaper" way to solve this problem.
+        // TODO 2: Investigate why flushing TLB is necessary in single CPU scenario.
+        // TODO 3: Investigate why we do not have to flush tlb when removing read mapping with ZFS.
+        mmu::flush_tlb_all();
     }
 }
 
-TRACEPOINT(trace_drop_read_cached_page, "buf=%p, addr=%p", void*, void*);
-unsigned drop_read_cached_page(cached_page_arc* cp, bool flush)
+void remove_arc_read_mapping(hashkey& key, mmu::hw_ptep<0> ptep)
 {
-    trace_drop_read_cached_page(cp->arcbuf(), cp->addr());
+    SCOPE_LOCK(arc_read_lock);
+    cached_page_arc* cp = find_in_cache(arc_read_cache, key);
+    if (cp) {
+        remove_arc_read_mapping(cp, ptep);
+    }
+}
+
+template<typename T>
+static unsigned drop_read_cached_page(std::unordered_map<hashkey, T>& cache, cached_page* cp, bool flush)
+{
     int flushed = cp->flush();
-    read_cache.erase(cp->key());
+    cache.erase(cp->key());
 
     if (flush && flushed > 1) { // if there was only one pte it is the one we are faulting on; no need to flush.
         mmu::flush_tlb_all();
@@ -356,12 +399,28 @@ unsigned drop_read_cached_page(cached_page_arc* cp, bool flush)
     return flushed;
 }
 
-void drop_read_cached_page(hashkey& key)
+static unsigned drop_arc_read_cached_page(cached_page_arc* cp, bool flush)
 {
-    SCOPE_LOCK(arc_lock);
-    cached_page_arc* cp = find_in_cache(read_cache, key);
+    return drop_read_cached_page(arc_read_cache, cp, flush);
+}
+
+static void drop_read_cached_page(hashkey& key)
+{
+    SCOPE_LOCK(read_lock);
+    cached_page* cp = find_in_cache(read_cache, key);
     if (cp) {
-        drop_read_cached_page(cp, true);
+        drop_read_cached_page(read_cache, cp, true);
+    }
+}
+
+TRACEPOINT(trace_drop_read_cached_page, "buf=%p, addr=%p", void*, void*);
+static void drop_arc_read_cached_page(hashkey& key)
+{
+    SCOPE_LOCK(arc_read_lock);
+    cached_page_arc* cp = find_in_cache(arc_read_cache, key);
+    if (cp) {
+        trace_drop_read_cached_page(cp->arcbuf(), cp->addr());
+        drop_read_cached_page(arc_read_cache, cp, true);
     }
 }
 
@@ -369,7 +428,7 @@ TRACEPOINT(trace_unmap_arc_buf, "buf=%p", void*);
 void unmap_arc_buf(arc_buf_t* ab)
 {
     trace_unmap_arc_buf(ab);
-    SCOPE_LOCK(arc_lock);
+    SCOPE_LOCK(arc_read_lock);
     cached_page_arc::unmap_arc_buf(ab);
 }
 
@@ -377,15 +436,22 @@ TRACEPOINT(trace_map_arc_buf, "buf=%p page=%p", void*, void*);
 void map_arc_buf(hashkey *key, arc_buf_t* ab, void *page)
 {
     trace_map_arc_buf(ab, page);
-    SCOPE_LOCK(arc_lock);
+    SCOPE_LOCK(arc_read_lock);
     cached_page_arc* pc = new cached_page_arc(*key, page, ab);
-    read_cache.emplace(*key, pc);
+    arc_read_cache.emplace(*key, pc);
     arc_share_buf(ab);
+}
+
+void map_read_cached_page(hashkey *key, void *page)
+{
+    SCOPE_LOCK(read_lock);
+    cached_page* pc = new cached_page(*key, page);
+    read_cache.emplace(*key, pc);
 }
 
 static int create_read_cached_page(vfs_file* fp, hashkey& key)
 {
-    return fp->get_arcbuf(&key, key.offset);
+    return fp->read_page_from_cache(&key, key.offset);
 }
 
 static std::unique_ptr<cached_page_write> create_write_cached_page(vfs_file* fp, hashkey& key)
@@ -422,6 +488,8 @@ static void insert(cached_page_write* cp) {
     }
 }
 
+#define IS_ZFS(st_dev) ((st_dev & (0xffULL<<56)) == ZFS_ID)
+
 bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element<0> pte, bool write, bool shared)
 {
     struct stat st;
@@ -437,17 +505,27 @@ bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element<0> pt
                 // write fault into shared mapping, there page is not in write cache yet, add it.
                 wcp = newcp.release();
                 insert(wcp);
-                // page is moved from ARC to write cache
-                // drop ARC page if exists, removing all mappings
-                drop_read_cached_page(key);
+                // page is moved from read cache to write cache
+                // drop read page if exists, removing all mappings
+                if (IS_ZFS(st.st_dev)) {
+                    drop_arc_read_cached_page(key);
+                } else {
+                    // ROFS (at least for now)
+                    drop_read_cached_page(key);
+                }
             } else {
-                // remove mapping to ARC page if exists
-                remove_read_mapping(key, ptep);
-                // cow of private page from ARC
+                // remove mapping to read cache page if exists
+                if (IS_ZFS(st.st_dev)) {
+                    remove_arc_read_mapping(key, ptep);
+                } else {
+                    // ROFS (at least for now)
+                    remove_read_mapping(key, ptep);
+                }
+                // cow (copy-on-write) of private page from read cache
                 return mmu::write_pte(newcp->release(), ptep, pte);
             }
         } else if (!shared) {
-            // cow of private page from write cache
+            // cow (copy-on-write) of private page from write cache
             void* page = memory::alloc_page();
             memcpy(page, wcp->addr(), mmu::page_size);
             return mmu::write_pte(page, ptep, pte);
@@ -456,11 +534,23 @@ bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element<0> pt
         int ret;
         // read fault and page is not in write cache yet, return one from ARC, mark it cow
         do {
-            WITH_LOCK(arc_lock) {
-                cached_page_arc* cp = find_in_cache(read_cache, key);
-                if (cp) {
-                    add_read_mapping(cp, ptep);
-                    return mmu::write_pte(cp->addr(), ptep, mmu::pte_mark_cow(pte, true));
+            if (IS_ZFS(st.st_dev)) {
+                WITH_LOCK(arc_read_lock) {
+                    cached_page_arc* cp = find_in_cache(arc_read_cache, key);
+                    if (cp) {
+                        add_arc_read_mapping(cp, ptep);
+                        return mmu::write_pte(cp->addr(), ptep, mmu::pte_mark_cow(pte, true));
+                    }
+                }
+            }
+            else {
+                // ROFS (at least for now)
+                WITH_LOCK(read_lock) {
+                    cached_page* cp = find_in_cache(read_cache, key);
+                    if (cp) {
+                        add_read_mapping(cp, ptep);
+                        return mmu::write_pte(cp->addr(), ptep, mmu::pte_mark_cow(pte, true));
+                    }
                 }
             }
 
@@ -480,7 +570,7 @@ bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element<0> pt
 
         } while (ret != -1);
 
-        // try to access a hole in a file, map by zero_page            }
+        // try to access a hole in a file, map by zero_page
         return mmu::write_pte(zero_page, ptep, mmu::pte_mark_cow(pte, true));
     }
 
@@ -513,12 +603,24 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep<0> ptep)
         }
     }
 
-    WITH_LOCK(arc_lock) {
-        cached_page_arc* rcp = find_in_cache(read_cache, key);
-        if (rcp && mmu::virt_to_phys(rcp->addr()) == old.addr()) {
-            // page is in ARC
-            remove_read_mapping(rcp, ptep);
-            return false;
+    if (IS_ZFS(st.st_dev)) {
+        WITH_LOCK(arc_read_lock) {
+            cached_page_arc* rcp = find_in_cache(arc_read_cache, key);
+            if (rcp && mmu::virt_to_phys(rcp->addr()) == old.addr()) {
+                // page is in ARC read cache
+                remove_arc_read_mapping(rcp, ptep);
+                return false;
+            }
+        }
+    } else {
+        // ROFS (at least for now)
+        WITH_LOCK(read_lock) {
+            cached_page* rcp = find_in_cache(read_cache, key);
+            if (rcp && mmu::virt_to_phys(rcp->addr()) == old.addr()) {
+                // page is in regular read cache
+                remove_read_mapping(read_cache, rcp, ptep);
+                return false;
+            }
         }
     }
 
@@ -595,7 +697,7 @@ private:
             auto start = sched::thread::current()->thread_clock();
             auto deadline = std::chrono::duration_cast<std::chrono::nanoseconds>(std::chrono::nanoseconds(static_cast<unsigned long>(work/_freq))) + start;
 
-            WITH_LOCK(arc_lock) {
+            WITH_LOCK(arc_read_lock) {
                 while (sched::thread::current()->thread_clock() < deadline && buckets_scanned < bucket_count) {
                     if (current_bucket >= cached_page_arc::arc_cache_map.bucket_count()) {
                         current_bucket = 0;
@@ -617,7 +719,7 @@ private:
 
                     // mark ARC buffers as accessed when we have 1024 of them
                     if (!(cleared % 1024)) {
-                        DROP_LOCK(arc_lock) {
+                        DROP_LOCK(arc_read_lock) {
                             flush = mark_accessed(accessed);
                         }
                     }
