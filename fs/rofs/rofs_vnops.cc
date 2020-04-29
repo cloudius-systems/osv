@@ -269,6 +269,9 @@ static int rofs_getattr(struct vnode *vnode, struct vattr *attr)
     attr->va_nodeid = vnode->v_ino;
     attr->va_size = vnode->v_size;
 
+    auto *fsid = &vnode->v_mount->m_fsid;
+    attr->va_fsid = ((uint32_t)fsid->__val[0]) | ((dev_t) ((uint32_t)fsid->__val[1]) << 32);
+
     return 0;
 }
 
