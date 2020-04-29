@@ -40,6 +40,7 @@
 #include <sys/types.h>
 #include <osv/device.h>
 #include <osv/sched.hh>
+#include <osv/pagecache.hh>
 
 #include "rofs.hh"
 
@@ -275,6 +276,41 @@ static int rofs_getattr(struct vnode *vnode, struct vattr *attr)
     return 0;
 }
 
+int rofs_map_cached_page(struct vnode *vnode, struct file* fp, struct uio *uio) {
+    struct rofs_info *rofs = (struct rofs_info *) vnode->v_mount->m_data;
+    struct rofs_super_block *sb = rofs->sb;
+    struct rofs_inode *inode = (struct rofs_inode *) vnode->v_data;
+    struct device *device = vnode->v_mount->m_dev;
+
+    if (vnode->v_type == VDIR)
+        return EISDIR;
+    /* Cant read anything but reg */
+    if (vnode->v_type != VREG)
+        return EINVAL;
+    /* Cant start reading before the first byte */
+    if (uio->uio_offset < 0)
+        return EINVAL;
+    /* Cant read after the end of the file */
+    if (uio->uio_offset >= (off_t)vnode->v_size)
+        return 0;
+    if (uio->uio_resid != mmu::page_size)
+        return EINVAL;
+    if (uio->uio_offset % mmu::page_size)
+        return EINVAL;
+
+    void *page_address;
+    int ret = rofs::cache_get_page_address(inode, device, sb, uio, &page_address);
+
+    if (!ret) {
+        pagecache::map_read_cached_page((pagecache::hashkey*)uio->uio_iov->iov_base, page_address);
+        uio->uio_resid = 0;
+    } else {
+        abort("ROFS cache failed!");
+    }
+
+    return ret;
+}
+
 #define rofs_write       ((vnop_write_t)vop_erofs)
 #define rofs_seek        ((vnop_seek_t)vop_nullop)
 #define rofs_ioctl       ((vnop_ioctl_t)vop_nullop)
@@ -287,7 +323,6 @@ static int rofs_getattr(struct vnode *vnode, struct vattr *attr)
 #define rofs_inactive    ((vnop_inactive_t)vop_nullop)
 #define rofs_truncate    ((vnop_truncate_t)vop_erofs)
 #define rofs_link        ((vnop_link_t)vop_erofs)
-#define rofs_arc         ((vnop_cache_t) nullptr)
 #define rofs_fallocate   ((vnop_fallocate_t)vop_erofs)
 #define rofs_fsync       ((vnop_fsync_t)vop_nullop)
 #define rofs_symlink     ((vnop_symlink_t)vop_erofs)
@@ -312,7 +347,7 @@ struct vnops rofs_vnops = {
     rofs_inactive,           /* inactive */
     rofs_truncate,           /* truncate - returns error when called*/
     rofs_link,               /* link - returns error when called*/
-    rofs_arc,                /* arc */ //TODO: Implement to allow memory re-use when mapping files
+    rofs_map_cached_page,
     rofs_fallocate,          /* fallocate - returns error when called*/
     rofs_readlink,           /* read link */
     rofs_symlink             /* symbolic link - returns error when called*/
@@ -320,4 +355,5 @@ struct vnops rofs_vnops = {
 
 extern "C" void rofs_disable_cache() {
     rofs_vnops.vop_read = rofs_read_without_cache;
+    rofs_vnops.vop_cache = (vnop_cache_t) nullptr;
 }

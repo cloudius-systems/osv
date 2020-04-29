@@ -10,8 +10,10 @@
 #include <list>
 #include <unordered_map>
 #include <include/osv/uio.h>
+#include <include/osv/contiguous_alloc.hh>
 #include <osv/debug.h>
 #include <osv/sched.hh>
+#include <sys/mman.h>
 
 /*
  * From cache perspective let us divide each file into sequence of contiguous 32K segments.
@@ -56,18 +58,34 @@ public:
         this->starting_block = _starting_block;
         this->block_count = _block_count;
         this->data_ready = false;   // Data has to be loaded from disk
-        this->data = malloc(_cache->sb->block_size * _block_count);
+        auto size = _cache->sb->block_size * _block_count;
+        // Only allocate contiguous page-aligned memory if size greater or equal a page
+        // to make sure page-cache mapping works properly
+        if (size >= mmu::page_size) {
+            this->data = memory::alloc_phys_contiguous_aligned(size, mmu::page_size);
+        } else {
+            this->data = malloc(size);
+        }
 #if defined(ROFS_DIAGNOSTICS_ENABLED)
         rofs_block_allocated += block_count;
 #endif
     }
 
     ~file_cache_segment() {
-        free(this->data);
+        auto size = this->cache->sb->block_size * this->block_count;
+        if (size >= mmu::page_size) {
+            memory::free_phys_contiguous_aligned(this->data);
+        } else {
+            free(this->data);
+        }
     }
 
     uint64_t length() {
         return this->block_count * this->cache->sb->block_size;
+    }
+
+    void* memory_address(off_t offset) {
+        return this->data + offset;
     }
 
     bool is_data_ready() {
@@ -93,12 +111,16 @@ public:
             blocks_remaining++;
         }
         auto block_count_to_read = std::min(block_count, blocks_remaining);
-        print("[rofs] [%d] -> file_cache_segment::write() i-node: %d, starting block %d, reading [%d] blocks at disk offset [%d]\n",
+        print("[rofs] [%d] -> file_cache_segment::read_from_disk() i-node: %d, starting block %d, reading [%d] blocks at disk offset [%d]\n",
               sched::thread::current()->id(), cache->inode->inode_no, starting_block, block_count_to_read, block);
         auto error = rofs_read_blocks(device, block, block_count_to_read, data);
         this->data_ready = (error == 0);
         if (error) {
-            print("!!!!! Error reading from disk\n");
+            printf("!!!!! Error reading from disk\n");
+        } else {
+            if (bytes_remaining < this->length()) {
+                memset(data + bytes_remaining, 0, this->length() - bytes_remaining);
+            }
         }
         return error;
     }
@@ -190,8 +212,8 @@ plan_cache_transactions(struct file_cache *cache, struct uio *uio) {
             bytes_to_read -= transaction.bytes_to_read;
             transactions.push_back(transaction);
         }
-            //
-            // Miss -> read from disk
+        //
+        // Miss -> read from disk
         else {
             print("[rofs] [%d] -> rofs_cache_get_segment_operations i-node: %d, cache segment %d MISS at file offset %d\n",
                   sched::thread::current()->id(), cache->inode->inode_no, cache_segment_index, file_offset);
@@ -269,6 +291,45 @@ cache_read(struct rofs_inode *inode, struct device *device, struct rofs_super_bl
     print("[rofs] [%d] rofs_cache_read completed for i-node [%d]\n", sched::thread::current()->id(),
           inode->inode_no);
     return error;
+}
+
+// Ensure a page (4096 bytes) of a file specified by offset is in memory in cache. Otherwise
+// load it from disk and eventually return address of the page in memory.
+int
+cache_get_page_address(struct rofs_inode *inode, struct device *device, struct rofs_super_block *sb, struct uio *uio, void **addr)
+{
+    // Find existing one or create new file cache
+    struct file_cache *cache = get_or_create_file_cache(inode, sb);
+
+    //
+    // Prepare a cache transaction (copy from memory
+    // or read from disk into cache memory and then copy into memory)
+    auto segment_transactions = plan_cache_transactions(cache, uio);
+    print("[rofs] [%d] rofs_get_page_address called for i-node [%d] at %d with %d ops\n",
+          sched::thread::current()->id(), inode->inode_no, offset, segment_transactions.size());
+
+    int error = 0;
+
+    assert(segment_transactions.size() == 1);
+    auto transaction = segment_transactions[0];
+#if defined(ROFS_DIAGNOSTICS_ENABLED)
+    rofs_cache_reads += 1;
+#endif
+    if (transaction.transaction_type == CacheTransactionType::READ_FROM_DISK) {
+        // Read from disk into segment missing in cache or empty segment that was in cache but had not data because
+        // of failure to read
+        error = transaction.segment->read_from_disk(device);
+#if defined(ROFS_DIAGNOSTICS_ENABLED)
+        rofs_cache_misses += 1;
+#endif
+   }
+
+   if( !error)
+       *addr = transaction.segment->memory_address(transaction.segment_offset);
+   else
+       *addr = nullptr;
+
+   return error;
 }
 
 }
