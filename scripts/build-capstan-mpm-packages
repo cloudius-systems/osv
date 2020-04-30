@@ -406,6 +406,9 @@ case "$1" in
   kernel_and_modules)
     echo "Building kernel and standard modules ..."
     build_kernel_and_standard_osv_modules;;
+  monitoring)
+    echo "Building httpserver monitoring mpm..."
+    build_httpserver_monitoring_package;;
   jdk)
     echo "Building Java 8 and 11 JREs ..."
     build_java_jdk_packages;;
