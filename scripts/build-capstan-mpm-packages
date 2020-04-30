@@ -263,7 +263,7 @@ build_httpserver_html5_cli_package() {
 }
 
 build_httpserver_monitoring_package() {
-  build_osv_image "httpserver-monitoring-api" selected none
+  build_osv_image "httpserver-monitoring-api" all none
   build_mpm "httpserver-monitoring-api"
 }
 
