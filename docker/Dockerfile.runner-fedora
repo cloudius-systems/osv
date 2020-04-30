@@ -17,7 +17,6 @@ python3 \
 file \
 which \
 curl \
-wget \
 qemu-system-x86 \
 qemu-img
 
@@ -31,7 +30,7 @@ ARG GIT_BRANCH=master
 RUN git clone --depth 1 -b ${GIT_BRANCH} --single-branch https://github.com/${GIT_ORG_OR_USER}/osv.git
 
 # - install Capstan
-RUN wget https://github.com/cloudius-systems/capstan/releases/latest/download/capstan -O /usr/local/bin/capstan
+ADD https://github.com/cloudius-systems/capstan/releases/latest/download/capstan /usr/local/bin/capstan
 RUN chmod u+x /usr/local/bin/capstan
 
 CMD /bin/bash

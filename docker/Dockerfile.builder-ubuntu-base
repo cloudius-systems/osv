@@ -23,16 +23,16 @@ RUN apt-get update -y && apt-get install -y git python3
 #
 
 # - prepare directories
-RUN mkdir -p /osv/scripts
+RUN mkdir -p /git-repos/osv/scripts
 
 # - get setup.py
 ARG GIT_ORG_OR_USER=cloudius-systems
 ARG GIT_BRANCH=master
-ADD https://raw.githubusercontent.com/${GIT_ORG_OR_USER}/osv/${GIT_BRANCH}/scripts/linux_distro.py /osv/scripts/
-ADD https://raw.githubusercontent.com/${GIT_ORG_OR_USER}/osv/${GIT_BRANCH}/scripts/setup.py /osv/scripts/
+ADD https://raw.githubusercontent.com/${GIT_ORG_OR_USER}/osv/${GIT_BRANCH}/scripts/linux_distro.py /git-repos/osv/scripts/
+ADD https://raw.githubusercontent.com/${GIT_ORG_OR_USER}/osv/${GIT_BRANCH}/scripts/setup.py /git-repos/osv/scripts/
 
 # - install all required packages and remove scripts
-RUN python3 /osv/scripts/setup.py && rm -rf /osv/scripts
+RUN python3 /git-repos/osv/scripts/setup.py && rm -rf /git-repos/osv/scripts
 
 RUN update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
 
@@ -40,5 +40,5 @@ RUN update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/jav
 ADD https://github.com/cloudius-systems/capstan/releases/latest/download/capstan /usr/local/bin/
 RUN chmod u+x /usr/local/bin/capstan
 
-WORKDIR /osv
+WORKDIR /git-repos/osv
 CMD /bin/bash
