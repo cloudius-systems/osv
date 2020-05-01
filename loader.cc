@@ -48,6 +48,7 @@
 #include <dirent.h>
 #include <iostream>
 #include <fstream>
+#include <mntent.h>
 
 #include "drivers/zfs.hh"
 #include "drivers/random.hh"
@@ -144,6 +145,7 @@ static std::string opt_defaultgw;
 static std::string opt_nameserver;
 static std::string opt_redirect;
 static std::chrono::nanoseconds boot_delay;
+std::vector<mntent> opt_mount_fs;
 bool opt_maxnic = false;
 int maxnic;
 bool opt_pci_disabled = false;
@@ -180,7 +182,8 @@ static void usage()
     std::cout << "  --redirect=arg        redirect stdout and stderr to file\n";
     std::cout << "  --disable_rofs_cache  disable ROFS memory cache\n";
     std::cout << "  --nopci               disable PCI enumeration\n";
-    std::cout << "  --extra-zfs-pools     import extra ZFS pools\n\n";
+    std::cout << "  --extra-zfs-pools     import extra ZFS pools\n";
+    std::cout << "  --mount-fs=arg        mount extra filesystem, format:<fs_type,url,path>\n\n";
 }
 
 static void handle_parse_error(const std::string &message)
@@ -269,6 +272,25 @@ static void parse_options(int loader_argc, char** loader_argv)
         }
         opt_console = v.front();
         debug("console=%s\n", opt_console);
+    }
+
+    if (options::option_value_exists(options_values, "mount-fs")) {
+        auto mounts = options::extract_option_values(options_values, "mount-fs");
+        for (auto m : mounts) {
+            std::vector<std::string> tmp;
+            boost::split(tmp, m, boost::is_any_of(","), boost::token_compress_on);
+            if (tmp.size() != 3 || tmp[0].empty() || tmp[1].empty() || tmp[2].empty()) {
+                printf("Ignoring value: '%s' for option mount-fs, expected in format: <fs_type,url,path>\n", m.c_str());
+                continue;
+            }
+            mntent mount = {
+                .mnt_fsname = strdup(tmp[1].c_str()),
+                .mnt_dir = strdup(tmp[2].c_str()),
+                .mnt_type = strdup(tmp[0].c_str()),
+                .mnt_opts = nullptr
+            };
+            opt_mount_fs.push_back(mount);
+        }
     }
 
     if (options::option_value_exists(options_values, "env")) {

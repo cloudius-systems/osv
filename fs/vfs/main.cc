@@ -2300,6 +2300,36 @@ static void import_extra_zfs_pools(void)
     }
 }
 
+static void mount_fs(mntent *m)
+{
+    if (!strcmp(m->mnt_dir, "/")) {
+        return;
+    }
+
+    auto mount_dir = opendir(m->mnt_dir);
+    if (!mount_dir) {
+        if (mkdir(m->mnt_dir, 0755) < 0) {
+            kprintf("failed to create missing mount point %s, error = %s\n", m->mnt_dir, strerror(errno));
+            return;
+        } else {
+            kprintf("created missing mount point %s\n", m->mnt_dir);
+        }
+    } else {
+        closedir(mount_dir);
+    }
+
+    if ((m->mnt_opts != nullptr) && strcmp(m->mnt_opts, MNTOPT_DEFAULTS)) {
+        printf("Warning: opts %s, ignored for fs %s\n", m->mnt_opts, m->mnt_type);
+    }
+
+    // FIXME: Right now, ignoring mntops. In the future we may have an option parser
+    auto ret = sys_mount(m->mnt_fsname, m->mnt_dir, m->mnt_type, 0, nullptr);
+    if (ret) {
+        printf("failed to mount %s, error = %s\n", m->mnt_type, strerror(ret));
+    }
+}
+
+extern std::vector<mntent> opt_mount_fs;
 void pivot_rootfs(const char* path)
 {
     int ret = sys_pivot_root(path, "/");
@@ -2323,27 +2353,17 @@ void pivot_rootfs(const char* path)
     }
 
     auto ent = setmntent("/etc/fstab", "r");
-    if (!ent) {
-        return;
+    if (ent) {
+        struct mntent *m = nullptr;
+        while ((m = getmntent(ent)) != nullptr) {
+            mount_fs(m);
+        }
+        endmntent(ent);
     }
 
-    struct mntent *m = nullptr;
-    while ((m = getmntent(ent)) != nullptr) {
-        if (!strcmp(m->mnt_dir, "/")) {
-            continue;
-        }
-
-        if ((m->mnt_opts != nullptr) && strcmp(m->mnt_opts, MNTOPT_DEFAULTS)) {
-            printf("Warning: opts %s, ignored for fs %s\n", m->mnt_opts, m->mnt_type);
-        }
-
-        // FIXME: Right now, ignoring mntops. In the future we may have an option parser
-        ret = sys_mount(m->mnt_fsname, m->mnt_dir, m->mnt_type, 0, nullptr);
-        if (ret) {
-            printf("failed to mount %s, error = %s\n", m->mnt_type, strerror(ret));
-        }
+    for (auto m: opt_mount_fs) {
+        mount_fs(&m);
     }
-    endmntent(ent);
 }
 
 extern "C" void unmount_devfs()
