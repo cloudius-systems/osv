@@ -34,6 +34,7 @@ usage() {
 	                                (can be used to customize specific app/module build process)
 	  -j<N>                         Set number of parallel jobs for make
 	  --append-manifest             Append build/<mode>/append.manifest to usr.manifest
+	  --create-disk                 Instead of usr.img create kernel-less disk.img
 
 	Examples:
 	  ./scripts/build -j4 fs=rofs image=native-example   # Create image with native-example app
@@ -75,7 +76,7 @@ do
 	case $i in
 	--help|-h)
 		usage ;;
-	image=*|modules=*|fs=*|usrskel=*|check|--append-manifest) ;;
+	image=*|modules=*|fs=*|usrskel=*|check|--append-manifest|--create-disk) ;;
 	clean)
 		stage1_args=clean ;;
 	*)	# yuck... Is there a prettier way to append to array?
@@ -147,6 +148,8 @@ do
 		vars[image]=tests;;
 	--append-manifest)
 		vars[append_manifest]="true";;
+	--create-disk)
+		vars[create_disk]="true";;
 	esac
 done
 
@@ -175,7 +178,7 @@ case $OUT in
 esac
 
 # Default manifest
-manifest=$OUT/bootfs.manifest
+manifest=bootfs.manifest.skel
 fs_type=${vars[fs]-zfs}
 usrskel_arg=
 case $fs_type in
@@ -254,37 +257,55 @@ kernel_end=$(($loader_size+2097151 & ~2097151))
 cd $OUT
 
 libgcc_s_dir=$(dirname $(readlink -f $(gcc -print-file-name=libgcc_s.so.1)))
+
+if [ "$export" != "none" ]; then
+	export_dir=${vars[export_dir]-$SRC/build/export}
+	"$SRC"/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
+	exit 0
+fi
+
+if [[ ${vars[create_disk]} == "true" ]]; then
+	partition_offset=512
+	bare=boot.bin
+	raw_disk=disk
+	qcow2_disk=disk
+	upload_kernel_mode="-k"
+else
+	partition_offset=$kernel_end
+	bare=loader.img
+	raw_disk=bare
+	qcow2_disk=usr
+fi
+
+create_zfs_disk() {
+	cp $bare $raw_disk.raw
+	"$SRC"/scripts/imgedit.py setpartition "-f raw ${raw_disk}.raw" 2 $partition_offset $partition_size
+	qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
+	qemu-img resize $qcow2_disk.img ${image_size}b >/dev/null 2>&1
+	"$SRC"/scripts/upload_manifest.py -o $qcow2_disk.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir" $upload_kernel_mode
+}
+
+create_rofs_disk() {
+	cp $bare $raw_disk.raw
+	"$SRC"/scripts/imgedit.py setpartition "-f raw ${raw_disk}.raw" 2 $partition_offset $partition_size
+	qemu-img resize ${raw_disk}.raw ${image_size}b >/dev/null 2>&1
+	dd if=rofs.img of=${raw_disk}.raw obs=$partition_offset seek=1 >/dev/null 2>&1
+	qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
+}
+
 case $fs_type in
 zfs)
-	cp loader.img bare.raw
-	zfs_size=$(($fs_size - $kernel_end))
-	"$SRC"/scripts/imgedit.py setpartition "-f raw bare.raw" 2 $kernel_end $zfs_size
-
-	qemu-img convert -f raw -O qcow2 bare.raw usr.img
-	qemu-img resize usr.img ${fs_size}b >/dev/null 2>&1
-
-	if [ "$export" == "none" ]
-	then
-		"$SRC"/scripts/upload_manifest.py -o usr.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
-	else
-		export_dir=${vars[export_dir]-$SRC/build/export}
-		"$SRC"/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
-	fi
-	;;
+	partition_size=$((fs_size - partition_offset))
+	image_size=$fs_size
+        create_zfs_disk ;;
 rofs)
 	rm -rf rofs.img
 	"$SRC"/scripts/gen-rofs-img.py -o rofs.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
-	rofs_size=`stat --printf %s rofs.img`
-	img_size=$((kernel_end + rofs_size))
-	cp loader.img bare.raw
-	"$SRC"/scripts/imgedit.py setpartition "-f raw bare.raw" 2 $kernel_end $rofs_size
-	qemu-img resize bare.raw ${img_size}b >/dev/null 2>&1
-	dd if=rofs.img of=bare.raw obs=${kernel_end} seek=1 >/dev/null 2>&1
-	qemu-img convert -f raw -O qcow2 bare.raw usr.img
-	;;
+	partition_size=`stat --printf %s rofs.img`
+	image_size=$((partition_offset + partition_size))
+        create_rofs_disk ;;
 ramfs)
-	qemu-img convert -f raw -O qcow2 loader.img usr.img
-	;;
+	qemu-img convert -f raw -O qcow2 loader.img usr.img ;;
 esac
 
 "$SRC"/scripts/imgedit.py setargs usr.img `cat cmdline`

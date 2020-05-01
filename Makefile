@@ -125,7 +125,7 @@ endif
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
 
-all: $(out)/loader.img links
+all: $(out)/loader.img links $(out)/kernel.elf
 ifeq ($(arch),x64)
 all: $(out)/vmlinuz.bin
 endif
@@ -1902,6 +1902,19 @@ $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(lo
 	@scripts/libosv.py $(out)/osv.syms $(out)/libosv.ld `scripts/osv-version.sh` | $(CC) -c -o $(out)/osv.o -x assembler -
 	$(call quiet, $(CC) $(out)/osv.o -nostdlib -shared -o $(out)/libosv.so -T $(out)/libosv.ld, LIBOSV.SO)
 
+$(out)/kernel.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/empty_bootfs.o $(loader_options_dep)
+	$(call quiet, $(LD) -o $@ --defsym=OSV_KERNEL_BASE=$(kernel_base) \
+	    --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) \
+		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
+	    $(^:%.ld=-T %.ld) \
+	    --whole-archive \
+	      $(libstdc++.a) $(libgcc_eh.a) \
+	      $(boost-libs) \
+	    --no-whole-archive $(libgcc.a), \
+		LINK kernel.elf)
+	$(call quiet, $(STRIP) $(out)/kernel.elf -o $(out)/kernel-stripped.elf, STRIP kernel.elf -> kernel-stripped.elf )
+	$(call very-quiet, cp $(out)/kernel-stripped.elf $(out)/kernel.elf)
+
 $(out)/bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__'
 
 environ_sources = $(addprefix libc/, $(environ_libc))
@@ -1940,6 +1953,8 @@ $(out)/bootfs.bin: scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep)
 
 $(out)/bootfs.o: $(out)/bootfs.bin
 $(out)/bootfs.o: ASFLAGS += -I$(out)
+
+$(out)/empty_bootfs.o: ASFLAGS += -I$(out)
 
 $(out)/tools/mkfs/mkfs.so: $(out)/tools/mkfs/mkfs.o $(out)/libzfs.so
 	$(makedir)

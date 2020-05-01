@@ -26,7 +26,7 @@ public:
     virtual bool put_page(void *addr, uintptr_t offset, mmu::hw_ptep<0> ptep);
     virtual void sync(off_t start, off_t end);
 
-    int get_arcbuf(void *key, off_t offset);
+    int read_page_from_cache(void *key, off_t offset);
 };
 
 #endif /* VFS_FILE_HH_ */

@@ -8,7 +8,7 @@
 # This Docker file defines a container intended to build, test and publish
 # OSv kernel as well as many applications ...
 #
-ARG DIST="fedora-29"
+ARG DIST="fedora-31"
 FROM osvunikernel/osv-${DIST}-builder-base
 
 #
@@ -35,8 +35,8 @@ CMD /bin/bash
 #
 # NOTES
 #
-# Build the container based on default Fedora 29 base image:
-# docker build -t osv/builder-fedora-29 -f Dockerfile.builder .
+# Build the container based on default Fedora 31 base image:
+# docker build -t osv/builder-fedora-31 -f Dockerfile.builder .
 #
 # Build the container based of specific Ubuntu version
 # docker build -t osv/builder-ubuntu-19.10 -f Dockerfile.builder --build-arg DIST="ubuntu-19.10" .
@@ -45,8 +45,8 @@ CMD /bin/bash
 # docker build -t osv/builder-fedora-31 -f Dockerfile.builder --build-arg DIST="fedora-31" --build-arg GIT_ORG_OR_USER=a_user .
 #
 # Run the container FIRST time example:
-# docker run -it --privileged osv/builder-fedora-29
-# 
+# docker run -it --privileged osv/builder-fedora-31
+#
 # To restart:
 # docker restart ID (from docker ps -a) && docker attach ID
 #

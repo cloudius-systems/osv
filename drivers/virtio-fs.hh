@@ -17,8 +17,8 @@
 namespace virtio {
 
 enum {
-   VQ_HIPRIO,
-   VQ_REQUEST
+    VQ_HIPRIO = 0,
+    VQ_REQUEST = 1
 };
 
 class fs : public virtio_driver {
@@ -28,13 +28,22 @@ public:
         u32 num_queues;
     } __attribute__((packed));
 
+    struct dax_window {
+        mmioaddr_t addr;
+        u64 len;
+        mutex lock;
+    };
+
     explicit fs(virtio_device& dev);
     virtual ~fs();
 
     virtual std::string get_name() const { return _driver_name; }
     void read_config();
 
-    int make_request(struct fuse_request*);
+    int make_request(fuse_request*);
+    dax_window* get_dax() {
+        return (_dax.addr != mmio_nullptr) ? &_dax : nullptr;
+    }
 
     void req_done();
     int64_t size();
@@ -42,18 +51,20 @@ public:
     bool ack_irq();
 
     static hw_driver* probe(hw_device* dev);
+
 private:
     struct fs_req {
-        fs_req(struct fuse_request* f) :fuse_req(f) {};
+        fs_req(fuse_request* f) : fuse_req(f) {};
         ~fs_req() {};
 
-        struct fuse_request* fuse_req;
+        fuse_request* fuse_req;
     };
 
     std::string _driver_name;
     fs_config _config;
+    dax_window _dax;
 
-    //maintains the virtio instance number for multiple drives
+    // maintains the virtio instance number for multiple drives
     static int _instance;
     int _id;
     // This mutex protects parallel make_request invocations

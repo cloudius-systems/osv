@@ -190,7 +190,9 @@ def start_osv_qemu(options):
             net_device_options.append('mac=%s' % options.mac)
 
         if options.networking:
-            if options.vhost:
+            if options.tap:
+                args += ["-netdev", "tap,id=hn%d,ifname=%s,script=no,downscript=no" % (idx, options.tap)]
+            elif options.vhost:
                 args += ["-netdev", "tap,id=hn%d,script=%s,vhost=on" % (idx, os.path.join(osv_base, "scripts/qemu-ifup.sh"))]
             else:
                 for bridge_helper_dir in ['/usr/libexec', '/usr/lib/qemu']:
@@ -489,6 +491,8 @@ if __name__ == "__main__":
                         help="bridge name for tap networking")
     parser.add_argument("-v", "--vhost", action="store_true",
                         help="needs root. tap networking and vhost")
+    parser.add_argument("-t", "--tap", action="store",
+                        help="tap interface name")
     parser.add_argument("-m", "--memsize", action="store", default="2G",
                         help="specify memory: ex. 1G, 2G, ...")
     parser.add_argument("-c", "--vcpus", action="store", default="4",
@@ -548,6 +552,8 @@ if __name__ == "__main__":
                         help="Path to the optional cloud-init image that should be attached to the instance")
     parser.add_argument("-k", "--kernel", action="store_true",
                         help="Run OSv in QEMU kernel mode as PVH.")
+    parser.add_argument("--kernel-path", action="store",
+                        help="path to kernel.elf. defaults to build/$mode/kernel.elf")
     parser.add_argument("--virtio", action="store", choices=["legacy","transitional","modern"], default="transitional",
                         help="specify virtio version: legacy, transitional or modern")
     parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default="x86_64",
@@ -558,7 +564,7 @@ if __name__ == "__main__":
     if cmdargs.arch == 'aarch64':
         cmdargs.kernel_file = os.path.join(osv_base, "build/%s/loader.img" % cmdargs.opt_path)
     else:
-        cmdargs.kernel_file = os.path.join(osv_base, "build/%s/loader-stripped.elf" % cmdargs.opt_path)
+        cmdargs.kernel_file = os.path.abspath(cmdargs.kernel_path or os.path.join(osv_base, "build/%s/kernel.elf" % cmdargs.opt_path))
     if not os.path.exists(cmdargs.image_file):
         raise Exception('Image file %s does not exist.' % cmdargs.image_file)
     if cmdargs.cloud_init_image:

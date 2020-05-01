@@ -10,40 +10,36 @@ before_install:
   - pushd docker && docker build -t osv/builder -f ./Dockerfile.builder --build-arg DIST="ubuntu-19.10" --build-arg GIT_BRANCH="ipv6" . && popd
   - docker run -it --privileged -d --name build osv/builder
 stages:
-  - build
-  - publish
+  - build_and_publish
 env:
   global:
     - CIRP_GITHUB_REPO_SLUG="osvunikernel/osv-nightly-releases"
 jobs:
   include:
-    - stage: build
+    - stage: build_and_publish
       script:
         - docker exec build ./scripts/build clean
         - docker exec build ./scripts/build-capstan-mpm-packages kernel
         - docker exec build ./scripts/build-capstan-mpm-packages unit_tests
+        - docker exec build ./scripts/build-capstan-mpm-packages monitoring
         - docker exec build ./scripts/osv-version.sh > /tmp/osv-version
         - export ARTIFACTS_DIR="$(mktemp -d)"
         - cp /tmp/osv-version "$ARTIFACTS_DIR"
         - docker cp build:/root/.capstan/repository/osv-loader/osv-loader.qemu "$ARTIFACTS_DIR"
         - gzip "$ARTIFACTS_DIR"/osv-loader.qemu
+        - docker cp build:/git-repos/osv/build/release/kernel-stripped.elf "$ARTIFACTS_DIR"/kernel.elf
+        - gzip "$ARTIFACTS_DIR"/kernel.elf
         - docker cp build:/root/.capstan/repository/osv-loader/index.yaml "$ARTIFACTS_DIR"
         - docker cp build:/root/.capstan/packages/osv.bootstrap.mpm "$ARTIFACTS_DIR"
         - docker cp build:/root/.capstan/packages/osv.bootstrap.yaml "$ARTIFACTS_DIR"
-        - docker cp build:/root/.capstan/packages/osv.unit-tests.mpm "$ARTIFACTS_DIR"
-        - docker cp build:/root/.capstan/packages/osv.unit-tests.yaml "$ARTIFACTS_DIR"
-        - docker cp build:/git-repos/osv/modules/tests/usr.manifest "$ARTIFACTS_DIR"/unit_tests.manifest
-        - ./.travis/cirp/cleanup1.sh
-        - ./.travis/cirp/store.sh "$ARTIFACTS_DIR"
-        - ./.travis/cirp/cleanup2.sh
-    - stage: publish
-      script:
-        - docker exec build ./scripts/osv-version.sh > /tmp/osv-version
-        - export ARTIFACTS_DIR="$(mktemp -d)"
-        - ./.travis/cirp/collect.sh "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.common-tests.mpm "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.common-tests.yaml "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.zfs-tests.mpm "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.zfs-tests.yaml "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.rofs-tests.mpm "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.rofs-tests.yaml "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.httpserver-monitoring-api.mpm "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.httpserver-monitoring-api.yaml "$ARTIFACTS_DIR"
         - ./.travis/cirp/cleanup4.sh
         - ./.travis/cirp/publish.sh "$ARTIFACTS_DIR" $(cat /tmp/osv-version)
         - ./.travis/cirp/cleanup5.sh
-      cache:
-        directories:
-          - /opt/cirp

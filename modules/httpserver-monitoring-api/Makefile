@@ -29,12 +29,15 @@ boost-libs := -lboost_system -lboost_filesystem
 TARGET = httpserver-api
 JSON_FILES := $(wildcard api-doc/listings/*.json)
 JSON_CC_FILES := $(subst .json,.json.cc,$(subst api-doc/listings/,autogen/,$(JSON_FILES)))
-CPP_FILES := $(addprefix json/,$(notdir $(wildcard ../httpserver-api/json/*.cc))) \
-	api/fs.cc api/os.cc api/network.cc api/hardware.cc api/env.cc api/file.cc api/api.cc \
-	common.cc main.cc plain_server.cc server.cc connection.cc matcher.cc \
+JSON_OBJ_FILES := $(addprefix obj/,$(JSON_CC_FILES:.cc=.o))
+
+API_CC_FILES := $(addprefix api/,fs.cc os.cc network.cc hardware.cc env.cc file.cc api.cc)
+SERVER_CC_FILES := common.cc main.cc plain_server.cc server.cc connection.cc matcher.cc \
 	reply.cc connection_manager.cc mime_types.cc request_handler.cc \
 	transformers.cc global_server.cc request_parser.cc handlers.cc \
-	path_holder.cc routes.cc $(JSON_CC_FILES)
+	path_holder.cc routes.cc
+CPP_FILES := $(addprefix json/,$(notdir $(wildcard ../httpserver-api/json/*.cc))) \
+	$(API_CC_FILES) $(SERVER_CC_FILES)
 OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
 
 DYN_LIBS = -lpthread -ldl -L../libtools -ltools $(boost-libs)
@@ -51,7 +54,7 @@ module: all
 all: lib$(TARGET).so
 	$(call very-quiet, $(SRC)/scripts/manifest_from_host.sh lib$(TARGET).so > usr.manifest)
 
-lib$(TARGET).so: $(OBJ_FILES)
+lib$(TARGET).so: $(JSON_OBJ_FILES) $(OBJ_FILES)
 	$(call quiet, $(CXX) $(CXXFLAGS) -shared $(STATIC_LIBS) -o $@ $^ $(DYN_LIBS), LINK $@)
 
 ifneq ($(MAKECMDGOALS),clean)
@@ -63,7 +66,11 @@ autogen/%.cc: api-doc/listings/% ../httpserver-api/json2code.py
 	$(call quiet,../httpserver-api/json2code.py -outdir autogen -f $< -ns json, GEN $@)
 
 $(OBJ_FILES): obj/%.o: ../httpserver-api/%.cc
-	$(call very-quiet, mkdir -p obj/stub obj/json obj/api obj/autogen)
+	$(call very-quiet, mkdir -p obj/json obj/api)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -MMD  -o $@ $<, CXX $@)
+
+$(JSON_OBJ_FILES): obj/autogen/%.o: autogen/%.cc
+	$(call very-quiet, mkdir -p obj/autogen)
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -MMD  -o $@ $<, CXX $@)
 
 clean:

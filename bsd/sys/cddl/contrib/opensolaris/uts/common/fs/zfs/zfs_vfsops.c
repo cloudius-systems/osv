@@ -61,6 +61,7 @@
 #include <sys/dmu_objset.h>
 #include <sys/spa_boot.h>
 #include "zfs_comutil.h"
+#include <fs/vfs/vfs_id.h>
 
 #if notyet
 struct mtx zfs_debug_mtx;
@@ -1009,7 +1010,7 @@ zfs_domount(vfs_t *vfsp, const char *osname)
 	ASSERT((fsid_guid & ~((1ULL<<56)-1)) == 0);
 	vfsp->vfs_fsid.__val[0] = fsid_guid;
 	/* fsid type not included */
-	vfsp->vfs_fsid.__val[1] = fsid_guid >> 32;
+	vfsp->vfs_fsid.__val[1] = (ZFS_ID | fsid_guid) >> 32;
 
 	/*
 	 * Set features for file system.

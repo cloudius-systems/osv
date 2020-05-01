@@ -26,6 +26,7 @@
 #include <sys/types.h>
 #include <osv/device.h>
 #include <osv/debug.h>
+#include <fs/vfs/vfs_id.h>
 #include <iomanip>
 #include <iostream>
 
@@ -43,6 +44,8 @@ std::atomic<long> rofs_block_allocated(0);
 std::atomic<long> rofs_cache_reads(0);
 std::atomic<long> rofs_cache_misses(0);
 #endif
+
+std::atomic<long> rofs_mounts(0);
 
 struct vfsops rofs_vfsops = {
     rofs_mount,		/* mount */
@@ -168,6 +171,10 @@ rofs_mount(struct mount *mp, const char *dev, int flags, const void *data)
     mp->m_data = rofs;
     mp->m_dev = device;
 
+    rofs_mounts += 1;
+    mp->m_fsid.__val[0] = rofs_mounts.load();
+    mp->m_fsid.__val[1] = ROFS_ID >> 32;
+
     rofs_set_vnode(mp->m_root->d_vnode, rofs->inodes);
 
     print("[rofs] returning from mount\n");
@@ -196,6 +203,9 @@ static int rofs_statfs(struct mount *mp, struct statfs *statp)
     statp->f_files = sb->inodes_count; //Needs to be inode count
 
     statp->f_namelen = 0; //FIXME - unlimited ROFS_FILENAME_MAXLEN;
+
+    statp->f_fsid.__val[0] = mp->m_fsid.__val[0];
+    statp->f_fsid.__val[1] = mp->m_fsid.__val[1];
 
     return 0;
 }

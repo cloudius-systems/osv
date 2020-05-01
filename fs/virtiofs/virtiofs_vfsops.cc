@@ -13,36 +13,21 @@
 #include "virtiofs.hh"
 #include "virtiofs_i.hh"
 
-static int virtiofs_mount(struct mount *mp, const char *dev, int flags, const void *data);
-static int virtiofs_sync(struct mount *mp);
-static int virtiofs_statfs(struct mount *mp, struct statfs *statp);
-static int virtiofs_unmount(struct mount *mp, int flags);
+static std::atomic<uint64_t> fuse_unique_id(1);
 
-#define virtiofs_vget ((vfsop_vget_t)vfs_nullop)
-
-struct vfsops virtiofs_vfsops = {
-    virtiofs_mount,		/* mount */
-    virtiofs_unmount,	/* unmount */
-    virtiofs_sync,		/* sync */
-    virtiofs_vget,      /* vget */
-    virtiofs_statfs,	/* statfs */
-    &virtiofs_vnops	    /* vnops */
-};
-
-std::atomic<uint64_t> fuse_unique_id(1);
-
-int fuse_req_send_and_receive_reply(fuse_strategy* strategy, uint32_t opcode, uint64_t nodeid,
-        void *input_args_data, size_t input_args_size, void *output_args_data, size_t output_args_size)
+int fuse_req_send_and_receive_reply(fuse_strategy* strategy, uint32_t opcode,
+    uint64_t nodeid, void* input_args_data, size_t input_args_size,
+    void* output_args_data, size_t output_args_size)
 {
-    auto *req = new (std::nothrow) fuse_request();
-
-    req->in_header.len = 0; //TODO
+    std::unique_ptr<fuse_request> req {new (std::nothrow) fuse_request()};
+    if (!req) {
+        return ENOMEM;
+    }
+    req->in_header.len = sizeof(req->in_header) + input_args_size;
     req->in_header.opcode = opcode;
-    req->in_header.unique = fuse_unique_id.fetch_add(1, std::memory_order_relaxed);
+    req->in_header.unique = fuse_unique_id.fetch_add(1,
+        std::memory_order_relaxed);
     req->in_header.nodeid = nodeid;
-    req->in_header.uid = 0;
-    req->in_header.gid = 0;
-    req->in_header.pid = 0;
 
     req->input_args_data = input_args_data;
     req->input_args_size = input_args_size;
@@ -51,18 +36,17 @@ int fuse_req_send_and_receive_reply(fuse_strategy* strategy, uint32_t opcode, ui
     req->output_args_size = output_args_size;
 
     assert(strategy->drv);
-    strategy->make_request(strategy->drv, req);
-    fuse_req_wait(req);
+    strategy->make_request(strategy->drv, req.get());
+    fuse_req_wait(req.get());
 
     int error = -req->out_header.error;
-    delete req;
 
     return error;
 }
 
-void virtiofs_set_vnode(struct vnode *vnode, struct virtiofs_inode *inode)
+void virtiofs_set_vnode(struct vnode* vnode, struct virtiofs_inode* inode)
 {
-    if (vnode == nullptr || inode == nullptr) {
+    if (!vnode || !inode) {
         return;
     }
 
@@ -82,81 +66,85 @@ void virtiofs_set_vnode(struct vnode *vnode, struct virtiofs_inode *inode)
     vnode->v_size = inode->attr.size;
 }
 
-static int
-virtiofs_mount(struct mount *mp, const char *dev, int flags, const void *data) {
-    struct device *device;
-    int error = -1;
+static int virtiofs_mount(struct mount* mp, const char* dev, int flags,
+    const void* data)
+{
+    struct device* device;
 
-    error = device_open(dev + 5, DO_RDWR, &device);
+    int error = device_open(dev + strlen("/dev/"), DO_RDWR, &device);
     if (error) {
         kprintf("[virtiofs] Error opening device!\n");
         return error;
     }
 
-    mp->m_dev = device;
-
-    auto *in_args = new(std::nothrow) fuse_init_in();
+    std::unique_ptr<fuse_init_in> in_args {new (std::nothrow) fuse_init_in()};
+    std::unique_ptr<fuse_init_out> out_args {new (std::nothrow) fuse_init_out};
+    if (!in_args || !out_args) {
+        return ENOMEM;
+    }
     in_args->major = FUSE_KERNEL_VERSION;
     in_args->minor = FUSE_KERNEL_MINOR_VERSION;
     in_args->max_readahead = PAGE_SIZE;
-    in_args->flags = 0; //TODO Investigate which flags to set
+    in_args->flags = 0; // TODO: Verify that we need not set any flag
 
-    auto *out_args = new(std::nothrow) fuse_init_out();
-
-    auto *strategy = reinterpret_cast<fuse_strategy *>(device->private_data);
+    auto* strategy = static_cast<fuse_strategy*>(device->private_data);
     error = fuse_req_send_and_receive_reply(strategy, FUSE_INIT, FUSE_ROOT_ID,
-            in_args, sizeof(*in_args), out_args, sizeof(*out_args));
-
-    if (!error) {
-        virtiofs_debug("Initialized fuse filesystem with version major: %d, minor: %d\n",
-                       out_args->major, out_args->minor);
-
-        auto *root_node = new virtiofs_inode();
-        root_node->nodeid = FUSE_ROOT_ID;
-        root_node->attr.mode = S_IFDIR;
-
-        virtiofs_set_vnode(mp->m_root->d_vnode, root_node);
-
-        mp->m_data = strategy;
-        mp->m_dev = device;
-    } else {
-        kprintf("[virtiofs] Failed to initialized fuse filesystem!\n");
+        in_args.get(), sizeof(*in_args), out_args.get(), sizeof(*out_args));
+    if (error) {
+        kprintf("[virtiofs] Failed to initialize fuse filesystem!\n");
+        return error;
     }
+    // TODO: Handle version negotiation
 
-    delete out_args;
-    delete in_args;
+    virtiofs_debug("Initialized fuse filesystem with version major: %d, "
+                   "minor: %d\n", out_args->major, out_args->minor);
 
-    return error;
-}
+    auto* root_node {new (std::nothrow) virtiofs_inode()};
+    if (!root_node) {
+        return ENOMEM;
+    }
+    root_node->nodeid = FUSE_ROOT_ID;
+    root_node->attr.mode = S_IFDIR;
 
-static int virtiofs_sync(struct mount *mp) {
+    virtiofs_set_vnode(mp->m_root->d_vnode, root_node);
+
+    mp->m_data = strategy;
+    mp->m_dev = device;
+
     return 0;
 }
 
-static int virtiofs_statfs(struct mount *mp, struct statfs *statp)
+static int virtiofs_sync(struct mount* mp)
 {
-    //TODO
-    //struct virtiofs_info *virtiofs = (struct virtiofs_info *) mp->m_data;
+    return 0;
+}
 
-    //statp->f_bsize = sb->block_size;
+static int virtiofs_statfs(struct mount* mp, struct statfs* statp)
+{
+    // TODO: Call FUSE_STATFS
 
-    // Total blocks
-    //statp->f_blocks = sb->structure_info_blocks_count + sb->structure_info_first_block;
     // Read only. 0 blocks free
     statp->f_bfree = 0;
     statp->f_bavail = 0;
 
     statp->f_ffree = 0;
-    //statp->f_files = sb->inodes_count; //Needs to be inode count
-
-    statp->f_namelen = 0; //FIXME
 
     return 0;
 }
 
-static int
-virtiofs_unmount(struct mount *mp, int flags)
+static int virtiofs_unmount(struct mount* mp, int flags)
 {
-    struct device *dev = mp->m_dev;
+    struct device* dev = mp->m_dev;
     return device_close(dev);
 }
+
+#define virtiofs_vget ((vfsop_vget_t)vfs_nullop)
+
+struct vfsops virtiofs_vfsops = {
+    virtiofs_mount,		/* mount */
+    virtiofs_unmount,	/* unmount */
+    virtiofs_sync,		/* sync */
+    virtiofs_vget,      /* vget */
+    virtiofs_statfs,	/* statfs */
+    &virtiofs_vnops	    /* vnops */
+};

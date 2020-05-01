@@ -8,6 +8,8 @@
 #include <unistd.h>
 #include <osv/mount.h>
 #include <mntent.h>
+#include <osv/printf.hh>
+#include <osv/mempool.hh>
 
 #include "fs/pseudofs/pseudofs.hh"
 
@@ -30,6 +32,47 @@ static string sysfs_distance()
     return std::string("10");
 }
 
+using namespace memory;
+static string sysfs_free_page_ranges()
+{
+    stats::page_ranges_stats stats;
+    stats::get_page_ranges_stats(stats);
+
+    std::ostringstream os;
+    if (stats.order[page_ranges_max_order].ranges_num) {
+        osv::fprintf(os, "huge %04d %012ld\n", //TODO: Show in GB/MB/KB
+           stats.order[page_ranges_max_order].ranges_num, stats.order[page_ranges_max_order].bytes);
+    }
+
+    for (int order = page_ranges_max_order; order--; ) {
+        if (stats.order[order].ranges_num) {
+            osv::fprintf(os, "  %02d %04d %012ld\n",
+               order + 1, stats.order[order].ranges_num, stats.order[order].bytes);
+        }
+    }
+
+    return os.str();
+}
+
+static string sysfs_memory_pools()
+{
+    stats::pool_stats stats;
+    stats::get_global_l2_stats(stats);
+
+    std::ostringstream os;
+    osv::fprintf(os, "global l2 (in batches) %02d %02d %02d %02d\n",
+        stats._max, stats._watermark_lo, stats._watermark_hi, stats._nr);
+
+    for (auto cpu : sched::cpus) {
+        stats::pool_stats stats;
+        stats::get_l1_stats(cpu->id, stats);
+        osv::fprintf(os, "cpu %d l1 (in pages) %03d %03d %03d %03d\n",
+            cpu->id, stats._max, stats._watermark_lo, stats._watermark_hi, stats._nr);
+    }
+
+    return os.str();
+}
+
 static int
 sysfs_mount(mount* mp, const char *dev, int flags, const void* data)
 {
@@ -49,8 +92,16 @@ sysfs_mount(mount* mp, const char *dev, int flags, const void* data)
     auto devices = make_shared<pseudo_dir_node>(inode_count++);
     devices->add("system", system);
 
+    auto memory = make_shared<pseudo_dir_node>(inode_count++);
+    memory->add("free_page_ranges", inode_count++, sysfs_free_page_ranges);
+    memory->add("pools", inode_count++, sysfs_memory_pools);
+
+    auto osv_extension = make_shared<pseudo_dir_node>(inode_count++);
+    osv_extension->add("memory", memory);
+
     auto* root = new pseudo_dir_node(vp->v_ino);
     root->add("devices", devices);
+    root->add("osv", osv_extension);
 
     vp->v_data = static_cast<void*>(root);
 

@@ -1,4 +1,4 @@
-module: usr.manifest build_all_tests
+module: usr.manifest common.manifest fs.manifest build_all_tests
 
 # Paths set by scripts/build
 src := $(OSV_BASE)
@@ -136,7 +136,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-sigaltstack.so tst-fread.so tst-tcp-cork.so tst-tcp-v6.so \
 	tst-calloc.so tst-crypt.so tst-non-fpic.so tst-small-malloc.so \
 	tst-mmx-fpu.so tst-getopt.so tst-getopt-pie.so tst-non-pie.so tst-semaphore.so \
-	tst-elf-init.so tst-socket-timestamp.so tst-pktinfo.so
+	tst-elf-init.so tst-realloc.so tst-socket-timestamp.so tst-pktinfo.so
 
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
@@ -187,7 +187,7 @@ $(out)/tests/tst-tls-gold.so: \
 
 boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system.so))
 
-boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
+common-boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	misc-bdev-write.so misc-bdev-wlatency.so misc-bdev-rw.so \
 	tst-promise.so tst-dlfcn.so tst-stat.so tst-wait-for.so \
 	tst-bsd-tcp1.so tst-bsd-tcp1-zsnd.so tst-bsd-tcp1-zrcv.so \
@@ -195,6 +195,8 @@ boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	tst-poll.so tst-bitset-iter.so tst-timer-set.so tst-clock.so \
 	tst-rcu-hashtable.so tst-unordered-ring-mpsc.so \
 	tst-seek.so tst-tcp-v6.so
+
+boost-tests := $(common-boost-tests)
 
 rofs-only-boost-tests :=
 
@@ -206,6 +208,7 @@ $(boost-tests:%=$(out)/tests/%): LIBS += \
 	-lboost_unit_test_framework \
 	-lboost_filesystem
 
+common-tests := $(tests) $(common-boost-tests)
 tests += $(boost-tests)
 
 solaris-tests := tst-solaris-taskq.so
@@ -248,12 +251,24 @@ usr.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FOR
 	@ldd $(addprefix $(out)/tests/,$(boost-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@
 	@echo $(all_tests) | tr ' ' '\n' | grep -v "tests/rofs/tst-.*.so" | awk '{print "/" $$0 ": ./" $$0}' >> $@
 	@echo $(all_tests) | tr ' ' '\n' | grep "tests/rofs/tst-.*.so" | sed 's/\.so//' | awk 'BEGIN { FS = "/" } ; { print "/tests/" $$3 "-rofs.so: ./tests/" $$2 "/" $$3 ".so"}' >> $@
-	./create_static.sh $(out) $(fs_type)
+	./create_static.sh $(out) usr.manifest $(fs_type)
 .PHONY: FORCE
 FORCE:
 
+common.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FORCE
+	@echo "  generating modules/tests/common.manifest"
+	@cat usr.manifest.skel > $@
+	@ldd $(addprefix $(out)/tests/,$(boost-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@
+	@echo $(common-tests) $(solaris-tests) | tr ' ' '\n' | awk '{print "/tests/" $$0 ": ./tests/" $$0}' >> $@
+
+fs.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) FORCE
+	@echo "  generating modules/tests/fs.manifest"
+	@echo $(specific-fs-tests) $($(fs_type)-only-boost-tests) | tr ' ' '\n' | grep -v "rofs/tst-.*.so" | awk '{print "/tests/" $$0 ": ./tests/" $$0}' > $@
+	@echo $(specific-fs-tests) $($(fs_type)-only-boost-tests) | tr ' ' '\n' | grep "rofs/tst-.*.so" | sed 's/\.so//' | awk 'BEGIN { FS = "/" } ; { print "/tests/" $$2 "-rofs.so: ./tests/" $$1 "/" $$2 ".so"}' >> $@
+	./create_static.sh $(out) fs.manifest $(fs_type)
+
 clean:
-	-rm -f usr.manifest
+	-rm -f usr.manifest common.manifest fs.manifest
 
 ifneq ($(MAKECMDGOALS),clean)
 include $(shell test -d $(out)/tests && find $(out)/tests -name '*.d')

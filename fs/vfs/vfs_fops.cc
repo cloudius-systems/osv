@@ -157,7 +157,7 @@ void vfs_file::sync(off_t start, off_t end)
 // eviction that will hold the mmu-side lock that protects the mappings
 // Always follow that order. We however can't just get rid of the mmu-side lock,
 // because not all invalidations will be synchronous.
-int vfs_file::get_arcbuf(void* key, off_t offset)
+int vfs_file::read_page_from_cache(void* key, off_t offset)
 {
     struct vnode *vp = f_dentry->d_vnode;
 

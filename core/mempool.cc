@@ -541,12 +541,12 @@ void reclaimer::wait_for_memory(size_t mem)
 
 class page_range_allocator {
 public:
-    static constexpr unsigned max_order = 16;
+    static constexpr unsigned max_order = page_ranges_max_order;
 
     page_range_allocator() : _deferred_free(nullptr) { }
 
     template<bool UseBitmap = true>
-    page_range* alloc(size_t size);
+    page_range* alloc(size_t size, bool contiguous = true);
     page_range* alloc_aligned(size_t size, size_t offset, size_t alignment,
                               bool fill = false);
     void free(page_range* pr);
@@ -569,6 +569,22 @@ public:
             size += list.size();
         }
         return size;
+    }
+
+    void stats(stats::page_ranges_stats& stats) const {
+        stats.order[max_order].ranges_num = _free_huge.size();
+        stats.order[max_order].bytes = 0;
+        for (auto& pr : _free_huge) {
+            stats.order[max_order].bytes += pr.size;
+        }
+
+        for (auto order = max_order; order--;) {
+            stats.order[order].ranges_num = _free[order].size();
+            stats.order[order].bytes = 0;
+            for (auto& pr : _free[order]) {
+                stats.order[order].bytes += pr.size;
+            }
+        }
     }
 
 private:
@@ -678,7 +694,7 @@ void page_range_allocator::bitmap_allocator<T>::deallocate(T* p, size_t n)
 }
 
 template<bool UseBitmap>
-page_range* page_range_allocator::alloc(size_t size)
+page_range* page_range_allocator::alloc(size_t size, bool contiguous)
 {
     auto exact_order = ilog2_roundup(size / page_size);
     if (exact_order > max_order) {
@@ -692,20 +708,22 @@ page_range* page_range_allocator::alloc(size_t size)
 
     page_range* range = nullptr;
     if (!bitset) {
-        if (!exact_order || _free[exact_order - 1].empty()) {
+        if (!contiguous || !exact_order || _free[exact_order - 1].empty()) {
             return nullptr;
         }
-        // TODO: This linear search makes worst case complexity of the allocator
-        // O(n). It would be better to fall back to non-contiguous allocation
-        // and make worst case complexity depend on the size of requested memory
-        // block and the logarithm of the number of free huge page ranges.
+        // This linear search makes worst case complexity of the allocator
+        // O(n). Unfortunately we do not have choice for contiguous allocation
+        // so let us hope there is large enough range.
         for (auto&& pr : _free[exact_order - 1]) {
             if (pr.size >= size) {
                 range = &pr;
+                remove_list(exact_order - 1, *range);
                 break;
             }
         }
-        return nullptr;
+        if (!range) {
+            return nullptr;
+        }
     } else if (order == max_order) {
         range = &*_free_huge.rbegin();
         if (range->size < size) {
@@ -820,7 +838,32 @@ void page_range_allocator::for_each(unsigned min_order, Func f)
     }
 }
 
-static void* malloc_large(size_t size, size_t alignment, bool block = true)
+namespace stats {
+    void get_page_ranges_stats(page_ranges_stats &stats)
+    {
+        WITH_LOCK(free_page_ranges_lock) {
+            free_page_ranges.stats(stats);
+        }
+    }
+}
+
+static void* mapped_malloc_large(size_t size, size_t offset)
+{
+    //TODO: For now pre-populate the memory, in future consider doing lazy population
+    void* obj = mmu::map_anon(nullptr, size, mmu::mmap_populate, mmu::perm_read | mmu::perm_write);
+    size_t* ret_header = static_cast<size_t*>(obj);
+    *ret_header = size;
+    return obj + offset;
+}
+
+static void mapped_free_large(void *object)
+{
+    object = align_down(object - 1, mmu::page_size);
+    size_t* ret_header = static_cast<size_t*>(object);
+    mmu::munmap(object, *ret_header);
+}
+
+static void* malloc_large(size_t size, size_t alignment, bool block = true, bool contiguous = true)
 {
     auto requested_size = size;
     size_t offset;
@@ -832,6 +875,14 @@ static void* malloc_large(size_t size, size_t alignment, bool block = true)
     size += offset;
     size = align_up(size, page_size);
 
+    // Use mmap if requested memory greater than "huge page" size
+    // and does not need to be contiguous
+    if (size >= mmu::huge_page_size && !contiguous) {
+        void* obj = mapped_malloc_large(size, offset);
+        trace_memory_malloc_large(obj, requested_size, size, alignment);
+        return obj;
+    }
+
     while (true) {
         WITH_LOCK(free_page_ranges_lock) {
             reclaimer_thread.wait_for_minimum_memory();
@@ -839,7 +890,7 @@ static void* malloc_large(size_t size, size_t alignment, bool block = true)
             if (alignment > page_size) {
                 ret_header = free_page_ranges.alloc_aligned(size, page_size, alignment);
             } else {
-                ret_header = free_page_ranges.alloc(size);
+                ret_header = free_page_ranges.alloc(size, contiguous);
             }
             if (ret_header) {
                 on_alloc(size);
@@ -847,6 +898,11 @@ static void* malloc_large(size_t size, size_t alignment, bool block = true)
                 obj += offset;
                 trace_memory_malloc_large(obj, requested_size, size, alignment);
                 return obj;
+            } else if (!contiguous) {
+                // If we failed to get contiguous memory allocation and
+                // the caller does not require one let us use map-based allocation
+                // which we do after the loop below
+                break;
             }
             if (block)
                 reclaimer_thread.wait_for_memory(size);
@@ -854,6 +910,15 @@ static void* malloc_large(size_t size, size_t alignment, bool block = true)
                 return nullptr;
         }
     }
+
+    // We are deliberately executing this code here because doing it
+    // in WITH_LOCK section above, would likely lead to a deadlock,
+    // as map_anon() eventually would be pulling memory from free_page_ranges
+    // to satisfy the request and even worse this method might get
+    // called recursively.
+    void* obj = mapped_malloc_large(size, offset);
+    trace_memory_malloc_large(obj, requested_size, size, alignment);
+    return obj;
 }
 
 void shrinker::deactivate_shrinker()
@@ -1067,14 +1132,23 @@ static void free_large(void* obj)
     free_page_range(static_cast<page_range*>(obj));
 }
 
-static unsigned large_object_size(void *obj)
+static size_t large_object_offset(void *&obj)
 {
+    void *original_obj = obj;
     obj = align_down(obj - 1, page_size);
+    return reinterpret_cast<uint64_t>(original_obj) - reinterpret_cast<uint64_t>(obj);
+}
+
+static size_t large_object_size(void *obj)
+{
+    size_t offset = large_object_offset(obj);
     auto header = static_cast<page_range*>(obj);
-    return header->size;
+    return header->size - offset;
 }
 
 namespace page_pool {
+
+static std::vector<stats::pool_stats> l1_pool_stats;
 
 // L1-pool (Percpu page buffer pool)
 //
@@ -1090,6 +1164,7 @@ struct l1 {
         : _fill_thread(sched::thread::make([] { fill_thread(); },
             sched::thread::attr().pin(cpu).name(osv::sprintf("page_pool_l1_%d", cpu->id))))
     {
+        cpu_id = cpu->id;
         _fill_thread->start();
     }
 
@@ -1113,12 +1188,15 @@ struct l1 {
     void* pop()
     {
         assert(nr);
+        l1_pool_stats[cpu_id]._nr = nr - 1;
         return _pages[--nr];
     }
     void push(void* page)
     {
         assert(nr < 512);
         _pages[nr++] = page;
+        l1_pool_stats[cpu_id]._nr = nr;
+
     }
     void* top() { return _pages[nr - 1]; }
     void wake_thread() { _fill_thread->wake(); }
@@ -1130,6 +1208,7 @@ struct l1 {
     static constexpr size_t watermark_lo = max * 1 / 4;
     static constexpr size_t watermark_hi = max * 3 / 4;
     size_t nr = 0;
+    unsigned int cpu_id;
 
 private:
     std::unique_ptr<sched::thread> _fill_thread;
@@ -1219,6 +1298,14 @@ public:
         return true;
     }
 
+    void stats(stats::pool_stats &stats)
+    {
+        stats._nr = get_nr();
+        stats._max = _max;
+        stats._watermark_lo = _watermark_lo;
+        stats._watermark_hi = _watermark_hi;
+    }
+
     void fill_thread();
     void refill();
     void unfill();
@@ -1244,6 +1331,7 @@ static sched::cpu::notifier _notifier([] () {
     if (smp_allocator_cnt++ == sched::cpus.size()) {
         smp_allocator = true;
     }
+    l1_pool_stats.resize(sched::cpus.size());
 });
 static inline l1& get_l1()
 {
@@ -1420,6 +1508,21 @@ void l2::free_batch(page_batch& batch)
     }
 }
 
+}
+
+namespace stats {
+    void get_global_l2_stats(pool_stats &stats)
+    {
+        page_pool::global_l2.stats(stats);
+    }
+
+    void get_l1_stats(unsigned int cpu_id, pool_stats &stats)
+    {
+        stats._nr = page_pool::l1_pool_stats[cpu_id]._nr;
+        stats._max = page_pool::l1::max;
+        stats._watermark_lo = page_pool::l1::watermark_lo;
+        stats._watermark_hi = page_pool::l1::watermark_hi;
+    }
 }
 
 static void* early_alloc_page()
@@ -1689,7 +1792,7 @@ static inline void* std_malloc(size_t size, size_t alignment)
                                        memory::alloc_page());
         trace_memory_malloc_page(ret, size, mmu::page_size, alignment);
     } else {
-        ret = memory::malloc_large(size, alignment);
+        ret = memory::malloc_large(size, alignment, true, false);
     }
     memory::tracker_remember(ret, size);
     return ret;
@@ -1711,6 +1814,12 @@ void* calloc(size_t nmemb, size_t size)
 
 static size_t object_size(void *object)
 {
+    if (!mmu::is_linear_mapped(object, 0)) {
+        size_t offset = memory::large_object_offset(object);
+        size_t* ret_header = static_cast<size_t*>(object);
+        return *ret_header - offset;
+    }
+
     switch (mmu::get_mem_area(object)) {
     case mmu::mem_area::main:
         return memory::large_object_size(object);
@@ -1760,6 +1869,11 @@ void free(void* object)
         return;
     }
     memory::tracker_forget(object);
+
+    if (!mmu::is_linear_mapped(object, 0)) {
+        return memory::mapped_free_large(object);
+    }
+
     switch (mmu::get_mem_area(object)) {
     case mmu::mem_area::page:
         object = mmu::translate_mem_area(mmu::mem_area::page,
@@ -1969,7 +2083,7 @@ void* alloc_phys_contiguous_aligned(size_t size, size_t align, bool block)
     assert(is_power_of_two(align));
     // make use of the standard large allocator returning properly aligned
     // physically contiguous memory:
-    auto ret = malloc_large(size, align, block);
+    auto ret = malloc_large(size, align, block, true);
     assert (!(reinterpret_cast<uintptr_t>(ret) & (align - 1)));
     return ret;
 }

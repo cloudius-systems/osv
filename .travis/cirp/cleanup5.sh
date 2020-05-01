@@ -33,5 +33,5 @@ fi
 . .travis/cirp/install.sh
 
 ci-release-publisher cleanup_publish
-ci-release-publisher cleanup_store --scope current-build previous-finished-builds \
-                                   --release complete incomplete
+#ci-release-publisher cleanup_store --scope current-build previous-finished-builds \
+#                                   --release complete incomplete

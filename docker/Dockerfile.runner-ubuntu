@@ -8,7 +8,7 @@
 # This Docker file defines a container intended to run and test OSv
 # It comes with capstan that can pull kernel and pre-built MPM packages
 #
-ARG DIST_VERSION=19.04
+ARG DIST_VERSION=19.10
 FROM ubuntu:${DIST_VERSION}
 
 ENV DEBIAN_FRONTEND noninteractive
@@ -21,12 +21,11 @@ RUN apt-get update -y && apt-get install -y \
 git \
 python3 \
 curl \
-wget \
 qemu-system-x86 \
 qemu-utils
 
 # - prepare directories
-RUN mkdir /git-repos /result
+RUN mkdir /git-repos
 
 # - clone OSv
 WORKDIR /git-repos
@@ -35,7 +34,7 @@ ARG GIT_BRANCH=master
 RUN git clone --depth 1 -b ${GIT_BRANCH} --single-branch https://github.com/${GIT_ORG_OR_USER}/osv.git
 
 # - install Capstan
-RUN wget https://github.com/cloudius-systems/capstan/releases/latest/download/capstan -O /usr/local/bin/capstan
+ADD https://github.com/cloudius-systems/capstan/releases/latest/download/capstan /usr/local/bin/capstan
 RUN chmod u+x /usr/local/bin/capstan
 
 CMD /bin/bash
@@ -51,7 +50,7 @@ CMD /bin/bash
 #
 # Run the container FIRST time example:
 # docker run -it --privileged osv/runner-ubuntu
-# 
+#
 # To restart:
 # docker restart ID (from docker ps -a) && docker attach ID
 #

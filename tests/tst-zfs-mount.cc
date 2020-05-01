@@ -173,8 +173,9 @@ int main(int argc, char **argv)
 
     printf("file size = %lld\n", s.st_size);
 
-    report((((dev_t) st.f_fsid.__val[1] << 32) | st.f_fsid.__val[0]) == s.st_dev,
-           "st_dev must be equals to f_fsid");
+    report(statfs("/tmp", &st) == 0, "stat /tmp");
+    dev_t f_fsid = ((uint32_t)st.f_fsid.__val[0]) | ((dev_t) ((uint32_t)st.f_fsid.__val[1]) << 32);
+    report(f_fsid == s.st_dev, "st_dev must be equals to f_fsid");
 
     report(close(fd) == 0, "close fd");
 

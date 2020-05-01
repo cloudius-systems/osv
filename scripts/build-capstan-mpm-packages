@@ -237,6 +237,10 @@ created: $(date +'%Y-%m-%d %H:%M')
 description: "OSv kernel"
 platform: "$PLATFORM"
 EOF
+  #Copy kernel.elf
+  mkdir -p $CAPSTAN_LOCAL_REPO/repository/osv-kernel/
+  cp -a $OSV_BUILD/kernel.elf $CAPSTAN_LOCAL_REPO/repository/osv-kernel/osv-kernel.elf
+  cp $CAPSTAN_LOCAL_REPO/repository/osv-loader/index.yaml $CAPSTAN_LOCAL_REPO/repository/osv-kernel/index.yaml
 
   # Create bootstrap package
   prepare_package empty
@@ -258,14 +262,31 @@ build_httpserver_html5_cli_package() {
   build_mpm "httpserver-html5-cli"
 }
 
+build_httpserver_monitoring_package() {
+  build_osv_image "httpserver-monitoring-api" all none
+  build_mpm "httpserver-monitoring-api"
+}
+
 build_cli_package() {
   build_osv_image "lua,terminfo,cli" selected none
   build_mpm "cli"
 }
 
 build_unit_tests_package() {
-  build_osv_image "java-base,java-non-isolated,java-cmd,java-tests,tests,dl_tests,libz" selected none
-  build_mpm "tests"
+  #First build common tests
+  build_osv_image "java-base,java-non-isolated,java-cmd,java-tests,tests,dl_tests,libz" selected none fs=zfs
+  cp "$OSV_ROOT/modules/tests/common.manifest" "$OSV_ROOT/build/release/append.manifest"
+  cd "$OSV_ROOT" && ./scripts/build -j4 image="java-base,java-non-isolated,java-cmd,java-tests,dl_tests,libz" export=selected usrskel=none --append-manifest
+  build_mpm "common-tests"
+  #Build ZFS tests
+  cp "$OSV_ROOT/modules/tests/fs.manifest" "$OSV_ROOT/build/release/append.manifest"
+  cd "$OSV_ROOT" && ./scripts/build -j4 image="empty" export=selected usrskel=none --append-manifest
+  build_mpm "zfs-tests"
+  #Build ROFS tests
+  cd "$OSV_ROOT" && ./scripts/build -j4 image="tests" export=selected usrskel=none fs=rofs
+  cp "$OSV_ROOT/modules/tests/fs.manifest" "$OSV_ROOT/build/release/append.manifest"
+  cd "$OSV_ROOT" && ./scripts/build -j4 image="empty" export=selected usrskel=none --append-manifest
+  build_mpm "rofs-tests"
 }
 
 build_http_server_tests_package() {
@@ -304,14 +325,16 @@ build_openjdk11-zulu-package() {
 build_kernel_and_standard_osv_modules() {
   ASK=1
   build_osv_image_loader_and_bootstrap_package
-
-  build_httpserver_api_package
-  build_httpserver_html5_gui_package
-  build_httpserver_html5_cli_package
-  build_cli_package
+  build_unit_tests_package
 
   build_run_java_package
   build_and_publish_mpm golang
+
+  build_httpserver_api_package
+  build_httpserver_monitoring_package
+  build_http_server_tests_package
+  build_http_server_https_tests_package
+
   ASK=0
   build_and_publish_mpm libz
 }
@@ -333,6 +356,7 @@ build_java_example_apps() {
   build_and_publish_mpm apache-kafka native
   ASK=0
   build_and_publish_mpm vertx native
+  build_and_publish_mpm specjvm
 }
 
 build_other_example_apps() {
@@ -358,10 +382,6 @@ build_other_example_apps() {
 # ---- TESTS 
 build_test_apps() {
   ASK=1
-  build_unit_tests_package
-  build_http_server_tests_package
-  build_http_server_https_tests_package
-
   build_and_publish_mpm rust-example
   build_and_publish_mpm rust-httpserver
 
@@ -386,6 +406,9 @@ case "$1" in
   kernel_and_modules)
     echo "Building kernel and standard modules ..."
     build_kernel_and_standard_osv_modules;;
+  monitoring)
+    echo "Building httpserver monitoring mpm..."
+    build_httpserver_monitoring_package;;
   jdk)
     echo "Building Java 8 and 11 JREs ..."
     build_java_jdk_packages;;
@@ -398,6 +421,11 @@ case "$1" in
   unit_tests)
     echo "Building unit tests mpm..."
     build_unit_tests_package;;
+  unit_and_httpserver_api_tests)
+    echo "Building unit and httpserver-api tests mpm..."
+    build_unit_tests_package
+    build_http_server_tests_package
+    build_http_server_https_tests_package;;
   tests)
     echo "Building test apps ..."
     build_test_apps;;

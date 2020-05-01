@@ -200,7 +200,7 @@ class SupervisedProcess:
         return self.has_errors or self.process.returncode
 
     def write_line_to_input(self, line):
-        self.process.stdin.write(line + "\n")
+        self.process.stdin.write((line + "\n").encode())
         self.process.stdin.flush()
 
     def line_with_error(self):
