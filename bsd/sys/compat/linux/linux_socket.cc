@@ -57,6 +57,7 @@
 
 #include <bsd/sys/compat/linux/linux.h>
 #include <bsd/sys/compat/linux/linux_socket.h>
+#include <osv/stubbing.hh>
 
 #define __NEED_sa_family_t
 #include <bits/alltypes.h>
@@ -1081,7 +1082,10 @@ linux_recvmsg(int s, struct msghdr *msg, int flags, ssize_t* bytes)
 			goto bad;
 	}
 
-	assert(msg->msg_controllen == 0);
+	//TODO: Implement handling of ancillary data - see http://www.masterraghu.com/subjects/np/introduction/unix_network_programming_v1.3/ch14lev1sec6.html
+	if (msg->msg_controllen != 0) {
+		WARN_ONCE("linux_recvmsg: ignoring ancillary data (control message)!\n");
+	}
 	assert(msg->msg_control == NULL);
 
 #if 0
