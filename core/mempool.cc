@@ -2014,6 +2014,11 @@ void* realloc(void* obj, size_t size)
     return buf;
 }
 
+extern "C" void *reallocarray(void *ptr, size_t nmemb, size_t size)
+{
+    return realloc(ptr, nmemb * size);
+}
+
 size_t malloc_usable_size(void* obj)
 {
     if ( obj == nullptr ) {
