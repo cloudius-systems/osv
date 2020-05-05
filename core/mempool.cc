@@ -2014,9 +2014,14 @@ void* realloc(void* obj, size_t size)
     return buf;
 }
 
-extern "C" void *reallocarray(void *ptr, size_t nmemb, size_t size)
+extern "C" void *reallocarray(void *ptr, size_t nmemb, size_t elem_size)
 {
-    return realloc(ptr, nmemb * size);
+    size_t bytes;
+    if (__builtin_mul_overflow(nmemb, elem_size, &bytes)) {
+        errno = ENOMEM;
+        return 0;
+    }
+    return realloc(ptr, nmemb * elem_size);
 }
 
 size_t malloc_usable_size(void* obj)
