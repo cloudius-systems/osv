@@ -443,6 +443,13 @@ int pthread_mutex_timedlock(pthread_mutex_t *m,
     return EINVAL;
 }
 
+int pthread_mutex_clocklock(pthread_mutex_t *m,
+                            clockid_t clock,
+                            const struct timespec *abs_timeout)
+{
+    WARN_STUBBED();
+    return EINVAL;
+}
 
 int pthread_mutex_unlock(pthread_mutex_t *m)
 {
@@ -614,6 +621,15 @@ int pthread_cond_timedwait(pthread_cond_t *__restrict cond,
         assert(0); // pthread_cond_init() will never allow this case
     }
     return from_libc(cond)->wait(from_libc(mutex), &tmr);
+}
+
+int pthread_cond_clockwait(pthread_cond_t *__restrict cond,
+                           pthread_mutex_t *__restrict mutex,
+                           clockid_t clock_id,
+                           const struct timespec* __restrict ts)
+{
+    WARN_STUBBED();
+    return EINVAL;
 }
 
 int pthread_attr_init(pthread_attr_t *attr)
