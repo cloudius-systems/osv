@@ -15,6 +15,7 @@
 #include <netinet/in.h>
 #include <arpa/inet.h>
 
+#include <string>
 #include <thread>
 
 /* To compile on Linux: g++ tests/tst-sendfile.cc -Wall -lpthread -std=c++0x */
