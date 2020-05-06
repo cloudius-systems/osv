@@ -55,8 +55,6 @@
 
 #include <bsd/porting/netport.h>
 
-int aok;
-
 int
 libzfs_errno(libzfs_handle_t *hdl)
 {

@@ -5248,14 +5248,6 @@ pool_status_check(const char *name, zfs_ioc_namecheck_t type)
 	return (error);
 }
 
-#ifdef __OSV__
-
-// really from zvol.c, but we don't build that yet
-void *zfsdev_state;
-
-#endif
-
-
 /*
  * Find a free minor number.
  */
