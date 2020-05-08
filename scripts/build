@@ -42,7 +42,7 @@ usage() {
 	  ./scripts/build JAVA_VERSION=10 image=openjdk-zulu-9-and-above,spring-boot-example
 	                                                     # Create image with spring boot app with Java 10 jdk
 
-	  ./scripts/manifest_from_host.sh -w ls && ./script/build --append-manifest
+	  ./scripts/manifest_from_host.sh -w ls && ./scripts/build --append-manifest
 	                                                     # Create manifest for 'ls' executable
 
 	  ./script/build check                               # Create test image and run all tests in it
