@@ -31,6 +31,7 @@ $(LDIR)/socket/core.so: $(LUA_ROCKS)
 LuaJSON: $(CDIR)/json.lua
 
 $(CDIR)/json.lua: $(LUA_ROCKS)
+	$(LUA_ROCKS) install --no-doc --tree $(MODULES_DIR) lpeg 1.0.2-1
 	$(LUA_ROCKS) install --no-doc --tree $(MODULES_DIR) luajson 1.3.4-1
 
 # == Lua_stdlib ==
