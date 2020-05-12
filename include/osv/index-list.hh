@@ -8,6 +8,8 @@
 #ifndef INDEX_LIST_HH_
 #define INDEX_LIST_HH_
 
+#include <stddef.h>
+
 // make_index_list<3> evaluates to index_list<0, 1, 2>.  This can be used when
 // we want to enumerate a template argument pack, for example a tuple's.
 

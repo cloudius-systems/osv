@@ -698,7 +698,7 @@ zfs_get_parent(const char *datasetname, char *parent, int parentsize)
 	/*
 	 * Remove the @bla or /bla from the end of the name to get the parent.
 	 */
-	(void) strncpy(parent, datasetname, parentsize);
+	(void) strlcpy(parent, datasetname, parentsize);
 	cp = strrchr(parent, '@');
 	if (cp != NULL) {
 		cp[0] = '\0';
@@ -5247,14 +5247,6 @@ pool_status_check(const char *name, zfs_ioc_namecheck_t type)
 	}
 	return (error);
 }
-
-#ifdef __OSV__
-
-// really from zvol.c, but we don't build that yet
-void *zfsdev_state;
-
-#endif
-
 
 /*
  * Find a free minor number.

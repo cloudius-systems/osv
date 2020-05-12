@@ -172,6 +172,13 @@ def start_osv_qemu(options):
         "-device", "virtio-blk-pci,id=blk1,bootindex=1,drive=hd1,scsi=off%s" % options.virtio_device_suffix,
         "-drive", "file=%s,if=none,id=hd1" % (options.cloud_init_image)]
 
+    if options.virtio_fs_tag:
+        args += [
+        "-chardev", "socket,id=char0,path=/tmp/vhostqemu",
+        "-device", "vhost-user-fs-pci,queue-size=1024,chardev=char0,tag=%s" % options.virtio_fs_tag,
+        "-object", "memory-backend-file,id=mem,size=%s,mem-path=/dev/shm,share=on" % options.memsize,
+        "-numa", "node,memdev=mem"]
+
     if options.no_shutdown:
         args += ["-no-reboot", "-no-shutdown"]
 
@@ -244,6 +251,18 @@ def start_osv_qemu(options):
 
     for a in options.pass_args or []:
         args += a.split()
+
+    if options.virtio_fs_dir:
+        try:
+            # Normally virtiofsd exits by itself but in future we should probably kill it if it did not
+            subprocess.Popen(["virtiofsd", "--socket-path=/tmp/vhostqemu", "-o",
+                              "source=%s" % options.virtio_fs_dir, "-o", "cache=always"], stdout=devnull, stderr=devnull)
+        except OSError as e:
+            if e.errno == errno.ENOENT:
+                print("virtiofsd binary not found. Please install the qemu-system-x86 package that comes with it (>= 4.2) and is in path.")
+            else:
+                print("OS error({0}): \"{1}\" while running virtiofsd {2}".
+                    format(e.errno, e.strerror, " ".join(args)))
 
     try:
         # Save the current settings of the stty
@@ -558,6 +577,10 @@ if __name__ == "__main__":
                         help="specify virtio version: legacy, transitional or modern")
     parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default="x86_64",
                         help="specify QEMU architecture: x86_64, aarch64")
+    parser.add_argument("--virtio-fs-tag", action="store",
+                        help="virtio-fs device tag")
+    parser.add_argument("--virtio-fs-dir", action="store",
+                        help="path to the directory exposed via virtio-fs mount")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
     cmdargs.image_file = os.path.abspath(cmdargs.image or os.path.join(osv_base, "build/%s/usr.img" % cmdargs.opt_path))
@@ -571,6 +594,9 @@ if __name__ == "__main__":
         cmdargs.cloud_init_image = os.path.abspath(cmdargs.cloud_init_image)
         if not os.path.exists(cmdargs.cloud_init_image):
             raise Exception('Cloud-init image %s does not exist.' % cmdargs.cloud_init_image)
+
+    if cmdargs.virtio_fs_dir and not os.path.exists(cmdargs.virtio_fs_dir):
+        raise Exception('Directory %s to be exposed through virtio-fs does not exist.' % cmdargs.virtio_fs_dir)
 
     if cmdargs.hypervisor == "auto":
         cmdargs.hypervisor = choose_hypervisor(cmdargs.networking,cmdargs.arch)

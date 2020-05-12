@@ -8,6 +8,7 @@
 #include "sse.hh"
 #include <x86intrin.h>
 #include <osv/initialize.hh>
+#include <stdint.h>
 
 // We want to use the PALIGNR SSSE3 instruction to copy relatively
 // misaligned data (e.g. 1k from address 0x1000006 to address 0x2000007,

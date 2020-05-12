@@ -26,6 +26,7 @@
 #include <netinet/tcp.h>
 #include <assert.h>
 
+#include <cstdlib>
 #include <thread>
 #include <chrono>
 

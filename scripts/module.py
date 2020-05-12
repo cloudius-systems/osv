@@ -110,7 +110,7 @@ def make_cmd(cmdline, j, jobserver):
     ret = 'make ' + cmdline
     if jobserver is not None:
         ret += ' -j --jobserver-fds=' + jobserver
-    elif j is '-':
+    elif j == '-':
         ret += ' -j'
     elif j is not None:
         ret += ' -j' + j
