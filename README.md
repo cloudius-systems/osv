@@ -314,6 +314,8 @@ At the end of the boot process, OSv dynamic linker loads an application ELF and 
  the kernel ELF. You can specify which filesystem to build image disk as
   by setting parameter `fs` of `./scripts/build` to one of the three values -`zfs`, `rofs` or `ramfs`.
 
+In addtion, one can mount NFS filesystem, which had been recently transformed to be a shared library pluggable as a [module](https://github.com/cloudius-systems/osv/tree/master/modules/nfs), and newly implemented [Virtio-FS filesystem](https://stefanha.github.io/virtio/virtio-fs.html#x1-41500011). The NFS and Virtio-FS mounts can be setup by adding proper entry `/etc/fstab` or by passing a boot parameter as explained in this [commit comments](https://github.com/cloudius-systems/osv/commit/47c7e9268ff96f67f4649bb6c63685a5c2d74f00).
+
 ## Running OSv
 
 Running an OSv image, built by `scripts/build`, is as easy as:
