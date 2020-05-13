@@ -255,6 +255,13 @@ class Ubuntu(object):
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
 
+    class Ubuntu_20_04(object):
+        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients']
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '20.04'
+
     class Ubuntu_19_10(object):
         packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients']
         ec2_packages = ['ec2-api-tools', 'awscli']
@@ -297,7 +304,7 @@ class Ubuntu(object):
         ec2_post_install = None
         version = '16.04'
 
-    versions = [Ubuntu_19_10, Ubuntu_19_04, Ubuntu_18_10, Ubuntu_18_04, Ubuntu_17_04, Ubuntu_16_04]
+    versions = [Ubuntu_20_04, Ubuntu_19_10, Ubuntu_19_04, Ubuntu_18_10, Ubuntu_18_04, Ubuntu_17_04, Ubuntu_16_04]
 
 class LinuxMint(Ubuntu):
     name = 'LinuxMint'
