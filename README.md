@@ -289,6 +289,8 @@ For example:
 ./scripts/convert raw
 ```
 
+### Aarch64
+
 By default, OSv kernel gets built for x86_64 architecture, but it is also possible
  to build one for ARM by adding **arch** parameter like so:
 ```bash
