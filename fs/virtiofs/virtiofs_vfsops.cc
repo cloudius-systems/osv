@@ -14,9 +14,11 @@
 #include "virtiofs_i.hh"
 #include "drivers/virtio-fs.hh"
 
+using fuse_request = virtio::fs::fuse_request;
+
 static std::atomic<uint64_t> fuse_unique_id(1);
 
-int fuse_req_send_and_receive_reply(fuse_strategy* strategy, uint32_t opcode,
+int fuse_req_send_and_receive_reply(virtio::fs* drv, uint32_t opcode,
     uint64_t nodeid, void* input_args_data, size_t input_args_size,
     void* output_args_data, size_t output_args_size)
 {
@@ -36,9 +38,9 @@ int fuse_req_send_and_receive_reply(fuse_strategy* strategy, uint32_t opcode,
     req->output_args_data = output_args_data;
     req->output_args_size = output_args_size;
 
-    assert(strategy->drv);
-    strategy->make_request(strategy->drv, req.get());
-    fuse_req_wait(req.get());
+    assert(drv);
+    drv->make_request(req.get());
+    req->wait();
 
     int error = -req->out_header.error;
 
@@ -88,8 +90,8 @@ static int virtiofs_mount(struct mount* mp, const char* dev, int flags,
     in_args->max_readahead = PAGE_SIZE;
     in_args->flags |= FUSE_MAP_ALIGNMENT;
 
-    auto* strategy = static_cast<fuse_strategy*>(device->private_data);
-    error = fuse_req_send_and_receive_reply(strategy, FUSE_INIT, FUSE_ROOT_ID,
+    auto* drv = static_cast<virtio::fs*>(device->private_data);
+    error = fuse_req_send_and_receive_reply(drv, FUSE_INIT, FUSE_ROOT_ID,
         in_args.get(), sizeof(*in_args), out_args.get(), sizeof(*out_args));
     if (error) {
         kprintf("[virtiofs] Failed to initialize fuse filesystem!\n");
@@ -101,7 +103,6 @@ static int virtiofs_mount(struct mount* mp, const char* dev, int flags,
                    "minor: %d\n", out_args->major, out_args->minor);
 
     if (out_args->flags & FUSE_MAP_ALIGNMENT) {
-        auto* drv = static_cast<virtio::fs*>(strategy->drv);
         drv->set_map_alignment(out_args->map_alignment);
     }
 
@@ -114,7 +115,7 @@ static int virtiofs_mount(struct mount* mp, const char* dev, int flags,
 
     virtiofs_set_vnode(mp->m_root->d_vnode, root_node);
 
-    mp->m_data = strategy;
+    mp->m_data = drv;
     mp->m_dev = device;
 
     return 0;

@@ -28,7 +28,6 @@
 
 #include "virtiofs.hh"
 #include "virtiofs_i.hh"
-#include "drivers/virtio-fs.hh"
 
 static constexpr uint32_t OPEN_FLAGS = O_RDONLY;
 
@@ -60,8 +59,8 @@ static int virtiofs_lookup(struct vnode* vnode, char* name, struct vnode** vpp)
     }
     strcpy(in_args.get(), name);
 
-    auto* strategy = static_cast<fuse_strategy*>(vnode->v_mount->m_data);
-    auto error = fuse_req_send_and_receive_reply(strategy, FUSE_LOOKUP,
+    auto* drv = static_cast<virtio::fs*>(vnode->v_mount->m_data);
+    auto error = fuse_req_send_and_receive_reply(drv, FUSE_LOOKUP,
         inode->nodeid, in_args.get(), in_args_len, out_args.get(),
         sizeof(*out_args));
     if (error) {
@@ -111,8 +110,8 @@ static int virtiofs_open(struct file* fp)
     }
     in_args->flags = OPEN_FLAGS;
 
-    auto* strategy = static_cast<fuse_strategy*>(vnode->v_mount->m_data);
-    auto error = fuse_req_send_and_receive_reply(strategy, FUSE_OPEN,
+    auto* drv = static_cast<virtio::fs*>(vnode->v_mount->m_data);
+    auto error = fuse_req_send_and_receive_reply(drv, FUSE_OPEN,
         inode->nodeid, in_args.get(), sizeof(*in_args), out_args.get(),
         sizeof(*out_args));
     if (error) {
@@ -146,8 +145,8 @@ static int virtiofs_close(struct vnode* vnode, struct file* fp)
     in_args->fh = f_data->file_handle;
     in_args->flags = OPEN_FLAGS; // need to be same as in FUSE_OPEN
 
-    auto* strategy = static_cast<fuse_strategy*>(vnode->v_mount->m_data);
-    auto error = fuse_req_send_and_receive_reply(strategy, FUSE_RELEASE,
+    auto* drv = static_cast<virtio::fs*>(vnode->v_mount->m_data);
+    auto error = fuse_req_send_and_receive_reply(drv, FUSE_RELEASE,
         inode->nodeid, in_args.get(), sizeof(*in_args), nullptr, 0);
     if (error) {
         kprintf("[virtiofs] inode %lld, close failed\n", inode->nodeid);
@@ -173,8 +172,8 @@ static int virtiofs_readlink(struct vnode* vnode, struct uio* uio)
         return ENOMEM;
     }
 
-    auto* strategy = static_cast<fuse_strategy*>(vnode->v_mount->m_data);
-    auto error = fuse_req_send_and_receive_reply(strategy, FUSE_READLINK,
+    auto* drv = static_cast<virtio::fs*>(vnode->v_mount->m_data);
+    auto error = fuse_req_send_and_receive_reply(drv, FUSE_READLINK,
         inode->nodeid, nullptr, 0, link_path.get(), PATH_MAX);
     if (error) {
         kprintf("[virtiofs] inode %lld, readlink failed\n", inode->nodeid);
@@ -188,10 +187,9 @@ static int virtiofs_readlink(struct vnode* vnode, struct uio* uio)
 
 // Read @read_amt bytes from @inode, using the DAX window.
 static int virtiofs_read_direct(virtiofs_inode& inode, u64 file_handle,
-    u64 read_amt, fuse_strategy& strategy, struct uio& uio)
+    u64 read_amt, virtio::fs& drv, struct uio& uio)
 {
-    auto* drv = static_cast<virtio::fs*>(strategy.drv);
-    auto* dax = drv->get_dax();
+    auto* dax = drv.get_dax();
     // Enter the critical path: setup mapping -> read -> remove mapping
     std::lock_guard<mutex> guard {dax->lock};
 
@@ -215,7 +213,7 @@ static int virtiofs_read_direct(virtiofs_inode& inode, u64 file_handle,
     uint64_t moffset = 0;
     in_args->moffset = moffset;
 
-    auto map_align = drv->get_map_alignment();
+    auto map_align = drv.get_map_alignment();
     if (map_align < 0) {
         kprintf("[virtiofs] inode %lld, map alignment not set\n", inode.nodeid);
         return ENOTSUP;
@@ -239,7 +237,7 @@ static int virtiofs_read_direct(virtiofs_inode& inode, u64 file_handle,
     virtiofs_debug("inode %lld, setting up mapping (foffset=%lld, len=%lld, "
                    "moffset=%lld)\n", inode.nodeid, in_args->foffset,
                    in_args->len, in_args->moffset);
-    auto error = fuse_req_send_and_receive_reply(&strategy, FUSE_SETUPMAPPING,
+    auto error = fuse_req_send_and_receive_reply(&drv, FUSE_SETUPMAPPING,
         inode.nodeid, in_args.get(), sizeof(*in_args), nullptr, 0);
     if (error) {
         kprintf("[virtiofs] inode %lld, mapping setup failed\n", inode.nodeid);
@@ -277,7 +275,7 @@ static int virtiofs_read_direct(virtiofs_inode& inode, u64 file_handle,
 
     virtiofs_debug("inode %lld, removing mapping (moffset=%lld, len=%lld)\n",
         inode.nodeid, r_one->moffset, r_one->len);
-    error = fuse_req_send_and_receive_reply(&strategy, FUSE_REMOVEMAPPING,
+    error = fuse_req_send_and_receive_reply(&drv, FUSE_REMOVEMAPPING,
         inode.nodeid, r_in_args.get(), r_in_args_size, nullptr, 0);
     if (error) {
         kprintf("[virtiofs] inode %lld, mapping removal failed\n",
@@ -290,7 +288,7 @@ static int virtiofs_read_direct(virtiofs_inode& inode, u64 file_handle,
 
 // Read @read_amt bytes from @inode, using the fallback FUSE_READ mechanism.
 static int virtiofs_read_fallback(virtiofs_inode& inode, u64 file_handle,
-    u32 read_amt, u32 flags, fuse_strategy& strategy, struct uio& uio)
+    u32 read_amt, u32 flags, virtio::fs& drv, struct uio& uio)
 {
     std::unique_ptr<fuse_read_in> in_args {new (std::nothrow) fuse_read_in()};
     std::unique_ptr<void, std::function<void(void*)>> buf {
@@ -306,7 +304,7 @@ static int virtiofs_read_fallback(virtiofs_inode& inode, u64 file_handle,
 
     virtiofs_debug("inode %lld, reading %lld bytes at offset %lld\n",
         inode.nodeid, read_amt, uio.uio_offset);
-    auto error = fuse_req_send_and_receive_reply(&strategy, FUSE_READ,
+    auto error = fuse_req_send_and_receive_reply(&drv, FUSE_READ,
         inode.nodeid, in_args.get(), sizeof(*in_args), buf.get(), read_amt);
     if (error) {
         kprintf("[virtiofs] inode %lld, read failed\n", inode.nodeid);
@@ -345,24 +343,23 @@ static int virtiofs_read(struct vnode* vnode, struct file* fp, struct uio* uio,
 
     auto* inode = static_cast<virtiofs_inode*>(vnode->v_data);
     auto* file_data = static_cast<virtiofs_file_data*>(fp->f_data);
-    auto* strategy = static_cast<fuse_strategy*>(vnode->v_mount->m_data);
+    auto* drv = static_cast<virtio::fs*>(vnode->v_mount->m_data);
 
     // Total read amount is what they requested, or what is left
     auto read_amt = std::min<uint64_t>(uio->uio_resid,
         inode->attr.size - uio->uio_offset);
 
-    auto* drv = static_cast<virtio::fs*>(strategy->drv);
     if (drv->get_dax()) {
         // Try to read from DAX
         if (!virtiofs_read_direct(*inode, file_data->file_handle, read_amt,
-            *strategy, *uio)) {
+            *drv, *uio)) {
 
             return 0;
         }
     }
     // DAX unavailable or failed, use fallback
     return virtiofs_read_fallback(*inode, file_data->file_handle, read_amt,
-        ioflag, *strategy, *uio);
+        ioflag, *drv, *uio);
 }
 
 static int virtiofs_readdir(struct vnode* vnode, struct file* fp,

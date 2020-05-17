@@ -12,7 +12,7 @@
 #include <osv/waitqueue.hh>
 #include "drivers/virtio.hh"
 #include "drivers/virtio-device.hh"
-#include "fs/virtiofs/virtiofs_i.hh"
+#include "fs/virtiofs/fuse_kernel.h"
 
 namespace virtio {
 
@@ -23,6 +23,24 @@ enum {
 
 class fs : public virtio_driver {
 public:
+    struct fuse_request {
+        struct fuse_in_header in_header;
+        struct fuse_out_header out_header;
+
+        void* input_args_data;
+        size_t input_args_size;
+
+        void* output_args_data;
+        size_t output_args_size;
+
+        void wait();
+        void done();
+
+    private:
+        mutex_t req_mutex;
+        waitqueue req_wait;
+    };
+
     struct fs_config {
         char tag[36];
         u32 num_queues;
@@ -59,13 +77,6 @@ public:
     static hw_driver* probe(hw_device* dev);
 
 private:
-    struct fs_req {
-        fs_req(fuse_request* f) : fuse_req(f) {};
-        ~fs_req() {};
-
-        fuse_request* fuse_req;
-    };
-
     std::string _driver_name;
     fs_config _config;
     dax_window _dax;

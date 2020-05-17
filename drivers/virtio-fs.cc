@@ -28,25 +28,23 @@
 
 using namespace memory;
 
-void fuse_req_wait(fuse_request* req)
-{
-    WITH_LOCK(req->req_mutex) {
-        req->req_wait.wait(req->req_mutex);
-    }
-}
+using fuse_request = virtio::fs::fuse_request;
 
 namespace virtio {
 
-static int fuse_make_request(void* driver, fuse_request* req)
+// Wait for the request to be marked as completed.
+void fs::fuse_request::wait()
 {
-    auto fs_driver = static_cast<fs*>(driver);
-    return fs_driver->make_request(req);
+    WITH_LOCK(req_mutex) {
+        req_wait.wait(req_mutex);
+    }
 }
 
-static void fuse_req_done(fuse_request* req)
+// Mark the request as completed.
+void fs::fuse_request::done()
 {
-    WITH_LOCK(req->req_mutex) {
-        req->req_wait.wake_one(req->req_mutex);
+    WITH_LOCK(req_mutex) {
+        req_wait.wake_one(req_mutex);
     }
 }
 
@@ -87,7 +85,7 @@ static struct devops fs_devops {
 struct driver fs_driver = {
     "virtio_fs",
     &fs_devops,
-    sizeof(struct fuse_strategy),
+    sizeof(fs*),
 };
 
 bool fs::ack_irq()
@@ -161,10 +159,7 @@ fs::fs(virtio_device& virtio_dev)
     dev_name += std::to_string(_disk_idx++);
 
     struct device* dev = device_create(&fs_driver, dev_name.c_str(), D_BLK); // TODO Should it be really D_BLK?
-    auto* strategy = static_cast<fuse_strategy*>(dev->private_data);
-    strategy->drv = this;
-    strategy->make_request = fuse_make_request;
-
+    dev->private_data = this;
     debugf("virtio-fs: Add device instance %d as [%s]\n", _id,
         dev_name.c_str());
 }
@@ -201,13 +196,12 @@ void fs::req_done()
     while (true) {
         virtio_driver::wait_for_queue(queue, &vring::used_ring_not_empty);
 
-        fs_req* req;
+        fuse_request* req;
         u32 len;
-        while ((req = static_cast<fs_req*>(queue->get_buf_elem(&len))) !=
+        while ((req = static_cast<fuse_request*>(queue->get_buf_elem(&len))) !=
             nullptr) {
 
-            fuse_req_done(req->fuse_req);
-            delete req;
+            req->done();
             queue->get_buf_finalize();
         }
 
@@ -231,11 +225,7 @@ int fs::make_request(fuse_request* req)
         fuse_req_enqueue_input(queue, req);
         fuse_req_enqueue_output(queue, req);
 
-        auto* fs_request = new (std::nothrow) fs_req(req);
-        if (!fs_request) {
-            return ENOMEM;
-        }
-        queue->add_buf_wait(fs_request);
+        queue->add_buf_wait(req);
         queue->kick();
 
         return 0;
