@@ -23,9 +23,12 @@
 #include <sys/types.h>
 #include <osv/device.h>
 #include <osv/sched.hh>
+#include <osv/mmio.hh>
+#include <osv/contiguous_alloc.hh>
 
 #include "virtiofs.hh"
 #include "virtiofs_i.hh"
+#include "drivers/virtio-fs.hh"
 
 static constexpr uint32_t OPEN_FLAGS = O_RDONLY;
 
@@ -183,14 +186,142 @@ static int virtiofs_readlink(struct vnode* vnode, struct uio* uio)
     return uiomove(link_path.get(), strlen(link_path.get()), uio);
 }
 
+// Read @read_amt bytes from @inode, using the DAX window.
+static int virtiofs_read_direct(virtiofs_inode& inode, u64 file_handle,
+    u64 read_amt, fuse_strategy& strategy, struct uio& uio)
+{
+    auto* drv = static_cast<virtio::fs*>(strategy.drv);
+    auto* dax = drv->get_dax();
+    // Enter the critical path: setup mapping -> read -> remove mapping
+    std::lock_guard<mutex> guard {dax->lock};
+
+    // Setup mapping
+    // NOTE: There are restrictions on the arguments to FUSE_SETUPMAPPING, from
+    // the spec: "Alignment constraints for FUSE_SETUPMAPPING and
+    // FUSE_REMOVEMAPPING requests are communicated during FUSE_INIT
+    // negotiation"):
+    // - foffset: multiple of map_alignment from FUSE_INIT
+    // - len: not larger than remaining file?
+    // - moffset: multiple of map_alignment from FUSE_INIT
+    // In practice, map_alignment is the host's page size, because foffset and
+    // moffset are passed to mmap() on the host.
+    std::unique_ptr<fuse_setupmapping_in> in_args {
+        new (std::nothrow) fuse_setupmapping_in()};
+    if (!in_args) {
+        return ENOMEM;
+    }
+    in_args->fh = file_handle;
+    in_args->flags = 0;
+    uint64_t moffset = 0;
+    in_args->moffset = moffset;
+
+    auto map_align = drv->get_map_alignment();
+    if (map_align < 0) {
+        kprintf("[virtiofs] inode %lld, map alignment not set\n", inode.nodeid);
+        return ENOTSUP;
+    }
+    uint64_t alignment = 1ul << map_align;
+    auto foffset = align_down(static_cast<uint64_t>(uio.uio_offset), alignment);
+    in_args->foffset = foffset;
+
+    // The possible excess part of the file mapped due to alignment constraints
+    // NOTE: map_excess <= alignemnt
+    auto map_excess = uio.uio_offset - foffset;
+    if (moffset + map_excess >= dax->len) {
+        // No usable room in DAX window due to map_excess
+        return ENOBUFS;
+    }
+    // Actual read amount is read_amt, or what fits in the DAX window
+    auto read_amt_act = std::min<uint64_t>(read_amt,
+        dax->len - moffset - map_excess);
+    in_args->len = read_amt_act + map_excess;
+
+    virtiofs_debug("inode %lld, setting up mapping (foffset=%lld, len=%lld, "
+                   "moffset=%lld)\n", inode.nodeid, in_args->foffset,
+                   in_args->len, in_args->moffset);
+    auto error = fuse_req_send_and_receive_reply(&strategy, FUSE_SETUPMAPPING,
+        inode.nodeid, in_args.get(), sizeof(*in_args), nullptr, 0);
+    if (error) {
+        kprintf("[virtiofs] inode %lld, mapping setup failed\n", inode.nodeid);
+        return error;
+    }
+
+    // Read from the DAX window
+    // NOTE: It shouldn't be necessary to use the mmio* interface (i.e. volatile
+    // accesses). From the spec: "Drivers map this shared memory region with
+    // writeback caching as if it were regular RAM."
+    // The location of the requested data in the DAX window
+    auto req_data = dax->addr + moffset + map_excess;
+    error = uiomove(const_cast<void*>(req_data), read_amt_act, &uio);
+    if (error) {
+        kprintf("[virtiofs] inode %lld, uiomove failed\n", inode.nodeid);
+        return error;
+    }
+
+    // Remove mapping
+    // NOTE: This is only necessary when FUSE_SETUPMAPPING fails. From the spec:
+    // "If the device runs out of resources the FUSE_SETUPMAPPING request fails
+    // until resources are available again following FUSE_REMOVEMAPPING."
+    auto r_in_args_size = sizeof(fuse_removemapping_in) +
+        sizeof(fuse_removemapping_one);
+    std::unique_ptr<u8> r_in_args {new (std::nothrow) u8[r_in_args_size]};
+    if (!r_in_args) {
+        return ENOMEM;
+    }
+    auto r_in = new (r_in_args.get()) fuse_removemapping_in();
+    auto r_one = new (r_in_args.get() + sizeof(fuse_removemapping_in))
+        fuse_removemapping_one();
+    r_in->count = 1;
+    r_one->moffset = in_args->moffset;
+    r_one->len = in_args->len;
+
+    virtiofs_debug("inode %lld, removing mapping (moffset=%lld, len=%lld)\n",
+        inode.nodeid, r_one->moffset, r_one->len);
+    error = fuse_req_send_and_receive_reply(&strategy, FUSE_REMOVEMAPPING,
+        inode.nodeid, r_in_args.get(), r_in_args_size, nullptr, 0);
+    if (error) {
+        kprintf("[virtiofs] inode %lld, mapping removal failed\n",
+            inode.nodeid);
+        return error;
+    }
+
+    return 0;
+}
+
+// Read @read_amt bytes from @inode, using the fallback FUSE_READ mechanism.
+static int virtiofs_read_fallback(virtiofs_inode& inode, u64 file_handle,
+    u32 read_amt, u32 flags, fuse_strategy& strategy, struct uio& uio)
+{
+    std::unique_ptr<fuse_read_in> in_args {new (std::nothrow) fuse_read_in()};
+    std::unique_ptr<void, std::function<void(void*)>> buf {
+        memory::alloc_phys_contiguous_aligned(read_amt,
+        alignof(std::max_align_t)), memory::free_phys_contiguous_aligned };
+    if (!in_args | !buf) {
+        return ENOMEM;
+    }
+    in_args->fh = file_handle;
+    in_args->offset = uio.uio_offset;
+    in_args->size = read_amt;
+    in_args->flags = flags;
+
+    virtiofs_debug("inode %lld, reading %lld bytes at offset %lld\n",
+        inode.nodeid, read_amt, uio.uio_offset);
+    auto error = fuse_req_send_and_receive_reply(&strategy, FUSE_READ,
+        inode.nodeid, in_args.get(), sizeof(*in_args), buf.get(), read_amt);
+    if (error) {
+        kprintf("[virtiofs] inode %lld, read failed\n", inode.nodeid);
+        return error;
+    }
+
+    return uiomove(buf.get(), read_amt, &uio);
+}
+
 // TODO: Optimize it to reduce number of exits to host (each
 // fuse_req_send_and_receive_reply()) by reading eagerly "ahead/around" just
 // like ROFS does and caching it
 static int virtiofs_read(struct vnode* vnode, struct file* fp, struct uio* uio,
     int ioflag)
 {
-    auto* inode = static_cast<virtiofs_inode*>(vnode->v_data);
-
     // Can't read directories
     if (vnode->v_type == VDIR) {
         return EISDIR;
@@ -212,32 +343,26 @@ static int virtiofs_read(struct vnode* vnode, struct file* fp, struct uio* uio,
         return 0;
     }
 
+    auto* inode = static_cast<virtiofs_inode*>(vnode->v_data);
+    auto* file_data = static_cast<virtiofs_file_data*>(fp->f_data);
+    auto* strategy = static_cast<fuse_strategy*>(vnode->v_mount->m_data);
+
     // Total read amount is what they requested, or what is left
     auto read_amt = std::min<uint64_t>(uio->uio_resid,
         inode->attr.size - uio->uio_offset);
-    std::unique_ptr<u8[]> buf {new (std::nothrow) u8[read_amt]};
-    std::unique_ptr<fuse_read_in> in_args {new (std::nothrow) fuse_read_in()};
-    if (!buf || !in_args) {
-        return ENOMEM;
+
+    auto* drv = static_cast<virtio::fs*>(strategy->drv);
+    if (drv->get_dax()) {
+        // Try to read from DAX
+        if (!virtiofs_read_direct(*inode, file_data->file_handle, read_amt,
+            *strategy, *uio)) {
+
+            return 0;
+        }
     }
-    auto* f_data = static_cast<virtiofs_file_data*>(file_data(fp));
-    in_args->fh = f_data->file_handle;
-    in_args->offset = uio->uio_offset;
-    in_args->size = read_amt;
-    in_args->flags = ioflag;
-
-    virtiofs_debug("inode %lld, reading %lld bytes at offset %lld\n",
-        inode->nodeid, read_amt, uio->uio_offset);
-
-    auto* strategy = static_cast<fuse_strategy*>(vnode->v_mount->m_data);
-    auto error = fuse_req_send_and_receive_reply(strategy, FUSE_READ,
-        inode->nodeid, in_args.get(), sizeof(*in_args), buf.get(), read_amt);
-    if (error) {
-        kprintf("[virtiofs] inode %lld, read failed\n", inode->nodeid);
-        return error;
-    }
-
-    return uiomove(buf.get(), read_amt, uio);
+    // DAX unavailable or failed, use fallback
+    return virtiofs_read_fallback(*inode, file_data->file_handle, read_amt,
+        ioflag, *strategy, *uio);
 }
 
 static int virtiofs_readdir(struct vnode* vnode, struct file* fp,
@@ -307,7 +432,7 @@ struct vnops virtiofs_vnops = {
     virtiofs_truncate,  /* truncate - returns error when called */
     virtiofs_link,      /* link - returns error when called */
     virtiofs_arc,       /* arc */ //TODO: Implement to allow memory re-use when
-                        // mapping files, investigate using virtio-fs DAX
+                        // mapping files
     virtiofs_fallocate, /* fallocate - returns error when called */
     virtiofs_readlink,  /* read link */
     virtiofs_symlink    /* symbolic link - returns error when called */
