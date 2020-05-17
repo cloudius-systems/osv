@@ -44,6 +44,12 @@ public:
     dax_window* get_dax() {
         return (_dax.addr != mmio_nullptr) ? &_dax : nullptr;
     }
+    // Set map alignment for DAX window. @map_align should be
+    // log2(byte_alignment), e.g. 12 for a 4096 byte alignment.
+    void set_map_alignment(int map_align) { _map_align = map_align; }
+    // Returns the map alignment for the DAX window as preiously set with
+    // set_map_alignment(), or < 0 if it has not been set.
+    int get_map_alignment() const { return _map_align; }
 
     void req_done();
     int64_t size();
@@ -63,6 +69,7 @@ private:
     std::string _driver_name;
     fs_config _config;
     dax_window _dax;
+    int _map_align;
 
     // maintains the virtio instance number for multiple drives
     static int _instance;

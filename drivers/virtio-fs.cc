@@ -103,7 +103,7 @@ bool fs::ack_irq()
 }
 
 fs::fs(virtio_device& virtio_dev)
-    : virtio_driver(virtio_dev)
+    : virtio_driver(virtio_dev), _map_align(-1)
 {
     _driver_name = "virtio-fs";
     _id = _instance++;

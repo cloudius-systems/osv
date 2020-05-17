@@ -12,6 +12,7 @@
 #include <iostream>
 #include "virtiofs.hh"
 #include "virtiofs_i.hh"
+#include "drivers/virtio-fs.hh"
 
 static std::atomic<uint64_t> fuse_unique_id(1);
 
@@ -85,7 +86,7 @@ static int virtiofs_mount(struct mount* mp, const char* dev, int flags,
     in_args->major = FUSE_KERNEL_VERSION;
     in_args->minor = FUSE_KERNEL_MINOR_VERSION;
     in_args->max_readahead = PAGE_SIZE;
-    in_args->flags = 0; // TODO: Verify that we need not set any flag
+    in_args->flags |= FUSE_MAP_ALIGNMENT;
 
     auto* strategy = static_cast<fuse_strategy*>(device->private_data);
     error = fuse_req_send_and_receive_reply(strategy, FUSE_INIT, FUSE_ROOT_ID,
@@ -98,6 +99,11 @@ static int virtiofs_mount(struct mount* mp, const char* dev, int flags,
 
     virtiofs_debug("Initialized fuse filesystem with version major: %d, "
                    "minor: %d\n", out_args->major, out_args->minor);
+
+    if (out_args->flags & FUSE_MAP_ALIGNMENT) {
+        auto* drv = static_cast<virtio::fs*>(strategy->drv);
+        drv->set_map_alignment(out_args->map_alignment);
+    }
 
     auto* root_node {new (std::nothrow) virtiofs_inode()};
     if (!root_node) {
