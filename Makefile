@@ -1864,7 +1864,7 @@ $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(lo
 		LINK loader.elf)
 	@# Build libosv.so matching this loader.elf. This is not a separate
 	@# rule because that caused bug #545.
-	@readelf --dyn-syms $(out)/loader.elf > $(out)/osv.syms
+	@readelf --dyn-syms --wide $(out)/loader.elf > $(out)/osv.syms
 	@scripts/libosv.py $(out)/osv.syms $(out)/libosv.ld `scripts/osv-version.sh` | $(CC) -c -o $(out)/osv.o -x assembler -
 	$(call quiet, $(CC) $(out)/osv.o -nostdlib -shared -o $(out)/libosv.so -T $(out)/libosv.ld, LIBOSV.SO)
 
