@@ -245,7 +245,6 @@ class Ubuntu(object):
                 'maven',
                 'openssl',
                 'p11-kit',
-                'python3-dpkt',
                 'python3-requests',
                 'qemu-system-x86',
                 'qemu-utils',
@@ -263,49 +262,49 @@ class Ubuntu(object):
     ec2_post_install = None
 
     class Ubuntu_20_04(object):
-        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients']
+        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients', 'python3-dpkt']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '20.04'
 
     class Ubuntu_19_10(object):
-        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients']
+        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients', 'python3-dpkt']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '19.10'
 
     class Ubuntu_19_04(object):
-        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients']
+        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients', 'python-dpkt']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '19.04'
 
     class Ubuntu_18_10(object):
-        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients']
+        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients', 'python-dpkt']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '18.10'
 
     class Ubuntu_18_04(object):
-        packages = ['bridge-utils', 'libvirt-bin']
+        packages = ['bridge-utils', 'libvirt-bin', 'python-dpkt']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '18.04'
 
     class Ubuntu_17_04(object):
-        packages = ['libvirt-bin']
+        packages = ['libvirt-bin', 'python-dpkt']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
         version = '17.04'
 
     class Ubuntu_16_04(object):
-        packages = ['libvirt-bin']
+        packages = ['libvirt-bin', 'python-dpkt']
         ec2_packages = ['ec2-api-tools', 'awscli']
         test_packages = []
         ec2_post_install = None
