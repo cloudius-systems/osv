@@ -536,23 +536,23 @@ bsd += bsd/porting/mmu.o
 bsd += bsd/porting/pcpu.o
 bsd += bsd/porting/bus_dma.o
 bsd += bsd/porting/kobj.o
-bsd += bsd/sys/netinet/if_ether.o  
-bsd += bsd/sys/compat/linux/linux_socket.o  
-bsd += bsd/sys/compat/linux/linux_ioctl.o  
-bsd += bsd/sys/net/if_ethersubr.o  
-bsd += bsd/sys/net/if_llatbl.o  
-bsd += bsd/sys/net/radix.o  
-bsd += bsd/sys/net/route.o  
-bsd += bsd/sys/net/raw_cb.o  
-bsd += bsd/sys/net/raw_usrreq.o  
-bsd += bsd/sys/net/rtsock.o  
-bsd += bsd/sys/net/netisr.o  
-bsd += bsd/sys/net/netisr1.o  
-bsd += bsd/sys/net/if_dead.o  
-bsd += bsd/sys/net/if_clone.o  
-bsd += bsd/sys/net/if_loop.o  
-bsd += bsd/sys/net/if.o  
-bsd += bsd/sys/net/pfil.o  
+bsd += bsd/sys/netinet/if_ether.o
+bsd += bsd/sys/compat/linux/linux_socket.o
+bsd += bsd/sys/compat/linux/linux_ioctl.o
+bsd += bsd/sys/net/if_ethersubr.o
+bsd += bsd/sys/net/if_llatbl.o
+bsd += bsd/sys/net/radix.o
+bsd += bsd/sys/net/route.o
+bsd += bsd/sys/net/raw_cb.o
+bsd += bsd/sys/net/raw_usrreq.o
+bsd += bsd/sys/net/rtsock.o
+bsd += bsd/sys/net/netisr.o
+bsd += bsd/sys/net/netisr1.o
+bsd += bsd/sys/net/if_dead.o
+bsd += bsd/sys/net/if_clone.o
+bsd += bsd/sys/net/if_loop.o
+bsd += bsd/sys/net/if.o
+bsd += bsd/sys/net/pfil.o
 bsd += bsd/sys/net/routecache.o
 bsd += bsd/sys/netinet/in.o
 bsd += bsd/sys/netinet/in_pcb.o
@@ -1771,7 +1771,8 @@ fs_objs += rofs/rofs_vfsops.o \
 	rofs/rofs_common.o
 
 fs_objs += virtiofs/virtiofs_vfsops.o \
-	virtiofs/virtiofs_vnops.o
+	virtiofs/virtiofs_vnops.o \
+	virtiofs/virtiofs_dax.o
 
 fs_objs += pseudofs/pseudofs.o
 fs_objs += procfs/procfs_vnops.o
@@ -1978,7 +1979,7 @@ libuutil-objects = $(foreach file, $(libuutil-file-list), $(out)/bsd/cddl/contri
 
 define libuutil-includes
   bsd/cddl/contrib/opensolaris/lib/libuutil/common
-  bsd/cddl/compat/opensolaris/include 
+  bsd/cddl/compat/opensolaris/include
   bsd/sys/cddl/contrib/opensolaris/uts/common
   bsd/sys/cddl/compat/opensolaris
   bsd/cddl/contrib/opensolaris/head
