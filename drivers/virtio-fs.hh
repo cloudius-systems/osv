@@ -8,8 +8,11 @@
 #ifndef VIRTIO_FS_DRIVER_H
 #define VIRTIO_FS_DRIVER_H
 
+#include <functional>
+
 #include <osv/mutex.h>
 #include <osv/waitqueue.hh>
+
 #include "drivers/virtio.hh"
 #include "drivers/virtio-device.hh"
 #include "fs/virtiofs/fuse_kernel.h"
@@ -49,7 +52,13 @@ public:
     struct dax_window {
         mmioaddr_t addr;
         u64 len;
-        mutex lock;
+    };
+
+    // Helper enabling the use of fs* as key type in an unordered_* container.
+    struct hasher {
+        size_t operator()(fs* const _fs) const noexcept {
+            return std::hash<int>{}(_fs->_id);
+        }
     };
 
     explicit fs(virtio_device& dev);

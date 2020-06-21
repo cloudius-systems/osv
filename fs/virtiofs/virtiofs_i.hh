@@ -8,9 +8,6 @@
 #ifndef VIRTIOFS_IO_H
 #define VIRTIOFS_IO_H
 
-#include "fuse_kernel.h"
-#include <osv/mutex.h>
-#include <osv/waitqueue.hh>
 #include "drivers/virtio-fs.hh"
 
 int fuse_req_send_and_receive_reply(virtio::fs* drv, uint32_t opcode,
