@@ -776,6 +776,7 @@ drivers += drivers/line-discipline.o
 drivers += drivers/clock.o
 drivers += drivers/clock-common.o
 drivers += drivers/clockevent.o
+drivers += drivers/isa-serial-base.o
 drivers += core/elf.o
 drivers += drivers/random.o
 drivers += drivers/zfs.o
