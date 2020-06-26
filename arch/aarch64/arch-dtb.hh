@@ -49,6 +49,14 @@ size_t dtb_get_phys_memory(u64 *addr);
  */
 u64 dtb_get_uart(int *irqid);
 
+/* u64 dtb_get_mmio_serial_console(int *irqid)
+ *
+ * return the base address of the serial console and writes the
+ * irqid of the interrupt to irqid,
+ * or returns zero on failure.
+ */
+u64 dtb_get_mmio_serial_console(int *irqid);
+
 /* int gdb_get_timer_irq()
  *
  * returns the irqid of the virtual timer from the dtb,

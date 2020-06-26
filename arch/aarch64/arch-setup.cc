@@ -25,6 +25,7 @@
 #include "drivers/pl011.hh"
 #include "early-console.hh"
 #include <osv/pci.hh>
+#include "drivers/mmio-isa-serial.hh"
 
 #include <alloca.h>
 
@@ -47,8 +48,9 @@ void arch_setup_pci()
     /* linear_map [TTBR0 - PCI config space] */
     u64 pci_cfg;
     size_t pci_cfg_len;
-    if (!dtb_get_pci_cfg(&pci_cfg, &pci_cfg_len))
-	return;
+    if (!dtb_get_pci_cfg(&pci_cfg, &pci_cfg_len)) {
+        return;
+    }
 
     pci::set_pci_cfg(pci_cfg, pci_cfg_len);
     pci_cfg = pci::get_pci_cfg(&pci_cfg_len);
@@ -91,7 +93,7 @@ void arch_setup_free_memory()
     mmu::linear_map((void *)mmu::mem_addr, (mmu::phys)mmu::mem_addr,
                     addr - mmu::mem_addr);
 
-    if (!is_xen()) {
+    if (console::PL011_Console::active) {
         /* linear_map [TTBR0 - UART] */
         addr = (mmu::phys)console::aarch64_console.pl011.get_base_addr();
         mmu::linear_map((void *)addr, addr, 0x1000, mmu::page_size,
@@ -116,6 +118,8 @@ void arch_setup_free_memory()
     osv::parse_cmdline(cmdline);
 
     mmu::switch_to_runtime_page_tables();
+
+    console::mmio_isa_serial_console::memory_map();
 }
 
 void arch_setup_tls(void *tls, const elf::tls_data& info)
@@ -179,15 +183,28 @@ void arch_init_drivers()
 
 void arch_init_early_console()
 {
+    console::mmio_isa_serial_console::_phys_mmio_address = 0;
+
     if (is_xen()) {
         new (&console::aarch64_console.xen) console::XEN_Console();
         console::arch_early_console = console::aarch64_console.xen;
         return;
     }
 
+    int irqid;
+    u64 mmio_serial_address = dtb_get_mmio_serial_console(&irqid);
+    if (mmio_serial_address) {
+        console::mmio_isa_serial_console::early_init(mmio_serial_address);
+
+        new (&console::aarch64_console.isa_serial) console::mmio_isa_serial_console();
+        console::aarch64_console.isa_serial.set_irqid(irqid);
+        console::arch_early_console = console::aarch64_console.isa_serial;
+        return;
+    }
+
     new (&console::aarch64_console.pl011) console::PL011_Console();
     console::arch_early_console = console::aarch64_console.pl011;
-    int irqid;
+    console::PL011_Console::active = true;
     u64 addr = dtb_get_uart(&irqid);
     if (!addr) {
         /* keep using default addresses */

@@ -25,6 +25,7 @@ public:
     u64 get_base_addr();
     void set_irqid(int irqid);
 
+    static bool active;
 private:
     virtual void dev_start();
     virtual const char *thread_name() { return "pl011-input"; }

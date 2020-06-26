@@ -189,6 +189,36 @@ u64 dtb_get_uart(int *irqid)
     return retval;
 }
 
+u64 dtb_get_mmio_serial_console(int *irqid)
+{
+    int node;
+    struct dtb_int_spec int_spec[1];
+    u64 address;
+
+    if (!dtb)
+        return 0;
+
+    node = fdt_node_offset_by_compatible(dtb, -1, "ns16550a");
+    if (node < 0)
+        return 0;
+
+    const char *node_name = fdt_get_name(dtb, node, NULL);
+    if (!node_name) {
+        return 0;
+    }
+
+    if (sscanf(node_name,"uart@%x", &address) != 1) {
+        return 0;
+    }
+
+    if( !dtb_get_int_spec(node, int_spec, 1)) {
+        return 0;
+    };
+
+    *irqid = int_spec[0].irq_id;
+    return address;
+}
+
 /* this gets the virtual timer irq, we are not interested
  * about the other timers.
  */
