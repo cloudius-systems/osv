@@ -36,7 +36,7 @@ void mmio_isa_serial_console::memory_map()
 }
 
 void mmio_isa_serial_console::dev_start() {
-    _irq.reset(new spi_interrupt(gic::irq_type::IRQ_TYPE_EDGE, 64,
+    _irq.reset(new spi_interrupt(gic::irq_type::IRQ_TYPE_EDGE, irqid,
                                  [&] { return true; },
                                  [&] { _thread->wake(); }));
     enable_interrupt();
