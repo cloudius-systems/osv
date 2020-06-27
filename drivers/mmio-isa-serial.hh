@@ -17,6 +17,7 @@ public:
     void set_irqid(int irqid) { this->irqid = irqid; }
     static void early_init(u64 mmio_phys_address);
     static void memory_map();
+    static void clean_cmdline(char *cmdline);
     static mmioaddr_t _addr_mmio;
     static u64 _phys_mmio_address;
 private:

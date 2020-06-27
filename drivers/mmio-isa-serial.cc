@@ -35,6 +35,42 @@ void mmio_isa_serial_console::memory_map()
     }
 }
 
+static void remove_property_name_value(char *cmdline, const char *prefix)
+{
+    char *prefix_pos = strstr(cmdline, prefix);
+    if (!prefix_pos)
+        return;
+
+    // Verify that 1st preceding character is a white space
+    if (prefix_pos > cmdline && !isspace(*(prefix_pos - 1)))
+        return;
+
+    // Find first white-character or null as an end of the property value
+    char *next_char_pos = prefix_pos + strlen(prefix);
+    while (*next_char_pos && !isspace(*next_char_pos))
+        next_char_pos++;
+
+    // Remove any space characters before
+    while (prefix_pos > cmdline && isspace(*(prefix_pos - 1))) {
+        prefix_pos--;
+    };
+
+    // Remove entire name=value pair from cmdline by copying over the remaining part
+    do {
+        *prefix_pos = *next_char_pos++;
+    } while (*prefix_pos++);
+}
+
+#define CONSOLE_PREFIX "console="
+#define MMIO_ISA_CONSOLE_PREFIX "earlycon="
+void mmio_isa_serial_console::clean_cmdline(char *cmdline)
+{
+    if (_phys_mmio_address) {
+        remove_property_name_value(cmdline, CONSOLE_PREFIX);
+        remove_property_name_value(cmdline, MMIO_ISA_CONSOLE_PREFIX);
+    }
+}
+
 void mmio_isa_serial_console::dev_start() {
     _irq.reset(new spi_interrupt(gic::irq_type::IRQ_TYPE_EDGE, irqid,
                                  [&] { return true; },

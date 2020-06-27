@@ -115,6 +115,7 @@ void arch_setup_free_memory()
     arch_setup_pci();
 
     // get rid of the command line, before memory is unmapped
+    console::mmio_isa_serial_console::clean_cmdline(cmdline);
     osv::parse_cmdline(cmdline);
 
     mmu::switch_to_runtime_page_tables();
