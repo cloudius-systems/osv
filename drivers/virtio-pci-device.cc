@@ -44,11 +44,17 @@ void virtio_pci_device::init()
 
 void virtio_pci_device::register_interrupt(interrupt_factory irq_factory)
 {
+#ifdef AARCH64_PORT_STUB
+    // Currently MSI-X support for aach64 is stubbed (please see arch/aarch64/msi.cc)
+    // so until it becomes functional we register regular PCI interrupt
+    _irq.reset(irq_factory.create_pci_interrupt(*_dev));
+#else	
     if (irq_factory.register_msi_bindings && _dev->is_msix()) {
         irq_factory.register_msi_bindings(_msi);
     } else {
         _irq.reset(irq_factory.create_pci_interrupt(*_dev));
     }
+#endif    
 }
 
 virtio_legacy_pci_device::virtio_legacy_pci_device(pci::device *dev)
