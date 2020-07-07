@@ -72,7 +72,7 @@ def set_imgargs(options):
         execute = '--nopci ' + execute
 
     if options.arch == 'aarch64':
-        execute = '--nomount --maxnic=0 ' + execute #TODO: Investigate why both virtio-blk and virtio-net does not seem to work
+        execute = '--disable_rofs_cache ' + execute
 
     options.osv_cmdline = execute
     if options.kernel or options.hypervisor == 'qemu_microvm' or options.arch == 'aarch64':
@@ -141,7 +141,7 @@ def start_osv_qemu(options):
     if options.arch == 'aarch64':
         args += [
         "-machine", "virt", "-machine", "gic-version=2", "-cpu", "cortex-a57",
-        "-device", "virtio-blk-device,id=blk0,drive=hd0,scsi=off%s%s" % (boot_index, options.virtio_device_suffix),
+        "-device", "virtio-blk-pci,id=blk0,drive=hd0,scsi=off%s%s" % (boot_index, options.virtio_device_suffix),
         "-drive", "file=%s,if=none,id=hd0,%s" % (options.image_file, aio)]
     elif options.hypervisor == 'qemu_microvm':
         args += [
@@ -583,11 +583,16 @@ if __name__ == "__main__":
                         help="path to the directory exposed via virtio-fs mount")
     cmdargs = parser.parse_args()
     cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
-    cmdargs.image_file = os.path.abspath(cmdargs.image or os.path.join(osv_base, "build/%s/usr.img" % cmdargs.opt_path))
     if cmdargs.arch == 'aarch64':
         cmdargs.kernel_file = os.path.join(osv_base, "build/%s/loader.img" % cmdargs.opt_path)
     else:
         cmdargs.kernel_file = os.path.abspath(cmdargs.kernel_path or os.path.join(osv_base, "build/%s/kernel.elf" % cmdargs.opt_path))
+    if cmdargs.image:
+        cmdargs.image_file = os.path.abspath(cmdargs.image)
+    elif cmdargs.arch == 'aarch64':
+        cmdargs.image_file = os.path.abspath(os.path.join(osv_base, "build/%s/disk.img" % cmdargs.opt_path))
+    else:
+        cmdargs.image_file = os.path.abspath(os.path.join(osv_base, "build/%s/usr.img" % cmdargs.opt_path))
     if not os.path.exists(cmdargs.image_file):
         raise Exception('Image file %s does not exist.' % cmdargs.image_file)
     if cmdargs.cloud_init_image:
