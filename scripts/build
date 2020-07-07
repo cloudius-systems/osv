@@ -266,7 +266,7 @@ fi
 
 if [[ ${vars[create_disk]} == "true" ]]; then
 	partition_offset=512
-	bare=boot.bin
+	bare="$SRC"/scripts/disk.bin
 	raw_disk=disk
 	qcow2_disk=disk
 	upload_kernel_mode="-k"
