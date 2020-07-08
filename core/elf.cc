@@ -347,14 +347,19 @@ static bool intersects_with_kernel(Elf64_Addr elf_addr)
 
 void object::set_base(void* base)
 {
-    auto p = std::min_element(_phdrs.begin(), _phdrs.end(),
-                              [](Elf64_Phdr a, Elf64_Phdr b)
-                                  { return a.p_type == PT_LOAD
-                                        && a.p_vaddr < b.p_vaddr; });
-    auto q = std::min_element(_phdrs.begin(), _phdrs.end(),
-                              [](Elf64_Phdr a, Elf64_Phdr b)
-                                  { return a.p_type == PT_LOAD
-                                        && a.p_vaddr > b.p_vaddr; });
+    std::vector<const Elf64_Phdr*> pt_load_headers;
+    for (auto& p : _phdrs) {
+        if (p.p_type == PT_LOAD) {
+            pt_load_headers.push_back(&p);
+        }
+    }
+
+    auto p = *std::min_element(pt_load_headers.begin(), pt_load_headers.end(),
+                              [](const Elf64_Phdr* a, const Elf64_Phdr* b)
+                                  { return a->p_vaddr < b->p_vaddr; });
+    auto q = *std::max_element(pt_load_headers.begin(), pt_load_headers.end(),
+                              [](const Elf64_Phdr* a, const Elf64_Phdr* b)
+                                  { return a->p_vaddr < b->p_vaddr; });
 
     if (!is_core() && is_non_pie_executable()) {
         // Verify non-PIE executable does not collide with the kernel
