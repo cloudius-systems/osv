@@ -1489,8 +1489,7 @@ def runqueue(cpuid, node=None):
         cpus = gdb.lookup_global_symbol('sched::cpus').value()
         cpu = cpus['_M_impl']['_M_start'][cpuid]
         rq = cpu['runqueue']
-        p = rq['data_']['node_plus_pred_']
-        node = p['header_plus_size_']['header_']['parent_']
+        node = intrusive_set_root_node(rq)
 
     if node:
         offset = gdb.parse_and_eval('(int)&((sched::thread *)0)->_runqueue_link')
