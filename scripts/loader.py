@@ -8,8 +8,8 @@ import fnmatch
 from glob import glob
 from collections import defaultdict
 
-arch = 'x64'
 build_dir = os.path.dirname(gdb.current_objfile().filename)
+arch = build_dir[build_dir.rfind(".")+1:]
 osv_dir = os.path.abspath(os.path.join(build_dir, '../..'))
 apps_dir = os.path.join(osv_dir, 'apps')
 external = os.path.join(osv_dir, 'external', arch)
@@ -723,15 +723,31 @@ class cpu(object):
             old = gdb.selected_frame()
             try:
                 gdb.newest_frame().select()
-                self.rsp = ulong(gdb.parse_and_eval('$rsp'))
-                self.rbp = ulong(gdb.parse_and_eval('$rbp'))
-                self.rip = ulong(gdb.parse_and_eval('$rip'))
+                self.set_pointers()
             finally:
                 old.select()
         finally:
             cur.switch()
         g_cpus = gdb.parse_and_eval('sched::cpus._M_impl._M_start')
         self.obj = g_cpus + self.id
+    def set_pointers(self):
+        return
+
+class x64_cpu(cpu):
+    def __init__(self, cpu_thread):
+        cpu.__init__(self, cpu_thread)
+    def set_pointers(self):
+        self.sp = ulong(gdb.parse_and_eval('$rsp')) #stack pointer
+        self.fp = ulong(gdb.parse_and_eval('$rbp')) #frame pointer
+        self.ip = ulong(gdb.parse_and_eval('$rip')) #instruction pointer
+
+class aarch64_cpu(cpu):
+    def __init__(self, cpu_thread):
+        cpu.__init__(self, cpu_thread)
+    def set_pointers(self):
+        self.sp = ulong(gdb.parse_and_eval('$sp'))  #stack pointer
+        self.fp = ulong(gdb.parse_and_eval('$x29')) #frame pointer
+        self.ip = ulong(gdb.parse_and_eval('$x30')) #instruction pointer
 
 def template_arguments(gdb_type):
     n = 0
@@ -827,7 +843,10 @@ class vmstate(object):
         gdb.execute('info threads', False, True)
         cpu_list = {}
         for cpu_thread in gdb.selected_inferior().threads():
-            c = cpu(cpu_thread)
+            if arch == 'x64':
+                c = x64_cpu(cpu_thread)
+            else:
+                c = aarch64_cpu(cpu_thread)
             cpu_list[c.id] = c
         self.cpu_list = cpu_list
 
@@ -840,7 +859,7 @@ class vmstate(object):
         stack_begin = ulong(stack['begin'])
         stack_size = ulong(stack['size'])
         for c in values(self.cpu_list):
-            if c.rsp > stack_begin and c.rsp <= stack_begin + stack_size:
+            if c.sp > stack_begin and c.sp <= stack_begin + stack_size:
                 return c
         return None
 
@@ -849,32 +868,60 @@ class thread_context(object):
         self.old_frame = gdb.selected_frame()
         self.new_frame = gdb.newest_frame()
         self.new_frame.select()
-        self.old_rsp = gdb.parse_and_eval('$rsp').cast(ulong_type)
-        self.old_rip = gdb.parse_and_eval('$rip').cast(ulong_type)
-        self.old_rbp = gdb.parse_and_eval('$rbp').cast(ulong_type)
+        self.__save_old_pointers()
         self.running_cpu = state.cpu_from_thread(thread)
         self.vm_thread = gdb.selected_thread()
         if not self.running_cpu:
             self.old_frame.select()
-            self.new_rsp = thread['_state']['rsp'].cast(ulong_type)
-            self.new_rip = thread['_state']['rip'].cast(ulong_type)
-            self.new_rbp = thread['_state']['rbp'].cast(ulong_type)
+            self.__save_new_pointers(thread)
     def __enter__(self):
         self.new_frame.select()
         if not self.running_cpu:
-            gdb.execute('set $rsp = %s' % self.new_rsp)
-            gdb.execute('set $rip = %s' % self.new_rip)
-            gdb.execute('set $rbp = %s' % self.new_rbp)
+            self.__reset_new_pointers()
         else:
             self.running_cpu.cpu_thread.switch()
     def __exit__(self, *_):
         if not self.running_cpu:
+            self.__reset_old_pointers()
+        else:
+            self.vm_thread.switch()
+        self.old_frame.select()
+    def __save_old_pointers(self):
+        if arch == 'x64':
+            self.old_rsp = gdb.parse_and_eval('$rsp').cast(ulong_type)
+            self.old_rip = gdb.parse_and_eval('$rip').cast(ulong_type)
+            self.old_rbp = gdb.parse_and_eval('$rbp').cast(ulong_type)
+        else:
+            self.old_sp = gdb.parse_and_eval('$sp').cast(ulong_type)
+            self.old_x30 = gdb.parse_and_eval('$x30').cast(ulong_type)
+            self.old_x29 = gdb.parse_and_eval('$x29').cast(ulong_type)
+    def __save_new_pointers(self, thread):
+        if arch == 'x64':
+            self.new_rsp = thread['_state']['rsp'].cast(ulong_type)
+            self.new_rip = thread['_state']['rip'].cast(ulong_type)
+            self.new_rbp = thread['_state']['rbp'].cast(ulong_type)
+        else:
+            self.new_sp = thread['_state']['sp'].cast(ulong_type)
+            self.new_x30 = thread['_state']['pc'].cast(ulong_type)
+            self.new_x29 = thread['_state']['fp'].cast(ulong_type)
+    def __reset_old_pointers(self):
+        if arch == 'x64':
             gdb.execute('set $rsp = %s' % self.old_rsp)
             gdb.execute('set $rip = %s' % self.old_rip)
             gdb.execute('set $rbp = %s' % self.old_rbp)
         else:
-            self.vm_thread.switch()
-        self.old_frame.select()
+            gdb.execute('set $sp = %s' % self.old_sp)
+            gdb.execute('set $x30 = %s' % self.old_x30)
+            gdb.execute('set $x29 = %s' % self.old_x29)
+    def __reset_new_pointers(self):
+        if arch == 'x64':
+            gdb.execute('set $rsp = %s' % self.new_rsp)
+            gdb.execute('set $rip = %s' % self.new_rip)
+            gdb.execute('set $rbp = %s' % self.new_rbp)
+        else:
+            gdb.execute('set $sp = %s' % self.new_sp)
+            gdb.execute('set $x30 = %s' % self.new_x30)
+            gdb.execute('set $x29 = %s' % self.new_x29)
 
 def exit_thread_context():
     global active_thread_context
@@ -982,7 +1029,7 @@ class osv_info_threads(gdb.Command):
                 # Here we try to skip such functions and instead show a more
                 # interesting caller which initiated the wait.
                 file_blacklist = ["arch-switch.hh", "sched.cc", "sched.hh",
-                                  "mutex.hh", "mutex.cc", "mutex.c", "mutex.h"]
+                                  "mutex.hh", "mutex.cc", "mutex.c", "mutex.h", "psci.cc"]
 
                 # Functions from blacklisted files which are interesting
                 sched_thread_join = 'sched::thread::join()'
@@ -1000,9 +1047,17 @@ class osv_info_threads(gdb.Command):
                 else:
                     location = '??'
 
+                if cpu:
+                    if arch == 'x64':
+                        cpu_id = cpu['arch']['acpi_id']
+                    else:
+                        cpu_id = cpu['arch']['mpid']
+                else:
+                    cpu_id = '?'
+
                 gdb.write('%4d (0x%x) %-15s cpu%s %-10s %s vruntime %12g\n' %
                           (tid, ulong(t.address), name,
-                           cpu['arch']['acpi_id'] if cpu != 0 else "?",
+                           cpu_id,
                            thread_status(t),
                            location,
                            t['_runtime']['_Rtt'],
@@ -1012,7 +1067,7 @@ class osv_info_threads(gdb.Command):
                 if fr and fr.func_name == sched_thread_join:
                     gdb.write("\tjoining on %s\n" % fr.frame.read_var("this"))
 
-                show_thread_timers(t)
+                #show_thread_timers(t)
                 thread_nr += 1
         gdb.write('Number of threads: %d\n' % thread_nr)
 
