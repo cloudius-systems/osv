@@ -293,6 +293,10 @@ create_rofs_disk() {
 	qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
 }
 
+if [[ "$arch" == 'aarch64' ]]; then
+	export STRIP=aarch64-linux-gnu-strip
+fi
+
 case $fs_type in
 zfs)
 	partition_size=$((fs_size - partition_offset))
@@ -308,7 +312,9 @@ ramfs)
 	qemu-img convert -f raw -O qcow2 loader.img usr.img ;;
 esac
 
-"$SRC"/scripts/imgedit.py setargs usr.img `cat cmdline`
+if [[ -f "$OSV_BUILD_PATH/usr.img" ]]; then
+	"$SRC"/scripts/imgedit.py setargs usr.img `cat cmdline`
+fi
 
 # Support "build check"
 for i
