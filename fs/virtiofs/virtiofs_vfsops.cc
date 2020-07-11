@@ -15,6 +15,7 @@
 #include <osv/debug.h>
 #include <osv/device.h>
 #include <osv/mutex.h>
+#include <osv/sched.hh>
 
 #include "drivers/virtio-fs.hh"
 #include "virtiofs.hh"
@@ -35,7 +36,8 @@ int fuse_req_send_and_receive_reply(virtio::fs* drv, uint32_t opcode,
     uint64_t nodeid, void* input_args_data, size_t input_args_size,
     void* output_args_data, size_t output_args_size)
 {
-    std::unique_ptr<fuse_request> req {new (std::nothrow) fuse_request()};
+    std::unique_ptr<fuse_request> req {
+        new (std::nothrow) fuse_request(sched::thread::current())};
     if (!req) {
         return ENOMEM;
     }

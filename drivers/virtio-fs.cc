@@ -24,22 +24,6 @@ using fuse_request = virtio::fs::fuse_request;
 
 namespace virtio {
 
-// Wait for the request to be marked as completed.
-void fs::fuse_request::wait()
-{
-    WITH_LOCK(req_mutex) {
-        req_wait.wait(req_mutex);
-    }
-}
-
-// Mark the request as completed.
-void fs::fuse_request::done()
-{
-    WITH_LOCK(req_mutex) {
-        req_wait.wake_one(req_mutex);
-    }
-}
-
 static void fuse_req_enqueue_input(vring& queue, fuse_request& req)
 {
     // Header goes first

@@ -12,7 +12,8 @@
 
 #include <osv/mmio.hh>
 #include <osv/mutex.h>
-#include <osv/waitqueue.hh>
+#include <osv/sched.hh>
+#include <osv/wait_record.hh>
 
 #include "drivers/device.hh"
 #include "drivers/driver.hh"
@@ -29,6 +30,8 @@ enum {
 
 class fs : public virtio_driver {
 public:
+    // A fuse_request encapsulates a low-level virtio-fs device request. This is
+    // a single-use object.
     struct fuse_request {
         struct fuse_in_header in_header;
         struct fuse_out_header out_header;
@@ -39,12 +42,19 @@ public:
         void* output_args_data;
         size_t output_args_size;
 
-        void wait();
-        void done();
+        // Constructs a fuse_request, determining that wait() on it will be
+        // called by @t.
+        fuse_request(sched::thread* t): processed{t} {}
+
+        // Waits for the request to be marked as completed. Should only be
+        // called once, from the thread specified in the constructor.
+        void wait() { processed.wait(); }
+        // Marks the request as completed. Should only be called once.
+        void done() { processed.wake(); }
 
     private:
-        mutex_t req_mutex;
-        waitqueue req_wait;
+        // Signifies whether the request has been processed by the device
+        waiter processed;
     };
 
     struct fs_config {
