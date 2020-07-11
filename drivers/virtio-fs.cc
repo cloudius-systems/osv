@@ -5,28 +5,20 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <sys/cdefs.h>
+#include <string>
 
+#include <osv/debug.h>
+#include <osv/device.h>
+#include <osv/interrupt.hh>
+#include <osv/mmio.hh>
+#include <osv/msi.hh>
+#include <osv/sched.hh>
+
+#include "drivers/pci-device.hh"
 #include "drivers/virtio.hh"
 #include "drivers/virtio-fs.hh"
-#include <osv/interrupt.hh>
-
-#include <osv/mempool.hh>
-#include <osv/mmu.hh>
-
-#include <string>
-#include <string.h>
-#include <map>
-#include <errno.h>
-#include <osv/debug.h>
-
-#include <osv/sched.hh>
-#include "osv/trace.hh"
-#include "osv/aligned_new.hh"
-
-#include <osv/device.h>
-
-using namespace memory;
+#include "drivers/virtio-vring.hh"
+#include "fs/virtiofs/fuse_kernel.h"
 
 using fuse_request = virtio::fs::fuse_request;
 
@@ -48,25 +40,25 @@ void fs::fuse_request::done()
     }
 }
 
-static void fuse_req_enqueue_input(vring* queue, fuse_request* req)
+static void fuse_req_enqueue_input(vring& queue, fuse_request& req)
 {
     // Header goes first
-    queue->add_out_sg(&req->in_header, sizeof(struct fuse_in_header));
+    queue.add_out_sg(&req.in_header, sizeof(struct fuse_in_header));
 
     // Add fuse in arguments as out sg
-    if (req->input_args_size > 0) {
-        queue->add_out_sg(req->input_args_data, req->input_args_size);
+    if (req.input_args_size > 0) {
+        queue.add_out_sg(req.input_args_data, req.input_args_size);
     }
 }
 
-static void fuse_req_enqueue_output(vring* queue, fuse_request* req)
+static void fuse_req_enqueue_output(vring& queue, fuse_request& req)
 {
     // Header goes first
-    queue->add_in_sg(&req->out_header, sizeof(struct fuse_out_header));
+    queue.add_in_sg(&req.out_header, sizeof(struct fuse_out_header));
 
     // Add fuse out arguments as in sg
-    if (req->output_args_size > 0) {
-        queue->add_in_sg(req->output_args_data, req->output_args_size);
+    if (req.output_args_size > 0) {
+        queue.add_in_sg(req.output_args_data, req.output_args_size);
     }
 }
 
@@ -194,7 +186,7 @@ void fs::req_done()
     auto* queue = get_virt_queue(VQ_REQUEST);
 
     while (true) {
-        virtio_driver::wait_for_queue(queue, &vring::used_ring_not_empty);
+        wait_for_queue(queue, &vring::used_ring_not_empty);
 
         fuse_request* req;
         u32 len;
@@ -210,26 +202,21 @@ void fs::req_done()
     }
 }
 
-int fs::make_request(fuse_request* req)
+int fs::make_request(fuse_request& req)
 {
-    // The lock is here for parallel requests protection
+    auto* queue = get_virt_queue(VQ_REQUEST);
+
     WITH_LOCK(_lock) {
-        if (!req) {
-            return EIO;
-        }
-
-        auto* queue = get_virt_queue(VQ_REQUEST);
-
         queue->init_sg();
 
-        fuse_req_enqueue_input(queue, req);
-        fuse_req_enqueue_output(queue, req);
+        fuse_req_enqueue_input(*queue, req);
+        fuse_req_enqueue_output(*queue, req);
 
-        queue->add_buf_wait(req);
+        queue->add_buf_wait(&req);
         queue->kick();
-
-        return 0;
     }
+
+    return 0;
 }
 
 hw_driver* fs::probe(hw_device* dev)

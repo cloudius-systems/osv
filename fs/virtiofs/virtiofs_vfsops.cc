@@ -52,7 +52,7 @@ int fuse_req_send_and_receive_reply(virtio::fs* drv, uint32_t opcode,
     req->output_args_size = output_args_size;
 
     assert(drv);
-    drv->make_request(req.get());
+    drv->make_request(*req);
     req->wait();
 
     int error = -req->out_header.error;

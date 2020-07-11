@@ -10,9 +10,12 @@
 
 #include <functional>
 
+#include <osv/mmio.hh>
 #include <osv/mutex.h>
 #include <osv/waitqueue.hh>
 
+#include "drivers/device.hh"
+#include "drivers/driver.hh"
 #include "drivers/virtio.hh"
 #include "drivers/virtio-device.hh"
 #include "fs/virtiofs/fuse_kernel.h"
@@ -67,7 +70,7 @@ public:
     virtual std::string get_name() const { return _driver_name; }
     void read_config();
 
-    int make_request(fuse_request*);
+    int make_request(fuse_request&);
     dax_window* get_dax() {
         return (_dax.addr != mmio_nullptr) ? &_dax : nullptr;
     }
@@ -94,8 +97,9 @@ private:
     // maintains the virtio instance number for multiple drives
     static int _instance;
     int _id;
+
     // This mutex protects parallel make_request invocations
-    mutex _lock;
+    mutex _lock;    // TODO: Maintain one mutex per virtqueue
 };
 
 }
