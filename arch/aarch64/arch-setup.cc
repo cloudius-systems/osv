@@ -118,6 +118,8 @@ void arch_setup_free_memory()
     console::mmio_isa_serial_console::clean_cmdline(cmdline);
     osv::parse_cmdline(cmdline);
 
+    dtb_collect_parsed_mmio_virtio_devices();
+
     mmu::switch_to_runtime_page_tables();
 
     console::mmio_isa_serial_console::memory_map();
@@ -147,6 +149,7 @@ void arch_init_premain()
 #include "drivers/virtio-rng.hh"
 #include "drivers/virtio-blk.hh"
 #include "drivers/virtio-net.hh"
+#include "drivers/virtio-mmio.hh"
 
 void arch_init_drivers()
 {
@@ -168,9 +171,12 @@ void arch_init_drivers()
     // Enumerate PCI devices
     size_t pci_cfg_len;
     if (pci::get_pci_cfg(&pci_cfg_len)) {
-	    pci::pci_device_enumeration();
-	    boot_time.event("pci enumerated");
+	pci::pci_device_enumeration();
+	boot_time.event("pci enumerated");
     }
+
+    // Register any parsed virtio-mmio devices
+    virtio::register_mmio_devices(device_manager::instance());
 
     // Initialize all drivers
     hw::driver_manager* drvman = hw::driver_manager::instance();

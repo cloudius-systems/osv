@@ -57,6 +57,13 @@ u64 dtb_get_uart(int *irqid);
  */
 u64 dtb_get_mmio_serial_console(int *irqid);
 
+/* dtb_collect_parsed_mmio_virtio_devices()
+ *
+ * collect and add any parsed mmio devices
+ * to be recognized and potentially recognized
+ */
+void dtb_collect_parsed_mmio_virtio_devices();
+
 /* int gdb_get_timer_irq()
  *
  * returns the irqid of the virtual timer from the dtb,
