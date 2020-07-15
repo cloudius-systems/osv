@@ -256,7 +256,11 @@ kernel_end=$(($loader_size+2097151 & ~2097151))
 # the case in our old build.mk).
 cd $OUT
 
-libgcc_s_dir=$(dirname $(readlink -f $(gcc -print-file-name=libgcc_s.so.1)))
+if [[ "$arch" == 'aarch64' ]]; then
+	libgcc_s_dir=$(readlink -f ../downloaded_packages/aarch64/gcc/install/lib64)
+else
+	libgcc_s_dir=$(dirname $(readlink -f $(gcc -print-file-name=libgcc_s.so.1)))
+fi
 
 if [ "$export" != "none" ]; then
 	export_dir=${vars[export_dir]-$SRC/build/export}

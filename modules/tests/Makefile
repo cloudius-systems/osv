@@ -9,6 +9,9 @@ fs_type := $(fs_type)
 # TODO: need to set up CXX, etc., for cross compilation, as in the main
 # Makefile...
 
+aarch64_gccbase = $(src)/build/downloaded_packages/aarch64/gcc/install
+aarch64_boostbase = $(src)/build/downloaded_packages/aarch64/boost/install
+
 # Ask make to not delete "intermediate" results, such as the .o in the chain
 # .cc -> .o -> .so. Otherwise, during the first build, make considers the .o
 # to be intermediate, and deletes it, but the newly-created ".d" files lists
@@ -23,14 +26,59 @@ makedir = $(call very-quiet, mkdir -p $(dir $@))
 autodepend = -MD -MT $@ -MP
 
 INCLUDES = -I$(src)/arch/$(ARCH) -I$(src) -I$(src)/include \
-	-I$(src)/arch/common -isystem $(src)/include/glibc-compat \
-	$(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^ .*c\+\+/ {print "-isystem" $$0}') \
-	-isystem $(src)/include/api -isystem $(src)/include/api/$(ARCH) \
-	-isystem $(out)/gen/include
+	-I$(src)/arch/common -isystem $(src)/include/glibc-compat
 
-COMMON = $(autodepend) $(INCLUDES) -g -O2 -fPIC -DBOOST_TEST_DYN_LINK \
+ifeq ($(arch),aarch64)
+  CROSS_PREFIX = aarch64-linux-gnu-
+  CXX=$(CROSS_PREFIX)g++
+  CC=$(CROSS_PREFIX)gcc
+  LD=$(CROSS_PREFIX)ld
+  OBJCOPY=$(CROSS_PREFIX)objcopy
+  export STRIP=$(CROSS_PREFIX)strip
+
+  aarch64_libdir := $(dir $(shell find $(aarch64_gccbase)/ -name libstdc++.so))
+  LDFLAGS = -L$(aarch64_libdir)
+
+  aarch64-gcc-inc-base := $(dir $(shell find $(aarch64_gccbase)/ -name vector | grep -v -e debug/vector$$ -e profile/vector$$ -e experimental/vector$$))
+  aarch64-gcc-inc-base3 := $(dir $(shell dirname `find $(aarch64_gccbase)/ -name c++config.h | grep -v /32/`))
+  INCLUDES += -isystem $(aarch64-gcc-inc-base)
+  INCLUDES += -isystem $(aarch64-gcc-inc-base3)
+  INCLUDES += -isystem $(aarch64_boostbase)/usr/include
+else
+  INCLUDES += $(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^ .*c\+\+/ {print "-isystem" $$0}')
+endif
+
+INCLUDES += -isystem $(src)/include/api -isystem $(src)/include/api/$(ARCH)
+
+ifeq ($(arch),aarch64)
+  aarch64-gcc-inc-base2 := $(dir $(shell find $(aarch64_gccbase)/ -name unwind.h))
+  # must be after include/api, since it includes some libc-style headers:
+  INCLUDES += -isystem $(aarch64-gcc-inc-base2)
+endif
+
+INCLUDES += -isystem $(out)/gen/include
+
+ifeq ($(arch),aarch64)
+  post-includes-bsd = -isystem $(src)/bsd/sys
+  # For acessing machine/ in cpp xen drivers
+  post-includes-bsd += -isystem $(src)/bsd/
+  post-includes-bsd += -isystem $(src)/bsd/$(arch)
+  INCLUDES += $(post-includes-bsd)
+endif
+
+COMMON = $(autodepend) $(INCLUDES)
+
+ifeq ($(arch),aarch64)
+  COMMON += --sysroot $(aarch64_gccbase)
+endif
+
+COMMON += -g -O2 -fPIC -DBOOST_TEST_DYN_LINK \
 	-U _FORTIFY_SOURCE -D_KERNEL -D__OSV__ -DCONF_debug_memory=0 \
 	-Wall -Wno-pointer-arith -Wformat=0 -Wno-format-security
+
+ifeq ($(arch),aarch64)
+  COMMON += -nostdinc
+endif
 
 LIBS =
 
@@ -58,7 +106,7 @@ $(out)/tests/rofs/%.o: $(src)/tests/%.c
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -DREAD_ONLY_FS -c -o $@ $< , CC $*.c)
 $(out)/%.so: $(out)/%.o
-	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $< $(LIBS), LD $*.so)
+	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(LIBS), LD $*.so)
 
 $(out)/tests/tst-non-fpic.o: CXXFLAGS:=$(subst -fPIC,-mcmodel=large,$(CXXFLAGS))
 
@@ -67,11 +115,11 @@ $(out)/tests/tst-getopt-pie.o: $(src)/tests/tst-getopt.cc
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX tests/tst-getopt-pie.cc)
 $(out)/tests/tst-getopt-pie.so: $(out)/tests/tst-getopt-pie.o
-	$(call quiet, $(CXX) $(CXXFLAGS) -pie -o $@ $< $(LIBS), LD tests/tst-getopt-pie.so)
+	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -pie -o $@ $< $(LIBS), LD tests/tst-getopt-pie.so)
 
 $(out)/tests/tst-non-pie.so: CXXFLAGS:=$(subst -fPIC,-no-pie,$(CXXFLAGS))
 $(out)/tests/tst-non-pie.so: $(src)/tests/tst-non-pie.cc
-	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ $< $(LIBS), LD tests/tst-non-pie.so)
+	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $< $(LIBS), LD tests/tst-non-pie.so)
 
 # The rofs test image mounts /tmp as ramfs and 4 tests that exercise file system
 # fail due to some unresolved bugs or other shortcomings of the ramfs implementation
@@ -119,18 +167,27 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-sendfile.so misc-lock-perf.so tst-uio.so tst-printf.so \
 	tst-pthread-affinity.so tst-pthread-tsd.so tst-thread-local.so \
 	tst-zfs-mount.so tst-regex.so tst-tcp-siocoutq.so \
-	libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so tst-select-timeout.so tst-faccessat.so \
+	tst-select-timeout.so tst-faccessat.so \
 	tst-fstatat.so misc-reboot.so tst-fcntl.so payload-namespace.so \
 	tst-namespace.so tst-without-namespace.so payload-env.so \
 	payload-merge-env.so misc-execve.so misc-execve-payload.so misc-mutex2.so \
-	tst-pthread-setcancelstate.so tst-syscall.so tst-pin.so tst-run.so \
-	tst-ifaddrs.so tst-pthread-affinity-inherit.so tst-sem-timed-wait.so \
+	tst-pthread-setcancelstate.so tst-pin.so tst-run.so \
+	tst-pthread-affinity-inherit.so tst-sem-timed-wait.so \
 	tst-ttyname.so tst-pthread-barrier.so tst-feexcept.so tst-math.so \
 	tst-sigaltstack.so tst-fread.so tst-tcp-cork.so tst-tcp-v6.so \
 	tst-calloc.so tst-crypt.so tst-non-fpic.so tst-small-malloc.so \
-	tst-mmx-fpu.so tst-getopt.so tst-getopt-pie.so tst-non-pie.so tst-semaphore.so \
+	tst-getopt.so tst-getopt-pie.so tst-non-pie.so tst-semaphore.so \
 	tst-elf-init.so tst-realloc.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
+
+#TODO For now let us disable these tests for aarch64 until
+# we support floating point numbers, TLS and correct syscall handling
+# The tst-ifaddrs.so is an exception and it does not compile due to some
+# missing headers
+ifeq ($(arch),x64)
+tests += libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so \
+	tst-syscall.so tst-ifaddrs.so tst-mmx-fpu.so
+endif
 
 tests += testrunner.so
 
@@ -163,21 +220,24 @@ $(out)/tests/tst-tls-pie.so: \
 		$(out)/tests/tst-tls-pie.o \
 		$(out)/tests/libtls.so
 	$(makedir)
-	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -fuse-ld=bfd -pthread -pie -o $@ $< tests/libtls.so, LD tests/tst-tls-pie.so)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -fuse-ld=bfd -pthread -pie -o $@ $< tests/libtls.so, LD tests/tst-tls-pie.so)
 
 $(out)/tests/libtls_gold.so: COMMON += -fuse-ld=gold
 $(out)/tests/libtls_gold.so: $(out)/tests/libtls.o
 	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLAGS) -shared -o $@ $< $(LIBS), LD tests/libtls_gold.so)
+	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(LIBS), LD tests/libtls_gold.so)
 
 $(out)/tests/tst-tls-gold.so: COMMON += -fuse-ld=gold
 $(out)/tests/tst-tls-gold.so: \
 		$(src)/tests/tst-tls.cc \
 		$(out)/tests/libtls_gold.so
 	$(makedir)
-	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -D__SHARED_OBJECT__=1 -shared -o $@ $< tests/libtls_gold.so, CXX tests/tst-tls.cc)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -D__SHARED_OBJECT__=1 -shared -o $@ $< tests/libtls_gold.so, CXX tests/tst-tls.cc)
 
-boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system.so))
+ifeq ($(arch),aarch64)
+  aarch64_boost_libdir := $(dir $(shell find $(aarch64_boostbase)/ -name libboost_system.so))
+  LDFLAGS += -L$(aarch64_boost_libdir)
+endif
 
 common-boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	misc-bdev-write.so misc-bdev-wlatency.so misc-bdev-rw.so \
@@ -240,7 +300,11 @@ build_all_tests: $(all_tests:%=$(out)/%)
 usr.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FORCE
 	@echo "  generating modules/tests/usr.manifest"
 	@cat $@.skel > $@
-	@ldd $(addprefix $(out)/tests/,$(boost-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@
+	@if [ $(arch) == x64 ]; then \
+		ldd $(addprefix $(out)/tests/,$(boost-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@; \
+	else \
+		./add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@; \
+	fi
 	@echo $(all_tests) | tr ' ' '\n' | grep -v "tests/rofs/tst-.*.so" | awk '{print "/" $$0 ": ./" $$0}' >> $@
 	@echo $(all_tests) | tr ' ' '\n' | grep "tests/rofs/tst-.*.so" | sed 's/\.so//' | awk 'BEGIN { FS = "/" } ; { print "/tests/" $$3 "-rofs.so: ./tests/" $$2 "/" $$3 ".so"}' >> $@
 	./create_static.sh $(out) usr.manifest $(fs_type)
@@ -250,7 +314,11 @@ FORCE:
 common.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FORCE
 	@echo "  generating modules/tests/common.manifest"
 	@cat usr.manifest.skel > $@
-	@ldd $(addprefix $(out)/tests/,$(boost-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@
+	@if [ $(arch) == x64 ]; then \
+		ldd $(addprefix $(out)/tests/,$(boost-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@; \
+	else \
+		./add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@; \
+	fi
 	@echo $(common-tests) $(solaris-tests) | tr ' ' '\n' | awk '{print "/tests/" $$0 ": ./tests/" $$0}' >> $@
 
 fs.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) FORCE

@@ -13,7 +13,11 @@ def aarch64_download(version):
                     'libstdc++-static']
     boost_packages = ['boost-devel',
                       'boost-static',
-                      'boost-system']
+                      'boost-system',
+                      'boost-filesystem',
+                      'boost-test',
+                      'boost-chrono',
+                      'boost-timer']
     osv_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
     script_path = '%s/scripts/download_rpm_package.sh' % osv_root
     destination = '%s/build/downloaded_packages/aarch64' % osv_root
