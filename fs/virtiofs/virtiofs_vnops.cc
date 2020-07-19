@@ -44,7 +44,7 @@ static int virtiofs_lookup(struct vnode* vnode, char* name, struct vnode** vpp)
     }
 
     if (!S_ISDIR(inode->attr.mode)) {
-        kprintf("[virtiofs] inode:%lld, ABORTED lookup of %s because not a "
+        kprintf("[virtiofs] inode %lld, ABORTED lookup of %s because not a "
                 "directory\n", inode->nodeid, name);
         return ENOTDIR;
     }
@@ -64,7 +64,7 @@ static int virtiofs_lookup(struct vnode* vnode, char* name, struct vnode** vpp)
         inode->nodeid, in_args.get(), in_args_len, out_args.get(),
         sizeof(*out_args));
     if (error) {
-        kprintf("[virtiofs] inode:%lld, lookup failed to find %s\n",
+        kprintf("[virtiofs] inode %lld, lookup failed to find %s\n",
             inode->nodeid, name);
         // TODO: Implement proper error handling by sending FUSE_FORGET
         return error;
@@ -73,7 +73,7 @@ static int virtiofs_lookup(struct vnode* vnode, char* name, struct vnode** vpp)
     struct vnode* vp;
     // TODO OPT: Should we even use the cache? (consult spec on metadata)
     if (vget(vnode->v_mount, out_args->nodeid, &vp) == 1) {
-        virtiofs_debug("lookup found vp in cache!\n");
+        virtiofs_debug("lookup found vp in cache\n");
         *vpp = vp;
         return 0;
     }
@@ -83,7 +83,7 @@ static int virtiofs_lookup(struct vnode* vnode, char* name, struct vnode** vpp)
         return ENOMEM;
     }
     new_inode->nodeid = out_args->nodeid;
-    virtiofs_debug("inode %lld, lookup found inode %lld for %s!\n",
+    virtiofs_debug("inode %lld, lookup found inode %lld for %s\n",
         inode->nodeid, new_inode->nodeid, name);
     memcpy(&new_inode->attr, &out_args->attr, sizeof(out_args->attr));
 
@@ -196,7 +196,7 @@ static int virtiofs_read_fallback(virtiofs_inode& inode, u64 file_handle,
     std::unique_ptr<void, std::function<void(void*)>> buf {
         memory::alloc_phys_contiguous_aligned(read_amt,
         alignof(std::max_align_t)), memory::free_phys_contiguous_aligned };
-    if (!in_args | !buf) {
+    if (!in_args || !buf) {
         return ENOMEM;
     }
     in_args->fh = file_handle;
