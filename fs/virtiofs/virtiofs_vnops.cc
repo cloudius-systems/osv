@@ -13,6 +13,7 @@
 #include <sys/param.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <tuple>
 
 #include <osv/contiguous_alloc.hh>
 #include <osv/debug.h>
@@ -24,6 +25,7 @@
 #include <osv/sched.hh>
 #include <osv/vnode.h>
 
+#include "fuse_kernel.h"
 #include "virtiofs.hh"
 #include "virtiofs_dax.hh"
 #include "virtiofs_i.hh"
@@ -264,11 +266,81 @@ static int virtiofs_read(struct vnode* vnode, struct file* fp, struct uio* uio,
         ioflag, *drv, *uio);
 }
 
+// Checks if @buf (with size @len) points to a valid fuse_dirent (with its name
+// not exceeding @name_max) and if so returns @buf. Otherwise, returns nullptr.
+static fuse_dirent* parse_fuse_dirent(void* buf, size_t len, size_t name_max)
+{
+    if (len < FUSE_NAME_OFFSET) {
+        return nullptr;
+    }
+
+    auto* fdir = static_cast<struct fuse_dirent*>(buf);
+    if (FUSE_DIRENT_SIZE(fdir) > len || fdir->namelen > name_max) {
+        return nullptr;
+    }
+
+    return fdir;
+}
+
 static int virtiofs_readdir(struct vnode* vnode, struct file* fp,
     struct dirent* dir)
 {
-    // TODO: Implement
-    return EPERM;
+    auto* inode = static_cast<virtiofs_inode*>(vnode->v_data);
+    auto* file_data = static_cast<virtiofs_file_data*>(fp->f_data);
+    auto* m_data = static_cast<virtiofs_mount_data*>(vnode->v_mount->m_data);
+    auto* drv = m_data->drv;
+
+    // NOTE: The response consists of a buffer of size <= fuse_read_in.size.
+    // This contains multiple (whole) fuse_dirent structs, each padded to 64-bit
+    // boundary. We only parse one such struct at a time, for simplicity. The
+    // fuse_dirent.name field is _not_ null-terminated, but our dirent.d_name
+    // is, requiring caution.
+    std::unique_ptr<fuse_read_in> in_args {new (std::nothrow) fuse_read_in()};
+    constexpr size_t name_max = sizeof(dir->d_name) - 1;    // account for '\0'
+    // The size of a (padded) fuse_dirent with a name_max-long name
+    size_t bufsize = FUSE_DIRENT_ALIGN(FUSE_NAME_OFFSET + name_max);
+    std::unique_ptr<void, std::function<void(void*)>> buf {
+        memory::alloc_phys_contiguous_aligned(bufsize,
+        alignof(std::max_align_t)), memory::free_phys_contiguous_aligned };
+    if (!in_args || !buf) {
+        return ENOMEM;
+    }
+    in_args->fh = file_data->file_handle;
+    in_args->offset = fp->f_offset;
+    in_args->size = bufsize;
+    in_args->flags = fp->f_flags;
+
+    size_t len;
+    int error;
+    std::tie(len, error) = fuse_req_send_and_receive_reply(drv, FUSE_READDIR,
+        inode->nodeid, in_args.get(), sizeof(*in_args), buf.get(), bufsize);
+    if (error) {
+        kprintf("[virtiofs] inode %lld, readdir failed\n", inode->nodeid);
+        return error;
+    }
+
+    if (len == 0) {
+        return ENOENT;
+    }
+    auto* fdir = parse_fuse_dirent(buf.get(), len, name_max);
+    if (!fdir) {
+        kprintf("[virtiofs] inode %lld, dirent parsing failed\n",
+            inode->nodeid);
+        return EIO;
+    }
+
+    dir->d_ino = fdir->ino;
+    dir->d_off = fdir->off;
+    dir->d_type = fdir->type;
+    // Copy fdir->name (not null-terminated) to dir->d_name (null-terminated)
+    memcpy(dir->d_name, fdir->name, fdir->namelen);
+    dir->d_name[fdir->namelen] = '\0';
+
+    fp->f_offset = fdir->off;
+
+    virtiofs_debug("inode %lld, read dir entry %s\n", inode->nodeid,
+        dir->d_name);
+    return 0;
 }
 
 static int virtiofs_getattr(struct vnode* vnode, struct vattr* attr)
