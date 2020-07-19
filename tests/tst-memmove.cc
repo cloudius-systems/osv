@@ -59,6 +59,7 @@ static void memmove_test(int dest_offset, int src_offset, size_t n)
 
     memmove_model(buf1 + dest_offset, buf1 + src_offset, n);
     memmove(buf2 + dest_offset, buf2 + src_offset, n);
+
     assert(0 == memcmp(buf1, buf2, BUF_SIZE));
 
     free(buf2);
@@ -180,6 +181,10 @@ int main()
     memmove_test(6, 0, 13520);
     memmove_test(4, 0, 13526);
     memmove_test(125, 0, 14572);
+
+    // Some explicit tests that failed on AArch64
+    memmove_test(10318, 10328, 127);
+    memmove_test(10318, 10328, 138);
 
     // Test random overlapping memmove scenarios
     int n;

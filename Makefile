@@ -833,7 +833,6 @@ endif # aarch64
 objects += arch/$(arch)/arch-trace.o
 objects += arch/$(arch)/arch-setup.o
 objects += arch/$(arch)/signal.o
-objects += arch/$(arch)/string.o
 objects += arch/$(arch)/arch-cpu.o
 objects += arch/$(arch)/backtrace.o
 objects += arch/$(arch)/smp.o
@@ -861,11 +860,15 @@ objects += arch/$(arch)/arm-clock.o
 objects += arch/$(arch)/gic.o
 objects += arch/$(arch)/arch-dtb.o
 objects += arch/$(arch)/hypercall.o
+objects += arch/$(arch)/memset.o
+objects += arch/$(arch)/memcpy.o
+objects += arch/$(arch)/memmove.o
 objects += $(libfdt)
 endif
 
 ifeq ($(arch),x64)
 objects += arch/x64/dmi.o
+objects += arch/x64/string.o
 objects += arch/x64/string-ssse3.o
 objects += arch/x64/arch-trace.o
 objects += arch/x64/ioapic.o
