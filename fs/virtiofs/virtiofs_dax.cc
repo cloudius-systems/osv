@@ -194,7 +194,7 @@ int dax_manager::map_ll(uint64_t nodeid, uint64_t file_handle, chunk nchunks,
                    "moffset=%lld)\n", nodeid, in_args->foffset, in_args->len,
                    in_args->moffset);
     auto error = fuse_req_send_and_receive_reply(&_drv, FUSE_SETUPMAPPING,
-        nodeid, in_args.get(), sizeof(*in_args), nullptr, 0);
+        nodeid, in_args.get(), sizeof(*in_args), nullptr, 0).second;
     if (error) {
         kprintf("[virtiofs] inode %lld, mapping setup failed\n", nodeid);
         return error;
@@ -230,7 +230,7 @@ int dax_manager::unmap_ll(chunk nchunks, chunk mstart)
     virtiofs_debug("inode %lld, removing mapping (moffset=%lld, len=%lld)\n",
         nodeid, r_one->moffset, r_one->len);
     auto error = fuse_req_send_and_receive_reply(&_drv, FUSE_REMOVEMAPPING,
-        nodeid, in_args.get(), in_args_size, nullptr, 0);
+        nodeid, in_args.get(), in_args_size, nullptr, 0).second;
     if (error) {
         kprintf("[virtiofs] inode %lld, mapping removal failed\n", nodeid);
         return error;

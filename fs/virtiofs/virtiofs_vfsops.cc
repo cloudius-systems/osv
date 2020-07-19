@@ -10,6 +10,7 @@
 #include <mutex>
 #include <new>
 #include <sys/types.h>
+#include <utility>
 
 #include <api/assert.h>
 #include <osv/debug.h>
@@ -32,14 +33,14 @@ static struct {
     mutex lock;
 } dax_managers;
 
-int fuse_req_send_and_receive_reply(virtio::fs* drv, uint32_t opcode,
-    uint64_t nodeid, void* input_args_data, size_t input_args_size,
-    void* output_args_data, size_t output_args_size)
+std::pair<size_t, int> fuse_req_send_and_receive_reply(virtio::fs* drv,
+    uint32_t opcode, uint64_t nodeid, void* input_args_data,
+    size_t input_args_size, void* output_args_data, size_t output_args_size)
 {
     std::unique_ptr<fuse_request> req {
         new (std::nothrow) fuse_request(sched::thread::current())};
     if (!req) {
-        return ENOMEM;
+        return std::make_pair(0, ENOMEM);
     }
     req->in_header.len = sizeof(req->in_header) + input_args_size;
     req->in_header.opcode = opcode;
@@ -57,9 +58,11 @@ int fuse_req_send_and_receive_reply(virtio::fs* drv, uint32_t opcode,
     drv->make_request(*req);
     req->wait();
 
+    // return the length of the response's payload
+    size_t len = req->out_header.len - sizeof(fuse_out_header);
     int error = -req->out_header.error;
 
-    return error;
+    return std::make_pair(len, error);
 }
 
 void virtiofs_set_vnode(struct vnode* vnode, struct virtiofs_inode* inode)
@@ -107,7 +110,8 @@ static int virtiofs_mount(struct mount* mp, const char* dev, int flags,
 
     auto* drv = static_cast<virtio::fs*>(device->private_data);
     error = fuse_req_send_and_receive_reply(drv, FUSE_INIT, FUSE_ROOT_ID,
-        in_args.get(), sizeof(*in_args), out_args.get(), sizeof(*out_args));
+        in_args.get(), sizeof(*in_args), out_args.get(),
+        sizeof(*out_args)).second;
     if (error) {
         kprintf("[virtiofs] Failed to initialize fuse filesystem!\n");
         return error;

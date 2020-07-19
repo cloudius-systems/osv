@@ -62,7 +62,7 @@ static int virtiofs_lookup(struct vnode* vnode, char* name, struct vnode** vpp)
     auto* drv = m_data->drv;
     auto error = fuse_req_send_and_receive_reply(drv, FUSE_LOOKUP,
         inode->nodeid, in_args.get(), in_args_len, out_args.get(),
-        sizeof(*out_args));
+        sizeof(*out_args)).second;
     if (error) {
         kprintf("[virtiofs] inode %lld, lookup failed to find %s\n",
             inode->nodeid, name);
@@ -114,7 +114,7 @@ static int virtiofs_open(struct file* fp)
     auto* drv = m_data->drv;
     auto error = fuse_req_send_and_receive_reply(drv, FUSE_OPEN,
         inode->nodeid, in_args.get(), sizeof(*in_args), out_args.get(),
-        sizeof(*out_args));
+        sizeof(*out_args)).second;
     if (error) {
         kprintf("[virtiofs] inode %lld, open failed\n", inode->nodeid);
         return error;
@@ -149,7 +149,7 @@ static int virtiofs_close(struct vnode* vnode, struct file* fp)
     auto* m_data = static_cast<virtiofs_mount_data*>(vnode->v_mount->m_data);
     auto* drv = m_data->drv;
     auto error = fuse_req_send_and_receive_reply(drv, FUSE_RELEASE,
-        inode->nodeid, in_args.get(), sizeof(*in_args), nullptr, 0);
+        inode->nodeid, in_args.get(), sizeof(*in_args), nullptr, 0).second;
     if (error) {
         kprintf("[virtiofs] inode %lld, close failed\n", inode->nodeid);
         return error;
@@ -177,7 +177,7 @@ static int virtiofs_readlink(struct vnode* vnode, struct uio* uio)
     auto* m_data = static_cast<virtiofs_mount_data*>(vnode->v_mount->m_data);
     auto* drv = m_data->drv;
     auto error = fuse_req_send_and_receive_reply(drv, FUSE_READLINK,
-        inode->nodeid, nullptr, 0, link_path.get(), PATH_MAX);
+        inode->nodeid, nullptr, 0, link_path.get(), PATH_MAX).second;
     if (error) {
         kprintf("[virtiofs] inode %lld, readlink failed\n", inode->nodeid);
         return error;
@@ -207,7 +207,8 @@ static int virtiofs_read_fallback(virtiofs_inode& inode, u64 file_handle,
     virtiofs_debug("inode %lld, reading %lld bytes at offset %lld\n",
         inode.nodeid, read_amt, uio.uio_offset);
     auto error = fuse_req_send_and_receive_reply(&drv, FUSE_READ,
-        inode.nodeid, in_args.get(), sizeof(*in_args), buf.get(), read_amt);
+        inode.nodeid, in_args.get(), sizeof(*in_args), buf.get(),
+        read_amt).second;
     if (error) {
         kprintf("[virtiofs] inode %lld, read failed\n", inode.nodeid);
         return error;
