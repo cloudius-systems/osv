@@ -112,7 +112,8 @@ static int virtiofs_open(struct file* fp)
 
     auto* m_data = static_cast<virtiofs_mount_data*>(vnode->v_mount->m_data);
     auto* drv = m_data->drv;
-    auto error = fuse_req_send_and_receive_reply(drv, FUSE_OPEN,
+    auto operation = S_ISDIR(inode->attr.mode) ? FUSE_OPENDIR : FUSE_OPEN;
+    auto error = fuse_req_send_and_receive_reply(drv, operation,
         inode->nodeid, in_args.get(), sizeof(*in_args), out_args.get(),
         sizeof(*out_args)).second;
     if (error) {
@@ -148,7 +149,8 @@ static int virtiofs_close(struct vnode* vnode, struct file* fp)
 
     auto* m_data = static_cast<virtiofs_mount_data*>(vnode->v_mount->m_data);
     auto* drv = m_data->drv;
-    auto error = fuse_req_send_and_receive_reply(drv, FUSE_RELEASE,
+    auto operation = S_ISDIR(inode->attr.mode) ? FUSE_RELEASEDIR : FUSE_RELEASE;
+    auto error = fuse_req_send_and_receive_reply(drv, operation,
         inode->nodeid, in_args.get(), sizeof(*in_args), nullptr, 0).second;
     if (error) {
         kprintf("[virtiofs] inode %lld, close failed\n", inode->nodeid);
