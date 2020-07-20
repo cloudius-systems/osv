@@ -172,16 +172,16 @@ def setup_tap_interface(mode, tap_interface_name, tap_ip=None, physical_nic=None
             else:
                 subprocess.call([setup_networking_script, 'natted', tap_interface_name, tap_ip])
 
-def find_firecracker(dirname):
-    firecracker_path = os.path.join(dirname, '../.firecracker/firecracker')
+def find_firecracker(dirname, arch):
+    firecracker_path = os.path.join(dirname, '../.firecracker/firecracker-%s' % arch)
     if os.environ.get('FIRECRACKER_PATH'):
         firecracker_path = os.environ.get('FIRECRACKER_PATH')
 
     # And offer to install if not found
-    firecracker_version = 'v0.21.0'
+    firecracker_version = 'v0.21.1'
     if not os.path.exists(firecracker_path):
         url_base = 'https://github.com/firecracker-microvm/firecracker/releases/download'
-        download_url = '%s/%s/firecracker-%s-x86_64' % (url_base, firecracker_version, firecracker_version)
+        download_url = '%s/%s/firecracker-%s-%s' % (url_base, firecracker_version, firecracker_version, arch)
         answer = input("Firecracker executable has not been found under %s. "
                            "Would you like to download it from %s and place it under %s? [y|n]" %
                            (firecracker_path, download_url, firecracker_path))
@@ -255,7 +255,7 @@ def get_memory_size_in_mb(options):
 def main(options):
     # Check if firecracker is installed
     dirname = os.path.dirname(os.path.abspath(__file__))
-    firecracker_path = find_firecracker(dirname)
+    firecracker_path = find_firecracker(dirname, options.arch)
 
     # Firecracker is installed so lets start
     print_time("Start")
@@ -277,7 +277,11 @@ def main(options):
     if not cmdline:
         with open(os.path.join(dirname, '../build/release/cmdline'), 'r') as f:
             cmdline = f.read()
-    cmdline = "--nopci %s" % cmdline
+
+    if options.arch == 'aarch64':
+        cmdline = "console=tty --disable_rofs_cache %s" % cmdline
+    else:
+        cmdline = "--nopci %s" % cmdline
 
     if options.networking:
         tap_device = 'fc_tap0'
@@ -322,6 +326,8 @@ def main(options):
         print_time("Created OSv VM with cmdline: %s" % cmdline)
 
         if not options.api:
+            if options.verbose:
+                print(client.firecracker_config_json())
             firecracker, config_file_path = start_firecracker_with_no_api(firecracker_path, client.firecracker_config_json())
         else:
             client.start_instance()
@@ -375,6 +381,8 @@ if __name__ == "__main__":
                         help="use socket-based API to configure and start OSv on firecracker")
     parser.add_argument("-p", "--physical_nic", action="store", default=None,
                         help="name of the physical NIC (wired or wireless) to forward to if in natted mode")
+    parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default="x86_64",
+                        help="specify Firecracker architecture: x86_64, aarch64")
 
     cmd_args = parser.parse_args()
     if cmd_args.verbose:
