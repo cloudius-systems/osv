@@ -20,7 +20,7 @@ stty_params = None
 
 devnull = open('/dev/null', 'w')
 
-host_arch = subprocess.check_output(["uname", "-m"]).decode('utf-8').split('\n')[0]
+host_arch = os.uname().machine
 
 def stty_save():
     global stty_params

@@ -14,6 +14,8 @@ devnull = open('/dev/null', 'w')
 
 osv_base = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 
+host_arch = os.uname().machine
+
 def stty_save():
     global stty_params
     p = subprocess.Popen(["stty", "-g"], stdout=subprocess.PIPE, stderr=devnull)
@@ -134,8 +136,10 @@ def start_osv_qemu(options):
         boot_index = ",bootindex=0"
 
     if options.arch == 'aarch64':
+        if options.hypervisor == 'qemu':
+            args += ["-machine", "gic-version=2", "-cpu", "cortex-a57"]
         args += [
-        "-machine", "virt", "-machine", "gic-version=2", "-cpu", "cortex-a57",
+        "-machine", "virt",
         "-device", "virtio-blk-pci,id=blk0,drive=hd0,scsi=off%s%s" % (boot_index, options.virtio_device_suffix),
         "-drive", "file=%s,if=none,id=hd0,%s" % (options.image_file, aio)]
     elif options.hypervisor == 'qemu_microvm':
@@ -228,7 +232,10 @@ def start_osv_qemu(options):
         args += ["-device", "virtio-rng-pci%s" % options.virtio_device_suffix]
 
     if options.hypervisor == "kvm" or options.hypervisor == 'qemu_microvm':
-        args += ["-enable-kvm", "-cpu", "host,+x2apic"]
+        if options.arch == 'aarch64':
+            args += ["-enable-kvm", "-cpu", "host"]
+        else:
+            args += ["-enable-kvm", "-cpu", "host,+x2apic"]
     elif options.hypervisor == "none" or options.hypervisor == "qemu":
         pass
 
@@ -267,10 +274,7 @@ def start_osv_qemu(options):
         qemu_env = os.environ.copy()
 
         qemu_env['OSV_BRIDGE'] = options.bridge
-        if options.arch == 'aarch64':
-            qemu_path = 'qemu-system-aarch64'
-        else:
-            qemu_path = options.qemu_path
+        qemu_path = options.qemu_path or ('qemu-system-%s' % options.arch)
         cmdline = [qemu_path] + args
         if options.dry_run:
             print(format_args(cmdline))
@@ -282,8 +286,8 @@ def start_osv_qemu(options):
         if e.errno == errno.ENOENT:
             print("'%s' binary not found. Please install the qemu-system-x86 package." % qemu_path)
         else:
-            print("OS error({0}): \"{1}\" while running qemu-system-x86_64 {2}".
-                format(e.errno, e.strerror, " ".join(args)))
+            print("OS error({0}): \"{1}\" while running qemu-system-{2} {3}".
+                format(e.errno, e.strerror, options.arch, " ".join(args)))
     finally:
         cleanups()
 
@@ -468,7 +472,7 @@ def start_osv(options):
         return
 
 def choose_hypervisor(external_networking, arch):
-    if os.path.exists('/dev/kvm') and arch == 'x86_64':
+    if os.path.exists('/dev/kvm') and arch == host_arch:
         return 'kvm'
     if (os.path.exists('/proc/xen/capabilities')
         and 'control_d' in file('/proc/xen/capabilities').read()
@@ -550,7 +554,6 @@ if __name__ == "__main__":
     parser.add_argument("--sampler", action="store", nargs='?', const='1000',
                         help="start sampling profiler. optionally specify sampling frequency in Hz")
     parser.add_argument("--qemu-path", action="store",
-                        default="qemu-system-x86_64",
                         help="specify qemu command path")
     parser.add_argument("--nics", action="store", default="1",
                         help="number of NICs configured for the VM")
@@ -570,26 +573,26 @@ if __name__ == "__main__":
                         help="path to kernel.elf. defaults to build/$mode/kernel.elf")
     parser.add_argument("--virtio", action="store", choices=["legacy","transitional","modern"], default="transitional",
                         help="specify virtio version: legacy, transitional or modern")
-    parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default="x86_64",
+    parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default=host_arch,
                         help="specify QEMU architecture: x86_64, aarch64")
     parser.add_argument("--virtio-fs-tag", action="store",
                         help="virtio-fs device tag")
     parser.add_argument("--virtio-fs-dir", action="store",
                         help="path to the directory exposed via virtio-fs mount")
     cmdargs = parser.parse_args()
+
     cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
     if cmdargs.arch == 'aarch64':
-        cmdargs.kernel_file = os.path.join(osv_base, "build/%s/loader.img" % cmdargs.opt_path)
+        default_kernel_file_name = "loader.img"
+        default_image_file_name = "disk.img"
     else:
-        cmdargs.kernel_file = os.path.abspath(cmdargs.kernel_path or os.path.join(osv_base, "build/%s/kernel.elf" % cmdargs.opt_path))
-    if cmdargs.image:
-        cmdargs.image_file = os.path.abspath(cmdargs.image)
-    elif cmdargs.arch == 'aarch64':
-        cmdargs.image_file = os.path.abspath(os.path.join(osv_base, "build/%s/disk.img" % cmdargs.opt_path))
-    else:
-        cmdargs.image_file = os.path.abspath(os.path.join(osv_base, "build/%s/usr.img" % cmdargs.opt_path))
+        default_kernel_file_name = "kernel.elf"
+        default_image_file_name = "usr.img"
+    cmdargs.kernel_file = os.path.abspath(cmdargs.kernel_path or os.path.join(osv_base, "build/%s/%s" % (cmdargs.opt_path, default_kernel_file_name)))
+    cmdargs.image_file = os.path.abspath(cmdargs.image or os.path.join(osv_base, "build/%s/%s" % (cmdargs.opt_path, default_image_file_name)))
     if not os.path.exists(cmdargs.image_file):
         raise Exception('Image file %s does not exist.' % cmdargs.image_file)
+
     if cmdargs.cloud_init_image:
         cmdargs.cloud_init_image = os.path.abspath(cmdargs.cloud_init_image)
         if not os.path.exists(cmdargs.cloud_init_image):
