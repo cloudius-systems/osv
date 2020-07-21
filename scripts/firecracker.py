@@ -14,12 +14,13 @@ import json
 import tempfile
 from datetime import datetime
 
-
 verbose = False
 
 stty_params = None
 
 devnull = open('/dev/null', 'w')
+
+host_arch = subprocess.check_output(["uname", "-m"]).decode('utf-8').split('\n')[0]
 
 def stty_save():
     global stty_params
@@ -381,7 +382,7 @@ if __name__ == "__main__":
                         help="use socket-based API to configure and start OSv on firecracker")
     parser.add_argument("-p", "--physical_nic", action="store", default=None,
                         help="name of the physical NIC (wired or wireless) to forward to if in natted mode")
-    parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default="x86_64",
+    parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default=host_arch,
                         help="specify Firecracker architecture: x86_64, aarch64")
 
     cmd_args = parser.parse_args()
