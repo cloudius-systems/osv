@@ -300,7 +300,7 @@ build_all_tests: $(all_tests:%=$(out)/%)
 usr.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FORCE
 	@echo "  generating modules/tests/usr.manifest"
 	@cat $@.skel > $@
-	@if [ $(arch) == x64 ]; then \
+	@if [ "$(arch)" = "x64" ]; then \
 		ldd $(addprefix $(out)/tests/,$(boost-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@; \
 	else \
 		./add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@; \
@@ -314,7 +314,7 @@ FORCE:
 common.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FORCE
 	@echo "  generating modules/tests/common.manifest"
 	@cat usr.manifest.skel > $@
-	@if [ $(arch) == x64 ]; then \
+	@if [ "$(arch)" = "x64" ]; then \
 		ldd $(addprefix $(out)/tests/,$(boost-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@; \
 	else \
 		./add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@; \
