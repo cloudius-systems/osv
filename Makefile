@@ -1,4 +1,4 @@
-# OSv makefile
+# O./libc/string/strdup.cSv makefile
 #
 # Copyright (C) 2015 Cloudius Systems, Ltd.
 # This work is open source software, licensed under the terms of the
@@ -1344,10 +1344,10 @@ musl += multibyte/wctomb.o
 
 $(out)/libc/multibyte/mbsrtowcs.o: CFLAGS += -Imusl/src/multibyte
 
-libc += network/htonl.o
-libc += network/htons.o
-libc += network/ntohl.o
-libc += network/ntohs.o
+musl += network/htonl.o
+musl += network/htons.o
+musl += network/ntohl.o
+musl += network/ntohs.o
 libc += network/gethostbyname_r.o
 musl += network/gethostbyname2_r.o
 musl += network/gethostbyaddr_r.o
@@ -1576,13 +1576,13 @@ musl += string/strcasecmp.o
 musl += string/strcasestr.o
 libc += string/strcat.o
 libc += string/__strcat_chk.o
-libc += string/strchr.o
+musl += string/strchr.o
 libc += string/strchrnul.o
-libc += string/strcmp.o
+musl += string/strcmp.o
 libc += string/strcpy.o
 libc += string/__strcpy_chk.o
-libc += string/strcspn.o
-libc += string/strdup.o
+musl += string/strcspn.o
+musl += string/strdup.o
 libc += string/strerror_r.o
 libc += string/strlcat.o
 libc += string/strlcpy.o
@@ -1590,18 +1590,18 @@ libc += string/strlen.o
 musl += string/strncasecmp.o
 libc += string/strncat.o
 libc += string/__strncat_chk.o
-libc += string/strncmp.o
+musl += string/strncmp.o
 libc += string/strncpy.o
 libc += string/__strncpy_chk.o
 libc += string/__strndup.o
 musl += string/strndup.o
 musl += string/strnlen.o
-libc += string/strpbrk.o
+musl += string/strpbrk.o
 musl += string/strrchr.o
-libc += string/strsep.o
+musl += string/strsep.o
 libc += string/stresep.o
 libc += string/strsignal.o
-libc += string/strspn.o
+musl += string/strspn.o
 musl += string/strstr.o
 libc += string/strtok.o
 libc += string/strtok_r.o
