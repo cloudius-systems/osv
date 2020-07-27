@@ -1,4 +1,4 @@
-# O./libc/string/strdup.cSv makefile
+# OSv makefile
 #
 # Copyright (C) 2015 Cloudius Systems, Ltd.
 # This work is open source software, licensed under the terms of the
@@ -1556,8 +1556,8 @@ musl += string/bcmp.o
 musl += string/bcopy.o
 musl += string/bzero.o
 musl += string/index.o
-libc += string/memccpy.o
-libc += string/memchr.o
+musl += string/memccpy.o
+musl += string/memchr.o
 musl += string/memcmp.o
 libc += string/memcpy.o
 musl += string/memmem.o
@@ -1569,15 +1569,15 @@ libc += string/memset.o
 libc += string/__memset_chk.o
 libc += string/rawmemchr.o
 musl += string/rindex.o
-libc += string/stpcpy.o
+musl += string/stpcpy.o
 libc += string/__stpcpy_chk.o
-libc += string/stpncpy.o
+musl += string/stpncpy.o
 musl += string/strcasecmp.o
 musl += string/strcasestr.o
 musl += string/strcat.o
 libc += string/__strcat_chk.o
 musl += string/strchr.o
-libc += string/strchrnul.o
+musl += string/strchrnul.o
 musl += string/strcmp.o
 musl += string/strcpy.o
 libc += string/__strcpy_chk.o
@@ -1585,8 +1585,8 @@ musl += string/strcspn.o
 musl += string/strdup.o
 libc += string/strerror_r.o
 libc += string/strlcat.o
-libc += string/strlcpy.o
-libc += string/strlen.o
+musl += string/strlcpy.o
+musl += string/strlen.o
 musl += string/strncasecmp.o
 musl += string/strncat.o
 libc += string/__strncat_chk.o
