@@ -55,12 +55,15 @@ std::pair<size_t, int> fuse_req_send_and_receive_reply(virtio::fs* drv,
     req->output_args_size = output_args_size;
 
     assert(drv);
-    drv->make_request(*req);
+    int error = drv->make_request(*req);
+    if (error) {
+        return std::make_pair(0, error);
+    }
     req->wait();
 
     // return the length of the response's payload
     size_t len = req->out_header.len - sizeof(fuse_out_header);
-    int error = -req->out_header.error;
+    error = -req->out_header.error;
 
     return std::make_pair(len, error);
 }
