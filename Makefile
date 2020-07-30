@@ -1305,7 +1305,7 @@ $(out)/musl/src/math/llroundf.o: conf-opt := $(conf-opt) -O0
 $(out)/musl/src/math/llroundl.o: conf-opt := $(conf-opt) -O0
 
 musl += misc/a64l.o
-libc += misc/basename.o
+musl += misc/basename.o
 musl += misc/dirname.o
 libc += misc/error.o
 libc += misc/ffs.o
@@ -1367,7 +1367,7 @@ musl += network/proto.o
 libc += network/if_indextoname.o
 libc += network/if_nametoindex.o
 libc += network/gai_strerror.o
-libc += network/h_errno.o
+musl += network/h_errno.o
 musl += network/getservbyname_r.o
 musl += network/getservbyname.o
 musl += network/getservbyport_r.o
