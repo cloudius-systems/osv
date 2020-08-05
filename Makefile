@@ -1164,7 +1164,7 @@ musl += math/fminl.o
 musl += math/fmod.o
 musl += math/fmodf.o
 musl += math/fmodl.o
-libc += math/finite.o
+libc += math/finite.o #This 3 libc modules will go away once we upgrade to musl 1.1.24
 libc += math/finitef.o
 libc += math/finitel.o
 musl += math/frexp.o
@@ -1288,7 +1288,6 @@ musl += math/tgammal.o
 musl += math/trunc.o
 musl += math/truncf.o
 musl += math/truncl.o
-libc += math/aliases.o
 
 # Issue #867: Gcc 4.8.4 has a bug where it optimizes the trivial round-
 # related functions incorrectly - it appears to convert calls to any

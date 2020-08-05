@@ -9,4 +9,17 @@
  * address.
  */
 
+/* network */
 __res_init = res_init;
+
+/* math */
+__exp_finite = exp;
+__exp2_finite = exp2;
+__log10_finite = log10;
+__log2_finite = log2;
+__log2f_finite = log2f;
+__log_finite = log;
+__pow_finite = pow;
+__finite = finite;
+__finitef = finitef;
+__finitel = finitel;

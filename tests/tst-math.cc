@@ -10,6 +10,12 @@
 
 #include <math.h>
 
+extern "C" int __finite(double x);
+extern "C" int __finitef(float x);
+extern "C" int __finitel(long double x);
+
+extern "C" double __log10_finite(double x);
+
 #include <iostream>
 
 static int tests = 0, fails = 0;
@@ -37,6 +43,15 @@ int main(int argc, char **argv)
     // Test nearbyint()
     expect(nearbyint(1.3), 1.0);
     expect(nearbyint(1.7), 2.0);
+
+    expect(finite(NAN), 0);
+    expect(__finite(NAN), 0);
+    expect(finitel(NAN), 0);
+    expect(__finitel(NAN), 0);
+    expect(finitef(NAN), 0);
+    expect(__finitef(NAN), 0);
+
+    expect(__log10_finite(100), log10(100));
 
     std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";
     return fails == 0 ? 0 : 1;
