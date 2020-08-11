@@ -23,3 +23,9 @@ __pow_finite = pow;
 __finite = finite;
 __finitef = finitef;
 __finitel = finitel;
+
+/* multibyte */
+__mbrlen = mbrlen;
+
+/* string */
+__strtok_r = strtok_r;
