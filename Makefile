@@ -1592,7 +1592,6 @@ libc += string/__strncat_chk.o
 musl += string/strncmp.o
 musl += string/strncpy.o
 libc += string/__strncpy_chk.o
-libc += string/__strndup.o
 musl += string/strndup.o
 musl += string/strnlen.o
 musl += string/strpbrk.o

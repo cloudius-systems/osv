@@ -29,3 +29,4 @@ __mbrlen = mbrlen;
 
 /* string */
 __strtok_r = strtok_r;
+__strndup = strndup;
