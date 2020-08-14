@@ -14,13 +14,39 @@
  * limitations under the License.
  */
 
+/*
+ * Copyright (C) 2020 Waldemar Kozaczuk
+ *
+ * This work is open source software, licensed under the terms of the
+ * BSD license as described in the LICENSE file in the top-level directory.
+ */
+
+// This file is a verbatim copy of tests/ctype_test.cpp from the bionic project
+// (https://android.googlesource.com/platform/bionic as of commit: 9c6d60d073db079a87fbeb5de3e72ac12838a480)
+// PLUS some minor tweaks (mostly macros) that adapt it to run with boost unit framework
+// instead of Google's test framework
+
 #include <wctype.h>
 
 #include <dlfcn.h>
 
-#include <gtest/gtest.h>
+//#include <gtest/gtest.h>
+#define BOOST_TEST_MODULE tst-wctype
 
-#include "utils.h"
+#include <boost/test/unit_test.hpp>
+namespace utf = boost::unit_test;
+
+//#include "utils.h"
+#define have_dl() (true)
+
+#define TEST(MODULE_NAME,TEST_NAME) BOOST_AUTO_TEST_CASE(MODULE_NAME##TEST_NAME)
+#define EXPECT_TRUE(EXP) BOOST_REQUIRE(EXP)
+#define EXPECT_FALSE(EXP) BOOST_REQUIRE(!(EXP))
+#define EXPECT_TRUE_P(EXP,P) BOOST_REQUIRE_MESSAGE(EXP, "Failed for " << P)
+#define EXPECT_FALSE_P(EXP,P) BOOST_REQUIRE_MESSAGE(!(EXP), "Failed for " << P)
+#define EXPECT_EQ(EXP1,EXP2) BOOST_CHECK_EQUAL(EXP1,EXP2)
+#define GTEST_LOG_(I) std::cout
+#define GTEST_SKIP() std::cout
 
 class UtfLocale {
  public:
@@ -39,16 +65,16 @@ static void TestIsWideFn(int fn(wint_t),
       GTEST_LOG_(INFO) << "skipping unicode test " << *p;
       continue;
     }
-    EXPECT_TRUE(fn(*p)) << *p;
-    EXPECT_TRUE(fn_l(*p, l.l)) << *p;
+    EXPECT_TRUE_P(fn(*p), *p);
+    EXPECT_TRUE_P(fn_l(*p, l.l), *p);
   }
   for (const wchar_t* p = falses; *p; ++p) {
     if (!have_dl() && *p > 0x7f) {
       GTEST_LOG_(INFO) << "skipping unicode test " << *p;
       continue;
     }
-    EXPECT_FALSE(fn(*p)) << *p;
-    EXPECT_FALSE(fn_l(*p, l.l)) << *p;
+    EXPECT_FALSE_P(fn(*p), *p);
+    EXPECT_FALSE_P(fn_l(*p, l.l), *p);
   }
 }
 

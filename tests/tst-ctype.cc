@@ -14,9 +14,30 @@
  * limitations under the License.
  */
 
-#include <gtest/gtest.h>
+/*
+ * Copyright (C) 2020 Waldemar Kozaczuk
+ *
+ * This work is open source software, licensed under the terms of the
+ * BSD license as described in the LICENSE file in the top-level directory.
+ */
+
+// This file is a verbatim copy of tests/ctype_test.cpp from the bionic project
+// (https://android.googlesource.com/platform/bionic as of commit: 9c6d60d073db079a87fbeb5de3e72ac12838a480)
+// PLUS some minor tweaks (mostly macros) that adapt it to run with boost unit framework
+// instead of Google's test framework
+
+//#include <gtest/gtest.h>
+#define BOOST_TEST_MODULE tst-ctype
+
+#include <boost/test/unit_test.hpp>
+namespace utf = boost::unit_test;
 
 #include <ctype.h>
+
+#define TEST(MODULE_NAME,TEST_NAME) BOOST_AUTO_TEST_CASE(MODULE_NAME##TEST_NAME)
+#define EXPECT_TRUE(EXP) BOOST_REQUIRE_MESSAGE(EXP, "Failed for " << i)
+#define EXPECT_FALSE(EXP) BOOST_REQUIRE_MESSAGE(!(EXP), "Failed for " << i)
+#define EXPECT_EQ(EXP1,EXP2) BOOST_CHECK_EQUAL(EXP1,EXP2)
 
 // We test from -1 (EOF) to 0xff, because that's the range for which behavior
 // is actually defined. (It's explicitly undefined below or above that.) Most
@@ -31,9 +52,9 @@ TEST(ctype, isalnum) {
     if ((i >= '0' && i <= '9') ||
         (i >= 'A' && i <= 'Z') ||
         (i >= 'a' && i <= 'z')) {
-      EXPECT_TRUE(isalnum(i)) << i;
+      EXPECT_TRUE(isalnum(i));
     } else {
-      EXPECT_FALSE(isalnum(i)) << i;
+      EXPECT_FALSE(isalnum(i));
     }
   }
 }
@@ -43,9 +64,9 @@ TEST(ctype, isalnum_l) {
     if ((i >= '0' && i <= '9') ||
         (i >= 'A' && i <= 'Z') ||
         (i >= 'a' && i <= 'z')) {
-      EXPECT_TRUE(isalnum_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_TRUE(isalnum_l(i, LC_GLOBAL_LOCALE));
     } else {
-      EXPECT_FALSE(isalnum_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_FALSE(isalnum_l(i, LC_GLOBAL_LOCALE));
     }
   }
 }
@@ -54,9 +75,9 @@ TEST(ctype, isalpha) {
   for (int i = kMin; i < kMax; ++i) {
     if ((i >= 'A' && i <= 'Z') ||
         (i >= 'a' && i <= 'z')) {
-      EXPECT_TRUE(isalpha(i)) << i;
+      EXPECT_TRUE(isalpha(i));
     } else {
-      EXPECT_FALSE(isalpha(i)) << i;
+      EXPECT_FALSE(isalpha(i));
     }
   }
 }
@@ -65,9 +86,9 @@ TEST(ctype, isalpha_l) {
   for (int i = kMin; i < kMax; ++i) {
     if ((i >= 'A' && i <= 'Z') ||
         (i >= 'a' && i <= 'z')) {
-      EXPECT_TRUE(isalpha_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_TRUE(isalpha_l(i, LC_GLOBAL_LOCALE));
     } else {
-      EXPECT_FALSE(isalpha_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_FALSE(isalpha_l(i, LC_GLOBAL_LOCALE));
     }
   }
 }
@@ -75,9 +96,9 @@ TEST(ctype, isalpha_l) {
 TEST(ctype, isascii) {
   for (int i = kMin; i < kMax; ++i) {
     if (i >= 0 && i <= 0x7f) {
-      EXPECT_TRUE(isascii(i)) << i;
+      EXPECT_TRUE(isascii(i));
     } else {
-      EXPECT_FALSE(isascii(i)) << i;
+      EXPECT_FALSE(isascii(i));
     }
   }
 }
@@ -85,9 +106,9 @@ TEST(ctype, isascii) {
 TEST(ctype, isblank) {
   for (int i = kMin; i < kMax; ++i) {
     if (i == '\t' || i == ' ') {
-      EXPECT_TRUE(isblank(i)) << i;
+      EXPECT_TRUE(isblank(i));
     } else {
-      EXPECT_FALSE(isblank(i)) << i;
+      EXPECT_FALSE(isblank(i));
     }
   }
 }
@@ -95,9 +116,9 @@ TEST(ctype, isblank) {
 TEST(ctype, isblank_l) {
   for (int i = kMin; i < kMax; ++i) {
     if (i == '\t' || i == ' ') {
-      EXPECT_TRUE(isblank_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_TRUE(isblank_l(i, LC_GLOBAL_LOCALE));
     } else {
-      EXPECT_FALSE(isblank_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_FALSE(isblank_l(i, LC_GLOBAL_LOCALE));
     }
   }
 }
@@ -105,9 +126,9 @@ TEST(ctype, isblank_l) {
 TEST(ctype, iscntrl) {
   for (int i = kMin; i < kMax; ++i) {
     if ((i >= 0 && i < ' ') || i == 0x7f) {
-      EXPECT_TRUE(iscntrl(i)) << i;
+      EXPECT_TRUE(iscntrl(i));
     } else {
-      EXPECT_FALSE(iscntrl(i)) << i;
+      EXPECT_FALSE(iscntrl(i));
     }
   }
 }
@@ -115,9 +136,9 @@ TEST(ctype, iscntrl) {
 TEST(ctype, iscntrl_l) {
   for (int i = kMin; i < kMax; ++i) {
     if ((i >= 0 && i < ' ') || i == 0x7f) {
-      EXPECT_TRUE(iscntrl_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_TRUE(iscntrl_l(i, LC_GLOBAL_LOCALE));
     } else {
-      EXPECT_FALSE(iscntrl_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_FALSE(iscntrl_l(i, LC_GLOBAL_LOCALE));
     }
   }
 }
@@ -125,9 +146,9 @@ TEST(ctype, iscntrl_l) {
 TEST(ctype, isdigit) {
   for (int i = kMin; i < kMax; ++i) {
     if (i >= '0' && i <= '9') {
-      EXPECT_TRUE(isdigit(i)) << i;
+      EXPECT_TRUE(isdigit(i));
     } else {
-      EXPECT_FALSE(isdigit(i)) << i;
+      EXPECT_FALSE(isdigit(i));
     }
   }
 }
@@ -135,9 +156,9 @@ TEST(ctype, isdigit) {
 TEST(ctype, isdigit_l) {
   for (int i = kMin; i < kMax; ++i) {
     if (i >= '0' && i <= '9') {
-      EXPECT_TRUE(isdigit_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_TRUE(isdigit_l(i, LC_GLOBAL_LOCALE));
     } else {
-      EXPECT_FALSE(isdigit_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_FALSE(isdigit_l(i, LC_GLOBAL_LOCALE));
     }
   }
 }
@@ -145,9 +166,9 @@ TEST(ctype, isdigit_l) {
 TEST(ctype, isgraph) {
   for (int i = kMin; i < kMax; ++i) {
     if (i >= '!' && i <= '~') {
-      EXPECT_TRUE(isgraph(i)) << i;
+      EXPECT_TRUE(isgraph(i));
     } else {
-      EXPECT_FALSE(isgraph(i)) << i;
+      EXPECT_FALSE(isgraph(i));
     }
   }
 }
@@ -155,9 +176,9 @@ TEST(ctype, isgraph) {
 TEST(ctype, isgraph_l) {
   for (int i = kMin; i < kMax; ++i) {
     if (i >= '!' && i <= '~') {
-      EXPECT_TRUE(isgraph_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_TRUE(isgraph_l(i, LC_GLOBAL_LOCALE));
     } else {
-      EXPECT_FALSE(isgraph_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_FALSE(isgraph_l(i, LC_GLOBAL_LOCALE));
     }
   }
 }
@@ -165,9 +186,9 @@ TEST(ctype, isgraph_l) {
 TEST(ctype, islower) {
   for (int i = kMin; i < kMax; ++i) {
     if (i >= 'a' && i <= 'z') {
-      EXPECT_TRUE(islower(i)) << i;
+      EXPECT_TRUE(islower(i));
     } else {
-      EXPECT_FALSE(islower(i)) << i;
+      EXPECT_FALSE(islower(i));
     }
   }
 }
@@ -175,9 +196,9 @@ TEST(ctype, islower) {
 TEST(ctype, islower_l) {
   for (int i = kMin; i < kMax; ++i) {
     if (i >= 'a' && i <= 'z') {
-      EXPECT_TRUE(islower_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_TRUE(islower_l(i, LC_GLOBAL_LOCALE));
     } else {
-      EXPECT_FALSE(islower_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_FALSE(islower_l(i, LC_GLOBAL_LOCALE));
     }
   }
 }
@@ -185,9 +206,9 @@ TEST(ctype, islower_l) {
 TEST(ctype, isprint) {
   for (int i = kMin; i < kMax; ++i) {
     if (i >= ' ' && i <= '~') {
-      EXPECT_TRUE(isprint(i)) << i;
+      EXPECT_TRUE(isprint(i));
     } else {
-      EXPECT_FALSE(isprint(i)) << i;
+      EXPECT_FALSE(isprint(i));
     }
   }
 }
@@ -195,9 +216,9 @@ TEST(ctype, isprint) {
 TEST(ctype, isprint_l) {
   for (int i = kMin; i < kMax; ++i) {
     if (i >= ' ' && i <= '~') {
-      EXPECT_TRUE(isprint_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_TRUE(isprint_l(i, LC_GLOBAL_LOCALE));
     } else {
-      EXPECT_FALSE(isprint_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_FALSE(isprint_l(i, LC_GLOBAL_LOCALE));
     }
   }
 }
@@ -208,9 +229,9 @@ TEST(ctype, ispunct) {
         (i >= ':' && i <= '@') ||
         (i >= '[' && i <= '`') ||
         (i >= '{' && i <= '~')) {
-      EXPECT_TRUE(ispunct(i)) << i;
+      EXPECT_TRUE(ispunct(i));
     } else {
-      EXPECT_FALSE(ispunct(i)) << i;
+      EXPECT_FALSE(ispunct(i));
     }
   }
 }
@@ -221,9 +242,9 @@ TEST(ctype, ispunct_l) {
         (i >= ':' && i <= '@') ||
         (i >= '[' && i <= '`') ||
         (i >= '{' && i <= '~')) {
-      EXPECT_TRUE(ispunct_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_TRUE(ispunct_l(i, LC_GLOBAL_LOCALE));
     } else {
-      EXPECT_FALSE(ispunct_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_FALSE(ispunct_l(i, LC_GLOBAL_LOCALE));
     }
   }
 }
@@ -231,9 +252,9 @@ TEST(ctype, ispunct_l) {
 TEST(ctype, isspace) {
   for (int i = kMin; i < kMax; ++i) {
     if ((i >= '\t' && i <= '\r') || i == ' ') {
-      EXPECT_TRUE(isspace(i)) << i;
+      EXPECT_TRUE(isspace(i));
     } else {
-      EXPECT_FALSE(isspace(i)) << i;
+      EXPECT_FALSE(isspace(i));
     }
   }
 }
@@ -241,9 +262,9 @@ TEST(ctype, isspace) {
 TEST(ctype, isspace_l) {
   for (int i = kMin; i < kMax; ++i) {
     if ((i >= '\t' && i <= '\r') || i == ' ') {
-      EXPECT_TRUE(isspace_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_TRUE(isspace_l(i, LC_GLOBAL_LOCALE));
     } else {
-      EXPECT_FALSE(isspace_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_FALSE(isspace_l(i, LC_GLOBAL_LOCALE));
     }
   }
 }
@@ -251,9 +272,9 @@ TEST(ctype, isspace_l) {
 TEST(ctype, isupper) {
   for (int i = kMin; i < kMax; ++i) {
     if (i >= 'A' && i <= 'Z') {
-      EXPECT_TRUE(isupper(i)) << i;
+      EXPECT_TRUE(isupper(i));
     } else {
-      EXPECT_FALSE(isupper(i)) << i;
+      EXPECT_FALSE(isupper(i));
     }
   }
 }
@@ -261,9 +282,9 @@ TEST(ctype, isupper) {
 TEST(ctype, isupper_l) {
   for (int i = kMin; i < kMax; ++i) {
     if (i >= 'A' && i <= 'Z') {
-      EXPECT_TRUE(isupper_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_TRUE(isupper_l(i, LC_GLOBAL_LOCALE));
     } else {
-      EXPECT_FALSE(isupper_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_FALSE(isupper_l(i, LC_GLOBAL_LOCALE));
     }
   }
 }
@@ -273,9 +294,9 @@ TEST(ctype, isxdigit) {
     if ((i >= '0' && i <= '9') ||
         (i >= 'A' && i <= 'F') ||
         (i >= 'a' && i <= 'f')) {
-      EXPECT_TRUE(isxdigit(i)) << i;
+      EXPECT_TRUE(isxdigit(i));
     } else {
-      EXPECT_FALSE(isxdigit(i)) << i;
+      EXPECT_FALSE(isxdigit(i));
     }
   }
 }
@@ -285,9 +306,9 @@ TEST(ctype, isxdigit_l) {
     if ((i >= '0' && i <= '9') ||
         (i >= 'A' && i <= 'F') ||
         (i >= 'a' && i <= 'f')) {
-      EXPECT_TRUE(isxdigit_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_TRUE(isxdigit_l(i, LC_GLOBAL_LOCALE));
     } else {
-      EXPECT_FALSE(isxdigit_l(i, LC_GLOBAL_LOCALE)) << i;
+      EXPECT_FALSE(isxdigit_l(i, LC_GLOBAL_LOCALE));
     }
   }
 }
