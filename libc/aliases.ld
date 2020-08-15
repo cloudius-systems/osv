@@ -24,6 +24,9 @@ __finite = finite;
 __finitef = finitef;
 __finitel = finitel;
 
+/* locale */
+__toupper_l = toupper_l;
+
 /* multibyte */
 __mbrlen = mbrlen;
 
