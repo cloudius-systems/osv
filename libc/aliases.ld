@@ -31,6 +31,9 @@ __setlocale = setlocale;
 /* multibyte */
 __mbrlen = mbrlen;
 
+/* stdio */
+__dup3 = dup3;
+
 /* string */
 __strtok_r = strtok_r;
 __strndup = strndup;
