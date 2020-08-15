@@ -26,6 +26,7 @@ __finitel = finitel;
 
 /* locale */
 __toupper_l = toupper_l;
+__setlocale = setlocale;
 
 /* multibyte */
 __mbrlen = mbrlen;
