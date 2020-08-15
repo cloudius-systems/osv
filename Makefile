@@ -1028,7 +1028,7 @@ musl += locale/iswalnum_l.o
 musl += locale/iswalpha_l.o
 musl += locale/iswblank_l.o
 musl += locale/iswcntrl_l.o
-libc += locale/iswctype_l.o
+musl += locale/iswctype_l.o
 musl += locale/iswdigit_l.o
 musl += locale/iswgraph_l.o
 musl += locale/iswlower_l.o
@@ -1066,7 +1066,7 @@ libc += locale/wcsftime_l.o
 libc += locale/wcsxfrm.o
 libc += locale/wcsxfrm_l.o
 musl += locale/wctrans_l.o
-libc += locale/wctype_l.o
+musl += locale/wctype_l.o
 
 musl += math/__cos.o
 musl += math/__cosdf.o
