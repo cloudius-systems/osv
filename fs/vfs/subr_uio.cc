@@ -41,13 +41,13 @@
 #include <osv/uio.h>
 
 int
-uiomove(void *cp, int n, struct uio *uio)
+uiomove(void *cp, size_t n, struct uio *uio)
 {
 	assert(uio->uio_rw == UIO_READ || uio->uio_rw == UIO_WRITE);
 
 	while (n > 0 && uio->uio_resid) {
 		struct iovec *iov = uio->uio_iov;
-		int cnt = iov->iov_len;
+		size_t cnt = iov->iov_len;
 		if (cnt == 0) {
 			uio->uio_iov++;
 			uio->uio_iovcnt--;

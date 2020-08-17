@@ -42,11 +42,7 @@ __BEGIN_DECLS
 
 enum	uio_rw { UIO_READ, UIO_WRITE };
 
-/*
- * Safe default to prevent possible overflows in user code, otherwise could
- * be SSIZE_T_MAX.
- */
-#define IOSIZE_MAX      INT_MAX
+#define IOSIZE_MAX      SSIZE_MAX
 
 #undef UIO_MAXIOV
 #define UIO_MAXIOV 1024
@@ -61,7 +57,7 @@ struct uio {
 	enum	uio_rw uio_rw;		/* operation */
 };
 
-int	uiomove(void *cp, int n, struct uio *uio);
+int	uiomove(void *cp, size_t n, struct uio *uio);
 
 __END_DECLS
 
