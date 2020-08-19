@@ -131,10 +131,14 @@ fs::fs(virtio_device& virtio_dev)
     // Step 8
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
+    // TODO: Don't ignore the virtio-fs tag and use that instead of _id for
+    // identifying the device (e.g. something like /dev/virtiofs/<tag> or at
+    // least /dev/virtiofs-<tag> would be nice, but devfs does not support
+    // nested directories or device names > 12). Linux does not create a devfs
+    // entry and instead uses the virtio-fs tag passed to mount directly.
     std::string dev_name("virtiofs");
-    dev_name += std::to_string(_disk_idx++);
-
-    struct device* dev = device_create(&fs_driver, dev_name.c_str(), D_BLK); // TODO Should it be really D_BLK?
+    dev_name += std::to_string(_id);
+    struct device* dev = device_create(&fs_driver, dev_name.c_str(), D_BLK);
     dev->private_data = this;
     debugf("virtio-fs: Add device instance %d as [%s]\n", _id,
         dev_name.c_str());
