@@ -1,0 +1,1 @@
+../../musl/src/internal/shgetc.h
