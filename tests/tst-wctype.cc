@@ -29,6 +29,7 @@
 #include <wctype.h>
 
 #include <dlfcn.h>
+#include <iostream>
 
 //#include <gtest/gtest.h>
 #define BOOST_TEST_MODULE tst-wctype
