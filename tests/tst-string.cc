@@ -26,6 +26,8 @@
 // PLUS some minor tweaks (mostly macros) that adapt it to run with boost unit framework
 // instead of Google's test framework
 
+// gcc tests/tst-string.cc -lstdc++  -lboost_unit_test_framework -lboost_filesystem -o /tmp/a
+//#define BOOST_TEST_DYN_LINK //ONLY FOR LINUX
 #define BOOST_TEST_MODULE tst-string
 
 #include <boost/test/unit_test.hpp>
@@ -34,6 +36,10 @@ namespace utf = boost::unit_test;
 #define TEST(MODULE_NAME,TEST_NAME) BOOST_AUTO_TEST_CASE(MODULE_NAME##TEST_NAME)
 #define ASSERT_TRUE(EXP) BOOST_REQUIRE(EXP)
 #define ASSERT_GT(EXP1,EXP2) BOOST_REQUIRE((EXP1)>(EXP2))
+#define ASSERT_EQ(EXP1,EXP2) BOOST_CHECK_EQUAL(EXP1,EXP2)
+#define ASSERT_STREQ(EXP1,EXP2) BOOST_CHECK_EQUAL(EXP1,EXP2)
+
+#include <signal.h>
 
 TEST(STRING_TEST, strxfrm_smoke) {
   locale_t l(newlocale(LC_ALL, "C.UTF-8", nullptr));
@@ -58,4 +64,36 @@ TEST(STRING_TEST, strcoll_smoke) {
   ASSERT_TRUE(strcoll("aac", "aab") > 0);
   ASSERT_TRUE(strcoll_l("aac", "aab", l) > 0);
   freelocale(l);
+}
+
+TEST(STRING_TEST, strsignal) {
+  // A regular signal.
+  ASSERT_STREQ("Hangup", strsignal(1));
+
+  // A real-time signal.
+  // TODO: Disable unti we upgrade musl
+  //ASSERT_STREQ("Real-time signal 14", strsignal(SIGRTMIN + 14));
+
+  // Errors.
+  ASSERT_STREQ("Unknown signal", strsignal(-1)); // Too small.
+  ASSERT_STREQ("Unknown signal", strsignal(0)); // Still too small.
+  ASSERT_STREQ("Unknown signal", strsignal(1234)); // Too large.
+}
+
+static void* ConcurrentStrSignalFn(void*) {
+  bool equal = (strcmp("Unknown signal", strsignal(2002)) == 0);
+  return reinterpret_cast<void*>(equal);
+}
+
+TEST(STRING_TEST, strsignal_concurrent) {
+  const char* strsignal1001 = strsignal(1001);
+  ASSERT_STREQ("Unknown signal", strsignal1001);
+
+  pthread_t t;
+  ASSERT_EQ(0, pthread_create(&t, nullptr, ConcurrentStrSignalFn, nullptr));
+  void* result;
+  ASSERT_EQ(0, pthread_join(t, &result));
+  ASSERT_TRUE(static_cast<bool>(result));
+
+  ASSERT_STREQ("Unknown signal", strsignal1001);
 }
