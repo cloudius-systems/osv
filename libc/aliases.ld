@@ -31,6 +31,10 @@ __setlocale = setlocale;
 /* multibyte */
 __mbrlen = mbrlen;
 
+/* memory */
+__munmap = munmap;
+__mmap = mmap;
+
 /* stdio */
 __dup3 = dup3;
 

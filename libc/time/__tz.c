@@ -2,6 +2,7 @@
 #include <stdint.h>
 #include <limits.h>
 #include <stdlib.h>
+#undef _BSD_SOURCE // avoid conflict of static index variable with index() function in include/api/strings.h
 #include <string.h>
 #include "libc.h"
 
@@ -15,6 +16,7 @@ weak_alias(__tzname, tzname);
 
 static char std_name[TZNAME_MAX+1];
 static char dst_name[TZNAME_MAX+1];
+const char __utc[] = "UTC";
 
 static int dst_off;
 static int r0[5], r1[5];
@@ -26,7 +28,7 @@ static char old_tz_buf[32];
 static char *old_tz = old_tz_buf;
 static size_t old_tz_size = sizeof old_tz_buf;
 
-static int lock[2];
+static mutex_t lock;
 
 static int getint(const char **p)
 {
@@ -127,7 +129,7 @@ static void do_tzset()
 		"/usr/share/zoneinfo/\0/share/zoneinfo/\0/etc/zoneinfo/\0";
 
 	s = getenv("TZ");
-	if (!s) s = "";
+	if (!s) s = __utc;
 
 	if (old_tz && !strcmp(s, old_tz)) return;
 
@@ -137,7 +139,7 @@ static void do_tzset()
 	 * free so as not to pull it into static programs. Growth
 	 * strategy makes it so free would have minimal benefit anyway. */
 	i = strlen(s);
-	if (i > PATH_MAX+1) s = "", i = 0;
+	if (i > PATH_MAX+1) s = __utc, i = 0;
 	if (i >= old_tz_size) {
 		old_tz_size *= 2;
 		if (i >= old_tz_size) old_tz_size = i+1;
@@ -152,7 +154,7 @@ static void do_tzset()
 	 * pathame beginning with "."; in secure mode, only the
 	 * standard path will be searched. */
 	if (*s == '/' || *s == '.') {
-		if (!libc.secure) map = __map_file(s, &map_size);
+		map = __map_file(s, &map_size);
 	} else {
 		for (i=0; s[i] && s[i]!=','; i++) {
 			if (s[i]=='/') {
@@ -175,8 +177,8 @@ static void do_tzset()
 	if (map) {
 		int scale = 2;
 		if (sizeof(time_t) > 4 && map[4]=='2') {
-			size_t skip = zi_dotprod(zi, VEC(1,1,8,5,6,1), 6);
-			trans = zi+skip+44+20;
+			size_t skip = zi_dotprod(zi+20, VEC(1,1,8,5,6,1), 6);
+			trans = zi+skip+44+44;
 			scale++;
 		} else {
 			trans = zi+44;
@@ -192,7 +194,7 @@ static void do_tzset()
 		}
 	}
 
-	if (!s) s = "GMT0";
+	if (!s) s = __utc;
 	getname(std_name, &s);
 	__tzname[0] = std_name;
 	__timezone = getoff(&s);

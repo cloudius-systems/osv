@@ -1,1 +1,5 @@
 /testrunner.so: ./tests/testrunner.so
+/usr/share/zoneinfo/America/**: /usr/share/zoneinfo/America/**
+/usr/share/zoneinfo/Europe/**: /usr/share/zoneinfo/Europe/**
+/usr/share/zoneinfo/Pacific/**: /usr/share/zoneinfo/Pacific/**
+/usr/share/zoneinfo/Asia/**: /usr/share/zoneinfo/Asia/**

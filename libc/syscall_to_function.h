@@ -1,7 +1,7 @@
 #include <bits/syscall.h>
 #include <unistd.h>
 
-#define __OSV_TO_FUNCTION_SYS_open(filename, flags, perm) (open(filename, flags, perm))
+#define __OSV_TO_FUNCTION_SYS_open(filename, flags, ...) (open(filename, flags __VA_OPT__(,) __VA_ARGS__))
 
 #define __OSV_TO_FUNCTION_SYS_close(fd) (close(fd))
 
@@ -14,6 +14,8 @@
 #define __OSV_TO_FUNCTION_SYS_access(p, i) (access(p, i))
 
 #define __OSV_TO_FUNCTION_SYS_ioctl(fd, cmd, args) (ioctl(fd, cmd, args))
+
+#define __OSV_TO_FUNCTION_SYS_fstat(fd, st) (fstat(fd, st))
 
 #define __OSV_TO_FUNCTION_SYS_unlink(path) (unlink(path))
 
