@@ -1057,7 +1057,6 @@ musl += locale/towlower_l.o
 musl += locale/towupper_l.o
 libc += locale/uselocale.o
 musl += locale/wcscoll.o
-libc += locale/wcsftime_l.o
 musl += locale/wcsxfrm.o
 musl += locale/wctrans_l.o
 musl += locale/wctype_l.o
@@ -1665,7 +1664,7 @@ musl += time/strftime.o
 musl += time/strptime.o
 musl += time/time.o
 musl += time/timegm.o
-libc += time/wcsftime.o
+musl += time/wcsftime.o
 libc += time/ftime.o # verbatim copy of the file as in 4b15d9f46a2b@musl
 $(out)/libc/time/ftime.o: CFLAGS += -Ilibc/include
 
