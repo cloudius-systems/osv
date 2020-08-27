@@ -9,6 +9,7 @@
 // To compile on Linux, use: c++ -std=c++11 tests/tst-feexcept.cc
 
 #include <fenv.h>
+#include <__fenv.h>
 #include <signal.h>
 #include <assert.h>
 #include <setjmp.h>

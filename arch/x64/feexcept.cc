@@ -7,6 +7,7 @@
 
 #include <osv/types.h>
 #include <fenv.h>
+#include <__fenv.h>
 
 int feenableexcept(int mask)
 {

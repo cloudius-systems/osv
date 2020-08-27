@@ -8,6 +8,7 @@
 #include <osv/types.h>
 #include <osv/stubbing.hh>
 #include <fenv.h>
+#include <__fenv.h>
 // Note that musl's fenv.h does not define feenableexcept and friends, so
 // we need to 'extern "C"' them here, as no header file does this.
 
