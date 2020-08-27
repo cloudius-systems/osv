@@ -154,7 +154,7 @@ hypercall_memfree()
 }
 
 void
-hypercall_create(void *arg __unused)
+hypercall_create(void *arg __bsd_unused)
 {
     uint64_t hc, hc_orig;
 
@@ -195,7 +195,7 @@ hypercall_create(void *arg __unused)
 SYSINIT(hypercall_ctor, SI_SUB_DRIVERS, SI_ORDER_FIRST, hypercall_create, NULL);
 
 void
-hypercall_destroy(void *arg __unused)
+hypercall_destroy(void *arg __bsd_unused)
 {
     uint64_t hc;
 

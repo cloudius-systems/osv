@@ -97,7 +97,7 @@ callb_cpr_t	callb_cprinfo_safe = {
  * Init all callb tables in the system.
  */
 void
-callb_init(void *dummy __unused2)
+callb_init(void *dummy __bsd_unused2)
 {
 	callb_table.ct_busy = 0;	/* mark table open for additions */
 	mutex_init(&callb_safe_mutex, NULL, MUTEX_DEFAULT, NULL);
@@ -105,7 +105,7 @@ callb_init(void *dummy __unused2)
 }
 
 void
-callb_fini(void *dummy __unused2)
+callb_fini(void *dummy __bsd_unused2)
 {
 	callb_t *cp;
 	int i;

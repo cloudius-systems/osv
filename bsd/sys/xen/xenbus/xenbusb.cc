@@ -131,7 +131,7 @@ xenbusb_free_child_ivars(struct xenbus_device_ivars *ivars)
  */
 static void
 xenbusb_otherend_watch_cb(struct xs_watch *watch, const char **vec,
-    unsigned int vec_size __unused)
+    unsigned int vec_size __bsd_unused)
 {
 	struct xenbus_device_ivars *ivars;
 	device_t child;
@@ -169,7 +169,7 @@ xenbusb_otherend_watch_cb(struct xs_watch *watch, const char **vec,
  */
 static void
 xenbusb_local_watch_cb(struct xs_watch *watch, const char **vec,
-    unsigned int vec_size __unused)
+    unsigned int vec_size __bsd_unused)
 {
 	struct xenbus_device_ivars *ivars;
 	device_t child;
@@ -490,7 +490,7 @@ xenbusb_probe_children(device_t dev)
  *                 be run.
  */
 static void
-xenbusb_probe_children_cb(void *arg, int pending __unused)
+xenbusb_probe_children_cb(void *arg, int pending __bsd_unused)
 {
 	device_t dev = (device_t)arg;
 
@@ -578,7 +578,7 @@ out:
  * \param arg  Unused configuration hook callback argument.
  */
 static void
-xenbusb_nop_confighook_cb(void *arg __unused)
+xenbusb_nop_confighook_cb(void *arg __bsd_unused)
 {
 }
 
@@ -610,7 +610,7 @@ xenbusb_release_confighook(struct xenbusb_softc *xbs)
 /*--------------------------- Public Functions -------------------------------*/
 /*--------- API comments for these methods can be found in xenbusb.h ---------*/
 void
-xenbusb_identify(driver_t *driver __unused, device_t parent)
+xenbusb_identify(driver_t *driver __bsd_unused, device_t parent)
 {
 	/*
 	 * A single instance of each bus type for which we have a driver

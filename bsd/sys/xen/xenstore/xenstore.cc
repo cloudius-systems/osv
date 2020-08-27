@@ -378,7 +378,7 @@ xs_join(const char *dir, const char *name)
  * service has modified the queues.
  */
 static void
-xs_intr(void * arg __unused /*__attribute__((unused))*/)
+xs_intr(void * arg __bsd_unused /*__attribute__((unused))*/)
 {
 
 	/*
@@ -701,7 +701,7 @@ xs_process_msg(enum xsd_sockmsg_type *type)
  * and processes and received messages.
  */
 void
-xs_rcv_thread(void *arg __unused)
+xs_rcv_thread(void *arg __bsd_unused)
 {
 	int error;
 	enum xsd_sockmsg_type type;
@@ -1243,7 +1243,7 @@ xs_suspend(device_t dev)
  * Resume XenStore operations after this VM is resumed.
  */
 static int
-xs_resume(device_t dev __unused)
+xs_resume(device_t dev __bsd_unused)
 {
 	struct xs_watch *watch;
 	char token[sizeof(watch) * 2 + 1];

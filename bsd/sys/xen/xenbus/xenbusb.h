@@ -181,7 +181,7 @@ struct xenbus_device_ivars {
  * \param driver  The driver performing this identify action.
  * \param parent  The NewBus parent device for any devices this method adds.
  */
-void xenbusb_identify(driver_t *driver __unused, device_t parent);
+void xenbusb_identify(driver_t *driver __bsd_unused, device_t parent);
 
 /**
  * \brief Perform common XenBus bus attach processing.

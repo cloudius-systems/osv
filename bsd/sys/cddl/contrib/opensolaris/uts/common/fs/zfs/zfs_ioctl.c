@@ -5667,7 +5667,7 @@ _info(struct modinfo *modinfop)
 #endif	/* sun */
 
 static int
-zfs_modevent(module_t mod, int type, void *unused __unused)
+zfs_modevent(module_t mod, int type, void *unused __bsd_unused)
 {
 	int error = 0;
 

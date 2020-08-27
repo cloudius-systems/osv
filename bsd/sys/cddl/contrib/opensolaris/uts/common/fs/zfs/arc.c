@@ -2479,7 +2479,7 @@ arc_kmem_reap_now(arc_reclaim_strategy_t strat)
 }
 
 static void
-arc_reclaim_thread(void *dummy __unused2)
+arc_reclaim_thread(void *dummy __bsd_unused2)
 {
 	clock_t			growtime = 0;
 	arc_reclaim_strategy_t	last_reclaim = ARC_RECLAIM_CONS;
@@ -3883,7 +3883,7 @@ static kmutex_t arc_lowmem_lock;
 static eventhandler_tag arc_event_lowmem = NULL;
 
 size_t
-arc_lowmem(void *arg __unused2, int howto __unused2)
+arc_lowmem(void *arg __bsd_unused2, int howto __bsd_unused2)
 {
 	uint64_t old_arcsize, new_arcsize;
 	size_t freed = 0;
@@ -4966,7 +4966,7 @@ l2arc_write_buffers(spa_t *spa, l2arc_dev_t *dev, uint64_t target_sz)
  * heart of the L2ARC.
  */
 static void
-l2arc_feed_thread(void *dummy __unused2)
+l2arc_feed_thread(void *dummy __bsd_unused2)
 {
 	callb_cpr_t cpr;
 	l2arc_dev_t *dev;
