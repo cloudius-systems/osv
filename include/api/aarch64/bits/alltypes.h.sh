@@ -24,6 +24,7 @@ TYPEDEF unsigned long size_t;
 TYPEDEF long ssize_t;
 TYPEDEF long ptrdiff_t;
 TYPEDEF __builtin_va_list va_list;
+TYPEDEF __builtin_va_list __isoc_va_list;
 
 #ifndef __cplusplus
 TYPEDEF unsigned int wchar_t;
