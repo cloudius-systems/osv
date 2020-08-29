@@ -59,8 +59,8 @@ system_taskq_fini(void *arg)
 SYSUNINIT(system_taskq_fini, SI_SUB_CONFIGURE, SI_ORDER_ANY, system_taskq_fini, NULL);
 
 taskq_t *
-taskq_create(const char *name, int nthreads, pri_t pri, int minalloc __unused2,
-    int maxalloc __unused2, uint_t flags)
+taskq_create(const char *name, int nthreads, pri_t pri, int minalloc __bsd_unused2,
+    int maxalloc __bsd_unused2, uint_t flags)
 {
 	taskq_t *tq;
 
@@ -77,7 +77,7 @@ taskq_create(const char *name, int nthreads, pri_t pri, int minalloc __unused2,
 
 taskq_t *
 taskq_create_proc(const char *name, int nthreads, pri_t pri, int minalloc,
-    int maxalloc, proc_t *proc __unused2, uint_t flags)
+    int maxalloc, proc_t *proc __bsd_unused2, uint_t flags)
 {
 
 	return (taskq_create(name, nthreads, pri, minalloc, maxalloc, flags));
@@ -99,7 +99,7 @@ taskq_member(taskq_t *tq, kthread_t *thread)
 }
 
 static void
-taskq_run(void *arg, int pending __unused2)
+taskq_run(void *arg, int pending __bsd_unused2)
 {
 	struct ostask *task = arg;
 
@@ -140,7 +140,7 @@ taskq_dispatch(taskq_t *tq, task_func_t func, void *arg, uint_t flags)
 #define	TASKQ_MAGIC	0x74541c
 
 static void
-taskq_run_safe(void *arg, int pending __unused2)
+taskq_run_safe(void *arg, int pending __bsd_unused2)
 {
 	struct ostask *task = arg;
 

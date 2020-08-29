@@ -51,7 +51,7 @@ static inline int     modfind(const char *_name) { return 0; }
 
 #define __dead2         __attribute__((__noreturn__))
 #define __pure2         __attribute__((__const__))
-#define __unused2       __attribute__((__unused__))
+#define __bsd_unused2   __attribute__((__unused__))
 #define __used          __attribute__((__used__))
 #define __packed        __attribute__((__packed__))
 #define __aligned(x)    __attribute__((__aligned__(x)))

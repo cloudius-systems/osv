@@ -1593,7 +1593,7 @@ int faccessat(int dirfd, const char *pathname, int mode, int flags)
     return error;
 }
 
-extern "C" 
+extern "C"
 int euidaccess(const char *pathname, int mode)
 {
     return access(pathname, mode);
@@ -2375,45 +2375,53 @@ extern "C" void unmount_devfs()
 
 extern "C" int mount_rofs_rootfs(bool pivot_root)
 {
-    int ret;
+    constexpr char* mp = "/rofs";
 
-    if (mkdir("/rofs", 0755) < 0)
-        kprintf("failed to create /rofs, error = %s\n", strerror(errno));
+    if (mkdir(mp, 0755) < 0) {
+        int ret = errno;
+        kprintf("failed to create %s, error = %s\n", mp, strerror(errno));
+        return ret;
+    }
 
-    ret = sys_mount("/dev/vblk0.1", "/rofs", "rofs", MNT_RDONLY, 0);
-
+    int ret = sys_mount("/dev/vblk0.1", mp, "rofs", MNT_RDONLY, nullptr);
     if (ret) {
-        kprintf("failed to mount /rofs, error = %s\n", strerror(ret));
-        rmdir("/rofs");
+        kprintf("failed to mount %s, error = %s\n", mp, strerror(ret));
+        rmdir(mp);
         return ret;
     }
 
     if (pivot_root) {
-        pivot_rootfs("/rofs");
+        pivot_rootfs(mp);
     }
 
     return 0;
 }
 
-extern "C" void mount_zfs_rootfs(bool pivot_root, bool extra_zfs_pools)
+extern "C" int mount_zfs_rootfs(bool pivot_root, bool extra_zfs_pools)
 {
-    if (mkdir("/zfs", 0755) < 0)
-        kprintf("failed to create /zfs, error = %s\n", strerror(errno));
+    constexpr char* mp = "/zfs";
 
-    int ret = sys_mount("/dev/vblk0.1", "/zfs", "zfs", 0, (void *)"osv/zfs");
-
-    if (ret)
-        kprintf("failed to mount /zfs, error = %s\n", strerror(ret));
-
-    if (!pivot_root) {
-        return;
+    if (mkdir(mp, 0755) < 0) {
+        int ret = errno;
+        kprintf("failed to create %s, error = %s\n", mp, strerror(errno));
+        return ret;
     }
 
-    pivot_rootfs("/zfs");
-
-    if (extra_zfs_pools) {
-        import_extra_zfs_pools();
+    int ret = sys_mount("/dev/vblk0.1", mp, "zfs", 0, (void *)"osv/zfs");
+    if (ret) {
+        kprintf("failed to mount %s, error = %s\n", mp, strerror(ret));
+        rmdir(mp);
+        return ret;
     }
+
+    if (pivot_root) {
+        pivot_rootfs(mp);
+        if (extra_zfs_pools) {
+            import_extra_zfs_pools();
+        }
+    }
+
+    return 0;
 }
 
 extern "C" void unmount_rootfs(void)

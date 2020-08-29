@@ -32,7 +32,7 @@ typedef void (*driver_intr_t)(void *arg);
 
 // should be in netporting or somewhere else, but it conflicts with other
 // definitions. unused seems to be quite a common name
-#define __unused    __attribute__((unused))
+#define __bsd_unused    __attribute__((unused))
 
 // not used
 enum intr_type {

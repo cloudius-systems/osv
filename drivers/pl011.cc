@@ -25,6 +25,8 @@ enum {
     UARTICR   = 0x044
 };
 
+bool PL011_Console::active = false;
+
 void PL011_Console::set_base_addr(u64 addr)
 {
     uart = (char *)addr;

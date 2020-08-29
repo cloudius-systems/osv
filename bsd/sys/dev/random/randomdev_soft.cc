@@ -292,7 +292,7 @@ randomdev_flush_reseed(void)
 
 #ifndef __OSV__
 static int
-randomdev_modevent(module_t mod __unused, int type, void *unused __unused)
+randomdev_modevent(module_t mod __bsd_unused, int type, void *unused __bsd_unused)
 {
 
 	switch (type) {

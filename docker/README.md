@@ -9,7 +9,7 @@ docker build -t osv/builder -f Dockerfile.builder .
 
 Build container image for specific version of linux distribution and git repo owner (if forker)
 ```
-docker build -t osv/builder-ubuntu-19.10 -f Dockerfile.builder --build-arg DIST="ubuntu-19.10" --build-arg GIT_ORG_OR_USER=a_user .
+docker build -t osv/builder-ubuntu-20.04 -f Dockerfile.builder --build-arg DIST="ubuntu-20.04" --build-arg GIT_ORG_OR_USER=a_user .
 ```
 
 Run container

@@ -53,7 +53,7 @@ secpolicy_zfs(cred_t *cr)
 }
 
 int
-secpolicy_sys_config(cred_t *cr, int checkonly __unused2)
+secpolicy_sys_config(cred_t *cr, int checkonly __bsd_unused2)
 {
 
 	return (0);
@@ -67,7 +67,7 @@ secpolicy_zinject(cred_t *cr)
 }
 
 int
-secpolicy_fs_unmount(cred_t *cr, struct mount *vfsp __unused2)
+secpolicy_fs_unmount(cred_t *cr, struct mount *vfsp __bsd_unused2)
 {
 
 	return (0);
@@ -170,7 +170,7 @@ secpolicy_vnode_setids_setgids(vnode_t *vp, cred_t *cr, gid_t gid)
 
 int
 secpolicy_vnode_setid_retain(vnode_t *vp, cred_t *cr,
-    boolean_t issuidroot __unused2)
+    boolean_t issuidroot __bsd_unused2)
 {
 
 	return (0);

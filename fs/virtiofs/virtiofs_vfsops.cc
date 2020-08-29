@@ -5,23 +5,42 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <atomic>
+#include <memory>
+#include <mutex>
+#include <new>
 #include <sys/types.h>
-#include <osv/device.h>
+#include <utility>
+
+#include <api/assert.h>
 #include <osv/debug.h>
-#include <iomanip>
-#include <iostream>
+#include <osv/device.h>
+#include <osv/mutex.h>
+#include <osv/sched.hh>
+
+#include "drivers/virtio-fs.hh"
 #include "virtiofs.hh"
+#include "virtiofs_dax.hh"
 #include "virtiofs_i.hh"
+
+using fuse_request = virtio::fs::fuse_request;
 
 static std::atomic<uint64_t> fuse_unique_id(1);
 
-int fuse_req_send_and_receive_reply(fuse_strategy* strategy, uint32_t opcode,
-    uint64_t nodeid, void* input_args_data, size_t input_args_size,
-    void* output_args_data, size_t output_args_size)
+static struct {
+    std::unordered_map<virtio::fs*, std::shared_ptr<virtiofs::dax_manager>,
+        virtio::fs::hasher> mgrs;
+    mutex lock;
+} dax_managers;
+
+std::pair<size_t, int> fuse_req_send_and_receive_reply(virtio::fs* drv,
+    uint32_t opcode, uint64_t nodeid, void* input_args_data,
+    size_t input_args_size, void* output_args_data, size_t output_args_size)
 {
-    std::unique_ptr<fuse_request> req {new (std::nothrow) fuse_request()};
+    std::unique_ptr<fuse_request> req {
+        new (std::nothrow) fuse_request(sched::thread::current())};
     if (!req) {
-        return ENOMEM;
+        return std::make_pair(0, ENOMEM);
     }
     req->in_header.len = sizeof(req->in_header) + input_args_size;
     req->in_header.opcode = opcode;
@@ -35,13 +54,18 @@ int fuse_req_send_and_receive_reply(fuse_strategy* strategy, uint32_t opcode,
     req->output_args_data = output_args_data;
     req->output_args_size = output_args_size;
 
-    assert(strategy->drv);
-    strategy->make_request(strategy->drv, req.get());
-    fuse_req_wait(req.get());
+    assert(drv);
+    int error = drv->make_request(*req);
+    if (error) {
+        return std::make_pair(0, error);
+    }
+    req->wait();
 
-    int error = -req->out_header.error;
+    // return the length of the response's payload
+    size_t len = req->out_header.len - sizeof(fuse_out_header);
+    error = -req->out_header.error;
 
-    return error;
+    return std::make_pair(len, error);
 }
 
 void virtiofs_set_vnode(struct vnode* vnode, struct virtiofs_inode* inode)
@@ -85,11 +109,12 @@ static int virtiofs_mount(struct mount* mp, const char* dev, int flags,
     in_args->major = FUSE_KERNEL_VERSION;
     in_args->minor = FUSE_KERNEL_MINOR_VERSION;
     in_args->max_readahead = PAGE_SIZE;
-    in_args->flags = 0; // TODO: Verify that we need not set any flag
+    in_args->flags |= FUSE_MAP_ALIGNMENT;
 
-    auto* strategy = static_cast<fuse_strategy*>(device->private_data);
-    error = fuse_req_send_and_receive_reply(strategy, FUSE_INIT, FUSE_ROOT_ID,
-        in_args.get(), sizeof(*in_args), out_args.get(), sizeof(*out_args));
+    auto* drv = static_cast<virtio::fs*>(device->private_data);
+    error = fuse_req_send_and_receive_reply(drv, FUSE_INIT, FUSE_ROOT_ID,
+        in_args.get(), sizeof(*in_args), out_args.get(),
+        sizeof(*out_args)).second;
     if (error) {
         kprintf("[virtiofs] Failed to initialize fuse filesystem!\n");
         return error;
@@ -98,6 +123,10 @@ static int virtiofs_mount(struct mount* mp, const char* dev, int flags,
 
     virtiofs_debug("Initialized fuse filesystem with version major: %d, "
                    "minor: %d\n", out_args->major, out_args->minor);
+
+    if (out_args->flags & FUSE_MAP_ALIGNMENT) {
+        drv->set_map_alignment(out_args->map_alignment);
+    }
 
     auto* root_node {new (std::nothrow) virtiofs_inode()};
     if (!root_node) {
@@ -108,7 +137,28 @@ static int virtiofs_mount(struct mount* mp, const char* dev, int flags,
 
     virtiofs_set_vnode(mp->m_root->d_vnode, root_node);
 
-    mp->m_data = strategy;
+    auto* m_data = new (std::nothrow) virtiofs_mount_data;
+    if (!m_data) {
+        return ENOMEM;
+    }
+    m_data->drv = drv;
+    if (drv->get_dax()) {
+        // The device supports the DAX window
+        std::lock_guard<mutex> guard {dax_managers.lock};
+        auto found = dax_managers.mgrs.find(drv);
+        if (found != dax_managers.mgrs.end()) {
+            // There is a dax_manager already associated with this device (the
+            // device is already mounted)
+            m_data->dax_mgr = found->second;
+        } else {
+            m_data->dax_mgr = std::make_shared<virtiofs::dax_manager>(*drv);
+            if (!m_data->dax_mgr) {
+                return ENOMEM;
+            }
+        }
+    }
+
+    mp->m_data = m_data;
     mp->m_dev = device;
 
     return 0;
@@ -134,6 +184,15 @@ static int virtiofs_statfs(struct mount* mp, struct statfs* statp)
 
 static int virtiofs_unmount(struct mount* mp, int flags)
 {
+    auto* m_data = static_cast<virtiofs_mount_data*>(mp->m_data);
+    std::lock_guard<mutex> guard {dax_managers.lock};
+    if (m_data->dax_mgr && m_data->dax_mgr.use_count() == 2) {
+        // This was the last mount of this device. It's safe to delete the
+        // window manager.
+        dax_managers.mgrs.erase(m_data->drv);
+    }
+    delete m_data;
+
     struct device* dev = mp->m_dev;
     return device_close(dev);
 }

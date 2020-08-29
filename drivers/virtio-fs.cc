@@ -5,70 +5,44 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <sys/cdefs.h>
+#include <string>
 
+#include <osv/debug.h>
+#include <osv/device.h>
+#include <osv/interrupt.hh>
+#include <osv/mmio.hh>
+#include <osv/msi.hh>
+#include <osv/sched.hh>
+
+#include "drivers/pci-device.hh"
 #include "drivers/virtio.hh"
 #include "drivers/virtio-fs.hh"
-#include <osv/interrupt.hh>
+#include "drivers/virtio-vring.hh"
+#include "fs/virtiofs/fuse_kernel.h"
 
-#include <osv/mempool.hh>
-#include <osv/mmu.hh>
-
-#include <string>
-#include <string.h>
-#include <map>
-#include <errno.h>
-#include <osv/debug.h>
-
-#include <osv/sched.hh>
-#include "osv/trace.hh"
-#include "osv/aligned_new.hh"
-
-#include <osv/device.h>
-
-using namespace memory;
-
-void fuse_req_wait(fuse_request* req)
-{
-    WITH_LOCK(req->req_mutex) {
-        req->req_wait.wait(req->req_mutex);
-    }
-}
+using fuse_request = virtio::fs::fuse_request;
 
 namespace virtio {
 
-static int fuse_make_request(void* driver, fuse_request* req)
-{
-    auto fs_driver = static_cast<fs*>(driver);
-    return fs_driver->make_request(req);
-}
-
-static void fuse_req_done(fuse_request* req)
-{
-    WITH_LOCK(req->req_mutex) {
-        req->req_wait.wake_one(req->req_mutex);
-    }
-}
-
-static void fuse_req_enqueue_input(vring* queue, fuse_request* req)
+static void fuse_req_enqueue_input(vring& queue, fuse_request& req)
 {
     // Header goes first
-    queue->add_out_sg(&req->in_header, sizeof(struct fuse_in_header));
+    queue.add_out_sg(&req.in_header, sizeof(struct fuse_in_header));
 
     // Add fuse in arguments as out sg
-    if (req->input_args_size > 0) {
-        queue->add_out_sg(req->input_args_data, req->input_args_size);
+    if (req.input_args_size > 0) {
+        queue.add_out_sg(req.input_args_data, req.input_args_size);
     }
 }
 
-static void fuse_req_enqueue_output(vring* queue, fuse_request* req)
+static void fuse_req_enqueue_output(vring& queue, fuse_request& req)
 {
     // Header goes first
-    queue->add_in_sg(&req->out_header, sizeof(struct fuse_out_header));
+    queue.add_in_sg(&req.out_header, sizeof(struct fuse_out_header));
 
     // Add fuse out arguments as in sg
-    if (req->output_args_size > 0) {
-        queue->add_in_sg(req->output_args_data, req->output_args_size);
+    if (req.output_args_size > 0) {
+        queue.add_in_sg(req.output_args_data, req.output_args_size);
     }
 }
 
@@ -87,7 +61,7 @@ static struct devops fs_devops {
 struct driver fs_driver = {
     "virtio_fs",
     &fs_devops,
-    sizeof(struct fuse_strategy),
+    sizeof(fs*),
 };
 
 bool fs::ack_irq()
@@ -103,7 +77,7 @@ bool fs::ack_irq()
 }
 
 fs::fs(virtio_device& virtio_dev)
-    : virtio_driver(virtio_dev)
+    : virtio_driver(virtio_dev), _map_align(-1)
 {
     _driver_name = "virtio-fs";
     _id = _instance++;
@@ -157,14 +131,15 @@ fs::fs(virtio_device& virtio_dev)
     // Step 8
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
+    // TODO: Don't ignore the virtio-fs tag and use that instead of _id for
+    // identifying the device (e.g. something like /dev/virtiofs/<tag> or at
+    // least /dev/virtiofs-<tag> would be nice, but devfs does not support
+    // nested directories or device names > 12). Linux does not create a devfs
+    // entry and instead uses the virtio-fs tag passed to mount directly.
     std::string dev_name("virtiofs");
-    dev_name += std::to_string(_disk_idx++);
-
-    struct device* dev = device_create(&fs_driver, dev_name.c_str(), D_BLK); // TODO Should it be really D_BLK?
-    auto* strategy = static_cast<fuse_strategy*>(dev->private_data);
-    strategy->drv = this;
-    strategy->make_request = fuse_make_request;
-
+    dev_name += std::to_string(_id);
+    struct device* dev = device_create(&fs_driver, dev_name.c_str(), D_BLK);
+    dev->private_data = this;
     debugf("virtio-fs: Add device instance %d as [%s]\n", _id,
         dev_name.c_str());
 }
@@ -199,15 +174,14 @@ void fs::req_done()
     auto* queue = get_virt_queue(VQ_REQUEST);
 
     while (true) {
-        virtio_driver::wait_for_queue(queue, &vring::used_ring_not_empty);
+        wait_for_queue(queue, &vring::used_ring_not_empty);
 
-        fs_req* req;
+        fuse_request* req;
         u32 len;
-        while ((req = static_cast<fs_req*>(queue->get_buf_elem(&len))) !=
+        while ((req = static_cast<fuse_request*>(queue->get_buf_elem(&len))) !=
             nullptr) {
 
-            fuse_req_done(req->fuse_req);
-            delete req;
+            req->done();
             queue->get_buf_finalize();
         }
 
@@ -216,30 +190,21 @@ void fs::req_done()
     }
 }
 
-int fs::make_request(fuse_request* req)
+int fs::make_request(fuse_request& req)
 {
-    // The lock is here for parallel requests protection
+    auto* queue = get_virt_queue(VQ_REQUEST);
+
     WITH_LOCK(_lock) {
-        if (!req) {
-            return EIO;
-        }
-
-        auto* queue = get_virt_queue(VQ_REQUEST);
-
         queue->init_sg();
 
-        fuse_req_enqueue_input(queue, req);
-        fuse_req_enqueue_output(queue, req);
+        fuse_req_enqueue_input(*queue, req);
+        fuse_req_enqueue_output(*queue, req);
 
-        auto* fs_request = new (std::nothrow) fs_req(req);
-        if (!fs_request) {
-            return ENOMEM;
-        }
-        queue->add_buf_wait(fs_request);
+        queue->add_buf_wait(&req);
         queue->kick();
-
-        return 0;
     }
+
+    return 0;
 }
 
 hw_driver* fs::probe(hw_device* dev)

@@ -10,7 +10,7 @@ int ttyname_r(int fd, char *buf, size_t buflen)
    }
    // OSv doesn't support any virtual terminals or ptys so return
    // the fixed pathname of /dev/console
-   char* ttyname = "/dev/console\0";
+   char* ttyname = "/dev/console";
    size_t len = strlen(ttyname);
    if (!isatty(fd)) {
       return ENOTTY;
@@ -25,5 +25,4 @@ int ttyname_r(int fd, char *buf, size_t buflen)
          return 0;
       }
    }
-   return 0;
 }

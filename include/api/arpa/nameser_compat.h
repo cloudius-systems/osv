@@ -1,1 +1,1 @@
-#include <arpa/nameser.h>
+../../../musl/include/arpa/nameser_compat.h

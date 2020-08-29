@@ -381,7 +381,7 @@ struct {								\
 #define	RB_PROTOTYPE(name, type, field, cmp)				\
 	RB_PROTOTYPE_INTERNAL(name, type, field, cmp,)
 #define	RB_PROTOTYPE_STATIC(name, type, field, cmp)			\
-	RB_PROTOTYPE_INTERNAL(name, type, field, cmp, __unused static)
+	RB_PROTOTYPE_INTERNAL(name, type, field, cmp, __bsd_unused static)
 #define RB_PROTOTYPE_INTERNAL(name, type, field, cmp, attr)		\
 attr void name##_RB_INSERT_COLOR(struct name *, struct type *);		\
 attr void name##_RB_REMOVE_COLOR(struct name *, struct type *, struct type *);\
@@ -400,7 +400,7 @@ attr struct type *name##_RB_MINMAX(struct name *, int);			\
 #define	RB_GENERATE(name, type, field, cmp)				\
 	RB_GENERATE_INTERNAL(name, type, field, cmp,)
 #define	RB_GENERATE_STATIC(name, type, field, cmp)			\
-	RB_GENERATE_INTERNAL(name, type, field, cmp, __unused static)
+	RB_GENERATE_INTERNAL(name, type, field, cmp, __bsd_unused static)
 #define RB_GENERATE_INTERNAL(name, type, field, cmp, attr)		\
 attr void								\
 name##_RB_INSERT_COLOR(struct name *head, struct type *elm)		\

@@ -144,7 +144,15 @@ blk::blk(virtio_device& virtio_dev)
             [=] { t->wake(); });
     };
 
-#ifndef AARCH64_PORT_STUB
+#ifdef AARCH64_PORT_STUB
+    int_factory.create_spi_edge_interrupt = [this,t]() {
+        return new spi_interrupt(
+                gic::irq_type::IRQ_TYPE_EDGE,
+                _dev.get_irq(),
+                [=] { return this->ack_irq(); },
+                [=] { t->wake(); });
+    };
+#else
     int_factory.create_gsi_edge_interrupt = [this,t]() {
         return new gsi_edge_interrupt(
                 _dev.get_irq(),

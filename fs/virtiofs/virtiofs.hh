@@ -8,11 +8,13 @@
 #ifndef __INCLUDE_VIRTIOFS_H__
 #define __INCLUDE_VIRTIOFS_H__
 
-#include <osv/vnode.h>
+#include <memory>
+
+#include <osv/debug.h>
 #include <osv/mount.h>
-#include <osv/dentry.h>
-#include <osv/prex.h>
-#include <osv/buf.h>
+#include <osv/vnode.h>
+
+#include "drivers/virtio-fs.hh"
 #include "fuse_kernel.h"
 
 #define VIRTIOFS_DEBUG_ENABLED 1
@@ -22,6 +24,17 @@
 #else
 #define virtiofs_debug(...)
 #endif
+
+// Necessary pre-declaration because virtiofs::dax depends on virtiofs_inode,
+// declared below.
+namespace virtiofs {
+class dax_manager;
+}
+
+struct virtiofs_mount_data {
+    virtio::fs* drv;
+    std::shared_ptr<virtiofs::dax_manager> dax_mgr;
+};
 
 struct virtiofs_inode {
     uint64_t nodeid;

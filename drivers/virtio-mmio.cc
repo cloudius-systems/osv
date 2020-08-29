@@ -103,7 +103,11 @@ u8 mmio_device::read_config(u32 offset)
 
 void mmio_device::register_interrupt(interrupt_factory irq_factory)
 {
+#ifdef AARCH64_PORT_STUB
+    _irq.reset(irq_factory.create_spi_edge_interrupt());
+#else
     _irq.reset(irq_factory.create_gsi_edge_interrupt());
+#endif
 }
 
 bool mmio_device::parse_config()
@@ -136,6 +140,7 @@ bool mmio_device::parse_config()
     return true;
 }
 
+#ifndef AARCH64_PORT_STUB
 #define VIRTIO_MMIO_DEVICE_CMDLINE_PREFIX "virtio_mmio.device="
 static mmio_device_info* parse_mmio_device_info(char *cmdline)
 {   //
@@ -186,18 +191,31 @@ static mmio_device_info* parse_mmio_device_info(char *cmdline)
 
     return new mmio_device_info(address, size, irq);
 }
+#endif
 
 static std::vector<struct mmio_device_info> *mmio_device_info_entries = 0;
 
+#ifndef AARCH64_PORT_STUB
 void parse_mmio_device_configuration(char *cmdline)
 {   //
     // We are assuming the mmio devices information is appended to the
     // command line (at least it is the case with the firecracker) so
     // once we parse those we strip it away so only plain OSv command line is left
-    mmio_device_info_entries = new std::vector<struct mmio_device_info>();
+    if (!mmio_device_info_entries) {
+        mmio_device_info_entries = new std::vector<struct mmio_device_info>();
+    }
     for( auto device_info = parse_mmio_device_info(cmdline); device_info != nullptr; device_info = parse_mmio_device_info(cmdline))
         mmio_device_info_entries->push_back(*device_info);
 }
+#else
+void add_mmio_device_configuration(mmio_device_info device_info)
+{
+    if (!mmio_device_info_entries) {
+        mmio_device_info_entries = new std::vector<struct mmio_device_info>();
+    }
+    mmio_device_info_entries->push_back(device_info);
+}
+#endif
 
 void register_mmio_devices(hw::device_manager *dev_manager)
 {

@@ -239,14 +239,14 @@ zone_get_hostid(void *ptr)
 }
 
 static void
-zone_sysinit(void *arg __unused)
+zone_sysinit(void *arg __bsd_unused)
 {
 
 	zone_slot = osd_jail_register(zone_destroy, NULL);
 }
 
 static void
-zone_sysuninit(void *arg __unused)
+zone_sysuninit(void *arg __bsd_unused)
 {
 
 	osd_jail_deregister(zone_slot);

@@ -41,7 +41,7 @@ MALLOC_DECLARE(M_MOUNT);
 
 void
 vfs_setmntopt(vfs_t *vfsp, const char *name, const char *arg,
-    int flags __unused)
+    int flags __bsd_unused)
 {
 	struct vfsopt *opt;
 	size_t namesize;

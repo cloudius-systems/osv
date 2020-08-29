@@ -76,7 +76,7 @@ SYSUNINIT(opensolaris_unregister, SI_SUB_OPENSOLARIS, SI_ORDER_FIRST, opensolari
 
 #if 0
 static int
-opensolaris_modevent(module_t mod __unused2, int type, void *data __unused2)
+opensolaris_modevent(module_t mod __bsd_unused2, int type, void *data __bsd_unused2)
 {
 	int error = 0;
 

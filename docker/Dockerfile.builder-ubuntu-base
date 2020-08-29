@@ -7,7 +7,7 @@
 # This Docker file defines an image based on Ubuntu distribution and provides
 # all packages necessary to build and run kernel and applications.
 #
-ARG DIST_VERSION=19.10
+ARG DIST_VERSION=20.04
 FROM ubuntu:${DIST_VERSION}
 
 ENV DEBIAN_FRONTEND noninteractive

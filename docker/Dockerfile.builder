@@ -39,7 +39,7 @@ CMD /bin/bash
 # docker build -t osv/builder-fedora-31 -f Dockerfile.builder .
 #
 # Build the container based of specific Ubuntu version
-# docker build -t osv/builder-ubuntu-19.10 -f Dockerfile.builder --build-arg DIST="ubuntu-19.10" .
+# docker build -t osv/builder-ubuntu-20.04 -f Dockerfile.builder --build-arg DIST="ubuntu-20.04" .
 #
 # Build the container based of specific Fedora version and git repo owner (if forked) example:
 # docker build -t osv/builder-fedora-31 -f Dockerfile.builder --build-arg DIST="fedora-31" --build-arg GIT_ORG_OR_USER=a_user .

@@ -146,7 +146,7 @@ vdev_geom_attach(struct g_provider *pp)
 }
 
 static void
-vdev_geom_detach(void *arg, int flag __unused)
+vdev_geom_detach(void *arg, int flag __bsd_unused)
 {
 	struct g_geom *gp;
 	struct g_consumer *cp;

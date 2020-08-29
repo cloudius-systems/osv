@@ -16,6 +16,7 @@
 #include <osv/mempool.hh>
 #include <osv/commands.hh>
 #include <osv/elf.hh>
+#include "drivers/virtio-mmio.hh"
 
 #define DTB_INTERRUPT_CELLS 3
 
@@ -189,6 +190,79 @@ u64 dtb_get_uart(int *irqid)
     return retval;
 }
 
+u64 dtb_get_mmio_serial_console(int *irqid)
+{
+    int node;
+    struct dtb_int_spec int_spec[1];
+    u64 address;
+
+    if (!dtb)
+        return 0;
+
+    node = fdt_node_offset_by_compatible(dtb, -1, "ns16550a");
+    if (node < 0)
+        return 0;
+
+    const char *node_name = fdt_get_name(dtb, node, NULL);
+    if (!node_name) {
+        return 0;
+    }
+
+    if (sscanf(node_name,"uart@%x", &address) != 1) {
+        return 0;
+    }
+
+    if( !dtb_get_int_spec(node, int_spec, 1)) {
+        return 0;
+    };
+
+    *irqid = int_spec[0].irq_id;
+    return address;
+}
+
+#define VIRTIO_MMIO_DEV_COMPAT "virtio,mmio"
+#define DTB_MAX_VIRTIO_MMIO_DEV_COUNT 8
+static virtio::mmio_device_info dtb_dtb_virtio_mmio_devices_infos[DTB_MAX_VIRTIO_MMIO_DEV_COUNT];
+static unsigned int dtb_virtio_mmio_dev_count;
+static void dtb_parse_mmio_virtio_devices()
+{
+    int node;
+    struct dtb_int_spec int_spec[1];
+
+    if (!dtb)
+        return;
+
+    dtb_virtio_mmio_dev_count = 0;
+    node = fdt_node_offset_by_compatible(dtb, -1, VIRTIO_MMIO_DEV_COMPAT);
+    while (node != -FDT_ERR_NOTFOUND && dtb_virtio_mmio_dev_count < DTB_MAX_VIRTIO_MMIO_DEV_COUNT) {
+	int value_size;
+        int required = 2 * sizeof(u64); // We expect two fields - address and length, each u64 size
+        u64 *reg = (u64 *)fdt_getprop(dtb, node, "reg", &value_size);
+        if (!reg || value_size < required) {
+	    break;
+	}
+
+	dtb_dtb_virtio_mmio_devices_infos[dtb_virtio_mmio_dev_count]._address = fdt64_to_cpu(reg[0]);
+	dtb_dtb_virtio_mmio_devices_infos[dtb_virtio_mmio_dev_count]._size = fdt64_to_cpu(reg[1]);
+
+        if( !dtb_get_int_spec(node, int_spec, 1)) {
+            break;
+        };
+
+        dtb_dtb_virtio_mmio_devices_infos[dtb_virtio_mmio_dev_count++]._irq_no = int_spec[0].irq_id;
+
+	// Move to the next node
+	node = fdt_node_offset_by_compatible(dtb, node, VIRTIO_MMIO_DEV_COMPAT);
+    }
+}
+
+void dtb_collect_parsed_mmio_virtio_devices()
+{
+    for( unsigned int idx = 0; idx < dtb_virtio_mmio_dev_count; idx++) {
+	virtio::add_mmio_device_configuration(dtb_dtb_virtio_mmio_devices_infos[idx]);
+    }
+}
+
 /* this gets the virtual timer irq, we are not interested
  * about the other timers.
  */
@@ -225,9 +299,12 @@ bool dtb_get_gic_v2(u64 *dist, size_t *dist_len, u64 *cpu, size_t *cpu_len)
     if (!dtb)
         return false;
 
-    node = fdt_node_offset_by_compatible(dtb, -1, "arm,cortex-a15-gic");
-    if (node < 0)
-        return false;
+    node = fdt_node_offset_by_compatible(dtb, -1, "arm,gic-400");
+    if (node < 0) {
+        node = fdt_node_offset_by_compatible(dtb, -1, "arm,cortex-a15-gic");
+        if (node < 0)
+            return false;
+    }
 
     if (!dtb_get_reg_n(node, addr, len, 2))
         return false;
@@ -616,9 +693,11 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
     dtb_timer_irq = dtb_parse_timer_irq();
     dtb_pci_irqmask = dtb_parse_pci_irqmask();
     dtb_pci_irqmap_count = dtb_parse_pci_irqmap_count();
-    if (!dtb_parse_pci_irqmap(dtb_pci_bdfs, dtb_pci_irq_ids, dtb_pci_irqmap_count)) {
+    if (dtb_pci_irqmap_count > 0 && !dtb_parse_pci_irqmap(dtb_pci_bdfs, dtb_pci_irq_ids, dtb_pci_irqmap_count)) {
         abort("dtb_setup: failed to parse pci_irq_map.\n");
     }
+
+    dtb_parse_mmio_virtio_devices();
 
     register u64 edata;
     asm volatile ("adrp %0, .edata" : "=r"(edata));

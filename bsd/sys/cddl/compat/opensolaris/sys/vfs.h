@@ -101,7 +101,7 @@ typedef struct mntopts {
 } mntopts_t;
 
 void vfs_setmntopt(vfs_t *vfsp, const char *name, const char *arg,
-    int flags __unused);
+    int flags __bsd_unused);
 void vfs_clearmntopt(vfs_t *vfsp, const char *name);
 int vfs_optionisset(const vfs_t *vfsp, const char *opt, char **argp);
 int mount_snapshot(kthread_t *td, vnode_t **vpp, const char *fstype,

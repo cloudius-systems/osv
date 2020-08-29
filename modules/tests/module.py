@@ -1,4 +1,6 @@
 from osv.modules import api
+import os
 
-api.require('java-tests')
+if os.getenv('ARCH') == 'x64':
+    api.require('java-tests')
 api.require('dl_tests')

@@ -92,6 +92,7 @@ namespace virtio {
 struct mmio_device_info {
     mmio_device_info(u64 address, u64 size, unsigned int irq) :
         _address(address), _size(size), _irq_no(irq) {}
+    mmio_device_info() : mmio_device_info(0, 0, 0) {}
 
     u64 _address;
     u64 _size;
@@ -144,10 +145,18 @@ private:
     u16 _device_id;
 
     mmioaddr_t _addr_mmio;
+#ifdef AARCH64_PORT_STUB
+    std::unique_ptr<spi_interrupt> _irq;
+#else
     std::unique_ptr<gsi_edge_interrupt> _irq;
+#endif
 };
 
+#ifndef AARCH64_PORT_STUB
 void parse_mmio_device_configuration(char *cmdline);
+#else
+void add_mmio_device_configuration(mmio_device_info device_info);
+#endif
 void register_mmio_devices(hw::device_manager *dev_manager);
 
 }

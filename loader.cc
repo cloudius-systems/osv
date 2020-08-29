@@ -89,7 +89,7 @@ extern "C" {
     void premain();
     void vfs_init(void);
     void unmount_devfs();
-    void mount_zfs_rootfs(bool,bool);
+    int mount_zfs_rootfs(bool, bool);
     int mount_rofs_rootfs(bool);
     void rofs_disable_cache();
 }
@@ -402,19 +402,20 @@ void* do_main_thread(void *_main_args)
 
     if (opt_mount) {
         unmount_devfs();
-        //
+
         // Try to mount rofs
-        if(mount_rofs_rootfs(opt_pivot) != 0) {
-            //
+        if (mount_rofs_rootfs(opt_pivot) != 0) {
             // Failed -> try to mount zfs
             zfsdev::zfsdev_init();
-            mount_zfs_rootfs(opt_pivot, opt_extra_zfs_pools);
+            auto error = mount_zfs_rootfs(opt_pivot, opt_extra_zfs_pools);
+            if (error) {
+                debug("Could not mount zfs root filesystem.\n");
+            }
             bsd_shrinker_init();
 
             boot_time.event("ZFS mounted");
-        }
-        else {
-            if(opt_disable_rofs_cache) {
+        } else {
+            if (opt_disable_rofs_cache) {
                 debug("Disabling ROFS memory cache.\n");
                 rofs_disable_cache();
             }
@@ -534,8 +535,7 @@ void* do_main_thread(void *_main_args)
 
     if (opt_bootchart) {
         boot_time.print_chart();
-    }
-    else {
+    } else {
         boot_time.print_total_time();
     }
 

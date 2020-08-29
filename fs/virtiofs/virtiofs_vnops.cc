@@ -5,26 +5,29 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <sys/stat.h>
+#include <cstdlib>
+#include <cstring>
 #include <dirent.h>
-#include <sys/param.h>
-
 #include <errno.h>
-#include <string.h>
-#include <stdlib.h>
 #include <fcntl.h>
-
-#include <osv/prex.h>
-#include <osv/vnode.h>
-#include <osv/file.h>
-#include <osv/mount.h>
-#include <osv/debug.h>
-
+#include <sys/param.h>
+#include <sys/stat.h>
 #include <sys/types.h>
-#include <osv/device.h>
-#include <osv/sched.hh>
+#include <tuple>
 
+#include <osv/contiguous_alloc.hh>
+#include <osv/debug.h>
+#include <osv/device.h>
+#include <osv/file.h>
+#include <osv/mmio.hh>
+#include <osv/mount.h>
+#include <osv/prex.h>
+#include <osv/sched.hh>
+#include <osv/vnode.h>
+
+#include "fuse_kernel.h"
 #include "virtiofs.hh"
+#include "virtiofs_dax.hh"
 #include "virtiofs_i.hh"
 
 static constexpr uint32_t OPEN_FLAGS = O_RDONLY;
@@ -43,7 +46,7 @@ static int virtiofs_lookup(struct vnode* vnode, char* name, struct vnode** vpp)
     }
 
     if (!S_ISDIR(inode->attr.mode)) {
-        kprintf("[virtiofs] inode:%lld, ABORTED lookup of %s because not a "
+        kprintf("[virtiofs] inode %lld, ABORTED lookup of %s because not a "
                 "directory\n", inode->nodeid, name);
         return ENOTDIR;
     }
@@ -57,12 +60,13 @@ static int virtiofs_lookup(struct vnode* vnode, char* name, struct vnode** vpp)
     }
     strcpy(in_args.get(), name);
 
-    auto* strategy = static_cast<fuse_strategy*>(vnode->v_mount->m_data);
-    auto error = fuse_req_send_and_receive_reply(strategy, FUSE_LOOKUP,
+    auto* m_data = static_cast<virtiofs_mount_data*>(vnode->v_mount->m_data);
+    auto* drv = m_data->drv;
+    auto error = fuse_req_send_and_receive_reply(drv, FUSE_LOOKUP,
         inode->nodeid, in_args.get(), in_args_len, out_args.get(),
-        sizeof(*out_args));
+        sizeof(*out_args)).second;
     if (error) {
-        kprintf("[virtiofs] inode:%lld, lookup failed to find %s\n",
+        kprintf("[virtiofs] inode %lld, lookup failed to find %s\n",
             inode->nodeid, name);
         // TODO: Implement proper error handling by sending FUSE_FORGET
         return error;
@@ -71,7 +75,7 @@ static int virtiofs_lookup(struct vnode* vnode, char* name, struct vnode** vpp)
     struct vnode* vp;
     // TODO OPT: Should we even use the cache? (consult spec on metadata)
     if (vget(vnode->v_mount, out_args->nodeid, &vp) == 1) {
-        virtiofs_debug("lookup found vp in cache!\n");
+        virtiofs_debug("lookup found vp in cache\n");
         *vpp = vp;
         return 0;
     }
@@ -81,7 +85,7 @@ static int virtiofs_lookup(struct vnode* vnode, char* name, struct vnode** vpp)
         return ENOMEM;
     }
     new_inode->nodeid = out_args->nodeid;
-    virtiofs_debug("inode %lld, lookup found inode %lld for %s!\n",
+    virtiofs_debug("inode %lld, lookup found inode %lld for %s\n",
         inode->nodeid, new_inode->nodeid, name);
     memcpy(&new_inode->attr, &out_args->attr, sizeof(out_args->attr));
 
@@ -108,10 +112,12 @@ static int virtiofs_open(struct file* fp)
     }
     in_args->flags = OPEN_FLAGS;
 
-    auto* strategy = static_cast<fuse_strategy*>(vnode->v_mount->m_data);
-    auto error = fuse_req_send_and_receive_reply(strategy, FUSE_OPEN,
+    auto* m_data = static_cast<virtiofs_mount_data*>(vnode->v_mount->m_data);
+    auto* drv = m_data->drv;
+    auto operation = S_ISDIR(inode->attr.mode) ? FUSE_OPENDIR : FUSE_OPEN;
+    auto error = fuse_req_send_and_receive_reply(drv, operation,
         inode->nodeid, in_args.get(), sizeof(*in_args), out_args.get(),
-        sizeof(*out_args));
+        sizeof(*out_args)).second;
     if (error) {
         kprintf("[virtiofs] inode %lld, open failed\n", inode->nodeid);
         return error;
@@ -143,9 +149,11 @@ static int virtiofs_close(struct vnode* vnode, struct file* fp)
     in_args->fh = f_data->file_handle;
     in_args->flags = OPEN_FLAGS; // need to be same as in FUSE_OPEN
 
-    auto* strategy = static_cast<fuse_strategy*>(vnode->v_mount->m_data);
-    auto error = fuse_req_send_and_receive_reply(strategy, FUSE_RELEASE,
-        inode->nodeid, in_args.get(), sizeof(*in_args), nullptr, 0);
+    auto* m_data = static_cast<virtiofs_mount_data*>(vnode->v_mount->m_data);
+    auto* drv = m_data->drv;
+    auto operation = S_ISDIR(inode->attr.mode) ? FUSE_RELEASEDIR : FUSE_RELEASE;
+    auto error = fuse_req_send_and_receive_reply(drv, operation,
+        inode->nodeid, in_args.get(), sizeof(*in_args), nullptr, 0).second;
     if (error) {
         kprintf("[virtiofs] inode %lld, close failed\n", inode->nodeid);
         return error;
@@ -170,9 +178,10 @@ static int virtiofs_readlink(struct vnode* vnode, struct uio* uio)
         return ENOMEM;
     }
 
-    auto* strategy = static_cast<fuse_strategy*>(vnode->v_mount->m_data);
-    auto error = fuse_req_send_and_receive_reply(strategy, FUSE_READLINK,
-        inode->nodeid, nullptr, 0, link_path.get(), PATH_MAX);
+    auto* m_data = static_cast<virtiofs_mount_data*>(vnode->v_mount->m_data);
+    auto* drv = m_data->drv;
+    auto error = fuse_req_send_and_receive_reply(drv, FUSE_READLINK,
+        inode->nodeid, nullptr, 0, link_path.get(), PATH_MAX).second;
     if (error) {
         kprintf("[virtiofs] inode %lld, readlink failed\n", inode->nodeid);
         return error;
@@ -183,14 +192,38 @@ static int virtiofs_readlink(struct vnode* vnode, struct uio* uio)
     return uiomove(link_path.get(), strlen(link_path.get()), uio);
 }
 
-// TODO: Optimize it to reduce number of exits to host (each
-// fuse_req_send_and_receive_reply()) by reading eagerly "ahead/around" just
-// like ROFS does and caching it
+// Read @read_amt bytes from @inode, using the fallback FUSE_READ mechanism.
+static int virtiofs_read_fallback(virtiofs_inode& inode, u64 file_handle,
+    u32 read_amt, u32 flags, virtio::fs& drv, struct uio& uio)
+{
+    std::unique_ptr<fuse_read_in> in_args {new (std::nothrow) fuse_read_in()};
+    std::unique_ptr<void, std::function<void(void*)>> buf {
+        memory::alloc_phys_contiguous_aligned(read_amt,
+        alignof(std::max_align_t)), memory::free_phys_contiguous_aligned };
+    if (!in_args || !buf) {
+        return ENOMEM;
+    }
+    in_args->fh = file_handle;
+    in_args->offset = uio.uio_offset;
+    in_args->size = read_amt;
+    in_args->flags = flags;
+
+    virtiofs_debug("inode %lld, reading %lld bytes at offset %lld\n",
+        inode.nodeid, read_amt, uio.uio_offset);
+    auto error = fuse_req_send_and_receive_reply(&drv, FUSE_READ,
+        inode.nodeid, in_args.get(), sizeof(*in_args), buf.get(),
+        read_amt).second;
+    if (error) {
+        kprintf("[virtiofs] inode %lld, read failed\n", inode.nodeid);
+        return error;
+    }
+
+    return uiomove(buf.get(), read_amt, &uio);
+}
+
 static int virtiofs_read(struct vnode* vnode, struct file* fp, struct uio* uio,
     int ioflag)
 {
-    auto* inode = static_cast<virtiofs_inode*>(vnode->v_data);
-
     // Can't read directories
     if (vnode->v_type == VDIR) {
         return EISDIR;
@@ -212,39 +245,102 @@ static int virtiofs_read(struct vnode* vnode, struct file* fp, struct uio* uio,
         return 0;
     }
 
+    auto* inode = static_cast<virtiofs_inode*>(vnode->v_data);
+    auto* file_data = static_cast<virtiofs_file_data*>(fp->f_data);
+    auto* m_data = static_cast<virtiofs_mount_data*>(vnode->v_mount->m_data);
+    auto* drv = m_data->drv;
+    auto dax_mgr = m_data->dax_mgr;
+
     // Total read amount is what they requested, or what is left
     auto read_amt = std::min<uint64_t>(uio->uio_resid,
         inode->attr.size - uio->uio_offset);
-    std::unique_ptr<u8[]> buf {new (std::nothrow) u8[read_amt]};
-    std::unique_ptr<fuse_read_in> in_args {new (std::nothrow) fuse_read_in()};
-    if (!buf || !in_args) {
-        return ENOMEM;
+
+    if (dax_mgr) {
+        // Try to read from DAX
+        if (!dax_mgr->read(*inode, file_data->file_handle, read_amt, *uio)) {
+            return 0;
+        }
     }
-    auto* f_data = static_cast<virtiofs_file_data*>(file_data(fp));
-    in_args->fh = f_data->file_handle;
-    in_args->offset = uio->uio_offset;
-    in_args->size = read_amt;
-    in_args->flags = ioflag;
+    // DAX unavailable or failed, use fallback
+    return virtiofs_read_fallback(*inode, file_data->file_handle, read_amt,
+        ioflag, *drv, *uio);
+}
 
-    virtiofs_debug("inode %lld, reading %lld bytes at offset %lld\n",
-        inode->nodeid, read_amt, uio->uio_offset);
-
-    auto* strategy = static_cast<fuse_strategy*>(vnode->v_mount->m_data);
-    auto error = fuse_req_send_and_receive_reply(strategy, FUSE_READ,
-        inode->nodeid, in_args.get(), sizeof(*in_args), buf.get(), read_amt);
-    if (error) {
-        kprintf("[virtiofs] inode %lld, read failed\n", inode->nodeid);
-        return error;
+// Checks if @buf (with size @len) points to a valid fuse_dirent (with its name
+// not exceeding @name_max) and if so returns @buf. Otherwise, returns nullptr.
+static fuse_dirent* parse_fuse_dirent(void* buf, size_t len, size_t name_max)
+{
+    if (len < FUSE_NAME_OFFSET) {
+        return nullptr;
     }
 
-    return uiomove(buf.get(), read_amt, uio);
+    auto* fdir = static_cast<struct fuse_dirent*>(buf);
+    if (FUSE_DIRENT_SIZE(fdir) > len || fdir->namelen > name_max) {
+        return nullptr;
+    }
+
+    return fdir;
 }
 
 static int virtiofs_readdir(struct vnode* vnode, struct file* fp,
     struct dirent* dir)
 {
-    // TODO: Implement
-    return EPERM;
+    auto* inode = static_cast<virtiofs_inode*>(vnode->v_data);
+    auto* file_data = static_cast<virtiofs_file_data*>(fp->f_data);
+    auto* m_data = static_cast<virtiofs_mount_data*>(vnode->v_mount->m_data);
+    auto* drv = m_data->drv;
+
+    // NOTE: The response consists of a buffer of size <= fuse_read_in.size.
+    // This contains multiple (whole) fuse_dirent structs, each padded to 64-bit
+    // boundary. We only parse one such struct at a time, for simplicity. The
+    // fuse_dirent.name field is _not_ null-terminated, but our dirent.d_name
+    // is, requiring caution.
+    std::unique_ptr<fuse_read_in> in_args {new (std::nothrow) fuse_read_in()};
+    constexpr size_t name_max = sizeof(dir->d_name) - 1;    // account for '\0'
+    // The size of a (padded) fuse_dirent with a name_max-long name
+    size_t bufsize = FUSE_DIRENT_ALIGN(FUSE_NAME_OFFSET + name_max);
+    std::unique_ptr<void, std::function<void(void*)>> buf {
+        memory::alloc_phys_contiguous_aligned(bufsize,
+        alignof(std::max_align_t)), memory::free_phys_contiguous_aligned };
+    if (!in_args || !buf) {
+        return ENOMEM;
+    }
+    in_args->fh = file_data->file_handle;
+    in_args->offset = fp->f_offset;
+    in_args->size = bufsize;
+    in_args->flags = fp->f_flags;
+
+    size_t len;
+    int error;
+    std::tie(len, error) = fuse_req_send_and_receive_reply(drv, FUSE_READDIR,
+        inode->nodeid, in_args.get(), sizeof(*in_args), buf.get(), bufsize);
+    if (error) {
+        kprintf("[virtiofs] inode %lld, readdir failed\n", inode->nodeid);
+        return error;
+    }
+
+    if (len == 0) {
+        return ENOENT;
+    }
+    auto* fdir = parse_fuse_dirent(buf.get(), len, name_max);
+    if (!fdir) {
+        kprintf("[virtiofs] inode %lld, dirent parsing failed\n",
+            inode->nodeid);
+        return EIO;
+    }
+
+    dir->d_ino = fdir->ino;
+    dir->d_off = fdir->off;
+    dir->d_type = fdir->type;
+    // Copy fdir->name (not null-terminated) to dir->d_name (null-terminated)
+    memcpy(dir->d_name, fdir->name, fdir->namelen);
+    dir->d_name[fdir->namelen] = '\0';
+
+    fp->f_offset = fdir->off;
+
+    virtiofs_debug("inode %lld, read dir entry %s\n", inode->nodeid,
+        dir->d_name);
+    return 0;
 }
 
 static int virtiofs_getattr(struct vnode* vnode, struct vattr* attr)
@@ -307,7 +403,7 @@ struct vnops virtiofs_vnops = {
     virtiofs_truncate,  /* truncate - returns error when called */
     virtiofs_link,      /* link - returns error when called */
     virtiofs_arc,       /* arc */ //TODO: Implement to allow memory re-use when
-                        // mapping files, investigate using virtio-fs DAX
+                        // mapping files
     virtiofs_fallocate, /* fallocate - returns error when called */
     virtiofs_readlink,  /* read link */
     virtiofs_symlink    /* symbolic link - returns error when called */

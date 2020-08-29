@@ -44,11 +44,17 @@ void virtio_pci_device::init()
 
 void virtio_pci_device::register_interrupt(interrupt_factory irq_factory)
 {
+#ifdef AARCH64_PORT_STUB
+    // Currently MSI-X support for aach64 is stubbed (please see arch/aarch64/msi.cc)
+    // so until it becomes functional we register regular PCI interrupt
+    _irq.reset(irq_factory.create_pci_interrupt(*_dev));
+#else
     if (irq_factory.register_msi_bindings && _dev->is_msix()) {
         irq_factory.register_msi_bindings(_msi);
     } else {
         _irq.reset(irq_factory.create_pci_interrupt(*_dev));
     }
+#endif
 }
 
 virtio_legacy_pci_device::virtio_legacy_pci_device(pci::device *dev)
@@ -63,6 +69,7 @@ void virtio_legacy_pci_device::kick_queue(int queue)
 
 void virtio_legacy_pci_device::setup_queue(vring *queue)
 {
+#ifndef AARCH64_PORT_STUB
     if (_dev->is_msix()) {
         // Setup queue_id:entry_id 1:1 correlation...
         virtio_conf_writew(VIRTIO_MSI_QUEUE_VECTOR, queue->index());
@@ -71,6 +78,7 @@ void virtio_legacy_pci_device::setup_queue(vring *queue)
             return;
         }
     }
+#endif
     // Tell host about pfn
     // TODO: Yak, this is a bug in the design, on large memory we'll have PFNs > 32 bit
     // Dor to notify Rusty
@@ -173,6 +181,7 @@ void virtio_modern_pci_device::setup_queue(vring *queue)
 {
     auto queue_index = queue->index();
 
+#ifndef AARCH64_PORT_STUB
     if (_dev->is_msix()) {
         // Setup queue_id:entry_id 1:1 correlation...
         _common_cfg->virtio_conf_writew(COMMON_CFG_OFFSET_OF(queue_msix_vector), queue_index);
@@ -181,6 +190,7 @@ void virtio_modern_pci_device::setup_queue(vring *queue)
             return;
         }
     }
+#endif
 
     _queues_notify_offsets[queue_index] =
             _common_cfg->virtio_conf_readw(COMMON_CFG_OFFSET_OF(queue_notify_off));

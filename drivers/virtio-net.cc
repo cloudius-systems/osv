@@ -317,7 +317,15 @@ net::net(virtio_device& dev)
             [=] { poll_task->wake(); });
     };
 
-#ifndef AARCH64_PORT_STUB
+#ifdef AARCH64_PORT_STUB
+    int_factory.create_spi_edge_interrupt = [this,poll_task]() {
+        return new spi_interrupt(
+            gic::irq_type::IRQ_TYPE_EDGE,
+            _dev.get_irq(),
+            [=] { return this->ack_irq(); },
+            [=] { poll_task->wake(); });
+    };
+#else
     int_factory.create_gsi_edge_interrupt = [this,poll_task]() {
         return new gsi_edge_interrupt(
             _dev.get_irq(),

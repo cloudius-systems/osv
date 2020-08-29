@@ -256,7 +256,11 @@ kernel_end=$(($loader_size+2097151 & ~2097151))
 # the case in our old build.mk).
 cd $OUT
 
-libgcc_s_dir=$(dirname $(readlink -f $(gcc -print-file-name=libgcc_s.so.1)))
+if [[ "$arch" == 'aarch64' ]]; then
+	libgcc_s_dir=$(readlink -f ../downloaded_packages/aarch64/gcc/install/lib64)
+else
+	libgcc_s_dir=$(dirname $(readlink -f $(gcc -print-file-name=libgcc_s.so.1)))
+fi
 
 if [ "$export" != "none" ]; then
 	export_dir=${vars[export_dir]-$SRC/build/export}
@@ -266,7 +270,7 @@ fi
 
 if [[ ${vars[create_disk]} == "true" ]]; then
 	partition_offset=512
-	bare=boot.bin
+	bare="$SRC"/scripts/disk.bin
 	raw_disk=disk
 	qcow2_disk=disk
 	upload_kernel_mode="-k"
@@ -293,6 +297,10 @@ create_rofs_disk() {
 	qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
 }
 
+if [[ "$arch" == 'aarch64' ]]; then
+	export STRIP=aarch64-linux-gnu-strip
+fi
+
 case $fs_type in
 zfs)
 	partition_size=$((fs_size - partition_offset))
@@ -308,7 +316,9 @@ ramfs)
 	qemu-img convert -f raw -O qcow2 loader.img usr.img ;;
 esac
 
-"$SRC"/scripts/imgedit.py setargs usr.img `cat cmdline`
+if [[ -f "$OSV_BUILD_PATH/usr.img" ]]; then
+	"$SRC"/scripts/imgedit.py setargs usr.img `cat cmdline`
+fi
 
 # Support "build check"
 for i
