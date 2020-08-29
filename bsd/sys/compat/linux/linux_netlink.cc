@@ -439,7 +439,7 @@ static struct pr_usrreqs netlink_usrreqs = initialize_with([] (pr_usrreqs& x) {
 	x.pru_close =		netlink_close;
 });
 
-static void netlink_dispatch(struct socket *so __unused2, struct mbuf *m)
+static void netlink_dispatch(struct socket *so __bsd_unused2, struct mbuf *m)
 {
 	netisr_queue(NETISR_NETLINK, m);
 }

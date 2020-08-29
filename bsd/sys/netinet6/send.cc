@@ -249,7 +249,7 @@ send_close(struct socket *so)
  * daemon adding SeND ICMPv6 options.
  */
 static int
-send_input(struct mbuf *m, struct ifnet *ifp, int direction, int msglen __unused)
+send_input(struct mbuf *m, struct ifnet *ifp, int direction, int msglen __bsd_unused)
 {
 	struct ip6_hdr *ip6;
 	struct sockaddr_send sendsrc;

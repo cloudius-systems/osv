@@ -3252,7 +3252,7 @@ mld_rec_type_to_str(const int type)
 #endif
 
 void
-mld_init(void *unused __unused2)
+mld_init(void *unused __bsd_unused2)
 {
 
 	CTR1(KTR_MLD, "%s: initializing", __func__);
@@ -3267,7 +3267,7 @@ mld_init(void *unused __unused2)
 SYSINIT(mld_init, SI_SUB_PSEUDO, SI_ORDER_MIDDLE, mld_init, NULL);
 
 void
-mld_uninit(void *unused __unused2)
+mld_uninit(void *unused __bsd_unused2)
 {
 
 	CTR1(KTR_MLD, "%s: tearing down", __func__);
@@ -3276,7 +3276,7 @@ mld_uninit(void *unused __unused2)
 SYSUNINIT(mld_uninit, SI_SUB_PSEUDO, SI_ORDER_MIDDLE, mld_uninit, NULL);
 
 void
-vnet_mld_init(const void *unused __unused2)
+vnet_mld_init(const void *unused __bsd_unused2)
 {
 
 	CTR1(KTR_MLD, "%s: initializing", __func__);
@@ -3287,7 +3287,7 @@ VNET_SYSINIT(vnet_mld_init, SI_SUB_PSEUDO, SI_ORDER_ANY, vnet_mld_init,
     NULL);
 
 void
-vnet_mld_uninit(const void *unused __unused2)
+vnet_mld_uninit(const void *unused __bsd_unused2)
 {
 
 	CTR1(KTR_MLD, "%s: tearing down", __func__);
@@ -3301,7 +3301,7 @@ VNET_SYSUNINIT(vnet_mld_uninit, SI_SUB_PSEUDO, SI_ORDER_ANY, vnet_mld_uninit,
 #if 0 // TODO: modevent not supported
 
 int
-mld_modevent(module_t mod, int type, void *unused __unused2)
+mld_modevent(module_t mod, int type, void *unused __bsd_unused2)
 {
 
     switch (type) {

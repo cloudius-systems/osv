@@ -299,7 +299,7 @@ ip6_destroy()
 #endif
 
 static int
-ip6_init2_vnet(const void *unused __unused2)
+ip6_init2_vnet(const void *unused __bsd_unused2)
 {
 	/* FIXME: Make nd6_timer()  MPSAFE
          * - Iterates through V_nd_defrouter list and deletes routers that are expired
