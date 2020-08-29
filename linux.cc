@@ -42,6 +42,8 @@
 
 #include <musl/src/internal/ksigaction.h>
 
+extern "C" int eventfd2(unsigned int, int);
+
 extern "C" long gettid()
 {
     return sched::thread::current()->id();
