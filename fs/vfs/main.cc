@@ -2404,6 +2404,30 @@ extern "C" int mount_zfs_rootfs(bool pivot_root, bool extra_zfs_pools)
     return 0;
 }
 
+extern "C" int mount_virtiofs_rootfs(bool pivot_root)
+{
+    constexpr char* mp = "/virtiofs";
+
+    if (mkdir(mp, 0755) < 0) {
+        int ret = errno;
+        kprintf("failed to create %s, error = %s\n", mp, strerror(errno));
+        return ret;
+    }
+
+    int ret = sys_mount("/dev/virtiofs0", mp, "virtiofs", MNT_RDONLY, nullptr);
+    if (ret) {
+        kprintf("failed to mount %s, error = %s\n", mp, strerror(ret));
+        rmdir(mp);
+        return ret;
+    }
+
+    if (pivot_root) {
+        pivot_rootfs(mp);
+    }
+
+    return 0;
+}
+
 extern "C" void unmount_rootfs(void)
 {
     int ret;

@@ -91,6 +91,7 @@ extern "C" {
     int mount_zfs_rootfs(bool, bool);
     int mount_rofs_rootfs(bool);
     void rofs_disable_cache();
+    int mount_virtiofs_rootfs(bool);
 }
 
 void premain()
@@ -165,7 +166,7 @@ static void usage()
     std::cout << "  --leak                start leak detector after boot\n";
     std::cout << "  --nomount             don't mount the root file system\n";
     std::cout << "  --nopivot             do not pivot the root from bootfs to the root fs\n";
-    std::cout << "  --rootfs=arg          root filesystem to use (zfs, rofs or ramfs)\n";
+    std::cout << "  --rootfs=arg          root filesystem to use (zfs, rofs, ramfs or virtiofs)\n";
     std::cout << "  --assign-net          assign virtio network to the application\n";
     std::cout << "  --maxnic=arg          maximum NIC number\n";
     std::cout << "  --norandom            don't initialize any random device\n";
@@ -435,6 +436,13 @@ void* do_main_thread(void *_main_args)
             // TODO: Avoid the hack of using pivot_rootfs() just for mounting
             // the fstab entries.
             pivot_rootfs("/");
+        } else if (opt_rootfs.compare("virtiofs") == 0) {
+            auto error = mount_virtiofs_rootfs(opt_pivot);
+            if (error) {
+                debug("Could not mount virtiofs root filesystem.\n");
+            }
+
+            boot_time.event("Virtio-fs mounted");
         } else {
             // Fallback to original behavior for compatibility: try rofs -> zfs
             if (mount_rofs_rootfs(opt_pivot) == 0) {

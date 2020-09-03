@@ -24,8 +24,9 @@ usage() {
 	  --help|-h                     Print this help message
 	  arch=x64|aarch64              Specify the build architecture; default is x64
 	  mode=release|debug            Specify the build mode; default is release
-	  export=none|selected|all      If 'selected' or 'all' export the app files to build/export
-	  fs=zfs|rofs|ramfs             Specify the filesystem of the image partition
+	  export=none|selected|all      If 'selected' or 'all' export the app files to <export_dir>
+	  export_dir=<dir>              The directory to export the files to; default is build/export
+	  fs=zfs|rofs|ramfs|virtiofs    Specify the filesystem of the image partition
 	  fs_size=N                     Specify the size of the image in bytes
 	  fs_size_mb=N                  Specify the size of the image in MiB
 	  app_local_exec_tls_size=N     Specify the size of app local TLS in bytes; the default is 64
@@ -182,12 +183,17 @@ manifest=bootfs.manifest.skel
 fs_type=${vars[fs]-zfs}
 usrskel_arg=
 case $fs_type in
-zfs);; # Nothing to change here. This is our default behavior
-rofs)	manifest=bootfs_empty.manifest.skel
+zfs)
+	;; # Nothing to change here. This is our default behavior
+rofs|virtiofs)
+	# Both are read-only (in OSv) and require nothing extra on bootfs to work
+	manifest=bootfs_empty.manifest.skel
 	usrskel_arg="--usrskel usr_rofs.manifest.skel";;
-ramfs)	manifest=$OUT/usr.manifest
+ramfs)
+	manifest=$OUT/usr.manifest
 	usrskel_arg="--usrskel usr_ramfs.manifest.skel";;
-*)	echo "Unknown filesystem \"$fs_type\"" >&2
+*)
+	echo "Unknown filesystem \"$fs_type\"" >&2
 	exit 2
 esac
 
@@ -312,7 +318,9 @@ rofs)
 	partition_size=`stat --printf %s rofs.img`
 	image_size=$((partition_offset + partition_size))
         create_rofs_disk ;;
-ramfs)
+ramfs|virtiofs)
+	# No need to create extra fs like above: ramfs is already created (as the
+	# bootfs) and virtio-fs is specified with virtiofsd at run time
 	qemu-img convert -f raw -O qcow2 loader.img usr.img ;;
 esac
 # Prepend the root fs type option to the command line (preserved by run.py)
