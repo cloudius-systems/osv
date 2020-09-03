@@ -315,6 +315,9 @@ rofs)
 ramfs)
 	qemu-img convert -f raw -O qcow2 loader.img usr.img ;;
 esac
+# Prepend the root fs type option to the command line (preserved by run.py)
+cmdline=$(cat cmdline)
+echo -n "--rootfs=${fs_type} ${cmdline}" > cmdline
 
 if [[ -f "$OSV_BUILD_PATH/usr.img" ]]; then
 	"$SRC"/scripts/imgedit.py setargs usr.img `cat cmdline`

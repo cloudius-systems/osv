@@ -86,6 +86,7 @@ void setup_tls(elf::init_table inittab)
 extern "C" {
     void premain();
     void vfs_init(void);
+    void pivot_rootfs(const char*);
     void unmount_devfs();
     int mount_zfs_rootfs(bool, bool);
     int mount_rofs_rootfs(bool);
@@ -134,6 +135,7 @@ bool opt_power_off_on_abort = false;
 static bool opt_log_backtrace = false;
 static bool opt_mount = true;
 static bool opt_pivot = true;
+static std::string opt_rootfs;
 static bool opt_random = true;
 static bool opt_init = true;
 static std::string opt_console = "all";
@@ -161,8 +163,9 @@ static void usage()
     std::cout << "  --trace=arg           tracepoints to enable\n";
     std::cout << "  --trace-backtrace     log backtraces in the tracepoint log\n";
     std::cout << "  --leak                start leak detector after boot\n";
-    std::cout << "  --nomount             don't mount the ZFS file system\n";
-    std::cout << "  --nopivot             do not pivot the root from bootfs to the ZFS\n";
+    std::cout << "  --nomount             don't mount the root file system\n";
+    std::cout << "  --nopivot             do not pivot the root from bootfs to the root fs\n";
+    std::cout << "  --rootfs=arg          root filesystem to use (zfs, rofs or ramfs)\n";
     std::cout << "  --assign-net          assign virtio network to the application\n";
     std::cout << "  --maxnic=arg          maximum NIC number\n";
     std::cout << "  --norandom            don't initialize any random device\n";
@@ -272,6 +275,14 @@ static void parse_options(int loader_argc, char** loader_argv)
         }
         opt_console = v.front();
         debug("console=%s\n", opt_console);
+    }
+
+    if (options::option_value_exists(options_values, "rootfs")) {
+        auto v = options::extract_option_values(options_values, "rootfs");
+        if (v.size() > 1) {
+            printf("Ignoring '--rootfs' options after the first.");
+        }
+        opt_rootfs = v.front();
     }
 
     if (options::option_value_exists(options_values, "mount-fs")) {
@@ -397,23 +408,52 @@ void* do_main_thread(void *_main_args)
     if (opt_mount) {
         unmount_devfs();
 
-        // Try to mount rofs
-        if (mount_rofs_rootfs(opt_pivot) != 0) {
-            // Failed -> try to mount zfs
-            zfsdev::zfsdev_init();
-            auto error = mount_zfs_rootfs(opt_pivot, opt_extra_zfs_pools);
+        if (opt_rootfs.compare("rofs") == 0) {
+            auto error = mount_rofs_rootfs(opt_pivot);
             if (error) {
-                debug("Could not mount zfs root filesystem.\n");
+                debug("Could not mount rofs root filesystem.\n");
             }
-            bsd_shrinker_init();
 
-            boot_time.event("ZFS mounted");
-        } else {
             if (opt_disable_rofs_cache) {
                 debug("Disabling ROFS memory cache.\n");
                 rofs_disable_cache();
             }
             boot_time.event("ROFS mounted");
+        } else if (opt_rootfs.compare("zfs") == 0) {
+            zfsdev::zfsdev_init();
+            auto error = mount_zfs_rootfs(opt_pivot, opt_extra_zfs_pools);
+            if (error) {
+                debug("Could not mount zfs root filesystem.\n");
+            }
+
+            bsd_shrinker_init();
+            boot_time.event("ZFS mounted");
+        } else if (opt_rootfs.compare("ramfs") == 0) {
+            // NOTE: The ramfs is already mounted, we just need to mount fstab
+            // entries. That's the only difference between this and --nomount.
+
+            // TODO: Avoid the hack of using pivot_rootfs() just for mounting
+            // the fstab entries.
+            pivot_rootfs("/");
+        } else {
+            // Fallback to original behavior for compatibility: try rofs -> zfs
+            if (mount_rofs_rootfs(opt_pivot) == 0) {
+                if (opt_disable_rofs_cache) {
+                    debug("Disabling ROFS memory cache.\n");
+                    rofs_disable_cache();
+                }
+                boot_time.event("ROFS mounted");
+            } else {
+                zfsdev::zfsdev_init();
+                auto error = mount_zfs_rootfs(opt_pivot, opt_extra_zfs_pools);
+                if (error) {
+                    debug("Could not mount zfs root filesystem (while "
+                          "auto-discovering).\n");
+                }
+
+                bsd_shrinker_init();
+                boot_time.event("ZFS mounted");
+            }
         }
     }
 

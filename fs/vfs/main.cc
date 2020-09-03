@@ -2310,7 +2310,7 @@ static void mount_fs(mntent *m)
 }
 
 extern std::vector<mntent> opt_mount_fs;
-void pivot_rootfs(const char* path)
+extern "C" void pivot_rootfs(const char* path)
 {
     int ret = sys_pivot_root(path, "/");
     if (ret)
