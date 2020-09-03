@@ -271,7 +271,6 @@ fi
 if [ "$export" != "none" ]; then
 	export_dir=${vars[export_dir]-$SRC/build/export}
 	"$SRC"/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
-	exit 0
 fi
 
 if [[ ${vars[create_disk]} == "true" ]]; then
