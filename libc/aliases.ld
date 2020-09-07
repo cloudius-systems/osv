@@ -31,9 +31,10 @@ __setlocale = setlocale;
 /* multibyte */
 __mbrlen = mbrlen;
 
-/* memory */
+/* mman */
 __munmap = munmap;
 __mmap = mmap;
+mmap64 = mmap;
 
 /* stdio */
 __dup3 = dup3;
@@ -41,3 +42,15 @@ __dup3 = dup3;
 /* string */
 __strtok_r = strtok_r;
 __strndup = strndup;
+
+/* vfs */
+statfs64 = statfs;
+fstatfs64 = fstatfs;
+statvfs64 = statvfs;
+fstatvfs64 = fstatvfs;
+preadv64 = preadv;
+pwritev64 = pwritev;
+stat64 = stat;
+fstat64 = fstat;
+lstat64 = lstat;
+fstatat64 = fstatat;

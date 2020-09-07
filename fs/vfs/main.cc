@@ -431,8 +431,6 @@ ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset)
     return -1;
 }
 
-LFS64(preadv);
-
 ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 {
     return preadv(fd, iov, iovcnt, -1);
@@ -466,7 +464,6 @@ ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
     errno = error;
     return -1;
 }
-LFS64(pwritev);
 
 ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 {
@@ -582,8 +579,6 @@ int fstat(int fd, struct stat *st)
     return __fxstat(1, fd, st);
 }
 
-LFS64(fstat);
-
 extern "C"
 int __fxstatat(int ver, int dirfd, const char *pathname, struct stat *st,
         int flags)
@@ -635,8 +630,6 @@ int fstatat(int dirfd, const char *path, struct stat *st, int flags)
 {
     return __fxstatat(1, dirfd, path, st, flags);
 }
-
-LFS64(fstatat);
 
 extern "C" int flock(int fd, int operation)
 {
@@ -1152,8 +1145,6 @@ int stat(const char *pathname, struct stat *st)
     return __xstat(1, pathname, st);
 }
 
-LFS64(stat);
-
 TRACEPOINT(trace_vfs_lstat, "pathname=%s, stat=%p", const char*, struct stat*);
 TRACEPOINT(trace_vfs_lstat_ret, "");
 TRACEPOINT(trace_vfs_lstat_err, "errno=%d", int);
@@ -1191,8 +1182,6 @@ int lstat(const char *pathname, struct stat *st)
     return __lxstat(1, pathname, st);
 }
 
-LFS64(lstat);
-
 TRACEPOINT(trace_vfs_statfs, "\"%s\" %p", const char*, struct statfs*);
 TRACEPOINT(trace_vfs_statfs_ret, "");
 TRACEPOINT(trace_vfs_statfs_err, "%d", int);
@@ -1220,8 +1209,6 @@ int __statfs(const char *pathname, struct statfs *buf)
     return -1;
 }
 weak_alias(__statfs, statfs);
-
-LFS64(statfs);
 
 TRACEPOINT(trace_vfs_fstatfs, "\"%s\" %p", int, struct statfs*);
 TRACEPOINT(trace_vfs_fstatfs_ret, "");
@@ -1253,8 +1240,6 @@ int __fstatfs(int fd, struct statfs *buf)
 }
 weak_alias(__fstatfs, fstatfs);
 
-LFS64(fstatfs);
-
 static int
 statfs_to_statvfs(struct statvfs *dst, struct statfs *src)
 {
@@ -1282,8 +1267,6 @@ statvfs(const char *pathname, struct statvfs *buf)
     return statfs_to_statvfs(buf, &st);
 }
 
-LFS64(statvfs);
-
 int
 fstatvfs(int fd, struct statvfs *buf)
 {
@@ -1293,9 +1276,6 @@ fstatvfs(int fd, struct statvfs *buf)
         return -1;
     return statfs_to_statvfs(buf, &st);
 }
-
-LFS64(fstatvfs);
-
 
 TRACEPOINT(trace_vfs_getcwd, "%p %d", char*, size_t);
 TRACEPOINT(trace_vfs_getcwd_ret, "\"%s\"", const char*);

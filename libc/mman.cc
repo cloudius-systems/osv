@@ -188,11 +188,6 @@ void *mmap(void *addr, size_t length, int prot, int flags,
     return ret;
 }
 
-extern "C" void *mmap64(void *addr, size_t length, int prot, int flags,
-                      int fd, off64_t offset)
-    __attribute__((alias("mmap")));
-
-
 int munmap_validate(void *addr, size_t length)
 {
     if (!mmu::is_page_aligned(addr) || length == 0) {

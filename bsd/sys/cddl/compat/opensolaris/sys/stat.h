@@ -39,6 +39,7 @@
 #ifndef _KERNEL
 #include <sys/disk.h>
 
+#undef fstat64
 static __inline int
 fstat64(int fd, struct stat *sb)
 {
