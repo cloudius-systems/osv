@@ -64,6 +64,7 @@ int rmdir(const char *);
 int truncate(const char *, off_t);
 int truncate64(const char *, off_t);
 int ftruncate(int, off_t);
+int ftruncate64(int, off_t);
 
 #define F_OK 0
 #define R_OK 4
