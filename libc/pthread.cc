@@ -1181,3 +1181,6 @@ int pthread_attr_getaffinity_np(const pthread_attr_t *attr, size_t cpusetsize,
 
     return 0;
 }
+
+extern "C" void _pthread_cleanup_push(struct __ptcb *cb, void (*f)(void *), void *x) {} //TODO: Check if it can be stubbed like this
+extern "C" void _pthread_cleanup_pop(struct __ptcb *cb, int run) {} //TODO: Check if it can be stubbed like this

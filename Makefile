@@ -229,6 +229,7 @@ ifeq ($(arch),x64)
 # C++ include directories, though they are already in the default search path.
 INCLUDES += $(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^ .*c\+\+/ {print "-isystem" $$0}')
 endif
+INCLUDES += $(pre-include-api)
 INCLUDES += -isystem include/api
 INCLUDES += -isystem include/api/$(arch)
 ifeq ($(arch),aarch64)
@@ -243,6 +244,8 @@ post-includes-bsd += -isystem bsd/sys
 # For acessing machine/ in cpp xen drivers
 post-includes-bsd += -isystem bsd/
 post-includes-bsd += -isystem bsd/$(arch)
+
+$(out)/musl/%.o: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include
 
 ifneq ($(werror),0)
 	CFLAGS_WERROR = -Werror
@@ -936,7 +939,7 @@ environ_musl =
 ifeq ($(arch),x64)
 musl_arch = x86_64
 else
-musl_arch = notsup
+musl_arch = aarch64
 endif
 
 libc += internal/_chk_fail.o
@@ -1000,6 +1003,7 @@ environ_libc += env/secure_getenv.c
 environ_musl += env/putenv.c
 environ_musl += env/setenv.c
 environ_musl += env/unsetenv.c
+environ_musl += string/strchrnul.c
 
 musl += ctype/__ctype_b_loc.o
 
@@ -1007,59 +1011,27 @@ musl += errno/strerror.o
 libc += errno/strerror.o
 
 musl += locale/catclose.o
+musl += locale/__mo_lookup.o
+musl += locale/pleval.o
 musl += locale/catgets.o
-musl += locale/catopen.o
-musl += locale/duplocale.o
+libc += locale/catopen.o
+libc += locale/duplocale.o
 libc += locale/freelocale.o
 musl += locale/iconv.o
-musl += locale/intl.o
-musl += locale/isalnum_l.o
-musl += locale/isalpha_l.o
-musl += locale/isblank_l.o
-musl += locale/iscntrl_l.o
-musl += locale/isdigit_l.o
-musl += locale/isgraph_l.o
-musl += locale/islower_l.o
-musl += locale/isprint_l.o
-musl += locale/ispunct_l.o
-musl += locale/isspace_l.o
-musl += locale/isupper_l.o
-musl += locale/iswalnum_l.o
-musl += locale/iswalpha_l.o
-musl += locale/iswblank_l.o
-musl += locale/iswcntrl_l.o
-musl += locale/iswctype_l.o
-musl += locale/iswdigit_l.o
-musl += locale/iswgraph_l.o
-musl += locale/iswlower_l.o
-musl += locale/iswprint_l.o
-musl += locale/iswpunct_l.o
-musl += locale/iswspace_l.o
-musl += locale/iswupper_l.o
-musl += locale/iswxdigit_l.o
-musl += locale/isxdigit_l.o
-musl += locale/langinfo.o
+musl += locale/iconv_close.o
+libc += locale/intl.o
+libc += locale/langinfo.o
 musl += locale/localeconv.o
-musl += locale/setlocale.o
-musl += locale/strcasecmp_l.o
+libc += locale/setlocale.o
 musl += locale/strcoll.o
-musl += locale/strerror_l.o
 musl += locale/strfmon.o
-musl += locale/strncasecmp_l.o
 libc += locale/strtod_l.o
 libc += locale/strtof_l.o
 libc += locale/strtold_l.o
 musl += locale/strxfrm.o
-musl += locale/tolower_l.o
-musl += locale/toupper_l.o
-musl += locale/towctrans_l.o
-musl += locale/towlower_l.o
-musl += locale/towupper_l.o
 libc += locale/uselocale.o
 musl += locale/wcscoll.o
 musl += locale/wcsxfrm.o
-musl += locale/wctrans_l.o
-musl += locale/wctype_l.o
 
 musl += math/__cos.o
 musl += math/__cosdf.o
@@ -1084,6 +1056,16 @@ musl += math/__sinl.o
 musl += math/__tan.o
 musl += math/__tandf.o
 musl += math/__tanl.o
+musl += math/__math_oflow.o
+musl += math/__math_oflowf.o
+musl += math/__math_xflow.o
+musl += math/__math_xflowf.o
+musl += math/__math_uflow.o
+musl += math/__math_uflowf.o
+musl += math/__math_divzero.o
+musl += math/__math_divzerof.o
+musl += math/__math_invalid.o
+musl += math/__math_invalidf.o
 musl += math/acos.o
 musl += math/acosf.o
 musl += math/acosh.o
@@ -1124,11 +1106,13 @@ musl += math/erf.o
 musl += math/erff.o
 musl += math/erfl.o
 musl += math/exp.o
+musl += math/exp_data.o
 musl += math/exp10.o
 musl += math/exp10f.o
 musl += math/exp10l.o
 musl += math/exp2.o
 musl += math/exp2f.o
+musl += math/exp2f_data.o
 musl += math/exp2l.o
 $(out)/musl/src/math/exp2l.o: CFLAGS += -Wno-unused-variable
 musl += math/expf.o
@@ -1157,8 +1141,8 @@ musl += math/fminl.o
 musl += math/fmod.o
 musl += math/fmodf.o
 musl += math/fmodl.o
-libc += math/finite.o #This 3 libc modules will go away once we upgrade to musl 1.1.24
-libc += math/finitef.o
+musl += math/finite.o
+musl += math/finitef.o
 libc += math/finitel.o
 musl += math/frexp.o
 musl += math/frexpf.o
@@ -1167,8 +1151,11 @@ musl += math/hypot.o
 musl += math/hypotf.o
 musl += math/hypotl.o
 musl += math/ilogb.o
+$(out)/musl/src/math/ilogb.o: CFLAGS += -Wno-unknown-pragmas
 musl += math/ilogbf.o
+$(out)/musl/src/math/ilogbf.o: CFLAGS += -Wno-unknown-pragmas
 musl += math/ilogbl.o
+$(out)/musl/src/math/ilogbl.o: CFLAGS += -Wno-unknown-pragmas
 musl += math/j0.o
 musl += math/j0f.o
 musl += math/j1.o
@@ -1193,6 +1180,7 @@ musl += math/llround.o
 musl += math/llroundf.o
 musl += math/llroundl.o
 musl += math/log.o
+musl += math/log_data.o
 musl += math/log10.o
 musl += math/log10f.o
 musl += math/log10l.o
@@ -1200,12 +1188,15 @@ musl += math/log1p.o
 musl += math/log1pf.o
 musl += math/log1pl.o
 musl += math/log2.o
+musl += math/log2_data.o
 musl += math/log2f.o
+musl += math/log2f_data.o
 musl += math/log2l.o
 musl += math/logb.o
 musl += math/logbf.o
 musl += math/logbl.o
 musl += math/logf.o
+musl += math/logf_data.o
 musl += math/logl.o
 musl += math/lrint.o
 #musl += math/lrintf.o
@@ -1232,7 +1223,9 @@ musl += math/nexttoward.o
 musl += math/nexttowardf.o
 musl += math/nexttowardl.o
 musl += math/pow.o
+musl += math/pow_data.o
 musl += math/powf.o
+musl += math/powf_data.o
 musl += math/powl.o
 musl += math/remainder.o
 musl += math/remainderf.o
@@ -1300,7 +1293,9 @@ musl += misc/a64l.o
 musl += misc/basename.o
 musl += misc/dirname.o
 libc += misc/error.o
-libc += misc/ffs.o
+musl += misc/ffs.o
+musl += misc/ffsl.o
+musl += misc/ffsll.o
 musl += misc/get_current_dir_name.o
 libc += misc/gethostid.o
 libc += misc/getopt.o
@@ -1316,6 +1311,8 @@ libc += misc/__longjmp_chk.o
 
 musl += signal/killpg.o
 musl += signal/siginterrupt.o
+musl += signal/sigrtmin.o
+musl += signal/sigrtmax.o
 
 musl += multibyte/btowc.o
 musl += multibyte/internal.o
@@ -1344,17 +1341,27 @@ libc += network/gethostbyname_r.o
 musl += network/gethostbyname2_r.o
 musl += network/gethostbyaddr_r.o
 musl += network/gethostbyaddr.o
+musl += network/resolvconf.o
+musl += network/res_msend.o
+$(out)/musl/src/network/res_msend.o: CFLAGS += -Wno-maybe-uninitialized --include libc/syscall_to_function.h --include libc/internal/pthread_stubs.h
+$(out)/libc/multibyte/mbsrtowcs.o: CFLAGS += -Imusl/src/multibyte
+musl += network/lookup_ipliteral.o
 libc += network/getaddrinfo.o
-musl += network/freeaddrinfo.o
+libc += network/freeaddrinfo.o
+musl += network/dn_expand.o
+musl += network/res_mkquery.o
+musl += network/dns_parse.o
 musl += network/in6addr_any.o
 musl += network/in6addr_loopback.o
+musl += network/lookup_name.o
+musl += network/lookup_serv.o
 libc += network/getnameinfo.o
 libc += network/__dns.o
 libc += network/__ipparse.o
-libc += network/inet_addr.o
-libc += network/inet_aton.o
+musl += network/inet_addr.o
+musl += network/inet_aton.o
 musl += network/inet_pton.o
-libc += network/inet_ntop.o
+musl += network/inet_ntop.o
 musl += network/proto.o
 libc += network/if_indextoname.o
 libc += network/if_nametoindex.o
@@ -1372,7 +1379,7 @@ musl += network/res_init.o
 musl += prng/rand.o
 musl += prng/rand_r.o
 libc += prng/random.o
-libc += prng/__rand48_step.o
+musl += prng/__rand48_step.o
 musl += prng/__seed48.o
 musl += prng/drand48.o
 musl += prng/lcong48.o
@@ -1383,16 +1390,14 @@ musl += prng/srand48.o
 libc += random.o
 
 libc += process/execve.o
-libc += process/execle.o
+musl += process/execle.o
 musl += process/execv.o
 musl += process/execl.o
 libc += process/waitpid.o
 musl += process/wait.o
 
-libc += arch/$(arch)/setjmp/setjmp.o
-libc += arch/$(arch)/setjmp/longjmp.o
-libc += arch/$(arch)/setjmp/sigrtmax.o
-libc += arch/$(arch)/setjmp/sigrtmin.o
+musl += setjmp/$(musl_arch)/setjmp.o
+musl += setjmp/$(musl_arch)/longjmp.o
 libc += arch/$(arch)/setjmp/siglongjmp.o
 libc += arch/$(arch)/setjmp/sigsetjmp.o
 libc += arch/$(arch)/setjmp/block.o
@@ -1405,6 +1410,7 @@ endif
 
 musl += stdio/__fclose_ca.o
 libc += stdio/__fdopen.o
+$(out)/libc/stdio/__fdopen.o: CFLAGS += --include libc/syscall_to_function.h
 musl += stdio/__fmodeflags.o
 libc += stdio/__fopen_rb_ca.o
 libc += stdio/__fprintf_chk.o
@@ -1416,13 +1422,16 @@ musl += stdio/__stdio_exit.o
 libc += stdio/__stdio_read.o
 musl += stdio/__stdio_seek.o
 $(out)/musl/src/stdio/__stdio_seek.o: CFLAGS += --include libc/syscall_to_function.h
-libc += stdio/__stdio_write.o
+musl += stdio/__stdio_write.o
+$(out)/musl/src/stdio/__stdio_write.o: CFLAGS += --include libc/syscall_to_function.h
 libc += stdio/__stdout_write.o
 musl += stdio/__string_read.o
 musl += stdio/__toread.o
 musl += stdio/__towrite.o
 musl += stdio/__uflow.o
 libc += stdio/__vfprintf_chk.o
+libc += stdio/ofl.o
+musl += stdio/ofl_add.o
 musl += stdio/asprintf.o
 musl += stdio/clearerr.o
 musl += stdio/dprintf.o
@@ -1464,7 +1473,7 @@ musl += stdio/fwrite.o
 musl += stdio/fwscanf.o
 libc += stdio/getc.o
 musl += stdio/getc_unlocked.o
-musl += stdio/getchar.o
+libc += stdio/getchar.o
 musl += stdio/getchar_unlocked.o
 musl += stdio/getdelim.o
 musl += stdio/getline.o
@@ -1478,7 +1487,7 @@ musl += stdio/perror.o
 musl += stdio/printf.o
 libc += stdio/putc.o
 musl += stdio/putc_unlocked.o
-musl += stdio/putchar.o
+libc += stdio/putchar.o
 musl += stdio/putchar_unlocked.o
 musl += stdio/puts.o
 musl += stdio/putw.o
@@ -1500,6 +1509,7 @@ libc += stdio/stdout.o
 musl += stdio/swprintf.o
 musl += stdio/swscanf.o
 musl += stdio/tempnam.o
+$(out)/musl/src/stdio/tempnam.o: CFLAGS += --include libc/syscall_to_function.h
 musl += stdio/tmpfile.o
 $(out)/musl/src/stdio/tmpfile.o: CFLAGS += --include libc/syscall_to_function.h
 musl += stdio/tmpnam.o
@@ -1509,9 +1519,12 @@ musl += stdio/ungetwc.o
 musl += stdio/vasprintf.o
 libc += stdio/vdprintf.o
 libc += stdio/vfprintf.o
-libc += stdio/vfscanf.o
+$(out)/libc/stdio/vfprintf.o: COMMON += -Wno-maybe-uninitialized
+musl += stdio/vfscanf.o
+$(out)/musl/src/stdio/vfscanf.o: COMMON += -Wno-maybe-uninitialized
 musl += stdio/vfwprintf.o
-libc += stdio/vfwscanf.o
+musl += stdio/vfwscanf.o
+$(out)/musl/src/stdio/vfwscanf.o: COMMON += -Wno-maybe-uninitialized
 musl += stdio/vprintf.o
 musl += stdio/vscanf.o
 libc += stdio/vsnprintf.o
@@ -1641,13 +1654,13 @@ musl += temp/mktemp.o
 musl += temp/mkostemp.o
 musl += temp/mkostemps.o
 
-musl += time/__asctime.o
 musl += time/__map_file.o
 $(out)/musl/src/time/__map_file.o: CFLAGS += --include libc/syscall_to_function.h
 musl += time/__month_to_secs.o
 musl += time/__secs_to_tm.o
 musl += time/__tm_to_secs.o
 libc += time/__tz.o
+$(out)/libc/time/__tz.o: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include
 musl += time/__year_to_secs.o
 musl += time/asctime.o
 musl += time/asctime_r.o
@@ -1665,7 +1678,7 @@ musl += time/strptime.o
 musl += time/time.o
 musl += time/timegm.o
 musl += time/wcsftime.o
-libc += time/ftime.o # verbatim copy of the file as in 4b15d9f46a2b@musl
+musl += time/ftime.o
 $(out)/libc/time/ftime.o: CFLAGS += -Ilibc/include
 
 musl += termios/tcflow.o
@@ -1724,14 +1737,11 @@ libc += mallopt.o
 
 libc += linux/makedev.o
 
-ifneq ($(musl_arch), notsup)
 musl += fenv/fegetexceptflag.o
 musl += fenv/feholdexcept.o
 musl += fenv/fesetexceptflag.o
+musl += fenv/fesetround.o
 musl += fenv/$(musl_arch)/fenv.o
-else
-musl += fenv/fenv.o
-endif
 
 musl += crypt/crypt_blowfish.o
 musl += crypt/crypt.o
@@ -1740,7 +1750,7 @@ musl += crypt/crypt_md5.o
 musl += crypt/crypt_r.o
 musl += crypt/crypt_sha256.o
 musl += crypt/crypt_sha512.o
-libc += crypt/encrypt.o
+musl += crypt/encrypt.o
 
 #include $(src)/fs/build.mk:
 
@@ -1893,6 +1903,9 @@ $(out)/bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__'
 
 environ_sources = $(addprefix libc/, $(environ_libc))
 environ_sources += $(addprefix musl/src/, $(environ_musl))
+
+$(out)/libenviron.so: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include
+$(out)/libenviron.so: source-dialects =
 
 $(out)/libenviron.so: $(environ_sources)
 	$(makedir)

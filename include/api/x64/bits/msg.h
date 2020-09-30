@@ -1,1 +1,1 @@
-../../../../musl/arch/x86_64/bits/msg.h
+../../../../musl/arch/generic/bits/msg.h

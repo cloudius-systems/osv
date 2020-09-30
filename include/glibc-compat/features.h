@@ -10,6 +10,8 @@
 
 #include_next <features.h>
 
+#define hidden __attribute__((__visibility__("hidden")))
+
 #define __GNU_LIBRARY__ 6
 #define __GLIBC__       2
 #define __GLIBC_MINOR__ 20

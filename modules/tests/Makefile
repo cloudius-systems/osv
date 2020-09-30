@@ -250,9 +250,9 @@ common-boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 
 boost-tests := $(common-boost-tests)
 
-rofs-only-boost-tests :=
+rofs-only-boost-tests := rofs/tst-stdio.so
 
-zfs-only-boost-tests := tst-rename.so
+zfs-only-boost-tests := tst-rename.so tst-stdio.so
 
 boost-tests += $($(fs_type)-only-boost-tests)
 

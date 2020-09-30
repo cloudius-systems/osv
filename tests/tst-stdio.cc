@@ -199,7 +199,9 @@ TEST(STDIO_TEST, tmpfile_fileno_fprintf_rewind_fgets) {
   struct stat sb;
   int rc = fstat(fd, &sb);
   ASSERT_NE(rc, -1);
+#if !defined(READ_ONLY_FS)
   ASSERT_EQ(sb.st_mode & 0777, 0600U);
+#endif
 
   rc = fprintf(fp, "hello\n");
   ASSERT_EQ(rc, 6);
@@ -2414,6 +2416,7 @@ TEST(STDIO_TEST, fseek_64bit) {
 
 // POSIX requires that fseek/fseeko fail with EOVERFLOW if the new file offset
 // isn't representable in long/off_t.
+#if !defined(READ_ONLY_FS)
 TEST(STDIO_TEST, fseek_overflow_32bit) {
   TemporaryFile tf;
   FILE* fp = fopen64(tf.path, "w+");
@@ -2434,6 +2437,7 @@ TEST(STDIO_TEST, fseek_overflow_32bit) {
 
   fclose(fp);
 }
+#endif
 
 /*@wkozaczuk This test fails completely on OSv so disable it for now
 TEST(STDIO_TEST, dev_std_files) {

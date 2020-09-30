@@ -41,7 +41,7 @@ extern char **__environ;
 
 #undef weak_alias
 #define __weak_alias(old, new) \
-	__typeof(old) new __attribute__((weak, alias(#old)))
+	__typeof(old) new __attribute__((__weak__, alias(#old)))
 #ifdef __cplusplus
 #define weak_alias(old, new) extern "C" __weak_alias(old, new)
 #else

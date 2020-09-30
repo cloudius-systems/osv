@@ -1,5 +1,8 @@
 #include <bits/syscall.h>
 #include <unistd.h>
+#include <errno.h>
+
+#define sys_open(filename, flags, ...) (open(filename, flags __VA_OPT__(,) __VA_ARGS__))
 
 #define __OSV_TO_FUNCTION_SYS_open(filename, flags, ...) (open(filename, flags __VA_OPT__(,) __VA_ARGS__))
 
@@ -17,6 +20,8 @@
 
 #define __OSV_TO_FUNCTION_SYS_fstat(fd, st) (fstat(fd, st))
 
+#define __OSV_TO_FUNCTION_SYS_lstat(fd, st) (lstat(fd, st))
+
 #define __OSV_TO_FUNCTION_SYS_unlink(path) (unlink(path))
 
 #define __OSV_TO_FUNCTION_SYS_rmdir(path) (rmdir(path))
@@ -26,7 +31,7 @@
 #define __OSV_TO_FUNCTION_SYS_writev(fd, cmd, args) (writev(fd, cmd, args))
 
 #undef __syscall
-#define __syscall(sys_number, ...) (__OSV_TO_FUNCTION_##sys_number(__VA_ARGS__))
+#define __syscall(sys_number, ...) (__OSV_TO_FUNCTION_##sys_number(__VA_ARGS__) < 0 ? -errno : 0)
 #undef syscall
 #define syscall(sys_number, ...) (__OSV_TO_FUNCTION_##sys_number(__VA_ARGS__))
 #undef syscall_cp

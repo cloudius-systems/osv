@@ -69,6 +69,7 @@ int mbtowc (wchar_t *__restrict, const char *__restrict, size_t);
 int wctomb (char *, wchar_t);
 size_t mbstowcs (wchar_t *__restrict, const char *__restrict, size_t);
 size_t wcstombs (char *__restrict, const wchar_t *__restrict, size_t);
+size_t mbstowcs (wchar_t *__restrict, const char *__restrict, size_t);
 
 #define EXIT_FAILURE 1
 #define EXIT_SUCCESS 0

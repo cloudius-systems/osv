@@ -1,1 +1,1 @@
-../../../../musl/arch/x86_64/bits/shm.h
+../../../../musl/arch/generic/bits/shm.h

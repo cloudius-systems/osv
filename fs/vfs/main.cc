@@ -2095,7 +2095,7 @@ ssize_t sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
         return -1;
     }
 
-    auto ret = write(out_fd, src + (offset % PAGESIZE), count);
+    auto ret = write(out_fd, src + (offset % PAGE_SIZE), count);
 
     if (ret < 0) {
         return libc_error(errno);

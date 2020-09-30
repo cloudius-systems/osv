@@ -1,12 +1,12 @@
 #include "locale_impl.h"
 #include "libc.h"
 
-static __thread locale_t __locale;
+__thread locale_t __current_locale;
 
 locale_t __uselocale(locale_t l)
 {
-	locale_t old = __locale;
-	if (l) __locale = l;
+	locale_t old = __current_locale;
+	if (l) __current_locale = l;
 	return old;
 }
 

@@ -50,6 +50,11 @@ int* __errno_location()
     return &errno;
 }
 
+extern "C" int* ___errno_location()
+{
+    return &errno;
+}
+
 int getrlimit(int resource, struct rlimit *rlim)
 {
     auto set = [=] (rlim_t r) { rlim->rlim_cur = rlim->rlim_max = r; };
