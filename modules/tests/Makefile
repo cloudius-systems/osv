@@ -69,7 +69,7 @@ endif
 COMMON = $(autodepend) $(INCLUDES)
 
 ifeq ($(arch),aarch64)
-  COMMON += --sysroot $(aarch64_gccbase)
+  COMMON += --sysroot $(aarch64_gccbase) -DAARCH64_PORT_STUB
 endif
 
 COMMON += -g -O2 -fPIC -DBOOST_TEST_DYN_LINK \

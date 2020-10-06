@@ -44,12 +44,14 @@ namespace utf = boost::unit_test;
 //#include "BionicDeathTest.h"
 //#include "utils.h"
 
+#ifndef AARCH64_PORT_STUB
 // This #include is actually a test too. We have to duplicate the
 // definitions of the RENAME_ constants because <linux/fs.h> also contains
 // pollution such as BLOCK_SIZE which conflicts with lots of user code.
 // Important to check that we have matching definitions.
 // There's no _MAX to test that we have all the constants, sadly.
 #include <linux/fs.h>
+#endif
 
 #if defined(NOFORTIFY)
 #define STDIO_TEST stdio_nofortify
@@ -2477,6 +2479,7 @@ TEST(STDIO_TEST, fread_with_locked_file) {
   fclose(fp1);
 }
 
+#ifndef AARCH64_PORT_STUB
 TEST(STDIO_TEST, SEEK_macros) {
   ASSERT_EQ(0, SEEK_SET);
   ASSERT_EQ(1, SEEK_CUR);
@@ -2486,6 +2489,7 @@ TEST(STDIO_TEST, SEEK_macros) {
   // So we'll notice if Linux grows another constant in <linux/fs.h>...
   ASSERT_EQ(SEEK_MAX, SEEK_HOLE);
 }
+#endif
 
 TEST(STDIO_TEST, rename) {
   TemporaryDir td;
