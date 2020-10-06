@@ -12,6 +12,8 @@ import tests.test_tracing
 from operator import attrgetter
 from tests.testing import *
 
+host_arch = os.uname().machine
+
 os.environ["LC_ALL"]="C"
 os.environ["LANG"]="C"
 
@@ -27,6 +29,59 @@ qemu_blacklist= [
 firecracker_blacklist= [
     "tracing_smoke_test",
     "tcp_close_without_reading_on_qemu"
+]
+
+#At this point there are 130 unit tests that pass on aarch64.
+#The remaining ones are blacklisted below until we fix various
+#issues that prevent from tests from passing.
+aarch64_blacklist= [
+    #All java tests require JVM running on aarch64 which in turn at least requires TLS support
+    "java_isolated",
+    "java_non_isolated",
+    "java_no_wrapper",
+    "java-perms",
+    #All following tests which mostly use boost test framework
+    #crash with a message 'fedisableexcept() stubbed' due
+    #to missing support of feenableexcept/fedisableexcept/fegetexcept
+    #on aarch64 (please see arch/aarch64/feexcept.cc)
+    "tst-vfs.so",
+    "tst-libc-locking.so",
+    "tst-promise.so","tst-dlfcn.so","tst-stat.so","tst-wait-for.so",
+    "tst-bsd-tcp1.so","tst-bsd-tcp1-zsnd.so","tst-bsd-tcp1-zrcv.so",
+    "tst-bsd-tcp1-zsndrcv.so","tst-async.so","tst-rcu-list.so","tst-tcp-listen.so",
+    "tst-poll.so","tst-bitset-iter.so","tst-timer-set.so","tst-clock.so",
+    "tst-rcu-hashtable.so","tst-unordered-ring-mpsc.so",
+    "tst-seek.so","tst-ctype.so","tst-wctype.so","tst-string.so", "tst-stdio-rofs.so",
+    "tst-time.so",
+    #Remaining tests below fail for various different reasons
+    #Please see comments on the right side for more details
+    "tst-async.so",                # Assertion failed: type == ARCH_JUMP_SLOT (core/elf.cc: relocate_pltgot: 789)
+    "tst-condvar.so",              # To few cpus?
+    "tst-elf-permissions.so",      # Infinite page fault
+    "tst-eventfd.so",              # Seems to hang after 'running simple threaded test'
+    "tst-except.so",               # Crashes with 'failed looking up symbol _Unwind_Resume'
+    "tst-fpu.so",                  # Seems to hang, possibly floating point related
+    "tst-hub.so",                  # Seems to hang after 'Starting stress test'
+    "tst-mmap-file.so",            # Some assertions fail - 'SUMMARY: 30 tests, 4 failures'
+    "tst-mmap.so",                 # Infinite page fault
+    "tst-pthread-barrier.so",      # Some assertions fail - 'SUMMARY: 8 tests / 1 failures', with cpu >= 2 seems to hang
+    "tst-ring-spsc-wraparound.so", # Hangs
+    "tst-sampler.so",              # Crashes with 'failed looking up symbol _ZN4prof13start_samplerENS_6configE (prof::start_sampler(prof::config))'
+    "tst-semaphore.so",            # Seems to hang after 'Thread *: Incremented 1th' messages
+    "tst-sigaltstack.so",          # Assertion failed: type == ARCH_JUMP_SLOT (core/elf.cc: relocate_pltgot: 789)
+    "tst-thread-local.so",         # Crashes due to missing TLS support
+    "tst-timerfd.so",              # Some assertions fail - 'SUMMARY: 212 tests, 10 failures'
+    "tst-yield.so",                # Seems to hang
+    #These tests fail due to some other shortcomings in the test scripts
+    "tracing_smoke_test",
+    "tcp_close_without_reading_on_fc",
+    "tcp_close_without_reading_on_qemu",
+    #The tests below are NOT blacklisted but occasionally hang so I am listing
+    #them here for completeness.
+    #tst-queue-mpsc.so,            # Sometimes hangs
+    #tst-tcp-nbwrite.so,           # Sometimes hangs
+    #tst-concurrent-init.so,       # Sometimes hangs
+    #tst-bsd-kthread.so,           # Once failed with page fault
 ]
 
 add_tests([
@@ -146,15 +201,21 @@ if __name__ == "__main__":
     parser.add_argument("--run_options", action="store", help="pass extra options to run.py")
     parser.add_argument("-m", "--manifest", action="store", default="modules/tests/usr.manifest", help="test manifest")
     parser.add_argument("-b", "--blacklist", action="append", help="test to be blacklisted", default=[])
+    parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default=host_arch,
+                        help="specify QEMU architecture: x86_64, aarch64")
     cmdargs = parser.parse_args()
     set_verbose_output(cmdargs.verbose)
     if cmdargs.run_options != None:
         run_py_args = cmdargs.run_options.split()
     else:
         run_py_args = []
+    if cmdargs.arch != None:
+        run_py_args = run_py_args + ['--arch', cmdargs.arch]
     if cmdargs.hypervisor == 'firecracker':
         blacklist.extend(firecracker_blacklist)
     else:
         blacklist.extend(qemu_blacklist)
+    if cmdargs.arch == 'aarch64':
+        blacklist.extend(aarch64_blacklist)
     blacklist.extend(cmdargs.blacklist)
     main()
