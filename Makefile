@@ -1398,9 +1398,9 @@ musl += process/wait.o
 
 musl += setjmp/$(musl_arch)/setjmp.o
 musl += setjmp/$(musl_arch)/longjmp.o
-libc += arch/$(arch)/setjmp/siglongjmp.o
 libc += arch/$(arch)/setjmp/sigsetjmp.o
-libc += arch/$(arch)/setjmp/block.o
+libc += signal/block.o
+libc += signal/siglongjmp.o
 ifeq ($(arch),x64)
 libc += arch/$(arch)/ucontext/getcontext.o
 libc += arch/$(arch)/ucontext/setcontext.o

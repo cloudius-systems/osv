@@ -31,45 +31,38 @@ firecracker_blacklist= [
     "tcp_close_without_reading_on_qemu"
 ]
 
-#At this point there are 130 unit tests that pass on aarch64.
+#At this point there are 100 out of 131 unit tests that pass on aarch64.
 #The remaining ones are blacklisted below until we fix various
-#issues that prevent from tests from passing.
+#issues that prevent those tests from passing.
 aarch64_blacklist= [
     #All java tests require JVM running on aarch64 which in turn at least requires TLS support
     "java_isolated",
     "java_non_isolated",
     "java_no_wrapper",
     "java-perms",
-    #All following tests which mostly use boost test framework
-    #crash with a message 'fedisableexcept() stubbed' due
-    #to missing support of feenableexcept/fedisableexcept/fegetexcept
-    #on aarch64 (please see arch/aarch64/feexcept.cc)
-    "tst-vfs.so",
-    "tst-libc-locking.so",
-    "tst-promise.so","tst-dlfcn.so","tst-stat.so","tst-wait-for.so",
-    "tst-bsd-tcp1.so","tst-bsd-tcp1-zsnd.so","tst-bsd-tcp1-zrcv.so",
-    "tst-bsd-tcp1-zsndrcv.so","tst-async.so","tst-rcu-list.so","tst-tcp-listen.so",
-    "tst-poll.so","tst-bitset-iter.so","tst-timer-set.so","tst-clock.so",
-    "tst-rcu-hashtable.so","tst-unordered-ring-mpsc.so",
-    "tst-seek.so","tst-ctype.so","tst-wctype.so","tst-string.so", "tst-stdio-rofs.so",
-    "tst-time.so",
+    #Following tests crash with message 'Assertion failed: type == ARCH_JUMP_SLOT (core/elf.cc: relocate_pltgot: 789)'
+    "tst-async.so",
+    "tst-promise.so",
+    "tst-sigaltstack.so",
     #Remaining tests below fail for various different reasons
     #Please see comments on the right side for more details
-    "tst-async.so",                # Assertion failed: type == ARCH_JUMP_SLOT (core/elf.cc: relocate_pltgot: 789)
     "tst-condvar.so",              # To few cpus?
+    "tst-dlfcn.so",                # Fails with page fault - 'relocate_rela(): unknown relocation type 0000000000000008'
     "tst-elf-permissions.so",      # Infinite page fault
     "tst-eventfd.so",              # Seems to hang after 'running simple threaded test'
     "tst-except.so",               # Crashes with 'failed looking up symbol _Unwind_Resume'
     "tst-fpu.so",                  # Seems to hang, possibly floating point related
     "tst-hub.so",                  # Seems to hang after 'Starting stress test'
+    "tst-libc-locking.so",         # Hangs
     "tst-mmap-file.so",            # Some assertions fail - 'SUMMARY: 30 tests, 4 failures'
     "tst-mmap.so",                 # Infinite page fault
     "tst-pthread-barrier.so",      # Some assertions fail - 'SUMMARY: 8 tests / 1 failures', with cpu >= 2 seems to hang
     "tst-ring-spsc-wraparound.so", # Hangs
     "tst-sampler.so",              # Crashes with 'failed looking up symbol _ZN4prof13start_samplerENS_6configE (prof::start_sampler(prof::config))'
     "tst-semaphore.so",            # Seems to hang after 'Thread *: Incremented 1th' messages
-    "tst-sigaltstack.so",          # Assertion failed: type == ARCH_JUMP_SLOT (core/elf.cc: relocate_pltgot: 789)
+    "tst-stdio-rofs.so",           # One assertion fails - 'tst-stdio.cc(1922): fatal error: in "STDIO_TEST_fread_unbuffered_pathological_performance": critical check (t1 - t0) <= (1) has failed'
     "tst-thread-local.so",         # Crashes due to missing TLS support
+    "tst-time.so",                 # One assertion fails - 'tst-time.cc(70): fatal error: in "time_time": critical check (static_cast<time_t>(0)) != (t1) has failed'
     "tst-timerfd.so",              # Some assertions fail - 'SUMMARY: 212 tests, 10 failures'
     "tst-yield.so",                # Seems to hang
     #These tests fail due to some other shortcomings in the test scripts
