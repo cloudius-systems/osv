@@ -177,7 +177,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-sigaltstack.so tst-fread.so tst-tcp-cork.so tst-tcp-v6.so \
 	tst-calloc.so tst-crypt.so tst-non-fpic.so tst-small-malloc.so \
 	tst-getopt.so tst-getopt-pie.so tst-non-pie.so tst-semaphore.so \
-	tst-elf-init.so tst-realloc.so
+	tst-elf-init.so tst-realloc.so tst-setjmp.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
 #TODO For now let us disable these tests for aarch64 until
