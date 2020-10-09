@@ -17,8 +17,6 @@
 #include <alloca.h>
 
 extern "C" { /* see boot.S */
-    extern u64 smpboot_ttbr0;
-    extern u64 smpboot_ttbr1;
     extern init_stack *smp_stack_free;
     extern u64 start_secondary_cpu();
 }
@@ -85,8 +83,6 @@ void smp_launch()
         attr.stack(81920).pin(c).name(name);
         c->init_idle_thread();
         c->bringup_thread = new sched::thread([=] { secondary_bringup(c); }, attr, true);
-        smpboot_ttbr0 = processor::read_ttbr0();
-        smpboot_ttbr1 = processor::read_ttbr1();
         psci::_psci.cpu_on(c->arch.mpid, mmu::virt_to_phys(reinterpret_cast<void *>(start_secondary_cpu)));
     }
     while (smp_processors != sched::cpus.size())

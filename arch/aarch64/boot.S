@@ -157,6 +157,8 @@ start_secondary_cpu:
         isb
 
         bl      init_cpu
+        bl      init_boot_pt
+        bl      init_mmu
         bl      init_secondary_pt
         bl      init_mmu
 

@@ -61,10 +61,15 @@ void flush_tlb_local() {
 static pt_element<4> page_table_root[2] __attribute__((init_priority((int)init_prio::pt_root)));
 u64 mem_addr;
 
+extern "C" { /* see boot.S */
+    extern u64 smpboot_ttbr0;
+    extern u64 smpboot_ttbr1;
+}
+
 void switch_to_runtime_page_tables()
 {
-    auto pt_ttbr0 = mmu::page_table_root[0].next_pt_addr();
-    auto pt_ttbr1 = mmu::page_table_root[1].next_pt_addr();
+    auto pt_ttbr0 = smpboot_ttbr0 = mmu::page_table_root[0].next_pt_addr();
+    auto pt_ttbr1 = smpboot_ttbr1 = mmu::page_table_root[1].next_pt_addr();
     asm volatile("msr ttbr0_el1, %0; isb;" ::"r" (pt_ttbr0));
     asm volatile("msr ttbr1_el1, %0; isb;" ::"r" (pt_ttbr1));
     mmu::flush_tlb_all();
