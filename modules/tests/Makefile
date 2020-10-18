@@ -37,6 +37,7 @@ ifeq ($(arch),aarch64)
   export STRIP=$(CROSS_PREFIX)strip
 
   aarch64_libdir := $(dir $(shell find $(aarch64_gccbase)/ -name libstdc++.so))
+  aarch64_libdir2 := $(dir $(shell find $(aarch64_gccbase)/ -name libgcc_s.so.1))
   LDFLAGS = -L$(aarch64_libdir)
 
   aarch64-gcc-inc-base := $(dir $(shell find $(aarch64_gccbase)/ -name vector | grep -v -e debug/vector$$ -e profile/vector$$ -e experimental/vector$$))
@@ -80,7 +81,11 @@ ifeq ($(arch),aarch64)
   COMMON += -nostdinc
 endif
 
+ifeq ($(arch),aarch64)
+LIBS = $(aarch64_libdir2)/libgcc_s.so.1
+else
 LIBS =
+endif
 
 CXXFLAGS = -std=gnu++11 $(COMMON)
 CFLAGS = -std=gnu99 $(COMMON)
@@ -115,7 +120,7 @@ $(out)/tests/tst-getopt-pie.o: $(src)/tests/tst-getopt.cc
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX tests/tst-getopt-pie.cc)
 $(out)/tests/tst-getopt-pie.so: $(out)/tests/tst-getopt-pie.o
-	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -pie -o $@ $< $(LIBS), LD tests/tst-getopt-pie.so)
+	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -fpie -o $@ $< $(LIBS), LD tests/tst-getopt-pie.so)
 
 $(out)/tests/tst-non-pie.so: CXXFLAGS:=$(subst -fPIC,-no-pie,$(CXXFLAGS))
 $(out)/tests/tst-non-pie.so: $(src)/tests/tst-non-pie.cc
@@ -177,7 +182,8 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-sigaltstack.so tst-fread.so tst-tcp-cork.so tst-tcp-v6.so \
 	tst-calloc.so tst-crypt.so tst-non-fpic.so tst-small-malloc.so \
 	tst-getopt.so tst-getopt-pie.so tst-non-pie.so tst-semaphore.so \
-	tst-elf-init.so tst-realloc.so tst-setjmp.so
+	tst-elf-init.so tst-realloc.so tst-setjmp.so \
+	libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
 #TODO For now let us disable these tests for aarch64 until
@@ -185,8 +191,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 # The tst-ifaddrs.so is an exception and it does not compile due to some
 # missing headers
 ifeq ($(arch),x64)
-tests += libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so \
-	tst-syscall.so tst-ifaddrs.so tst-mmx-fpu.so
+tests += tst-syscall.so tst-ifaddrs.so tst-mmx-fpu.so
 endif
 
 tests += testrunner.so
@@ -203,6 +208,7 @@ $(out)/tests/misc-free-perf.so: COMMON += -faligned-new
 $(out)/tests/tst-mmap.so: COMMON += -fuse-ld=bfd
 $(out)/tests/tst-elf-permissions.so: COMMON += -fuse-ld=bfd
 $(out)/tests/tst-tls.so: COMMON += -fuse-ld=bfd
+$(out)/tests/tst-tls-pie.so: COMMON += -fuse-ld=bfd
 
 $(out)/tests/tst-dlfcn.so: COMMON += -rdynamic -ldl
 
@@ -210,7 +216,7 @@ $(out)/tests/tst-tls.so: \
 		$(src)/tests/tst-tls.cc \
 		$(out)/tests/libtls.so
 	$(makedir)
-	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -D__SHARED_OBJECT__=1 -shared -o $@ $< tests/libtls.so, CXX tests/tst-tls.cc)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -pthread -D__SHARED_OBJECT__=1 -shared -o $@ $< tests/libtls.so, CXX tests/tst-tls.cc)
 
 $(out)/tests/tst-tls-pie.o: CXXFLAGS:=$(subst -fPIC,-fpie,$(CXXFLAGS))
 $(out)/tests/tst-tls-pie.o: $(src)/tests/tst-tls.cc
@@ -220,7 +226,7 @@ $(out)/tests/tst-tls-pie.so: \
 		$(out)/tests/tst-tls-pie.o \
 		$(out)/tests/libtls.so
 	$(makedir)
-	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -fuse-ld=bfd -pthread -pie -o $@ $< tests/libtls.so, LD tests/tst-tls-pie.so)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -pthread -fpie -o $@ $< $(LIBS) tests/libtls.so, LD tests/tst-tls-pie.so)
 
 $(out)/tests/libtls_gold.so: COMMON += -fuse-ld=gold
 $(out)/tests/libtls_gold.so: $(out)/tests/libtls.o
