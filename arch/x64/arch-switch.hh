@@ -170,6 +170,10 @@ void thread::setup_tcb()
     // (see arch/x64/loader.ld for specifics) with an extra buffer at
     // the end of the kernel TLS to accommodate TLS block of pies and
     // position-dependant executables.
+    //
+    // Please note that the TLS layout conforms to the variant II (2),
+    // which means for example that all variable offsets are negative.
+    // It also means that individual objects are laid out from the right to the left.
 
     // (1) - TLS memory area layout with app shared library
     // |-----|-----|-----|--------------|------|

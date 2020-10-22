@@ -31,10 +31,8 @@
 
 #include "arch.hh"
 
-#define ELF_DEBUG_ENABLED 0
-
-#if ELF_DEBUG_ENABLED
-#define elf_debug(format,...) kprintf("ELF [tid:%d, %s]: " format, sched::thread::current()->id(), _pathname.c_str(), ##__VA_ARGS__)
+#if CONF_debug_elf
+#define elf_debug(format,...) kprintf("ELF [tid:%d, mod:%d, %s]: " format, sched::thread::current()->id(), _module_index, _pathname.c_str(), ##__VA_ARGS__)
 #else
 #define elf_debug(...)
 #endif
@@ -376,7 +374,7 @@ void object::set_base(void* base)
     }
 
     _end = _base + q->p_vaddr + q->p_memsz;
-    elf_debug("The base set to: 0x%016x and end: 0x%016x\n", _base, _end);
+    elf_debug("The base set to: %018p and end: %018p\n", _base, _end);
 }
 
 void* object::base() const
@@ -417,7 +415,7 @@ void file::load_segment(const Elf64_Phdr& phdr)
             mmu::map_anon(_base + vstart + filesz, memsz - filesz, flag, perm);
         }
     }
-    elf_debug("Loaded and mapped PT_LOAD segment at: 0x%016x of size: 0x%x\n", _base + vstart, filesz); //TODO: Add memory?
+    elf_debug("Loaded and mapped PT_LOAD segment at: %018p of size: 0x%x\n", _base + vstart, filesz);
 }
 
 bool object::mlocked()
@@ -523,7 +521,7 @@ void object::process_headers()
             _tls_init_size = phdr.p_filesz;
             _tls_uninit_size = phdr.p_memsz - phdr.p_filesz;
             _tls_alignment = phdr.p_align;
-            elf_debug("Found TLS segment at 0x%016x of aligned size: %x\n", _tls_segment, get_aligned_tls_size());
+            elf_debug("Found TLS segment at %018p of aligned size: 0x%x\n", _tls_segment, get_aligned_tls_size());
             break;
         default:
             abort("Unknown p_type in executable %s: %d\n", pathname(), phdr.p_type);
@@ -1211,7 +1209,7 @@ void object::alloc_static_tls()
     if (!_static_tls && tls_size) {
         _static_tls = true;
         _static_tls_offset = _static_tls_alloc.fetch_add(tls_size, std::memory_order_relaxed);
-        elf_debug("Allocated static TLS at 0x%016x of size: 0x%x\n", _static_tls_offset, tls_size);
+        elf_debug("Allocated static TLS at offset: 0x%x of size: 0x%x\n", _static_tls_offset, tls_size);
     }
 }
 
