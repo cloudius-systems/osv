@@ -456,7 +456,7 @@ ifeq ($(arch),aarch64)
 
 kernel_base := 0x40080000
 kernel_vm_base := 0x40080000
-app_local_exec_tls_size := 0x0
+app_local_exec_tls_size := 0x40
 
 include $(libfdt_base)/Makefile.libfdt
 libfdt-source := $(patsubst %.c, $(libfdt_base)/%.c, $(LIBFDT_SRCS))
@@ -866,6 +866,7 @@ objects += arch/$(arch)/hypercall.o
 objects += arch/$(arch)/memset.o
 objects += arch/$(arch)/memcpy.o
 objects += arch/$(arch)/memmove.o
+objects += arch/$(arch)/tlsdesc.o
 objects += $(libfdt)
 endif
 

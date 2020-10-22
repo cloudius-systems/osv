@@ -105,17 +105,18 @@ SECTIONS
     }
     /* do not align tdata, tbss with .tdata : ALIGN (64),
        or the linker will offset the TLS loads accordingly! */
-    .tdata : { *(.tdata .tdata.* .gnu.linkonce.td.*) } : tls : text
-    .tbss : {
-        *(.tbss .tbss.* .gnu.linkonce.tb.*) *(.tcommon)
+    .tdata : {
         _pie_static_tls_start = .;
         /* This is a reserve intended for executables' (pie or non-pie) TLS block */
         . = . + APP_LOCAL_EXEC_TLS_SIZE;
         _pie_static_tls_end = .;
+        *(.tdata .tdata.* .gnu.linkonce.td.*)
+    } : tls : text
+    .tbss : {
+        *(.tbss .tbss.* .gnu.linkonce.tb.*) *(.tcommon)
     } : tls : text
     .tls_template_size = SIZEOF(.tdata) + SIZEOF(.tbss);
     .bss : { *(.dynbss .bss .bss.* .gnu.linkonce.b.*) } : text
-
     . = ALIGN(64);
     tcb0 = .;
     . = . + .tls_template_size + 1024;

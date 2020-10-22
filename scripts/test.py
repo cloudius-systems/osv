@@ -61,7 +61,6 @@ aarch64_blacklist= [
     "tst-sampler.so",              # Crashes with 'failed looking up symbol _ZN4prof13start_samplerENS_6configE (prof::start_sampler(prof::config))'
     "tst-semaphore.so",            # Seems to hang after 'Thread *: Incremented 1th' messages
     "tst-stdio-rofs.so",           # One assertion fails - 'tst-stdio.cc(1922): fatal error: in "STDIO_TEST_fread_unbuffered_pathological_performance": critical check (t1 - t0) <= (1) has failed'
-    "tst-thread-local.so",         # Crashes due to missing TLS support
     "tst-time.so",                 # One assertion fails - 'tst-time.cc(70): fatal error: in "time_time": critical check (static_cast<time_t>(0)) != (t1) has failed'
     "tst-timerfd.so",              # Some assertions fail - 'SUMMARY: 212 tests, 10 failures'
     "tst-yield.so",                # Seems to hang

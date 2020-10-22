@@ -784,29 +784,34 @@ void object::relocate_pltgot()
     for (auto p = rel; p < rel + nrel; ++p) {
         auto info = p->r_info;
         u32 type = info & 0xffffffff;
-        assert(type == ARCH_JUMP_SLOT);
         void *addr = _base + p->r_offset;
-        if (bind_now) {
-            // If on-load binding is requested (instead of the default lazy
-            // binding), try to resolve all the PLT entries now.
-            // If symbol cannot be resolved warn about it instead of aborting
-            u32 sym = info >> 32;
-            auto _sym = symbol(sym, true);
-            if (arch_relocate_jump_slot(_sym, addr, p->r_addend))
-                  continue;
-        }
-        if (original_plt) {
-            // Restore the link to the original plt.
-            // We know the JUMP_SLOT entries are in plt order, and that
-            // each plt entry is 16 bytes.
-            *static_cast<void**>(addr) = original_plt + (p-rel)*16;
+        assert(type == ARCH_JUMP_SLOT || type == ARCH_TLSDESC);
+        if (type == ARCH_JUMP_SLOT) {
+            if (bind_now) {
+                // If on-load binding is requested (instead of the default lazy
+                // binding), try to resolve all the PLT entries now.
+                // If symbol cannot be resolved warn about it instead of aborting
+                u32 sym = info >> 32;
+                auto _sym = symbol(sym, true);
+                if (arch_relocate_jump_slot(_sym, addr, p->r_addend))
+                    continue;
+            }
+            if (original_plt) {
+                // Restore the link to the original plt.
+                // We know the JUMP_SLOT entries are in plt order, and that
+                // each plt entry is 16 bytes.
+                *static_cast<void**>(addr) = original_plt + (p-rel)*16;
+            } else {
+                // The JUMP_SLOT entry already points back to the PLT, just
+                // make sure it is relocated relative to the object base.
+                *static_cast<u64*>(addr) += reinterpret_cast<u64>(_base);
+            }
         } else {
-            // The JUMP_SLOT entry already points back to the PLT, just
-            // make sure it is relocated relative to the object base.
-            *static_cast<u64*>(addr) += reinterpret_cast<u64>(_base);
+            u32 sym = info >> 32;
+            arch_relocate_tls_desc(sym, addr, p->r_addend);
         }
     }
-    elf_debug("Relocated %d PLT symbols in DT_JMPREL\n", nrel);
+    elf_debug("Relocated %d PLT symbols\n", nrel);
 
     // PLTGOT resolution has a special calling convention,
     // for x64 the symbol index and some word is pushed on the stack,

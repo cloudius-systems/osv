@@ -18,5 +18,6 @@ enum {
 
 /* for pltgot relocation */
 #define ARCH_JUMP_SLOT R_AARCH64_JUMP_SLOT
+#define ARCH_TLSDESC R_AARCH64_TLSDESC
 
 #endif /* ARCH_ELF_HH */

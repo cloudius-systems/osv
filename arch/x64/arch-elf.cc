@@ -176,6 +176,11 @@ bool object::arch_relocate_jump_slot(symbol_module& sym, void *addr, Elf64_Sxwor
     }
 }
 
+void object::arch_relocate_tls_desc(u32 sym, void *addr, Elf64_Sxword addend)
+{
+    abort("Not implemented!");
+}
+
 void object::prepare_initial_tls(void* buffer, size_t size,
                                  std::vector<ptrdiff_t>& offsets)
 {
