@@ -8,8 +8,8 @@ arch=aarch64
 
 letter=${package:0:1}
 
-main_repo_url="http://mirrors.kernel.org/fedora/releases/$release/Everything/$arch/os/Packages/$letter/"
-version=$(wget -t 1 -qO- $main_repo_url | grep "${package}-[0-9].*$arch" | grep -Po ">.*<" | sed -e "s/>${package}-\(.*\)\.$arch\.rpm</\1/g" | tail -l)
+main_repo_url="https://download-ib01.fedoraproject.org/pub/fedora/linux/releases/$release/Everything/$arch/os/Packages/$letter/"
+version=$(wget -t 1 -qO- $main_repo_url | grep "${package}-[0-9].*$arch" | grep -Po "href=\".*\"" | sed -e "s/href=\"${package}-\(.*\)\.$arch\.rpm\"/\1/g" | tail -l)
 
 archive_repo_url="http://archives.fedoraproject.org/pub/archive/fedora/linux/releases/$release/Everything/$arch/os/Packages/$letter/"
 if [[ "${version}" != "" ]]; then
