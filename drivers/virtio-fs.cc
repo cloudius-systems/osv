@@ -130,6 +130,7 @@ fs::fs(virtio_device& virtio_dev)
 
     // Step 8
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
+    // sleep(10);
 
     // TODO: Don't ignore the virtio-fs tag and use that instead of _id for
     // identifying the device (e.g. something like /dev/virtiofs/<tag> or at
@@ -205,6 +206,12 @@ int fs::make_request(fuse_request& req)
     }
 
     return 0;
+}
+
+u64 fs::get_driver_features()
+{
+    auto base = virtio_driver::get_driver_features();
+    return base | ((u64)1 << VIRTIO_F_VERSION_1);
 }
 
 hw_driver* fs::probe(hw_device* dev)
