@@ -246,7 +246,7 @@ int scsi::make_request(struct bio* bio)
     }
 }
 
-u32 scsi::get_driver_features()
+u64 scsi::get_driver_features()
 {
     auto base = virtio_driver::get_driver_features();
     return base | ( 1 << VIRTIO_SCSI_F_INOUT);

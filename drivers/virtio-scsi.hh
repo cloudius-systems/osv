@@ -149,7 +149,7 @@ public:
     virtual std::string get_name() const { return _driver_name; }
     void read_config();
 
-    virtual u32 get_driver_features();
+    virtual u64 get_driver_features();
 
     static struct scsi_priv *get_priv(struct bio *bio) {
         return reinterpret_cast<struct scsi_priv*>(bio->bio_dev->private_data);

@@ -125,7 +125,7 @@ public:
     virtual std::string get_name() const { return _driver_name; }
     void read_config();
 
-    virtual u32 get_driver_features();
+    virtual u64 get_driver_features();
 
     int make_request(struct bio*);
 
