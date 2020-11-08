@@ -179,7 +179,7 @@ def find_firecracker(dirname, arch):
         firecracker_path = os.environ.get('FIRECRACKER_PATH')
 
     # And offer to install if not found
-    firecracker_version = 'v0.21.1'
+    firecracker_version = 'v0.23.0'
     if not os.path.exists(firecracker_path):
         url_base = 'https://github.com/firecracker-microvm/firecracker/releases/download'
         download_url = '%s/%s/firecracker-%s-%s' % (url_base, firecracker_version, firecracker_version, arch)
