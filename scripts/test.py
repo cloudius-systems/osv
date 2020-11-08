@@ -97,6 +97,11 @@ test_files = []
 is_comment = re.compile("^[ \t]*(|#.*|\[manifest])$")
 is_test = re.compile("^/tests/tst-.*.so")
 
+def running_with_kvm_on(arch, hypervisor):
+    if os.path.exists('/dev/kvm') and arch == host_arch and hypervisor in ['qemu', 'qemu_microvm', 'firecracker']:
+        return True
+    return False
+
 def collect_tests():
     with open(cmdargs.manifest, 'r') as f:
         for line in f:
@@ -209,5 +214,7 @@ if __name__ == "__main__":
         disabled_list.extend(qemu_disabled_list)
     if cmdargs.arch == 'aarch64':
         disabled_list.extend(aarch64_disabled_list)
+    if running_with_kvm_on(cmdargs.arch, cmdargs.hypervisor):
+        disabled_list.remove("tst-feexcept.so")
     disabled_list.extend(cmdargs.disabled_list)
     main()
