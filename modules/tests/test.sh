@@ -9,7 +9,7 @@ if [ "$OSV_KERNEL" != "" ]; then
   else
      RUN_OPTIONS="-k --kernel-path $OSV_KERNEL"
   fi
-  $THIS_DIR/../../scripts/test.py -p $OSV_HYPERVISOR --blacklist tracing_smoke_test --run_options "$RUN_OPTIONS"
+  $THIS_DIR/../../scripts/test.py -p $OSV_HYPERVISOR --disabled_list tracing_smoke_test --run_options "$RUN_OPTIONS"
 else
-  $THIS_DIR/../../scripts/test.py -p $OSV_HYPERVISOR --blacklist tracing_smoke_test
+  $THIS_DIR/../../scripts/test.py -p $OSV_HYPERVISOR --disabled_list tracing_smoke_test
 fi

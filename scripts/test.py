@@ -17,24 +17,24 @@ host_arch = os.uname().machine
 os.environ["LC_ALL"]="C"
 os.environ["LANG"]="C"
 
-blacklist= [
+disabled_list= [
     "tst-dns-resolver.so",
     "tst-feexcept.so",
 ]
 
-qemu_blacklist= [
+qemu_disabled_list= [
     "tcp_close_without_reading_on_fc"
 ]
 
-firecracker_blacklist= [
+firecracker_disabled_list= [
     "tracing_smoke_test",
     "tcp_close_without_reading_on_qemu"
 ]
 
 #At this point there are 100 out of 131 unit tests that pass on aarch64.
-#The remaining ones are blacklisted below until we fix various
+#The remaining ones are disabled below until we fix various
 #issues that prevent those tests from passing.
-aarch64_blacklist= [
+aarch64_disabled_list= [
     #All java tests require JVM running on aarch64 which in turn at least requires TLS support
     "java_isolated",
     "java_non_isolated",
@@ -68,7 +68,7 @@ aarch64_blacklist= [
     "tracing_smoke_test",
     "tcp_close_without_reading_on_fc",
     "tcp_close_without_reading_on_qemu",
-    #The tests below are NOT blacklisted but occasionally hang so I am listing
+    #The tests below are NOT disabled but occasionally hang so I am listing
     #them here for completeness.
     #tst-queue-mpsc.so,            # Sometimes hangs
     #tst-tcp-nbwrite.so,           # Sometimes hangs
@@ -129,13 +129,13 @@ def run_test(test):
     sys.stdout.flush()
 
 def is_not_skipped(test):
-    return test.name not in blacklist
+    return test.name not in disabled_list
 
 def run_tests_in_single_instance():
     run([test for test in tests if not isinstance(test, TestRunnerTest)])
 
-    blacklist_tests = ' '.join(blacklist)
-    args = run_py_args + ["-s", "-e", "/testrunner.so -b %s" % (blacklist_tests)]
+    disabled_tests = ' '.join(disabled_list)
+    args = run_py_args + ["-s", "-e", "/testrunner.so -d %s" % (disabled_tests)]
     if subprocess.call(["./scripts/run.py"] + args):
         exit(1)
 
@@ -192,7 +192,7 @@ if __name__ == "__main__":
     parser.add_argument("-n", "--name", action="store", help="run all tests whose names match given regular expression")
     parser.add_argument("--run_options", action="store", help="pass extra options to run.py")
     parser.add_argument("-m", "--manifest", action="store", default="modules/tests/usr.manifest", help="test manifest")
-    parser.add_argument("-b", "--blacklist", action="append", help="test to be blacklisted", default=[])
+    parser.add_argument("-d", "--disabled_list", action="append", help="test to be disabled", default=[])
     parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default=host_arch,
                         help="specify QEMU architecture: x86_64, aarch64")
     cmdargs = parser.parse_args()
@@ -204,10 +204,10 @@ if __name__ == "__main__":
     if cmdargs.arch != None:
         run_py_args = run_py_args + ['--arch', cmdargs.arch]
     if cmdargs.hypervisor == 'firecracker':
-        blacklist.extend(firecracker_blacklist)
+        disabled_list.extend(firecracker_disabled_list)
     else:
-        blacklist.extend(qemu_blacklist)
+        disabled_list.extend(qemu_disabled_list)
     if cmdargs.arch == 'aarch64':
-        blacklist.extend(aarch64_blacklist)
-    blacklist.extend(cmdargs.blacklist)
+        disabled_list.extend(aarch64_disabled_list)
+    disabled_list.extend(cmdargs.disabled_list)
     main()

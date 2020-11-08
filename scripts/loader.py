@@ -1028,17 +1028,17 @@ class osv_info_threads(gdb.Command):
                 # related functions (switch_to, schedule, wait_until, etc.).
                 # Here we try to skip such functions and instead show a more
                 # interesting caller which initiated the wait.
-                file_blacklist = ["arch-switch.hh", "sched.cc", "sched.hh",
+                file_deny_list = ["arch-switch.hh", "sched.cc", "sched.hh",
                                   "mutex.hh", "mutex.cc", "mutex.c", "mutex.h", "psci.cc"]
 
-                # Functions from blacklisted files which are interesting
+                # Functions from the list of denied files which are interesting
                 sched_thread_join = 'sched::thread::join()'
-                function_whitelist = [sched_thread_join]
+                function_allow_list = [sched_thread_join]
 
                 def is_interesting(resolved_frame):
-                    is_whitelisted = resolved_frame.func_name in function_whitelist
-                    is_blacklisted = os.path.basename(resolved_frame.file_name) in file_blacklist
-                    return is_whitelisted or not is_blacklisted
+                    is_allowed = resolved_frame.func_name in function_allow_list
+                    is_denied = os.path.basename(resolved_frame.file_name) in file_deny_list
+                    return is_allowed or not is_denied
 
                 fr = find_or_give_last(is_interesting, traverse_resolved_frames(newest_frame))
 
