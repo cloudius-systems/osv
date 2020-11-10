@@ -1,5 +1,3 @@
-module: usr.manifest build_all
-
 src := $(OSV_BASE)
 out := $(OSV_BUILD_PATH)
 arch := $(ARCH)
@@ -33,11 +31,9 @@ tests := libtest_simple.so libtest_empty.so libtest_dlsym_from_this_grandchild.s
 	libtest_dlsym_from_this_child.so libtest_dlsym_from_this.so libdlext_test.so \
 	libtest_with_dependency.so libtest_check_rtld_next_from_library.so
 
-all_tests := $(tests:%=dl_tests/%)
+all_tests := $(tests:%=$(out)/dl_tests/%)
 
-build_all:
-	$(MAKE) $(all_tests:%=$(out)/%)
-.PHONY: build_all
+module: usr.manifest $(all_tests)
 
 $(out)/dl_tests/libtest_simple.so: $(bionic_test_libs)/dlopen_testlib_simple.cpp
 	$(makedir)
@@ -75,7 +71,7 @@ $(out)/dl_tests/libtest_with_dependency.so: $(bionic_test_libs)/dlopen_testlib_s
 	$(makedir)
 	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS2) -ldlext_test -D__SHARED_OBJECT__=1 -shared -o $@ $<, CXX dl_tests/libtest_with_dependency.so)
 
-usr.manifest: build_all FORCE
+usr.manifest:
 	@echo "/usr/lib/libtest_simple.so: ./dl_tests/libtest_simple.so" > $@
 	@echo "/usr/lib/libtest_empty.so: ./dl_tests/libtest_empty.so" >> $@
 	@echo "/usr/lib/libtest_dlsym_from_this_grandchild.so: ./dl_tests/libtest_dlsym_from_this_grandchild.so" >> $@

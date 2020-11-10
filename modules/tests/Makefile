@@ -313,7 +313,7 @@ usr.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FOR
 	fi
 	@echo $(all_tests) | tr ' ' '\n' | grep -v "tests/rofs/tst-.*.so" | awk '{print "/" $$0 ": ./" $$0}' >> $@
 	@echo $(all_tests) | tr ' ' '\n' | grep "tests/rofs/tst-.*.so" | sed 's/\.so//' | awk 'BEGIN { FS = "/" } ; { print "/tests/" $$3 "-rofs.so: ./tests/" $$2 "/" $$3 ".so"}' >> $@
-	./create_static.sh $(out) usr.manifest $(fs_type)
+	$(call very-quiet, ./create_static.sh $(out) usr.manifest $(fs_type))
 .PHONY: FORCE
 FORCE:
 
@@ -331,7 +331,7 @@ fs.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) FORCE
 	@echo "  generating modules/tests/fs.manifest"
 	@echo $(specific-fs-tests) $($(fs_type)-only-boost-tests) | tr ' ' '\n' | grep -v "rofs/tst-.*.so" | awk '{print "/tests/" $$0 ": ./tests/" $$0}' > $@
 	@echo $(specific-fs-tests) $($(fs_type)-only-boost-tests) | tr ' ' '\n' | grep "rofs/tst-.*.so" | sed 's/\.so//' | awk 'BEGIN { FS = "/" } ; { print "/tests/" $$2 "-rofs.so: ./tests/" $$1 "/" $$2 ".so"}' >> $@
-	./create_static.sh $(out) fs.manifest $(fs_type)
+	$(call very-quiet, ./create_static.sh $(out) fs.manifest $(fs_type))
 
 clean:
 	-rm -f usr.manifest common.manifest fs.manifest
