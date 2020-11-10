@@ -8,6 +8,8 @@ else
 java-targets := obj/java.so
 endif
 
+jar-targets := $(java-base-path)/runjava-isolated/target/runjava-isolated.jar
+
 obj/java.o: $(java-base-path)/java.cc | init
 	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ -c $(java-base-path)/java.cc -MMD, CXX $@)
 
@@ -18,8 +20,18 @@ init:
 	@echo "  MKDIRS"
 	$(call very-quiet, mkdir -p obj)
 
-module: $(java-targets)
-	cd $(java-base-path) && mvn -q --projects :runjava-common,:runjava-isolated  package -DskipTests=true
+comma := ,
+
+$(jar-targets): $(wildcard $(java-base-path)/runjava-isolated/src/main/java/io/osv/isolated/*.java) \
+		$(wildcard $(java-base-path)/runjava-isolated/src/main/java/io/osv/util/*.java) \
+		$(wildcard $(java-base-path)/runjava-isolated/src/main/java/io/osv/jul/*.java) \
+		$(wildcard $(java-base-path)/runjava-common/src/main/java/io/osv/*.java) \
+		$(wildcard $(java-base-path)/runjava-common/src/main/java/io/osv/util/*.java) \
+		$(java-base-path)/pom.xml $(java-base-path)/runjava-common/pom.xml \
+		$(java-base-path)/runjava-isolated/pom.xml
+	$(call quiet, cd $(java-base-path) && mvn -q --projects :runjava-common$(comma):runjava-isolated package -DskipTests=true, MVN $@)
+
+module: $(java-targets) $(jar-targets)
 
 clean:
 	cd $(java-base-path) && mvn -q clean
