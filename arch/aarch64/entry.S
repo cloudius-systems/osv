@@ -136,6 +136,7 @@ entry_invalid:
 entry_sync:
         push_state_to_exception_frame
         mrs     x1, esr_el1
+        str     w1, [sp, #272] // Store Exception Syndrom Register in the frame
         ubfm    x2, x1, #ESR_EC_BEG, #ESR_EC_END // Exception Class -> X2
         ubfm    x3, x1, #ESR_FLT_BEG, #ESR_FLT_END // FLT -> X3
         cmp     x2, #ESR_EC_DATA_ABORT
