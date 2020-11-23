@@ -23,6 +23,7 @@ usage() {
 	  -R              Make guest root path match the host, otherwise assume '/'; applies with directory path input
 	  -h              Show this help output
 	  -w              Write output to ./build/last/append.manifest
+          -i              Ignore missing library
 
 	Examples:
 	  ./scripts/manifest_from_host.sh ls                 # Create manifest for 'ls' executable
@@ -39,9 +40,11 @@ find_library()
 	local pattern="$1"
 	local count=$(ldconfig -p | grep -P "$pattern" | grep 'x86-64' | wc -l)
 
-	if [[ $count == 0 ]]; then
+	if [[ $count == 0 && $IGNORE_MISSING == false ]]; then
 		echo "Could not find any so file matching $pattern" >&2
 		return -1
+	elif [[ $count == 0 && $IGNORE_MISSING == true ]]; then
+		return 0
 	elif [[ $count > 1 ]]; then
 		echo 'Found more than one alternative:' >&2
 		ldconfig -p | grep -P "$pattern"
@@ -97,14 +100,16 @@ OUTPUT="/dev/null"
 DEFAULT_OUTPUT_FILE="$(dirname $0)/../build/last/append.manifest"
 GUEST_ROOT=true
 WRITE_CMD=false
+IGNORE_MISSING=false
 
-while getopts lrRwh: OPT ; do
+while getopts ilrRwh: OPT ; do
 	case ${OPT} in
 	l) MODE="LIB";;
 	r) RESOLVE=true;;
 	R) GUEST_ROOT=false;;
 	w) WRITE_CMD=true
            OUTPUT="$DEFAULT_OUTPUT_FILE";;
+        i) IGNORE_MISSING=true;;
 	h) usage;;
 	?) usage 1;;
 	esac
@@ -169,9 +174,13 @@ else
 	if [[ $MODE == "LIB" ]]; then
 		find_library "$NAME_OR_PATH"
 		if [[ $? == 0 ]]; then
-			echo "# Shared library" | tee $OUTPUT
-			echo "/usr/lib/$so_name: $so_path" | tee -a $OUTPUT
-			output_manifest $so_path
+		        if [[ "$so_path" != "" ]]; then
+			        echo "# Shared library" | tee $OUTPUT
+			        echo "/usr/lib/$so_name: $so_path" | tee -a $OUTPUT
+			        output_manifest $so_path
+                        else
+                                exit 0
+                        fi
 		else
 			exit 1
 		fi
