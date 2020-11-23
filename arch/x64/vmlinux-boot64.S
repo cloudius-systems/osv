@@ -36,4 +36,4 @@ vmlinux_entry64:
     movl $0x18, 4(%rsp)
     movl $start32_from_64-OSV_KERNEL_VM_SHIFT, %eax # Because memory is mapped 1:1 subtract OSV_KERNEL_VM_SHIFT
     movl %eax, (%rsp)
-    lret
+    lretl
