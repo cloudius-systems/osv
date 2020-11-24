@@ -63,70 +63,61 @@ class Fedora(object):
                 'yaml-cpp-devel',
                 'pax-utils',
                 'java-1.8.0-openjdk',
-                'lua-5.3.*',
-                'lua-devel-5.3.*',
                  ]
     ec2_packages = standard_ec2_packages
     test_packages = ['openssl-devel']
     ec2_post_install = standard_ec2_post_install
 
-    class Fedora_25(object):
-        packages = []
-        ec2_packages = []
-        test_packages = []
-        ec2_post_install = None
-        version = '25'
-
-    class Fedora_26(object):
-        packages = []
-        ec2_packages = []
-        test_packages = []
-        ec2_post_install = None
-        version = '26'
-
     class Fedora_27(object):
-        packages = []
+        packages = ['lua-5.3.*', 'lua-devel-5.3.*']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '27'
 
     class Fedora_28(object):
-        packages = []
+        packages = ['lua-5.3.*', 'lua-devel-5.3.*']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '28'
 
     class Fedora_29(object):
-        packages = []
+        packages = ['lua-5.3.*', 'lua-devel-5.3.*']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '29'
 
     class Fedora_30(object):
-        packages = []
+        packages = ['lua-5.3.*', 'lua-devel-5.3.*']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '30'
 
     class Fedora_31(object):
-        packages = []
+        packages = ['lua-5.3.*', 'lua-devel-5.3.*']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '31'
 
     class Fedora_32(object):
-        packages = []
+        packages = ['lua-5.3.*', 'lua-devel-5.3.*']
         ec2_packages = []
         test_packages = []
         ec2_post_install = None
         version = '32'
 
-    versions = [Fedora_25, Fedora_26, Fedora_27, Fedora_28, Fedora_29, Fedora_30, Fedora_31, Fedora_32]
+    class Fedora_33(object):
+        packages = ['lua-5.4.*', 'lua-devel-5.4.*']
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '33'
+
+    versions = [Fedora_27, Fedora_28, Fedora_29, Fedora_30, Fedora_31, Fedora_32, Fedora_33]
 
 class RHELbased(Fedora):
     name = ['Scientific Linux', 'NauLinux', 'CentOS Linux', 'Red Hat Enterprise Linux', 'Oracle Linux']
