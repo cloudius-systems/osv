@@ -70,3 +70,4 @@ lstat64 = lstat;
 fstatat64 = fstatat;
 
 __lseek = lseek;
+__getauxval = getauxval;
