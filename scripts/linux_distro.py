@@ -4,8 +4,10 @@ def linux_distribution():
     def parse_file(f):
         res = {}
         for line in f:
-            k, v = line.rstrip().split('=')
-            res[k] = v.strip('"')
+            stripped = line.rstrip()
+            if stripped:
+                k, v = stripped.split('=')
+                res[k] = v.strip('"')
         return res
 
     try:
