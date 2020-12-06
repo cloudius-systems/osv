@@ -30,31 +30,73 @@ void handler1(int sig) {
     global = 1;
 }
 
+// Test kill() on the current process, sending
+// "pid" to kill should cause this process to be interrupted
+// and signal handler for SIGUSR1 should already be installed
+void test_signal_self(pid_t pid){
+    int r;
+    char output[64];
+
+    global = 0;
+    r = kill(pid, SIGUSR1);
+    snprintf(output, 64, "kill SIGUSR1 and pid %d succeeds", pid);
+    report(r == 0, output);
+
+    for(int i = 0; i < 100; i++){
+        if(global == 1) break;
+        usleep(10000);
+    }
+    snprintf(output, 64, "global now 1, process correctly interrupted with pid %d", pid);
+    report(global == 1, output);
+}
+
+// test kill() edges cases, pid should be a valid pid
+void test_edge_cases(pid_t pid){
+    int r;
+    char output[64];
+
+    // signal 0 always succeeds with valid pid
+    r = kill(pid, 0);
+    snprintf(output, 64, "kill succeeds with pid %d and signal 0", pid);
+    report(r == 0, output);
+
+    // kill with invalid signal number
+    r = kill(pid, -2);
+    snprintf(output, 64, "kill with pid %d and invalid signal number", pid);
+    report(r == -1 && errno == EINVAL, output);
+
+    // another invalid signal number
+    r = kill(pid, 12345);
+    snprintf(output, 64, "kill with pid %d and invalid signal number", pid);
+    report(r == -1 && errno == EINVAL, output);
+}
+
 int main(int ac, char** av)
 {
     // Test kill() of current process:
     report (global == 0, "'global' initially 0");
     auto sr = signal(SIGUSR1, handler1);
     report(sr != SIG_ERR, "set SIGUSR1 handler");
+
+    // pid 0 = "all processes whose process group ID is
+    //          equal to process group ID of sender"
+    test_signal_self(0);
+
+    // pid -1 = "all processes for which the calling process
+    //           has permission to send signals"
+    test_signal_self(-1);
+
+    // our own pid
+    test_signal_self(getpid());
+
+    // Test various edge cases for kill() with various pids
+    test_edge_cases(0);
+    test_edge_cases(-1);
+    test_edge_cases(getpid());
+
     int r;
-    r = kill(0, SIGUSR1);
-    report(r == 0, "kill SIGUSR1 succeeds");
-    for (int i=0; i<100; i++) {
-        if (global == 1) break;
-        usleep(10000);
-    }
-    report(global == 1, "'global' is now 1");
-    // Test various edge cases for kill():
-    r = kill(0, 0);
-    report(r == 0, "kill with signal 0 succeeds (and does nothing)");
-    r = kill(-1, 0);
-    report(r == 0, "kill of pid -1 is also fine");
     r = kill(17171717, 0);
     report(r == -1 && errno == ESRCH, "kill of non-existant process");
-    r = kill(0, -2);
-    report(r == -1 && errno == EINVAL, "kill with invalid signal number");
-    r = kill(0, 12345);
-    report(r == -1 && errno == EINVAL, "kill with invalid signal number");
 
     // Test alarm();
     global = 0;
@@ -128,13 +170,13 @@ int main(int ac, char** av)
     global = 0;
     r = sigaction(SIGUSR1, &act, nullptr);
     report(r == 0, "set SIGUSR1 handler");
-    r = kill(0, SIGUSR1);
-    report(r == 0, "kill SIGUSR1 succeeds");
-    for (int i=0; i<100; i++) {
-        if (global == 1) break;
-        usleep(10000);
-    }
-    report(global == 1, "'global' is now 1");
+
+    // ensure signal handler is called when kill is
+    // called with any of these pids
+    test_signal_self(0);
+    test_signal_self(-1);
+    test_signal_self(getpid());
+
     struct sigaction oldact;
     r = sigaction(SIGUSR1, nullptr, &oldact);
     report(r == 0 && oldact.sa_handler == handler1, "without SA_RESETHAND, signal handler is not reset");
@@ -142,13 +184,13 @@ int main(int ac, char** av)
     global = 0;
     r = sigaction(SIGUSR1, &act, nullptr);
     report(r == 0, "set SIGUSR1 handler with SA_RESETHAND");
-    r = kill(0, SIGUSR1);
-    report(r == 0, "kill SIGUSR1 succeeds");
-    for (int i=0; i<100; i++) {
-        if (global == 1) break;
-        usleep(10000);
-    }
-    report(global == 1, "'global' is now 1");
+
+    // ensure signal handler is called when kill is
+    // called with any of these pids
+    test_signal_self(0);
+    test_signal_self(-1);
+    test_signal_self(getpid());
+
     r = sigaction(SIGUSR1, nullptr, &oldact);
     report(r == 0 && oldact.sa_handler == SIG_DFL, "with SA_RESETHAND, signal handler is reset");
 
