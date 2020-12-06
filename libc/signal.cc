@@ -18,6 +18,7 @@
 #include <osv/clock.hh>
 #include <api/setjmp.h>
 #include <osv/stubbing.hh>
+#include <osv/pid.h>
 
 using namespace osv::clock::literals;
 
@@ -325,17 +326,13 @@ int kill(pid_t pid, int sig)
                 sig, strsignal(sig));
         osv::poweroff();
     } else if(!is_sig_ign(signal_actions[sig])) {
-        if ((pid == 0) || (pid == -1)) {
-            // That semantically means signalling everybody (or that, or the
-            // user did getpid() and got 0, all the same. So we will signal
+        if ((pid == OSV_PID) || (pid == 0) || (pid == -1)) {
+            // This semantically means signalling everybody. So we will signal
             // every thread that is waiting for this.
             //
             // The thread does not expect the signal handler to still be delivered,
             // so if we wake up some folks (usually just the one waiter), we should
             // not continue processing.
-            //
-            // FIXME: Maybe it could be a good idea for our getpid() to start
-            // returning 1 so we can differentiate between those cases?
             if (wake_up_signal_waiters(sig)) {
                 return 0;
             }
@@ -482,7 +479,7 @@ void itimer::work()
                     } else {
                         _due = _no_alarm;
                     }
-                    kill(0, _signum);
+                    kill(getpid(), _signum);
                     if(!is_sig_ign(signal_actions[_signum])) {
                         _owner_thread->interrupted(true);
                     }

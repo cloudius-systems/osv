@@ -60,6 +60,7 @@
 #include <api/sys/prctl.h>
 #include <sys/wait.h>
 #include <pty.h>
+#include <osv/pid.h>
 
 #define __LC_LAST 13
 
@@ -263,7 +264,7 @@ LFS64(posix_fallocate);
 
 int getpid()
 {
-    return 0;
+    return OSV_PID;
 }
 
 //    WCTDEF(alnum), WCTDEF(alpha), WCTDEF(blank), WCTDEF(cntrl),

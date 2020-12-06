@@ -12,6 +12,7 @@
 #include <osv/prex.h>
 #include <osv/sched.hh>
 #include <osv/mmu.hh>
+#include <osv/pid.h>
 
 #include "fs/pseudofs/pseudofs.hh"
 
@@ -177,7 +178,7 @@ procfs_mount(mount* mp, const char *dev, int flags, const void* data)
 
     auto* root = new pseudo_dir_node(vp->v_ino);
     root->add("self", self);
-    root->add("0", self); // our standard pid
+    root->add(std::to_string(OSV_PID), self); // our standard pid
     root->add("mounts", inode_count++, procfs_mounts);
     root->add("sys", sys);
 
