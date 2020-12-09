@@ -30,6 +30,7 @@
 #include <deque>
 
 #include "arch.hh"
+#include "arch-elf.hh"
 
 #if CONF_debug_elf
 #define elf_debug(format,...) kprintf("ELF [tid:%d, mod:%d, %s]: " format, sched::thread::current()->id(), _module_index, _pathname.c_str(), ##__VA_ARGS__)
@@ -315,6 +316,9 @@ void file::load_elf_header()
     if (!(_ehdr.e_type == ET_DYN || _ehdr.e_type == ET_EXEC)) {
         throw osv::invalid_elf_error(
                 "bad executable type (only shared-object, PIE or non-PIE executable supported)");
+    }
+    if(_ehdr.e_machine != ELF_KERNEL_MACHINE_TYPE) {
+        throw osv::invalid_elf_error("machine type for " + _pathname + " differs from the kernel");
     }
 }
 
