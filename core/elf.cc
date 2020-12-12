@@ -186,7 +186,7 @@ void object::set_visibility(elf::VisibilityLevel visibilityLevel)
 template <>
 void* object::lookup(const char* symbol)
 {
-    symbol_module sm{lookup_symbol(symbol), this};
+    symbol_module sm{lookup_symbol(symbol, false), this};
     if (!sm.symbol || sm.symbol->st_shndx == SHN_UNDEF) {
         return nullptr;
     }
@@ -680,7 +680,7 @@ symbol_module object::symbol(unsigned idx, bool ignore_missing)
     }
     auto nameidx = sym->st_name;
     auto name = dynamic_ptr<const char>(DT_STRTAB) + nameidx;
-    auto ret = _prog.lookup(name);
+    auto ret = _prog.lookup(name, this);
     if (!ret.symbol && binding == STB_WEAK) {
         return symbol_module(sym, this);
     }
@@ -708,7 +708,7 @@ symbol_module object::symbol_other(unsigned idx)
         for (auto module : ml.objects) {
             if (module == this)
                 continue; // do not match this module
-            if (auto sym = module->lookup_symbol(name)) {
+            if (auto sym = module->lookup_symbol(name, false)) {
                 ret = symbol_module(sym, module);
                 break;
             }
@@ -885,7 +885,7 @@ dl_new_hash(const char *s)
     return h & 0xffffffff;
 }
 
-Elf64_Sym* object::lookup_symbol_gnu(const char* name)
+Elf64_Sym* object::lookup_symbol_gnu(const char* name, bool self_lookup)
 {
     auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
     auto strtab = dynamic_ptr<char>(DT_STRTAB);
@@ -909,7 +909,7 @@ Elf64_Sym* object::lookup_symbol_gnu(const char* name)
     if (idx == 0) {
         return nullptr;
     }
-    auto version_symtab = dynamic_exists(DT_VERSYM) ? dynamic_ptr<Elf64_Versym>(DT_VERSYM) : nullptr;
+    auto version_symtab = (!self_lookup && dynamic_exists(DT_VERSYM)) ? dynamic_ptr<Elf64_Versym>(DT_VERSYM) : nullptr;
     do {
         if ((chains[idx] & ~1) != (hashval & ~1)) {
             continue;
@@ -924,14 +924,14 @@ Elf64_Sym* object::lookup_symbol_gnu(const char* name)
     return nullptr;
 }
 
-Elf64_Sym* object::lookup_symbol(const char* name)
+Elf64_Sym* object::lookup_symbol(const char* name, bool self_lookup)
 {
     if (!visible()) {
         return nullptr;
     }
     Elf64_Sym* sym;
     if (dynamic_exists(DT_GNU_HASH)) {
-        sym = lookup_symbol_gnu(name);
+        sym = lookup_symbol_gnu(name, self_lookup);
     } else {
         sym = lookup_symbol_old(name);
     }
@@ -1491,14 +1491,14 @@ void program::del_debugger_obj(object* obj)
     }
 }
 
-symbol_module program::lookup(const char* name)
+symbol_module program::lookup(const char* name, object* seeker)
 {
     trace_elf_lookup(name);
     symbol_module ret(nullptr,nullptr);
     with_modules([&](const elf::program::modules_list &ml)
     {
         for (auto module : ml.objects) {
-            if (auto sym = module->lookup_symbol(name)) {
+            if (auto sym = module->lookup_symbol(name, seeker == module)) {
                 ret = symbol_module(sym, module);
                 return;
             }
@@ -1509,7 +1509,7 @@ symbol_module program::lookup(const char* name)
 
 void* program::do_lookup_function(const char* name)
 {
-    auto sym = lookup(name);
+    auto sym = lookup(name, nullptr);
     if (!sym.symbol) {
         throw std::runtime_error("symbol not found " + demangle(name));
     }

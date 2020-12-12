@@ -346,7 +346,7 @@ public:
     void set_dynamic_table(Elf64_Dyn* dynamic_table);
     void* base() const;
     void* end() const;
-    Elf64_Sym* lookup_symbol(const char* name);
+    Elf64_Sym* lookup_symbol(const char* name, bool self_lookup);
     void load_segments();
     void unload_segments();
     void fix_permissions();
@@ -388,7 +388,7 @@ protected:
     unsigned get_segment_mmap_permissions(const Elf64_Phdr& phdr);
 private:
     Elf64_Sym* lookup_symbol_old(const char* name);
-    Elf64_Sym* lookup_symbol_gnu(const char* name);
+    Elf64_Sym* lookup_symbol_gnu(const char* name, bool self_lookup);
     template <typename T>
     T* dynamic_ptr(unsigned tag);
     Elf64_Xword dynamic_val(unsigned tag);
@@ -581,7 +581,7 @@ public:
      */
     void set_search_path(std::initializer_list<std::string> path);
 
-    symbol_module lookup(const char* symbol);
+    symbol_module lookup(const char* symbol, object* seeker);
     template <typename T>
     T* lookup_function(const char* symbol);
 

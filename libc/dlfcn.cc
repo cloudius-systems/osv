@@ -68,13 +68,13 @@ void* dlsym(void* handle, const char* name)
     elf::symbol_module sym;
     auto program = elf::get_program();
     if ((program == handle) || (handle == RTLD_DEFAULT)) {
-        sym = program->lookup(name);
+        sym = program->lookup(name, nullptr);
     } else if (handle == RTLD_NEXT) {
         // FIXME: implement
         abort();
     } else {
         auto obj = *reinterpret_cast<std::shared_ptr<elf::object>*>(handle);
-        sym = { obj->lookup_symbol(name), obj.get() };
+        sym = { obj->lookup_symbol(name, false), obj.get() };
     }
     if (!sym.obj || !sym.symbol) {
         dlerror_fmt("dlsym: symbol %s not found", name);
