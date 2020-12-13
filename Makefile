@@ -345,7 +345,7 @@ $(out)/%.o: %.s
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) $(ASFLAGS) -c -o $@ $<, AS $*.s)
 
-%.so: EXTRA_FLAGS = -fPIC -shared
+%.so: EXTRA_FLAGS = -fPIC -shared -z relro -z lazy
 %.so: %.o
 	$(makedir)
 	$(q-build-so)
