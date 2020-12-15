@@ -142,16 +142,21 @@ entry_sync:
         cmp     x2, #ESR_EC_DATA_ABORT
         b.eq    handle_mem_abort
         cmp     x2, #ESR_EC_INSN_ABORT
-        b.ne    entry_invalid
+        b.ne    unexpected_sync_exception
 handle_mem_abort:
-        cbz     x3, entry_invalid
+        cbz     x3, unexpected_sync_exception
         cmp     x3, #3
-        b.hi    entry_invalid
+        b.hi    unexpected_sync_exception
 
         mov     x0, sp  // save exception_frame to x0
         bl      page_fault
         pop_state_from_exception_frame
         eret
+unexpected_sync_exception:
+        mov     x0, sp  // save exception_frame to x0
+        bl      handle_unexpected_sync_exception
+        pop_state_from_exception_frame
+        bl      abort
 
 .global entry_irq
 .type entry_irq, @function

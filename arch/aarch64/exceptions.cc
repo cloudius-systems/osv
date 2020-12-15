@@ -12,6 +12,7 @@
 
 #include "exceptions.hh"
 #include "fault-fixup.hh"
+#include "dump.hh"
 
 __thread exception_frame* current_interrupt_frame;
 class interrupt_table idt __attribute__((init_priority((int)init_prio::idt)));
@@ -162,6 +163,19 @@ void interrupt(exception_frame* frame)
 
     current_interrupt_frame = nullptr;
     sched::preempt();
+}
+
+extern "C" { void handle_unexpected_sync_exception(exception_frame* frame); }
+
+#define ESR_EC_BEG  26 // Exception Class field begins in ESR at the bit 26th
+#define ESR_EC_END  31 // and ends at 31st
+#define ESR_EC_MASK 0b111111UL
+
+void handle_unexpected_sync_exception(exception_frame* frame)
+{
+    u64 exception_class = (frame->esr >> ESR_EC_BEG) & ESR_EC_MASK;
+    debug_ll("unexpected synchronous exception, EC: 0x%04x\n", exception_class);
+    dump_registers(frame);
 }
 
 bool fixup_fault(exception_frame* ef)
