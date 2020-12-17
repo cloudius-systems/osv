@@ -1853,6 +1853,8 @@ boost-libs := $(boost-lib-dir)/libboost_system$(boost-mt).a
 
 objects += fs/nfs/nfs_null_vfsops.o
 
+$(objects:%=$(out)/%) $(drivers:%=$(out)/%) $(out)/arch/$(arch)/boot.o $(out)/loader.o $(out)/runtime.o: COMMON += -fno-pie
+
 # ld has a known bug (https://sourceware.org/bugzilla/show_bug.cgi?id=6468)
 # where if the executable doesn't use shared libraries, its .dynamic section
 # is dropped, even when we use the "--export-dynamic" (which is silently
