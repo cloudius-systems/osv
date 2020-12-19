@@ -1109,6 +1109,15 @@ int unlink(const char *pathname)
     return -1;
 }
 
+int unlinkat(int dirfd, const char *pathname, int flags)
+{
+    //TODO: Really implement it
+    if (dirfd != AT_FDCWD || flags) {
+        UNIMPLEMENTED("unlinkat() with non-zero flags or dirfd != AT_FDCWD");
+    }
+    return unlink(pathname);
+}
+
 TRACEPOINT(trace_vfs_stat, "\"%s\" %p", const char*, struct stat*);
 TRACEPOINT(trace_vfs_stat_ret, "");
 TRACEPOINT(trace_vfs_stat_err, "%d", int);
