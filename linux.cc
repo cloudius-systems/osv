@@ -378,7 +378,9 @@ long syscall(long number, ...)
     SCOPE_LOCK(fpu);
 
     switch (number) {
+#ifdef SYS_open
     SYSCALL2(open, const char *, int);
+#endif
     SYSCALL3(read, int, char *, size_t);
     SYSCALL1(uname, struct utsname *);
     SYSCALL3(write, int, const void *, size_t);
@@ -391,7 +393,9 @@ long syscall(long number, ...)
     SYSCALL1(epoll_create1, int);
     SYSCALL2(eventfd2, unsigned int, int);
     SYSCALL4(epoll_ctl, int, int, int, struct epoll_event *);
+#ifdef SYS_epoll_wait
     SYSCALL4(epoll_wait, int, struct epoll_event *, int, int);
+#endif
     SYSCALL4(accept4, int, struct sockaddr *, socklen_t *, int);
     SYSCALL3(connect, int, struct sockaddr *, socklen_t);
     SYSCALL5(get_mempolicy, int *, unsigned long *, unsigned long, void *, int);
@@ -402,7 +406,9 @@ long syscall(long number, ...)
     SYSCALL4(rt_sigprocmask, int, sigset_t *, sigset_t *, size_t);
     SYSCALL1(sys_exit, int);
     SYSCALL2(sigaltstack, const stack_t *, stack_t *);
+#ifdef SYS_select
     SYSCALL5(select, int, fd_set *, fd_set *, fd_set *, struct timeval *);
+#endif
     SYSCALL3(madvise, void *, size_t, int);
     SYSCALL0(sched_yield);
     SYSCALL3(mincore, void *, size_t, unsigned char *);
@@ -414,7 +420,9 @@ long syscall(long number, ...)
     SYSCALL3(bind, int, struct sockaddr *, int);
     SYSCALL2(listen, int, int);
     SYSCALL3(sys_ioctl, unsigned int, unsigned int, unsigned long);
+#ifdef SYS_stat
     SYSCALL2(stat, const char *, struct stat *);
+#endif
     SYSCALL2(fstat, int, struct stat *);
     SYSCALL3(getsockname, int, struct sockaddr *, socklen_t *);
     SYSCALL6(sendto, int, const void *, size_t, int, const struct sockaddr *, socklen_t);

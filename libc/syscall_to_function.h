@@ -17,6 +17,8 @@
 #define __OSV_TO_FUNCTION_SYS_rmdir         rmdir
 #define __OSV_TO_FUNCTION_SYS_readv         readv
 #define __OSV_TO_FUNCTION_SYS_writev        writev
+#define __OSV_TO_FUNCTION_SYS_fstatat       fstatat
+#define __OSV_TO_FUNCTION_SYS_unlinkat      unlinkat
 
 #undef __syscall
 #define __syscall(sys_number, ...) (__OSV_TO_FUNCTION_##sys_number(__VA_ARGS__) < 0 ? -errno : 0)
