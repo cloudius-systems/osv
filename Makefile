@@ -1853,6 +1853,10 @@ boost-libs := $(boost-lib-dir)/libboost_system$(boost-mt).a
 
 objects += fs/nfs/nfs_null_vfsops.o
 
+# The OSv kernel is linked into an ordinary, non-PIE, executable, so there is no point in compiling
+# with -fPIC or -fpie and objects that can be linked into a PIE. On the contrary, PIE-compatible objects
+# have overheads and can cause problems (see issue #1112). Recently, on some systems gcc's
+# default was changed to use -fpie, so we need to undo this default by explicitly specifying -fno-pie.
 $(objects:%=$(out)/%) $(drivers:%=$(out)/%) $(out)/arch/$(arch)/boot.o $(out)/loader.o $(out)/runtime.o: COMMON += -fno-pie
 
 # ld has a known bug (https://sourceware.org/bugzilla/show_bug.cgi?id=6468)
