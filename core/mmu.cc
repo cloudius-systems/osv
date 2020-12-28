@@ -1206,6 +1206,13 @@ ulong populate_vma(vma *vma, void *v, size_t size, bool write = false)
         vma->operate_range(populate_small<Account>(map, vma->perm(), write, vma->map_dirty()), v, size) :
         vma->operate_range(populate<Account>(map, vma->perm(), write, vma->map_dirty()), v, size);
 
+    // On some architectures, the cpu data and instruction caches are separate (non-unified)
+    // and therefore it might be necessary to synchronize data cache with instruction cache
+    // after populating vma with executable code.
+    if (vma->perm() & perm_exec) {
+        synchronize_cpu_caches(v, size);
+    }
+
     return total;
 }
 

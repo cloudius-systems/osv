@@ -97,4 +97,38 @@ bool is_page_fault_write_exclusive(unsigned int esr) {
 bool fast_sigsegv_check(uintptr_t addr, exception_frame* ef) {
     return false;
 }
+
+void synchronize_cpu_caches(void *v, size_t size) {
+    // The aarch64 qualifies as Modified Harvard architecture and defines separate
+    // cpu instruction and data caches - I-cache and D-cache. Therefore it is necessary
+    // to synchronize both caches by cleaning data cache and invalidating instruction
+    // cache after loading code into memory before letting it be executed.
+    // For more details of why and when it is necessary please read this excellent article -
+    // https://community.arm.com/developer/ip-products/processors/b/processors-ip-blog/posts/caches-and-self-modifying-code
+    // or this paper - https://hal.inria.fr/hal-02509910/document.
+    //
+    // So when OSv dynamic linker, being part of the kernel code, loads pages
+    // of executable sections of ELF segments into memory, we need to clean D-cache
+    // in order push code (as data) into next cache level (L2) and invalidate
+    // the I-cache right before it gets executed.
+    //
+    // In order to achieve the above we delegate to the __clear_cache builtin.
+    // The __clear_cache does following in terms of ARM64 assembly:
+    //
+    // For each D-cache line in the range (v, v + size):
+    //   DC CVAU, Xn ; Clean data cache by virtual address (VA) to PoU
+    // DSB ISH       ; Ensure visibility of the data cleaned from cache
+    // For each I-cache line in the range (v, v + size):
+    //   IC IVAU, Xn ; Invalidate instruction cache by VA to PoU
+    // DSB ISH       ; Ensure completion of the invalidations
+    // ISB           ; Synchronize the fetched instruction stream
+    //
+    // Please note that that both DC CVAU and IC CVAU are broadcast to all cores in the
+    // same Inner Sharebility domain (which all OSv memory is mapped as) so that all
+    // caches in all cores should eventually see and execute same code.
+    //
+    // For more details about what this built-in does, please read this gcc documentation -
+    // https://gcc.gnu.org/onlinedocs/gcc/Other-Builtins.html
+    __builtin___clear_cache((char*)v, (char*)(v + size));
+}
 }
