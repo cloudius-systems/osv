@@ -69,6 +69,20 @@ int main()
         fclose(fp);
     }
 
+    // Test that if read from a directory with fread(), we get an error,
+    // not an endless loop as we did before commit
+    // 0d4d8fd6752521bed92a4be194403b89955b591f.
+    std::cerr << "opening /\n";
+    fp = fopen("/", "r");
+    expect(!fp, false);
+    if (fp) {
+        char buf[4096];
+        expect(fread(buf, 1, 4096, fp), (size_t)0);
+        expect(ferror(fp), 1);
+        expect(feof(fp), 0);
+        fclose(fp);
+    }
+
     std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";
     return fails == 0 ? 0 : 1;
 
