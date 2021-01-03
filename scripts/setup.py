@@ -6,6 +6,8 @@ import sys, argparse
 import subprocess, os
 from linux_distro import linux_distribution
 
+arch = os.uname().machine
+
 standard_ec2_packages = ['python-pip', 'wget']
 standard_ec2_post_install = ['pip install awscli &&'
                              'wget http://s3.amazonaws.com/ec2-downloads/ec2-api-tools.zip &&'
@@ -34,7 +36,6 @@ class Fedora(object):
                 'curl',
                 'flex',
                 'gcc-c++',
-                'gcc-c++-aarch64-linux-gnu',
                 'gdb',
                 'genromfs',
                 'git',
@@ -66,6 +67,9 @@ class Fedora(object):
                 'lua',
                 'lua-devel',
                  ]
+    if arch == 'x86_64':
+        packages = packages + [ 'gcc-c++-aarch64-linux-gnu' ]
+
     ec2_packages = standard_ec2_packages
     test_packages = ['openssl-devel']
     ec2_post_install = standard_ec2_post_install
@@ -221,7 +225,6 @@ class Ubuntu(object):
                 'build-essential',
                 'curl',
                 'flex',
-                'g++-multilib',
                 'gawk',
                 'gdb',
                 'genromfs',
@@ -249,6 +252,8 @@ class Ubuntu(object):
                 'pax-utils',
                 'openjdk-8-jdk',
                 ]
+    if arch == 'x86_64':
+        packages = packages + [ 'g++-aarch64-linux-gnu' ]
 
     ec2_packages = standard_ec2_packages
     test_packages = ['libssl-dev', 'zip']
