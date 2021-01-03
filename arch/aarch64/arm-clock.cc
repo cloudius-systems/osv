@@ -30,6 +30,8 @@ public:
     virtual s64 time();
     /* Return current estimate of wall-clock time at OSV's boot. */
     virtual s64 boot_time();
+    /* Convert a processor based timestamp read from cntvct_el0 to nanoseconds. */
+    virtual u64 processor_to_nano(u64 ticks);
 protected:
     u32 freq_hz;  /* frequency in Hz (updates per second) */
 
@@ -74,6 +76,12 @@ s64 arm_clock::time()
 s64 arm_clock::boot_time()
 {
     return uptime();
+}
+
+u64 arm_clock::processor_to_nano(u64 ticks)
+{
+    u64 cntvct = ((__uint128_t)ticks * NANO_PER_SEC) / this->freq_hz;
+    return cntvct;
 }
 
 class arm_clock_events : public clock_event_driver {
