@@ -26,7 +26,9 @@ void gic_driver::init_cpu(int smp_idx)
        and the registers are banked for each cpu target,
        we logically start looking from IRQ 16 to get the mask.
     */
+#if CONF_logger_debug
     debug_early_entry("gic_driver::init_cpu()");
+#endif
 
     assert(smp_idx < max_cpu_if);
     unsigned char my_mask = 0;
@@ -40,7 +42,9 @@ void gic_driver::init_cpu(int smp_idx)
     }
 
     if (!my_mask) {
+#if CONF_logger_debug
         debug_early("gic: failed to read cpu mask, assuming uniprocessor\n");
+#endif
         this->cpu_targets[smp_idx] = 0;
     }
 
@@ -54,13 +58,17 @@ void gic_driver::init_cpu(int smp_idx)
     gicc_ctlr |= 1;
     this->gicc.write_reg(gicc_reg::GICC_CTLR, gicc_ctlr);
 
+#if CONF_logger_debug
     debug_early("CPU interface enabled.\n");
+#endif
 }
 
 /* to be called only from the boot CPU */
 void gic_driver::init_dist(int smp_idx)
 {
+#if CONF_logger_debug
     debug_early_entry("gic_driver::init_dist()");
+#endif
     assert(smp_idx < max_cpu_if);
 
     /* disable first */
@@ -72,7 +80,9 @@ void gic_driver::init_dist(int smp_idx)
     /* note: number of CPU interfaces could be read from here as well */
     this->nr_irqs = ((this->gicd.read_reg(gicd_reg::GICD_TYPER) & 0x1f)
                      + 1) * 32;
+#if CONF_logger_debug
     debug_early_u64("number of supported IRQs: ", (u64)this->nr_irqs);
+#endif
 
     /* set all SPIs to level-sensitive at the start */
     for (unsigned int i = 32; i < this->nr_irqs; i += 16)

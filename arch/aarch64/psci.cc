@@ -26,7 +26,7 @@ void psci::init()
     _psci.version.major = ret & ~0xffff;
     _psci.version.minor = ret & 0xffff;
 
-    fprintf(stdout, "PSCI: version %u.%u detected.\n",
+    debugf("PSCI: version %u.%u detected.\n",
             _psci.version.major, _psci.version.minor);
 }
 

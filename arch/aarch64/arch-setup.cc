@@ -166,7 +166,9 @@ void arch_init_drivers()
         pci::set_pci_irqmap(bdfs, irqs, irqmap_count, mask);
     }
 
+#if CONF_logger_debug
     pci::dump_pci_irqmap();
+#endif
 
     // Enumerate PCI devices
     size_t pci_cfg_len;

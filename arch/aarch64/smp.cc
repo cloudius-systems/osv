@@ -45,6 +45,7 @@ void smp_init()
     if (nr_cpus < 1) {
         abort("smp_init: could not get cpus from device tree.\n");
     }
+    debug(fmt("%d CPUs detected\n") % nr_cpus);
     u64 *mpids = (u64 *)alloca(sizeof(u64) * nr_cpus);
     if (!dtb_get_cpus_mpid(mpids, nr_cpus)) {
         abort("smp_init: failed to get cpus mpids from device tree.\n");
@@ -67,7 +68,9 @@ void smp_init()
 
 void smp_launch()
 {
+#if CONF_logger_debug
     debug_early_entry("smp_launch");
+#endif
     for (auto c : sched::cpus) {
         auto name = osv::sprintf("balancer%d", c->id);
         if (c->arch.smp_idx == 0) {
@@ -91,7 +94,9 @@ void smp_launch()
 
 void smp_main()
 {
+#if CONF_logger_debug
     debug_early_entry("smp_main");
+#endif
     sched::cpu* cpu = smp_initial_find_current_cpu();
     assert(cpu);
     cpu->init_on_cpu();

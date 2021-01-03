@@ -18,20 +18,25 @@ void page_fault(exception_frame *ef)
 {
     sched::fpu_lock fpu;
     SCOPE_LOCK(fpu);
+#if CONF_logger_debug
     debug_early_entry("page_fault");
+#endif
     u64 addr;
     asm volatile ("mrs %0, far_el1" : "=r"(addr));
+#if CONF_logger_debug
     debug_early_u64("faulting address ", (u64)addr);
     debug_early_u64("elr exception ra ", (u64)ef->elr);
+#endif
 
     if (fixup_fault(ef)) {
+#if CONF_logger_debug
         debug_early("fixed up with fixup_fault\n");
+#endif
         return;
     }
 
     if (!ef->elr) {
-        debug_early("trying to execute null pointer\n");
-        abort();
+        abort("trying to execute null pointer");
     }
 
     /* vm_fault might sleep, so check that the thread is preemptable,
@@ -45,7 +50,9 @@ void page_fault(exception_frame *ef)
         mmu::vm_fault(addr, ef);
     }
 
+#if CONF_logger_debug
     debug_early("leaving page_fault()\n");
+#endif
 }
 
 namespace mmu {

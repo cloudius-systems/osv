@@ -153,7 +153,9 @@ unsigned get_pci_irq_line(pci::device &dev)
     assert(irq_id > 0);
     /* add the SPI base number 32 to the irq id */
     irq_id += 32;
+#if CONF_logger_debug
     debug("get_pci_irq_line: bdfp  = %u, irqid = %d\n", bdfp, irq_id);
+#endif
     return irq_id;
 }
 

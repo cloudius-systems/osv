@@ -33,13 +33,17 @@ interrupt_desc::interrupt_desc(interrupt_desc *old)
 }
 
 interrupt_table::interrupt_table() {
+#if CONF_logger_debug
     debug_early_entry("interrupt_table::interrupt_table()");
+#endif
 
     gic::gic->init_cpu(0);
     gic::gic->init_dist(0);
 
     this->nr_irqs = gic::gic->nr_irqs;
+#if CONF_logger_debug
     debug_early("interrupt table: gic driver created.\n");
+#endif
 }
 
 void interrupt_table::enable_irq(int id)
@@ -61,7 +65,9 @@ void interrupt_table::register_interrupt(interrupt *interrupt)
         interrupt_desc *desc = new interrupt_desc(old, interrupt);
         this->irq_desc[id].assign(desc);
         osv::rcu_dispose(old);
+#if CONF_logger_debug
         debug_early_u64(" registered IRQ id=", (u64)id);
+#endif
         enable_irq(id);
     }
 }
@@ -104,7 +110,9 @@ void interrupt_table::unregister_interrupt(interrupt *interrupt)
 
         this->irq_desc[id].assign(desc);
         osv::rcu_dispose(old);
+#if CONF_logger_debug
         debug_early_u64("unregistered IRQ id=", (u64)id);
+#endif
         if (!desc) {
             disable_irq(id);
             return;

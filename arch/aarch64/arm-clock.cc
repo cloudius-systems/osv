@@ -44,12 +44,16 @@ arm_clock::arm_clock() {
         debug_early_u64("arm_clock(): read invalid frequency ", freq_hz);
         abort();
     }
+#if CONF_logger_debug
     debug_early_u64("arm_clock(): frequency read as ", freq_hz);
+#endif
 }
 
 static __attribute__((constructor(init_prio::clock))) void setup_arm_clock()
 {
+#if CONF_logger_debug
     debug_early_entry("setup_arm_clock()");
+#endif
     clock::register_clock(new arm_clock);
 }
 
