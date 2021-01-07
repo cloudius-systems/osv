@@ -297,11 +297,11 @@ By default, OSv kernel gets built for x86_64 architecture, but it is also possib
 ./scripts/build arch=aarch64
 ```
 At this point cross-compiling the **aarch64** version of OSv is only supported
-on Fedora and relevant aarch64 gcc and libraries' binaries can be downloaded using
-the `./scripts/download_fedora_aarch64_packages.py` script.
-Please note that simple "hello world" app should work just fine, but overall the ARM part of OSv has not been
+on Fedora and Ubuntu and relevant aarch64 gcc and libraries' binaries can be downloaded using
+the `./scripts/download_aarch64_packages.py` script. OSv can also be built natively on Ubuntu on ARM hardware like Raspberry PI 4, Odroid N2 or RockPro64
+Please note that simple "hello world" app and 80% of unit tests should work just fine, but overall the ARM part of OSv has not been
  as well maintained and tested as x86_64 due to the lack of volunteers. In addition,
- the same simple example can successfully run on QEMU on Raspberry PI 4 with KVM acceleration enabled.
+ the same simple example can successfully run on QEMU and Firecraker on Raspberry PI 4 with KVM acceleration enabled.
  For more information about the aarch64 port please read [this Wiki page](https://github.com/cloudius-systems/osv/wiki/AArch64).
 
 ### Filesystems
