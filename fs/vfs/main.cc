@@ -833,6 +833,43 @@ mkdir(const char *pathname, mode_t mode)
     return -1;
 }
 
+int mkdirat(int dirfd, const char *pathname, mode_t mode)
+{
+    mode = apply_umask(mode);
+
+	if (pathname[0] == '/' || dirfd == AT_FDCWD) {
+        // Supplied path is either absolute or relative to cwd
+        return mkdir(pathname, mode);
+    }
+
+    // Supplied path is relative to folder specified by dirfd
+    struct file *fp;
+    int error = fget(dirfd, &fp);
+    if (error) {
+        errno = error;
+        return -1;
+    }
+
+    struct vnode *vp = fp->f_dentry->d_vnode;
+    vn_lock(vp);
+
+    std::unique_ptr<char []> up (new char[PATH_MAX]);
+    char *p = up.get();
+
+    /* build absolute path */
+    strlcpy(p, fp->f_dentry->d_mount->m_path, PATH_MAX);
+    strlcat(p, fp->f_dentry->d_path, PATH_MAX);
+    strlcat(p, "/", PATH_MAX);
+    strlcat(p, pathname, PATH_MAX);
+
+    error = mkdir(p, mode);
+
+    vn_unlock(vp);
+    fdrop(fp);
+
+    return error;
+}
+
 TRACEPOINT(trace_vfs_rmdir, "\"%s\"", const char*);
 TRACEPOINT(trace_vfs_rmdir_ret, "");
 TRACEPOINT(trace_vfs_rmdir_err, "%d", int);
