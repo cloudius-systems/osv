@@ -1,7 +1,7 @@
 #!/usr/bin/python3
 
 import subprocess, os, string, sys
-from distro import linux_distribution
+import distro
 import re
 
 osv_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
@@ -30,35 +30,44 @@ def fedora_download_commands(fedora_version):
                         'rm -rf %s/boost/install' % destination] + install_commands
     return ' && '.join(install_commands)
 
-def ubuntu_download_commands(boost_version):
-    boost_packages = ['libboost%s-dev' % boost_version,
-                      'libboost-system%s' % boost_version,
-                      'libboost-system%s-dev' % boost_version,
-                      'libboost-filesystem%s' % boost_version,
-                      'libboost-filesystem%s-dev' % boost_version,
-                      'libboost-test%s' % boost_version,
-                      'libboost-test%s-dev' % boost_version,
-                      'libboost-timer%s' % boost_version,
-                      'libboost-timer%s-dev' % boost_version,
-                      'libboost-chrono%s' % boost_version,
-                      'libboost-chrono%s-dev' % boost_version]
+def ubuntu_download_commands(boost_long_version):
+    boost_short_version = re.search('\d+\.\d+', boost_long_version).group()
+    boost_patchlevel = boost_long_version.split('.')[2]
+    boost_packages = ['libboost%s-dev' % boost_short_version,
+                      'libboost-system%s' % boost_short_version,
+                      'libboost-system%s-dev' % boost_short_version,
+                      'libboost-filesystem%s' % boost_short_version,
+                      'libboost-filesystem%s-dev' % boost_short_version,
+                      'libboost-test%s' % boost_short_version,
+                      'libboost-test%s-dev' % boost_short_version,
+                      'libboost-timer%s' % boost_short_version,
+                      'libboost-timer%s-dev' % boost_short_version,
+                      'libboost-chrono%s' % boost_short_version,
+                      'libboost-chrono%s-dev' % boost_short_version]
 
     script_path = '%s/scripts/download_ubuntu_aarch64_deb_package.sh' % osv_root
 
-    install_commands = ['%s boost%s %s %s/boost' % (script_path, boost_version, package, destination) for package in boost_packages]
+    if boost_patchlevel == '0':
+        boost_package_directory = boost_short_version
+    else:
+        boost_package_directory = boost_long_version
+
+    install_commands = ['%s boost%s %s %s/boost' % (script_path, boost_package_directory, package, destination) for package in boost_packages]
     install_commands = ['rm -rf %s/boost/install' % destination] + install_commands
     return ' && '.join(install_commands)
 
 def ubuntu_identify_boost_version(codename, index):
     packages = subprocess.check_output(['wget', '-t', '1', '-qO-', 'http://ports.ubuntu.com/indices/override.%s.%s' % (codename, 'main')]).decode('utf-8')
-    libboost_system_package = re.search("libboost-system\d+\.\d+-dev", packages)
+    libboost_system_package = re.search("libboost-system\d+\.\d+\.\d+", packages)
     if libboost_system_package:
        libboost_system_package_name = libboost_system_package.group()
-       return re.search('\d+\.\d+', libboost_system_package_name).group()
+       return re.search('\d+\.\d+\.\d+', libboost_system_package_name).group()
     else:
        return ''
 
-(name, version, codename) = linux_distribution()
+name = distro.id()
+version = distro.version()
+codename = distro.lsb_release_attr('codename')
 if name.lower() == 'fedora':
     commands_to_download = fedora_download_commands(version)
 elif name.lower() == 'ubuntu':
