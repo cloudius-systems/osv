@@ -10,6 +10,11 @@
 
 NAME=$1
 
+MACHINE=$(uname -m)
+if [ "${MACHINE}" == "x86_64" ]; then
+	MACHINE="x86-64"
+fi
+
 argv0=${0##*/}
 usage() {
 	cat <<-EOF
@@ -23,7 +28,7 @@ usage() {
 	  -R              Make guest root path match the host, otherwise assume '/'; applies with directory path input
 	  -h              Show this help output
 	  -w              Write output to ./build/last/append.manifest
-          -i              Ignore missing library
+	  -i              Ignore missing library
 
 	Examples:
 	  ./scripts/manifest_from_host.sh ls                 # Create manifest for 'ls' executable
@@ -38,7 +43,7 @@ usage() {
 find_library()
 {
 	local pattern="$1"
-	local count=$(ldconfig -p | grep -P "$pattern" | grep 'x86-64' | wc -l)
+	local count=$(ldconfig -p | grep -P "$pattern" | grep "${MACHINE}" | wc -l)
 
 	if [[ $count == 0 && $IGNORE_MISSING == false ]]; then
 		echo "Could not find any so file matching $pattern" >&2
@@ -50,7 +55,7 @@ find_library()
 		ldconfig -p | grep -P "$pattern"
 		return -1
 	else
-		local so_name_path=$(ldconfig -p | grep -P "$pattern" | grep 'x86-64')
+		local so_name_path=$(ldconfig -p | grep -P "$pattern" | grep "${MACHINE}")
 		so_name=$(echo $so_name_path | grep -Po 'lib[^ ]+.+?(?= \()')
 		so_path=$(echo $so_name_path | grep -Po '(?<=> )/[^ ]+')
 		return 0
@@ -63,7 +68,7 @@ output_manifest()
 	echo "# --------------------" | tee -a $OUTPUT
 	echo "# Dependencies" | tee -a $OUTPUT
 	echo "# --------------------" | tee -a $OUTPUT
-	lddtree $so_path | grep -v "not found" | grep -v "$so_path" | grep -v 'ld-linux-x86-64' | \
+	lddtree $so_path | grep -v "not found" | grep -v "$so_path" | grep -v "ld-linux-${MACHINE}" | \
 		grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|stdc\+\+|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
 		sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
 }
@@ -72,7 +77,7 @@ detect_elf()
 {
 	local file_path="$1"
 	local file_desc=$(file -L $file_path)
-	local elf_filter=$(echo $file_desc | grep -P 'LSB shared object|LSB.*executable' | grep 'x86-64' | wc -l)
+	local elf_filter=$(echo $file_desc | grep -P 'LSB shared object|LSB.*executable' | grep "${MACHINE}" | wc -l)
 	if [[ $elf_filter == 1 ]]; then
 		local shared_object_filter=$(echo $file_desc | grep -P 'LSB shared object' | wc -l)
 		if [[ $shared_object_filter == 1 ]]; then
@@ -139,7 +144,7 @@ if [[ -d $NAME_OR_PATH ]]; then
 		echo "# --------------------" | tee -a $OUTPUT
 		echo "# Dependencies" | tee -a $OUTPUT
 		echo "# --------------------" | tee -a $OUTPUT
-		lddtree $SO_FILES | grep -v "not found" | grep -v "$NAME_OR_PATH/$SUBDIRECTORY_PATH" | grep -v 'ld-linux-x86-64' | \
+		lddtree $SO_FILES | grep -v "not found" | grep -v "$NAME_OR_PATH/$SUBDIRECTORY_PATH" | grep -v "ld-linux-${MACHINE}" | \
 			grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|stdc\+\+|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
 			sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
 	fi
