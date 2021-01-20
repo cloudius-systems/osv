@@ -7,6 +7,9 @@ extern "C" {
 
 #include <features.h>
 
+#undef _GLIBCXX_HAVE_OBSOLETE_ISINF
+#undef _GLIBCXX_HAVE_OBSOLETE_ISNAN
+
 #define __NEED_float_t
 #define __NEED_double_t
 #define __NEED___uint16_t
