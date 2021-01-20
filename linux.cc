@@ -447,7 +447,9 @@ long syscall(long number, ...)
     SYSCALL0(getpid);
     SYSCALL3(set_mempolicy, int, unsigned long *, unsigned long);
     SYSCALL3(sched_setaffinity_syscall, pid_t, unsigned, unsigned long *);
+#ifdef SYS_mkdir
     SYSCALL2(mkdir, char*, mode_t);
+#endif
     SYSCALL3(mkdirat, int, char*, mode_t);
     }
 
