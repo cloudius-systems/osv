@@ -253,7 +253,7 @@ class Ubuntu(object):
                 'openjdk-8-jdk',
                 ]
     if arch == 'x86_64':
-        packages = packages + [ 'g++-aarch64-linux-gnu' ]
+        packages = packages + [ 'g++-aarch64-linux-gnu', 'gdb-multiarch' ]
 
     ec2_packages = standard_ec2_packages
     test_packages = ['libssl-dev', 'zip']
