@@ -1,0 +1,172 @@
+# Paths set by scripts/build
+ifndef OSV_BASE
+    OSV_BASE := $(shell readlink -f ../..)
+endif
+
+ifndef OSV_BUILD_PATH
+    OSV_BUILD_PATH := $(shell readlink -f ../../build/release.$(arch))
+endif
+
+src := $(OSV_BASE)
+out := $(OSV_BUILD_PATH)
+arch := $(ARCH)
+fs_type := $(fs_type)
+
+quiet = $(if $V, $1, @echo " $2"; $1)
+very-quiet = $(if $V, $1, @$1)
+makedir = $(call very-quiet, mkdir -p $(dir $@))
+
+autodepend = -MD -MT $@ -MP
+
+# By default, detect HOST_CXX's architecture - x64 or aarch64.
+# But also allow the user to specify a cross-compiled target architecture
+# by setting either "ARCH" or "arch" in the make command line, or the "ARCH"
+# environment variable.
+HOST_CXX := g++
+
+detect_arch = $(word 1, $(shell { echo "x64        __x86_64__";  \
+                                  echo "aarch64    __aarch64__"; \
+                       } | $1 -E -xc - | grep ' 1$$'))
+
+host_arch := $(call detect_arch, $(HOST_CXX))
+
+# As an alternative to setting ARCH or arch, let's allow the user to
+# directly set the CROSS_PREFIX environment variable, and learn its arch:
+ifdef CROSS_PREFIX
+    ARCH := $(call detect_arch, $(CROSS_PREFIX)gcc)
+endif
+
+ifndef ARCH
+    ARCH := $(host_arch)
+endif
+arch := $(ARCH)
+
+# ARCH_STR is like ARCH, but uses the full name x86_64 instead of x64
+ARCH_STR := $(arch:x64=x86_64)
+
+ifeq (,$(wildcard $(src)/conf/$(arch).mk))
+    $(error unsupported architecture $(arch))
+endif
+
+CROSS_PREFIX ?= $(if $(filter-out $(arch),$(host_arch)),$(arch)-linux-gnu-)
+CXX=$(CROSS_PREFIX)g++
+CC=$(CROSS_PREFIX)gcc
+LD=$(CROSS_PREFIX)ld.bfd
+export STRIP=$(CROSS_PREFIX)strip
+OBJCOPY=$(CROSS_PREFIX)objcopy
+
+#
+# Let us detect presence of standard C++ headers
+CXX_INCLUDES = $(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^ .*c\+\+/ {print "-isystem" $$0}')
+ifeq ($(CXX_INCLUDES),)
+  ifeq ($(CROSS_PREFIX),aarch64-linux-gnu-)
+    # We are on distribution where the aarch64-linux-gnu package does not come with C++ headers
+    # So let us point it to the expected location
+    aarch64_gccbase = $(src)/build/downloaded_packages/aarch64/gcc/install
+    ifeq (,$(wildcard $(aarch64_gccbase)))
+     $(error Missing $(aarch64_gccbase) directory. Please run "./scripts/download_aarch64_packages.py")
+    endif
+
+    gcc-inc-base := $(dir $(shell find $(aarch64_gccbase)/ -name vector | grep -v -e debug/vector$$ -e profile/vector$$ -e experimental/vector$$))
+    ifeq (,$(gcc-inc-base))
+      $(error Could not find C++ headers under $(aarch64_gccbase) directory. Please run "./scripts/download_aarch64_packages.py")
+    endif
+
+    gcc-inc-base3 := $(dir $(shell dirname `find $(aarch64_gccbase)/ -name c++config.h | grep -v /32/`))
+    ifeq (,$(gcc-inc-base3))
+      $(error Could not find C++ headers under $(aarch64_gccbase) directory. Please run "./scripts/download_aarch64_packages.py")
+    endif
+    CXX_INCLUDES = -isystem $(gcc-inc-base) -isystem $(gcc-inc-base3)
+
+    gcc-inc-base2 := $(dir $(shell find $(aarch64_gccbase)/ -name unwind.h))
+    ifeq (,$(gcc-inc-base2))
+      $(error Could not find standard gcc headers like "unwind.h" under $(aarch64_gccbase) directory. Please run "./scripts/download_aarch64_packages.py")
+    endif
+    STANDARD_GCC_INCLUDES = -isystem $(gcc-inc-base2)
+
+    gcc-sysroot = --sysroot $(aarch64_gccbase)
+    standard-includes-flag = -nostdinc
+  else
+    $(error Could not find standard C++ headers. Please run "sudo ./scripts/setup.py")
+  endif
+else
+  # If gcc can find C++ headers it also means it can find standard libc headers, so no need to add them specifically
+  STANDARD_GCC_INCLUDES =
+  standard-includes-flag =
+endif
+
+# Standard C++ library
+libstd_dir := $(dir $(shell $(CXX) -print-file-name=libstdc++.so))
+ifeq ($(filter /%,$(libstd_dir)),)
+ifeq ($(arch),aarch64)
+    libstd_dir := $(dir $(shell find $(aarch64_gccbase)/ -name libstdc++.so))
+    ifeq ($(libstd_dir),)
+        $(error Error: libstdc++.so needs to be installed.)
+    endif
+    LDFLAGS += -L$(libstd_dir)
+else
+    $(error Error: libstdc++.so needs to be installed.)
+endif
+endif
+
+# GCC library
+libgcc_s_dir := $(dir $(shell $(CC) -print-file-name=libgcc_s.so.1))
+ifeq ($(filter /%,$(libgcc_s_dir)),)
+ifeq ($(arch),aarch64)
+    libgcc_s_dir := $(aarch64_gccbase)/lib64
+else
+    $(error Error: libgcc_s.so.1 needs to be installed.)
+endif
+endif
+
+#
+# Let us detect presence of boost headers and library
+ifeq ($(CROSS_PREFIX),)
+    boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system.so))
+    ifeq ($(filter /%,$(boost-lib-dir)),)
+        $(error Error: libboost_system.a needs to be installed.)
+    endif
+    # When boost_env=host, we won't use "-nostdinc", so the build machine's
+    # header files will be used normally. So we don't need to add anything
+    # special for Boost.
+    boost-includes =
+else
+ifeq ($(arch),aarch64)
+    aarch64_boostbase = $(src)/build/downloaded_packages/aarch64/boost/install
+    ifeq (,$(wildcard $(aarch64_boostbase)))
+        $(error Missing $(aarch64_boostbase) directory. Please run "./scripts/download_aarch64_packages.py")
+    endif
+
+    boost-lib-dir := $(firstword $(dir $(shell find $(aarch64_boostbase)/ -name libboost_system.so)))
+    LDFLAGS += -L$(boost-lib-dir)
+    boost-includes = -isystem $(aarch64_boostbase)/usr/include
+endif
+endif
+
+# Let us set INCLUDES given all paths identified above
+INCLUDES = -I$(src)/arch/$(arch) -I$(src) -I$(src)/include  -I$(src)/arch/common
+INCLUDES += -isystem $(src)/include/glibc-compat
+INCLUDES += $(boost-includes)
+# Starting in Gcc 6, the standard C++ header files (which we do not change)
+# must precede in the include path the C header files (which we replace).
+# This is explained in https://gcc.gnu.org/bugzilla/show_bug.cgi?id=70722.
+# So we are forced to list here (before include/api) the system's default
+# C++ include directories, though they are already in the default search path.
+INCLUDES += $(CXX_INCLUDES)
+INCLUDES += -isystem $(src)/include/api
+INCLUDES += -isystem $(src)/include/api/$(arch)
+# must be after include/api, since it includes some libc-style headers:
+INCLUDES += $(STANDARD_GCC_INCLUDES)
+INCLUDES += -isystem $(out)/gen/include
+INCLUDES += $(post-includes-bsd)
+
+post-includes-bsd += -isystem $(src)/bsd/sys
+# For acessing machine/ in cpp xen drivers
+post-includes-bsd += -isystem $(src)/bsd/
+post-includes-bsd += -isystem $(src)/bsd/$(arch)
+
+COMMON = $(autodepend) $(INCLUDES) $(gcc-sysroot) $(standard-includes-flag)
+
+ifeq ($(arch),aarch64)
+  COMMON += -DAARCH64_PORT_STUB
+endif
