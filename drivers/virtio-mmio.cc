@@ -219,6 +219,9 @@ void add_mmio_device_configuration(mmio_device_info device_info)
 
 void register_mmio_devices(hw::device_manager *dev_manager)
 {
+    if (!mmio_device_info_entries)
+        return;
+
     for (auto info : *mmio_device_info_entries) {
         auto device = new mmio_device(info);
         if (device->parse_config()) {
