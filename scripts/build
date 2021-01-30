@@ -264,7 +264,7 @@ cd $OUT
 
 host_arch=$(uname -m)
 if [[ "$host_arch" == "x86_64" && "$arch" == 'aarch64' ]]; then
-	libgcc_s_path=$(aarch64-linux-gnu-gcc -print-file-name=libgcc_s.so.1)
+	libgcc_s_path=$(${CROSS_PREFIX:-aarch64-linux-gnu-}gcc -print-file-name=libgcc_s.so.1)
 	if [[ "$libgcc_s_path" == "libgcc_s.so.1" ]]; then
 		libgcc_s_dir=$(readlink -f ../downloaded_packages/aarch64/gcc/install/lib64)
 	else
@@ -309,7 +309,7 @@ create_rofs_disk() {
 }
 
 if [[ "$arch" == 'aarch64' ]]; then
-	export STRIP=aarch64-linux-gnu-strip
+	export STRIP=${CROSS_PREFIX:-aarch64-linux-gnu-}strip
 fi
 
 case $fs_type in
