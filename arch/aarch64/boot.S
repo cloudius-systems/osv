@@ -37,7 +37,7 @@ start_elf:
         bl      premain
 
         adrp    x3, __loader_argc
-        ldr     x0, [x3, #:lo12:__loader_argc]
+        ldr     w0, [x3, #:lo12:__loader_argc]
         adrp    x3, __loader_argv
         ldr     x1, [x3, #:lo12:__loader_argv]
         bl      main
