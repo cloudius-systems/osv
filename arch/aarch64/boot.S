@@ -190,10 +190,11 @@ ident_pt_l4_ttbr0:
         .quad 0
         .endr
 ident_pt_l3_ttbr0:
-        .quad ident_pt_l2_0_ttbr0 + 0x3 // Map 0GB-2GB one-to-one
-        .quad ident_pt_l2_1_ttbr0 + 0x3 // Map 2GB-4GB one-to-one
-        .quad ident_pt_l2_2_ttbr0 + 0x3 // Map 4GB-6GB one-to-one
-        .rept 509
+        .quad ident_pt_l2_0_ttbr0 + 0x3 // Map 0GB-1GB one-to-one
+        .quad ident_pt_l2_1_ttbr0 + 0x3 // Map 1GB-2GB one-to-one
+        .quad ident_pt_l2_2_ttbr0 + 0x3 // Map 2GB-3GB one-to-one
+        .quad ident_pt_l2_3_ttbr0 + 0x3 // Map 3GB-4GB one-to-one
+        .rept 508
         .quad 0
         .endr
 ident_pt_l2_0_ttbr0:
@@ -213,6 +214,13 @@ ident_pt_l2_1_ttbr0:
 ident_pt_l2_2_ttbr0:
         index = 0
         offset = 0x80000000
+        .rept 512
+        .quad offset + (index << 21) + 0x411
+        index = index + 1
+        .endr
+ident_pt_l2_3_ttbr0:
+        index = 0
+        offset = 0xC0000000
         .rept 512
         .quad offset + (index << 21) + 0x411
         index = index + 1
