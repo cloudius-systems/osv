@@ -47,7 +47,6 @@ aarch64_disabled_list= [
     #Remaining tests below fail for various different reasons
     #Please see comments on the right side for more details
     "tst-condvar.so",              # To few cpus?
-    "tst-dlfcn.so",                # Fails with page fault - 'relocate_rela(): unknown relocation type 0000000000000008'
     "tst-elf-permissions.so",      # Infinite page fault
     "tst-eventfd.so",              # Seems to hang after 'running simple threaded test'
     "tst-except.so",               # Crashes with 'failed looking up symbol _Unwind_Resume'
