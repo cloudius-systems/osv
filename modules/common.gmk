@@ -121,26 +121,39 @@ endif
 
 #
 # Let us detect presence of boost headers and library
-ifeq ($(CROSS_PREFIX),)
-    boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system.so))
-    ifeq ($(filter /%,$(boost-lib-dir)),)
-        $(error Error: libboost_system.a needs to be installed.)
-    endif
-    # When boost_env=host, we won't use "-nostdinc", so the build machine's
-    # header files will be used normally. So we don't need to add anything
-    # special for Boost.
-    boost-includes =
-else
-ifeq ($(arch),aarch64)
-    aarch64_boostbase = $(src)/build/downloaded_packages/aarch64/boost/install
-    ifeq (,$(wildcard $(aarch64_boostbase)))
-        $(error Missing $(aarch64_boostbase) directory. Please run "./scripts/download_aarch64_packages.py")
-    endif
+# Allow user specify non-default location of boost
+ifeq ($(boost_base),)
+    ifeq ($(CROSS_PREFIX),)
+        boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system.so))
+        ifeq ($(filter /%,$(boost-lib-dir)),)
+            $(error Error: libboost_system.so needs to be installed.)
+        endif
+        # When boost_env=host, we won't use "-nostdinc", so the build machine's
+        # header files will be used normally. So we don't need to add anything
+        # special for Boost.
+        boost-includes =
+    else
+        ifeq ($(arch),aarch64)
+            aarch64_boostbase = $(src)/build/downloaded_packages/aarch64/boost/install
+            ifeq (,$(wildcard $(aarch64_boostbase)))
+                $(error Missing $(aarch64_boostbase) directory. Please run "./scripts/download_aarch64_packages.py")
+            endif
 
-    boost-lib-dir := $(firstword $(dir $(shell find $(aarch64_boostbase)/ -name libboost_system.so)))
+            boost-lib-dir := $(firstword $(dir $(shell find $(aarch64_boostbase)/ -name libboost_system.so)))
+            LDFLAGS += -L$(boost-lib-dir)
+            boost-includes = -isystem $(aarch64_boostbase)/usr/include
+        endif
+    endif
+else
+    ifeq ($(filter /%,$(boost_base)),)
+        absolute_boost_base := $(src)/$(boost_base)# It must be relative OSv root
+    else
+        absolute_boost_base := $(boost_base)# It is absolute already
+    endif
+    # Use boost specified by the user
+    boost-lib-dir := $(firstword $(dir $(shell find $(absolute_boost_base)/ -name libboost_system.so)))
     LDFLAGS += -L$(boost-lib-dir)
-    boost-includes = -isystem $(aarch64_boostbase)/usr/include
-endif
+    boost-includes = -isystem $(absolute_boost_base)/usr/include
 endif
 
 # Let us set INCLUDES given all paths identified above
