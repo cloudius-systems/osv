@@ -747,7 +747,7 @@ class aarch64_cpu(cpu):
     def set_pointers(self):
         self.sp = ulong(gdb.parse_and_eval('$sp'))  #stack pointer
         self.fp = ulong(gdb.parse_and_eval('$x29')) #frame pointer
-        self.ip = ulong(gdb.parse_and_eval('$x30')) #instruction pointer
+        self.ip = ulong(gdb.parse_and_eval('$pc'))  #instruction pointer
 
 def template_arguments(gdb_type):
     n = 0
@@ -893,7 +893,7 @@ class thread_context(object):
             self.old_rbp = gdb.parse_and_eval('$rbp').cast(ulong_type)
         else:
             self.old_sp = gdb.parse_and_eval('$sp').cast(ulong_type)
-            self.old_x30 = gdb.parse_and_eval('$x30').cast(ulong_type)
+            self.old_pc = gdb.parse_and_eval('$pc').cast(ulong_type)
             self.old_x29 = gdb.parse_and_eval('$x29').cast(ulong_type)
     def __save_new_pointers(self, thread):
         if arch == 'x64':
@@ -902,7 +902,7 @@ class thread_context(object):
             self.new_rbp = thread['_state']['rbp'].cast(ulong_type)
         else:
             self.new_sp = thread['_state']['sp'].cast(ulong_type)
-            self.new_x30 = thread['_state']['pc'].cast(ulong_type)
+            self.new_pc = thread['_state']['pc'].cast(ulong_type)
             self.new_x29 = thread['_state']['fp'].cast(ulong_type)
     def __reset_old_pointers(self):
         if arch == 'x64':
@@ -911,7 +911,7 @@ class thread_context(object):
             gdb.execute('set $rbp = %s' % self.old_rbp)
         else:
             gdb.execute('set $sp = %s' % self.old_sp)
-            gdb.execute('set $x30 = %s' % self.old_x30)
+            gdb.execute('set $pc = %s' % self.old_pc)
             gdb.execute('set $x29 = %s' % self.old_x29)
     def __reset_new_pointers(self):
         if arch == 'x64':
@@ -920,7 +920,7 @@ class thread_context(object):
             gdb.execute('set $rbp = %s' % self.new_rbp)
         else:
             gdb.execute('set $sp = %s' % self.new_sp)
-            gdb.execute('set $x30 = %s' % self.new_x30)
+            gdb.execute('set $pc = %s' % self.new_pc)
             gdb.execute('set $x29 = %s' % self.new_x29)
 
 def exit_thread_context():
