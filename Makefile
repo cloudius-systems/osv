@@ -1845,32 +1845,40 @@ else
 endif
 endif
 
-ifeq ($(CROSS_PREFIX),)
-    # link with -mt if present, else the base version (and hope it is multithreaded)
-    boost-mt := -mt
-    boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system$(boost-mt).a))
-    ifeq ($(filter /%,$(boost-lib-dir)),)
-        boost-mt :=
+#Allow user specify non-default location of boost
+ifeq ($(boost_base),)
+    ifeq ($(CROSS_PREFIX),)
+        # link with -mt if present, else the base version (and hope it is multithreaded)
+        boost-mt := -mt
         boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system$(boost-mt).a))
         ifeq ($(filter /%,$(boost-lib-dir)),)
-            $(error Error: libboost_system.a needs to be installed.)
+            boost-mt :=
+            boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system$(boost-mt).a))
+            ifeq ($(filter /%,$(boost-lib-dir)),)
+                $(error Error: libboost_system.a needs to be installed.)
+            endif
+        endif
+        # When boost_env=host, we won't use "-nostdinc", so the build machine's
+        # header files will be used normally. So we don't need to add anything
+        # special for Boost.
+        boost-includes =
+    else
+        ifeq ($(arch),aarch64)
+            aarch64_boostbase = build/downloaded_packages/aarch64/boost/install
+            ifeq (,$(wildcard $(aarch64_boostbase)))
+                $(error Missing $(aarch64_boostbase) directory. Please run "./scripts/download_aarch64_packages.py")
+            endif
+
+            boost-lib-dir := $(firstword $(dir $(shell find $(aarch64_boostbase)/ -name libboost_system*.a)))
+            boost-mt := $(if $(filter %-mt.a, $(wildcard $(boost-lib-dir)/*.a)),-mt)
+            boost-includes = -isystem $(aarch64_boostbase)/usr/include
         endif
     endif
-    # When boost_env=host, we won't use "-nostdinc", so the build machine's
-    # header files will be used normally. So we don't need to add anything
-    # special for Boost.
-    boost-includes =
 else
-ifeq ($(arch),aarch64)
-    aarch64_boostbase = build/downloaded_packages/aarch64/boost/install
-    ifeq (,$(wildcard $(aarch64_boostbase)))
-        $(error Missing $(aarch64_boostbase) directory. Please run "./scripts/download_aarch64_packages.py")
-    endif
-
-    boost-lib-dir := $(firstword $(dir $(shell find $(aarch64_boostbase)/ -name libboost_system*.a)))
+    # Use boost specified by the user
+    boost-lib-dir := $(firstword $(dir $(shell find $(boost_base)/ -name libboost_system*.a)))
     boost-mt := $(if $(filter %-mt.a, $(wildcard $(boost-lib-dir)/*.a)),-mt)
-    boost-includes = -isystem $(aarch64_boostbase)/usr/include
-endif
+    boost-includes = -isystem $(boost_base)/usr/include
 endif
 
 boost-libs := $(boost-lib-dir)/libboost_system$(boost-mt).a
