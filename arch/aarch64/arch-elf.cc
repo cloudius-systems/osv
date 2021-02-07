@@ -47,9 +47,11 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
     case R_AARCH64_ABS64:
         *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
         break;
-    case R_AARCH64_COPY:
-        abort();
+    case R_AARCH64_COPY: {
+        symbol_module sm = symbol_other(sym);
+        memcpy(addr, sm.relocated_addr(), sm.size());
         break;
+    }
     case R_AARCH64_GLOB_DAT:
     case R_AARCH64_JUMP_SLOT:
         *static_cast<void**>(addr) = symbol(sym).relocated_addr() + addend;
