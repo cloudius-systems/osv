@@ -22,7 +22,7 @@ usage() {
 
 	Options:
 	  --help|-h                     Print this help message
-	  arch=x64|aarch64              Specify the build architecture; default is x64
+	  arch=x64|aarch64              Specify the build architecture; default is the same as build host arch
 	  mode=release|debug            Specify the build mode; default is release
 	  export=none|selected|all      If 'selected' or 'all' export the app files to <export_dir>
 	  export_dir=<dir>              The directory to export the files to; default is build/export
@@ -80,8 +80,11 @@ do
 	image=*|modules=*|fs=*|usrskel=*|check|--append-manifest|--create-disk) ;;
 	clean)
 		stage1_args=clean ;;
-	*)	# yuck... Is there a prettier way to append to array?
-		args[${#args[@]}]="$i" ;;
+	arch=*)
+		eval ${i}
+		args+=("$i") ;;
+	*)
+		args+=("$i") ;;
 	esac
 done
 
