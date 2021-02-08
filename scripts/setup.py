@@ -126,7 +126,7 @@ class Fedora(object):
     versions = [Fedora_27, Fedora_28, Fedora_29, Fedora_30, Fedora_31, Fedora_32, Fedora_33]
 
 class RHELbased(Fedora):
-    name = ['Scientific Linux', 'NauLinux', 'CentOS Linux', 'Red Hat Enterprise Linux', 'Oracle Linux']
+    name = ['Scientific Linux', 'NauLinux', 'Red Hat Enterprise Linux', 'Oracle Linux']
 
     class RHELbased_70(object):
         packages = []
@@ -336,12 +336,55 @@ class LinuxMint(Ubuntu):
 
     versions = [LinuxMint_18_03, LinuxMint_19]
 
+class CentOS(object):
+    name = 'CentOS Linux'
+    install = 'yum -y install'
+    packages = [
+                'ant',
+                'autoconf',
+                'automake',
+                'curl',
+                'git',
+                'gnutls-utils',
+                'libtool',
+                'maven',
+                'maven-shade-plugin',
+                'openssl',
+                'openssl-libs',
+                'openssl-devel',
+                'p11-kit',
+                'patch',
+                'python3-requests',
+                'qemu-img',
+                'tcpdump',
+                'unzip',
+                'wget',
+                'yaml-cpp-devel',
+                'pax-utils',
+                'java-1.8.0-openjdk',
+                'devtoolset-9-toolchain',
+                 ]
+
+    test_packages = ['openssl-devel']
+
+    class CentOS_7(object):
+        pre_install = 'yum -y install epel-release centos-release-scl centos-release-scl-rh https://packages.endpoint.com/rhel/7/os/x86_64/endpoint-repo-1.7-1.x86_64.rpm'
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        post_install = 'echo "---> Run \'scl enable devtoolset-9 bash\' or add \'source /opt/rh/devtoolset-9/enable\' to ~/.bashrc or ~/.bash_profile" to enable GCC 9 before building OSv !'
+        version = '7'
+
+    versions = [CentOS_7]
+
 distros = [
            Debian(),
            Fedora(),
            Ubuntu(),
            LinuxMint(),
-           RHELbased()
+           RHELbased(),
+           CentOS()
            ]
 
 parser = argparse.ArgumentParser(prog='setup')
@@ -366,6 +409,8 @@ for distro in distros:
             if dver.version == version or version.startswith(dver.version+'.'):
                 if hasattr(distro, 'pre_install'):
                     subprocess.check_call(distro.pre_install, shell=True)
+                if hasattr(dver, 'pre_install'):
+                    subprocess.check_call(dver.pre_install, shell=True)
                 pkg = distro.packages + dver.packages
                 if cmdargs.ec2:
                     pkg += distro.ec2_packages + dver.ec2_packages
@@ -377,6 +422,10 @@ for distro in distros:
                         subprocess.check_call(distro.ec2_post_install, shell=True)
                     if dver.ec2_post_install:
                         subprocess.check_call(dver.ec2_post_install, shell=True)
+                if hasattr(distro, 'post_install'):
+                    subprocess.check_call(distro.post_install, shell=True)
+                if hasattr(dver, 'post_install'):
+                    subprocess.check_call(dver.post_install, shell=True)
                 sys.exit(0)
         print ('Your distribution %s version %s is not supported by this script' % (name, version))
         sys.exit(1)
