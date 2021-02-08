@@ -78,6 +78,8 @@ elif name.lower() == 'ubuntu':
         print("Cound not find boost version from neither main nor universe ports index!")
         sys.exit(1)
     commands_to_download = ubuntu_download_commands(boost_version)
+elif name.lower() == "centos":
+    commands_to_download = [ 'bash -eu %s/scripts/download_aarch64_toolchain.sh' % osv_root ]
 else:
     print("The distribution %s is not supported for cross-compiling aarch64 version of OSv" % name)
     sys.exit(1)

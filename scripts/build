@@ -88,6 +88,11 @@ do
 	esac
 done
 
+if [[ "${arch-}" == "aarch64" && -d "build/downloaded_packages/aarch64/toolchain/" ]]; then
+	. scripts/download_aarch64_toolchain.sh
+	export CROSS_PREFIX=aarch64-none-linux-gnu-
+fi
+
 make "${args[@]}" ${stage1_args} | tee build.out
 # check exit status of make
 status=${PIPESTATUS[0]}
