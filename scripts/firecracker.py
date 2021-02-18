@@ -267,16 +267,16 @@ def main(options):
     # Prepare arguments we are going to pass when creating VM instance
     kernel_path = options.kernel
     if not kernel_path:
-        kernel_path = os.path.join(dirname, '../build/release/kernel.elf')
+        kernel_path = os.path.join(dirname, '../build/last/kernel.elf')
 
     qemu_disk_path = options.image
     if not qemu_disk_path:
-        qemu_disk_path = os.path.join(dirname, '../build/release/usr.img')
+        qemu_disk_path = os.path.join(dirname, '../build/last/usr.img')
     raw_disk_path = disk_path(qemu_disk_path)
 
     cmdline = options.execute
     if not cmdline:
-        with open(os.path.join(dirname, '../build/release/cmdline'), 'r') as f:
+        with open(os.path.join(dirname, '../build/last/cmdline'), 'r') as f:
             cmdline = f.read()
 
     if options.arch == 'aarch64':
@@ -369,9 +369,9 @@ if __name__ == "__main__":
     parser.add_argument("-e", "--execute", action="store", default=None, metavar="CMD",
                         help="overwrite command line")
     parser.add_argument("-i", "--image", action="store", default=None, metavar="CMD",
-                        help="path to disk image file. defaults to ../build/release/usr.img")
+                        help="path to disk image file. defaults to ../build/last/usr.img")
     parser.add_argument("-k", "--kernel", action="store", default=None, metavar="CMD",
-                        help="path to kernel loader file. defaults to ../build/release/kernel.elf")
+                        help="path to kernel loader file. defaults to ../build/last/kernel.elf")
     parser.add_argument("-n", "--networking", action="store_true",
                         help="needs root to setup tap networking first time")
     parser.add_argument("-b", "--bridge", action="store", default=None,
