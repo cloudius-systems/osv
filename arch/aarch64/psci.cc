@@ -8,16 +8,55 @@
 #include "psci.hh"
 
 #include <stdio.h>
+#include <string.h>
 #include <osv/debug.hh>
+#include "arch-dtb.hh"
 
 namespace psci {
 
 psci _psci;
 
+int (*psci::invoke_method)(u64, u64, u64, u64) = NULL;
+
+#define asmeq(x, y)  ".ifnc " x "," y " ; .err ; .endif\n\t"
+static __attribute__ ((noinline)) int invoke_hvc(u64 fid, u64 arg0, u64 arg1, u64 arg2)
+{
+    asm volatile(asmeq("%0", "x0")
+                 asmeq("%1", "x1")
+                 asmeq("%2", "x2")
+                 asmeq("%3", "x3")
+                 "hvc   #0\n"
+                 : "+r" (fid)
+                 : "r" (arg0), "r" (arg1), "r" (arg2));
+    return fid;
+}
+
+static __attribute__ ((noinline)) int invoke_smc(u64 fid, u64 arg0, u64 arg1, u64 arg2)
+{
+    asm volatile(asmeq("%0", "x0")
+                 asmeq("%1", "x1")
+                 asmeq("%2", "x2")
+                 asmeq("%3", "x3")
+                 "smc   #0\n"
+                 : "+r" (fid)
+                 : "r" (arg0), "r" (arg1), "r" (arg2));
+    return fid;
+}
+#undef asmeq
+
 /* _psci object initialization */
 /* __attribute__((constructor(init_prio::psci))) */
 void psci::init()
 {
+    const char * method = dtb_get_psci_method();
+    if (strcmp("hvc", method) == 0) {
+        psci::invoke_method = invoke_hvc;
+    } else if (strcmp("smc", method) == 0) {
+        psci::invoke_method = invoke_smc;
+    } else {
+        abort("No PSCI method found");
+    }
+
     int ret = _psci.psci_version();
     if (ret < 0) {
         abort("PSCI: failed invocation of PSCI_VERSION, missing PSCI?\n");
@@ -30,19 +69,13 @@ void psci::init()
             _psci.version.major, _psci.version.minor);
 }
 
-#define asmeq(x, y)  ".ifnc " x "," y " ; .err ; .endif\n\t"
 int psci::invoke(u64 fid, u64 arg0, u64 arg1, u64 arg2)
 {
-    asm volatile(asmeq("%0", "x0")
-                 asmeq("%1", "x1")
-                 asmeq("%2", "x2")
-                 asmeq("%3", "x3")
-                 "hvc   #0\n"
-                 : "+r" (fid)
-                 : "r" (arg0), "r" (arg1), "r" (arg2));
-    return fid;
+    if (!psci::invoke_method) {
+        abort("No PSCI method found");
+    }
+    return psci::invoke_method(fid, arg0, arg1, arg2);
 }
-#undef asmeq
 
 int psci::psci_to_errno(s32 err)
 {
