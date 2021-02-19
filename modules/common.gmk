@@ -123,16 +123,14 @@ endif
 # Let us detect presence of boost headers and library
 # Allow user specify non-default location of boost
 ifeq ($(boost_base),)
-    ifeq ($(CROSS_PREFIX),)
-        boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system.so))
-        ifeq ($(filter /%,$(boost-lib-dir)),)
-            $(error Error: libboost_system.so needs to be installed.)
-        endif
-        # When boost_env=host, we won't use "-nostdinc", so the build machine's
-        # header files will be used normally. So we don't need to add anything
-        # special for Boost.
-        boost-includes =
-    else
+    boost-lib-dir := $(dir $(shell $(CC) --print-file-name libboost_system.so))
+    # When boost_env=host, we won't use "-nostdinc", so the build machine's
+    # header files will be used normally. So we don't need to add anything
+    # special for Boost.
+    boost-includes =
+    ifeq ($(filter /%,$(boost-lib-dir)),)
+        # If the compiler cannot find the boost library, for aarch64 we look in a
+        # special location before giving up.
         ifeq ($(arch),aarch64)
             aarch64_boostbase = $(src)/build/downloaded_packages/aarch64/boost/install
             ifeq (,$(wildcard $(aarch64_boostbase)))
@@ -142,6 +140,8 @@ ifeq ($(boost_base),)
             boost-lib-dir := $(firstword $(dir $(shell find $(aarch64_boostbase)/ -name libboost_system.so)))
             LDFLAGS += -L$(boost-lib-dir)
             boost-includes = -isystem $(aarch64_boostbase)/usr/include
+        else
+            $(error Error: libboost_system.so needs to be installed.)
         endif
     endif
 else
