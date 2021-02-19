@@ -641,6 +641,7 @@ bool dtb_get_vmm_is_xen()
 
 void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
 {
+    void *olddtb;
     int node;
     char *cmdline_override;
     int len;
@@ -678,6 +679,17 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
     }
     if ((size_t)len > max_cmdline) {
         abort("dtb_setup: command line too long.\n");
+    }
+
+    if (fdt_pack(dtb) != 0) {
+        abort("dtb_setup: failed to pack dtb\n");
+    }
+
+    olddtb = dtb;
+    dtb = (void *)OSV_KERNEL_BASE;
+
+    if (fdt_open_into(olddtb, dtb, 0x10000) != 0) {
+        abort("dtb_setup: failed to move dtb (dtb too large?)\n");
     }
 
     cmdline = (char *)fdt_getprop(dtb, node, "bootargs", NULL);
