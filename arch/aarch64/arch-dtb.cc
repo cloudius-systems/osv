@@ -639,6 +639,34 @@ bool dtb_get_vmm_is_xen()
     return fdt_node_offset_by_compatible(dtb, -1, "xen,xen") >= 0;
 }
 
+const char *dtb_get_psci_method()
+{
+    const char *psci_compatible[] = {
+            "arm,psci",
+            "arm,psci-0.2",
+            "arm,psci-1.0",
+    };
+    unsigned int i;
+    int node;
+
+    for (i = 0; i < sizeof(psci_compatible)/sizeof(psci_compatible[0]); i++) {
+        node = fdt_node_offset_by_compatible(dtb, -1, psci_compatible[i]);
+        if (node >= 0)
+            break;
+    }
+
+    if (node < 0) {
+        return NULL;
+    }
+
+    const char *method = (char *)fdt_getprop(dtb, node, "method", NULL);
+    if (!method) {
+        return NULL;
+    }
+
+    return method;
+}
+
 void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
 {
     void *olddtb;

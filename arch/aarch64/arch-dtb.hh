@@ -153,4 +153,11 @@ bool dtb_get_pci_irqmap(u32 *bdfs, int *irq_ids, int n);
 
 bool dtb_get_vmm_is_xen();
 
+/* const char *dtb_get_psci_method();
+ *
+ * Returns the PSCI method, "hvc" or "smc", if found in the device tree.
+ * Returne NULL otherwise.
+ */
+const char *dtb_get_psci_method();
+
 #endif /* ARCH_DTB_HH */
