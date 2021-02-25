@@ -128,7 +128,7 @@ void arch_setup_free_memory()
 void arch_setup_tls(void *tls, const elf::tls_data& info)
 {
     struct thread_control_block *tcb;
-    memset(tls, 0, info.size + 1024);
+    memset(tls, 0, sizeof(*tcb) + info.size);
 
     tcb = (thread_control_block *)tls;
     tcb[0].tls_base = &tcb[1];
