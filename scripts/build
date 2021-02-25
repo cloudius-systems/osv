@@ -270,17 +270,21 @@ kernel_end=$(($loader_size+2097151 & ~2097151))
 # the case in our old build.mk).
 cd $OUT
 
+CC=gcc
 host_arch=$(uname -m)
 if [[ "$host_arch" == "x86_64" && "$arch" == 'aarch64' ]]; then
-	libgcc_s_path=$(${CROSS_PREFIX:-aarch64-linux-gnu-}gcc -print-file-name=libgcc_s.so.1)
-	if [[ "$libgcc_s_path" == "libgcc_s.so.1" ]]; then
-		libgcc_s_dir=$(readlink -f ../downloaded_packages/aarch64/gcc/install/lib64)
-	else
-		libgcc_s_dir=$(dirname $(readlink -f $libgcc_s_path))
-	fi
-else
-	libgcc_s_dir=$(dirname $(readlink -f $(gcc -print-file-name=libgcc_s.so.1)))
+    CC=${CROSS_PREFIX:-aarch64-linux-gnu-}gcc
 fi
+
+libgcc_s_path=$(${CC} -print-file-name=libgcc_s.so.1)
+if [[ "$libgcc_s_path" == "libgcc_s.so.1" ]]; then
+	cat <<-EOF
+	Unable to resolve libgcc_s.so.1 using "${CC}".
+	Looking in ../downloaded_packages/aarch64/gcc/install/lib64
+	EOF
+	libgcc_s_path="../downloaded_packages/aarch64/gcc/install/lib64/libgcc_s.so.1"
+fi
+libgcc_s_dir=$(dirname $(readlink -f ${libgcc_s_path}))
 
 if [ "$export" != "none" ]; then
 	export_dir=${vars[export_dir]-$SRC/build/export}
