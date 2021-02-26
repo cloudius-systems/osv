@@ -41,8 +41,6 @@ aarch64_disabled_list= [
     "java_no_wrapper",
     "java-perms",
     #Following tests crash with message 'Assertion failed: type == ARCH_JUMP_SLOT (core/elf.cc: relocate_pltgot: 789)'
-    "tst-async.so",
-    "tst-promise.so",
     "tst-sigaltstack.so",
     #Remaining tests below fail for various different reasons
     #Please see comments on the right side for more details

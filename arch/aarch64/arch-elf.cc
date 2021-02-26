@@ -29,7 +29,7 @@ bool arch_init_reloc_dyn(struct init_table *t, u32 type, u32 sym,
         *static_cast<u64*>(addr) = t->dyn_tabs.lookup(sym)->st_value + addend;
         break;
     case R_AARCH64_TLS_TPREL64:
-        *static_cast<u64*>(addr) = t->dyn_tabs.lookup(sym)->st_value + addend;
+        *static_cast<u64*>(addr) = t->dyn_tabs.lookup(sym)->st_value + addend + sizeof(thread_control_block);
         break;
     default:
         return false;
@@ -116,7 +116,7 @@ void object::arch_relocate_tls_desc(u32 sym, void *addr, Elf64_Sxword addend)
     ulong tls_offset;
     if (sym) {
         auto sm = symbol(sym);
-        if (sm.obj->is_executable()) {
+        if (sm.obj->is_executable() || sm.obj->is_core()) {
             // If this is an executable (pie or position-dependant one)
             // then the variable is located in the reserved slot of the TLS
             // right where the kernel TLS lives
