@@ -1967,7 +1967,7 @@ $(bootfs_manifest_dep): phony
 	fi
 
 libgcc_s_dir := $(dir $(shell $(CC) -print-file-name=libgcc_s.so.1))
-ifeq (,$(libgcc_s_dir))
+ifeq ($(filter /%,$(libgcc_s_dir)),)
 libgcc_s_dir := ../../$(aarch64_gccbase)/lib64
 endif
 
