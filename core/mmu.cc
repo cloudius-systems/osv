@@ -351,6 +351,13 @@ template<typename PageOp>
 {
     map_level<PageOp, 4> pt_mapper(vma_start, vstart, size, page_mapper, slop);
     pt_mapper(hw_ptep<4>::force(mmu::get_root_pt(vstart)));
+    // On some architectures with weak memory model it is necessary
+    // to force writes to page table entries complete and instruction pipeline
+    // flushed so that new mappings are properly visible when relevant newly mapped
+    // virtual memory areas are accessed right after this point.
+    // So let us call arch-specific function to execute the logic above if
+    // applicable for given architecture.
+    synchronize_page_table_modifications();
 }
 
 template<typename PageOp, int ParentLevel> class map_level {
