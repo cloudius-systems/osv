@@ -175,7 +175,7 @@ common-boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	tst-bsd-tcp1-zsndrcv.so tst-async.so tst-rcu-list.so tst-tcp-listen.so \
 	tst-poll.so tst-bitset-iter.so tst-timer-set.so tst-clock.so \
 	tst-rcu-hashtable.so tst-unordered-ring-mpsc.so \
-	tst-seek.so tst-ctype.so tst-wctype.so tst-string.so tst-time.so
+	tst-seek.so tst-ctype.so tst-wctype.so tst-string.so tst-time.so tst-dax.so
 
 boost-tests := $(common-boost-tests)
 
@@ -197,7 +197,7 @@ solaris-tests := tst-solaris-taskq.so
 # FIXME: two of the test below can't compile now because of include path
 # (BSD and OSv header files get mixed up, etc.).
 #zfs-tests := misc-zfs-disk.so misc-zfs-io.so misc-zfs-arc.so
-zfs-tests := misc-zfs-io.so 
+zfs-tests := misc-zfs-io.so
 solaris-tests += $(zfs-tests)
 
 tests += $(solaris-tests)
@@ -205,7 +205,7 @@ tests += $(solaris-tests)
 $(zfs-tests:%=$(out)/tests/%): COMMON+= \
         -DBUILDING_ZFS \
         -I$(src)/bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs \
-        -I$(src)/bsd/sys/cddl/contrib/opensolaris/common/zfs 
+        -I$(src)/bsd/sys/cddl/contrib/opensolaris/common/zfs
 
 $(solaris-tests:%=$(out)/tests/%): COMMON+= \
         -Wno-strict-aliasing \
