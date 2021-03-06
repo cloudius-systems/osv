@@ -16,6 +16,7 @@
 
 #include "drivers/virtio-fs.hh"
 #include "fuse_kernel.h"
+#include "virtiofs_dax.hh"
 
 #define VIRTIOFS_DEBUG_ENABLED 1
 
@@ -25,15 +26,9 @@
 #define virtiofs_debug(...)
 #endif
 
-// Necessary pre-declaration because virtiofs::dax depends on virtiofs_inode,
-// declared below.
-namespace virtiofs {
-class dax_manager;
-}
-
 struct virtiofs_mount_data {
     virtio::fs* drv;
-    std::shared_ptr<virtiofs::dax_manager> dax_mgr;
+    std::shared_ptr<virtiofs::dax_manager_impl> dax_mgr;
 };
 
 struct virtiofs_inode {

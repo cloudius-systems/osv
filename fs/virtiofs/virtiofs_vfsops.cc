@@ -28,7 +28,7 @@ using fuse_request = virtio::fs::fuse_request;
 static std::atomic<uint64_t> fuse_unique_id(1);
 
 static struct {
-    std::unordered_map<virtio::fs*, std::shared_ptr<virtiofs::dax_manager>,
+    std::unordered_map<virtio::fs*, std::shared_ptr<virtiofs::dax_manager_impl>,
         virtio::fs::hasher> mgrs;
     mutex lock;
 } dax_managers;
@@ -151,7 +151,8 @@ static int virtiofs_mount(struct mount* mp, const char* dev, int flags,
             // device is already mounted)
             m_data->dax_mgr = found->second;
         } else {
-            m_data->dax_mgr = std::make_shared<virtiofs::dax_manager>(*drv);
+            auto w {virtiofs::dax_window_impl(*drv)};
+            m_data->dax_mgr = std::make_shared<virtiofs::dax_manager_impl>(w);
             if (!m_data->dax_mgr) {
                 return ENOMEM;
             }
