@@ -73,6 +73,15 @@ def set_imgargs(options):
     if options.hypervisor == 'qemu_microvm':
         execute = '--nopci ' + execute
 
+    if options.mount_fs:
+        execute = ' '.join('--mount-fs=%s' % m for m in options.mount_fs) + ' ' + execute
+
+    if options.ip:
+        execute = ' '.join('--ip=%s' % i for i in options.ip) + ' ' + execute
+
+    if options.bootchart:
+        execute = '--bootchart ' + execute
+
     options.osv_cmdline = execute
     if options.kernel or options.hypervisor == 'qemu_microvm' or options.arch == 'aarch64':
         return
@@ -576,6 +585,12 @@ if __name__ == "__main__":
                         help="virtio-fs device tag")
     parser.add_argument("--virtio-fs-dir", action="store",
                         help="path to the directory exposed via virtio-fs mount")
+    parser.add_argument("--mount-fs", default=[], action="append",
+                        help="extra mounts (forwarded to respective kernel command line option)")
+    parser.add_argument("--ip", default=[], action="append",
+                        help="static ip addresses (forwarded to respective kernel command line option)")
+    parser.add_argument("--bootchart", action="store_true",
+                        help="bootchart mode (forwarded to respective kernel command line option")
     cmdargs = parser.parse_args()
 
     cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
