@@ -260,17 +260,25 @@ def start_osv_qemu(options):
     for a in options.pass_args or []:
         args += a.split()
 
+    virtiofsd = None
     if options.virtio_fs_dir:
-        try:
-            # Normally virtiofsd exits by itself but in future we should probably kill it if it did not
-            subprocess.Popen(["virtiofsd", "--socket-path=/tmp/vhostqemu", "-o",
-                              "source=%s" % options.virtio_fs_dir, "-o", "cache=always"], stdout=devnull, stderr=devnull)
-        except OSError as e:
-            if e.errno == errno.ENOENT:
-                print("virtiofsd binary not found. Please install the qemu-system-x86 package that comes with it (>= 4.2) and is in path.")
-            else:
-                print("OS error({0}): \"{1}\" while running virtiofsd {2}".
-                    format(e.errno, e.strerror, " ".join(args)))
+        virtiofsd_cmdline = ["virtiofsd", "--socket-path=/tmp/vhostqemu", "-o",
+            "source=%s" % options.virtio_fs_dir]
+        if options.dry_run:
+            print(format_args(virtiofsd_cmdline))
+        else:
+            try:
+                virtiofsd = subprocess.Popen(virtiofsd_cmdline, stdout=devnull,
+                    stderr=devnull)
+            except OSError as e:
+                if e.errno == errno.ENOENT:
+                    print("virtiofsd binary not found. Please install the qemu-system-%s package "
+                        "that comes with it (>= 4.2) and is in path." % options.arch,
+                        file=sys.stderr)
+                else:
+                    print("OS error(%d): \"%s\" while running virtiofsd %s" % \
+                        (e.errno, e.strerror, " ".join(args)), file=sys.stderr)
+                sys.exit()
 
     try:
         # Save the current settings of the stty
@@ -290,12 +298,21 @@ def start_osv_qemu(options):
                 sys.exit("qemu failed.")
     except OSError as e:
         if e.errno == errno.ENOENT:
-            print("'%s' binary not found. Please install the qemu-system-x86 package." % qemu_path)
+            print("'%s' binary not found. Please install the qemu-system-%s package." % \
+                (qemu_path, options.arch), file=sys.stderr)
         else:
-            print("OS error({0}): \"{1}\" while running qemu-system-{2} {3}".
-                format(e.errno, e.strerror, options.arch, " ".join(args)))
+            print("OS error(%d): \"%s\" while running qemu-system-%s %s" %
+                (e.errno, e.strerror, options.arch, " ".join(args)), file=sys.stderr)
     finally:
         cleanups()
+        # Clean up the spawned virtiofsd, if any
+        if virtiofsd is not None:
+            if virtiofsd.poll() is None:
+                virtiofsd.terminate()
+                try:
+                    virtiofsd.wait(5)
+                except subprocess.TimeoutExpired:
+                    virtiofsd.kill()
 
 def start_osv_xen(options):
     if options.hypervisor == "xen":
