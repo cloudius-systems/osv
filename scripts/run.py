@@ -178,9 +178,10 @@ def start_osv_qemu(options):
         "-drive", "file=%s,if=none,id=hd1" % (options.cloud_init_image)]
 
     if options.virtio_fs_tag:
+        dax = (",cache-size=%s" % options.virtio_fs_dax) if options.virtio_fs_dax else ""
         args += [
         "-chardev", "socket,id=char0,path=/tmp/vhostqemu",
-        "-device", "vhost-user-fs-pci,queue-size=1024,chardev=char0,tag=%s" % options.virtio_fs_tag,
+        "-device", "vhost-user-fs-pci,queue-size=1024,chardev=char0,tag=%s%s" % (options.virtio_fs_tag, dax),
         "-object", "memory-backend-file,id=mem,size=%s,mem-path=/dev/shm,share=on" % options.memsize,
         "-numa", "node,memdev=mem"]
 
@@ -602,6 +603,8 @@ if __name__ == "__main__":
                         help="virtio-fs device tag")
     parser.add_argument("--virtio-fs-dir", action="store",
                         help="path to the directory exposed via virtio-fs mount")
+    parser.add_argument("--virtio-fs-dax", action="store",
+                        help="DAX window size for virtio-fs device (disabled if not specified)")
     parser.add_argument("--mount-fs", default=[], action="append",
                         help="extra mounts (forwarded to respective kernel command line option)")
     parser.add_argument("--ip", default=[], action="append",
