@@ -833,6 +833,7 @@ endif # x64
 ifeq ($(arch),aarch64)
 drivers += drivers/mmio-isa-serial.o
 drivers += drivers/pl011.o
+drivers += drivers/cadence-uart.o
 drivers += drivers/xenconsole.o
 drivers += drivers/virtio.o
 drivers += drivers/virtio-pci-device.o
