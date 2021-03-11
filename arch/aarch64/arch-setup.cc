@@ -100,6 +100,13 @@ void arch_setup_free_memory()
                         mmu::mattr::dev);
     }
 
+    if (console::Cadence_Console::active) {
+        // linear_map [TTBR0 - UART]
+        addr = (mmu::phys)console::aarch64_console.cadence.get_base_addr();
+        mmu::linear_map((void *)addr, addr, 0x1000, mmu::page_size,
+                        mmu::mattr::dev);
+    }
+
     /* linear_map [TTBR0 - GIC DIST and GIC CPU] */
     u64 dist, cpu;
     size_t dist_len, cpu_len;
@@ -208,6 +215,16 @@ void arch_init_early_console()
         new (&console::aarch64_console.isa_serial) console::mmio_isa_serial_console();
         console::aarch64_console.isa_serial.set_irqid(irqid);
         console::arch_early_console = console::aarch64_console.isa_serial;
+        return;
+    }
+
+    mmio_serial_address = dtb_get_cadence_uart(&irqid);
+    if (mmio_serial_address) {
+        new (&console::aarch64_console.cadence) console::Cadence_Console();
+        console::arch_early_console = console::aarch64_console.cadence;
+        console::aarch64_console.cadence.set_base_addr(mmio_serial_address);
+        console::aarch64_console.cadence.set_irqid(irqid);
+        console::Cadence_Console::active = true;
         return;
     }
 
