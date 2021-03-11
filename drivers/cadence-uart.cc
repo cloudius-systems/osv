@@ -138,6 +138,9 @@ void Cadence_Console::write(const char *str, size_t len) {
             asm volatile("nop");
         }
         uart->fifo = *str++;
+#ifdef __aarch64__
+        asm volatile("dmb nshst");
+#endif
         len--;
     }
 }
