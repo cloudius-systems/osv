@@ -220,6 +220,46 @@ u64 dtb_get_mmio_serial_console(int *irqid)
     return address;
 }
 
+u64 dtb_get_cadence_uart(int *irqid)
+{
+    const char *compatible[] = {
+            "cdns,uart-r1p8",
+            "cdns,uart-r1p12",
+            "xlnx,xuartps",
+    };
+    unsigned int i;
+    int node;
+    struct dtb_int_spec int_spec[1];
+    u64 addr;
+
+    if (!dtb) {
+        return 0;
+    }
+
+    for (i = 0; i < sizeof(compatible)/sizeof(compatible[0]); i++) {
+        node = fdt_node_offset_by_compatible(dtb, -1, compatible[i]);
+        if (node >= 0)
+            break;
+    }
+
+    if (node < 0) {
+        return 0;
+    }
+
+    if (!dtb_get_reg(node, &addr)) {
+        return 0;
+    }
+
+    if (!dtb_get_int_spec(node, int_spec, 1)) {
+        return 0;
+    }
+
+    if (irqid) {
+        *irqid = int_spec[0].irq_id;
+    }
+    return addr;
+}
+
 #define VIRTIO_MMIO_DEV_COMPAT "virtio,mmio"
 #define DTB_MAX_VIRTIO_MMIO_DEV_COUNT 8
 static virtio::mmio_device_info dtb_dtb_virtio_mmio_devices_infos[DTB_MAX_VIRTIO_MMIO_DEV_COUNT];
