@@ -466,7 +466,7 @@ endif # x64
 ifeq ($(arch),aarch64)
 
 kernel_base := 0x40080000
-kernel_vm_base := 0x40080000
+kernel_vm_base := $(kernel_base)
 app_local_exec_tls_size := 0x40
 
 include $(libfdt_base)/Makefile.libfdt
