@@ -225,13 +225,34 @@ void thread::cputime_estimator_get(
 void cpu::schedule()
 {
     WITH_LOCK(irq_lock) {
+#ifdef AARCH64_PORT_STUB
+        reschedule_from_interrupt(sched::cpu::current(), false, thyst);
+#else
         current()->reschedule_from_interrupt();
+#endif
     }
 }
 
+// In aarch64 port, the reschedule_from_interrupt() needs to be implemented
+// in assembly (please see arch/aarch64/sched.S) to give us better control
+// which registers are used and which ones are saved and restored during
+// the context switch. In essence, most of the original reschedule_from_interrupt()
+// code up to switch_to() is shared with aarch64-specific cpu::schedule_next_thread()
+// that is called from reschedule_from_interrupt() in arch/arch64/sched.S assembly.
+// The logic executed after switch_to() that makes up destroy_current_cpu_terminating_thread()
+// is called from arch/arch64/sched.S as well.
+// At the end, we define reschedule_from_interrupt() in C++ for x86_64 and schedule_next_thread()
+// and destroy_current_cpu_terminating_thread() in C++ for aarch64.
+#ifdef AARCH64_PORT_STUB
+inline thread_switch_data cpu::schedule_next_thread(bool called_from_yield,
+                                                    thread_runtime::duration preempt_after)
+{
+    thread_switch_data switch_data;
+#else
 void cpu::reschedule_from_interrupt(bool called_from_yield,
                                     thread_runtime::duration preempt_after)
 {
+#endif
     trace_sched_sched();
     assert(sched::exception_depth <= 1);
     need_reschedule = false;
@@ -259,7 +280,11 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
         // lowest runtime, and update the timer until the next thread's turn.
         if (runqueue.empty()) {
             preemption_timer.cancel();
+#ifdef AARCH64_PORT_STUB
+            return switch_data;
+#else
             return;
+#endif
         } else if (!called_from_yield) {
             auto &t = *runqueue.begin();
             if (p->_runtime.get_local() < t._runtime.get_local()) {
@@ -268,7 +293,11 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
                 if (delta > 0) {
                     preemption_timer.set(now + delta);
                 }
+#ifdef AARCH64_PORT_STUB
+                return switch_data;
+#else
                 return;
+#endif
             }
         }
         // If we're here, p no longer has the lowest runtime. Before queuing
@@ -336,18 +365,38 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
     if (lazy_flush_tlb.exchange(false, std::memory_order_seq_cst)) {
         mmu::flush_tlb_local();
     }
+#ifdef AARCH64_PORT_STUB
+    switch_data.old_thread_state = &(p->_state);
+    switch_data.new_thread_state = &(n->_state);
+    return switch_data;
+}
+#else
     n->switch_to();
+#endif
 
     // Note: after the call to n->switch_to(), we should no longer use any of
     // the local variables, nor "this" object, because we just switched to n's
     // stack and the values we can access now are those that existed in the
     // reschedule call which scheduled n out, and will now be returning.
     // So to get the current cpu, we must use cpu::current(), not "this".
+#ifdef AARCH64_PORT_STUB
+extern "C" void destroy_current_cpu_terminating_thread()
+{
+#endif
     if (cpu::current()->terminating_thread) {
         cpu::current()->terminating_thread->destroy();
         cpu::current()->terminating_thread = nullptr;
     }
 }
+
+#ifdef AARCH64_PORT_STUB
+extern "C" thread_switch_data cpu_schedule_next_thread(cpu* cpu,
+                                                       bool called_from_yield,
+                                                       thread_runtime::duration preempt_after)
+{
+    return cpu->schedule_next_thread(called_from_yield, preempt_after);
+}
+#endif
 
 void cpu::timer_fired()
 {
@@ -521,7 +570,11 @@ void thread::pin(cpu *target_cpu)
         // Note that wakeme is on the same CPU, and irq is disabled,
         // so it will not actually run until we stop running.
         wakeme->wake_with([&] { do_wakeme = true; });
+#ifdef AARCH64_PORT_STUB
+        reschedule_from_interrupt(source_cpu, false, thyst);
+#else
         source_cpu->reschedule_from_interrupt();
+#endif
     }
     // wakeme will be implicitly join()ed here.
 }
@@ -760,7 +813,11 @@ void thread::yield(thread_runtime::duration preempt_after)
     }
     trace_sched_yield_switch();
 
+#ifdef AARCH64_PORT_STUB
+    reschedule_from_interrupt(cpu::current(), true, preempt_after);
+#else
     cpu::current()->reschedule_from_interrupt(true, preempt_after);
+#endif
 }
 
 void thread::set_priority(float priority)

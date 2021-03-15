@@ -31,6 +31,9 @@ typedef float runtime_t;
 
 extern "C" {
 void smp_main();
+#ifdef AARCH64_PORT_STUB
+void destroy_current_cpu_terminating_thread();
+#endif
 };
 void smp_launch();
 
@@ -321,7 +324,12 @@ constexpr thread_runtime::duration thyst = std::chrono::milliseconds(5);
 constexpr thread_runtime::duration context_switch_penalty =
                                            std::chrono::microseconds(10);
 
-
+#ifdef AARCH64_PORT_STUB
+struct thread_switch_data {
+   thread_state* old_thread_state = nullptr;
+   thread_state* new_thread_state = nullptr;
+};
+#endif
 /**
  * OSv thread
  */
@@ -600,7 +608,9 @@ private:
             unsigned allowed_initial_states_mask = 1 << unsigned(status::waiting));
     static void sleep_impl(timer &tmr);
     void main();
+#ifndef AARCH64_PORT_STUB
     void switch_to();
+#endif
     void switch_to_first();
     void prepare_wait();
     void wait();
@@ -702,7 +712,12 @@ private:
     std::vector<char*> _tls;
     bool _app;
     std::shared_ptr<osv::application_runtime> _app_runtime;
+public:
     void destroy();
+private:
+#ifdef AARCH64_PORT_STUB
+    friend void ::destroy_current_cpu_terminating_thread();
+#endif
     friend class thread_ref_guard;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
@@ -884,8 +899,13 @@ struct cpu : private timer_base::client {
      * @param preempt_after fire the preemption timer after this time period
      *                      (relevant only when "called_from_yield" is TRUE)
      */
+#ifdef AARCH64_PORT_STUB
+    thread_switch_data schedule_next_thread(bool called_from_yield = false,
+                                            thread_runtime::duration preempt_after = thyst);
+#else
     void reschedule_from_interrupt(bool called_from_yield = false,
-                                thread_runtime::duration preempt_after = thyst);
+                                   thread_runtime::duration preempt_after = thyst);
+#endif
     void enqueue(thread& t);
     void init_idle_thread();
     virtual void timer_fired() override;
@@ -894,6 +914,12 @@ struct cpu : private timer_base::client {
     runtime_t c;
     int renormalize_count;
 };
+
+#ifdef AARCH64_PORT_STUB
+extern "C" void reschedule_from_interrupt(cpu* cpu,
+                                          bool called_from_yield,
+                                          thread_runtime::duration preempt_after);
+#endif
 
 class cpu::notifier {
 public:
@@ -996,7 +1022,11 @@ inline bool preemptable()
 inline void preempt()
 {
     if (preemptable()) {
+#ifdef AARCH64_PORT_STUB
+        reschedule_from_interrupt(sched::cpu::current(), false, thyst);
+#else
         sched::cpu::current()->reschedule_from_interrupt();
+#endif
     } else {
         // preempt_enable() will pick this up eventually
         need_reschedule = true;

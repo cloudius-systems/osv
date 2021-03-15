@@ -14,6 +14,7 @@ struct thread_state {
 
     void* sp;
     void* pc;
+    void* tcb;
 };
 
 #endif /* ARCH_THREAD_STATE_HH_ */
