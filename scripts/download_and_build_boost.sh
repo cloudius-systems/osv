@@ -34,7 +34,7 @@ pushd "${TAR_DOWNLOAD_DIR}"
 rm -rf "./boost_${BOOST_VERSION2}"
 tar -xf "./boost_${BOOST_VERSION2}.tar.gz"
 cd "./boost_${BOOST_VERSION2}"
-./bootstrap.sh --with-libraries=system,thread,test,chrono,regex,date_time,filesystem,locale,random,atomic,log,program_options
+./bootstrap.sh --with-libraries=system,thread,test,chrono,regex,date_time,filesystem,locale,random,atomic,log,program_options,timer
 
 BOOST_DIR=$(pwd)
 if [[ "$CROSS_PREFIX" == aarch64* ]]; then
