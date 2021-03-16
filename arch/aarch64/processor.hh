@@ -10,6 +10,7 @@
 
 #include <osv/types.h>
 #include <osv/debug.h>
+#include <cstddef>
 
 namespace processor {
 
@@ -88,56 +89,20 @@ inline u64 ticks()
     return cntvct;
 }
 
+// Keep this in sync with fpu_state_save/load in arch/aarch64/entry.S
 struct fpu_state {
     __uint128_t vregs[32];
     u32 fpsr;
     u32 fpcr;
+    // 64 bits of implied padding here
 };
+static_assert(sizeof(struct fpu_state) == 528, "Wrong size for struct fpu_state");
+static_assert(offsetof(fpu_state, fpsr) == 512, "Wrong offset for fpsr");
+static_assert(offsetof(fpu_state, fpcr) == 516, "Wrong offset for fpcr");
 
-inline void fpu_state_save(fpu_state *s)
-{
-    asm volatile("stp q0, q1, %0" : "=Ump"(s->vregs[0]) :: "memory");
-    asm volatile("stp q2, q3, %0" : "=Ump"(s->vregs[2]) :: "memory");
-    asm volatile("stp q4, q5, %0" : "=Ump"(s->vregs[4]) :: "memory");
-    asm volatile("stp q6, q7, %0" : "=Ump"(s->vregs[6]) :: "memory");
-    asm volatile("stp q8, q9, %0" : "=Ump"(s->vregs[8]) :: "memory");
-    asm volatile("stp q10, q11, %0" : "=Ump"(s->vregs[10]) :: "memory");
-    asm volatile("stp q12, q13, %0" : "=Ump"(s->vregs[12]) :: "memory");
-    asm volatile("stp q14, q15, %0" : "=Ump"(s->vregs[14]) :: "memory");
-    asm volatile("stp q16, q17, %0" : "=Ump"(s->vregs[16]) :: "memory");
-    asm volatile("stp q18, q19, %0" : "=Ump"(s->vregs[18]) :: "memory");
-    asm volatile("stp q20, q21, %0" : "=Ump"(s->vregs[20]) :: "memory");
-    asm volatile("stp q22, q23, %0" : "=Ump"(s->vregs[22]) :: "memory");
-    asm volatile("stp q24, q25, %0" : "=Ump"(s->vregs[24]) :: "memory");
-    asm volatile("stp q26, q27, %0" : "=Ump"(s->vregs[26]) :: "memory");
-    asm volatile("stp q28, q29, %0" : "=Ump"(s->vregs[28]) :: "memory");
-    asm volatile("stp q30, q31, %0" : "=Ump"(s->vregs[30]) :: "memory");
-
-    asm volatile("mrs %0, fpsr" : "=r"(s->fpsr) :: "memory");
-    asm volatile("mrs %0, fpcr" : "=r"(s->fpcr) :: "memory");
-}
-
-inline void fpu_state_load(fpu_state *s)
-{
-    asm volatile("ldp q0, q1, %0" :: "Ump"(s->vregs[0]) : "q0", "q1");
-    asm volatile("ldp q2, q3, %0" :: "Ump"(s->vregs[2]) : "q2", "q3");
-    asm volatile("ldp q4, q5, %0" :: "Ump"(s->vregs[4]) : "q4", "q5");
-    asm volatile("ldp q6, q7, %0" :: "Ump"(s->vregs[6]) : "q6", "q7");
-    asm volatile("ldp q8, q9, %0" :: "Ump"(s->vregs[8]) : "q8", "q9");
-    asm volatile("ldp q10, q11, %0" :: "Ump"(s->vregs[10]) : "q10", "q11");
-    asm volatile("ldp q12, q13, %0" :: "Ump"(s->vregs[12]) : "q12", "q13");
-    asm volatile("ldp q14, q15, %0" :: "Ump"(s->vregs[14]) : "q14", "q15");
-    asm volatile("ldp q16, q17, %0" :: "Ump"(s->vregs[16]) : "q16", "q17");
-    asm volatile("ldp q18, q19, %0" :: "Ump"(s->vregs[18]) : "q18", "q19");
-    asm volatile("ldp q20, q21, %0" :: "Ump"(s->vregs[20]) : "q20", "q21");
-    asm volatile("ldp q22, q23, %0" :: "Ump"(s->vregs[22]) : "q22", "q23");
-    asm volatile("ldp q24, q25, %0" :: "Ump"(s->vregs[24]) : "q24", "q25");
-    asm volatile("ldp q26, q27, %0" :: "Ump"(s->vregs[26]) : "q26", "q27");
-    asm volatile("ldp q28, q29, %0" :: "Ump"(s->vregs[28]) : "q28", "q29");
-    asm volatile("ldp q30, q31, %0" :: "Ump"(s->vregs[30]) : "q30", "q31");
-
-    asm volatile("msr fpsr, %0" :: "r"(s->fpsr) : "memory");
-    asm volatile("msr fpcr, %0" :: "r"(s->fpcr) : "memory");
+extern "C" {
+void fpu_state_save(fpu_state *s);
+void fpu_state_load(fpu_state *s);
 }
 
 }
