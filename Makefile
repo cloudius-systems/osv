@@ -479,11 +479,13 @@ $(out)/preboot.elf: arch/$(arch)/preboot.ld $(out)/arch/$(arch)/preboot.o
 $(out)/preboot.bin: $(out)/preboot.elf
 	$(call quiet, $(OBJCOPY) -O binary $^ $@, OBJCOPY $@)
 
-#image-size = $(shell stat --printf %s $(out)/loader-stripped.elf)
+edata = $(shell readelf --syms $(out)/loader-stripped.elf | grep "\.edata" | awk '{print "0x" $$2}')
+image_size = $$(( $(edata) - $(kernel_base) ))
 
 $(out)/loader.img: $(out)/preboot.bin $(out)/loader-stripped.elf
 	$(call quiet, dd if=$(out)/preboot.bin of=$@ > /dev/null 2>&1, DD $@ preboot.bin)
 	$(call quiet, dd if=$(out)/loader-stripped.elf of=$@ conv=notrunc obs=4096 seek=16 > /dev/null 2>&1, DD $@ loader-stripped.elf)
+	$(call quiet, scripts/imgedit.py setsize_aarch64 "-f raw $@" $(image_size), IMGEDIT $@)
 	$(call quiet, scripts/imgedit.py setargs "-f raw $@" $(cmdline), IMGEDIT $@)
 
 endif # aarch64

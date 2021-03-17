@@ -19,8 +19,8 @@ _head:
 	.long 0			// reserved
 	.long 0x00080000	// image load offset
 	.long 0x00000000
-	.long 0			// unused image size -- already known by
-	.long 0			//    image loader, thus ignored
+	.long 0			// image size will be populated by Makefile
+	.long 0
 	.long 0			// unused informative flags, Xen/QEMU
 	.long 0			//    image loaders ignore this field
 	.long 0			// reserved
