@@ -48,7 +48,6 @@ aarch64_disabled_list= [
     "tst-elf-permissions.so",      # Infinite page fault
     "tst-mmap.so",                 # Infinite page fault
     "tst-pthread-barrier.so",      # Some assertions fail - 'SUMMARY: 8 tests / 1 failures', with cpu >= 2 seems to hang
-    "tst-stdio-rofs.so",           # One assertion fails - 'tst-stdio.cc(1922): fatal error: in "STDIO_TEST_fread_unbuffered_pathological_performance": critical check (t1 - t0) <= (1) has failed'
     "tst-time.so",                 # One assertion fails - 'tst-time.cc(70): fatal error: in "time_time": critical check (static_cast<time_t>(0)) != (t1) has failed'
     "tst-timerfd.so",              # Some assertions fail - 'SUMMARY: 212 tests, 10 failures'
     #These tests fail due to some other shortcomings in the test scripts

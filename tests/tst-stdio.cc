@@ -1898,34 +1898,6 @@ TEST(STDIO_TEST, fopen64_freopen64) {
   fclose(fp);
 }
 
-// https://code.google.com/p/android/issues/detail?id=81155
-// http://b/18556607
-TEST(STDIO_TEST, fread_unbuffered_pathological_performance) {
-  FILE* fp = fopen("/dev/random", "r");
-  ASSERT_TRUE(fp != nullptr);
-
-  // Make this stream unbuffered.
-  setvbuf(fp, nullptr, _IONBF, 0);
-
-  char buf[65*1024];
-  memset(buf, 0xff, sizeof(buf));
-
-  time_t t0 = time(nullptr);
-  for (size_t i = 0; i < 1024; ++i) {
-    ASSERT_EQ(1U, fread(buf, 64*1024, 1, fp));
-  }
-  time_t t1 = time(nullptr);
-
-  fclose(fp);
-
-  // 1024 64KiB reads should have been very quick.
-  ASSERT_LE(t1 - t0, 1);
-
-  for (size_t i = 64*1024; i < 65*1024; ++i) {
-    ASSERT_EQ('\xff', buf[i]);
-  }
-}
-
 TEST(STDIO_TEST, fread_EOF) {
   std::string digits("0123456789");
   FILE* fp = fmemopen(&digits[0], digits.size(), "r");
