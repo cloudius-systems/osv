@@ -31,7 +31,7 @@ firecracker_disabled_list= [
     "tcp_close_without_reading_on_qemu"
 ]
 
-#At this point there are 117 out of 131 unit tests that pass on aarch64.
+#At this point there are 120 out of 131 unit tests that pass on aarch64.
 #The remaining ones are disabled below until we fix various
 #issues that prevent those tests from passing.
 aarch64_disabled_list= [
@@ -47,7 +47,6 @@ aarch64_disabled_list= [
     "tst-condvar.so",              # To few cpus?
     "tst-elf-permissions.so",      # Infinite page fault
     "tst-mmap.so",                 # Infinite page fault
-    "tst-pthread-barrier.so",      # Some assertions fail - 'SUMMARY: 8 tests / 1 failures', with cpu >= 2 seems to hang
     "tst-time.so",                 # One assertion fails - 'tst-time.cc(70): fatal error: in "time_time": critical check (static_cast<time_t>(0)) != (t1) has failed'
     "tst-timerfd.so",              # Some assertions fail - 'SUMMARY: 212 tests, 10 failures'
     #These tests fail due to some other shortcomings in the test scripts
