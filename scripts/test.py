@@ -19,7 +19,7 @@ os.environ["LANG"]="C"
 
 disabled_list= [
     "tst-dns-resolver.so",
-    "tst-feexcept.so",
+    "tst-feexcept.so", # On AArch64 the tests around floating point exceptions (SIGFPE) fail even on KVM
 ]
 
 qemu_disabled_list= [
@@ -31,7 +31,7 @@ firecracker_disabled_list= [
     "tcp_close_without_reading_on_qemu"
 ]
 
-#At this point there are 100 out of 131 unit tests that pass on aarch64.
+#At this point there are 117 out of 131 unit tests that pass on aarch64.
 #The remaining ones are disabled below until we fix various
 #issues that prevent those tests from passing.
 aarch64_disabled_list= [
@@ -46,31 +46,16 @@ aarch64_disabled_list= [
     #Please see comments on the right side for more details
     "tst-condvar.so",              # To few cpus?
     "tst-elf-permissions.so",      # Infinite page fault
-    "tst-eventfd.so",              # Seems to hang after 'running simple threaded test'
-    "tst-except.so",               # Crashes with 'failed looking up symbol _Unwind_Resume'
-    "tst-fpu.so",                  # Seems to hang, possibly floating point related
-    "tst-hub.so",                  # Seems to hang after 'Starting stress test'
-    "tst-libc-locking.so",         # Hangs
-    "tst-mmap-file.so",            # Some assertions fail - 'SUMMARY: 30 tests, 4 failures'
     "tst-mmap.so",                 # Infinite page fault
     "tst-pthread-barrier.so",      # Some assertions fail - 'SUMMARY: 8 tests / 1 failures', with cpu >= 2 seems to hang
-    "tst-ring-spsc-wraparound.so", # Hangs
     "tst-sampler.so",              # Crashes with 'failed looking up symbol _ZN4prof13start_samplerENS_6configE (prof::start_sampler(prof::config))'
-    "tst-semaphore.so",            # Seems to hang after 'Thread *: Incremented 1th' messages
     "tst-stdio-rofs.so",           # One assertion fails - 'tst-stdio.cc(1922): fatal error: in "STDIO_TEST_fread_unbuffered_pathological_performance": critical check (t1 - t0) <= (1) has failed'
     "tst-time.so",                 # One assertion fails - 'tst-time.cc(70): fatal error: in "time_time": critical check (static_cast<time_t>(0)) != (t1) has failed'
     "tst-timerfd.so",              # Some assertions fail - 'SUMMARY: 212 tests, 10 failures'
-    "tst-yield.so",                # Seems to hang
     #These tests fail due to some other shortcomings in the test scripts
     "tracing_smoke_test",
     "tcp_close_without_reading_on_fc",
     "tcp_close_without_reading_on_qemu",
-    #The tests below are NOT disabled but occasionally hang so I am listing
-    #them here for completeness.
-    #tst-queue-mpsc.so,            # Sometimes hangs
-    #tst-tcp-nbwrite.so,           # Sometimes hangs
-    #tst-concurrent-init.so,       # Sometimes hangs
-    #tst-bsd-kthread.so,           # Once failed with page fault
 ]
 
 add_tests([
@@ -199,19 +184,27 @@ if __name__ == "__main__":
                         help="specify QEMU architecture: x86_64, aarch64")
     cmdargs = parser.parse_args()
     set_verbose_output(cmdargs.verbose)
+
     if cmdargs.run_options != None:
         run_py_args = cmdargs.run_options.split()
     else:
         run_py_args = []
+
     if cmdargs.arch != None:
         run_py_args = run_py_args + ['--arch', cmdargs.arch]
+
     if cmdargs.hypervisor == 'firecracker':
         disabled_list.extend(firecracker_disabled_list)
     else:
         disabled_list.extend(qemu_disabled_list)
+
     if cmdargs.arch == 'aarch64':
         disabled_list.extend(aarch64_disabled_list)
-    if running_with_kvm_on(cmdargs.arch, cmdargs.hypervisor):
+        #The SMP (#vCPUs >= 2) support on AArch64 is still pretty flaky (see issue #1123), so let us force to single cpu_list)
+        run_py_args = run_py_args + ['-c', '1']
+
+    if running_with_kvm_on(cmdargs.arch, cmdargs.hypervisor) and cmdargs.arch != 'aarch64':
         disabled_list.remove("tst-feexcept.so")
+
     disabled_list.extend(cmdargs.disabled_list)
     main()
