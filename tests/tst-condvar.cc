@@ -153,29 +153,30 @@ int main(int argc, char **argv)
         (end-start).count()/iterations);
 
 
-    debug("Measuring unwaited wake_all (two threads): ");
-    iterations = 100000000;
     unsigned int nthreads = 2;
-    assert(sched::cpus.size() >= nthreads);
-    sched::thread *threads2[nthreads];
-    std::atomic<u64> time(0);
-    for(unsigned int i = 0; i < nthreads; i++) {
-        threads2[i]= sched::thread::make([iterations, &cv, &time] {
-            auto start = std::chrono::high_resolution_clock::now();
-            for (int j = 0; j < iterations; j++) {
-                cv.wake_all();
-            }
-            auto end = std::chrono::high_resolution_clock::now();
-            time += std::chrono::duration_cast<std::chrono::nanoseconds>
-                        (end-start).count();
-        }, sched::thread::attr().pin(sched::cpus[i]));
-        threads2[i]->start();
+    if (sched::cpus.size() >= nthreads) {
+        debug("Measuring unwaited wake_all (two threads): ");
+        iterations = 100000000;
+        sched::thread *threads2[nthreads];
+        std::atomic<u64> time(0);
+        for(unsigned int i = 0; i < nthreads; i++) {
+            threads2[i]= sched::thread::make([iterations, &cv, &time] {
+                auto start = std::chrono::high_resolution_clock::now();
+                for (int j = 0; j < iterations; j++) {
+                    cv.wake_all();
+                }
+                auto end = std::chrono::high_resolution_clock::now();
+                time += std::chrono::duration_cast<std::chrono::nanoseconds>
+                            (end-start).count();
+            }, sched::thread::attr().pin(sched::cpus[i]));
+            threads2[i]->start();
+        }
+        for(unsigned int i = 0; i < nthreads; i++) {
+            threads2[i]->join();
+            delete threads2[i];
+        }
+        debug ("%d ns\n", time/iterations/nthreads);
     }
-    for(unsigned int i = 0; i < nthreads; i++) {
-        threads2[i]->join();
-        delete threads2[i];
-    }
-    debug ("%d ns\n", time/iterations/nthreads);
 
 
     debug("condvar tests succeeded\n");

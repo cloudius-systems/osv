@@ -44,7 +44,6 @@ aarch64_disabled_list= [
     "tst-sigaltstack.so",
     #Remaining tests below fail for various different reasons
     #Please see comments on the right side for more details
-    "tst-condvar.so",              # To few cpus?
     "tst-elf-permissions.so",      # Infinite page fault
     "tst-mmap.so",                 # Infinite page fault
     "tst-time.so",                 # One assertion fails - 'tst-time.cc(70): fatal error: in "time_time": critical check (static_cast<time_t>(0)) != (t1) has failed'
