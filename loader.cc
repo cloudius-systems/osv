@@ -444,23 +444,29 @@ void* do_main_thread(void *_main_args)
 
             boot_time.event("Virtio-fs mounted");
         } else {
-            // Fallback to original behavior for compatibility: try rofs -> zfs
+            // Auto-discovery: try rofs -> virtio-fs -> ZFS
             if (mount_rofs_rootfs(opt_pivot) == 0) {
                 if (opt_disable_rofs_cache) {
                     debug("Disabling ROFS memory cache.\n");
                     rofs_disable_cache();
                 }
                 boot_time.event("ROFS mounted");
+            } else if (mount_virtiofs_rootfs(opt_pivot) == 0) {
+                boot_time.event("Virtio-fs mounted");
             } else {
                 zfsdev::zfsdev_init();
                 auto error = mount_zfs_rootfs(opt_pivot, opt_extra_zfs_pools);
                 if (error) {
                     debug("Could not mount zfs root filesystem (while "
                           "auto-discovering).\n");
+                    // Continue with ramfs (already mounted)
+                    // TODO: Avoid the hack of using pivot_rootfs() just for
+                    // mounting the fstab entries.
+                    pivot_rootfs("/");
+                } else {
+                    bsd_shrinker_init();
+                    boot_time.event("ZFS mounted");
                 }
-
-                bsd_shrinker_init();
-                boot_time.event("ZFS mounted");
             }
         }
     }
