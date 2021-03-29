@@ -59,6 +59,7 @@ exception_vectors:
 /* keep in sync with the struct in exceptions.hh */
 .macro push_state_to_exception_frame
         sub     sp, sp, #48 // make space for align2, align1+ESR, PSTATE, PC, SP
+        .cfi_adjust_cfa_offset 48
         push_pair x28, x29
         push_pair x26, x27
         push_pair x24, x25
@@ -101,6 +102,7 @@ exception_vectors:
         pop_pair x26, x27
         pop_pair x28, x29
         ldr     x30, [sp], #48
+        .cfi_adjust_cfa_offset -48
 .endm /* pop_state_to_exception_frame */
 
 .global thread_main
@@ -143,6 +145,12 @@ entry_invalid:
 .global entry_sync
 .type entry_sync, @function
 entry_sync:
+        .cfi_startproc simple
+        .cfi_signal_frame
+        .cfi_def_cfa sp, 0
+        .cfi_offset x30, -32 // Point to the elr register located at the -32 offset
+                             // of the exception frame to help gdb link to the
+                             // address when interrupt was raised
         push_state_to_exception_frame
         mrs     x1, esr_el1
         str     w1, [sp, #272] // Store Exception Syndrom Register in the frame
@@ -161,20 +169,30 @@ handle_mem_abort:
         bl      page_fault
         pop_state_from_exception_frame
         eret
+        .cfi_endproc
 unexpected_sync_exception:
+        .cfi_startproc
         mov     x0, sp  // save exception_frame to x0
         bl      handle_unexpected_sync_exception
         pop_state_from_exception_frame
         bl      abort
+        .cfi_endproc
 
 .global entry_irq
 .type entry_irq, @function
 entry_irq:
+        .cfi_startproc simple
+        .cfi_signal_frame
+        .cfi_def_cfa sp, 0
+        .cfi_offset x30, -32 // Point to the elr register located at the -32 offset
+                             // of the exception frame to help gdb link to the
+                             // address when interrupt was raised
         push_state_to_exception_frame
         mov     x0, sp
         bl      interrupt // extern "C"
         pop_state_from_exception_frame
         eret
+        .cfi_endproc
 
 .global entry_fiq
 .type entry_fiq, @function
@@ -187,6 +205,7 @@ entry_serror:
 .global call_signal_handler_thunk
 call_signal_handler_thunk:
         .type call_signal_handler_thunk, @function
+        .cfi_startproc simple
         # stack contains a signal_frame
         /*
         .cfi_offset reg, offset
@@ -199,6 +218,7 @@ call_signal_handler_thunk:
         add sp, sp, 16 # error_code
         */
         ret
+        .cfi_endproc
 
 // Keep fpu_state_save/load in sync with struct fpu_state in arch/aarch64/processor.hh
 // void fpu_state_save(fpu_state *s);

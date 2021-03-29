@@ -7,8 +7,14 @@
 
 .macro push_pair reg1, reg2
         stp \reg1, \reg2, [sp, #-16]!
+       .cfi_adjust_cfa_offset 16
+       .cfi_rel_offset \reg1, 0
+       .cfi_rel_offset \reg2, 8
 .endm
 
 .macro pop_pair reg1, reg2
         ldp \reg1, \reg2, [sp], #16
+       .cfi_adjust_cfa_offset -16
+       .cfi_restore \reg2
+       .cfi_restore \reg1
 .endm
