@@ -103,6 +103,15 @@ exception_vectors:
         ldr     x30, [sp], #48
 .endm /* pop_state_to_exception_frame */
 
+.global thread_main
+thread_main:
+        .type thread_main, @function
+        .cfi_startproc simple
+        .cfi_undefined %x30
+        .cfi_def_cfa %sp, 0
+        bl thread_main_c
+        .cfi_endproc
+
 .equ ESR_EC_BEG,26          // Exception Class field begin in ESR
 .equ ESR_EC_END,31          // Exception Class field end in ESR
 .equ ESR_EC_DATA_ABORT,0x25 // Exception Class Data Abort value

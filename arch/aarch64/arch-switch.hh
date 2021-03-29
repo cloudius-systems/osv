@@ -15,6 +15,7 @@
 #include "arch-setup.hh"
 
 extern "C" {
+void thread_main(void);
 void thread_main_c(sched::thread* t);
 }
 
@@ -57,7 +58,7 @@ void thread::init_stack()
     _state.fp = 0;
     _state.thread = this;
     _state.sp = stacktop;
-    _state.pc = reinterpret_cast<void*>(thread_main_c);
+    _state.pc = reinterpret_cast<void*>(thread_main);
 }
 
 void thread::setup_tcb()
