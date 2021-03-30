@@ -157,6 +157,7 @@ void arch_init_premain()
 #include "drivers/virtio-blk.hh"
 #include "drivers/virtio-net.hh"
 #include "drivers/virtio-mmio.hh"
+#include "drivers/virtio-fs.hh"
 
 void arch_init_drivers()
 {
@@ -192,6 +193,7 @@ void arch_init_drivers()
     drvman->register_driver(virtio::rng::probe);
     drvman->register_driver(virtio::blk::probe);
     drvman->register_driver(virtio::net::probe);
+    drvman->register_driver(virtio::fs::probe);
     boot_time.event("drivers probe");
     drvman->load_all();
     drvman->list_drivers();
