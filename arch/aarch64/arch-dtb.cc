@@ -190,6 +190,25 @@ u64 dtb_get_uart(int *irqid)
     return retval;
 }
 
+u64 dtb_get_rtc()
+{
+    u64 retval;
+    int node; size_t len;
+
+    if (!dtb)
+        return 0;
+
+    node = fdt_node_offset_by_compatible(dtb, -1, "arm,pl031");
+    if (node < 0)
+        return 0;
+
+    len = dtb_get_reg(node, &retval);
+    if (!len)
+        return 0;
+
+    return retval;
+}
+
 u64 dtb_get_mmio_serial_console(int *irqid)
 {
     int node;

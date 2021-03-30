@@ -49,6 +49,13 @@ size_t dtb_get_phys_memory(u64 *addr);
  */
 u64 dtb_get_uart(int *irqid);
 
+/* u64 dtb_get_rtc()
+ *
+ * return the base address of the RTC (PL031)
+ * device or returns zero on failure.
+ */
+u64 dtb_get_rtc();
+
 /* u64 dtb_get_mmio_serial_console(int *irqid)
  *
  * return the base address of the serial console and writes the
