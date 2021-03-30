@@ -815,7 +815,11 @@ class intrusive_list:
         else:
             self.link_offset = get_base_class_offset(self.node_type, "boost::intrusive::list_base_hook")
             if self.link_offset == None:
-                raise Exception("Class does not extend list_base_hook: " + str(self.node_type))
+                member_hook = gdb.lookup_type('boost::intrusive::member_hook<sched::timer_base, boost::intrusive::list_member_hook<>, &sched::timer_base::client_hook>')
+                if member_hook:
+                    self.link_offset = member_hook.template_argument(2).cast(self.size_t)
+                else:
+                    raise Exception("Class does not extend list_base_hook: " + str(self.node_type))
 
     def __iter__(self):
         hook = self.root['next_']
@@ -940,7 +944,7 @@ timer_state_expired = enum_value('sched::timer_base::state', 'expired')
 def show_thread_timers(t):
     timer_list = intrusive_list(t['_active_timers'])
     if timer_list:
-        gdb.write('  timers:')
+        gdb.write('    timers:')
         for timer in timer_list:
             expired = '*' if timer['_state'] == timer_state_expired else ''
             expiration = int(timer['_time']['__d']['__r']) / 1.0e9
@@ -1014,6 +1018,14 @@ class osv_info_threads(gdb.Command):
         gdb.Command.__init__(self, 'osv info threads',
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, for_tty):
+        gdb.write('  id  address             name            cpu  status         vruntime  total_cpu_time')
+
+        show_location = not '--no_location' in arg
+        if show_location:
+           gdb.write(' location\n')
+        else:
+           gdb.write('\n')
+
         thread_nr = 0
         exit_thread_context()
         state = vmstate()
@@ -1022,30 +1034,32 @@ class osv_info_threads(gdb.Command):
                 cpu = thread_cpu(t)
                 tid = t['_id']
                 name = t['_attr']['_name']['_M_elems'].string()
-                newest_frame = gdb.selected_frame()
-                # Non-running threads have always, by definition, just called
-                # a reschedule, and the stack trace is filled with reschedule
-                # related functions (switch_to, schedule, wait_until, etc.).
-                # Here we try to skip such functions and instead show a more
-                # interesting caller which initiated the wait.
-                file_deny_list = ["arch-switch.hh", "sched.cc", "sched.hh",
-                                  "mutex.hh", "mutex.cc", "mutex.c", "mutex.h", "psci.cc"]
 
-                # Functions from the list of denied files which are interesting
-                sched_thread_join = 'sched::thread::join()'
-                function_allow_list = [sched_thread_join]
+                if show_location:
+                    newest_frame = gdb.selected_frame()
+                    # Non-running threads have always, by definition, just called
+                    # a reschedule, and the stack trace is filled with reschedule
+                    # related functions (switch_to, schedule, wait_until, etc.).
+                    # Here we try to skip such functions and instead show a more
+                    # interesting caller which initiated the wait.
+                    file_deny_list = ["arch-switch.hh", "sched.cc", "sched.hh", "sched.S",
+                                      "mutex.hh", "mutex.cc", "mutex.c", "mutex.h", "psci.cc"]
 
-                def is_interesting(resolved_frame):
-                    is_allowed = resolved_frame.func_name in function_allow_list
-                    is_denied = os.path.basename(resolved_frame.file_name) in file_deny_list
-                    return is_allowed or not is_denied
+                    # Functions from the list of denied files which are interesting
+                    sched_thread_join = 'sched::thread::join()'
+                    function_allow_list = [sched_thread_join]
 
-                fr = find_or_give_last(is_interesting, traverse_resolved_frames(newest_frame))
+                    def is_interesting(resolved_frame):
+                        is_allowed = resolved_frame.func_name in function_allow_list
+                        is_denied = os.path.basename(resolved_frame.file_name) in file_deny_list
+                        return is_allowed or not is_denied
 
-                if fr:
-                    location = '%s at %s:%s' % (fr.func_name, strip_dotdot(fr.file_name), fr.line)
-                else:
-                    location = '??'
+                    fr = find_or_give_last(is_interesting, traverse_resolved_frames(newest_frame))
+
+                    if fr:
+                        location = '%s at %s:%s' % (fr.func_name, strip_dotdot(fr.file_name), fr.line)
+                    else:
+                        location = '??'
 
                 if cpu:
                     if arch == 'x64':
@@ -1055,19 +1069,29 @@ class osv_info_threads(gdb.Command):
                 else:
                     cpu_id = '?'
 
-                gdb.write('%4d (0x%x) %-15s cpu%s %-10s %s vruntime %12g\n' %
-                          (tid, ulong(t.address), name,
+                total_cpu_time = t['_total_cpu_time']['__r']
+
+                gdb.write('%4d (0x%x) %-15s cpu%s %-10s %12g %15d' %
+                          (tid,
+                           ulong(t.address),
+                           name,
                            cpu_id,
-                           thread_status(t),
-                           location,
+                           thread_status(t)[8:],
                            t['_runtime']['_Rtt'],
+                           total_cpu_time
                            )
                           )
 
-                if fr and fr.func_name == sched_thread_join:
-                    gdb.write("\tjoining on %s\n" % fr.frame.read_var("this"))
+                if show_location:
+                    gdb.write(' %s\n' % location)
+                    if fr and fr.func_name == sched_thread_join:
+                        gdb.write("\tjoining on %s\n" % fr.frame.read_var("this"))
+                else:
+                    gdb.write('\n')
 
-                #show_thread_timers(t)
+                if '--timers' in arg:
+                    show_thread_timers(t)
+
                 thread_nr += 1
         gdb.write('Number of threads: %d\n' % thread_nr)
 
