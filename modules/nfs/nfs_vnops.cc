@@ -259,13 +259,13 @@ static int nfs_op_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
     // Fill dirent infos
     assert(sizeof(ino_t) == sizeof(nfsdirent->inode));
     dir->d_ino = nfsdirent->inode;
-    // FIXME: not filling dir->d_off
     // FIXME: not filling dir->d_reclen
     dir->d_type = IFTODT(nfsdirent->mode & S_IFMT);
     strlcpy((char *) &dir->d_name, nfsdirent->name, sizeof(dir->d_name));
 
     // iterate
     fp->f_offset++;
+    dir->d_off = fp->f_offset;
 
     return 0;
 }

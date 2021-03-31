@@ -1269,7 +1269,7 @@ zfs_lookup(struct vnode *dvp, char *nm, struct vnode **vpp)
 
 	ASSERT0(!(nm[0] == '.' && nm[1] == '\0'));
 	ASSERT0(!(nm[0] == '.' && nm[1] == '.' && nm[2] == '\0'));
-	
+
 	ZFS_ENTER(zfsvfs);
 	ZFS_VERIFY_ZP(dzp);
 
@@ -1974,6 +1974,7 @@ zfs_readdir(struct vnode *dvp, struct file *fp, struct dirent *dir)
 	} else {
 		file_setoffset(fp, file_offset(fp) + 1);
 	}
+    dir->d_off = file_offset(fp);
 
 	zp->z_zn_prefetch = B_FALSE; /* a lookup will re-enable pre-fetching */
 
@@ -4714,7 +4715,7 @@ zfs_getpages(struct vnode *vp, vm_page_t *m, int count, int reqpage)
  * FreeBSD's extended attributes namespace defines file name prefix for ZFS'
  * extended attribute name:
  *
- *	NAMESPACE	PREFIX	
+ *	NAMESPACE	PREFIX
  *	system		freebsd:system:
  *	user		(none, can be used to access ZFS fsattr(5) attributes
  *			created on Solaris)
