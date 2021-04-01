@@ -19,14 +19,14 @@ LINUX_DIST_ID=$(grep "^ID=" /etc/os-release)
 
 case "${LINUX_DIST_ID}" in
   *fedora*|*centos*)
-    PACKAGES="ninja-build cmake3 glib2-devel libfdt-devel pixman-devel zlib-devel libaio-devel libcap-devel libiscsi-devel"
+    PACKAGES="ninja-build cmake3 glib2-devel libfdt-devel pixman-devel zlib-devel libaio-devel libcap-devel libiscsi-devel libcap-ng-devel libseccomp-devel"
     if [[ "${LINUX_DIST_ID}" == "fedora" ]]; then
       PACKAGE_MANAGER=dnf
     else
       PACKAGE_MANAGER=yum
     fi ;;
   *ubuntu*)
-    PACKAGES="ninja-build cmake libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev libaio-dev libcap-dev libnfs-dev libiscsi-dev"
+    PACKAGES="ninja-build cmake libglib2.0-dev libfdt-dev libpixman-1-dev zlib1g-dev libaio-dev libcap-dev libnfs-dev libiscsi-dev libcap-ng-dev libseccomp-dev"
     PACKAGE_MANAGER="apt-get" ;;
   *)
     echo "Unsupported distribution!" && exit 1
@@ -42,6 +42,9 @@ fi
 QEMU_VERSION=$1
 QEMU_VERSION=${QEMU_VERSION:-v5.2.0}
 
+QEMU_REPO=$2
+QEMU_REPO=${QEMU_REPO:-git://git.qemu.org/qemu.git}
+
 OSV_ROOT=$(dirname $(readlink -e $0))/..
 BUILD_DIR="${OSV_ROOT}"/build/downloaded_packages
 
@@ -49,12 +52,13 @@ mkdir -p "${BUILD_DIR}"
 pushd "${BUILD_DIR}"
 
 if [[ ! -d qemu ]]; then
-  git clone --depth 1 --branch "${QEMU_VERSION}" git://git.qemu.org/qemu.git
+  echo "Getting sources from the branch ${QEMU_VERSION} in the repo ${QEMU_REPO}"
+  git clone --depth 1 --branch "${QEMU_VERSION}" "${QEMU_REPO}"
 fi
 cd qemu
 mkdir -p build && cd build
 
-../configure --target-list=x86_64-softmmu,aarch64-softmmu
+../configure --target-list=x86_64-softmmu,aarch64-softmmu --enable-virtiofsd
 make -j$(nproc)
 popd
 
