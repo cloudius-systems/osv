@@ -499,7 +499,7 @@ def choose_hypervisor(external_networking, arch):
     if os.path.exists('/dev/kvm') and arch == host_arch:
         return 'kvm'
     if (os.path.exists('/proc/xen/capabilities')
-        and 'control_d' in file('/proc/xen/capabilities').read()
+        and 'control_d' in open('/proc/xen/capabilities', 'r').read()
         and external_networking):
         return 'xen'
     return 'qemu'
