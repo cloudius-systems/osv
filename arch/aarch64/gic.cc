@@ -13,6 +13,7 @@
 #include "processor.hh"
 
 #include "gic.hh"
+#include "arm-clock.hh"
 
 namespace gic {
 
@@ -57,6 +58,11 @@ void gic_driver::init_cpu(int smp_idx)
     unsigned int gicc_ctlr = this->gicc.read_reg(gicc_reg::GICC_CTLR);
     gicc_ctlr |= 1;
     this->gicc.write_reg(gicc_reg::GICC_CTLR, gicc_ctlr);
+
+    /* enable CPU clock timer PPI interrupt on non-primary CPUs */
+    if (smp_idx) {
+        this->gicd.write_reg_grp(gicd_reg_irq1::GICD_ISENABLER, get_timer_irq_id(), 1);
+    }
 
 #if CONF_logger_debug
     debug_early("CPU interface enabled.\n");
