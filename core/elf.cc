@@ -91,8 +91,6 @@ void* symbol_module::relocated_addr() const
     }
     switch (symbol_type(*symbol)) {
     case STT_NOTYPE:
-        return reinterpret_cast<void*>(symbol->st_value);
-        break;
     case STT_OBJECT:
     case STT_FUNC:
         return base + symbol->st_value;
