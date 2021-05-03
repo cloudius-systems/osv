@@ -1323,15 +1323,18 @@ private:
     std::unique_ptr<sched::thread> _fill_thread;
 };
 
+std::atomic<unsigned int> l1_initialized_cnt{};
 PERCPU(l1*, percpu_l1);
 static sched::cpu::notifier _notifier([] () {
     *percpu_l1 = new l1(sched::cpu::current());
+    if (++l1_initialized_cnt == sched::cpus.size()) {
+        l1_pool_stats.resize(sched::cpus.size());
+    }
     // N per-cpu threads for L1 page pool, 1 thread for L2 page pool
     // Switch to smp_allocator only when all the N + 1 threads are ready
     if (smp_allocator_cnt++ == sched::cpus.size()) {
         smp_allocator = true;
     }
-    l1_pool_stats.resize(sched::cpus.size());
 });
 static inline l1& get_l1()
 {
