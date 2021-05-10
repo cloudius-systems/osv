@@ -31,6 +31,7 @@
 
 #include "arch.hh"
 #include "arch-elf.hh"
+#include "cpuid.hh"
 
 #if CONF_debug_elf
 #define elf_debug(format,...) kprintf("ELF [tid:%d, mod:%d, %s]: " format, sched::thread::current()->id(), _module_index, _pathname.c_str(), ##__VA_ARGS__)
@@ -1919,6 +1920,10 @@ unsigned long getauxval(unsigned long type)
         return sysconf(_SC_PAGESIZE);
     case AT_CLKTCK:
         return sysconf(_SC_CLK_TCK);
+#ifdef __aarch64__
+    case AT_HWCAP:
+        return processor::hwcap32();
+#endif
 
     // Unimplemented, man page says we should return 0
     case AT_PHDR:
@@ -1928,7 +1933,9 @@ unsigned long getauxval(unsigned long type)
     case AT_ENTRY:
     case AT_EXECFD:
     case AT_EXECFN:
+#ifdef __x86_64__
     case AT_HWCAP:
+#endif
     case AT_ICACHEBSIZE:
     case AT_RANDOM:
     case AT_SECURE:
