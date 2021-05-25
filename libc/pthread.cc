@@ -995,8 +995,19 @@ int pthread_getschedparam(pthread_t thread, int *policy,
 
 int pthread_kill(pthread_t thread, int sig)
 {
-    WARN_STUBBED();
+    // We are assuming that if pthread_kill() is called with thread
+    // equal to pthread_self(), then most likely it was called by
+    // raise() (see below) so we simply delegate to kill().
+    // This an approximation as it reality multithreaded apps
+    // may actually send signal to the current thread by directly
+    // calling pthread_kill() for a reason and then thread specific mask
+    // would apply, etc. But OSv does not really support sending signals to
+    // specific threads so we are silently ignoring such case for now.
+    if (thread == current_pthread) {
+        return kill(getpid(), sig);
+    }
 
+    WARN_STUBBED();
     return EINVAL;
 }
 

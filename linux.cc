@@ -371,6 +371,22 @@ static int pselect6(int nfds, fd_set *readfds, fd_set *writefds,
     return pselect(nfds, readfds, writefds, exceptfds, timeout_ts, NULL);
 }
 
+static int tgkill(int tgid, int tid, int sig)
+{
+    //
+    // Given OSv supports sigle process only, we only support this syscall
+    // when thread group id is self (getpid()) or -1 (see https://linux.die.net/man/2/tgkill)
+    // AND tid points to the current thread (caller)
+    // Ideally we would want to delegate to pthread_kill() but there is no
+    // easy way to map tgid to pthread_t so we directly delegate to kill().
+    if ((tgid == -1 || tgid == getpid()) && (tid == gettid())) {
+        return kill(tgid, sig);
+    }
+
+    errno = ENOSYS;
+    return -1;
+}
+
 long syscall(long number, ...)
 {
     // Save FPU state and restore it at the end of this function
@@ -451,6 +467,7 @@ long syscall(long number, ...)
     SYSCALL2(mkdir, char*, mode_t);
 #endif
     SYSCALL3(mkdirat, int, char*, mode_t);
+    SYSCALL3(tgkill, int, int, int);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);

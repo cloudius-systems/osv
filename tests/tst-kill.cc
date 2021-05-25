@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <unistd.h>
 #include <errno.h>
+#include <pthread.h>
 
 int tests = 0, fails = 0;
 
@@ -97,6 +98,10 @@ int main(int ac, char** av)
     int r;
     r = kill(17171717, 0);
     report(r == -1 && errno == ESRCH, "kill of non-existant process");
+
+    report(raise(0) == 0, "raise() should succeed");
+    report(pthread_kill(pthread_self(), 0) == 0, "pthread_kill() should succeed with current thread");
+    report(pthread_kill((pthread_t)(-1), 0) == EINVAL, "pthread_kill() should fail for thread different than current one");
 
     // Test alarm();
     global = 0;
