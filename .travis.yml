@@ -7,6 +7,7 @@ branches:
   - master
   - ipv6
 before_install:
+  - echo "$DOCKER_ACCESS_TOKEN" | docker login --username osvunikernel --password-stdin
   - pushd docker && docker build -t osv/builder -f ./Dockerfile.builder --build-arg DIST="ubuntu-20.10" . && popd
   - docker run -it --privileged -d --name build osv/builder
 stages:
