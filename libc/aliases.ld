@@ -48,6 +48,7 @@ __strndup = strndup;
 __stpcpy = stpcpy;
 __stpncpy = stpncpy;
 __strdup = strdup;
+strerrordesc_np = strerror;
 
 /* temp */
 __mktemp = mktemp;
