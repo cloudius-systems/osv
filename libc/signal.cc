@@ -57,7 +57,11 @@ sigset* thread_signals(sched::thread *t)
 }
 
 inline bool is_sig_dfl(const struct sigaction &sa) {
-    return (!(sa.sa_flags & SA_SIGINFO) && sa.sa_handler == SIG_DFL);
+    if (sa.sa_flags & SA_SIGINFO) {
+         return sa.sa_sigaction == nullptr; // a non-standard Linux extension
+    } else {
+         return sa.sa_handler == SIG_DFL;
+    }
 }
 
 inline bool is_sig_ign(const struct sigaction &sa) {

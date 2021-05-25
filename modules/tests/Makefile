@@ -111,7 +111,8 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-calloc.so tst-crypt.so tst-non-fpic.so tst-small-malloc.so \
 	tst-getopt.so tst-getopt-pie.so tst-non-pie.so tst-semaphore.so \
 	tst-elf-init.so tst-realloc.so tst-setjmp.so \
-	libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so
+	libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so \
+	tst-sigaction.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
 #TODO For now let us disable these tests for aarch64 until
