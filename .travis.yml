@@ -1,4 +1,5 @@
 sudo: required
+dist: bionic
 language: c
 services:
   - docker
@@ -6,7 +7,19 @@ branches:
   only:
   - master
   - ipv6
+addons:
+  apt:
+    packages:
+      - bridge-utils
+      - libpulse0
+      - libvirt-bin
+      - qemu-kvm
+      - virtinst
+      - ubuntu-vm-builder
 before_install:
+  # Set up KVM
+  - sudo adduser $USER libvirt
+  - sudo adduser $USER kvm
   - echo "$DOCKER_ACCESS_TOKEN" | docker login --username osvunikernel --password-stdin
   - pushd docker && docker build -t osv/builder -f ./Dockerfile.builder --build-arg DIST="ubuntu-20.10" . && popd
   - docker run -it --privileged -d --name build osv/builder
