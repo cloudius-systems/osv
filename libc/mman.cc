@@ -13,6 +13,7 @@
 #include "osv/trace.hh"
 #include "osv/dentry.h"
 #include "osv/mount.h"
+#include <osv/stubbing.hh>
 #include "libc/libc.hh"
 #include <safe-ptr.hh>
 
@@ -233,4 +234,18 @@ int madvise(void *addr, size_t length, int advice)
 {
     auto err = mmu::advise(addr, length, libc_madvise_to_advise(advice));
     return err.to_libc();
+}
+
+int brk(void *addr)
+{
+    WARN_STUBBED();
+    errno = ENOMEM;
+    return -1;
+}
+
+void *sbrk(intptr_t increment)
+{
+    WARN_STUBBED();
+    errno = ENOMEM;
+    return (void *)-1;
 }
