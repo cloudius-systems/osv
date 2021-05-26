@@ -346,7 +346,7 @@ def format_packet_sample(sample):
     pcap = dpkt.pcap.Writer(proc.stdin)
     write_sample_to_pcap(sample, pcap)
     pcap.close()
-    assert(proc.stdout.readline().decode() == "reading from file -, link-type EN10MB (Ethernet)\n")
+    assert(proc.stdout.readline().decode().startswith("reading from file -, link-type EN10MB (Ethernet)"))
     packet_line = proc.stdout.readline().rstrip()
     proc.wait()
     return packet_line
