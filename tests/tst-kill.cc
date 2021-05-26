@@ -53,6 +53,22 @@ void test_signal_self(pid_t pid)
     report(global == 1, output);
 }
 
+void test_signal_self_with_resetting_handler(pid_t pid)
+{
+    struct sigaction act = {};
+    act.sa_handler = handler1;
+    act.sa_flags = SA_RESETHAND;
+    int r = sigaction(SIGUSR1, &act, nullptr);
+    report(r == 0, "set SIGUSR1 handler with SA_RESETHAND");
+
+    // ensure signal handler is called
+    test_signal_self(pid);
+
+    struct sigaction oldact;
+    r = sigaction(SIGUSR1, nullptr, &oldact);
+    report(r == 0 && oldact.sa_handler == SIG_DFL, "with SA_RESETHAND, signal handler is reset");
+}
+
 // test kill() edges cases, pid should be a valid pid
 void test_edge_cases(pid_t pid)
 {
@@ -86,16 +102,20 @@ int main(int ac, char** av)
     //          equal to process group ID of sender"
     test_signal_self(0);
 
+#ifdef __OSV__
     // pid -1 = "all processes for which the calling process
     //           has permission to send signals"
     test_signal_self(-1);
+#endif
 
     // our own pid
     test_signal_self(getpid());
 
     // Test various edge cases for kill() with various pids
     test_edge_cases(0);
+#ifdef __OSV__
     test_edge_cases(-1);
+#endif
     test_edge_cases(getpid());
 
     int r;
@@ -104,7 +124,9 @@ int main(int ac, char** av)
 
     report(raise(0) == 0, "raise() should succeed");
     report(pthread_kill(pthread_self(), 0) == 0, "pthread_kill() should succeed with current thread");
+#ifdef __OSV__
     report(pthread_kill((pthread_t)(-1), 0) == EINVAL, "pthread_kill() should fail for thread different than current one");
+#endif
 
     // Test alarm();
     global = 0;
@@ -175,33 +197,29 @@ int main(int ac, char** av)
     // Test with and without SA_RESETHAND (for __sysv_signal support)
     struct sigaction act = {};
     act.sa_handler = handler1;
-    global = 0;
     r = sigaction(SIGUSR1, &act, nullptr);
     report(r == 0, "set SIGUSR1 handler");
 
     // ensure signal handler is called when kill is
     // called with any of these pids
     test_signal_self(0);
+#ifdef __OSV__
     test_signal_self(-1);
+#endif
     test_signal_self(getpid());
 
     struct sigaction oldact;
     r = sigaction(SIGUSR1, nullptr, &oldact);
     report(r == 0 && oldact.sa_handler == handler1, "without SA_RESETHAND, signal handler is not reset");
-    act.sa_flags = SA_RESETHAND;
-    global = 0;
-    r = sigaction(SIGUSR1, &act, nullptr);
-    report(r == 0, "set SIGUSR1 handler with SA_RESETHAND");
 
     // ensure signal handler is called when kill is
-    // called with any of these pids
-    test_signal_self(0);
-    test_signal_self(-1);
-    test_signal_self(getpid());
-
-    r = sigaction(SIGUSR1, nullptr, &oldact);
-    report(r == 0 && oldact.sa_handler == SIG_DFL, "with SA_RESETHAND, signal handler is reset");
-
+    // called with any of these pids and handler is
+    // reset with SA_RESETHAND
+    test_signal_self_with_resetting_handler(0);
+#ifdef __OSV__
+    test_signal_self_with_resetting_handler(-1);
+#endif
+    test_signal_self_with_resetting_handler(getpid());
 
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);
 
@@ -212,5 +230,4 @@ int main(int ac, char** av)
 
     return fails == 0 ? 0 : 1;
 }
-
 
