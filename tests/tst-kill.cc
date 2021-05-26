@@ -26,7 +26,8 @@ static void report(bool ok, const char* msg)
 
 int global = 0;
 
-void handler1(int sig) {
+void handler1(int sig)
+{
     printf("handler1 called, sig=%d, global=%d\n", sig, global);
     global = 1;
 }
@@ -34,7 +35,8 @@ void handler1(int sig) {
 // Test kill() on the current process, sending
 // "pid" to kill should cause this process to be interrupted
 // and signal handler for SIGUSR1 should already be installed
-void test_signal_self(pid_t pid){
+void test_signal_self(pid_t pid)
+{
     int r;
     char output[64];
 
@@ -52,7 +54,8 @@ void test_signal_self(pid_t pid){
 }
 
 // test kill() edges cases, pid should be a valid pid
-void test_edge_cases(pid_t pid){
+void test_edge_cases(pid_t pid)
+{
     int r;
     char output[64];
 
