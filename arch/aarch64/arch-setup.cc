@@ -72,6 +72,7 @@ void arch_setup_pci()
                     mmu::page_size, mmu::mattr::dev);
 }
 
+extern bool opt_pci_disabled;
 void arch_setup_free_memory()
 {
     setup_temporary_phys_map();
@@ -119,7 +120,9 @@ void arch_setup_free_memory()
     mmu::linear_map((void *)cpu, (mmu::phys)cpu, cpu_len, mmu::page_size,
                     mmu::mattr::dev);
 
-    arch_setup_pci();
+    if (!opt_pci_disabled) {
+        arch_setup_pci();
+    }
 
     // get rid of the command line, before memory is unmapped
     console::mmio_isa_serial_console::clean_cmdline(cmdline);
@@ -163,26 +166,28 @@ void arch_init_drivers()
 {
     extern boot_time_chart boot_time;
 
-    int irqmap_count = dtb_get_pci_irqmap_count();
-    if (irqmap_count > 0) {
-        u32 mask = dtb_get_pci_irqmask();
-        u32 *bdfs = (u32 *)alloca(sizeof(u32) * irqmap_count);
-        int *irqs  = (int *)alloca(sizeof(int) * irqmap_count);
-        if (!dtb_get_pci_irqmap(bdfs, irqs, irqmap_count)) {
-            abort("arch-setup: failed to get PCI irqmap.\n");
+    if (!opt_pci_disabled) {
+        int irqmap_count = dtb_get_pci_irqmap_count();
+        if (irqmap_count > 0) {
+            u32 mask = dtb_get_pci_irqmask();
+            u32 *bdfs = (u32 *)alloca(sizeof(u32) * irqmap_count);
+            int *irqs  = (int *)alloca(sizeof(int) * irqmap_count);
+            if (!dtb_get_pci_irqmap(bdfs, irqs, irqmap_count)) {
+                abort("arch-setup: failed to get PCI irqmap.\n");
+            }
+            pci::set_pci_irqmap(bdfs, irqs, irqmap_count, mask);
         }
-        pci::set_pci_irqmap(bdfs, irqs, irqmap_count, mask);
-    }
 
 #if CONF_logger_debug
-    pci::dump_pci_irqmap();
+        pci::dump_pci_irqmap();
 #endif
 
-    // Enumerate PCI devices
-    size_t pci_cfg_len;
-    if (pci::get_pci_cfg(&pci_cfg_len)) {
-	pci::pci_device_enumeration();
-	boot_time.event("pci enumerated");
+        // Enumerate PCI devices
+        size_t pci_cfg_len;
+        if (pci::get_pci_cfg(&pci_cfg_len)) {
+            pci::pci_device_enumeration();
+            boot_time.event("pci enumerated");
+        }
     }
 
     // Register any parsed virtio-mmio devices
