@@ -20,6 +20,8 @@ stty_params = None
 
 devnull = open('/dev/null', 'w')
 
+osv_base = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+
 host_arch = os.uname().machine
 
 def stty_save():
@@ -265,14 +267,7 @@ def main(options):
         firecracker = start_firecracker(firecracker_path, socket_path)
 
     # Prepare arguments we are going to pass when creating VM instance
-    kernel_path = options.kernel
-    if not kernel_path:
-        kernel_path = os.path.join(dirname, '../build/last/kernel.elf')
-
-    qemu_disk_path = options.image
-    if not qemu_disk_path:
-        qemu_disk_path = os.path.join(dirname, '../build/last/usr.img')
-    raw_disk_path = disk_path(qemu_disk_path)
+    raw_disk_path = disk_path(options.image_path)
 
     cmdline = options.execute
     if not cmdline:
@@ -280,7 +275,7 @@ def main(options):
             cmdline = f.read()
 
     if options.arch == 'aarch64':
-        cmdline = "console=tty --disable_rofs_cache %s" % cmdline
+        cmdline = "console=tty --nopci %s" % cmdline
     else:
         cmdline = "--nopci %s" % cmdline
 
@@ -323,7 +318,7 @@ def main(options):
         if options.networking:
             client.add_network_interface('eth0', 'fc_tap0')
 
-        client.create_instance(kernel_path, cmdline)
+        client.create_instance(options.kernel_path, cmdline)
         print_time("Created OSv VM with cmdline: %s" % cmdline)
 
         if not options.api:
@@ -362,6 +357,10 @@ def main(options):
 if __name__ == "__main__":
     # Parse arguments
     parser = argparse.ArgumentParser(prog='firecracker')
+    parser.add_argument("-d", "--debug", action="store_true",
+                        help="start debug version")
+    parser.add_argument("-r", "--release", action="store_true",
+                        help="start release version")
     parser.add_argument("-c", "--vcpus", action="store", type=int, default=1,
                         help="specify number of vcpus")
     parser.add_argument("-m", "--memsize", action="store", default="128M",
@@ -385,7 +384,16 @@ if __name__ == "__main__":
     parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default=host_arch,
                         help="specify Firecracker architecture: x86_64, aarch64")
 
-    cmd_args = parser.parse_args()
-    if cmd_args.verbose:
+    cmdargs = parser.parse_args()
+    cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
+    if cmdargs.arch == 'aarch64':
+        default_kernel_file_name = "loader.img"
+        default_image_file_name = "disk.img"
+    else:
+        default_kernel_file_name = "kernel.elf"
+        default_image_file_name = "usr.img"
+    cmdargs.kernel_path = os.path.abspath(cmdargs.kernel or os.path.join(osv_base, "build/%s/%s" % (cmdargs.opt_path, default_kernel_file_name)))
+    cmdargs.image_path = os.path.abspath(cmdargs.image or os.path.join(osv_base, "build/%s/%s" % (cmdargs.opt_path, default_image_file_name)))
+    if cmdargs.verbose:
         verbose = True
-    main(cmd_args)
+    main(cmdargs)
