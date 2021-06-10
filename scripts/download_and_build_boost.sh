@@ -27,7 +27,7 @@ fi
 TAR_DOWNLOAD_DIR="${OSV_ROOT}/build/downloaded_packages/${ARCH}/boost/upstream/"
 mkdir -p "${TAR_DOWNLOAD_DIR}"
 
-BOOST_URL=https://dl.bintray.com/boostorg/release/"${BOOST_VERSION}"/source/boost_"${BOOST_VERSION2}".tar.gz
+BOOST_URL=https://boostorg.jfrog.io/artifactory/main/release/"${BOOST_VERSION}"/source/boost_"${BOOST_VERSION2}".tar.gz
 wget -c -O "${TAR_DOWNLOAD_DIR}"/boost_"${BOOST_VERSION2}".tar.gz "${BOOST_URL}"
 
 pushd "${TAR_DOWNLOAD_DIR}"
