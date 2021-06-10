@@ -186,9 +186,19 @@ case $OUT in
 *)	OSV_BUILD_PATH=`pwd`/$OUT;;
 esac
 
+host_arch=$(uname -m)
+
 # Default manifest
 manifest=bootfs.manifest.skel
-fs_type=${vars[fs]-zfs}
+if [[ "$host_arch" == "aarch64" || "$arch" == "aarch64" ]]; then
+	# We default to ROFS as ZFS is not supported on ARM until the issue #1131 is fixed
+	fs_type=${vars[fs]-rofs}
+	if [[ "$fs_type" == "rofs" ]]; then
+		vars[create_disk]="true"
+	fi
+else
+	fs_type=${vars[fs]-zfs}
+fi
 usrskel_arg=
 case $fs_type in
 zfs)
@@ -271,7 +281,6 @@ kernel_end=$(($loader_size+2097151 & ~2097151))
 cd $OUT
 
 CC=gcc
-host_arch=$(uname -m)
 if [[ "$host_arch" == "x86_64" && "$arch" == 'aarch64' ]]; then
     CC=${CROSS_PREFIX:-aarch64-linux-gnu-}gcc
 fi
