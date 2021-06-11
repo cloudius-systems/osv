@@ -6,8 +6,8 @@ import time
 import sys
 import os
 
-import tests.test_net
-import tests.test_tracing
+import tests.test_net as test_net
+import tests.test_tracing as test_tracing
 
 from operator import attrgetter
 from tests.testing import *
@@ -46,10 +46,6 @@ aarch64_disabled_list= [
     #Please see comments on the right side for more details
     "tst-elf-permissions.so",      # Infinite page fault
     "tst-mmap.so",                 # Infinite page fault
-    #These tests fail due to some other shortcomings in the test scripts
-    "tracing_smoke_test",
-    "tcp_close_without_reading_on_fc",
-    "tcp_close_without_reading_on_qemu",
 ]
 
 add_tests([
@@ -194,11 +190,15 @@ if __name__ == "__main__":
 
     if cmdargs.arch == 'aarch64':
         disabled_list.extend(aarch64_disabled_list)
-        #The SMP (#vCPUs >= 2) support on AArch64 is still pretty flaky (see issue #1123), so let us force to single cpu_list)
-        run_py_args = run_py_args + ['-c', '1']
+        if host_arch != cmdargs.arch:
+            #Until the issue #1143 is resolved, we need to force running with 2 CPUs in TCG mode
+            run_py_args = run_py_args + ['-c', '2']
 
     if running_with_kvm_on(cmdargs.arch, cmdargs.hypervisor) and cmdargs.arch != 'aarch64':
         disabled_list.remove("tst-feexcept.so")
+
+    test_net.set_arch(cmdargs.arch)
+    test_tracing.set_arch(cmdargs.arch)
 
     disabled_list.extend(cmdargs.disabled_list)
     main()

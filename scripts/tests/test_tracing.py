@@ -2,11 +2,21 @@ from tests.testing import *
 import os
 import subprocess
 
+arch = os.uname().machine
+def set_arch(_arch):
+    global arch
+    arch = _arch
+
 @test
 def tracing_smoke_test():
+    global arch
+    run_args = []
+    if os.uname().machine != arch:
+        run_args=['--arch', arch, '-c', '2']
     path = '/this/path/does/not/exist'
     guest = Guest(['--trace=vfs_*,net_packet*,sched_wait*', '--trace-backtrace', '-e', path],
-        hold_with_poweroff=True, show_output_on_error=False, scan_for_failed_to_load_object_error=False)
+        hold_with_poweroff=True, show_output_on_error=False, scan_for_failed_to_load_object_error=False,
+        run_py_args=run_args)
     try:
         wait_for_line(guest, 'Failed to load object: %s. Powering off.' % path)
 
