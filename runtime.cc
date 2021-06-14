@@ -11,7 +11,6 @@
 #include <cstring>
 #include <string.h>
 #include <exception>
-#include <cxxabi.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #include <link.h>
@@ -61,6 +60,14 @@
 #include <sys/wait.h>
 #include <pty.h>
 #include <osv/pid.h>
+
+// cxxabi.h from gcc 10 and earlier used to say that __cxa_finalize returns
+// an int, while it should return void (and does so on gcc 11). To allow us
+// to define __cxa_finalize with neither gcc 10 or 11 complaining, we need
+// to hide the declaration in the header file
+#define __cxa_finalize __cxa_finalize_ignore
+#include <cxxabi.h>
+#undef __cxa_finalize
 
 #define __LC_LAST 13
 
@@ -169,11 +176,11 @@ int __cxa_atexit(destructor_t destructor, void *arg, void *dso)
     return 0;
 }
 
-int __cxa_finalize(void *dso)
+void __cxa_finalize(void *dso)
 {
     if (!dso || dso == &__dso_handle) {
         debug("__cxa_finalize() running kernel's destructors not supported\n");
-        return 0;
+        return;
     }
     std::vector<std::pair<destructor_t,void*>> my_destructors;
     WITH_LOCK(destructors_mutex) {
@@ -183,7 +190,7 @@ int __cxa_finalize(void *dso)
     for (auto d : boost::adaptors::reverse(my_destructors)) {
         d.first(d.second);
     }
-    return 0;
+    return;
 }
 }
 
