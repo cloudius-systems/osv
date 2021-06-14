@@ -2197,7 +2197,7 @@ struct bootfs_metadata {
     char name[BOOTFS_PATH_MAX];
 };
 
-extern char bootfs_start;
+extern char bootfs_start[];
 
 int ramfs_set_file_data(struct vnode *vp, const void *data, size_t size);
 void unpack_bootfs(void)
@@ -2223,7 +2223,7 @@ void unpack_bootfs(void)
         if (md[i].type == bootfs_file_type::symlink) {
             // This is a symbolic link record. The file's content is the
             // target path, and we assume ends with a null.
-            if (symlink(&bootfs_start + md[i].offset, md[i].name) != 0) {
+            if (symlink(&bootfs_start[md[i].offset], md[i].name) != 0) {
                 kprintf("couldn't symlink %s: %d\n", md[i].name, errno);
                 sys_panic("unpack_bootfs failed");
             }
@@ -2250,7 +2250,7 @@ void unpack_bootfs(void)
         }
 
         struct vnode *vp = fp->f_dentry->d_vnode;
-        ret = ramfs_set_file_data(vp, &bootfs_start + md[i].offset, md[i].size);
+        ret = ramfs_set_file_data(vp, &bootfs_start[md[i].offset], md[i].size);
         if (ret) {
             kprintf("ramfs_set_file_data failed, ret = %d\n", ret);
             sys_panic("unpack_bootfs failed");
