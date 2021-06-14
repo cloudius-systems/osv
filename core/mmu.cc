@@ -29,6 +29,10 @@
 #include <osv/rwlock.h>
 #include <numeric>
 
+// FIXME: Without this pragma, we get a lot of warnings that I don't know
+// how to explain or fix. For now, let's just ignore them :-(
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+
 extern void* elf_start;
 extern size_t elf_size;
 
