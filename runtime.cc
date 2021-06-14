@@ -641,3 +641,6 @@ char *ctermid(char *s)
     *s = 0;
     return s;
 }
+
+// OSv is always multi-threaded.
+char __libc_single_threaded = 0;
