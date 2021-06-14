@@ -57,8 +57,9 @@ clear_evtchn(int port)
 inline void
 notify_remote_via_evtchn(int port)
 {
-        struct evtchn_send send = { .port = port };
-        (void)HYPERVISOR_event_channel_op(EVTCHNOP_send, &send);
+        struct evtchn_op send;
+	send.u.send.port = port;
+        (void)HYPERVISOR_event_channel_op(EVTCHNOP_send, &send.u);
 }
 
 /*
