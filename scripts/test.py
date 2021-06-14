@@ -35,11 +35,6 @@ firecracker_disabled_list= [
 #The remaining ones are disabled below until we fix various
 #issues that prevent those tests from passing.
 aarch64_disabled_list= [
-    #All java tests require JVM running on aarch64 which in turn at least requires TLS support
-    "java_isolated",
-    "java_non_isolated",
-    "java_no_wrapper",
-    "java-perms",
     #Following tests crash with message 'Assertion failed: type == ARCH_JUMP_SLOT (core/elf.cc: relocate_pltgot: 789)'
     "tst-sigaltstack.so",
     #Remaining tests below fail for various different reasons
@@ -47,16 +42,6 @@ aarch64_disabled_list= [
     "tst-elf-permissions.so",      # Infinite page fault
     "tst-mmap.so",                 # Infinite page fault
 ]
-
-add_tests([
-    SingleCommandTest('java_isolated', '/java_isolated.so -cp /tests/java/tests.jar:/tests/java/isolates.jar \
-        -Disolates.jar=/tests/java/isolates.jar org.junit.runner.JUnitCore io.osv.AllTestsThatTestIsolatedApp'),
-    SingleCommandTest('java_non_isolated', '/java.so -cp /tests/java/tests.jar:/tests/java/isolates.jar \
-        -Disolates.jar=/tests/java/isolates.jar org.junit.runner.JUnitCore io.osv.AllTestsThatTestNonIsolatedApp'),
-    SingleCommandTest('java_no_wrapper', '/usr/bin/java -cp /tests/java/tests.jar \
-        org.junit.runner.JUnitCore io.osv.BasicTests !'),
-    SingleCommandTest('java-perms', '/java_isolated.so -cp /tests/java/tests.jar io.osv.TestDomainPermissions'),
-])
 
 class TestRunnerTest(SingleCommandTest):
     def __init__(self, name):
@@ -85,6 +70,16 @@ def collect_tests():
             if is_test.match(guestpath):
                 test_files.append(guestpath);
     add_tests((TestRunnerTest(os.path.basename(x)) for x in test_files))
+
+def collect_java_tests():
+    with open('modules/java-tests/test_commands', 'r') as f:
+        for line in f:
+            line = line.rstrip();
+            if is_comment.match(line): continue;
+            components = line.split(": ", 2);
+            test_name = components[0].strip();
+            test_command = components[1].strip()
+            add_tests([SingleCommandTest(test_name, test_command)])
 
 def run_test(test):
     sys.stdout.write("  TEST %-35s" % test.name)
@@ -154,6 +149,7 @@ def run_tests():
     print(("OK (%d %s run, %.3f s)" % (len(tests_to_run), pluralize("test", len(tests_to_run)), duration)))
 
 def main():
+    collect_java_tests()
     collect_tests()
     while True:
         run_tests()

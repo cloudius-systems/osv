@@ -6,7 +6,6 @@ from osv.modules import api
 _module = '${OSV_BASE}/modules/cloud-init'
 
 usr_files = FileMap()
-usr_files.add(os.path.join(_module, 'cloud-init.so')).to('/usr/mgmt/cloud-init.so')
 usr_files.add(os.path.join(_module, 'cloud-init.yaml')).to('/usr/mgmt/cloud-init.yaml')
 usr_files.add(os.path.join(_module, 'cmdline')).to('/init/00-cmdline')
 
