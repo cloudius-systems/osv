@@ -428,6 +428,19 @@ public:
         }
         return new(p) thread(std::forward<Args>(args)...);
     }
+    // Since make() doesn't necessarily allocate with "new", dispose() should
+    // be used to free it, not "delete". However, in practice our new and
+    // delete are the same, so delete is fine.
+    static void dispose(thread* p) {
+        p->~thread();
+        free(p);
+    }
+    using thread_unique_ptr = std::unique_ptr<thread, decltype(&thread::dispose)>;
+    template <typename... Args>
+    static thread_unique_ptr make_unique(Args&&... args) {
+        return thread_unique_ptr(make(std::forward<Args>(args)...),
+        thread::dispose);
+    }
 private:
     explicit thread(std::function<void ()> func, attr attributes = attr(),
             bool main = false, bool app = false);

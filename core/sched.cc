@@ -135,7 +135,7 @@ public:
 private:
     mutex _mtx;
     std::list<thread*> _zombies;
-    std::unique_ptr<thread> _thread;
+    thread_unique_ptr _thread;
 };
 
 cpu::cpu(unsigned _id)
@@ -552,7 +552,7 @@ void thread::pin(cpu *target_cpu)
     // load balancer thread) but a "good-enough" dirty solution is to
     // temporarily create a new ad-hoc thread, "wakeme".
     bool do_wakeme = false;
-    std::unique_ptr<thread> wakeme(thread::make([&] () {
+    thread_unique_ptr wakeme(thread::make_unique([&] () {
         wait_until([&] { return do_wakeme; });
         t.wake();
     }, sched::thread::attr().pin(source_cpu)));
@@ -590,7 +590,7 @@ void thread::pin(thread *t, cpu *target_cpu)
     // where the target thread is currently running. We start here a new
     // helper thread to follow the target thread's CPU. We could have also
     // re-used an existing thread (e.g., the load balancer thread).
-    std::unique_ptr<thread> helper(thread::make([&] {
+    thread_unique_ptr helper(thread::make_unique([&] {
         WITH_LOCK(irq_lock) {
             // This thread started on the same CPU as t, but by now t might
             // have moved. If that happened, we need to move too.
@@ -701,7 +701,7 @@ void thread::unpin()
         }
         return;
     }
-    std::unique_ptr<thread> helper(thread::make([this] {
+    thread_unique_ptr helper(thread::make_unique([this] {
         WITH_LOCK(preempt_lock) {
             // helper thread started on the same CPU as "this", but by now
             // "this" might migrated. If that happened helper need to migrate.
@@ -973,7 +973,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
     , _migration_lock_counter(0)
     , _pinned(false)
     , _id(0)
-    , _cleanup([this] { delete this; })
+    , _cleanup([this] { dispose(this); })
     , _app(app)
     , _joiner(nullptr)
 {
@@ -1600,7 +1600,7 @@ bool operator<(const timer_base& t1, const timer_base& t2)
 }
 
 thread::reaper::reaper()
-    : _mtx{}, _zombies{}, _thread(thread::make([=] { reap(); }))
+    : _mtx{}, _zombies{}, _thread(thread::make_unique([=] { reap(); }))
 {
     _thread->start();
 }
