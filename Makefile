@@ -1403,6 +1403,7 @@ musl += prng/lcong48.o
 musl += prng/lrand48.o
 musl += prng/mrand48.o
 musl += prng/seed48.o
+$(out)/musl/src/prng/seed48.o: CFLAGS += -Wno-array-parameter
 musl += prng/srand48.o
 libc += random.o
 
