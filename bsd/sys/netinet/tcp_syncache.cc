@@ -920,10 +920,11 @@ int syncache_expand(struct in_conninfo *inc, struct tcpopt *to,
 	 */
 	if ((to->to_flags & TOF_TS) && to->to_tsecr != sc->sc_ts&&
 	!TOEPCB_ISSET(sc)) {if
-(		(s = tcp_log_addrs(inc, th, NULL, NULL)))
+(		(s = tcp_log_addrs(inc, th, NULL, NULL))) {
 		bsd_log(LOG_DEBUG, "%s; %s: TSECR %u != TS %u, "
 		"segment rejected\n",
 		s, __func__, to->to_tsecr, sc->sc_ts);
+		}
 		goto failed;
 	}
 

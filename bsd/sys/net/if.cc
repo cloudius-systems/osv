@@ -2624,8 +2624,8 @@ if_allocmulti(struct ifnet *ifp, struct bsd_sockaddr *sa, struct bsd_sockaddr *l
 		free(ifma);
 		return (NULL);
 	}
-    if (mflags & M_ZERO)
-        bzero(dupsa, sa->sa_len);
+	if (mflags & M_ZERO)
+		bzero(dupsa, sa->sa_len);
 	bcopy(llsa, dupsa, llsa->sa_len);
 	ifma->ifma_lladdr = dupsa;
 
