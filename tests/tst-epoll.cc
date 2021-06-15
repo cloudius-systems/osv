@@ -32,7 +32,7 @@ static void report(bool ok, std::string msg)
 
 static void write_one(int fd)
 {
-    char c;
+    char c = 0;
     int w = write(fd, &c, 1);
     report(w == 1, "write");
 }
