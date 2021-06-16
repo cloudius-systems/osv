@@ -13,6 +13,7 @@
 #include <osv/migration-lock.hh>
 #include <boost/test/unit_test.hpp>
 #include <future>
+#include <thread>
 
 using namespace osv::clock::literals;
 using namespace async;
