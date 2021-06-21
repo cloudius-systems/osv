@@ -1191,6 +1191,83 @@ int stat(const char *pathname, struct stat *st)
     return __xstat(1, pathname, st);
 }
 
+// Our <sys/stat.h> (from Musl) doesn't yet declare statx(), struct statx,
+// or the various STATX_* constants. So we need to do it here for now.
+// Eventually, when we update Musl or modify it manually to include these
+// definitions, they should be removed from here:
+struct statx_timestamp
+{
+    int64_t tv_sec;
+    uint32_t tv_nsec;
+    int32_t statx_timestamp_pad1[1];
+};
+struct statx {
+    uint32_t stx_mask;
+    uint32_t stx_blksize;
+    uint64_t stx_attributes;
+    uint32_t stx_nlink;
+    uint32_t stx_uid;
+    uint32_t stx_gid;
+    uint16_t stx_mode;
+    uint16_t __statx_pad1[1];
+    uint64_t stx_ino;
+    uint64_t stx_size;
+    uint64_t stx_blocks;
+    uint64_t stx_attributes_mask;
+    struct statx_timestamp stx_atime;
+    struct statx_timestamp stx_btime;
+    struct statx_timestamp stx_ctime;
+    struct statx_timestamp stx_mtime;
+    uint32_t stx_rdev_major;
+    uint32_t stx_rdev_minor;
+    uint32_t stx_dev_major;
+    uint32_t stx_dev_minor;
+    uint64_t __statx_pad2[14];
+};
+extern "C" int statx(int dirfd, const char* pathname, int flags, unsigned int mask, struct statx *buf);
+#define STATX_BASIC_STATS 0x000007ffU
+
+int statx(int dirfd, const char* pathname, int flags, unsigned int mask,
+    struct statx *buf)
+{
+    // This is a simplistic implementation which just calls the old fstatat()
+    // and converts the resulting "struct stat" to a "struct statx".
+    // This is good enough for OSv and its local filesystems, where we don't
+    // expect great performance savings from not retrieving all the fields.
+    struct stat st;
+    int ret = fstatat(dirfd, pathname, &st, flags);
+    if (ret != 0) {
+        return ret;
+    }
+    // Convert the information we got in "struct stat" to "struct statx".
+    // We are allowed to ignore the list of requested attributes in "mask" -
+    // the documentation specifies that "the kernel may return fields that
+    // weren't requested and may fail to return fields that were requested
+    // ... Fields that are given values despite being unrequested can just
+    // be ignored.". We just need to return stx_mask saying what we filled.
+    buf->stx_mask = STATX_BASIC_STATS;
+    buf->stx_blksize = st.st_blksize;
+    buf->stx_attributes_mask = 0;
+    buf->stx_nlink = st.st_nlink;
+    buf->stx_uid = st.st_uid;
+    buf->stx_gid = st.st_gid;
+    buf->stx_mode = st.st_mode;
+    buf->stx_ino = st.st_ino;
+    buf->stx_size = st.st_size;
+    buf->stx_blocks = st.st_blocks;
+    buf->stx_atime.tv_sec = st.st_atim.tv_sec;
+    buf->stx_atime.tv_nsec = st.st_atim.tv_nsec;
+    buf->stx_mtime.tv_sec = st.st_mtim.tv_sec;
+    buf->stx_mtime.tv_nsec = st.st_mtim.tv_nsec;
+    buf->stx_ctime.tv_sec = st.st_ctim.tv_sec;
+    buf->stx_ctime.tv_nsec = st.st_ctim.tv_nsec;
+    buf->stx_rdev_major = major(st.st_rdev);
+    buf->stx_rdev_minor = minor(st.st_rdev);
+    buf->stx_dev_major = major(st.st_dev);
+    buf->stx_dev_minor = minor(st.st_dev);
+    return 0;
+}
+
 TRACEPOINT(trace_vfs_lstat, "pathname=%s, stat=%p", const char*, struct stat*);
 TRACEPOINT(trace_vfs_lstat_ret, "");
 TRACEPOINT(trace_vfs_lstat_err, "errno=%d", int);
