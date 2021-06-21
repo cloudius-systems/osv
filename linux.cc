@@ -62,23 +62,44 @@ static mutex queues_mutex;
 enum {
     FUTEX_WAIT           = 0,
     FUTEX_WAKE           = 1,
+    FUTEX_WAIT_BITSET    = 9,
     FUTEX_PRIVATE_FLAG   = 128,
     FUTEX_CLOCK_REALTIME = 256,
     FUTEX_CMD_MASK       = ~(FUTEX_PRIVATE_FLAG|FUTEX_CLOCK_REALTIME),
 };
 
+#define FUTEX_BITSET_MATCH_ANY  0xffffffff
+
 int futex(int *uaddr, int op, int val, const struct timespec *timeout,
-        int *uaddr2, int val3)
+        int *uaddr2, uint32_t val3)
 {
     switch (op & FUTEX_CMD_MASK) {
+    case FUTEX_WAIT_BITSET:
+        if (val3 != FUTEX_BITSET_MATCH_ANY) {
+            abort("Unimplemented futex() operation %d\n", op);
+        }
+
     case FUTEX_WAIT:
         WITH_LOCK(queues_mutex) {
             if (*uaddr == val) {
                 waitqueue &q = queues[uaddr];
                 if (timeout) {
                     sched::timer tmr(*sched::thread::current());
-                    tmr.set(std::chrono::seconds(timeout->tv_sec) +
-                            std::chrono::nanoseconds(timeout->tv_nsec));
+                    if ((op & FUTEX_CMD_MASK) == FUTEX_WAIT_BITSET) {
+                        // If FUTEX_WAIT_BITSET we need to interpret timeout as an absolute
+                        // time point. If futex operation FUTEX_CLOCK_REALTIME is set we will use
+                        // real-time clock otherwise we will use monotonic clock
+                        if (op & FUTEX_CLOCK_REALTIME) {
+                            tmr.set(osv::clock::wall::time_point(std::chrono::seconds(timeout->tv_sec) +
+                                                                 std::chrono::nanoseconds(timeout->tv_nsec)));
+                        } else {
+                            tmr.set(osv::clock::uptime::time_point(std::chrono::seconds(timeout->tv_sec) +
+                                                                   std::chrono::nanoseconds(timeout->tv_nsec)));
+                        }
+                    } else {
+                        tmr.set(std::chrono::seconds(timeout->tv_sec) +
+                                std::chrono::nanoseconds(timeout->tv_nsec));
+                    }
                     sched::thread::wait_for(queues_mutex, tmr, q);
                     // FIXME: testing if tmr was expired isn't quite right -
                     // we could have had both a wakeup and timer expiration
@@ -403,7 +424,7 @@ long syscall(long number, ...)
     SYSCALL0(gettid);
     SYSCALL2(clock_gettime, clockid_t, struct timespec *);
     SYSCALL2(clock_getres, clockid_t, struct timespec *);
-    SYSCALL6(futex, int *, int, int, const struct timespec *, int *, int);
+    SYSCALL6(futex, int *, int, int, const struct timespec *, int *, uint32_t);
     SYSCALL1(close, int);
     SYSCALL2(pipe2, int *, int);
     SYSCALL1(epoll_create1, int);
