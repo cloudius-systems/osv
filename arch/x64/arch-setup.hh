@@ -43,6 +43,7 @@ struct osv_multiboot_info_type {
     u32 tsc_disk_done, tsc_disk_done_hi;
     u32 tsc_uncompress_done, tsc_uncompress_done_hi;
     u8 disk_err;
+    u64 pvh_rsdp;
 } __attribute__((packed));
 
 struct e820ent {

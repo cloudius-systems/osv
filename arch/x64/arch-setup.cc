@@ -21,6 +21,7 @@
 #include <osv/boot.hh>
 #include <osv/commands.hh>
 #include "dmi.hh"
+#include "drivers/acpi.hh"
 
 osv_multiboot_info_type* osv_multiboot_info;
 
@@ -245,6 +246,8 @@ void arch_init_premain()
     auto omb = *osv_multiboot_info;
     if (omb.disk_err)
 	debug_early_u64("Error reading disk (real mode): ", static_cast<u64>(omb.disk_err));
+
+    acpi::pvh_rsdp_paddr = omb.pvh_rsdp;
 
     disable_pic();
 }
