@@ -71,8 +71,12 @@ def collect_tests():
                 test_files.append(guestpath);
     add_tests((TestRunnerTest(os.path.basename(x)) for x in test_files))
 
+java_test_commands_file = 'modules/java-tests/test_commands'
+
 def collect_java_tests():
-    with open('modules/java-tests/test_commands', 'r') as f:
+    if not os.path.exists(java_test_commands_file):
+        return
+    with open(java_test_commands_file, 'r') as f:
         for line in f:
             line = line.rstrip();
             if is_comment.match(line): continue;
