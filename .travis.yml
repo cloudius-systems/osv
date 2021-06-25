@@ -33,6 +33,8 @@ jobs:
     - stage: build_and_publish
       script:
         - docker exec build ./scripts/build clean
+        - docker exec build ./scripts/build -j$(nproc) image=tests
+        - docker exec build ./scripts/test.py -d tracing_smoke_test
         - docker exec build ./scripts/build-capstan-mpm-packages kernel
         - docker exec build ./scripts/build-capstan-mpm-packages unit_tests
         - docker exec build ./scripts/build-capstan-mpm-packages monitoring
