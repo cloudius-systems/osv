@@ -8,6 +8,18 @@ osv_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
 destination = '%s/build/downloaded_packages/aarch64' % osv_root
 
 def fedora_download_commands(fedora_version):
+    #For some reason, the gcc-c++-aarch64-linux-gnu package Fedora 34 ships with,
+    #installs the version 10.2.1 of gcc aarch64 cross-compiler which is different
+    #from the regular x86_64 gcc compiler - 11.1.1. To avoid compilation errors caused
+    #by the mismatch between compiler and aarch64 C/C++ headers Fedora 34 provides,
+    #we download all relevant artifacts from Fedora 33 which also provides
+    #the version 10.2.1 of gcc aarch64 cross-compiler and therefore compatible C/C++
+    #headers.
+    if fedora_version == '34':
+        gcc_version = subprocess.check_output(["aarch64-linux-gnu-gcc", "--version"]).decode('utf-8')
+        if gcc_version.find('(GCC) 10.2.1') >= 0:
+            fedora_version = '33'
+
     gcc_packages = ['gcc',
                     'glibc',
                     'glibc-devel',
