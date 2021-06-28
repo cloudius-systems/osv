@@ -19,7 +19,7 @@ os.environ["LANG"]="C"
 
 disabled_list= [
     "tst-dns-resolver.so",
-    "tst-feexcept.so", # On AArch64 the tests around floating point exceptions (SIGFPE) fail even on KVM
+    "tst-feexcept.so", # On AArch64 the tests around floating point exceptions (SIGFPE) fail even on KVM - see issue #1150
 ]
 
 qemu_disabled_list= [
@@ -31,16 +31,12 @@ firecracker_disabled_list= [
     "tcp_close_without_reading_on_qemu"
 ]
 
-#At this point there are 122 out of 131 unit tests that pass on aarch64.
-#The remaining ones are disabled below until we fix various
-#issues that prevent those tests from passing.
+#At this point there are 128 out of 134 unit tests that pass on aarch64.
+#The remaining ones are disabled below until we fix the issues that prevent them from passing.
 aarch64_disabled_list= [
-    #Following tests crash with message 'Assertion failed: type == ARCH_JUMP_SLOT (core/elf.cc: relocate_pltgot: 789)'
-    "tst-sigaltstack.so",
-    #Remaining tests below fail for various different reasons
-    #Please see comments on the right side for more details
-    "tst-elf-permissions.so",      # Infinite page fault
-    "tst-mmap.so",                 # Infinite page fault
+    "tst-sigaltstack.so",          #Most likely fails due to the lack of signals support on aarch64 - see #1151
+    "tst-elf-permissions.so",      #Hangs - most likely fails due to the lack of signals support on aarch64 - see #1152
+    "tst-mmap.so",                 #Hangs - most likely fails due to the lack of signals support on aarch64 - see #1153
 ]
 
 class TestRunnerTest(SingleCommandTest):
