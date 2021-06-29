@@ -145,14 +145,14 @@ private:
     u16 _device_id;
 
     mmioaddr_t _addr_mmio;
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
     std::unique_ptr<spi_interrupt> _irq;
 #else
     std::unique_ptr<gsi_edge_interrupt> _irq;
 #endif
 };
 
-#ifndef AARCH64_PORT_STUB
+#ifdef __x86_64__
 void parse_mmio_device_configuration(char *cmdline);
 #else
 void add_mmio_device_configuration(mmio_device_info device_info);

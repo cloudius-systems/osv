@@ -28,11 +28,11 @@ namespace virtio {
 struct interrupt_factory {
     std::function<void(interrupt_manager &)> register_msi_bindings = nullptr;
     std::function<pci_interrupt *(pci::device &)> create_pci_interrupt = nullptr;
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
     std::function<spi_interrupt *()> create_spi_edge_interrupt = nullptr;
 #else
     std::function<gsi_edge_interrupt *()> create_gsi_edge_interrupt = nullptr;
-#endif /* !AARCH64_PORT_STUB */
+#endif /* __aarch64__ */
 };
 
 // Defines virtio transport abstraction used by virtio-driver

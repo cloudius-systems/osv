@@ -19,9 +19,9 @@
 
 #include "smp.hh"
 
-#ifndef AARCH64_PORT_STUB
+#ifdef __x86_64__
 #include "drivers/acpi.hh"
-#endif /* !AARCH64_PORT_STUB */
+#endif /* __x86_64__ */
 
 #include <osv/sched.hh>
 #include <osv/barrier.hh>
@@ -537,12 +537,12 @@ void* do_main_thread(void *_main_args)
     }
 
     boot_time.event("Total time");
-#ifndef AARCH64_PORT_STUB
+#ifdef __x86_64__
     // Some hypervisors like firecracker when booting OSv
     // look for this write to this port as a signal of end of
     // boot time.
     processor::outb(123, 0x3f0);
-#endif /* !AARCH64_PORT_STUB */
+#endif /* __x86_64__ */
 
     if (opt_bootchart) {
         boot_time.print_chart();
@@ -670,9 +670,9 @@ void main_cont(int loader_argc, char** loader_argv)
 
     memory::enable_debug_allocator();
 
-#ifndef AARCH64_PORT_STUB
+#ifdef __x86_64__
     acpi::init();
-#endif /* !AARCH64_PORT_STUB */
+#endif /* __x86_64__ */
 
     if (sched::cpus.size() > sched::max_cpus) {
         printf("Too many cpus, can't boot with greater than %u cpus.\n", sched::max_cpus);

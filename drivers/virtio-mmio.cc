@@ -103,7 +103,7 @@ u8 mmio_device::read_config(u32 offset)
 
 void mmio_device::register_interrupt(interrupt_factory irq_factory)
 {
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
     _irq.reset(irq_factory.create_spi_edge_interrupt());
 #else
     _irq.reset(irq_factory.create_gsi_edge_interrupt());
@@ -140,7 +140,7 @@ bool mmio_device::parse_config()
     return true;
 }
 
-#ifndef AARCH64_PORT_STUB
+#ifdef __x86_64__
 #define VIRTIO_MMIO_DEVICE_CMDLINE_PREFIX "virtio_mmio.device="
 static mmio_device_info* parse_mmio_device_info(char *cmdline)
 {   //
@@ -195,7 +195,7 @@ static mmio_device_info* parse_mmio_device_info(char *cmdline)
 
 static std::vector<struct mmio_device_info> *mmio_device_info_entries = 0;
 
-#ifndef AARCH64_PORT_STUB
+#ifdef __x86_64__
 void parse_mmio_device_configuration(char *cmdline)
 {   //
     // We are assuming the mmio devices information is appended to the

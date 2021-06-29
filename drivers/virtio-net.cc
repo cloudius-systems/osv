@@ -317,7 +317,7 @@ net::net(virtio_device& dev)
             [=] { poll_task->wake(); });
     };
 
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
     int_factory.create_spi_edge_interrupt = [this,poll_task]() {
         return new spi_interrupt(
             gic::irq_type::IRQ_TYPE_EDGE,

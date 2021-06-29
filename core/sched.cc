@@ -225,7 +225,7 @@ void thread::cputime_estimator_get(
 void cpu::schedule()
 {
     WITH_LOCK(irq_lock) {
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
         reschedule_from_interrupt(sched::cpu::current(), false, thyst);
 #else
         current()->reschedule_from_interrupt();
@@ -243,7 +243,7 @@ void cpu::schedule()
 // is called from arch/arch64/sched.S as well.
 // At the end, we define reschedule_from_interrupt() in C++ for x86_64 and schedule_next_thread()
 // and destroy_current_cpu_terminating_thread() in C++ for aarch64.
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
 inline thread_switch_data cpu::schedule_next_thread(bool called_from_yield,
                                                     thread_runtime::duration preempt_after)
 {
@@ -280,7 +280,7 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
         // lowest runtime, and update the timer until the next thread's turn.
         if (runqueue.empty()) {
             preemption_timer.cancel();
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
             return switch_data;
 #else
             return;
@@ -293,7 +293,7 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
                 if (delta > 0) {
                     preemption_timer.set(now + delta);
                 }
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
                 return switch_data;
 #else
                 return;
@@ -365,7 +365,7 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
     if (lazy_flush_tlb.exchange(false, std::memory_order_seq_cst)) {
         mmu::flush_tlb_local();
     }
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
     switch_data.old_thread_state = &(p->_state);
     switch_data.new_thread_state = &(n->_state);
     return switch_data;
@@ -379,7 +379,7 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
     // stack and the values we can access now are those that existed in the
     // reschedule call which scheduled n out, and will now be returning.
     // So to get the current cpu, we must use cpu::current(), not "this".
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
 extern "C" void destroy_current_cpu_terminating_thread()
 {
 #endif
@@ -389,7 +389,7 @@ extern "C" void destroy_current_cpu_terminating_thread()
     }
 }
 
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
 extern "C" thread_switch_data cpu_schedule_next_thread(cpu* cpu,
                                                        bool called_from_yield,
                                                        thread_runtime::duration preempt_after)
@@ -570,7 +570,7 @@ void thread::pin(cpu *target_cpu)
         // Note that wakeme is on the same CPU, and irq is disabled,
         // so it will not actually run until we stop running.
         wakeme->wake_with([&] { do_wakeme = true; });
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
         reschedule_from_interrupt(source_cpu, false, thyst);
 #else
         source_cpu->reschedule_from_interrupt();
@@ -813,7 +813,7 @@ void thread::yield(thread_runtime::duration preempt_after)
     }
     trace_sched_yield_switch();
 
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
     reschedule_from_interrupt(cpu::current(), true, preempt_after);
 #else
     cpu::current()->reschedule_from_interrupt(true, preempt_after);

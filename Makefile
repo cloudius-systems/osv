@@ -1424,6 +1424,7 @@ libc += arch/$(arch)/ucontext/getcontext.o
 libc += arch/$(arch)/ucontext/setcontext.o
 libc += arch/$(arch)/ucontext/start_context.o
 libc += arch/$(arch)/ucontext/ucontext.o
+libc += string/memmove.o
 endif
 
 musl += stdio/__fclose_ca.o
@@ -1590,7 +1591,6 @@ musl += string/memchr.o
 musl += string/memcmp.o
 libc += string/memcpy.o
 musl += string/memmem.o
-libc += string/memmove.o
 musl += string/mempcpy.o
 musl += string/memrchr.o
 libc += string/__memmove_chk.o

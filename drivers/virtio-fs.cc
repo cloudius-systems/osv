@@ -115,7 +115,7 @@ fs::fs(virtio_device& virtio_dev)
             [=] { t->wake(); });
     };
 
-#ifndef AARCH64_PORT_STUB
+#ifdef __x86_64__
     int_factory.create_gsi_edge_interrupt = [this, t]() {
         return new gsi_edge_interrupt(
             _dev.get_irq(),

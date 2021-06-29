@@ -44,7 +44,7 @@ namespace utf = boost::unit_test;
 //#include "BionicDeathTest.h"
 //#include "utils.h"
 
-#ifndef AARCH64_PORT_STUB
+#ifdef __x86_64__
 // This #include is actually a test too. We have to duplicate the
 // definitions of the RENAME_ constants because <linux/fs.h> also contains
 // pollution such as BLOCK_SIZE which conflicts with lots of user code.
@@ -2451,7 +2451,7 @@ TEST(STDIO_TEST, fread_with_locked_file) {
   fclose(fp1);
 }
 
-#ifndef AARCH64_PORT_STUB
+#ifdef __x86_64__
 TEST(STDIO_TEST, SEEK_macros) {
   ASSERT_EQ(0, SEEK_SET);
   ASSERT_EQ(1, SEEK_CUR);

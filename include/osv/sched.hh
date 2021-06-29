@@ -31,7 +31,7 @@ typedef float runtime_t;
 
 extern "C" {
 void smp_main();
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
 void destroy_current_cpu_terminating_thread();
 #endif
 };
@@ -324,7 +324,7 @@ constexpr thread_runtime::duration thyst = std::chrono::milliseconds(5);
 constexpr thread_runtime::duration context_switch_penalty =
                                            std::chrono::microseconds(10);
 
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
 struct thread_switch_data {
    thread_state* old_thread_state = nullptr;
    thread_state* new_thread_state = nullptr;
@@ -621,7 +621,7 @@ private:
             unsigned allowed_initial_states_mask = 1 << unsigned(status::waiting));
     static void sleep_impl(timer &tmr);
     void main();
-#ifndef AARCH64_PORT_STUB
+#ifdef __x86_64__
     void switch_to();
 #endif
     void switch_to_first();
@@ -728,7 +728,7 @@ private:
 public:
     void destroy();
 private:
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
     friend void ::destroy_current_cpu_terminating_thread();
 #endif
     friend class thread_ref_guard;
@@ -912,7 +912,7 @@ struct cpu : private timer_base::client {
      * @param preempt_after fire the preemption timer after this time period
      *                      (relevant only when "called_from_yield" is TRUE)
      */
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
     thread_switch_data schedule_next_thread(bool called_from_yield = false,
                                             thread_runtime::duration preempt_after = thyst);
 #else
@@ -928,7 +928,7 @@ struct cpu : private timer_base::client {
     int renormalize_count;
 };
 
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
 extern "C" void reschedule_from_interrupt(cpu* cpu,
                                           bool called_from_yield,
                                           thread_runtime::duration preempt_after);
@@ -1035,7 +1035,7 @@ inline bool preemptable()
 inline void preempt()
 {
     if (preemptable()) {
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
         reschedule_from_interrupt(sched::cpu::current(), false, thyst);
 #else
         sched::cpu::current()->reschedule_from_interrupt();
