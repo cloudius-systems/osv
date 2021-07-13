@@ -26,6 +26,6 @@ set -euo pipefail
 . .travis/cirp/check_precondition.sh
 . .travis/cirp/install.sh
 
-ci-release-publisher cleanup_publish
-ci-release-publisher cleanup_store --scope current-job previous-finished-builds \
+ci-release-publisher --travis-api-url https://api.travis-ci.com cleanup_publish
+ci-release-publisher --travis-api-url https://api.travis-ci.com cleanup_store --scope current-job previous-finished-builds \
                                    --release complete incomplete
