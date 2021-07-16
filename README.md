@@ -1,7 +1,8 @@
 ***OSv was originally designed and implemented by Cloudius Systems (now ScyllaDB) however
  currently it is being maintained and enhanced by a small community of volunteers.
  If you are into systems programming or want to learn and help us improve OSv, then please
- contact us on [OSv Google Group forum](https://groups.google.com/forum/#!forum/osv-dev).
+ contact us on [OSv Google Group forum](https://groups.google.com/forum/#!forum/osv-dev)
+ or feel free to pickup any [good issues for newcomers](https://github.com/cloudius-systems/osv/labels/good-for-newcomers).
  For details on how to format and send patches, please read
  [this wiki](https://github.com/cloudius-systems/osv/wiki/Formatting-and-sending-patches)
  (__we do NOT accept pull requests__).***
@@ -14,14 +15,13 @@ operating systems which were designed for a vast range of physical machines. Bui
 the ground up for effortless deployment and management of microservices
 and serverless apps, with superior performance.
 
-OSv has been designed to run unmodified x86-64 Linux
+OSv has been designed to run unmodified x86-64 and AArch64 Linux
 binaries **as is**, which effectively makes it a **Linux binary compatible unikernel**
 (for more details about Linux ABI compatibility please read
 [this doc](https://github.com/cloudius-systems/osv/wiki/OSv-Linux-ABI-Compatibility)).
 In particular OSv can run many managed language runtimes including
 [**JVM**](https://github.com/cloudius-systems/osv-apps/tree/master/java-example),
-**Python** [**2**](https://github.com/cloudius-systems/osv-apps/tree/master/python2x) and
-[**3**](https://github.com/cloudius-systems/osv-apps/tree/master/python3x),
+[**Python**](https://github.com/cloudius-systems/osv-apps/tree/master/python-from-host),
 [**Node.JS**](https://github.com/cloudius-systems/osv-apps/tree/master/node-from-host),
 [**Ruby**](https://github.com/cloudius-systems/osv-apps/tree/master/ruby-example), **Erlang**,
 and applications built on top of those runtimes.
@@ -36,6 +36,7 @@ and [WebAssembly/Wasmer](https://github.com/cloudius-systems/osv-apps/tree/maste
 OSv can boot as fast as **~5 ms** on Firecracker using as low as 15 MB of memory.
 OSv can run on many hypervisors including QEMU/KVM,
 [Firecracker](https://github.com/cloudius-systems/osv/wiki/Running-OSv-on-Firecracker),
+[Cloud Hypervisor](https://github.com/cloudius-systems/osv/wiki/Running-OSv-on-Cloud-Hypervisor),
 Xen, [VMWare](https://github.com/cloudius-systems/osv/wiki/Running-OSv-on-VMware-ESXi),
 [VirtualBox](https://github.com/cloudius-systems/osv/wiki/Running-OSv-on-VirtualBox) and
 Hyperkit as well as open clouds like AWS EC2, GCE and OpenStack.
@@ -101,7 +102,7 @@ So OSv is probably not best suited to run MySQL or ElasticSearch, but should del
 
 ### Kernel Size
 
-At this moment (as of May 2020) the size of the uncompressed OSv kernel (`kernel.elf` artifact) is around
+At this moment (as of July 2021) the size of the uncompressed OSv kernel (`kernel.elf` artifact) is around
 6.7 MB (the compressed is ~ 2.7 MB). This is not that small comparing to Linux kernel and quite large comparing
 to other unikernels. However, bear in mind that OSv kernel (being unikernel) provides **subset** of functionality
  of the following Linux libraries (see their approximate size on Linux host):
@@ -126,13 +127,13 @@ quite make sense.
 
 ### Boot Time
 
-OSv with _Read-Only FS with networking off_ can boot as fast as **~5 ms** on Firecracker 
+OSv, with _Read-Only FS and networking off_, can boot as fast as **~5 ms** on Firecracker 
 and even faster around **~3 ms** on QEMU with the microvm machine. However, in general the boot time
 will depend on many factors like hypervisor including settings of individual para-virtual devices, 
-filesystem (ZFS, ROFS or RAMFS) and some boot parameters. Please note that by default OSv images
+filesystem (ZFS, ROFS, RAMFS or Virtio-FS) and some boot parameters. Please note that by default OSv images
 get built with ZFS filesystem.
 
-For example, the boot time of ZFS image on Firecracker is around ~40 ms and regular QEMU around 200 ms these days. Also,
+For example, the boot time of ZFS image on Firecracker is ~40 ms and regular QEMU ~200 ms these days. Also,
 newer versions of QEMU (>=4.0) are typically faster to boot. Booting on QEMU in PVH/HVM mode (aka direct kernel boot, enabled 
 by `-k` option of `run.py`) should always be faster as OSv is directly invoked in 64-bit long mode. Please see
 [this Wiki](https://github.com/cloudius-systems/osv/wiki/OSv-boot-methods-overview) for the brief review of the boot
@@ -175,7 +176,7 @@ making application threads use [lazily allocated stacks](https://github.com/clou
 
 ## Testing
 
-OSv comes with around 130 unit tests that get executed upon every commit and run on ScyllaDB servers. There are also number of extra
+OSv comes with around 140 unit tests that get executed upon every commit and run on ScyllaDB servers. There are also number of extra
 tests located under `tests/` sub-tree that are not automated at this point.
 
 You can run unit tests in number of ways:
@@ -201,18 +202,18 @@ test OSv on different Linux distribution.
 
 ## Setting up Development Environment
 
-OSv can only be built on a 64-bit x86 Linux distribution. Please note that
-this means the "x86_64" or "amd64" version, not the 32-bit "i386" version.
+OSv can only be built on a 64-bit x86 and ARM Linux distribution. Please note that
+this means the "x86_64" or "amd64" version for 64-bit x86 and "aarch64" or "arm64" version for ARM respectively.
 
 In order to build OSv kernel you need a physical or virtual machine with Linux distribution on it and GCC toolchain and
 all necessary packages and libraries OSv build process depends on. The fastest way to set it up is to use the
 [Docker files](https://github.com/cloudius-systems/osv/tree/master/docker#docker-osv-builder) that OSv comes with.
 You can use them to build your own Docker image and then start it in order to build OSv kernel or run an app on OSv inside of it.
 Please note that the main docker file depends on pre-built base **Docker images** for 
-[Ubuntu](https://hub.docker.com/repository/docker/osvunikernel/osv-ubuntu-19.10-builder-base) 
+[Ubuntu](https://hub.docker.com/repository/docker/osvunikernel/osv-ubuntu-20.10-builder-base) 
 or [Fedora](https://hub.docker.com/repository/docker/osvunikernel/osv-fedora-31-builder-base) 
 that get published to DockerHub upon every commit. This should speed up building the final images
-as all necessary packages should already be part of the base images.
+as all necessary packages are installed as part of the base images.
 
 Alternatively, you can manually clone OSv repo and use [setup.py](https://github.com/cloudius-systems/osv/blob/master/scripts/setup.py)
 to install all required packages and libraries, as long as it supports your Linux distribution, and you have both git 
@@ -223,10 +224,11 @@ cd osv && git submodule update --init --recursive
 ./scripts/setup.py
 ```
 
-The `setup.py` recognizes and installs packages for number of Linux distributions including Fedora, Ubuntu, 
+The `setup.py` recognizes and installs packages for number of Linux distributions including Fedora, Ubuntu,
 [Debian](https://github.com/cloudius-systems/osv/wiki/Building-OSv-on-Debian-stable), LinuxMint and RedHat ones 
 (Scientific Linux, NauLinux, CentOS Linux, Red Hat Enterprise Linux, Oracle Linux). Please note that we actively
-maintain and test only Ubuntu and Fedora, so your mileage with other distributions may vary. The `setup.py`
+maintain and test only Ubuntu and Fedora, so your mileage with other distributions may vary. The support of CentOS 7
+has also been recently added and tested so it should work as well. The `setup.py`
 is actually used by Docker files internally to achieve the same result. 
 
 ### IDEs
@@ -291,18 +293,21 @@ For example:
 
 ### Aarch64
 
-By default, OSv kernel gets built for x86_64 architecture, but it is also possible
- to build one for ARM by adding **arch** parameter like so:
+By default, OSv kernel gets built for the native host architecture (x86_64 or aarch64), but it is also possible
+ to cross-compile kernel and modules on Intel machine for ARM by adding **arch** parameter like so:
 ```bash
 ./scripts/build arch=aarch64
 ```
 At this point cross-compiling the **aarch64** version of OSv is only supported
-on Fedora and Ubuntu and relevant aarch64 gcc and libraries' binaries can be downloaded using
-the `./scripts/download_aarch64_packages.py` script. OSv can also be built natively on Ubuntu on ARM hardware like Raspberry PI 4, Odroid N2 or RockPro64
-Please note that simple "hello world" app and 80% of unit tests should work just fine, but overall the ARM part of OSv has not been
- as well maintained and tested as x86_64 due to the lack of volunteers. In addition,
- the same simple example can successfully run on QEMU and Firecraker on Raspberry PI 4 with KVM acceleration enabled.
- For more information about the aarch64 port please read [this Wiki page](https://github.com/cloudius-systems/osv/wiki/AArch64).
+on Fedora, Ubuntu and CentOS 7 and relevant aarch64 gcc and libraries' binaries can be downloaded using
+the `./scripts/download_aarch64_packages.py` script. OSv can also be built natively on Ubuntu on ARM hardware
+like Raspberry PI 4, Odroid N2+ or RockPro64. 
+
+Please note that as of the latest [0.56.0 release](https://github.com/cloudius-systems/osv/releases/tag/v0.56.0), the ARM part of OSv has been greately improved and tested and is quite close in functionality to the x86_64 port.
+In addition, most unit tests and many more advanced apps like nginx, python, iperf3, etc can successfully run
+on QEMU and Firecraker on Raspberry PI 4 and Odroid N2+ with KVM acceleration enabled.
+
+For more information about the aarch64 port please read [this Wiki page](https://github.com/cloudius-systems/osv/wiki/AArch64).
 
 ### Filesystems
 
@@ -316,7 +321,7 @@ At the end of the boot process, OSv dynamic linker loads an application ELF and 
  the kernel ELF. You can specify which filesystem to build image disk as
   by setting parameter `fs` of `./scripts/build` to one of the three values -`zfs`, `rofs` or `ramfs`.
 
-In addition, one can mount NFS filesystem, which had been recently transformed to be a shared library pluggable as a [module](https://github.com/cloudius-systems/osv/tree/master/modules/nfs), and newly implemented [Virtio-FS filesystem](https://stefanha.github.io/virtio/virtio-fs.html#x1-41500011). The NFS and Virtio-FS mounts can be setup by adding proper entry `/etc/fstab` or by passing a boot parameter as explained in this [commit comments](https://github.com/cloudius-systems/osv/commit/47c7e9268ff96f67f4649bb6c63685a5c2d74f00). In addition, very recently OSv has been enhanced to be able to boot from Virtio-FS filesystem.
+In addition, one can mount NFS filesystem, which had been recently transformed to be a shared library pluggable as a [module](https://github.com/cloudius-systems/osv/tree/master/modules/nfs), and newly implemented and improved [Virtio-FS filesystem](https://stefanha.github.io/virtio/virtio-fs.html#x1-41500011). The Virtio-FS mounts can be setup by adding proper entry `/etc/fstab` or by passing a boot parameter as explained in this [Wiki](https://github.com/cloudius-systems/osv/wiki/virtio-fs). In addition, very recently OSv has been enhanced to be able to boot from Virtio-FS filesystem directly.
 
 ## Running OSv
 
