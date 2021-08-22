@@ -319,6 +319,13 @@ struct inpcbinfo {
 	u_long			 ipi_porthashmask;	/* (h) */
 
 	/*
+	 * Load balance groups used for the SO_REUSEPORT option,
+	 * hashed by local port.
+	 */
+	struct	inpcblbgrouphead *ipi_lbgrouphashbase;	/* (h) */
+	u_long			 ipi_lbgrouphashmask;	/* (h) */
+
+	/*
 	 * Pointer to network stack instance
 	 */
 	struct vnet		*ipi_vnet;		/* (c) */
@@ -330,6 +337,27 @@ struct inpcbinfo {
 };
 
 #ifdef _KERNEL
+
+/*
+ * Load balance groups used for the SO_REUSEPORT socket option. Each group
+ * (or unique address:port combination) can be re-used at most
+ * INPCBLBGROUP_SIZMAX (256) times. The inpcbs are stored in il_inp which
+ * is dynamically resized as processes bind/unbind to that specific group.
+ */
+struct inpcblbgroup {
+	LIST_ENTRY(inpcblbgroup) il_list;
+	uint16_t	il_lport;			/* (c) */
+	u_char		il_vflag;			/* (c) */
+	u_char		il_pad;
+	uint32_t	il_pad2;
+	union in_dependaddr il_dependladdr;		/* (c) */
+#define	il_laddr	il_dependladdr.id46_addr.ia46_addr4
+#define	il6_laddr	il_dependladdr.id6_addr
+	uint32_t	il_inpsiz; /* max count in il_inp[] (h) */
+	uint32_t	il_inpcnt; /* cur count in il_inp[] (h) */
+	struct inpcb	*il_inp[];			/* (h) */
+};
+LIST_HEAD(inpcblbgrouphead, inpcblbgroup);
 
 // No need to do any initialization to the lock, if the inp object was
 // created in C++ and the constructor ran (i.e., with new)
@@ -398,6 +426,10 @@ void 	inp_4tuple_get(struct inpcb *inp, uint32_t *laddr, uint16_t *lp,
 	(((faddr) ^ ((faddr) >> 16) ^ ntohs((lport) ^ (fport))) & (mask))
 #define INP_PCBPORTHASH(lport, mask) \
 	(ntohs((lport)) & (mask))
+#define	INP_PCBLBGROUP_PORTHASH(lport, mask) \
+	(ntohs((lport)) & (mask))
+#define	INP_PCBLBGROUP_PKTHASH(faddr, lport, fport) \
+	((faddr) ^ ((faddr) >> 16) ^ ntohs((lport) ^ (fport)))
 
 /*
  * Flags for inp_vflags -- historically version flags only
