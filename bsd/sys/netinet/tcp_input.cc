@@ -3218,8 +3218,8 @@ static ipv4_tcp_conn_id tcp_connection_id(tcpcb* tp)
 {
 	auto& conn = tp->t_inpcb->inp_inc.inc_ie;
 	return {
-		conn.ie_dependfaddr.ie46_foreign.ia46_addr4,
-		conn.ie_dependladdr.ie46_local.ia46_addr4,
+		conn.ie_dependfaddr.id46_addr.ia46_addr4,
+		conn.ie_dependladdr.id46_addr.ia46_addr4,
 		ntohs(conn.ie_fport),
 		ntohs(conn.ie_lport)
 	};
