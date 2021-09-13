@@ -107,6 +107,7 @@ public:
     virtual ~mmio_device() {}
 
     virtual hw_device_id get_id();
+    virtual hw_device_type get_device_type() { return hw_device_type::virtio_over_mmio_device; }
 
     virtual void init() {}
     virtual void print() {}
