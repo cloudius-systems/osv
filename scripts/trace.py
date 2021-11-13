@@ -294,6 +294,17 @@ def prof_lock(args):
 def prof_idle(args):
     show_profile(args, prof.get_idle_profile)
 
+def prof_flame(args):
+    sample_producer = lambda traces: prof.get_hit_profile(traces, get_trace_filter(args))
+    resolver = symbol_resolver(args)
+    time_range = get_time_range(args)
+
+    with get_trace_reader(args) as reader:
+        prof.print_flame_profile(sample_producer(reader.get_traces()),
+            symbol_resolver=resolver,
+            min_hits_count=int(args.min_hits) if args.min_hits else None,
+            time_range=time_range)
+
 def needs_dpkt():
     global dpkt
     try:
@@ -734,6 +745,16 @@ if __name__ == "__main__":
     cmd_prof_timed.add_argument("-t", "--tracepoint", action="store", required=True,
         help="name of the timed tracepoint to show; shows all by default")
     cmd_prof_timed.set_defaults(func=prof_timed, paginate=True)
+
+    cmd_prof_flame = subparsers.add_parser("prof-flame", help="show trace flame profile", description="""
+        Prints profile showing number of times given tracepoint was reached in the flame format.
+        Requires trace samples with backtrace.
+        """)
+    add_symbol_resolution_options(cmd_prof_flame)
+    add_trace_source_options(cmd_prof_flame)
+    add_profile_options(cmd_prof_flame)
+    cmd_prof_flame.add_argument("-t", "--tracepoint", action="store", help="name of the tracepoint to count")
+    cmd_prof_flame.set_defaults(func=prof_flame, paginate=True)
 
     cmd_extract = subparsers.add_parser("extract", help="extract trace from running instance", description="""
         Extracts trace from a running OSv instance via GDB.
