@@ -1,7 +1,9 @@
 .extern abort
 .extern sigprocmask
 .global __getcontext
+.hidden __getcontext
 .global _getcontext
+.hidden _getcontext
 .global getcontext
 .type __getcontext,@function
 .type _getcontext,@function

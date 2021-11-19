@@ -1,6 +1,7 @@
 #void cpu::reschedule_from_interrupt(bool called_from_yield,
 #                                    thread_runtime::duration preempt_after)
 .global reschedule_from_interrupt
+.hidden reschedule_from_interrupt
 .type reschedule_from_interrupt, @function
 reschedule_from_interrupt:
         stp     x29, x30, [sp, #-192]!

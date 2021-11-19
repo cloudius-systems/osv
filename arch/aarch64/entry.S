@@ -29,6 +29,7 @@
 .endm
 
 .global exception_vectors
+.hidden exception_vectors
 .type exception_vectors, @function
 .align 12
 exception_vectors:
@@ -106,6 +107,7 @@ exception_vectors:
 .endm /* pop_state_to_exception_frame */
 
 .global thread_main
+.hidden thread_main
 thread_main:
         .type thread_main, @function
         .cfi_startproc simple
@@ -130,6 +132,7 @@ thread_main:
 .equ ESR_FLT_END,5
 
 .global entry_invalid
+.hidden entry_invalid
 .type entry_invalid, @function
 entry_invalid:
         mrs     x20, elr_el1       // Exception Link Register -> X20
@@ -143,6 +146,7 @@ entry_invalid:
         b       1b
 
 .global entry_sync
+.hidden entry_sync
 .type entry_sync, @function
 entry_sync:
         .cfi_startproc simple
@@ -179,6 +183,7 @@ unexpected_sync_exception:
         .cfi_endproc
 
 .global entry_irq
+.hidden entry_irq
 .type entry_irq, @function
 entry_irq:
         .cfi_startproc simple
@@ -195,14 +200,17 @@ entry_irq:
         .cfi_endproc
 
 .global entry_fiq
+.hidden entry_fiq
 .type entry_fiq, @function
 entry_fiq:
 .global entry_serror
+.hidden entry_serror
 .type entry_serror, @function
 entry_serror:
         b       entry_invalid
 
 .global call_signal_handler_thunk
+.hidden call_signal_handler_thunk
 call_signal_handler_thunk:
         .type call_signal_handler_thunk, @function
         .cfi_startproc simple
@@ -223,6 +231,7 @@ call_signal_handler_thunk:
 // Keep fpu_state_save/load in sync with struct fpu_state in arch/aarch64/processor.hh
 // void fpu_state_save(fpu_state *s);
 .global fpu_state_save
+.hidden fpu_state_save
 .type fpu_state_save, @function
 fpu_state_save:
         stp     q0, q1, [x0]
@@ -249,6 +258,7 @@ fpu_state_save:
 
 // void fpu_state_load(fpu_state *s);
 .global fpu_state_load
+.hidden fpu_state_load
 .type fpu_state_load, @function
 fpu_state_load:
         ldp     q0, q1, [x0]

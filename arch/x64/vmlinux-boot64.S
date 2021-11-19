@@ -6,6 +6,7 @@
 .text
 .code64
 .global vmlinux_entry64
+.hidden vmlinux_entry64
 vmlinux_entry64:
     # The address of the boot_params structure is passed in the RSI
     # register so store it in RDI register so that it can be received

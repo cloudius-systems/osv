@@ -10,6 +10,7 @@
 .text
 
 .global __elf_resolve_pltgot
+.hidden __elf_resolve_pltgot
 
 // calling convention:
 // ip0: &pltgot(2)

@@ -23,6 +23,7 @@
 .data
 .align 4096
 .global ident_pt_l4
+.hidden ident_pt_l4
 ident_pt_l4:
     # The addresses of the paging tables have to be the physical ones, so we have to
     # manually subtract OSV_KERNEL_VM_SHIFT in all relevant places
@@ -79,6 +80,7 @@ gdt = . - 8
     .quad 0x00cf9b000000ffff # 32-bit code segment
 gdt_end = .
 .globl gdt64_desc
+.hidden gdt64_desc
 
 .align 8
 . = . + 4  # make sure tss_ist is aligned on a quad boundary
@@ -92,8 +94,11 @@ init_stack_top = .
 .text
 
 .globl start32
+.hidden start32
 .globl start32_from_vmlinuz
+.hidden start32_from_vmlinuz
 .globl start32_from_64
+.hidden start32_from_64
 start32:
     mov $0x0, %edi
 
@@ -139,6 +144,7 @@ start32_from_64:
 
     ljmpl $8, $start64
 .code64
+.hidden start64
 .global start64
 start64:
     .cfi_startproc simple
@@ -180,6 +186,7 @@ start64_continue:
 # it to address 0 by subtracting smpboot from any offset
 .data
 .global smpboot
+.hidden smpboot
 smpboot:
 .code16
     lgdtl smpboot_gdt_desc-smpboot
@@ -214,24 +221,30 @@ smpboot_gdt_desc:
     .short gdt_end - gdt - 1
     .long gdt - OSV_KERNEL_VM_SHIFT
 .global smpboot_cr0
+.hidden smpboot_cr0
 smpboot_cr0:
     .long 0
 .global smpboot_cr4
+.hidden smpboot_cr4
 smpboot_cr4:
     .long 0
 .global smpboot_efer
+.hidden smpboot_efer
 smpboot_efer:
     .quad 0
 
 .global smpboot_end
+.hidden smpboot_end
 smpboot_end = .
 
 .bss
 
 .global smpboot_cr3
+.hidden smpboot_cr3
 smpboot_cr3: .quad 0
 
 .global smp_stack_free
+.hidden smp_stack_free
 smp_stack_free: .quad 0
 
 # 'ltr' expects an available TSS, then marks it busy, so only one

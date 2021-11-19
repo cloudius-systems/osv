@@ -10,6 +10,7 @@
 #define _hypercall(call)			\
 	.align 16;				\
 	.globl HYPERVISOR_##call;		\
+	.hidden HYPERVISOR_##call;		\
 	.type HYPERVISOR_##call , "function";	\
 	HYPERVISOR_##call:			\
 		mov x16, #__HYPERVISOR_##call;	\

@@ -37,11 +37,13 @@ elfnote_val(XEN_ELFNOTE_PHYS32_ENTRY, hvm_xen_start-OSV_KERNEL_VM_SHIFT)
 # This hints where pre-mapped free memory exists.
 # We can then use it as the base for our stack pointer.
 .global xen_bootstrap_end
+.hidden xen_bootstrap_end
 xen_bootstrap_end: .quad 0
 
 .text
 .align 4096
 .globl hypercall_page
+.hidden hypercall_page
 hypercall_page:
         1: jmp 1b
 .align 4096

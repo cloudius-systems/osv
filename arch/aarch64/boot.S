@@ -8,6 +8,7 @@
 .text
 .align 16
 .globl start_elf
+.hidden start_elf
 .type start_elf , "function"
 start_elf:
         /* elf program start address */
@@ -150,6 +151,7 @@ init_mmu:
 
 .align 16
 .globl start_secondary_cpu
+.hidden start_secondary_cpu
 .type  start_secondary_cpu , "function"
 start_secondary_cpu:
         adrp    x0, exception_vectors
@@ -238,11 +240,14 @@ init_stack_bottom = .
 init_stack_top = .
 
 .globl smp_stack_free
+.hidden smp_stack_free
 .type smp_stack_free , "object"
 smp_stack_free: .quad 0
 
 .globl smpboot_ttbr0
+.hidden smpboot_ttbr0
 .type smpboot_ttbr0 , "object"
+.hidden smpboot_ttbr1
 .globl smpboot_ttbr1
 .type smpboot_ttbr1 , "object"
 
