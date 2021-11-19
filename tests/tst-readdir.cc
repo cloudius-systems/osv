@@ -10,8 +10,12 @@
 #include <dirent.h>
 #include <string.h>
 #include <fcntl.h>
+#include <unistd.h>
 
-#include <osv/debug.hh>
+#include <cstdio>
+#include <cerrno>
+#include <cstdlib>
+#include <string>
 
 #if defined(READ_ONLY_FS)
 #define SUBDIR "rofs"
@@ -30,7 +34,7 @@ static void report(bool ok, const char* msg)
 
 int main(int argc, char **argv)
 {
-    debug("Testing readdir() and related functions\n");
+    printf("Testing readdir() and related functions\n");
 #if defined(READ_ONLY_FS)
     report(mkdir("/rofs/tst-readdir-empty2", 0777) == -1 && errno == EROFS, "mkdir");
 #else
@@ -190,9 +194,9 @@ int main(int argc, char **argv)
     struct dirent **namelist;
     int count = scandir("/tmp/tst-readdir", &namelist, NULL, alphasort);
     report(count == 6, "scandir return 4 entries");
-    debug("count = %d\n", count);
+    printf("count = %d\n", count);
     for (int i = 0; i < count; i++) {
-        debug("namelist[%d] = %s\n", i, namelist[i]->d_name);
+        printf("namelist[%d] = %s\n", i, namelist[i]->d_name);
     }
     report(count > 0 && !strcmp(namelist[0]->d_name,"."), "scandir return .");
     report(count > 1 && !strcmp(namelist[1]->d_name,".."), "scandir return ..");
