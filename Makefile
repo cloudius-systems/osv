@@ -479,7 +479,7 @@ $(out)/preboot.elf: arch/$(arch)/preboot.ld $(out)/arch/$(arch)/preboot.o
 $(out)/preboot.bin: $(out)/preboot.elf
 	$(call quiet, $(OBJCOPY) -O binary $^ $@, OBJCOPY $@)
 
-edata = $(shell readelf --syms $(out)/loader-stripped.elf | grep "\.edata" | awk '{print "0x" $$2}')
+edata = $(shell readelf --syms $(out)/loader.elf | grep "\.edata" | awk '{print "0x" $$2}')
 image_size = $$(( $(edata) - $(kernel_base) ))
 
 $(out)/loader.img: $(out)/preboot.bin $(out)/loader-stripped.elf
