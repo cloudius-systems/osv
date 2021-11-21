@@ -23,4 +23,4 @@ static FILE f = {
 	.close = __stdio_close,
 };
 FILE *const stdin = &f;
-FILE *const __stdin_used = &f;
+hidden FILE *const __stdin_used = &f;

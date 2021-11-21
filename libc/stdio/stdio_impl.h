@@ -70,31 +70,33 @@ hidden void __ofl_unlock(void);
 hidden void __stdio_exit_needed(void);
 hidden FILE *__ofl_add(FILE *f);
 
-size_t __stdio_read(FILE *, unsigned char *, size_t);
-size_t __stdio_write(FILE *, const unsigned char *, size_t);
-size_t __stdout_write(FILE *, const unsigned char *, size_t);
-off_t __stdio_seek(FILE *, off_t, int);
-int __stdio_close(FILE *);
+hidden void __unlist_locked_file(FILE *);
 
-size_t __string_read(FILE *, unsigned char *, size_t);
+hidden size_t __stdio_read(FILE *, unsigned char *, size_t);
+hidden size_t __stdio_write(FILE *, const unsigned char *, size_t);
+hidden size_t __stdout_write(FILE *, const unsigned char *, size_t);
+hidden off_t __stdio_seek(FILE *, off_t, int);
+hidden int __stdio_close(FILE *);
 
-int __toread(FILE *);
-int __towrite(FILE *);
+hidden size_t __string_read(FILE *, unsigned char *, size_t);
+
+hidden int __toread(FILE *);
+hidden int __towrite(FILE *);
 
 #if defined(__PIC__) && (100*__GNUC__+__GNUC_MINOR__ >= 303)
 __attribute__((visibility("protected")))
 #endif
 int __overflow(FILE *, int), __uflow(FILE *);
 
-int __fseeko(FILE *, off_t, int);
-int __fseeko_unlocked(FILE *, off_t, int);
-off_t __ftello(FILE *);
-off_t __ftello_unlocked(FILE *);
-size_t __fwritex(const unsigned char *, size_t, FILE *);
-int __putc_unlocked(int, FILE *);
+hidden int __fseeko(FILE *, off_t, int);
+hidden int __fseeko_unlocked(FILE *, off_t, int);
+hidden off_t __ftello(FILE *);
+hidden off_t __ftello_unlocked(FILE *);
+hidden size_t __fwritex(const unsigned char *, size_t, FILE *);
+hidden int __putc_unlocked(int, FILE *);
 
-FILE *__fdopen(int, const char *);
-int __fmodeflags(const char *);
+hidden FILE *__fdopen(int, const char *);
+hidden int __fmodeflags(const char *);
 
 #define OFLLOCK() LOCK(libc.ofl_lock)
 #define OFLUNLOCK() UNLOCK(libc.ofl_lock)
@@ -109,11 +111,13 @@ int __fmodeflags(const char *);
 	? *(f)->wpos++ = (c) : __overflow((f),(c)) )
 
 /* Caller-allocated FILE * operations */
-FILE *__fopen_rb_ca(const char *, FILE *, unsigned char *, size_t);
-int __fclose_ca(FILE *);
+hidden FILE *__fopen_rb_ca(const char *, FILE *, unsigned char *, size_t);
+hidden int __fclose_ca(FILE *);
 
-int __lockfile(FILE *) ATTR_LIBC_VISIBILITY;
-void __unlockfile(FILE *) ATTR_LIBC_VISIBILITY;
+hidden int __lockfile(FILE *) ATTR_LIBC_VISIBILITY;
+hidden void __unlockfile(FILE *) ATTR_LIBC_VISIBILITY;
+
+hidden void __stdio_exit(void);
 
 __END_DECLS
 

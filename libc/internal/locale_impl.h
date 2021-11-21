@@ -12,6 +12,8 @@ struct __locale_struct {
     const char *__names[13];
 };
 
+hidden const char *__mo_lookup(const void *, size_t, const char *);
+
 typedef struct __locale_struct *__locale_t;
 
 typedef __locale_t locale_t;

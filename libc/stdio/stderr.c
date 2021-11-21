@@ -12,4 +12,4 @@ static FILE f = {
 	.close = __stdio_close,
 };
 FILE *const stderr = &f;
-FILE *const __stderr_used = &f;
+hidden FILE *const __stderr_used = &f;

@@ -6,7 +6,7 @@
 #ifdef __GNUC__
 __attribute__((const))
 #endif
-int *___errno_location(void);
+hidden int *___errno_location(void);
 
 #undef errno
 #define errno (*___errno_location())

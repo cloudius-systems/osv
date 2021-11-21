@@ -12,4 +12,4 @@ static FILE f = {
 	.close = __stdio_close,
 };
 FILE *const stdout = &f;
-FILE *const __stdout_used = &f;
+hidden FILE *const __stdout_used = &f;

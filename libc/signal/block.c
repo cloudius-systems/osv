@@ -27,17 +27,17 @@ static const unsigned long app_mask[] = {
 #endif
 };
 
-void __block_all_sigs(void *set)
+hidden void __block_all_sigs(void *set)
 {
 	sigprocmask(SIG_BLOCK, (void*)&all_mask, set);
 }
 
-void __block_app_sigs(void *set)
+hidden void __block_app_sigs(void *set)
 {
 	sigprocmask(SIG_BLOCK, (void*)&app_mask, set);
 }
 
-void __restore_sigs(void *set)
+hidden void __restore_sigs(void *set)
 {
 	sigprocmask(SIG_SETMASK, set, 0);
 }
