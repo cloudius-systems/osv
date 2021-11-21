@@ -115,7 +115,7 @@ static void dealwithipv6(stor **list, stor** head)
 	fclose(f);
 }
 
-int allocate_and_add_ifaddrs(stor **list, stor **head, struct if_nameindex *ii)
+static int allocate_and_add_ifaddrs(stor **list, stor **head, struct if_nameindex *ii)
 {
 	size_t i;
 	for(i = 0; ii[i].if_index || ii[i].if_name; i++) {
@@ -127,7 +127,7 @@ int allocate_and_add_ifaddrs(stor **list, stor **head, struct if_nameindex *ii)
 	return i;
 }
 
-int fill_mac_addrs(int sock, stor *list, struct if_nameindex *ii)
+static int fill_mac_addrs(int sock, stor *list, struct if_nameindex *ii)
 {
 	stor *head;
 	size_t i;
