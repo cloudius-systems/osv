@@ -1710,7 +1710,6 @@ libc += unistd/setpgid.o
 libc += unistd/getpgrp.o
 libc += unistd/getppid.o
 libc += unistd/getsid.o
-libc += unistd/setsid.o
 libc += unistd/ttyname_r.o
 musl += unistd/ttyname.o
 musl += unistd/tcgetpgrp.o
