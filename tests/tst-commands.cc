@@ -12,8 +12,16 @@
 #include <fstream>
 #include <map>
 #include <string.h>
+#include <boost/format.hpp>
 
 static int tests = 0, fails = 0;
+
+namespace osv {
+std::ostream& fprintf(std::ostream& os, boost::format& fmt)
+{
+    return os << fmt;
+}
+}
 
 static void report(bool ok, const char* msg)
 {
