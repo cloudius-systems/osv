@@ -5,30 +5,29 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <osv/sched.hh>
-#include <osv/debug.hh>
+#include <thread>
+#include <cstdio>
 
 int main(int argc, char **argv)
 {
-    debug("starting yield test\n");
+    printf("starting yield test\n");
 
     // Test that concurrent yield()s do not crash.
     constexpr int N = 10;
     constexpr int J = 10000000;
-    sched::thread *ts[N];
+    std::thread *ts[N];
     for (auto &t : ts) {
-            t = sched::thread::make([] {
+            t = new std::thread([] {
                 for (int j = 0; j < J; j++) {
-                    sched::thread::yield();
+                    std::this_thread::yield();
                 }
             });
-            t->start();
     }
     for (auto t : ts) {
         t->join();
         delete t;
     }
 
-    debug("yield test successful\n");
+    printf("yield test successful\n");
     return 0;
 }

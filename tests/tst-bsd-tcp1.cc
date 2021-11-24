@@ -9,18 +9,21 @@
 
 #include <boost/test/unit_test.hpp>
 
-#include <osv/sched.hh>
-
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <arpa/inet.h>
+#include <cstdio>
+#include <thread>
 
-#include <osv/debug.hh>
 #include "tst-hub.hh"
 
 #include <boost/asio.hpp>
 
-#define dbg_d(...) tprintf_d("tst-tcp1", __VA_ARGS__)
+#if CONF_logger_debug
+    #define dbg_d(tag, ...) printf(__VA_ARGS__)
+#else
+    #define dbg_d(tag, ...) do{}while(0)
+#endif
 
 #define LISTEN_PORT (5555)
 #define ITERATIONS (400)
@@ -42,10 +45,10 @@ public:
         int i;
 
         /* Create listening socket */
-        dbg_d("server: creating listening socket...");
+        dbg_d("tst-tcp1: server: creating listening socket...");
         listen_s = socket(AF_INET, SOCK_STREAM, 0);
         if (listen_s < 0) {
-            dbg_d("server: socket() failed!");
+            dbg_d("tst-tcp1: server: socket() failed!");
             return -1;
         }
 
@@ -54,7 +57,7 @@ public:
         error = setsockopt(listen_s, SOL_SOCKET, SO_REUSEADDR, &optval,
             sizeof(optval));
         if (error < 0) {
-            dbg_d("server: setsockopt(SO_REUSEADDR) failed, error=%d", error);
+            dbg_d("tst-tcp1: server: setsockopt(SO_REUSEADDR) failed, error=%d", error);
             return -1;
         }
 
@@ -65,63 +68,63 @@ public:
         inet_aton("127.0.0.1", &laddr.sin_addr);
         laddr.sin_port = htons(LISTEN_PORT);
 
-        dbg_d("server: calling bind()");
+        dbg_d("tst-tcp1: server: calling bind()");
         if ( bind(listen_s, (struct sockaddr *) &laddr, sizeof(laddr)) < 0 ) {
-            dbg_d("server: bind() failed!");
+            dbg_d("tst-tcp1: server: bind() failed!");
             return -1;
         }
 
         /* Listen */
-        dbg_d("server: calling listen()");
+        dbg_d("tst-tcp1: server: calling listen()");
         if ( listen(listen_s, 256) < 0 ) {
-            dbg_d("server: listen() failed!");
+            dbg_d("tst-tcp1: server: listen() failed!");
             return -1;
         }
 
         for (i=0; i < ITERATIONS; i++) {
 
             /*  Wait for a connection*/
-            dbg_d("server: calling accept()");
+            dbg_d("tst-tcp1: server: calling accept()");
             if ( (client_s = accept(listen_s, NULL, NULL) ) < 0 ) {
-                dbg_d("server: accept() failed!");
+                dbg_d("tst-tcp1: server: accept() failed!");
                 return -1;
             }
 
-            dbg_d("server: got a connection!");
+            dbg_d("tst-tcp1: server: got a connection!");
 
             /* Read max buf_size bytes */
             int bytes = read(client_s, &buf, buf_size);
             if (bytes < 0) {
-                dbg_d("server: read() failed!");
+                dbg_d("tst-tcp1: server: read() failed!");
                 close(client_s);
                 return -1;
             }
 
             /* Echo back */
-            dbg_d("Echoing %d bytes", bytes);
+            dbg_d("tst-tcp1: Echoing %d bytes", bytes);
 
             int bytes2 = write(client_s, &buf, bytes);
             if (bytes2 < 0) {
-                dbg_d("server: write() failed!");
+                dbg_d("tst-tcp1: server: write() failed!");
                 close(client_s);
                 return -1;
             }
 
-            dbg_d("server: echoed %d bytes", bytes2);
-            dbg_d("server: calling close()", bytes2);
+            dbg_d("tst-tcp1: server: echoed %d bytes", bytes2);
+            dbg_d("tst-tcp1: server: calling close()", bytes2);
 
             if ( close(client_s) < 0 ) {
-                dbg_d("server: close() failed!");
+                dbg_d("tst-tcp1: server: close() failed!");
                 return -1;
             }
         }
 
         if ( close(listen_s) < 0 ) {
-            dbg_d("server: close() failed!");
+            dbg_d("tst-tcp1: server: close() failed!");
             return -1;
         }
 
-        dbg_d("server: DONE");
+        dbg_d("tst-tcp1: server: DONE");
         return 0;
     }
 
@@ -138,43 +141,43 @@ public:
 
         for (int i=0; i < ITERATIONS; i++) {
 
-            dbg_d("client: creating socket()... #%d", i+1);
+            dbg_d("tst-tcp1: client: creating socket()... #%d", i+1);
             int s = socket(AF_INET, SOCK_STREAM, 0);
             if (s < 0) {
-                dbg_d("client: socket() failed!");
+                dbg_d("tst-tcp1: client: socket() failed!");
                 return -1;
             }
 
-            dbg_d("client: connecting to 127.0.0.1...");
+            dbg_d("tst-tcp1: client: connecting to 127.0.0.1...");
             if ( connect(s, (struct sockaddr *)&raddr, sizeof(raddr)) < 0 ) {
-                dbg_d("client: connect() failed!");
+                dbg_d("tst-tcp1: client: connect() failed!");
                 return -1;
             }
 
-            dbg_d("client: writing message: %s", message);
+            dbg_d("tst-tcp1: client: writing message: %s", message);
             int bytes = write(s, message, strlen(message) + 1);
             if (bytes < 0) {
-                dbg_d("client: write() failed!");
+                dbg_d("tst-tcp1: client: write() failed!");
                 return -1;
             }
 
             int bytes2 = read(s, &replay, buf_size);
             if (bytes2 < 0) {
-                 dbg_d("client: read() failed!");
+                 dbg_d("tst-tcp1: client: read() failed!");
                  return -1;
              }
 
             replay[bytes2] = '\0';
-            dbg_d("client: got replay: %s", replay);
+            dbg_d("tst-tcp1: client: got replay: %s", replay);
 
-            dbg_d("client: closing socket()");
+            dbg_d("tst-tcp1: client: closing socket()");
             if ( close(s) < 0 ) {
-                dbg_d("client: close() failed!");
+                dbg_d("tst-tcp1: client: close() failed!");
                 return -1;
             }
         }
 
-        dbg_d("client: DONE");
+        dbg_d("tst-tcp1: client: DONE");
         return 0;
     }
 
@@ -183,21 +186,16 @@ public:
         _client_result = 0;
         _server_result = 0;
 
-        sched::thread *srv = sched::thread::make([&] {
+        std::thread srv([&] {
             _server_result = tcp_server();
         });
-        sched::thread *cli = sched::thread::make([&] {
+        sleep(1);
+        std::thread cli([&] {
             _client_result = tcp_client();
         });
 
-        srv->start();
-        sleep(1);
-        cli->start();
-
-        cli->join();
-        srv->join();
-        delete(cli);
-        delete(srv);
+        cli.join();
+        srv.join();
 
         return (_client_result + _server_result);
     }
@@ -209,15 +207,15 @@ private:
 
 BOOST_AUTO_TEST_CASE(test_tcp_client_server)
 {
-    dbg_d("BSD TCP1 Test - Begin");
+    dbg_d("tst-tcp1: BSD TCP1 Test - Begin");
 
     test_bsd_tcp1 tcp1;
     int rc = tcp1.run();
 
     BOOST_REQUIRE(rc >= 0);
 
-    dbg_d("BSD TCP1 Test completed: %s!", rc >= 0 ? "PASS" : "FAIL");
-    dbg_d("BSD TCP1 Test - End");
+    dbg_d("tst-tcp1: BSD TCP1 Test completed: %s!", rc >= 0 ? "PASS" : "FAIL");
+    dbg_d("tst-tcp1: BSD TCP1 Test - End");
 }
 
 
@@ -235,4 +233,3 @@ BOOST_AUTO_TEST_CASE(test_shutdown_wr)
 
 #undef ITERATIONS
 #undef LISTEN_PORT
-#undef dbg_d

@@ -8,8 +8,10 @@
 #include <sys/socket.h>
 #include <sys/poll.h>
 #include <unistd.h>
-#include <osv/sched.hh>
-#include <osv/debug.hh>
+#include <cstdio>
+#include <cstring>
+#include <thread>
+#include <vector>
 
 int tests = 0, fails = 0;
 
@@ -17,7 +19,7 @@ static void report(bool ok, const char* msg)
 {
     ++tests;
     fails += !ok;
-    debug("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
+    printf("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
 }
 
 int main(int ac, char** av)
@@ -36,13 +38,12 @@ int main(int ac, char** av)
     memcpy(msg, "snafu", 5);
     memset(reply, 0, 5);
     int r2;
-    std::unique_ptr<sched::thread> t1(sched::thread::make([&] {
+    std::thread t1([&] {
         r2 = read(s[1], reply, 5);
-    }));
-    t1->start();
+    });
     sleep(1);
     r = write(s[0], msg, 5);
-    t1->join();
+    t1.join();
     report(r2 == 5 && memcmp(msg, reply, 5) == 0, "read before write");
 
     memcpy(msg, "fooba", 5);
@@ -60,17 +61,16 @@ int main(int ac, char** av)
 
     memcpy(msg, "smeg!", 5);
     memset(reply, 0, 5);
-    std::unique_ptr<sched::thread> t2(sched::thread::make([&] {
+    std::thread t2([&] {
         poller.revents = 0;
         r2 = poll(&poller, 1, 5000);
         report(r2 == 1 && poller.revents == POLLIN, "waiting poll");
         r2 = read(s[1], reply, 5);
         report(r2 == 5 && memcmp(msg, reply, 5) == 0, "read after waiting poll");
-    }));
-    t2->start();
+    });
     sleep(1);
     r = write(s[0], msg, 5);
-    t2->join();
+    t2.join();
     report(r == 5, "write to polling socket");
 
     close(s[1]);
@@ -132,7 +132,7 @@ int main(int ac, char** av)
     report(nsock > 100, "create many sockets");
 
 
-    debug("SUMMARY: %d tests, %d failures\n", tests, fails);
+    printf("SUMMARY: %d tests, %d failures\n", tests, fails);
 }
 
 
