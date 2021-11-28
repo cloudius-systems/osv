@@ -178,6 +178,7 @@ int event_fd::poll(int events)
     return rc;
 }
 
+OSV_LIBC_API
 int eventfd(unsigned int initval, int flags)
 {
     if (flags & (~(EFD_CLOEXEC | EFD_NONBLOCK | EFD_SEMAPHORE))) {
@@ -209,6 +210,7 @@ int eventfd(unsigned int initval, int flags)
 }
 weak_alias(eventfd, eventfd2);
 
+OSV_LIBC_API
 int eventfd_read(int fd, eventfd_t *value)
 {
     fileref f(fileref_from_fd(fd));
@@ -231,6 +233,7 @@ int eventfd_read(int fd, eventfd_t *value)
     return 0;
 }
 
+OSV_LIBC_API
 int eventfd_write(int fd, eventfd_t value)
 {
     fileref f(fileref_from_fd(fd));

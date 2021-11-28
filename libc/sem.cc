@@ -23,6 +23,7 @@ indirect_semaphore& from_libc(sem_t* p)
     return *reinterpret_cast<indirect_semaphore*>(p);
 }
 
+OSV_LIBC_API
 int sem_init(sem_t* s, int pshared, unsigned val)
 {
     static_assert(sizeof(indirect_semaphore) <= sizeof(*s), "sem_t overflow");
@@ -30,24 +31,28 @@ int sem_init(sem_t* s, int pshared, unsigned val)
     return 0;
 }
 
+OSV_LIBC_API
 int sem_destroy(sem_t *s)
 {
     from_libc(s).~indirect_semaphore();
     return 0;
 }
 
+OSV_LIBC_API
 int sem_post(sem_t* s)
 {
     from_libc(s)->post();
     return 0;
 }
 
+OSV_LIBC_API
 int sem_wait(sem_t* s)
 {
     from_libc(s)->wait();
     return 0;
 }
 
+OSV_LIBC_API
 int sem_timedwait(sem_t* s, const struct timespec *abs_timeout)
 {
     if ((abs_timeout->tv_sec < 0) || (abs_timeout->tv_nsec < 0) || (abs_timeout->tv_nsec > 1000000000LL)) {
@@ -64,6 +69,7 @@ int sem_timedwait(sem_t* s, const struct timespec *abs_timeout)
     return 0;
 }
 
+OSV_LIBC_API
 int sem_trywait(sem_t* s)
 {
     if (!from_libc(s)->trywait())

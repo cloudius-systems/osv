@@ -34,4 +34,3 @@ int getrusage(int who, struct rusage *usage)
     }
     return 0;
 }
-LFS64(getrusage);

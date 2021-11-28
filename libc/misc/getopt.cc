@@ -8,11 +8,13 @@
 
 extern "C" {
 
+OSV_LIBC_API
 char *optarg;
+OSV_LIBC_API
 int optind=1, opterr=1, optopt, __optpos, __optreset=0;
 
 #define optpos __optpos
-weak_alias(__optreset, optreset);
+weak_alias(__optreset, optreset) OSV_LIBC_API;
 
 int __getopt(int argc, char * const argv[], const char *optstring)
 {
@@ -74,11 +76,12 @@ int __getopt(int argc, char * const argv[], const char *optstring)
 	return c;
 }
 
+OSV_LIBC_API
 int getopt(int argc, char * const argv[], const char *optstring)
 {
 	getopt_caller_vars_copier guard;
 	return __getopt(argc, argv, optstring);
 }
 
-weak_alias(getopt, __posix_getopt);
+weak_alias(getopt, __posix_getopt) OSV_LIBC_API;
 }

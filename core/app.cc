@@ -11,6 +11,7 @@
 #include <osv/run.hh>
 #include <osv/power.hh>
 #include <osv/trace.hh>
+#include <osv/export.h>
 #include <functional>
 #include <thread>
 #include <libgen.h>
@@ -26,9 +27,11 @@ extern int optind;
 
 // Java uses this global variable (supplied by Glibc) to figure out
 // aproximatively where the initial thread's stack end.
+OSV_LD_LINUX_x86_64_API
 void *__libc_stack_end;
 
-extern "C" void __libc_start_main(int (*main)(int, char**), int, char**,
+extern "C" OSV_LIBC_API
+void __libc_start_main(int (*main)(int, char**), int, char**,
     void(*)(), void(*)(), void(*)(), void*)
 {
     auto app = osv::application::get_current();

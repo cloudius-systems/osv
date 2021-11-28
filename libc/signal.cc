@@ -19,6 +19,7 @@
 #include <api/setjmp.h>
 #include <osv/stubbing.hh>
 #include <osv/pid.h>
+#include <osv/export.h>
 
 using namespace osv::clock::literals;
 
@@ -148,35 +149,41 @@ void handle_mmap_fault(ulong addr, int sig, exception_frame* ef)
 
 using namespace osv;
 
+OSV_LIBC_API
 int sigemptyset(sigset_t* sigset)
 {
     from_libc(sigset)->mask.reset();
     return 0;
 }
 
+OSV_LIBC_API
 int sigfillset(sigset_t *sigset)
 {
     from_libc(sigset)->mask.set();
     return 0;
 }
 
+OSV_LIBC_API
 int sigaddset(sigset_t *sigset, int signum)
 {
     from_libc(sigset)->mask.set(signum);
     return 0;
 }
 
+OSV_LIBC_API
 int sigdelset(sigset_t *sigset, int signum)
 {
     from_libc(sigset)->mask.reset(signum);
     return 0;
 }
 
+OSV_LIBC_API
 int sigismember(const sigset_t *sigset, int signum)
 {
     return from_libc(sigset)->mask.test(signum);
 }
 
+OSV_LIBC_API
 int sigprocmask(int how, const sigset_t* _set, sigset_t* _oldset)
 {
     auto set = from_libc(_set);
@@ -218,8 +225,9 @@ int sigprocmask(int how, const sigset_t* _set, sigset_t* _oldset)
     return 0;
 }
 
-UNIMPL(int sigsuspend(const sigset_t *mask));
+UNIMPL(OSV_LIBC_API int sigsuspend(const sigset_t *mask));
 
+OSV_LIBC_API
 int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
 {
     // FIXME: We do not support any sa_flags besides SA_SIGINFO.
@@ -256,12 +264,14 @@ static sighandler_t signal(int signum, sighandler_t handler, int sa_flags)
     }
 }
 
+OSV_LIBC_API
 sighandler_t signal(int signum, sighandler_t handler)
 {
     return signal(signum, handler, SA_RESTART);
 }
 
 extern "C"
+OSV_LIBC_API
 sighandler_t __sysv_signal(int signum, sighandler_t handler)
 {
     return signal(signum, handler, SA_RESETHAND | SA_NODEFER);
@@ -269,6 +279,7 @@ sighandler_t __sysv_signal(int signum, sighandler_t handler)
 
 // using sigignore() and friends is not recommended as it is obsolete System V
 // APIs. Nevertheless, some programs use it.
+OSV_LIBC_API
 int sigignore(int signum)
 {
     struct sigaction act;
@@ -278,6 +289,7 @@ int sigignore(int signum)
     return sigaction(signum, &act, nullptr);
 }
 
+OSV_LIBC_API
 int sigwait(const sigset_t *set, int *sig)
 {
     sched::thread::wait_until([sig] { return *sig = thread_pending_signal; });
@@ -306,6 +318,7 @@ int sigwait(const sigset_t *set, int *sig)
 // another handler thread. We should probably block this signal while
 // handling it.
 
+OSV_LIBC_API
 int kill(pid_t pid, int sig)
 {
     // OSv only implements one process, whose pid is getpid().
@@ -368,6 +381,7 @@ int kill(pid_t pid, int sig)
     return 0;
 }
 
+OSV_LIBC_API
 int pause(void) {
     try
     {
@@ -561,6 +575,7 @@ void cancel_this_thread_alarm()
     itimer_virt.cancel_this_thread();
 }
 
+OSV_LIBC_API
 unsigned int alarm(unsigned int seconds)
 {
     unsigned int ret;
@@ -579,7 +594,8 @@ unsigned int alarm(unsigned int seconds)
     return ret;
 }
 
-extern "C" int setitimer(int which, const struct itimerval *new_value,
+extern "C" OSV_LIBC_API
+int setitimer(int which, const struct itimerval *new_value,
     struct itimerval *old_value)
 {
     switch (which) {
@@ -592,7 +608,8 @@ extern "C" int setitimer(int which, const struct itimerval *new_value,
     }
 }
 
-extern "C" int getitimer(int which, struct itimerval *curr_value)
+extern "C" OSV_LIBC_API
+int getitimer(int which, struct itimerval *curr_value)
 {
     switch (which) {
     case ITIMER_REAL:
@@ -617,6 +634,7 @@ extern "C" int getitimer(int which, struct itimerval *curr_value)
 static __thread void* signal_stack_begin;
 static __thread size_t signal_stack_size;
 
+OSV_LIBC_API
 int sigaltstack(const stack_t *ss, stack_t *oss)
 {
     if (oss) {
@@ -649,14 +667,16 @@ int sigaltstack(const stack_t *ss, stack_t *oss)
     return 0;
 }
 
-extern "C" int signalfd(int fd, const sigset_t *mask, int flags)
+extern "C" OSV_LIBC_API
+int signalfd(int fd, const sigset_t *mask, int flags)
 {
     WARN_STUBBED();
     errno = ENOSYS;
     return -1;
 }
 
-extern "C" int sigwaitinfo(const sigset_t *__restrict mask,
+extern "C" OSV_LIBC_API
+int sigwaitinfo(const sigset_t *__restrict mask,
                            siginfo_t *__restrict si)
 {
     int signo;

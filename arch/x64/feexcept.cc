@@ -8,7 +8,9 @@
 #include <osv/types.h>
 #include <fenv.h>
 #include <__fenv.h>
+#include <osv/export.h>
 
+OSV_LIBM_API
 int feenableexcept(int mask)
 {
     // The feenableexcept() manual page suggests that -1 should be returned
@@ -38,6 +40,7 @@ int feenableexcept(int mask)
     return ret;
 }
 
+OSV_LIBM_API
 int fedisableexcept(int mask)
 {
     mask &= FE_ALL_EXCEPT;
@@ -56,6 +59,7 @@ int fedisableexcept(int mask)
     return ret;
 }
 
+OSV_LIBM_API
 int fegetexcept()
 {
     u16 cw;

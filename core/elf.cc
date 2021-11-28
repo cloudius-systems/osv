@@ -26,6 +26,7 @@
 #include <osv/stubbing.hh>
 #include <sys/utsname.h>
 #include <osv/demangle.hh>
+#include <osv/export.h>
 #include <boost/version.hpp>
 #include <deque>
 
@@ -1325,6 +1326,7 @@ program::program(void* addr)
           "libaio.so.1",
           "libxenstore.so.3.0",
           "libcrypt.so.1",
+          "libutil.so",
     };
     auto ml = new modules_list();
     ml->objects.push_back(_core.get());
@@ -1876,7 +1878,7 @@ char *object::setup_tls()
             _module_index, _tls_segment, _tls_init_size, _tls_uninit_size);
 }
 
-extern "C"
+extern "C" OSV_LD_LINUX_x86_64_API
 void* __tls_get_addr(module_and_offset* mao)
 {
 #ifdef AARCH64_PORT_STUB
@@ -1901,7 +1903,7 @@ void* __tls_get_addr(module_and_offset* mao)
 // also uses a static area for uname, we can just return that.
 extern utsname utsname;
 
-extern "C"
+extern "C" OSV_LIBC_API
 unsigned long getauxval(unsigned long type)
 {
     switch (type) {

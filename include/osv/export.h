@@ -25,7 +25,6 @@
 #define OSV_LIBAIO_API __attribute__((__visibility__("default")))
 #define OSV_LIBC_API __attribute__((__visibility__("default")))
 #define OSV_LIBM_API __attribute__((__visibility__("default")))
-#define OSV_LIBBSD_API __attribute__((__visibility__("default")))
 #define OSV_LIBPTHREAD_API __attribute__((__visibility__("default")))
 #define OSV_LIBUTIL_API __attribute__((__visibility__("default")))
 #define OSV_LIBXENSTORE_API __attribute__((__visibility__("default")))

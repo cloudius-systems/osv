@@ -65,6 +65,7 @@ __FBSDID("$FreeBSD$");
 
 #include <xen/xenstore/xenstorevar.h>
 #include <xen/xenstore/xenstore_internal.h>
+#include <osv/export.h>
 
 #include <vm/vm.h>
 #include <vm/pmap.h>
@@ -1316,6 +1317,7 @@ public:
 
 /*-------------------------------- Public API --------------------------------*/
 /*------- API comments for these methods can be found in xenstorevar.h -------*/
+OSV_LIBXENSTORE_API
 const char **
 xs_directory(void *op, struct xs_transaction t, const char *path, u_int *num)
 {
@@ -1360,6 +1362,7 @@ xs_exists(struct xs_transaction t, const char *dir, const char *node)
 	return (1);
 }
 
+OSV_LIBXENSTORE_API
 char *
 xs_read(void *op, struct xs_transaction t, const char *path, u_int *len)
 {
@@ -1387,6 +1390,7 @@ xs_read(struct xs_transaction t, const char *dir, const char *node,
 	return 0;
 }
 
+OSV_LIBXENSTORE_API
 int
 xs_write(void *op, struct xs_transaction t, const char *path, const char *string)
 {
@@ -1403,11 +1407,13 @@ xs_write(void *op, struct xs_transaction t, const char *path, const char *string
 	return (error);
 }
 
+OSV_LIBXENSTORE_API
 void *xs_daemon_open()
 {
 	return (void *)-1;
 }
 
+OSV_LIBXENSTORE_API
 void xs_close(void *h)
 {
 }
@@ -1433,7 +1439,7 @@ xs_mkdir(struct xs_transaction t, const char *dir, const char *node)
 	return (ret);
 }
 
-
+OSV_LIBXENSTORE_API
 int
 xs_rm(void *op, struct xs_transaction t, const char *path)
 {
@@ -1562,6 +1568,7 @@ xs_transaction_start(struct xs_transaction *t)
 	return (error);
 }
 
+OSV_LIBXENSTORE_API
 int
 xs_transaction_start(void *h)
 {
@@ -1583,6 +1590,7 @@ xs_transaction_end(struct xs_transaction t, int abort)
 	return (xs_single(t, XS_TRANSACTION_END, abortstr, NULL, NULL));
 }
 
+OSV_LIBXENSTORE_API
 int
 xs_transaction_end(void *h, struct xs_transaction t, int abort)
 {

@@ -13,6 +13,7 @@
 #include <osv/mutex.h>
 #include <osv/waitqueue.hh>
 #include <osv/stubbing.hh>
+#include <osv/export.h>
 #include <memory>
 
 #include <syscall.h>
@@ -44,7 +45,7 @@
 
 extern "C" int eventfd2(unsigned int, int);
 
-extern "C" long gettid()
+extern "C" OSV_LIBC_API long gettid()
 {
     return sched::thread::current()->id();
 }
@@ -408,7 +409,7 @@ static int tgkill(int tgid, int tid, int sig)
     return -1;
 }
 
-long syscall(long number, ...)
+OSV_LIBC_API long syscall(long number, ...)
 {
     // Save FPU state and restore it at the end of this function
     sched::fpu_lock fpu;

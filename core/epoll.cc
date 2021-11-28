@@ -21,6 +21,7 @@
 #include <boost/lockfree/policies.hpp>
 
 #include <osv/debug.hh>
+#include <osv/export.h>
 #include <unordered_map>
 #include <boost/range/algorithm/find.hpp>
 #include <algorithm>
@@ -248,6 +249,7 @@ public:
     }
 };
 
+OSV_LIBC_API
 int epoll_create(int size)
 {
     // Note we ignore the size parameter. There's no point in checking it's
@@ -256,6 +258,7 @@ int epoll_create(int size)
     return epoll_create1(0);
 }
 
+OSV_LIBC_API
 int epoll_create1(int flags)
 {
     flags &= ~EPOLL_CLOEXEC;
@@ -272,6 +275,7 @@ int epoll_create1(int flags)
     }
 }
 
+OSV_LIBC_API
 int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
 {
     trace_epoll_ctl(epfd, fd,
@@ -321,6 +325,7 @@ int epoll_ctl(int epfd, int op, int fd, struct epoll_event *event)
     }
 }
 
+OSV_LIBC_API
 int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout_ms)
 {
     trace_epoll_wait(epfd, maxevents, timeout_ms);
@@ -339,6 +344,7 @@ int epoll_wait(int epfd, struct epoll_event *events, int maxevents, int timeout_
     return epo->wait(events, maxevents, timeout_ms);
 }
 
+OSV_LIBC_API
 int epoll_pwait(int epfd, struct epoll_event *events, int maxevents, int timeout_ms,
             const sigset_t *sigmask)
 {

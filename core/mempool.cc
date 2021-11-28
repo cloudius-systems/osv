@@ -35,6 +35,7 @@
 #include <boost/lockfree/stack.hpp>
 #include <boost/lockfree/policies.hpp>
 #include <osv/migration-lock.hh>
+#include <osv/export.h>
 
 TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d, align=%d", void *, size_t,
            size_t);
@@ -2010,6 +2011,7 @@ void* malloc(size_t size)
     return buf;
 }
 
+OSV_LIBC_API
 void* realloc(void* obj, size_t size)
 {
     void* buf = std_realloc(obj, size);
@@ -2017,7 +2019,8 @@ void* realloc(void* obj, size_t size)
     return buf;
 }
 
-extern "C" void *reallocarray(void *ptr, size_t nmemb, size_t elem_size)
+extern "C" OSV_LIBC_API
+void *reallocarray(void *ptr, size_t nmemb, size_t elem_size)
 {
     size_t bytes;
     if (__builtin_mul_overflow(nmemb, elem_size, &bytes)) {
@@ -2027,6 +2030,7 @@ extern "C" void *reallocarray(void *ptr, size_t nmemb, size_t elem_size)
     return realloc(ptr, nmemb * elem_size);
 }
 
+OSV_LIBC_API
 size_t malloc_usable_size(void* obj)
 {
     if ( obj == nullptr ) {
@@ -2079,6 +2083,7 @@ void *aligned_alloc(size_t alignment, size_t size)
 // that size be a multiple of alignment.
 // memalign() is considered to be an obsolete SunOS-ism, but Linux's glibc
 // supports it, and some applications still use it.
+OSV_LIBC_API
 void *memalign(size_t alignment, size_t size)
 {
     return aligned_alloc(alignment, size);

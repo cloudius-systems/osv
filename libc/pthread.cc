@@ -29,6 +29,7 @@
 
 #include <api/time.h>
 #include <osv/rwlock.h>
+#include <osv/export.h>
 
 #include "pthread.hh"
 
@@ -275,9 +276,9 @@ extern "C" int register_atfork(void (*prepare)(void), void (*parent)(void),
 
 extern "C" {
     int __register_atfork(void (*prepare)(void), void (*parent)(void),
-                          void (*child)(void), void *__dso_handle) __attribute__((alias("register_atfork")));
+                          void (*child)(void), void *__dso_handle) __attribute__((alias("register_atfork"))) OSV_LIBC_API;
     int __pthread_key_create(pthread_key_t* key, void (*dtor)(void*))
-        __attribute__((alias("pthread_key_create")));
+        __attribute__((alias("pthread_key_create"))) OSV_LIBPTHREAD_API;
 }
 
 
@@ -457,7 +458,8 @@ int pthread_mutex_unlock(pthread_mutex_t *m)
     return 0;
 }
 
-extern "C" int pthread_yield()
+extern "C" OSV_LIBPTHREAD_API
+int pthread_yield()
 {
     sched::thread::yield();
     return 0;
@@ -528,6 +530,7 @@ int pthread_rwlock_unlock(pthread_rwlock_t *rw)
     return 0;
 }
 
+OSV_LIBC_API
 int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset)
 {
     return sigprocmask(how, set, oldset);
@@ -993,6 +996,7 @@ int pthread_getschedparam(pthread_t thread, int *policy,
     return 0;
 }
 
+OSV_LIBPTHREAD_API
 int pthread_kill(pthread_t thread, int sig)
 {
     // We are assuming that if pthread_kill() is called with thread
@@ -1011,6 +1015,7 @@ int pthread_kill(pthread_t thread, int sig)
     return EINVAL;
 }
 
+OSV_LIBPTHREAD_API
 int raise(int sig)
 {
     return pthread_kill(pthread_self(), sig);

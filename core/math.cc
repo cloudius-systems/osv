@@ -7,40 +7,41 @@
 
 #include <math.h>
 #include <osv/types.h>
+#include <osv/export.h>
 #include <cmath>
 #include <ctgmath>
 
-extern "C"
+extern "C" OSV_LIBC_API
 int __isnan(double v)
 {
     return std::isnan(v);
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int __isnanf(float v)
 {
     return std::isnan(v);
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int __isnanl(long double v)
 {
     return std::isnan(v);
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int __isinf(double v)
 {
     return std::isinf(v);
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int __isinff(float v)
 {
     return std::isinf(v);
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int __isinfl(double v)
 {
     return std::isinf(v);

@@ -5,13 +5,14 @@
 
 #include <bsd/uipc_syscalls.h>
 #include <osv/debug.h>
+#include <osv/export.h>
 #include "libc/af_local.h"
 
 #include "libc/internal/libc.h"
 
 #define sock_d(...)		tprintf_d("socket-api", __VA_ARGS__);
 
-extern "C"
+extern "C" OSV_LIBC_API
 int socketpair(int domain, int type, int protocol, int sv[2])
 {
 	int error;
@@ -32,7 +33,7 @@ int socketpair(int domain, int type, int protocol, int sv[2])
 	return 0;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int getsockname(int sockfd, struct bsd_sockaddr *addr, socklen_t *addrlen)
 {
 	int error;
@@ -49,7 +50,7 @@ int getsockname(int sockfd, struct bsd_sockaddr *addr, socklen_t *addrlen)
 	return 0;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int getpeername(int sockfd, struct bsd_sockaddr *addr, socklen_t *addrlen)
 {
 	int error;
@@ -66,7 +67,7 @@ int getpeername(int sockfd, struct bsd_sockaddr *addr, socklen_t *addrlen)
 	return 0;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int accept4(int fd, struct bsd_sockaddr *__restrict addr, socklen_t *__restrict len, int flg)
 {
 	int fd2, error;
@@ -83,7 +84,7 @@ int accept4(int fd, struct bsd_sockaddr *__restrict addr, socklen_t *__restrict 
 	return fd2;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int accept(int fd, struct bsd_sockaddr *__restrict addr, socklen_t *__restrict len)
 {
 	int fd2, error;
@@ -100,7 +101,7 @@ int accept(int fd, struct bsd_sockaddr *__restrict addr, socklen_t *__restrict l
 	return fd2;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int bind(int fd, const struct bsd_sockaddr *addr, socklen_t len)
 {
 	int error;
@@ -117,7 +118,7 @@ int bind(int fd, const struct bsd_sockaddr *addr, socklen_t len)
 	return 0;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int connect(int fd, const struct bsd_sockaddr *addr, socklen_t len)
 {
 	int error;
@@ -134,7 +135,7 @@ int connect(int fd, const struct bsd_sockaddr *addr, socklen_t len)
 	return 0;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int listen(int fd, int backlog)
 {
 	int error;
@@ -151,7 +152,7 @@ int listen(int fd, int backlog)
 	return 0;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 ssize_t recvfrom(int fd, void *__restrict buf, size_t len, int flags,
 		struct bsd_sockaddr *__restrict addr, socklen_t *__restrict alen)
 {
@@ -171,7 +172,7 @@ ssize_t recvfrom(int fd, void *__restrict buf, size_t len, int flags,
 	return bytes;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 ssize_t recv(int fd, void *buf, size_t len, int flags)
 {
 	int error;
@@ -189,7 +190,7 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
 	return bytes;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 ssize_t recvmsg(int fd, struct msghdr *msg, int flags)
 {
 	ssize_t bytes;
@@ -207,7 +208,7 @@ ssize_t recvmsg(int fd, struct msghdr *msg, int flags)
 	return bytes;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 ssize_t sendto(int fd, const void *buf, size_t len, int flags,
     const struct bsd_sockaddr *addr, socklen_t alen)
 {
@@ -227,7 +228,7 @@ ssize_t sendto(int fd, const void *buf, size_t len, int flags,
 	return bytes;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 ssize_t send(int fd, const void *buf, size_t len, int flags)
 {
 	int error;
@@ -245,7 +246,7 @@ ssize_t send(int fd, const void *buf, size_t len, int flags)
 	return bytes;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 ssize_t sendmsg(int fd, const struct msghdr *msg, int flags)
 {
 	ssize_t bytes;
@@ -263,7 +264,7 @@ ssize_t sendmsg(int fd, const struct msghdr *msg, int flags)
 	return bytes;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int getsockopt(int fd, int level, int optname, void *__restrict optval,
 		socklen_t *__restrict optlen)
 {
@@ -281,7 +282,7 @@ int getsockopt(int fd, int level, int optname, void *__restrict optval,
 	return 0;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int setsockopt(int fd, int level, int optname, const void *optval, socklen_t optlen)
 {
 	int error;
@@ -299,7 +300,7 @@ int setsockopt(int fd, int level, int optname, const void *optval, socklen_t opt
 	return 0;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int shutdown(int fd, int how)
 {
 	int error;
@@ -322,7 +323,7 @@ int shutdown(int fd, int how)
 	return 0;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int socket(int domain, int type, int protocol)
 {
 	int s, error;

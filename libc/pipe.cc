@@ -86,6 +86,7 @@ int pipe_file::close()
     return 0;
 }
 
+OSV_LIBC_API
 int pipe2(int pipefd[2], int flags) {
     if (flags & ~(O_NONBLOCK | O_CLOEXEC)) {
         return libc_error(EINVAL);
@@ -115,6 +116,7 @@ int pipe2(int pipefd[2], int flags) {
     }
 }
 
+OSV_LIBC_API
 int pipe(int pipefd[2])
 {
     return pipe2(pipefd, 0);

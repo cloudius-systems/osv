@@ -56,6 +56,7 @@
 #include <dlfcn.h>
 
 #include <osv/prex.h>
+#include <osv/export.h>
 #include <osv/vnode.h>
 #include <osv/stubbing.hh>
 #include <osv/ioctl.h>
@@ -102,7 +103,7 @@ TRACEPOINT(trace_vfs_open_err, "%d", int);
 
 struct task *main_task;	/* we only have a single process */
 
-extern "C"
+extern "C" OSV_LIBC_API
 int open(const char *pathname, int flags, ...)
 {
     mode_t mode = 0;
@@ -159,6 +160,7 @@ int open(const char *pathname, int flags, ...)
 
 LFS64(open);
 
+OSV_LIBC_API
 int openat(int dirfd, const char *pathname, int flags, ...)
 {
     mode_t mode = 0;
@@ -205,13 +207,15 @@ LFS64(openat);
 // some cases (when the O_CREAT mode is used). As a safety feature, recent
 // versions of Glibc add a feature where open() with two arguments is replaced
 // by a call to __open_2(), which verifies it isn't called with O_CREATE.
-extern "C" int __open_2(const char *pathname, int flags)
+extern "C" OSV_LIBC_API
+int __open_2(const char *pathname, int flags)
 {
     assert(!(flags & O_CREAT));
     return open(pathname, flags, 0);
 }
 
-extern "C" int __open64_2(const char *file, int flags)
+extern "C" OSV_LIBC_API
+int __open64_2(const char *file, int flags)
 {
     if (flags & O_CREAT) {
         errno = EINVAL;
@@ -221,6 +225,7 @@ extern "C" int __open64_2(const char *file, int flags)
     return open64(file, flags);
 }
 
+OSV_LIBC_API
 int creat(const char *pathname, mode_t mode)
 {
     return open(pathname, O_CREAT|O_WRONLY|O_TRUNC, mode);
@@ -231,6 +236,7 @@ TRACEPOINT(trace_vfs_close, "%d", int);
 TRACEPOINT(trace_vfs_close_ret, "");
 TRACEPOINT(trace_vfs_close_err, "%d", int);
 
+OSV_LIBC_API
 int close(int fd)
 {
     int error;
@@ -254,7 +260,7 @@ TRACEPOINT(trace_vfs_mknod_ret, "");
 TRACEPOINT(trace_vfs_mknod_err, "%d", int);
 
 
-extern "C"
+extern "C" OSV_LIBC_API
 int __xmknod(int ver, const char *pathname, mode_t mode, dev_t *dev)
 {
     assert(ver == 0); // On x86-64 Linux, _MKNOD_VER_LINUX is 0.
@@ -279,6 +285,7 @@ int __xmknod(int ver, const char *pathname, mode_t mode, dev_t *dev)
     return -1;
 }
 
+OSV_LIBC_API
 int mknod(const char *pathname, mode_t mode, dev_t dev)
 {
     return __xmknod(0, pathname, mode, &dev);
@@ -289,6 +296,7 @@ TRACEPOINT(trace_vfs_lseek, "%d 0x%x %d", int, off_t, int);
 TRACEPOINT(trace_vfs_lseek_ret, "0x%x", off_t);
 TRACEPOINT(trace_vfs_lseek_err, "%d", int);
 
+OSV_LIBC_API
 off_t lseek(int fd, off_t offset, int whence)
 {
     struct file *fp;
@@ -333,6 +341,7 @@ static inline bool has_error(int error, int bytes)
 }
 
 
+OSV_LIBC_API
 ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 {
     trace_vfs_pread(fd, buf, count, offset);
@@ -364,6 +373,7 @@ ssize_t pread(int fd, void *buf, size_t count, off_t offset)
 
 LFS64(pread);
 
+OSV_LIBC_API
 ssize_t read(int fd, void *buf, size_t count)
 {
     return pread(fd, buf, count, -1);
@@ -373,6 +383,7 @@ TRACEPOINT(trace_vfs_pwrite, "%d %p 0x%x 0x%x", int, const void*, size_t, off_t)
 TRACEPOINT(trace_vfs_pwrite_ret, "0x%x", ssize_t);
 TRACEPOINT(trace_vfs_pwrite_err, "%d", int);
 
+OSV_LIBC_API
 ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 {
     trace_vfs_pwrite(fd, buf, count, offset);
@@ -404,11 +415,13 @@ ssize_t pwrite(int fd, const void *buf, size_t count, off_t offset)
 
 LFS64(pwrite);
 
+OSV_LIBC_API
 ssize_t write(int fd, const void *buf, size_t count)
 {
     return pwrite(fd, buf, count, -1);
 }
 
+OSV_LIBC_API
 ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 {
     struct file *fp;
@@ -431,6 +444,7 @@ ssize_t preadv(int fd, const struct iovec *iov, int iovcnt, off_t offset)
     return -1;
 }
 
+OSV_LIBC_API
 ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
 {
     return preadv(fd, iov, iovcnt, -1);
@@ -440,6 +454,7 @@ TRACEPOINT(trace_vfs_pwritev, "%d %p 0x%x 0x%x", int, const struct iovec*, int, 
 TRACEPOINT(trace_vfs_pwritev_ret, "0x%x", ssize_t);
 TRACEPOINT(trace_vfs_pwritev_err, "%d", int);
 
+OSV_LIBC_API
 ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
 {
     struct file *fp;
@@ -465,6 +480,7 @@ ssize_t pwritev(int fd, const struct iovec *iov, int iovcnt, off_t offset)
     return -1;
 }
 
+OSV_LIBC_API
 ssize_t writev(int fd, const struct iovec *iov, int iovcnt)
 {
     return pwritev(fd, iov, iovcnt, -1);
@@ -474,6 +490,7 @@ TRACEPOINT(trace_vfs_ioctl, "%d 0x%x", int, unsigned long);
 TRACEPOINT(trace_vfs_ioctl_ret, "");
 TRACEPOINT(trace_vfs_ioctl_err, "%d", int);
 
+OSV_LIBC_API
 int ioctl(int fd, unsigned long int request, ...)
 {
     struct file *fp;
@@ -511,6 +528,7 @@ TRACEPOINT(trace_vfs_fsync, "%d", int);
 TRACEPOINT(trace_vfs_fsync_ret, "");
 TRACEPOINT(trace_vfs_fsync_err, "%d", int);
 
+OSV_LIBC_API
 int fsync(int fd)
 {
     struct file *fp;
@@ -535,6 +553,7 @@ int fsync(int fd)
     return -1;
 }
 
+OSV_LIBC_API
 int fdatasync(int fd)
 {
     // TODO: See if we can do less than fsync().
@@ -545,7 +564,7 @@ TRACEPOINT(trace_vfs_fstat, "%d %p", int, struct stat*);
 TRACEPOINT(trace_vfs_fstat_ret, "");
 TRACEPOINT(trace_vfs_fstat_err, "%d", int);
 
-extern "C"
+extern "C" OSV_LIBC_API
 int __fxstat(int ver, int fd, struct stat *st)
 {
     struct file *fp;
@@ -573,13 +592,13 @@ int __fxstat(int ver, int fd, struct stat *st)
 
 LFS64(__fxstat);
 
-extern "C"
+extern "C" OSV_LIBC_API
 int fstat(int fd, struct stat *st)
 {
     return __fxstat(1, fd, st);
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int __fxstatat(int ver, int dirfd, const char *pathname, struct stat *st,
         int flags)
 {
@@ -625,13 +644,14 @@ int __fxstatat(int ver, int dirfd, const char *pathname, struct stat *st,
 
 LFS64(__fxstatat);
 
-extern "C"
+extern "C" OSV_LIBC_API
 int fstatat(int dirfd, const char *path, struct stat *st, int flags)
 {
     return __fxstatat(1, dirfd, path, st, flags);
 }
 
-extern "C" int flock(int fd, int operation)
+extern "C" OSV_LIBC_API
+int flock(int fd, int operation)
 {
     if (!fileref_from_fd(fd)) {
         return libc_error(EBADF);
@@ -660,6 +680,7 @@ struct __dirstream
     int fd;
 };
 
+OSV_LIBC_API
 DIR *opendir(const char *path)
 {
     DIR *dir = new DIR;
@@ -675,6 +696,7 @@ DIR *opendir(const char *path)
     return dir;
 }
 
+OSV_LIBC_API
 DIR *fdopendir(int fd)
 {
     DIR *dir;
@@ -692,6 +714,7 @@ DIR *fdopendir(int fd)
 
 }
 
+OSV_LIBC_API
 int dirfd(DIR *dirp)
 {
     if (!dirp) {
@@ -701,6 +724,7 @@ int dirfd(DIR *dirp)
     return dirp->fd;
 }
 
+OSV_LIBC_API
 int closedir(DIR *dir)
 {
     close(dir->fd);
@@ -708,6 +732,7 @@ int closedir(DIR *dir)
     return 0;
 }
 
+OSV_LIBC_API
 struct dirent *readdir(DIR *dir)
 {
     static __thread struct dirent entry, *result;
@@ -721,6 +746,7 @@ struct dirent *readdir(DIR *dir)
     return result;
 }
 
+OSV_LIBC_API
 int readdir_r(DIR *dir, struct dirent *entry, struct dirent **result)
 {
     int error;
@@ -752,13 +778,16 @@ int readdir_r(DIR *dir, struct dirent *entry, struct dirent **result)
 
 // FIXME: in 64bit dirent64 and dirent are identical, so it's safe to alias
 #undef readdir64_r
-extern "C" int readdir64_r(DIR *dir, struct dirent64 *entry,
+extern "C" OSV_LIBC_API
+int readdir64_r(DIR *dir, struct dirent64 *entry,
         struct dirent64 **result)
         __attribute__((alias("readdir_r")));
 
 #undef readdir64
-extern "C" struct dirent *readdir64(DIR *dir) __attribute__((alias("readdir")));
+extern "C" OSV_LIBC_API
+struct dirent *readdir64(DIR *dir) __attribute__((alias("readdir")));
 
+OSV_LIBC_API
 void rewinddir(DIR *dirp)
 {
     struct file *fp;
@@ -775,6 +804,7 @@ void rewinddir(DIR *dirp)
     fdrop(fp);
 }
 
+OSV_LIBC_API
 long telldir(DIR *dirp)
 {
     struct file *fp;
@@ -792,6 +822,7 @@ long telldir(DIR *dirp)
     return loc;
 }
 
+OSV_LIBC_API
 void seekdir(DIR *dirp, long loc)
 {
     struct file *fp;
@@ -809,6 +840,7 @@ TRACEPOINT(trace_vfs_mkdir, "\"%s\" 0%0o", const char*, mode_t);
 TRACEPOINT(trace_vfs_mkdir_ret, "");
 TRACEPOINT(trace_vfs_mkdir_err, "%d", int);
 
+OSV_LIBC_API
 int
 mkdir(const char *pathname, mode_t mode)
 {
@@ -833,6 +865,7 @@ mkdir(const char *pathname, mode_t mode)
     return -1;
 }
 
+OSV_LIBC_API
 int mkdirat(int dirfd, const char *pathname, mode_t mode)
 {
     mode = apply_umask(mode);
@@ -874,6 +907,7 @@ TRACEPOINT(trace_vfs_rmdir, "\"%s\"", const char*);
 TRACEPOINT(trace_vfs_rmdir_ret, "");
 TRACEPOINT(trace_vfs_rmdir_err, "%d", int);
 
+OSV_LIBC_API
 int rmdir(const char *pathname)
 {
     struct task *t = main_task;
@@ -927,6 +961,7 @@ TRACEPOINT(trace_vfs_rename, "\"%s\" \"%s\"", const char*, const char*);
 TRACEPOINT(trace_vfs_rename_ret, "");
 TRACEPOINT(trace_vfs_rename_err, "%d", int);
 
+OSV_LIBC_API
 int rename(const char *oldpath, const char *newpath)
 {
     trace_vfs_rename(oldpath, newpath);
@@ -996,6 +1031,7 @@ static int replace_cwd(struct task *t, struct file *new_cwdfp,
     return error;
 }
 
+OSV_LIBC_API
 int chdir(const char *pathname)
 {
     trace_vfs_chdir(pathname);
@@ -1031,6 +1067,7 @@ TRACEPOINT(trace_vfs_fchdir, "%d", int);
 TRACEPOINT(trace_vfs_fchdir_ret, "");
 TRACEPOINT(trace_vfs_fchdir_err, "%d", int);
 
+OSV_LIBC_API
 int fchdir(int fd)
 {
     trace_vfs_fchdir(fd);
@@ -1061,6 +1098,7 @@ TRACEPOINT(trace_vfs_link, "\"%s\" \"%s\"", const char*, const char*);
 TRACEPOINT(trace_vfs_link_ret, "");
 TRACEPOINT(trace_vfs_link_err, "%d", int);
 
+OSV_LIBC_API
 int link(const char *oldpath, const char *newpath)
 {
     struct task *t = main_task;
@@ -1094,6 +1132,7 @@ TRACEPOINT(trace_vfs_symlink, "oldpath=%s, newpath=%s", const char*, const char*
 TRACEPOINT(trace_vfs_symlink_ret, "");
 TRACEPOINT(trace_vfs_symlink_err, "errno=%d", int);
 
+OSV_LIBC_API
 int symlink(const char *oldpath, const char *newpath)
 {
     int error;
@@ -1122,6 +1161,7 @@ TRACEPOINT(trace_vfs_unlink, "\"%s\"", const char*);
 TRACEPOINT(trace_vfs_unlink_ret, "");
 TRACEPOINT(trace_vfs_unlink_err, "%d", int);
 
+OSV_LIBC_API
 int unlink(const char *pathname)
 {
     trace_vfs_unlink(pathname);
@@ -1146,6 +1186,7 @@ int unlink(const char *pathname)
     return -1;
 }
 
+OSV_LIBC_API
 int unlinkat(int dirfd, const char *pathname, int flags)
 {
     //TODO: Really implement it
@@ -1159,7 +1200,7 @@ TRACEPOINT(trace_vfs_stat, "\"%s\" %p", const char*, struct stat*);
 TRACEPOINT(trace_vfs_stat_ret, "");
 TRACEPOINT(trace_vfs_stat_err, "%d", int);
 
-extern "C"
+extern "C" OSV_LIBC_API
 int __xstat(int ver, const char *pathname, struct stat *st)
 {
     struct task *t = main_task;
@@ -1186,6 +1227,7 @@ int __xstat(int ver, const char *pathname, struct stat *st)
 
 LFS64(__xstat);
 
+OSV_LIBC_API
 int stat(const char *pathname, struct stat *st)
 {
     return __xstat(1, pathname, st);
@@ -1227,6 +1269,7 @@ struct statx {
 extern "C" int statx(int dirfd, const char* pathname, int flags, unsigned int mask, struct statx *buf);
 #define STATX_BASIC_STATS 0x000007ffU
 
+OSV_LIBC_API
 int statx(int dirfd, const char* pathname, int flags, unsigned int mask,
     struct statx *buf)
 {
@@ -1271,7 +1314,7 @@ int statx(int dirfd, const char* pathname, int flags, unsigned int mask,
 TRACEPOINT(trace_vfs_lstat, "pathname=%s, stat=%p", const char*, struct stat*);
 TRACEPOINT(trace_vfs_lstat_ret, "");
 TRACEPOINT(trace_vfs_lstat_err, "errno=%d", int);
-extern "C"
+extern "C" OSV_LIBC_API
 int __lxstat(int ver, const char *pathname, struct stat *st)
 {
     struct task *t = main_task;
@@ -1300,6 +1343,7 @@ int __lxstat(int ver, const char *pathname, struct stat *st)
 
 LFS64(__lxstat);
 
+OSV_LIBC_API
 int lstat(const char *pathname, struct stat *st)
 {
     return __lxstat(1, pathname, st);
@@ -1309,7 +1353,7 @@ TRACEPOINT(trace_vfs_statfs, "\"%s\" %p", const char*, struct statfs*);
 TRACEPOINT(trace_vfs_statfs_ret, "");
 TRACEPOINT(trace_vfs_statfs_err, "%d", int);
 
-extern "C"
+extern "C" OSV_LIBC_API
 int __statfs(const char *pathname, struct statfs *buf)
 {
     trace_vfs_statfs(pathname, buf);
@@ -1331,7 +1375,7 @@ int __statfs(const char *pathname, struct statfs *buf)
     errno = error;
     return -1;
 }
-weak_alias(__statfs, statfs);
+weak_alias(__statfs, statfs) OSV_LIBC_API;
 
 TRACEPOINT(trace_vfs_fstatfs, "\"%s\" %p", int, struct statfs*);
 TRACEPOINT(trace_vfs_fstatfs_ret, "");
@@ -1361,7 +1405,7 @@ int __fstatfs(int fd, struct statfs *buf)
     errno = error;
     return -1;
 }
-weak_alias(__fstatfs, fstatfs);
+weak_alias(__fstatfs, fstatfs) OSV_LIBC_API;
 
 static int
 statfs_to_statvfs(struct statvfs *dst, struct statfs *src)
@@ -1380,6 +1424,7 @@ statfs_to_statvfs(struct statvfs *dst, struct statfs *src)
     return 0;
 }
 
+OSV_LIBC_API
 int
 statvfs(const char *pathname, struct statvfs *buf)
 {
@@ -1390,6 +1435,7 @@ statvfs(const char *pathname, struct statvfs *buf)
     return statfs_to_statvfs(buf, &st);
 }
 
+OSV_LIBC_API
 int
 fstatvfs(int fd, struct statvfs *buf)
 {
@@ -1404,6 +1450,7 @@ TRACEPOINT(trace_vfs_getcwd, "%p %d", char*, size_t);
 TRACEPOINT(trace_vfs_getcwd_ret, "\"%s\"", const char*);
 TRACEPOINT(trace_vfs_getcwd_err, "%d", int);
 
+OSV_LIBC_API
 char *getcwd(char *path, size_t size)
 {
     trace_vfs_getcwd(path, size);
@@ -1447,6 +1494,7 @@ TRACEPOINT(trace_vfs_dup_err, "%d", int);
 /*
  * Duplicate a file descriptor
  */
+OSV_LIBC_API
 int dup(int oldfd)
 {
     struct file *fp;
@@ -1480,6 +1528,7 @@ TRACEPOINT(trace_vfs_dup3_err, "%d", int);
 /*
  * Duplicate a file descriptor to a particular value.
  */
+OSV_LIBC_API
 int dup3(int oldfd, int newfd, int flags)
 {
     struct file *fp;
@@ -1520,6 +1569,7 @@ int dup3(int oldfd, int newfd, int flags)
     return -1;
 }
 
+OSV_LIBC_API
 int dup2(int oldfd, int newfd)
 {
     if (oldfd == newfd)
@@ -1537,7 +1587,7 @@ TRACEPOINT(trace_vfs_fcntl, "%d %d 0x%x", int, int, int);
 TRACEPOINT(trace_vfs_fcntl_ret, "\"%s\"", int);
 TRACEPOINT(trace_vfs_fcntl_err, "%d", int);
 
-extern "C"
+extern "C" OSV_LIBC_API
 int fcntl(int fd, int cmd, int arg)
 {
     struct file *fp;
@@ -1632,6 +1682,7 @@ TRACEPOINT(trace_vfs_access_err, "%d", int);
 /*
  * Check permission for file access
  */
+OSV_LIBC_API
 int access(const char *pathname, int mode)
 {
     trace_vfs_access(pathname, mode);
@@ -1659,6 +1710,7 @@ int access(const char *pathname, int mode)
     return -1;
 }
 
+OSV_LIBC_API
 int faccessat(int dirfd, const char *pathname, int mode, int flags)
 {
     if (flags & AT_SYMLINK_NOFOLLOW) {
@@ -1696,13 +1748,13 @@ int faccessat(int dirfd, const char *pathname, int mode, int flags)
     return error;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int euidaccess(const char *pathname, int mode)
 {
     return access(pathname, mode);
 }
 
-weak_alias(euidaccess,eaccess);
+weak_alias(euidaccess,eaccess) OSV_LIBC_API;
 
 #if 0
 static int
@@ -1756,6 +1808,7 @@ TRACEPOINT(trace_vfs_isatty_err, "%d", int);
 /*
  * Return if specified file is a tty
  */
+OSV_LIBC_API
 int isatty(int fd)
 {
     struct file *fp;
@@ -1783,6 +1836,7 @@ TRACEPOINT(trace_vfs_truncate, "\"%s\" 0x%x", const char*, off_t);
 TRACEPOINT(trace_vfs_truncate_ret, "");
 TRACEPOINT(trace_vfs_truncate_err, "%d", int);
 
+OSV_LIBC_API
 int truncate(const char *pathname, off_t length)
 {
     trace_vfs_truncate(pathname, length);
@@ -1813,6 +1867,7 @@ TRACEPOINT(trace_vfs_ftruncate, "%d 0x%x", int, off_t);
 TRACEPOINT(trace_vfs_ftruncate_ret, "");
 TRACEPOINT(trace_vfs_ftruncate_err, "%d", int);
 
+OSV_LIBC_API
 int ftruncate(int fd, off_t length)
 {
     trace_vfs_ftruncate(fd, length);
@@ -1839,6 +1894,7 @@ int ftruncate(int fd, off_t length)
 
 LFS64(ftruncate);
 
+OSV_LIBC_API
 ssize_t readlink(const char *pathname, char *buf, size_t bufsize)
 {
     struct task *t = main_task;
@@ -1869,6 +1925,7 @@ ssize_t readlink(const char *pathname, char *buf, size_t bufsize)
     return -1;
 }
 
+OSV_LIBC_API
 ssize_t readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsize)
 {
     if (pathname[0] == '/' || dirfd == AT_FDCWD) {
@@ -1906,6 +1963,7 @@ TRACEPOINT(trace_vfs_fallocate, "%d %d 0x%x 0x%x", int, int, loff_t, loff_t);
 TRACEPOINT(trace_vfs_fallocate_ret, "");
 TRACEPOINT(trace_vfs_fallocate_err, "%d", int);
 
+OSV_LIBC_API
 int fallocate(int fd, int mode, loff_t offset, loff_t len)
 {
     struct file *fp;
@@ -1936,11 +1994,13 @@ TRACEPOINT(trace_vfs_utimes, "\"%s\"", const char*);
 TRACEPOINT(trace_vfs_utimes_ret, "");
 TRACEPOINT(trace_vfs_utimes_err, "%d", int);
 
+OSV_LIBC_API
 int futimes(int fd, const struct timeval times[2])
 {
     return futimesat(fd, nullptr, times);
 }
 
+OSV_LIBC_API
 int futimesat(int dirfd, const char *pathname, const struct timeval times[2])
 {
     struct stat st;
@@ -1998,7 +2058,7 @@ TRACEPOINT(trace_vfs_utimensat, "\"%s\"", const char*);
 TRACEPOINT(trace_vfs_utimensat_ret, "");
 TRACEPOINT(trace_vfs_utimensat_err, "%d", int);
 
-extern "C"
+extern "C" OSV_LIBC_API
 int utimensat(int dirfd, const char *pathname, const struct timespec times[2], int flags)
 {
     trace_vfs_utimensat(pathname);
@@ -2018,7 +2078,7 @@ TRACEPOINT(trace_vfs_futimens, "%d", int);
 TRACEPOINT(trace_vfs_futimens_ret, "");
 TRACEPOINT(trace_vfs_futimens_err, "%d", int);
 
-extern "C"
+extern "C" OSV_LIBC_API
 int futimens(int fd, const struct timespec times[2])
 {
     trace_vfs_futimens(fd);
@@ -2058,19 +2118,19 @@ static int do_utimes(const char *pathname, const struct timeval times[2], int fl
     return 0;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int utimes(const char *pathname, const struct timeval times[2])
 {
     return do_utimes(pathname, times, 0);
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int lutimes(const char *pathname, const struct timeval times[2])
 {
     return do_utimes(pathname, times, AT_SYMLINK_NOFOLLOW);
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int utime(const char *pathname, const struct utimbuf *t)
 {
     using namespace std::chrono;
@@ -2094,6 +2154,7 @@ TRACEPOINT(trace_vfs_chmod, "\"%s\" 0%0o", const char*, mode_t);
 TRACEPOINT(trace_vfs_chmod_ret, "");
 TRACEPOINT(trace_vfs_chmod_err, "%d", int);
 
+OSV_LIBC_API
 int chmod(const char *pathname, mode_t mode)
 {
     trace_vfs_chmod(pathname, mode);
@@ -2118,6 +2179,7 @@ out_errno:
 TRACEPOINT(trace_vfs_fchmod, "\"%d\" 0%0o", int, mode_t);
 TRACEPOINT(trace_vfs_fchmod_ret, "");
 
+OSV_LIBC_API
 int fchmod(int fd, mode_t mode)
 {
     trace_vfs_fchmod(fd, mode);
@@ -2134,6 +2196,7 @@ int fchmod(int fd, mode_t mode)
 TRACEPOINT(trace_vfs_fchown, "\"%d\" %d %d", int, uid_t, gid_t);
 TRACEPOINT(trace_vfs_fchown_ret, "");
 
+OSV_LIBC_API
 int fchown(int fd, uid_t owner, gid_t group)
 {
     trace_vfs_fchown(fd, owner, group);
@@ -2142,12 +2205,14 @@ int fchown(int fd, uid_t owner, gid_t group)
     return 0;
 }
 
+OSV_LIBC_API
 int chown(const char *path, uid_t owner, gid_t group)
 {
     WARN_STUBBED();
     return 0;
 }
 
+OSV_LIBC_API
 int lchown(const char *path, uid_t owner, gid_t group)
 {
     WARN_STUBBED();
@@ -2155,6 +2220,7 @@ int lchown(const char *path, uid_t owner, gid_t group)
 }
 
 
+OSV_LIBC_API
 ssize_t sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
 {
     struct file *in_fp;
@@ -2236,8 +2302,9 @@ ssize_t sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
 #undef sendfile64
 LFS64(sendfile);
 
-NO_SYS(int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags));
+NO_SYS(OSV_LIBC_API int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags));
 
+OSV_LIBC_API
 mode_t umask(mode_t newmask)
 {
     return global_umask.exchange(newmask, std::memory_order_relaxed);
@@ -2249,6 +2316,7 @@ fs_noop(void)
     return 0;
 }
 
+OSV_LIBC_API
 int chroot(const char *path)
 {
     WARN_STUBBED();

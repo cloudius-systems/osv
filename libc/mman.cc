@@ -84,6 +84,7 @@ unsigned libc_madvise_to_advise(int advice)
     return 0;
 }
 
+OSV_LIBC_API
 int mprotect(void *addr, size_t len, int prot)
 {
     // we don't support mprotecting() the linear map (e.g.., malloc() memory)
@@ -115,6 +116,7 @@ int mmap_validate(void *addr, size_t length, int flags, off_t offset)
     return 0;
 }
 
+OSV_LIBC_API
 void *mmap(void *addr, size_t length, int prot, int flags,
            int fd, off_t offset)
 {
@@ -199,6 +201,7 @@ int munmap_validate(void *addr, size_t length)
     return 0;
 }
 
+OSV_LIBC_API
 int munmap(void *addr, size_t length)
 {
     trace_memory_munmap(addr, length);
@@ -216,11 +219,13 @@ int munmap(void *addr, size_t length)
     return ret;
 }
 
+OSV_LIBC_API
 int msync(void *addr, size_t length, int flags)
 {
     return mmu::msync(addr, length, flags).to_libc();
 }
 
+OSV_LIBC_API
 int mincore(void *addr, size_t length, unsigned char *vec)
 {
     if (!mmu::is_page_aligned(addr)) {
@@ -230,12 +235,14 @@ int mincore(void *addr, size_t length, unsigned char *vec)
     return mmu::mincore(addr, length, vec).to_libc();
 }
 
+OSV_LIBC_API
 int madvise(void *addr, size_t length, int advice)
 {
     auto err = mmu::advise(addr, length, libc_madvise_to_advise(advice));
     return err.to_libc();
 }
 
+OSV_LIBC_API
 int brk(void *addr)
 {
     WARN_STUBBED();
@@ -243,6 +250,7 @@ int brk(void *addr)
     return -1;
 }
 
+OSV_LIBC_API
 void *sbrk(intptr_t increment)
 {
     WARN_STUBBED();

@@ -3,6 +3,7 @@
 
 #include <stdlib.h>
 #include <osv/mutex.h>
+#include <osv/export.h>
 #include "stdio.h"
 
 __BEGIN_DECLS
@@ -49,7 +50,7 @@ extern char **__environ;
 #endif
 
 #undef LFS64_2
-#define LFS64_2(x, y) weak_alias(x, y)
+#define LFS64_2(x, y) weak_alias(x, y) OSV_LIBC_API
 
 #undef LFS64
 #define LFS64(x) LFS64_2(x, x##64)

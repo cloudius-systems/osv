@@ -36,6 +36,7 @@
 #include <sys/types.h>
 #include <fenv.h>
 #include <__fenv.h>
+#include <osv/export.h>
 // Note that musl's fenv.h does not define feenableexcept and friends, so
 // we need to 'extern "C"' them here, as no header file does this.
 
@@ -55,7 +56,7 @@ typedef	__uint64_t	_fenv_t;
 #define	__mrs_fpsr(__r)	__asm __volatile("mrs %0, fpsr" : "=r" (__r))
 #define	__msr_fpsr(__r)	__asm __volatile("msr fpsr, %0" : : "r" (__r))
 
-extern "C"
+extern "C" OSV_LIBM_API
 int feenableexcept(int mask)
 {
     _fenv_t __old_r, __new_r;
@@ -66,7 +67,7 @@ int feenableexcept(int mask)
     return ((__old_r >> _FPUSW_SHIFT) & FE_ALL_EXCEPT);
 }
 
-extern "C"
+extern "C" OSV_LIBM_API
 int fedisableexcept(int mask)
 {
     _fenv_t __old_r, __new_r;
@@ -77,7 +78,7 @@ int fedisableexcept(int mask)
     return ((__old_r >> _FPUSW_SHIFT) & FE_ALL_EXCEPT);
 }
 
-extern "C"
+extern "C" OSV_LIBM_API
 int fegetexcept()
 {
     _fenv_t __r;

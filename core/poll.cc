@@ -48,6 +48,7 @@
 
 #include <osv/file.h>
 #include <osv/poll.h>
+#include <osv/export.h>
 #include <sys/epoll.h>
 
 #include <bsd/porting/netport.h>
@@ -334,6 +335,7 @@ static int poll_one(struct pollfd& pfd, file::timeout_t timeout)
     return fref->poll_sync(pfd, timeout);
 }
 
+OSV_LIBC_API
 int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
 {
     trace_poll(_pfd, _nfds, _timeout);
@@ -357,6 +359,7 @@ int poll(struct pollfd _pfd[], nfds_t _nfds, int _timeout)
     return ret;
 }
 
+OSV_LIBC_API
 int ppoll(struct pollfd *fds, nfds_t nfds,
            const struct timespec *timeout_ts, const sigset_t *sigmask)
 {
@@ -371,7 +374,7 @@ int ppoll(struct pollfd *fds, nfds_t nfds,
     return ret;
 }
 /* Used by code compiled on Linux with -D_FORTIFY_SOURCE */
-extern "C"
+extern "C" OSV_LIBC_API
 int __poll_chk (struct pollfd _pfd[], nfds_t _nfds, int _timeout, size_t pdflen)
 {
   assert(pdflen / sizeof (_pfd[0]) >= _nfds);
