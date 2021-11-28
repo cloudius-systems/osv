@@ -71,10 +71,6 @@
 
 #define __LC_LAST 13
 
-#define __ALIAS(old, new) \
-        __typeof(old) new __attribute__((alias(#old)))
-#define ALIAS(old, new) extern "C" __ALIAS(old, new)
-
 void *__dso_handle;
 
 static void print_backtrace(void)
@@ -198,7 +194,6 @@ int getpagesize()
 {
     return 4096;
 }
-ALIAS(getpagesize, __getpagesize);
 
 int vfork()
 {
@@ -346,8 +341,6 @@ __locale_t __newlocale(int category_mask, const char *locale, locale_t base)
     return nullptr;
 }
 
-ALIAS(__newlocale, newlocale);
-
 long sysconf(int name)
 {
     switch (name) {
@@ -423,9 +416,6 @@ void exit(int status)
 // "The function _exit() is like exit(3), but does not call any functions
 // registered with atexit(3) or on_exit(3)."
 //
-// Since we do nothing for those anyway, they are equal.
-ALIAS(exit, _exit);
-ALIAS(exit, _Exit);
 
 int atexit(void (*func)())
 {

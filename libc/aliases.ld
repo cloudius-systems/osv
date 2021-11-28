@@ -29,7 +29,7 @@ __finitel = finitel;
 
 /* locale */
 __toupper_l = toupper_l;
-__setlocale = setlocale;
+newlocale = __newlocale;
 
 /* multibyte */
 __mbrlen = mbrlen;
@@ -50,11 +50,7 @@ __stpncpy = stpncpy;
 __strdup = strdup;
 strerrordesc_np = strerror;
 
-/* temp */
-__mktemp = mktemp;
-
 /* time */
-__clock_gettime = clock_gettime;
 __gmtime_r = gmtime_r;
 __strftime_l = strftime_l;
 
@@ -69,6 +65,13 @@ stat64 = stat;
 fstat64 = fstat;
 lstat64 = lstat;
 fstatat64 = fstatat;
-
 __lseek = lseek;
+
 __getauxval = getauxval;
+__getpagesize = getpagesize;
+
+/* Since we do nothing for those anyway, they are equal. */
+_exit = exit;
+_Exit = exit;
+
+__dn_expand = dn_expand;
