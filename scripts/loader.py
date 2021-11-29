@@ -1001,7 +1001,14 @@ def find_or_give_last(predicate, seq):
 def unique_ptr_get(u):
     try:
         # Since gcc 7
-        return u['_M_t']['_M_t']['_M_head_impl']
+        tuple_member = u['_M_t']['_M_t']
+        tuple_impl_type = tuple_member.type.fields()[0].type # _Tuple_impl
+        tuple_head_type = tuple_impl_type.fields()[1].type   # _Head_base
+        head_field = tuple_head_type.fields()[0]
+        if head_field.name == '_M_head_impl':
+            return tuple_member.cast(tuple_head_type)['_M_head_impl']
+        else:
+            return tuple_member.cast(head_field.type)
     except:
         return u['_M_t']['_M_head_impl']
 
