@@ -68,9 +68,15 @@ output_manifest()
 	echo "# --------------------" | tee -a $OUTPUT
 	echo "# Dependencies" | tee -a $OUTPUT
 	echo "# --------------------" | tee -a $OUTPUT
-	lddtree $so_path | grep -v "not found" | grep -v "$so_path" | grep -v "ld-linux-${MACHINE}" | \
-		grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|stdc\+\+|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
-		sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
+	if [[ $conf_hide_symbols == 1 ]]; then
+		lddtree $so_path | grep -v "not found" | grep -v "$so_path" | grep -v "ld-linux-${MACHINE}" | \
+			grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
+			sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
+	else
+		lddtree $so_path | grep -v "not found" | grep -v "$so_path" | grep -v "ld-linux-${MACHINE}" | \
+			grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|stdc\+\+|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
+			sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
+	fi
 }
 
 detect_elf()
@@ -144,9 +150,15 @@ if [[ -d $NAME_OR_PATH ]]; then
 		echo "# --------------------" | tee -a $OUTPUT
 		echo "# Dependencies" | tee -a $OUTPUT
 		echo "# --------------------" | tee -a $OUTPUT
-		lddtree $SO_FILES | grep -v "not found" | grep -v "$NAME_OR_PATH/$SUBDIRECTORY_PATH" | grep -v "ld-linux-${MACHINE}" | \
-			grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|stdc\+\+|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
-			sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
+		if [[ $conf_hide_symbols == 1 ]]; then
+			lddtree $SO_FILES | grep -v "not found" | grep -v "$NAME_OR_PATH/$SUBDIRECTORY_PATH" | grep -v "ld-linux-${MACHINE}" | \
+				grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
+				sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
+		else
+			lddtree $SO_FILES | grep -v "not found" | grep -v "$NAME_OR_PATH/$SUBDIRECTORY_PATH" | grep -v "ld-linux-${MACHINE}" | \
+				grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|stdc\+\+|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
+				sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
+		fi
 	fi
 	exit 0
 fi

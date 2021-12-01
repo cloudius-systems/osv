@@ -279,7 +279,12 @@ $(out)/bsd/%.o: source-dialects =
 $(out)/libc/%.o: source-dialects =
 $(out)/musl/%.o: source-dialects =
 
-kernel-defines = -D_KERNEL $(source-dialects)
+# do not hide symbols in musl/libc because it has it's own hiding mechanism
+$(out)/libc/%.o: cc-hide-flags =
+$(out)/libc/%.o: cxx-hide-flags =
+$(out)/musl/%.o: cc-hide-flags =
+
+kernel-defines = -D_KERNEL $(source-dialects) $(cc-hide-flags)
 
 # This play the same role as "_KERNEL", but _KERNEL unfortunately is too
 # overloaded. A lot of files will expect it to be set no matter what, specially
@@ -310,9 +315,17 @@ tracing-flags-0 =
 tracing-flags-1 = -finstrument-functions -finstrument-functions-exclude-file-list=c++,trace.cc,trace.hh,align.hh,mmintrin.h
 tracing-flags = $(tracing-flags-$(conf-tracing))
 
+cc-hide-flags-0 =
+cc-hide-flags-1 = -fvisibility=hidden
+cc-hide-flags = $(cc-hide-flags-$(conf_hide_symbols))
+
+cxx-hide-flags-0 =
+cxx-hide-flags-1 = -fvisibility-inlines-hidden
+cxx-hide-flags = $(cxx-hide-flags-$(conf_hide_symbols))
+
 gcc-opt-Og := $(call compiler-flag, -Og, -Og, compiler/empty.cc)
 
-CXXFLAGS = -std=gnu++11 $(COMMON)
+CXXFLAGS = -std=gnu++11 $(COMMON) $(cxx-hide-flags)
 CFLAGS = -std=gnu99 $(COMMON)
 
 # should be limited to files under libc/ eventually
@@ -794,6 +807,7 @@ drivers += drivers/clock-common.o
 drivers += drivers/clockevent.o
 drivers += drivers/isa-serial-base.o
 drivers += core/elf.o
+$(out)/core/elf.o: CXXFLAGS += -DHIDE_SYMBOLS=$(conf_hide_symbols)
 drivers += drivers/random.o
 drivers += drivers/zfs.o
 drivers += drivers/null.o
@@ -949,6 +963,7 @@ objects += core/options.o
 
 #include $(src)/libc/build.mk:
 libc =
+libc_to_hide =
 musl =
 environ_libc =
 environ_musl =
@@ -960,6 +975,7 @@ musl_arch = aarch64
 endif
 
 libc += internal/_chk_fail.o
+libc_to_hide += internal/_chk_fail.o
 libc += internal/floatscan.o
 libc += internal/intscan.o
 libc += internal/libc.o
@@ -1029,6 +1045,7 @@ libc += errno/strerror.o
 
 musl += locale/catclose.o
 musl += locale/__mo_lookup.o
+$(out)/musl/src/locale/__mo_lookup.o: CFLAGS += $(cc-hide-flags-$(conf_hide_symbols))
 musl += locale/pleval.o
 musl += locale/catgets.o
 libc += locale/catopen.o
@@ -1316,13 +1333,16 @@ musl += misc/ffsll.o
 musl += misc/get_current_dir_name.o
 libc += misc/gethostid.o
 libc += misc/getopt.o
+libc_to_hide += misc/getopt.o
 libc += misc/getopt_long.o
+libc_to_hide += misc/getopt_long.o
 musl += misc/getsubopt.o
 libc += misc/realpath.o
 libc += misc/backtrace.o
 libc += misc/uname.o
 libc += misc/lockf.o
 libc += misc/mntent.o
+libc_to_hide += misc/mntent.o
 musl += misc/nftw.o
 libc += misc/__longjmp_chk.o
 
@@ -1360,7 +1380,7 @@ musl += network/gethostbyaddr_r.o
 musl += network/gethostbyaddr.o
 musl += network/resolvconf.o
 musl += network/res_msend.o
-$(out)/musl/src/network/res_msend.o: CFLAGS += -Wno-maybe-uninitialized --include libc/syscall_to_function.h --include libc/internal/pthread_stubs.h
+$(out)/musl/src/network/res_msend.o: CFLAGS += -Wno-maybe-uninitialized --include libc/syscall_to_function.h --include libc/internal/pthread_stubs.h $(cc-hide-flags-$(conf_hide_symbols))
 $(out)/libc/multibyte/mbsrtowcs.o: CFLAGS += -Imusl/src/multibyte
 musl += network/lookup_ipliteral.o
 libc += network/getaddrinfo.o
@@ -1374,7 +1394,9 @@ musl += network/lookup_name.o
 musl += network/lookup_serv.o
 libc += network/getnameinfo.o
 libc += network/__dns.o
+libc_to_hide += network/__dns.o
 libc += network/__ipparse.o
+libc_to_hide += network/__ipparse.o
 musl += network/inet_addr.o
 musl += network/inet_aton.o
 musl += network/inet_pton.o
@@ -1423,6 +1445,7 @@ ifeq ($(arch),x64)
 libc += arch/$(arch)/ucontext/getcontext.o
 libc += arch/$(arch)/ucontext/setcontext.o
 libc += arch/$(arch)/ucontext/start_context.o
+libc_to_hide += arch/$(arch)/ucontext/start_context.o
 libc += arch/$(arch)/ucontext/ucontext.o
 libc += string/memmove.o
 endif
@@ -1590,11 +1613,13 @@ musl += string/memccpy.o
 musl += string/memchr.o
 musl += string/memcmp.o
 libc += string/memcpy.o
+libc_to_hide += string/memcpy.o
 musl += string/memmem.o
 musl += string/mempcpy.o
 musl += string/memrchr.o
 libc += string/__memmove_chk.o
 libc += string/memset.o
+libc_to_hide += string/memset.o
 libc += string/__memset_chk.o
 libc += string/rawmemchr.o
 musl += string/rindex.o
@@ -1628,6 +1653,7 @@ musl += string/strpbrk.o
 musl += string/strrchr.o
 musl += string/strsep.o
 libc += string/stresep.o
+libc_to_hide += string/stresep.o
 musl += string/strsignal.o
 musl += string/strspn.o
 musl += string/strstr.o
@@ -1727,21 +1753,31 @@ musl += regex/tre-mem.o
 $(out)/musl/src/regex/tre-mem.o: CFLAGS += -UNDEBUG
 
 libc += pthread.o
+libc_to_hide += pthread.o
 libc += pthread_barrier.o
 libc += libc.o
 libc += dlfcn.o
 libc += time.o
+libc_to_hide += time.o
 libc += signal.o
+libc_to_hide += signal.o
 libc += mman.o
+libc_to_hide += mman.o
 libc += sem.o
+libc_to_hide += sem.o
 libc += pipe_buffer.o
+libc_to_hide += pipe_buffer.o
 libc += pipe.o
+libc_to_hide += pipe.o
 libc += af_local.o
+libc_to_hide += af_local.o
 libc += user.o
 libc += resource.o
 libc += mount.o
 libc += eventfd.o
+libc_to_hide += eventfd.o
 libc += timerfd.o
+libc_to_hide += timerfd.o
 libc += shm.o
 libc += inotify.o
 libc += __pread64_chk.o
@@ -1813,6 +1849,10 @@ fs_objs += sysfs/sysfs_vnops.o
 objects += $(addprefix fs/, $(fs_objs))
 objects += $(addprefix libc/, $(libc))
 objects += $(addprefix musl/src/, $(musl))
+
+libc_objects_to_hide = $(addprefix $(out)/libc/, $(libc_to_hide))
+$(libc_objects_to_hide): cc-hide-flags = $(cc-hide-flags-$(conf_hide_symbols))
+$(libc_objects_to_hide): cxx-hide-flags = $(cxx-hide-flags-$(conf_hide_symbols))
 
 libstdc++.a := $(shell $(CXX) -print-file-name=libstdc++.a)
 ifeq ($(filter /%,$(libstdc++.a)),)
@@ -1914,15 +1954,18 @@ $(loader_options_dep): stage1
 		echo -n "APP_LOCAL_EXEC_TLS_SIZE = $(app_local_exec_tls_size);" > $(loader_options_dep) ; \
 	fi
 
+ifeq ($(conf_hide_symbols),1)
+linker_archives_options = --no-whole-archive $(libstdc++.a) $(libgcc.a) $(libgcc_eh.a) $(boost-libs) --exclude-libs libstdc++.a
+else
+linker_archives_options = --whole-archive $(libstdc++.a) $(libgcc_eh.a) $(boost-libs) --no-whole-archive $(libgcc.a)
+endif
+
 $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(loader_options_dep)
 	$(call quiet, $(LD) -o $@ --defsym=OSV_KERNEL_BASE=$(kernel_base) \
 	    --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
 	    $(^:%.ld=-T %.ld) \
-	    --whole-archive \
-	      $(libstdc++.a) $(libgcc_eh.a) \
-	      $(boost-libs) \
-	    --no-whole-archive $(libgcc.a), \
+	    $(linker_archives_options), \
 		LINK loader.elf)
 	@# Build libosv.so matching this loader.elf. This is not a separate
 	@# rule because that caused bug #545.
@@ -1935,10 +1978,7 @@ $(out)/kernel.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/empty_bootfs.
 	    --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
 	    $(^:%.ld=-T %.ld) \
-	    --whole-archive \
-	      $(libstdc++.a) $(libgcc_eh.a) \
-	      $(boost-libs) \
-	    --no-whole-archive $(libgcc.a), \
+	    $(linker_archives_options), \
 		LINK kernel.elf)
 	$(call quiet, $(STRIP) $(out)/kernel.elf -o $(out)/kernel-stripped.elf, STRIP kernel.elf -> kernel-stripped.elf )
 	$(call very-quiet, cp $(out)/kernel-stripped.elf $(out)/kernel.elf)

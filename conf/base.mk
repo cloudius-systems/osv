@@ -11,3 +11,4 @@ conf-logger_debug=0
 conf-DEBUG_BUILD=0
 
 conf-debug_elf=0
+conf_hide_symbols=0

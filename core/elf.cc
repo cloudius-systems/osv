@@ -1315,19 +1315,25 @@ program::program(void* addr)
           // this library, it will not be visible for the application and
           // it will need to load its own version of this library.
 #if BOOST_VERSION < 106900
+#if HIDE_SYMBOLS < 1
           "libboost_system.so.1.55.0",
+#endif
 #endif
 #endif /* __x86_64__ */
 #ifdef __aarch64__
           "ld-linux-aarch64.so.1",
 #if BOOST_VERSION < 106900
+#if HIDE_SYMBOLS < 1
           "libboost_system-mt.so.1.55.0",
+#endif
 #endif
 #endif /* __aarch64__ */
           "libpthread.so.0",
           "libdl.so.2",
           "librt.so.1",
+#if HIDE_SYMBOLS < 1
           "libstdc++.so.6",
+#endif
           "libaio.so.1",
           "libxenstore.so.3.0",
           "libcrypt.so.1",
