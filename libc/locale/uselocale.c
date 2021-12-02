@@ -1,6 +1,7 @@
 #include "locale_impl.h"
 #include "libc.h"
 
+OSV_HIDDEN
 __thread locale_t __current_locale;
 
 locale_t __uselocale(locale_t l)

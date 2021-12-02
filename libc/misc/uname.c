@@ -7,6 +7,7 @@
 
 #include <sys/utsname.h>
 #include <string.h>
+#include "osv/export.h"
 
 // The Linux version we're pretending to be
 #define LINUX_MAJOR 3
@@ -23,7 +24,7 @@ _Static_assert(KERNEL_VERSION(LINUX_MAJOR, LINUX_MINOR, LINUX_PATCH)
 #define str(s) #s
 #define str2(s) str(s)
 
-struct utsname utsname = {
+struct utsname utsname OSV_HIDDEN = {
 	.sysname	= "Linux",	/* lie, to avoid confusing the payload. */
 	.nodename	= "osv.local",
 	.release	= str2(LINUX_MAJOR) "." str2(LINUX_MINOR) "." str2(LINUX_PATCH),
