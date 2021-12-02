@@ -63,11 +63,17 @@ $(out)/tests/tst-options.so: $(out)/tests/tst-options.o $(out)/tests/options.o
 $(out)/tests/commands.o: $(src)/core/commands.cc
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+$(out)/tests/printf.o: $(src)/core/printf.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+$(out)/tests/debug.o: $(src)/core/debug.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
 $(out)/tests/stresep.o: $(src)/libc/string/stresep.c
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $<, CC $*.c)
-$(out)/tests/tst-commands.so: $(out)/tests/tst-commands.o $(out)/tests/commands.o $(out)/tests/stresep.o
-	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(out)/tests/commands.o $(out)/tests/stresep.o $(LIBS), LD tests/tst-commands.so)
+$(out)/tests/tst-commands.so: $(out)/tests/tst-commands.o $(out)/tests/commands.o $(out)/tests/stresep.o $(out)/tests/printf.o $(out)/tests/debug.o
+	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(out)/tests/commands.o $(out)/tests/stresep.o $(out)/tests/printf.o $(out)/tests/debug.o $(LIBS), LD tests/tst-commands.so)
 
 # The rofs test image mounts /tmp as ramfs and 4 tests that exercise file system
 # fail due to some unresolved bugs or other shortcomings of the ramfs implementation
