@@ -23,14 +23,14 @@ SECTIONS
 	 */
     .start32_address : AT(ADDR(.start32_address) - OSV_KERNEL_VM_SHIFT) {
         *(.start32_address)
-    }
+    KEEP(*(.start32_address)) }
     . = OSV_KERNEL_VM_BASE + 0x900;
 	/*
 	 * Place address of start32_from_vmlinuz routine at predefined offset in memory
 	 */
     .start32_from_vmlinuz_address : AT(ADDR(.start32_from_vmlinuz_address) - OSV_KERNEL_VM_SHIFT) {
         *(.start32_from_vmlinuz_address)
-    }
+    KEEP(*(.start32_from_vmlinuz_address)) }
     . = OSV_KERNEL_VM_BASE + 0x1000;
     .dynamic : AT(ADDR(.dynamic) - OSV_KERNEL_VM_SHIFT) { *(.dynamic) } :dynamic :text
     .text : AT(ADDR(.text) - OSV_KERNEL_VM_SHIFT) {
@@ -48,32 +48,32 @@ SECTIONS
         HIDDEN(fault_fixup_start = .);
         *(.fixup)
         HIDDEN(fault_fixup_end = .);
-    } :text
+    KEEP(*(.fixup)) } :text
 
     . = ALIGN(8);
     .memcpy_decode : AT(ADDR(.memcpy_decode) - OSV_KERNEL_VM_SHIFT) {
         HIDDEN(memcpy_decode_start = .);
         *(.memcpy_decode)
         HIDDEN(memcpy_decode_end = .);
-    } :text
+    KEEP(*(.memcpy_decode)) } :text
 
-    .eh_frame : AT(ADDR(.eh_frame) - OSV_KERNEL_VM_SHIFT) { *(.eh_frame) } : text
+    .eh_frame : AT(ADDR(.eh_frame) - OSV_KERNEL_VM_SHIFT) { *(.eh_frame) KEEP(*(.eh_frame)); } : text
     .rodata : AT(ADDR(.rodata) - OSV_KERNEL_VM_SHIFT) { *(.rodata*) } :text
-    .eh_frame : AT(ADDR(.eh_frame) - OSV_KERNEL_VM_SHIFT) { *(.eh_frame) } :text
-    .eh_frame_hdr : AT(ADDR(.eh_frame_hdr) - OSV_KERNEL_VM_SHIFT) { *(.eh_frame_hdr) } :text :eh_frame
+    .eh_frame : AT(ADDR(.eh_frame) - OSV_KERNEL_VM_SHIFT) { *(.eh_frame) KEEP(*(.eh_frame)); } :text
+    .eh_frame_hdr : AT(ADDR(.eh_frame_hdr) - OSV_KERNEL_VM_SHIFT) { *(.eh_frame_hdr) KEEP(*(.eh_frame_hdr)); } :text :eh_frame
     .note : AT(ADDR(.note) - OSV_KERNEL_VM_SHIFT) { *(.note*) } :text :note
     .gcc_except_table : AT(ADDR(.gcc_except_table) - OSV_KERNEL_VM_SHIFT) { *(.gcc_except_table) *(.gcc_except_table.*) } : text
     .tracepoint_patch_sites ALIGN(8) : AT(ADDR(.tracepoint_patch_sites) - OSV_KERNEL_VM_SHIFT) {
         HIDDEN(__tracepoint_patch_sites_start = .);
         *(.tracepoint_patch_sites)
         HIDDEN(__tracepoint_patch_sites_end = .);
-    } : text
+    KEEP(*(.tracepoint_patch_sites)) } : text
     .data.rel.ro : AT(ADDR(.data.rel.ro) - OSV_KERNEL_VM_SHIFT) { *(.data.rel.ro.local* .gnu.linkonce.d.rel.ro.local.*) *(.data.rel.ro .data.rel.ro.* .gnu.linkonce.d.rel.ro.*) } : text
     .data : AT(ADDR(.data) - OSV_KERNEL_VM_SHIFT) { *(.data) } :text
     HIDDEN(_init_array_start = .);
     .init_array : AT(ADDR(.init_array) - OSV_KERNEL_VM_SHIFT) {
         *(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*))
-        *(.init_array .ctors)
+        *(.init_array .ctors) KEEP(*(.init_array .init_array.* .ctors.* .ctors))
     } : text
     HIDDEN(_init_array_end = .);
     . = ALIGN(4096);
