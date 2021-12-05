@@ -284,7 +284,7 @@ $(out)/libc/%.o: cc-hide-flags =
 $(out)/libc/%.o: cxx-hide-flags =
 $(out)/musl/%.o: cc-hide-flags =
 
-kernel-defines = -D_KERNEL $(source-dialects) $(cc-hide-flags)
+kernel-defines = -D_KERNEL $(source-dialects) $(cc-hide-flags) $(gc-flags)
 
 # This play the same role as "_KERNEL", but _KERNEL unfortunately is too
 # overloaded. A lot of files will expect it to be set no matter what, specially
@@ -322,6 +322,10 @@ cc-hide-flags = $(cc-hide-flags-$(conf_hide_symbols))
 cxx-hide-flags-0 =
 cxx-hide-flags-1 = -fvisibility-inlines-hidden
 cxx-hide-flags = $(cxx-hide-flags-$(conf_hide_symbols))
+
+gc-flags-0 =
+gc-flags-1 = -ffunction-sections -fdata-sections
+gc-flags = $(gc-flags-$(conf_hide_symbols))
 
 gcc-opt-Og := $(call compiler-flag, -Og, -Og, compiler/empty.cc)
 
@@ -1944,7 +1948,7 @@ $(out)/dummy-shlib.so: $(out)/dummy-shlib.o
 	$(call quiet, $(CXX) -nodefaultlibs -shared $(gcc-sysroot) -o $@ $^, LINK $@)
 
 stage1_targets = $(out)/arch/$(arch)/boot.o $(out)/loader.o $(out)/runtime.o $(drivers:%=$(out)/%) $(objects:%=$(out)/%) $(out)/dummy-shlib.so
-stage1: $(stage1_targets) links
+stage1: $(stage1_targets) links $(out)/version_script
 .PHONY: stage1
 
 loader_options_dep = $(out)/arch/$(arch)/loader_options.ld
@@ -1955,17 +1959,21 @@ $(loader_options_dep): stage1
 	fi
 
 ifeq ($(conf_hide_symbols),1)
-linker_archives_options = --no-whole-archive $(libstdc++.a) $(libgcc.a) $(libgcc_eh.a) $(boost-libs) --exclude-libs libstdc++.a
+linker_archives_options = --no-whole-archive $(libstdc++.a) $(libgcc.a) $(libgcc_eh.a) $(boost-libs) \
+  --exclude-libs libstdc++.a --gc-sections --version-script=$(out)/version_script
 else
 linker_archives_options = --whole-archive $(libstdc++.a) $(libgcc_eh.a) $(boost-libs) --no-whole-archive $(libgcc.a)
 endif
+
+$(out)/version_script: exported_symbols/$(arch)/*.symbols
+	$(call quiet, scripts/generate_version_script.sh $(out)/version_script, GEN version_script)
 
 $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(loader_options_dep)
 	$(call quiet, $(LD) -o $@ --defsym=OSV_KERNEL_BASE=$(kernel_base) \
 	    --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
 	    $(^:%.ld=-T %.ld) \
-	    $(linker_archives_options), \
+	    $(linker_archives_options) $(conf_linker_extra_options), \
 		LINK loader.elf)
 	@# Build libosv.so matching this loader.elf. This is not a separate
 	@# rule because that caused bug #545.
@@ -1978,10 +1986,9 @@ $(out)/kernel.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/empty_bootfs.
 	    --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
 	    $(^:%.ld=-T %.ld) \
-	    $(linker_archives_options), \
+	    $(linker_archives_options) $(conf_linker_extra_options), \
 		LINK kernel.elf)
 	$(call quiet, $(STRIP) $(out)/kernel.elf -o $(out)/kernel-stripped.elf, STRIP kernel.elf -> kernel-stripped.elf )
-	$(call very-quiet, cp $(out)/kernel-stripped.elf $(out)/kernel.elf)
 
 $(out)/bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__'
 
