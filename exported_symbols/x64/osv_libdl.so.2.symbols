@@ -1,0 +1,6 @@
+dladdr
+dlclose
+dlerror
+dlopen
+dlsym
+dlvsym

@@ -1,0 +1,8 @@
+xs_close
+xs_daemon_open
+xs_directory
+xs_read
+xs_rm
+xs_transaction_end
+xs_transaction_start
+xs_write
