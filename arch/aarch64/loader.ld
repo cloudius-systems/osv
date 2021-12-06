@@ -65,20 +65,20 @@ SECTIONS
         fault_fixup_start = .;
         *(.fixup)
         fault_fixup_end = .;
-    } : text
+    KEEP(*(.fixup)) } : text
 
-    .eh_frame : { *(.eh_frame) } : text
-    .eh_frame_hdr : { *(.eh_frame_hdr) } :text :eh_frame
+    .eh_frame : { *(.eh_frame) KEEP(*(.eh_frame)); } : text
+    .eh_frame_hdr : { *(.eh_frame_hdr) KEEP(*(.eh_frame_hdr)); } :text :eh_frame
     .rodata : { *(.rodata*) } :text
     .note : { *(.note*) } :text :note
 
-    .gcc_except_table : { *(.gcc_except_table) *(.gcc_except_table.*) } : text
+    .gcc_except_table : { *(.gcc_except_table) *(.gcc_except_table.*) KEEP(*(.gcc_except_table)); } : text
 
     .tracepoint_patch_sites : ALIGN(8) {
         HIDDEN(__tracepoint_patch_sites_start = .);
         *(.tracepoint_patch_sites)
         HIDDEN(__tracepoint_patch_sites_end = .);
-    } : text
+    KEEP(*(.tracepoint_patch_sites)); } : text
 
     .data.rel.ro : { *(.data.rel.ro.local* .gnu.linkonce.d.rel.ro.local.*) *(.data.rel.ro .data.rel.ro.* .gnu.linkonce.d.rel.ro.*) } : text
 
@@ -89,7 +89,7 @@ SECTIONS
         *(SORT_BY_NAME(.preinit_array.*) .preinit_array)
         *(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*))
         *(.init_array .ctors)
-    } : text
+    KEEP(*(.init_array .init_array.* .ctors.* .ctors)) } : text
     HIDDEN(_init_array_end = .);
 
     .percpu : ALIGN (4096) {
