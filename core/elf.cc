@@ -123,6 +123,7 @@ object::object(program& prog, std::string pathname)
     , _dynamic_table(nullptr)
     , _module_index(_prog.register_dtv(this))
     , _is_executable(false)
+    , _init_called(false)
     , _visibility_thread(nullptr)
     , _visibility_level(VisibilityLevel::Public)
 {
@@ -1178,11 +1179,15 @@ void object::run_init_funcs(int argc, char** argv)
         }
         elf_debug("Finished executing %d DT_INIT_ARRAYSZ functions\n", nr);
     }
+    _init_called = true;
 }
 
 // Run the object's static destructors or similar finalization
 void object::run_fini_funcs()
 {
+    if(!_init_called){
+        return;
+    }
     if (dynamic_exists(DT_FINI_ARRAY)) {
         auto funcs = dynamic_ptr<void (*)()>(DT_FINI_ARRAY);
         auto nr = dynamic_val(DT_FINI_ARRAYSZ) / sizeof(*funcs);

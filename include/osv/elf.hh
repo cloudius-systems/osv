@@ -435,6 +435,7 @@ protected:
     std::unique_ptr<char[]> _section_names_cache;
     bool _is_executable;
     bool is_core();
+    bool _init_called;
 
     std::unordered_map<std::string,void*> _cached_symbols;
 
