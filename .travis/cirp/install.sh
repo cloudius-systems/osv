@@ -69,29 +69,8 @@ fi
 
 pip install --upgrade pip
 
-check_sha256()
-{
-  if ! ( echo "$1  $2" | sha256sum -c --status - ); then
-    echo "Error: sha256 of $2 doesn't match the known one."
-    echo "Expected: $1  $2"
-    echo -n "Got: "
-    sha256sum "$2"
-    exit 1
-  else
-    echo "sha256 matches the expected one: $1"
-  fi
-}
-
 # Don't install again if already installed.
 # OSX keeps re-installing it tough, as it uses a temp per-script virtualenv.
 if ! pip list --format=columns | grep '^ci-release-publisher '; then
-  cd .
-  cd "$(mktemp -d)"
-  VERSION="0.3.0"
-  FILENAME="ci_release_publisher-$VERSION-py3-none-any.whl"
-  HASH="604455c548e2132b1e22bc43f7b13db71c2f98ec7f287a761271cd032237d2a7"
-  pip download ci_release_publisher==$VERSION
-  check_sha256 "$HASH" "$FILENAME"
-  pip install --no-index --find-links "$PWD" "$FILENAME"
-  cd -
+  python -m pip install https://files.pythonhosted.org/packages/49/20/2631e993daa85b35c8390e8124570b0321825e6a77e566492b4637566983/ci_release_publisher-0.3.0.tar.gz
 fi
