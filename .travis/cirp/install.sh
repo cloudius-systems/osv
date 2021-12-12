@@ -87,9 +87,9 @@ check_sha256()
 if ! pip list --format=columns | grep '^ci-release-publisher '; then
   cd .
   cd "$(mktemp -d)"
-  VERSION="0.2.0"
+  VERSION="0.3.0"
   FILENAME="ci_release_publisher-$VERSION-py3-none-any.whl"
-  HASH="da7f139e90c57fb64ed2eb83c883ad6434d7c0598c843f7be7b572377bed4bc4"
+  HASH="604455c548e2132b1e22bc43f7b13db71c2f98ec7f287a761271cd032237d2a7"
   pip download ci_release_publisher==$VERSION
   check_sha256 "$HASH" "$FILENAME"
   pip install --no-index --find-links "$PWD" "$FILENAME"
