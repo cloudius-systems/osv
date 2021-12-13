@@ -68,6 +68,7 @@ elif [ "$TRAVIS_OS_NAME" == "linux" ]; then
 fi
 
 python3 -m pip install --upgrade pip
+python3 -m pip install setuptools
 
 # Don't install again if already installed.
 # OSX keeps re-installing it tough, as it uses a temp per-script virtualenv.
