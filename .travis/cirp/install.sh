@@ -67,10 +67,10 @@ elif [ "$TRAVIS_OS_NAME" == "linux" ]; then
   pyenv global $(pyenv versions | grep -o ' 3\.[5-99]\.[1-99]' | tail -n1)
 fi
 
-pip install --upgrade pip
+python3 -m pip install --upgrade pip
 
 # Don't install again if already installed.
 # OSX keeps re-installing it tough, as it uses a temp per-script virtualenv.
-if ! pip list --format=columns | grep '^ci-release-publisher '; then
+if ! python3 -m pip list --format=columns | grep '^ci-release-publisher '; then
   python3 -m pip install https://files.pythonhosted.org/packages/49/20/2631e993daa85b35c8390e8124570b0321825e6a77e566492b4637566983/ci_release_publisher-0.3.0.tar.gz
 fi

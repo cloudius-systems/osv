@@ -17,6 +17,7 @@ addons:
       - qemu-kvm
       - virtinst
       - ubuntu-vm-builder
+      - python3-pip
 before_install:
   # Set up KVM
   - sudo adduser $USER libvirt
