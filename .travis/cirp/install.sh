@@ -72,5 +72,5 @@ pip install --upgrade pip
 # Don't install again if already installed.
 # OSX keeps re-installing it tough, as it uses a temp per-script virtualenv.
 if ! pip list --format=columns | grep '^ci-release-publisher '; then
-  python -m pip install https://files.pythonhosted.org/packages/49/20/2631e993daa85b35c8390e8124570b0321825e6a77e566492b4637566983/ci_release_publisher-0.3.0.tar.gz
+  python3 -m pip install https://files.pythonhosted.org/packages/49/20/2631e993daa85b35c8390e8124570b0321825e6a77e566492b4637566983/ci_release_publisher-0.3.0.tar.gz
 fi
