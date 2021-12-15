@@ -15,10 +15,6 @@
 #include <bsd/sys/sys/eventhandler.h>
 
 extern "C" {
-    extern void system_taskq_init(void *arg);
-    extern void opensolaris_load(void *arg);
-    extern void callb_init(void *arg);
-
     // taskqueue
     #include <bsd/sys/sys/taskqueue.h>
     #include <bsd/sys/sys/priority.h>
@@ -49,9 +45,6 @@ void bsd_init(void)
 
     arc4_init();
     eventhandler_init(NULL);
-    opensolaris_load(NULL);
-    callb_init(NULL);
-    system_taskq_init(NULL);
 
     debug(" - done\n");
 }

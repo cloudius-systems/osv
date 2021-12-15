@@ -24,7 +24,7 @@ _Static_assert(KERNEL_VERSION(LINUX_MAJOR, LINUX_MINOR, LINUX_PATCH)
 #define str(s) #s
 #define str2(s) str(s)
 
-struct utsname utsname OSV_HIDDEN = {
+struct utsname utsname = {
 	.sysname	= "Linux",	/* lie, to avoid confusing the payload. */
 	.nodename	= "osv.local",
 	.release	= str2(LINUX_MAJOR) "." str2(LINUX_MINOR) "." str2(LINUX_PATCH),

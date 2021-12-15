@@ -568,7 +568,6 @@ bsd += bsd/porting/kthread.o
 bsd += bsd/porting/mmu.o
 bsd += bsd/porting/pcpu.o
 bsd += bsd/porting/bus_dma.o
-bsd += bsd/porting/kobj.o
 bsd += bsd/sys/netinet/if_ether.o
 bsd += bsd/sys/compat/linux/linux_socket.o
 bsd += bsd/sys/compat/linux/linux_ioctl.o
@@ -618,9 +617,6 @@ bsd += bsd/sys/netinet/cc/cc_cubic.o
 bsd += bsd/sys/netinet/cc/cc_htcp.o
 bsd += bsd/sys/netinet/cc/cc_newreno.o
 bsd += bsd/sys/netinet/arpcache.o
-bsd += bsd/sys/xdr/xdr.o
-bsd += bsd/sys/xdr/xdr_array.o
-bsd += bsd/sys/xdr/xdr_mem.o
 bsd += bsd/sys/xen/evtchn.o
 
 ifeq ($(arch),x64)
@@ -643,6 +639,11 @@ bsd += bsd/sys/dev/random/harvest.o
 bsd += bsd/sys/dev/random/live_entropy_sources.o
 
 $(out)/bsd/sys/%.o: COMMON += -Wno-sign-compare -Wno-narrowing -Wno-write-strings -Wno-parentheses -Wno-unused-but-set-variable
+
+xdr :=
+xdr += bsd/sys/xdr/xdr.o
+xdr += bsd/sys/xdr/xdr_array.o
+xdr += bsd/sys/xdr/xdr_mem.o
 
 solaris :=
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris.o
@@ -799,7 +800,7 @@ libtsm += drivers/libtsm/tsm_screen.o
 libtsm += drivers/libtsm/tsm_vte.o
 libtsm += drivers/libtsm/tsm_vte_charsets.o
 
-drivers := $(bsd) $(solaris)
+drivers := $(bsd)
 drivers += core/mmu.o
 drivers += arch/$(arch)/early-console.o
 drivers += drivers/console.o
@@ -1849,6 +1850,7 @@ fs_objs += virtiofs/virtiofs_vfsops.o \
 fs_objs += pseudofs/pseudofs.o
 fs_objs += procfs/procfs_vnops.o
 fs_objs += sysfs/sysfs_vnops.o
+fs_objs += zfs/zfs_null_vfsops.o
 
 objects += $(addprefix fs/, $(fs_objs))
 objects += $(addprefix libc/, $(libc))
@@ -2035,11 +2037,11 @@ $(out)/empty_bootfs.o: ASFLAGS += -I$(out)
 
 $(out)/tools/mkfs/mkfs.so: $(out)/tools/mkfs/mkfs.o $(out)/libzfs.so
 	$(makedir)
-	$(call quiet, $(CC) $(CFLAGS) -o $@ $(out)/tools/mkfs/mkfs.o -L$(out) -lzfs, LINK mkfs.so)
+	$(call quiet, $(CC) $(CFLAGS) -o $@ $(out)/tools/mkfs/mkfs.o -L$(out) -lzfs -lstdc++, LINK mkfs.so)
 
 $(out)/tools/cpiod/cpiod.so: $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o $(out)/libzfs.so
 	$(makedir)
-	$(call quiet, $(CC) $(CFLAGS) -o $@ $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o -L$(out) -lzfs, LINK cpiod.so)
+	$(call quiet, $(CC) $(CFLAGS) -o $@ $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o -L$(out) -lzfs -lstdc++, LINK cpiod.so)
 
 ################################################################################
 # The dependencies on header files are automatically generated only after the
@@ -2117,6 +2119,34 @@ libzfs-objects = $(foreach file, $(libzfs-file-list), $(out)/bsd/cddl/contrib/op
 libzpool-file-list = util kernel
 libzpool-objects = $(foreach file, $(libzpool-file-list), $(out)/bsd/cddl/contrib/opensolaris/lib/libzpool/common/$(file).o)
 
+libsolaris-objects = $(foreach file, $(solaris) $(xdr), $(out)/$(file))
+libsolaris-objects += $(out)/bsd/porting/kobj.o $(out)/fs/zfs/zfs_initialize.o
+
+$(libsolaris-objects): kernel-defines = -D_KERNEL $(source-dialects) -fvisibility=hidden -ffunction-sections -fdata-sections
+
+$(out)/fs/zfs/zfs_initialize.o: CFLAGS+= \
+	-DBUILDING_ZFS \
+	-Ibsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs \
+	-Ibsd/sys/cddl/contrib/opensolaris/common/zfs \
+	-Ibsd/sys/cddl/compat/opensolaris \
+	-Ibsd/sys/cddl/contrib/opensolaris/common \
+	-Ibsd/sys/cddl/contrib/opensolaris/uts/common \
+	-Ibsd/sys \
+	-Wno-array-bounds \
+	-fno-strict-aliasing \
+	-Wno-unknown-pragmas \
+	-Wno-unused-variable \
+	-Wno-switch \
+	-Wno-maybe-uninitialized
+
+#build libsolaris.so with -z,now so that all symbols get resolved eagerly (BIND_NOW)
+#also make sure libsolaris.so has osv-mlock note (see zfs_initialize.c) so that
+# the file segments get loaded eagerly as well when mmapped
+comma:=,
+$(out)/libsolaris.so: $(libsolaris-objects)
+	$(makedir)
+	$(call quiet, $(CC) $(CFLAGS) -Wl$(comma)-z$(comma)now -Wl$(comma)--gc-sections -o $@ $(libsolaris-objects) -L$(out), LINK libsolaris.so)
+
 libzfs-objects += $(libzpool-objects)
 libzfs-objects += $(out)/bsd/cddl/compat/opensolaris/misc/mkdirp.o
 libzfs-objects += $(out)/bsd/cddl/compat/opensolaris/misc/zmount.o
@@ -2158,6 +2188,9 @@ $(libzfs-objects): CFLAGS += -Wno-switch -D__va_list=__builtin_va_list '-DTEXT_D
 			-Wno-maybe-uninitialized -Wno-unused-variable -Wno-unknown-pragmas -Wno-unused-function \
 			-D_OPENSOLARIS_SYS_UIO_H_
 
+$(out)/bsd/cddl/contrib/opensolaris/lib/libzpool/common/kernel.o: CFLAGS += -fvisibility=hidden
+$(out)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/zfs_prop.o: CFLAGS += -fvisibility=hidden
+
 # Note: zfs_prop.c and zprop_common.c are also used by the kernel, thus the manual targets.
 $(out)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/zfs_prop.o: bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_prop.c | generated-headers
 	$(makedir)
@@ -2167,9 +2200,9 @@ $(out)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/zprop_common.o: bsd/sys/cd
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $<, CC $<)
 
-$(out)/libzfs.so: $(libzfs-objects) $(out)/libuutil.so
+$(out)/libzfs.so: $(libzfs-objects) $(out)/libuutil.so $(out)/libsolaris.so
 	$(makedir)
-	$(call quiet, $(CC) $(CFLAGS) -o $@ $(libzfs-objects) -L$(out) -luutil, LINK libzfs.so)
+	$(call quiet, $(CC) $(CFLAGS) -o $@ $(libzfs-objects) -L$(out) -luutil -lsolaris, LINK libzfs.so)
 
 #include $(src)/bsd/cddl/contrib/opensolaris/cmd/zpool/build.mk:
 zpool-cmd-file-list = zpool_iter  zpool_main  zpool_util  zpool_vdev

@@ -11,7 +11,10 @@
 
 namespace zfsdev {
 
-extern "C" int osv_zfs_ioctl(unsigned long req, void* buffer);
+//The osv_zfs_ioctl_fun will be set dynamically in INIT function of
+//libsolaris.so by calling register_osv_zfs_ioctl() below. The osv_zfs_ioctl()
+//is a function defined in libsolaris.so.
+int (*osv_zfs_ioctl_fun)(unsigned long req, void* buffer);
 
 struct zfs_device_priv {
     zfs_device* drv;
@@ -24,7 +27,7 @@ static zfs_device_priv *to_priv(device *dev)
 
 static int zfs_ioctl(device* dev, ulong req, void* buffer)
 {
-    return osv_zfs_ioctl(req, buffer);
+    return (*osv_zfs_ioctl_fun)(req, buffer);
 }
 
 static devops zfs_device_devops = {
@@ -62,4 +65,9 @@ void zfsdev_init(void)
     new zfs_device();
 }
 
+}
+
+//Needs to be a C-style function so it can be called from libsolaris.so
+extern "C" void register_osv_zfs_ioctl( int (*osv_zfs_ioctl_fun)(unsigned long, void*)) {
+    zfsdev::osv_zfs_ioctl_fun = osv_zfs_ioctl_fun;
 }

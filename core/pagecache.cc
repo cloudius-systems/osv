@@ -19,11 +19,26 @@
 #include <osv/prio.hh>
 #include <chrono>
 
-extern "C" {
-void arc_unshare_buf(arc_buf_t*);
-void arc_share_buf(arc_buf_t*);
-void arc_buf_accessed(const uint64_t[4]);
-void arc_buf_get_hashkey(arc_buf_t*, uint64_t[4]);
+//These four function pointers will be set dynamically in INIT function of
+//libsolaris.so by calling register_pagecache_arc_funs() below. The arc_unshare_buf(),
+//arc_share_buf(), arc_buf_accessed() and arc_buf_get_hashkey()
+//are functions defined in libsolaris.so.
+void (*arc_unshare_buf_fun)(arc_buf_t*);
+void (*arc_share_buf_fun)(arc_buf_t*);
+void (*arc_buf_accessed_fun)(const uint64_t[4]);
+void (*arc_buf_get_hashkey_fun)(arc_buf_t*, uint64_t[4]);
+
+//This needs to be a C-style function so it can be called
+//from libsolaris.so
+extern "C" void register_pagecache_arc_funs(
+    void (*_arc_unshare_buf_fun)(arc_buf_t*),
+    void (*_arc_share_buf_fun)(arc_buf_t*),
+    void (*_arc_buf_accessed_fun)(const uint64_t[4]),
+    void (*_arc_buf_get_hashkey_fun)(arc_buf_t*, uint64_t[4])) {
+    arc_unshare_buf_fun = _arc_unshare_buf_fun;
+    arc_share_buf_fun = _arc_share_buf_fun;
+    arc_buf_accessed_fun = _arc_buf_accessed_fun;
+    arc_buf_get_hashkey_fun = _arc_buf_get_hashkey_fun;
 }
 
 namespace std {
@@ -270,7 +285,7 @@ public:
     cached_page_arc(hashkey key, void* page, arc_buf_t* ab) : cached_page(key, page), _ab(ref(ab, this)) {}
     virtual ~cached_page_arc() {
         if (!_removed && unref(_ab, this)) {
-            arc_unshare_buf(_ab);
+            (*arc_unshare_buf_fun)(_ab);
         }
     }
     arc_buf_t* arcbuf() {
@@ -439,7 +454,7 @@ void map_arc_buf(hashkey *key, arc_buf_t* ab, void *page)
     SCOPE_LOCK(arc_read_lock);
     cached_page_arc* pc = new cached_page_arc(*key, page, ab);
     arc_read_cache.emplace(*key, pc);
-    arc_share_buf(ab);
+    (*arc_share_buf_fun)(ab);
 }
 
 void map_read_cached_page(hashkey *key, void *page)
@@ -656,7 +671,7 @@ void sync(vfs_file* fp, off_t start, off_t end)
 }
 
 TRACEPOINT(trace_access_scanner, "scanned=%u, cleared=%u, %%cpu=%g", unsigned, unsigned, double);
-static class access_scanner {
+class access_scanner {
     static constexpr double _max_cpu = 20;
     static constexpr double _min_cpu = 0.1;
     static constexpr unsigned _freq = 1000;
@@ -673,7 +688,7 @@ private:
             return false;
         }
         for (auto&& arc_hashkey: accessed) {
-            arc_buf_accessed(arc_hashkey.key);
+            (*arc_buf_accessed_fun)(arc_hashkey.key);
         }
         accessed.clear();
         return true;
@@ -708,7 +723,7 @@ private:
                         auto cp = p.second;
                         if (cp->clear_accessed()) {
                             arc_hashkey arc_hashkey;
-                            arc_buf_get_hashkey(arcbuf, arc_hashkey.key);
+                            (*arc_buf_get_hashkey_fun)(arcbuf, arc_hashkey.key);
                             accessed.emplace(arc_hashkey);
                             cleared++;
                         }
@@ -746,10 +761,18 @@ private:
             cleared /= 2;
         }
     }
-} s_access_scanner;
+};
+
+static access_scanner *s_access_scanner = nullptr;
 
 constexpr double access_scanner::_max_cpu;
 constexpr double access_scanner::_min_cpu;
 
+}
 
+//The access_scanner thread is ZFS specific so it
+//is initialized by calling the function below if libsolaris.so
+//is loaded.
+extern "C" void start_pagecache_access_scanner() {
+    pagecache::s_access_scanner = new pagecache::access_scanner();
 }

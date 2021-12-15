@@ -45,14 +45,17 @@ arc_shrinker::arc_shrinker()
 {
 }
 
-extern "C" size_t arc_lowmem(void *arg, int howto);
-extern "C" size_t arc_sized_adjust(int64_t to_reclaim);
+//These two function pointers will be set dynamically in INIT function of
+//libsolaris.so by calling register_shrinker_funs() below. The arc_lowmem()
+//and arc_sized_adjust() are functions defined in libsolaris.so.
+size_t (*arc_lowmem_fun)(void *arg, int howto);
+size_t (*arc_sized_adjust_fun)(int64_t to_reclaim);
 
 size_t arc_shrinker::request_memory(size_t s, bool hard)
 {
     size_t ret = 0;
     if (hard) {
-        ret = arc_lowmem(nullptr, 0);
+        ret = (*arc_lowmem_fun)(nullptr, 0);
         // ARC's aggressive mode will call arc_adjust, which will reduce the size of the
         // cache, but won't necessarily free as much memory as we need. If it doesn't,
         // keep going in soft mode. This is better than calling arc_lowmem() again, since
@@ -67,7 +70,7 @@ size_t arc_shrinker::request_memory(size_t s, bool hard)
     // minimum of 16 M.
     s = std::max(s, (16ul << 20));
     do {
-        size_t r = arc_sized_adjust(s);
+        size_t r = (*arc_sized_adjust_fun)(s);
         if (r == 0) {
             break;
         }
@@ -89,7 +92,7 @@ void bsd_shrinker_init(void)
 
         auto *_ee = (struct eventhandler_entry_generic *)ep;
 
-        if ((void *)_ee->func == (void *)arc_lowmem) {
+        if ((void *)_ee->func == (void *)arc_lowmem_fun) {
             new arc_shrinker();
         } else {
             new bsd_shrinker(_ee);
@@ -98,4 +101,13 @@ void bsd_shrinker_init(void)
     EHL_UNLOCK(list);
 
     debug("BSD shrinker: unlocked, running\n");
+}
+
+//This needs to be a C-style function so it can be called
+//from libsolaris.so
+extern "C" void register_shrinker_arc_funs(
+    size_t (*_arc_lowmem_fun)(void *, int),
+    size_t (*_arc_sized_adjust_fun)(int64_t)) {
+    arc_lowmem_fun = _arc_lowmem_fun;
+    arc_sized_adjust_fun = _arc_sized_adjust_fun;
 }
