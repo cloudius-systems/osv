@@ -72,6 +72,8 @@
 #include "zfs_prop.h"
 #include "zfs_comutil.h"
 
+#include <osv/export.h>
+
 /* Check hostid on import? */
 static int check_hostid = 1;
 
@@ -3139,7 +3141,7 @@ spa_add_feature_stats(spa_t *spa, nvlist_t *config)
 	nvlist_free(features);
 }
 
-int
+OSV_LIB_SOLARIS_API int
 spa_get_stats(const char *name, nvlist_t **config,
     char *altroot, size_t buflen)
 {

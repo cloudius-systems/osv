@@ -32,6 +32,8 @@
 #include <sys/kmem.h>
 #endif
 
+#include <osv/export.h>
+
 /*
  * "Force" nvlist wrapper.
  *
@@ -176,13 +178,13 @@ fnvlist_add_int64(nvlist_t *nvl, const char *name, int64_t val)
 	VERIFY0(nvlist_add_int64(nvl, name, val));
 }
 
-void
+OSV_LIB_SOLARIS_API void
 fnvlist_add_uint64(nvlist_t *nvl, const char *name, uint64_t val)
 {
 	VERIFY0(nvlist_add_uint64(nvl, name, val));
 }
 
-void
+OSV_LIB_SOLARIS_API void
 fnvlist_add_string(nvlist_t *nvl, const char *name, const char *val)
 {
 	VERIFY0(nvlist_add_string(nvl, name, val));
@@ -377,7 +379,7 @@ fnvlist_lookup_uint32(nvlist_t *nvl, const char *name)
 	return (rv);
 }
 
-uint64_t
+OSV_LIB_SOLARIS_API uint64_t
 fnvlist_lookup_uint64(nvlist_t *nvl, const char *name)
 {
 	uint64_t rv;
@@ -385,7 +387,7 @@ fnvlist_lookup_uint64(nvlist_t *nvl, const char *name)
 	return (rv);
 }
 
-char *
+OSV_LIB_SOLARIS_API char *
 fnvlist_lookup_string(nvlist_t *nvl, const char *name)
 {
 	char *rv;
@@ -393,7 +395,7 @@ fnvlist_lookup_string(nvlist_t *nvl, const char *name)
 	return (rv);
 }
 
-nvlist_t *
+OSV_LIB_SOLARIS_API nvlist_t *
 fnvlist_lookup_nvlist(nvlist_t *nvl, const char *name)
 {
 	nvlist_t *rv;

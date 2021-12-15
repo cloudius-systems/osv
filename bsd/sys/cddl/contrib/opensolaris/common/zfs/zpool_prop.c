@@ -40,15 +40,17 @@
 #include <ctype.h>
 #endif
 
+#include <osv/export.h>
+
 static zprop_desc_t zpool_prop_table[ZPOOL_NUM_PROPS];
 
-zprop_desc_t *
+OSV_LIB_SOLARIS_API zprop_desc_t *
 zpool_prop_get_table(void)
 {
 	return (zpool_prop_table);
 }
 
-void
+OSV_LIB_SOLARIS_API void
 zpool_prop_init(void)
 {
 	static zprop_index_t boolean_table[] = {
@@ -128,7 +130,7 @@ zpool_prop_init(void)
 /*
  * Given a property name and its type, returns the corresponding property ID.
  */
-zpool_prop_t
+OSV_LIB_SOLARIS_API zpool_prop_t
 zpool_name_to_prop(const char *propname)
 {
 	return (zprop_name_to_prop(propname, ZFS_TYPE_POOL));
@@ -138,31 +140,31 @@ zpool_name_to_prop(const char *propname)
  * Given a pool property ID, returns the corresponding name.
  * Assuming the pool propety ID is valid.
  */
-const char *
+OSV_LIB_SOLARIS_API const char *
 zpool_prop_to_name(zpool_prop_t prop)
 {
 	return (zpool_prop_table[prop].pd_name);
 }
 
-zprop_type_t
+OSV_LIB_SOLARIS_API zprop_type_t
 zpool_prop_get_type(zpool_prop_t prop)
 {
 	return (zpool_prop_table[prop].pd_proptype);
 }
 
-boolean_t
+OSV_LIB_SOLARIS_API boolean_t
 zpool_prop_readonly(zpool_prop_t prop)
 {
 	return (zpool_prop_table[prop].pd_attr == PROP_READONLY);
 }
 
-const char *
+OSV_LIB_SOLARIS_API const char *
 zpool_prop_default_string(zpool_prop_t prop)
 {
 	return (zpool_prop_table[prop].pd_strdefault);
 }
 
-uint64_t
+OSV_LIB_SOLARIS_API uint64_t
 zpool_prop_default_numeric(zpool_prop_t prop)
 {
 	return (zpool_prop_table[prop].pd_numdefault);
@@ -171,7 +173,7 @@ zpool_prop_default_numeric(zpool_prop_t prop)
 /*
  * Returns true if this is a valid feature@ property.
  */
-boolean_t
+OSV_LIB_SOLARIS_API boolean_t
 zpool_prop_feature(const char *name)
 {
 	static const char *prefix = "feature@";
@@ -181,7 +183,7 @@ zpool_prop_feature(const char *name)
 /*
  * Returns true if this is a valid unsupported@ property.
  */
-boolean_t
+OSV_LIB_SOLARIS_API boolean_t
 zpool_prop_unsupported(const char *name)
 {
 	static const char *prefix = "unsupported@";
@@ -195,7 +197,7 @@ zpool_prop_string_to_index(zpool_prop_t prop, const char *string,
 	return (zprop_string_to_index(prop, string, index, ZFS_TYPE_POOL));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 zpool_prop_index_to_string(zpool_prop_t prop, uint64_t index,
     const char **string)
 {
@@ -210,19 +212,19 @@ zpool_prop_random_value(zpool_prop_t prop, uint64_t seed)
 
 #if !defined(_KERNEL) || defined(__OSV__)
 
-const char *
+OSV_LIB_SOLARIS_API const char *
 zpool_prop_values(zpool_prop_t prop)
 {
 	return (zpool_prop_table[prop].pd_values);
 }
 
-const char *
+OSV_LIB_SOLARIS_API const char *
 zpool_prop_column_name(zpool_prop_t prop)
 {
 	return (zpool_prop_table[prop].pd_colname);
 }
 
-boolean_t
+OSV_LIB_SOLARIS_API boolean_t
 zpool_prop_align_right(zpool_prop_t prop)
 {
 	return (zpool_prop_table[prop].pd_rightalign);

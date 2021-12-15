@@ -40,6 +40,8 @@
 #include <strings.h>
 #endif
 
+#include <osv/export.h>
+
 #ifndef	offsetof
 #define	offsetof(s, m)		((size_t)(&(((s *)0)->m)))
 #endif
@@ -263,7 +265,7 @@ nvlist_nvflag(nvlist_t *nvl)
  * nvlist_alloc - Allocate nvlist.
  */
 /*ARGSUSED1*/
-int
+OSV_LIB_SOLARIS_API int
 nvlist_alloc(nvlist_t **nvlp, uint_t nvflag, int kmflag)
 {
 #if defined(_KERNEL) && !defined(_BOOT)
@@ -549,7 +551,7 @@ nvpair_free(nvpair_t *nvp)
 /*
  * nvlist_free - free an unpacked nvlist
  */
-void
+OSV_LIB_SOLARIS_API void
 nvlist_free(nvlist_t *nvl)
 {
 	nvpriv_t *priv;
@@ -599,7 +601,7 @@ nvlist_contains_nvp(nvlist_t *nvl, nvpair_t *nvp)
  * Make a copy of nvlist
  */
 /*ARGSUSED1*/
-int
+OSV_LIB_SOLARIS_API int
 nvlist_dup(nvlist_t *nvl, nvlist_t **nvlp, int kmflag)
 {
 #if defined(_KERNEL) && !defined(_BOOT)
@@ -633,7 +635,7 @@ nvlist_xdup(nvlist_t *nvl, nvlist_t **nvlp, nv_alloc_t *nva)
 /*
  * Remove all with matching name
  */
-int
+OSV_LIB_SOLARIS_API int
 nvlist_remove_all(nvlist_t *nvl, const char *name)
 {
 	nvpriv_t *priv;
@@ -665,7 +667,7 @@ nvlist_remove_all(nvlist_t *nvl, const char *name)
 /*
  * Remove first one with matching name and type
  */
-int
+OSV_LIB_SOLARIS_API int
 nvlist_remove(nvlist_t *nvl, const char *name, data_type_t type)
 {
 	nvpriv_t *priv;
@@ -978,13 +980,13 @@ nvlist_add_common(nvlist_t *nvl, const char *name,
 	return (0);
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_add_boolean(nvlist_t *nvl, const char *name)
 {
 	return (nvlist_add_common(nvl, name, DATA_TYPE_BOOLEAN, 0, NULL));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_add_boolean_value(nvlist_t *nvl, const char *name, boolean_t val)
 {
 	return (nvlist_add_common(nvl, name, DATA_TYPE_BOOLEAN_VALUE, 1, &val));
@@ -1026,7 +1028,7 @@ nvlist_add_int32(nvlist_t *nvl, const char *name, int32_t val)
 	return (nvlist_add_common(nvl, name, DATA_TYPE_INT32, 1, &val));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_add_uint32(nvlist_t *nvl, const char *name, uint32_t val)
 {
 	return (nvlist_add_common(nvl, name, DATA_TYPE_UINT32, 1, &val));
@@ -1038,7 +1040,7 @@ nvlist_add_int64(nvlist_t *nvl, const char *name, int64_t val)
 	return (nvlist_add_common(nvl, name, DATA_TYPE_INT64, 1, &val));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_add_uint64(nvlist_t *nvl, const char *name, uint64_t val)
 {
 	return (nvlist_add_common(nvl, name, DATA_TYPE_UINT64, 1, &val));
@@ -1052,7 +1054,7 @@ nvlist_add_double(nvlist_t *nvl, const char *name, double val)
 }
 #endif
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_add_string(nvlist_t *nvl, const char *name, const char *val)
 {
 	return (nvlist_add_common(nvl, name, DATA_TYPE_STRING, 1, (void *)val));
@@ -1113,7 +1115,7 @@ nvlist_add_int64_array(nvlist_t *nvl, const char *name, int64_t *a, uint_t n)
 	return (nvlist_add_common(nvl, name, DATA_TYPE_INT64_ARRAY, n, a));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_add_uint64_array(nvlist_t *nvl, const char *name, uint64_t *a, uint_t n)
 {
 	return (nvlist_add_common(nvl, name, DATA_TYPE_UINT64_ARRAY, n, a));
@@ -1132,20 +1134,20 @@ nvlist_add_hrtime(nvlist_t *nvl, const char *name, hrtime_t val)
 	return (nvlist_add_common(nvl, name, DATA_TYPE_HRTIME, 1, &val));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_add_nvlist(nvlist_t *nvl, const char *name, nvlist_t *val)
 {
 	return (nvlist_add_common(nvl, name, DATA_TYPE_NVLIST, 1, val));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_add_nvlist_array(nvlist_t *nvl, const char *name, nvlist_t **a, uint_t n)
 {
 	return (nvlist_add_common(nvl, name, DATA_TYPE_NVLIST_ARRAY, n, a));
 }
 
 /* reading name-value pairs */
-nvpair_t *
+OSV_LIB_SOLARIS_API nvpair_t *
 nvlist_next_nvpair(nvlist_t *nvl, nvpair_t *nvp)
 {
 	nvpriv_t *priv;
@@ -1198,7 +1200,7 @@ nvlist_prev_nvpair(nvlist_t *nvl, nvpair_t *nvp)
 	return (curr != NULL ? &curr->nvi_nvp : NULL);
 }
 
-boolean_t
+OSV_LIB_SOLARIS_API boolean_t
 nvlist_empty(nvlist_t *nvl)
 {
 	nvpriv_t *priv;
@@ -1210,13 +1212,13 @@ nvlist_empty(nvlist_t *nvl)
 	return (priv->nvp_list == NULL);
 }
 
-char *
+OSV_LIB_SOLARIS_API char *
 nvpair_name(nvpair_t *nvp)
 {
 	return (NVP_NAME(nvp));
 }
 
-data_type_t
+OSV_LIB_SOLARIS_API data_type_t
 nvpair_type(nvpair_t *nvp)
 {
 	return (NVP_TYPE(nvp));
@@ -1348,7 +1350,7 @@ nvlist_lookup_boolean(nvlist_t *nvl, const char *name)
 	return (nvlist_lookup_common(nvl, name, DATA_TYPE_BOOLEAN, NULL, NULL));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_lookup_boolean_value(nvlist_t *nvl, const char *name, boolean_t *val)
 {
 	return (nvlist_lookup_common(nvl, name,
@@ -1391,19 +1393,19 @@ nvlist_lookup_int32(nvlist_t *nvl, const char *name, int32_t *val)
 	return (nvlist_lookup_common(nvl, name, DATA_TYPE_INT32, NULL, val));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_lookup_uint32(nvlist_t *nvl, const char *name, uint32_t *val)
 {
 	return (nvlist_lookup_common(nvl, name, DATA_TYPE_UINT32, NULL, val));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_lookup_int64(nvlist_t *nvl, const char *name, int64_t *val)
 {
 	return (nvlist_lookup_common(nvl, name, DATA_TYPE_INT64, NULL, val));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_lookup_uint64(nvlist_t *nvl, const char *name, uint64_t *val)
 {
 	return (nvlist_lookup_common(nvl, name, DATA_TYPE_UINT64, NULL, val));
@@ -1417,13 +1419,13 @@ nvlist_lookup_double(nvlist_t *nvl, const char *name, double *val)
 }
 #endif
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_lookup_string(nvlist_t *nvl, const char *name, char **val)
 {
 	return (nvlist_lookup_common(nvl, name, DATA_TYPE_STRING, NULL, val));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_lookup_nvlist(nvlist_t *nvl, const char *name, nvlist_t **val)
 {
 	return (nvlist_lookup_common(nvl, name, DATA_TYPE_NVLIST, NULL, val));
@@ -1492,7 +1494,7 @@ nvlist_lookup_int64_array(nvlist_t *nvl, const char *name,
 	return (nvlist_lookup_common(nvl, name, DATA_TYPE_INT64_ARRAY, n, a));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_lookup_uint64_array(nvlist_t *nvl, const char *name,
     uint64_t **a, uint_t *n)
 {
@@ -1506,7 +1508,7 @@ nvlist_lookup_string_array(nvlist_t *nvl, const char *name,
 	return (nvlist_lookup_common(nvl, name, DATA_TYPE_STRING_ARRAY, n, a));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_lookup_nvlist_array(nvlist_t *nvl, const char *name,
     nvlist_t ***a, uint_t *n)
 {
@@ -1784,7 +1786,7 @@ int nvlist_lookup_nvpair_embedded_index(nvlist_t *nvl,
 	return (nvlist_lookup_nvpair_ei_sep(nvl, name, '.', ret, ip, ep));
 }
 
-boolean_t
+OSV_LIB_SOLARIS_API boolean_t
 nvlist_exists(nvlist_t *nvl, const char *name)
 {
 	nvpriv_t *priv;
@@ -1847,7 +1849,7 @@ nvpair_value_int32(nvpair_t *nvp, int32_t *val)
 	return (nvpair_value_common(nvp, DATA_TYPE_INT32, NULL, val));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvpair_value_uint32(nvpair_t *nvp, uint32_t *val)
 {
 	return (nvpair_value_common(nvp, DATA_TYPE_UINT32, NULL, val));
@@ -1859,7 +1861,7 @@ nvpair_value_int64(nvpair_t *nvp, int64_t *val)
 	return (nvpair_value_common(nvp, DATA_TYPE_INT64, NULL, val));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvpair_value_uint64(nvpair_t *nvp, uint64_t *val)
 {
 	return (nvpair_value_common(nvp, DATA_TYPE_UINT64, NULL, val));
@@ -1873,13 +1875,13 @@ nvpair_value_double(nvpair_t *nvp, double *val)
 }
 #endif
 
-int
+OSV_LIB_SOLARIS_API int
 nvpair_value_string(nvpair_t *nvp, char **val)
 {
 	return (nvpair_value_common(nvp, DATA_TYPE_STRING, NULL, val));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvpair_value_nvlist(nvpair_t *nvp, nvlist_t **val)
 {
 	return (nvpair_value_common(nvp, DATA_TYPE_NVLIST, NULL, val));
@@ -2327,7 +2329,7 @@ nvlist_common(nvlist_t *nvl, char *buf, size_t *buflen, int encoding,
 	return (err);
 }
 
-int
+OSV_LIB_SOLARIS_API int
 nvlist_size(nvlist_t *nvl, size_t *size, int encoding)
 {
 	return (nvlist_common(nvl, NULL, size, encoding, NVS_OP_GETSIZE));
@@ -2337,7 +2339,7 @@ nvlist_size(nvlist_t *nvl, size_t *size, int encoding)
  * Pack nvlist into contiguous memory
  */
 /*ARGSUSED1*/
-int
+OSV_LIB_SOLARIS_API int
 nvlist_pack(nvlist_t *nvl, char **bufp, size_t *buflen, int encoding,
     int kmflag)
 {
@@ -2400,7 +2402,7 @@ nvlist_xpack(nvlist_t *nvl, char **bufp, size_t *buflen, int encoding,
  * Unpack buf into an nvlist_t
  */
 /*ARGSUSED1*/
-int
+OSV_LIB_SOLARIS_API int
 nvlist_unpack(char *buf, size_t buflen, nvlist_t **nvlp, int kmflag)
 {
 #if defined(_KERNEL) && !defined(_BOOT)

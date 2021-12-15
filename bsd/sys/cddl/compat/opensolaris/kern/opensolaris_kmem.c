@@ -35,6 +35,8 @@
 #include <bsd/porting/netport.h>
 #include <assert.h>
 
+#include <osv/export.h>
+
 void *
 zfs_kmem_alloc(size_t size, int kmflags)
 {
@@ -133,6 +135,7 @@ kmem_debugging(void)
 	return (0);
 }
 
+OSV_LIB_SOLARIS_API
 uint64_t kmem_size(void)
 {
 	return physmem * PAGE_SIZE;

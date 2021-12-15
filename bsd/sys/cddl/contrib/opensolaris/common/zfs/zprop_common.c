@@ -38,12 +38,14 @@
 #include "zfs_deleg.h"
 
 #if defined(_KERNEL)
+#define OSV_LIB_ZFS_API
 #include <sys/systm.h>
 #include <sys/libkern.h>
 #else
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#define OSV_LIB_ZFS_API __attribute__((__visibility__("default")))
 #endif
 
 static zprop_desc_t *
@@ -367,7 +369,7 @@ zprop_valid_for_type(int prop, zfs_type_t type)
  * Determines the minimum width for the column, and indicates whether it's fixed
  * or not.  Only string columns are non-fixed.
  */
-size_t
+OSV_LIB_ZFS_API size_t
 zprop_width(int prop, boolean_t *fixed, zfs_type_t type)
 {
 	zprop_desc_t *prop_tbl, *pd;

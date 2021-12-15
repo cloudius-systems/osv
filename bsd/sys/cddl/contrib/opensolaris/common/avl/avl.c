@@ -93,6 +93,7 @@
 #include <stdint.h>
 #include <sys/debug.h>
 #include <sys/avl.h>
+#include <osv/export.h>
 
 /*
  * Small arrays to translate between balance (or diff) values and child indeces.
@@ -121,7 +122,7 @@ static const int  avl_balance2child[]	= {0, 0, 1};
  * NULL - if at the end of the nodes
  * otherwise next node
  */
-void *
+OSV_LIB_SOLARIS_API void *
 avl_walk(avl_tree_t *tree, void	*oldnode, int left)
 {
 	size_t off = tree->avl_offset;
@@ -168,7 +169,7 @@ avl_walk(avl_tree_t *tree, void	*oldnode, int left)
  * Return the lowest valued node in a tree or NULL.
  * (leftmost child from root of tree)
  */
-void *
+OSV_LIB_SOLARIS_API void *
 avl_first(avl_tree_t *tree)
 {
 	avl_node_t *node;
@@ -187,7 +188,7 @@ avl_first(avl_tree_t *tree)
  * Return the highest valued node in a tree or NULL.
  * (rightmost child from root of tree)
  */
-void *
+OSV_LIB_SOLARIS_API void *
 avl_last(avl_tree_t *tree)
 {
 	avl_node_t *node;
@@ -211,7 +212,7 @@ avl_last(avl_tree_t *tree)
  *	NULL: no node in the given direction
  *	"void *"  of the found tree node
  */
-void *
+OSV_LIB_SOLARIS_API void *
 avl_nearest(avl_tree_t *tree, avl_index_t where, int direction)
 {
 	int child = AVL_INDEX2CHILD(where);
@@ -240,7 +241,7 @@ avl_nearest(avl_tree_t *tree, avl_index_t where, int direction)
  *		*where (if not NULL)  is set to indicate the insertion point
  *	"void *"  of the found tree node
  */
-void *
+OSV_LIB_SOLARIS_API void *
 avl_find(avl_tree_t *tree, const void *value, avl_index_t *where)
 {
 	avl_node_t *node;
@@ -467,7 +468,7 @@ avl_rotation(avl_tree_t *tree, avl_node_t *node, int balance)
  * After the node is inserted, a single rotation further up the tree may
  * be necessary to maintain an acceptable AVL balance.
  */
-void
+OSV_LIB_SOLARIS_API void
 avl_insert(avl_tree_t *tree, void *new_data, avl_index_t where)
 {
 	avl_node_t *node;
@@ -617,7 +618,7 @@ avl_insert_here(
 /*
  * Add a new node to an AVL tree.
  */
-void
+OSV_LIB_SOLARIS_API void
 avl_add(avl_tree_t *tree, void *new_node)
 {
 	avl_index_t where;
@@ -660,7 +661,7 @@ avl_add(avl_tree_t *tree, void *new_node)
  * avl_rotation() is used to detect when a subtree did not change overall
  * height due to a rotation.
  */
-void
+OSV_LIB_SOLARIS_API void
 avl_remove(avl_tree_t *tree, void *data)
 {
 	avl_node_t *delete;
@@ -867,7 +868,7 @@ avl_update(avl_tree_t *t, void *obj)
 /*
  * initialize a new AVL tree
  */
-void
+OSV_LIB_SOLARIS_API void
 avl_create(avl_tree_t *tree, int (*compar) (const void *, const void *),
     size_t size, size_t offset)
 {
@@ -890,7 +891,7 @@ avl_create(avl_tree_t *tree, int (*compar) (const void *, const void *),
  * Delete a tree.
  */
 /* ARGSUSED */
-void
+OSV_LIB_SOLARIS_API void
 avl_destroy(avl_tree_t *tree)
 {
 	ASSERT(tree);
@@ -902,7 +903,7 @@ avl_destroy(avl_tree_t *tree)
 /*
  * Return the number of nodes in an AVL tree.
  */
-ulong_t
+OSV_LIB_SOLARIS_API ulong_t
 avl_numnodes(avl_tree_t *tree)
 {
 	ASSERT(tree);
@@ -937,7 +938,7 @@ avl_is_empty(avl_tree_t *tree)
  *
  * On input, a cookie value of CHILDBIT indicates the tree is done.
  */
-void *
+OSV_LIB_SOLARIS_API void *
 avl_destroy_nodes(avl_tree_t *tree, void **cookie)
 {
 	avl_node_t	*node;

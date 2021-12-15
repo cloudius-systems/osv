@@ -35,12 +35,14 @@
 #include <sys/queue.h>
 #include <sys/taskqueue.h>
 #include <sys/taskq.h>
+#include <osv/export.h>
 
 static uma_zone_t taskq_zone;
 
+OSV_LIB_SOLARIS_API
 taskq_t *system_taskq = NULL;
 
-void
+OSV_LIB_SOLARIS_API void
 system_taskq_init(void *arg)
 {
 	taskq_zone = uma_zcreate("taskq_zone", sizeof(struct ostask),
@@ -49,7 +51,7 @@ system_taskq_init(void *arg)
 }
 SYSINIT(system_taskq_init, SI_SUB_CONFIGURE, SI_ORDER_ANY, system_taskq_init, NULL);
 
-void
+OSV_LIB_SOLARIS_API void
 system_taskq_fini(void *arg)
 {
 
@@ -58,7 +60,7 @@ system_taskq_fini(void *arg)
 }
 SYSUNINIT(system_taskq_fini, SI_SUB_CONFIGURE, SI_ORDER_ANY, system_taskq_fini, NULL);
 
-taskq_t *
+OSV_LIB_SOLARIS_API taskq_t *
 taskq_create(const char *name, int nthreads, pri_t pri, int minalloc __bsd_unused2,
     int maxalloc __bsd_unused2, uint_t flags)
 {
@@ -83,7 +85,7 @@ taskq_create_proc(const char *name, int nthreads, pri_t pri, int minalloc,
 	return (taskq_create(name, nthreads, pri, minalloc, maxalloc, flags));
 }
 
-void
+OSV_LIB_SOLARIS_API void
 taskq_destroy(taskq_t *tq)
 {
 
@@ -108,7 +110,7 @@ taskq_run(void *arg, int pending __bsd_unused2)
 	uma_zfree(taskq_zone, task);
 }
 
-taskqid_t
+OSV_LIB_SOLARIS_API taskqid_t
 taskq_dispatch(taskq_t *tq, task_func_t func, void *arg, uint_t flags)
 {
 	struct ostask *task;
