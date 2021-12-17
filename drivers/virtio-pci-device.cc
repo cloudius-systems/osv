@@ -185,7 +185,7 @@ void virtio_modern_pci_device::setup_queue(vring *queue)
     if (_dev->is_msix()) {
         // Setup queue_id:entry_id 1:1 correlation...
         _common_cfg->virtio_conf_writew(COMMON_CFG_OFFSET_OF(queue_msix_vector), queue_index);
-        if (_common_cfg->virtio_conf_readw(COMMON_CFG_OFFSET_OF(queue_msix_vector) != queue_index)) {
+        if (_common_cfg->virtio_conf_readw(COMMON_CFG_OFFSET_OF(queue_msix_vector)) != queue_index) {
             virtio_e("Setting MSIx entry for queue %d failed.", queue_index);
             return;
         }
