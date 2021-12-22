@@ -2037,11 +2037,11 @@ $(out)/empty_bootfs.o: ASFLAGS += -I$(out)
 
 $(out)/tools/mkfs/mkfs.so: $(out)/tools/mkfs/mkfs.o $(out)/libzfs.so
 	$(makedir)
-	$(call quiet, $(CC) $(CFLAGS) -o $@ $(out)/tools/mkfs/mkfs.o -L$(out) -lzfs -lstdc++, LINK mkfs.so)
+	$(call quiet, $(CC) $(CFLAGS) -o $@ $(out)/tools/mkfs/mkfs.o -L$(out) -lzfs, LINK mkfs.so)
 
 $(out)/tools/cpiod/cpiod.so: $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o $(out)/libzfs.so
 	$(makedir)
-	$(call quiet, $(CC) $(CFLAGS) -o $@ $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o -L$(out) -lzfs -lstdc++, LINK cpiod.so)
+	$(call quiet, $(CC) $(CFLAGS) -o $@ $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o -L$(out) -lzfs, LINK cpiod.so)
 
 ################################################################################
 # The dependencies on header files are automatically generated only after the
