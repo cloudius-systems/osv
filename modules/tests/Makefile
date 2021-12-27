@@ -91,7 +91,7 @@ rofs-only-tests := rofs/tst-chdir.so rofs/tst-symlink.so rofs/tst-readdir.so \
 	rofs/tst-concurrent-read.so
 
 zfs-only-tests := tst-readdir.so tst-fallocate.so tst-fs-link.so \
-	tst-concurrent-read.so
+	tst-concurrent-read.so misc-zfs-io.so tst-solaris-taskq.so
 
 specific-fs-tests := $($(fs_type)-only-tests)
 
@@ -222,8 +222,6 @@ solaris-tests := tst-solaris-taskq.so
 zfs-tests := misc-zfs-io.so
 solaris-tests += $(zfs-tests)
 
-tests += $(solaris-tests)
-
 $(zfs-tests:%=$(out)/tests/%): COMMON+= \
         -DBUILDING_ZFS \
         -I$(src)/bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs \
@@ -268,7 +266,7 @@ common.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel 
 		"aarch64"*) ./add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@ ;; \
 		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests/,$(boost-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@ ;; \
 	esac
-	@echo $(common-tests) $(solaris-tests) | tr ' ' '\n' | awk '{print "/tests/" $$0 ": ./tests/" $$0}' >> $@
+	@echo $(common-tests) | tr ' ' '\n' | awk '{print "/tests/" $$0 ": ./tests/" $$0}' >> $@
 
 fs.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) FORCE
 	@echo "  generating modules/tests/fs.manifest"
