@@ -15,6 +15,7 @@ libsunec_path = $(shell find $(java_jdk_path) -name libsunec.so)
 module:
 	$(call very-quiet, $(SRC)/scripts/manifest_from_host.sh $(libsunec_path) > usr.manifest)
 	$(call very-quiet, $(SRC)/scripts/manifest_from_host.sh -li libfreeblpriv3.so >> usr.manifest)
+	$(call very-quiet, $(SRC)/scripts/manifest_from_host.sh -li libnss3.so >> usr.manifest)
 
 clean:
 	rm -f usr.manifest
