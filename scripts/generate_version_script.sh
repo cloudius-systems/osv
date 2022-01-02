@@ -24,10 +24,19 @@ EOF
 
 echo "$VERSION_SCRIPT_START" > $VERSION_SCRIPT_FILE
 
-for file in exported_symbols/$ARCH/*.symbols
+#Firstly output list of symbols from files common to all architectures
+for file in exported_symbols/*.symbols
 do
   file_name=$(basename $file)
   echo "/*------- $file_name */" >> $VERSION_SCRIPT_FILE
+  cat $file | awk '// { printf("    %s;\n", $0) }' >> $VERSION_SCRIPT_FILE
+done
+
+#Secondly output list of symbols from files specific to given architecture
+for file in exported_symbols/$ARCH/*.symbols
+do
+  file_name=$(basename $file)
+  echo "/*------- $ARCH/$file_name */" >> $VERSION_SCRIPT_FILE
   cat $file | awk '// { printf("    %s;\n", $0) }' >> $VERSION_SCRIPT_FILE
 done
 

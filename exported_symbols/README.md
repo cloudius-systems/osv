@@ -1,11 +1,15 @@
+This directory contains files with lists of symbols OSv kernel exports
+for every library its dynamic linker advertises (see `core/elf.cc`) and
+which are common across all architectures supported.
 Two subdirectories - x64 and aarch64 - are intended to contain files
-with lists of symbols OSv kernel exports for relevant architecture and
-every library its dynamic linker advertises (see `core/elf.cc`). So for
-example the file `osv_libc.so.6.symbols` contains an alphanumerically
-ordered list of symbols exported by OSv kernel AND by the library
-`libc.so.6` from Linux host.
+with lists of symbols OSv kernel exports for specific architecture
+and given library. So for example the file `osv_libc.so.6.symbols`
+contains an alphanumerically ordered list of symbols exported by
+OSv kernel AND by the library `libc.so.6` from Linux host common
+on both x86_64 and aarch64 architectures. And `x64/osv_libc.so.6.symbols`
+contains symbols exported on x86_64 only.
 
-The initial versions of these files can be generated using the script `extract_symbols.sh`
+The initial versions of these files were generated using the script `extract_symbols.sh`
 like so:
 ```bash
 ./scripts/extract_symbols.sh

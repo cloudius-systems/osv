@@ -1,3 +1,1 @@
-__libc_stack_end
 __stack_chk_guard
-__tls_get_addr
