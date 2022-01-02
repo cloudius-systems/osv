@@ -257,3 +257,17 @@ void *sbrk(intptr_t increment)
     errno = ENOMEM;
     return (void *)-1;
 }
+
+static unsigned posix_madvise_to_advise(int advice)
+{
+    if (advice == POSIX_MADV_DONTNEED) {
+        return mmu::advise_dontneed;
+    }
+    return 0;
+}
+
+OSV_LIBC_API
+int posix_madvise(void *addr, size_t len, int advice) {
+    auto err = mmu::advise(addr, len, posix_madvise_to_advise(advice));
+    return err.get();
+}

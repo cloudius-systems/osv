@@ -722,6 +722,7 @@ posix_fadvise64
 posix_fallocate
 posix_fallocate64
 __posix_getopt
+posix_madvise
 posix_memalign
 pow
 pow10
