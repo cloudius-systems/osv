@@ -75,3 +75,4 @@ _exit = exit;
 _Exit = exit;
 
 __dn_expand = dn_expand;
+__sysconf = sysconf;

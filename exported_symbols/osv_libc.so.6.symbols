@@ -887,6 +887,7 @@ symlink
 sync
 syscall
 sysconf
+__sysconf
 sysctl
 sys_errlist
 sysinfo
