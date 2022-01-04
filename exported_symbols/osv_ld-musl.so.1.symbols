@@ -1104,6 +1104,7 @@ tcsetpgrp
 telldir
 tempnam
 textdomain
+tfind
 tgamma
 tgammaf
 tgammal
@@ -1140,6 +1141,7 @@ truncate
 truncate64
 truncf
 truncl
+tsearch
 ttyname
 ttyname_r
 __tzname

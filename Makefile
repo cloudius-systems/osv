@@ -1455,6 +1455,9 @@ libc += arch/$(arch)/ucontext/ucontext.o
 libc += string/memmove.o
 endif
 
+musl += search/tfind.o
+musl += search/tsearch.o
+
 musl += stdio/__fclose_ca.o
 libc += stdio/__fdopen.o
 $(out)/libc/stdio/__fdopen.o: CFLAGS += --include libc/syscall_to_function.h

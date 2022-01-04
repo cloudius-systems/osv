@@ -906,6 +906,7 @@ tcsetpgrp
 telldir
 tempnam
 textdomain
+tfind
 time
 timegm
 timerfd_create
@@ -936,6 +937,7 @@ __towupper_l
 towupper_l
 truncate
 truncate64
+tsearch
 ttyname
 ttyname_r
 __tzname
