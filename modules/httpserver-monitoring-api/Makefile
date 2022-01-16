@@ -45,7 +45,7 @@ all: $(module_out)/lib$(TARGET).so
 		$(src)/scripts/manifest_from_host.sh $(module_out)/lib$(TARGET).so > usr.manifest; \
 	fi
 
-$(module_out)/lib$(TARGET).so: $(JSON_OBJ_FILES) $(OBJ_FILES)
+$(module_out)/lib$(TARGET).so: $(JSON_OBJ_FILES) $(OBJ_FILES) $(module_out)/options.o
 	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared $(STATIC_LIBS) -o $@ $^ $(DYN_LIBS), LINK $@)
 
 ifneq ($(MAKECMDGOALS),clean)
@@ -63,6 +63,10 @@ $(OBJ_FILES): $(module_out)/%.o: ../httpserver-api/%.cc
 $(JSON_OBJ_FILES): $(module_out)/autogen/%.o: autogen/%.cc
 	$(call very-quiet, mkdir -p $(module_out)/autogen)
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -MMD  -o $@ $<, CXX $@)
+
+$(module_out)/options.o: $(src)/core/options.cc
+	$(call very-quiet, mkdir -p $(module_out))
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -MMD -o $@ $<, CXX $@)
 
 clean:
 	$(call quiet, $(RM) -f $(TARGET), CLEAN)

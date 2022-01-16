@@ -8,15 +8,14 @@
 #include "global_server.hh"
 #include "path_holder.hh"
 #include <iostream>
-#include <osv/app.hh>
 #include <fstream>
 #include <dlfcn.h>
 #include <boost/filesystem.hpp>
 #include <boost/foreach.hpp>
 #include "json/api_docs.hh"
-#include <osv/debug.h>
 #include "transformers.hh"
 #include <osv/options.hh>
+#include <osv/osv_c_wrappers.h>
 #if !defined(MONITORING)
 #include "yaml-cpp/yaml.h"
 #else
@@ -39,6 +38,13 @@ global_server& global_server::get()
         instance = new global_server();
     }
     return *instance;
+}
+
+void global_server::termination_handler() {
+    get().s->close();
+    for( auto plugin : get().plugins) {
+        dlclose(plugin);
+    }
 }
 
 bool global_server::run(std::map<std::string,std::vector<std::string>>& _config)
@@ -107,12 +113,7 @@ bool global_server::run(std::map<std::string,std::vector<std::string>>& _config)
     auto port = get().config["port"][0];
     get().s = new http::server::server(get().config, &get()._routes);
 
-    osv::this_application::on_termination_request([&] {
-        get().s->close();
-        for( auto plugin : get().plugins) {
-            dlclose(plugin);
-        }
-    });
+    osv_current_app_on_termination_request(termination_handler);
 
     std::cout << "Rest API server running on port " << port << std::endl;
     get().s->run();
@@ -121,6 +122,7 @@ bool global_server::run(std::map<std::string,std::vector<std::string>>& _config)
 
 #if !defined(MONITORING)
 void global_server::setup_file_mappings(const YAML::Node& file_mappings_node) {
+    auto debug_enabled = osv_debug_enabled();
     for (auto node : file_mappings_node) {
         const YAML::Node path = node["path"];
         if (path && node["directory"]) {
@@ -130,7 +132,9 @@ void global_server::setup_file_mappings(const YAML::Node& file_mappings_node) {
                                          new directory_handler(directory, new content_replace(content_replace_node.as<std::string>())) :
                                          new directory_handler(directory);
             _routes.add(GET, url(path.as<std::string>()).remainder("path"), handler);
-            debug("httpserver: setup directory mapping: [%s] -> [%s]\n", path.as<std::string>().c_str(), directory.c_str());
+            if (debug_enabled) {
+                std::cout << "httpserver: setup directory mapping: [" << path.as<std::string>() << "] -> [" << directory << "]" << std::endl;
+            }
         }
         else if (path && node["file"]) {
             const std::string file = node["file"].as<std::string>();
@@ -142,7 +146,9 @@ void global_server::setup_file_mappings(const YAML::Node& file_mappings_node) {
             else {
                 _routes.add(GET, url(path.as<std::string>()).remainder("path"), handler);
             }
-            debug("httpserver: setup file mapping: [%s] -> [%s]\n", path.as<std::string>().c_str(), file.c_str());
+            if (debug_enabled) {
+                std::cout << "httpserver: setup file mapping: [" << path.as<std::string>() << "] -> [" << file << "]" << std::endl;
+            }
         }
     }
 }
@@ -165,7 +171,9 @@ void global_server::setup_redirects(const YAML::Node& redirects_node) {
                                 return "";
                             });
             _routes.put(GET, path, redirect);
-            debug("httpserver: setup redirect: [%s] -> [%s]\n", path.c_str(), target_path.c_str());
+            if (osv_debug_enabled()) {
+                std::cout << "httpserver: setup redirect: [" << path << "] -> [" << target_path << "]" << std::endl;
+            }
         }
     }
 }
@@ -242,6 +250,8 @@ void global_server::load_plugin(const std::string& path)
     }
     plugins.push_back(plugin);
     httpserver_plugin_register_routes(&_routes);
-    debug("httpserver: loaded plugin from path: %s\n",path.c_str());
+    if (osv_debug_enabled()) {
+        std::cout << "httpserver: loaded plugin from path: " << path << std::endl;
+    }
 }
 }

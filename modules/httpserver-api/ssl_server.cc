@@ -5,11 +5,12 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <osv/debug.hh>
+#include <osv/osv_c_wrappers.h>
 
 #include "transport.hh"
 #include "ssl_server.hh"
 #include <openssl/ssl.h>
+#include <iostream>
 
 namespace http {
 
@@ -83,8 +84,10 @@ void ssl_acceptor::do_accept(callback_t callback)
                     [this, socket, callback] (boost::system::error_code ec) {
                         if (ec) {
                             auto remote = socket->lowest_layer().remote_endpoint();
-                            debug("handshake with " + remote.address().to_string()
-                                + " failed: " + ec.message() + "\n");
+                            if (osv_debug_enabled()) {
+                                std::cout << "handshake with " << remote.address().to_string()
+                                << " failed: " << ec.message() << std::endl;
+                            }
                         }
 
                         if (!_tcp_acceptor.is_open()) {
