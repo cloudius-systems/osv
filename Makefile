@@ -1970,7 +1970,7 @@ else
 linker_archives_options = --whole-archive $(libstdc++.a) $(libgcc_eh.a) $(boost-libs) --no-whole-archive $(libgcc.a)
 endif
 
-$(out)/version_script: exported_symbols/$(arch)/*.symbols
+$(out)/version_script: exported_symbols/*.symbols exported_symbols/$(arch)/*.symbols
 	$(call quiet, scripts/generate_version_script.sh $(out)/version_script, GEN version_script)
 
 $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(loader_options_dep)
