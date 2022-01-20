@@ -16,6 +16,7 @@
 #include <osv/commands.hh>
 #include <osv/firmware.hh>
 #include <osv/hypervisor.hh>
+#include "cpuid.hh"
 #include <vector>
 
 using namespace osv;
