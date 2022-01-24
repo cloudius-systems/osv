@@ -1,1 +1,1 @@
-../../../../musl/arch/x86_64/bits/termios.h
+../../../../musl/arch/generic/bits/termios.h

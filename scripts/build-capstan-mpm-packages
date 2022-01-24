@@ -140,7 +140,7 @@ prepare_package() {
   mkdir -p $package_dir
 
   cd $package_dir && $CAPSTAN package init --name "$package_name" --title "$package_title" \
-     --author "Anonymous" --version "$package_version" --platform "$PLATFORM"
+     --author "Anonymous" --version "$package_version" -p "$PLATFORM"
 
   if [ -f "$module_yaml" ]; then
     grep -P '^require:|^-' $module_yaml >> $package_dir/meta/package.yaml

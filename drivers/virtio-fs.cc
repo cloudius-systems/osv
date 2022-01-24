@@ -115,7 +115,7 @@ fs::fs(virtio_device& virtio_dev)
             [=] { t->wake(); });
     };
 
-#ifndef AARCH64_PORT_STUB
+#ifdef __x86_64__
     int_factory.create_gsi_edge_interrupt = [this, t]() {
         return new gsi_edge_interrupt(
             _dev.get_irq(),
@@ -205,6 +205,12 @@ int fs::make_request(fuse_request& req)
     }
 
     return 0;
+}
+
+u64 fs::get_driver_features()
+{
+    auto base = virtio_driver::get_driver_features();
+    return base | ((u64)1 << VIRTIO_F_VERSION_1);
 }
 
 hw_driver* fs::probe(hw_device* dev)

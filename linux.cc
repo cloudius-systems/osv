@@ -13,6 +13,7 @@
 #include <osv/mutex.h>
 #include <osv/waitqueue.hh>
 #include <osv/stubbing.hh>
+#include <osv/export.h>
 #include <memory>
 
 #include <syscall.h>
@@ -42,7 +43,9 @@
 
 #include <musl/src/internal/ksigaction.h>
 
-extern "C" long gettid()
+extern "C" int eventfd2(unsigned int, int);
+
+extern "C" OSV_LIBC_API long gettid()
 {
     return sched::thread::current()->id();
 }
@@ -60,23 +63,44 @@ static mutex queues_mutex;
 enum {
     FUTEX_WAIT           = 0,
     FUTEX_WAKE           = 1,
+    FUTEX_WAIT_BITSET    = 9,
     FUTEX_PRIVATE_FLAG   = 128,
     FUTEX_CLOCK_REALTIME = 256,
     FUTEX_CMD_MASK       = ~(FUTEX_PRIVATE_FLAG|FUTEX_CLOCK_REALTIME),
 };
 
+#define FUTEX_BITSET_MATCH_ANY  0xffffffff
+
 int futex(int *uaddr, int op, int val, const struct timespec *timeout,
-        int *uaddr2, int val3)
+        int *uaddr2, uint32_t val3)
 {
     switch (op & FUTEX_CMD_MASK) {
+    case FUTEX_WAIT_BITSET:
+        if (val3 != FUTEX_BITSET_MATCH_ANY) {
+            abort("Unimplemented futex() operation %d\n", op);
+        }
+
     case FUTEX_WAIT:
         WITH_LOCK(queues_mutex) {
             if (*uaddr == val) {
                 waitqueue &q = queues[uaddr];
                 if (timeout) {
                     sched::timer tmr(*sched::thread::current());
-                    tmr.set(std::chrono::seconds(timeout->tv_sec) +
-                            std::chrono::nanoseconds(timeout->tv_nsec));
+                    if ((op & FUTEX_CMD_MASK) == FUTEX_WAIT_BITSET) {
+                        // If FUTEX_WAIT_BITSET we need to interpret timeout as an absolute
+                        // time point. If futex operation FUTEX_CLOCK_REALTIME is set we will use
+                        // real-time clock otherwise we will use monotonic clock
+                        if (op & FUTEX_CLOCK_REALTIME) {
+                            tmr.set(osv::clock::wall::time_point(std::chrono::seconds(timeout->tv_sec) +
+                                                                 std::chrono::nanoseconds(timeout->tv_nsec)));
+                        } else {
+                            tmr.set(osv::clock::uptime::time_point(std::chrono::seconds(timeout->tv_sec) +
+                                                                   std::chrono::nanoseconds(timeout->tv_nsec)));
+                        }
+                    } else {
+                        tmr.set(std::chrono::seconds(timeout->tv_sec) +
+                                std::chrono::nanoseconds(timeout->tv_nsec));
+                    }
                     sched::thread::wait_for(queues_mutex, tmr, q);
                     // FIXME: testing if tmr was expired isn't quite right -
                     // we could have had both a wakeup and timer expiration
@@ -369,27 +393,47 @@ static int pselect6(int nfds, fd_set *readfds, fd_set *writefds,
     return pselect(nfds, readfds, writefds, exceptfds, timeout_ts, NULL);
 }
 
-long syscall(long number, ...)
+static int tgkill(int tgid, int tid, int sig)
+{
+    //
+    // Given OSv supports sigle process only, we only support this syscall
+    // when thread group id is self (getpid()) or -1 (see https://linux.die.net/man/2/tgkill)
+    // AND tid points to the current thread (caller)
+    // Ideally we would want to delegate to pthread_kill() but there is no
+    // easy way to map tgid to pthread_t so we directly delegate to kill().
+    if ((tgid == -1 || tgid == getpid()) && (tid == gettid())) {
+        return kill(tgid, sig);
+    }
+
+    errno = ENOSYS;
+    return -1;
+}
+
+OSV_LIBC_API long syscall(long number, ...)
 {
     // Save FPU state and restore it at the end of this function
     sched::fpu_lock fpu;
     SCOPE_LOCK(fpu);
 
     switch (number) {
+#ifdef SYS_open
     SYSCALL2(open, const char *, int);
+#endif
     SYSCALL3(read, int, char *, size_t);
     SYSCALL1(uname, struct utsname *);
     SYSCALL3(write, int, const void *, size_t);
     SYSCALL0(gettid);
     SYSCALL2(clock_gettime, clockid_t, struct timespec *);
     SYSCALL2(clock_getres, clockid_t, struct timespec *);
-    SYSCALL6(futex, int *, int, int, const struct timespec *, int *, int);
+    SYSCALL6(futex, int *, int, int, const struct timespec *, int *, uint32_t);
     SYSCALL1(close, int);
     SYSCALL2(pipe2, int *, int);
     SYSCALL1(epoll_create1, int);
     SYSCALL2(eventfd2, unsigned int, int);
     SYSCALL4(epoll_ctl, int, int, int, struct epoll_event *);
+#ifdef SYS_epoll_wait
     SYSCALL4(epoll_wait, int, struct epoll_event *, int, int);
+#endif
     SYSCALL4(accept4, int, struct sockaddr *, socklen_t *, int);
     SYSCALL3(connect, int, struct sockaddr *, socklen_t);
     SYSCALL5(get_mempolicy, int *, unsigned long *, unsigned long, void *, int);
@@ -400,7 +444,9 @@ long syscall(long number, ...)
     SYSCALL4(rt_sigprocmask, int, sigset_t *, sigset_t *, size_t);
     SYSCALL1(sys_exit, int);
     SYSCALL2(sigaltstack, const stack_t *, stack_t *);
+#ifdef SYS_select
     SYSCALL5(select, int, fd_set *, fd_set *, fd_set *, struct timeval *);
+#endif
     SYSCALL3(madvise, void *, size_t, int);
     SYSCALL0(sched_yield);
     SYSCALL3(mincore, void *, size_t, unsigned char *);
@@ -412,7 +458,9 @@ long syscall(long number, ...)
     SYSCALL3(bind, int, struct sockaddr *, int);
     SYSCALL2(listen, int, int);
     SYSCALL3(sys_ioctl, unsigned int, unsigned int, unsigned long);
+#ifdef SYS_stat
     SYSCALL2(stat, const char *, struct stat *);
+#endif
     SYSCALL2(fstat, int, struct stat *);
     SYSCALL3(getsockname, int, struct sockaddr *, socklen_t *);
     SYSCALL6(sendto, int, const void *, size_t, int, const struct sockaddr *, socklen_t);
@@ -437,6 +485,11 @@ long syscall(long number, ...)
     SYSCALL0(getpid);
     SYSCALL3(set_mempolicy, int, unsigned long *, unsigned long);
     SYSCALL3(sched_setaffinity_syscall, pid_t, unsigned, unsigned long *);
+#ifdef SYS_mkdir
+    SYSCALL2(mkdir, char*, mode_t);
+#endif
+    SYSCALL3(mkdirat, int, char*, mode_t);
+    SYSCALL3(tgkill, int, int, int);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);

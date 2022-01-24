@@ -50,11 +50,15 @@ __thread int v10 __attribute__ ((tls_model ("local-exec"))) = 1111;
 
 extern void external_library();
 
-static void report(bool ok, std::string msg)
+static void report(bool ok, std::string msg, bool use_printf = false)
 {
     ++tests;
     fails += !ok;
-    std::cout << (ok ? "PASS" : "FAIL") << ": " << msg << "\n";
+    if (use_printf) {
+        printf("%s: %s\n", ok ? "PASS" : "FAIL", msg.c_str());
+    } else {
+        std::cout << (ok ? "PASS" : "FAIL") << ": " << msg << "\n";
+    }
 }
 
 int main(int argc, char** argv)
@@ -124,8 +128,8 @@ int main(int argc, char** argv)
 static void before_main(void) __attribute__((constructor));
 static void before_main(void)
 {
-    report(v7 == 987UL, "v7 in init function");
-    report(v9 == 0, "v8 in init function");
+    report(v7 == 987UL, "v7 in init function", true);
+    report(v9 == 0, "v8 in init function", true);
 }
 #endif
 

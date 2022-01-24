@@ -196,7 +196,10 @@ class SupervisedProcess:
 
     @property
     def failed(self):
-        assert not self.output_collector_thread.isAlive()
+        if hasattr(self.output_collector_thread, "isAlive"):
+            assert not self.output_collector_thread.isAlive()
+        else:
+            assert not self.output_collector_thread.is_alive()
         return self.has_errors or self.process.returncode
 
     def write_line_to_input(self, line):

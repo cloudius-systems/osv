@@ -6,6 +6,7 @@ extern "C" {
 #endif
 
 #include <features.h>
+#include <sys/socket.h>
 
 #define __NEED_in_addr_t
 #define __NEED_in_port_t

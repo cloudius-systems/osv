@@ -11,7 +11,6 @@
 #include <cstring>
 #include <string.h>
 #include <exception>
-#include <cxxabi.h>
 #include <sys/mman.h>
 #include <unistd.h>
 #include <link.h>
@@ -34,6 +33,7 @@
 #include <osv/debug.hh>
 #include <boost/format.hpp>
 #include <osv/mempool.hh>
+#include <osv/export.h>
 #include <pwd.h>
 #include <fcntl.h>
 #include <osv/barrier.hh>
@@ -60,12 +60,17 @@
 #include <api/sys/prctl.h>
 #include <sys/wait.h>
 #include <pty.h>
+#include <osv/pid.h>
+
+// cxxabi.h from gcc 10 and earlier used to say that __cxa_finalize returns
+// an int, while it should return void (and does so on gcc 11). To allow us
+// to define __cxa_finalize with neither gcc 10 or 11 complaining, we need
+// to hide the declaration in the header file
+#define __cxa_finalize __cxa_finalize_ignore
+#include <cxxabi.h>
+#undef __cxa_finalize
 
 #define __LC_LAST 13
-
-#define __ALIAS(old, new) \
-        __typeof(old) new __attribute__((alias(#old)))
-#define ALIAS(old, new) extern "C" __ALIAS(old, new)
 
 void *__dso_handle;
 
@@ -134,6 +139,7 @@ void abort(const char *fmt, ...)
 }
 
 // __assert_fail() is used by the assert() macros
+OSV_LIBC_API
 void __assert_fail(const char *expr, const char *file, unsigned int line, const char *func)
 {
     abort("Assertion failed: %s (%s: %s: %d)\n", expr, file, func, line);
@@ -168,11 +174,11 @@ int __cxa_atexit(destructor_t destructor, void *arg, void *dso)
     return 0;
 }
 
-int __cxa_finalize(void *dso)
+void __cxa_finalize(void *dso)
 {
     if (!dso || dso == &__dso_handle) {
         debug("__cxa_finalize() running kernel's destructors not supported\n");
-        return 0;
+        return;
     }
     std::vector<std::pair<destructor_t,void*>> my_destructors;
     WITH_LOCK(destructors_mutex) {
@@ -182,63 +188,71 @@ int __cxa_finalize(void *dso)
     for (auto d : boost::adaptors::reverse(my_destructors)) {
         d.first(d.second);
     }
-    return 0;
+    return;
 }
 }
 
+OSV_LIBC_API
 int getpagesize()
 {
     return 4096;
 }
-ALIAS(getpagesize, __getpagesize);
 
+OSV_LIBC_API
 int vfork()
 {
     WARN_STUBBED();
     return -1;
 }
 
+OSV_LIBC_API
 int fork()
 {
     WARN_STUBBED();
     return -1;
 }
 
+OSV_LIBC_API
 pid_t setsid(void)
 {
     WARN_STUBBED();
     return -1;
 }
 
-NO_SYS(int execvp(const char *, char *const []));
+NO_SYS(OSV_LIBC_API int execvp(const char *, char *const []));
 
+OSV_LIBC_API
 int mlockall(int flags)
 {
     WARN_STUBBED();
     return 0;
 }
 
+OSV_LIBC_API
 int munlockall(void)
 {
     WARN_STUBBED();
     return 0;
 }
 
+OSV_LIBC_API
 int mlock(const void*, size_t)
 {
     WARN_STUBBED();
     return 0;
 }
 
+OSV_LIBC_API
 int munlock(const void*, size_t)
 {
     WARN_STUBBED();
     return 0;
 }
 
-NO_SYS(int mkfifo(const char*, mode_t));
-NO_SYS(int mkfifoat(int, const char *, mode_t));
+NO_SYS(OSV_LIBC_API int mkfifo(const char*, mode_t));
+NO_SYS(OSV_LIBC_API int mkfifoat(int, const char *, mode_t));
 
+OSV_LIBC_API
 int posix_fadvise(int fd, off_t offset, off_t len, int advice)
 {
     switch (advice) {
@@ -253,17 +267,19 @@ int posix_fadvise(int fd, off_t offset, off_t len, int advice)
         return EINVAL;
     }
 }
-LFS64(posix_fadvise);
+LFS64(posix_fadvise) __attribute__((nothrow));
 
+OSV_LIBC_API
 int posix_fallocate(int fd, off_t offset, off_t len)
 {
     return ENOSYS;
 }
-LFS64(posix_fallocate);
+LFS64(posix_fallocate) __attribute__((nothrow));
 
+OSV_LIBC_API
 int getpid()
 {
-    return 0;
+    return OSV_PID;
 }
 
 //    WCTDEF(alnum), WCTDEF(alpha), WCTDEF(blank), WCTDEF(cntrl),
@@ -282,8 +298,10 @@ static struct __locale_struct c_locale = {
 
 locale_t __c_locale_ptr = &c_locale;
 
+OSV_LIBC_API
 void* __stack_chk_guard = reinterpret_cast<void*>(0x12345678abcdefull);
-extern "C" void __stack_chk_fail(void) {
+extern "C" OSV_LIBC_API
+void __stack_chk_fail(void) {
     abort("__stack_chk_fail(): Stack overflow detected. Aborting.\n");
 }
 
@@ -306,7 +324,7 @@ struct __locale_data {
 #define _NL_CTYPE_TOUPPER 1
 #define _NL_CTYPE_TOLOWER 3
 
-extern "C"
+extern "C" OSV_LIBC_API
 __locale_t __newlocale(int category_mask, const char *locale, locale_t base)
     __THROW
 {
@@ -338,13 +356,14 @@ __locale_t __newlocale(int category_mask, const char *locale, locale_t base)
     return nullptr;
 }
 
-ALIAS(__newlocale, newlocale);
-
+OSV_LIBC_API
 long sysconf(int name)
 {
     switch (name) {
     case _SC_CLK_TCK: return CLOCKS_PER_SEC;
     case _SC_PAGESIZE: return mmu::page_size;
+    case _SC_THREAD_STACK_MIN: return 16384;
+    case _SC_LINE_MAX: return 2048;
     case _SC_THREAD_PROCESS_SHARED: return true;
     case _SC_NPROCESSORS_ONLN: return sched::cpus.size();
     case _SC_NPROCESSORS_CONF: return sched::cpus.size();
@@ -362,17 +381,20 @@ long sysconf(int name)
     }
 }
 
+OSV_LIBC_API
 long pathconf(const char *, int name)
 {
     return fpathconf(-1, name);
 }
 
+OSV_LIBC_API
 long fpathconf(int, int)
 {
     WARN_STUBBED();
     return -1;
 }
 
+OSV_LIBC_API
 size_t confstr(int name, char* buf, size_t len)
 {
     const char* v = nullptr;
@@ -395,12 +417,14 @@ size_t confstr(int name, char* buf, size_t len)
     }
 }
 
+OSV_LIBC_API
 FILE *popen(const char *command, const char *type)
 {
     WARN_STUBBED();
     return NULL;
 }
 
+OSV_LIBC_API
 int pclose(FILE *stream)
 {
     return 0;
@@ -415,21 +439,21 @@ void exit(int status)
 // "The function _exit() is like exit(3), but does not call any functions
 // registered with atexit(3) or on_exit(3)."
 //
-// Since we do nothing for those anyway, they are equal.
-ALIAS(exit, _exit);
-ALIAS(exit, _Exit);
 
+OSV_LIBC_API
 int atexit(void (*func)())
 {
     // nothing to do
     return 0;
 }
 
+OSV_LIBC_API
 int get_nprocs()
 {
     return sysconf(_SC_NPROCESSORS_ONLN);
 }
 
+OSV_LIBC_API
 clock_t times(struct tms *buffer)
 {
     using namespace std::chrono;
@@ -441,12 +465,15 @@ clock_t times(struct tms *buffer)
     clockseconds time;
     time = duration_cast<clockseconds>(seconds(ts.tv_sec) + nanoseconds(ts.tv_nsec));
 
-    buffer->tms_utime = time.count();
-    buffer->tms_stime = 0;
-    buffer->tms_cutime = 0;
-    buffer->tms_cstime = 0;
-
-    return buffer->tms_utime;
+    if (buffer) {
+        buffer->tms_utime = time.count();
+        buffer->tms_stime = 0;
+        buffer->tms_cutime = 0;
+        buffer->tms_cstime = 0;
+        return buffer->tms_utime;
+    } else {
+        return time.count();
+    }
 }
 
 static int prio_find_thread(sched::thread **th, int which, int id)
@@ -492,6 +519,7 @@ static int prio_find_thread(sched::thread **th, int which, int id)
 //
 static constexpr float prio_k = log(86) / 20;
 
+OSV_LIBC_API
 int getpriority(int which, int id)
 {
     sched::thread *th;
@@ -519,6 +547,7 @@ int getpriority(int which, int id)
     return prio;
 }
 
+OSV_LIBC_API
 int setpriority(int which, int id, int prio)
 {
     sched::thread *th;
@@ -535,12 +564,14 @@ int setpriority(int which, int id, int prio)
     return 0;
 }
 
+OSV_LIBC_API
 int initgroups(const char *user, gid_t group)
 {
     WARN_STUBBED();
     return -1;
 }
 
+OSV_LIBC_API
 int prctl(int option, ...)
 {
     switch (option) {
@@ -551,13 +582,14 @@ int prctl(int option, ...)
     return -1;
 }
 
+OSV_LIBC_API
 int daemon(int nochdir, int noclose)
 {
     WARN_STUBBED();
     return -1;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int sysctl(int *, int, void *, size_t *, void *, size_t)
 {
     WARN_STUBBED();
@@ -565,12 +597,13 @@ int sysctl(int *, int, void *, size_t *, void *, size_t)
     return -1;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 char *tmpnam_r(char *s)
 {
     return s ? tmpnam(s) : NULL;
 }
 
+OSV_LIBC_API
 pid_t wait3(int *status, int options, struct rusage *usage)
 {
     WARN_STUBBED();
@@ -578,6 +611,7 @@ pid_t wait3(int *status, int options, struct rusage *usage)
     return -1;
 }
 
+OSV_LIBC_API
 pid_t wait4(pid_t pid, int *status, int options, struct rusage *usage)
 {
     WARN_STUBBED();
@@ -585,6 +619,7 @@ pid_t wait4(pid_t pid, int *status, int options, struct rusage *usage)
     return -1;
 }
 
+OSV_LIBC_API
 int getresuid(uid_t *ruid, uid_t *euid, uid_t *suid)
 {
     WARN_STUBBED();
@@ -592,6 +627,7 @@ int getresuid(uid_t *ruid, uid_t *euid, uid_t *suid)
     return -1;
 }
 
+OSV_LIBC_API
 int getresgid(gid_t *rgid, gid_t *egid, gid_t *sgid)
 {
     WARN_STUBBED();
@@ -599,6 +635,7 @@ int getresgid(gid_t *rgid, gid_t *egid, gid_t *sgid)
     return -1;
 }
 
+OSV_LIBUTIL_API
 int openpty(int *amaster, int *aslave, char *name,
            const struct termios *termp,
            const struct winsize *winp)
@@ -608,6 +645,7 @@ int openpty(int *amaster, int *aslave, char *name,
     return -1;
 }
 
+OSV_LIBUTIL_API
 pid_t forkpty(int *amaster, char *name,
              const struct termios *termp,
              const struct winsize *winp)
@@ -617,11 +655,13 @@ pid_t forkpty(int *amaster, char *name,
     return -1;
 }
 
+OSV_LIBC_API
 int nice(int inc)
 {
     return setpriority(PRIO_PROCESS, 0, getpriority(PRIO_PROCESS, 0)+inc);
 }
 
+OSV_LIBC_API
 char *ctermid(char *s)
 {
     static char s2[L_ctermid];
@@ -630,3 +670,7 @@ char *ctermid(char *s)
     *s = 0;
     return s;
 }
+
+// OSv is always multi-threaded.
+OSV_LIBC_API
+char __libc_single_threaded = 0;

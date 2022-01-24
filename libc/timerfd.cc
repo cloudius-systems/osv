@@ -229,6 +229,7 @@ int timerfd::poll(int events)
 // After this long introduction, without further ado, let's implement Linux's
 // three <sys/timerfd.h> functions:
 
+OSV_LIBC_API
 int timerfd_create(int clockid, int flags) {
     switch (clockid) {
     case CLOCK_REALTIME:
@@ -258,6 +259,7 @@ static bool check_nsec_validity(long nsec)
     return (nsec >= 0 && nsec < second);
 }
 
+OSV_LIBC_API
 int timerfd_settime(int fd, int flags, const itimerspec *newval,
         itimerspec *oldval)
 {
@@ -301,6 +303,7 @@ int timerfd_settime(int fd, int flags, const itimerspec *newval,
     return 0;
 }
 
+OSV_LIBC_API
 int timerfd_gettime(int fd, itimerspec *val)
 {
     fileref f(fileref_from_fd(fd));

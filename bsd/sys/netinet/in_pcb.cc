@@ -85,6 +85,9 @@
 
 #include <osv/trace.hh>
 
+#define	INPCBLBGROUP_SIZMIN	8
+#define	INPCBLBGROUP_SIZMAX	256
+
 TRACEPOINT(trace_inpcb_ref, "inp=%x", struct inpcb *);
 TRACEPOINT(trace_inpcb_rele, "inp=%x", struct inpcb *);
 TRACEPOINT(trace_inpcb_free, "inp=%x", struct inpcb *);
@@ -199,6 +202,202 @@ SYSCTL_VNET_INT(_net_inet_ip_portrange, OID_AUTO, randomtime, CTLFLAG_RW,
  * functions often modify hash chains or addresses in pcbs.
  */
 
+static struct inpcblbgroup *
+in_pcblbgroup_alloc(struct inpcblbgrouphead *hdr, u_char vflag,
+    uint16_t port, const union in_dependaddr *addr, int size)
+{
+	struct inpcblbgroup *grp;
+	size_t bytes;
+
+	bytes = __offsetof(struct inpcblbgroup, il_inp) + sizeof(inpcblbgroup::il_inp[0]) * size;
+	grp = (struct inpcblbgroup *)malloc(bytes);
+	if (!grp)
+		return (NULL);
+	grp->il_vflag = vflag;
+	grp->il_lport = port;
+	grp->il_dependladdr = *addr;
+	grp->il_inpsiz = size;
+	LIST_INSERT_HEAD(hdr, grp, il_list);
+	return (grp);
+}
+
+static void
+in_pcblbgroup_free(struct inpcblbgroup *grp)
+{
+
+	LIST_REMOVE(grp, il_list);
+	free(grp);
+}
+
+static struct inpcblbgroup *
+in_pcblbgroup_resize(struct inpcblbgrouphead *hdr,
+    struct inpcblbgroup *old_grp, int size)
+{
+	struct inpcblbgroup *grp;
+	int i;
+
+	grp = in_pcblbgroup_alloc(hdr, old_grp->il_vflag,
+	    old_grp->il_lport, &old_grp->il_dependladdr, size);
+	if (!grp)
+		return (NULL);
+
+	KASSERT(old_grp->il_inpcnt < grp->il_inpsiz,
+	    ("invalid new local group size %d and old local group count %d",
+	     grp->il_inpsiz, old_grp->il_inpcnt));
+
+	for (i = 0; i < old_grp->il_inpcnt; ++i)
+		grp->il_inp[i] = old_grp->il_inp[i];
+	grp->il_inpcnt = old_grp->il_inpcnt;
+	in_pcblbgroup_free(old_grp);
+	return (grp);
+}
+
+/*
+ * PCB at index 'i' is removed from the group. Pull up the ones below il_inp[i]
+ * and shrink group if possible.
+ */
+static void
+in_pcblbgroup_reorder(struct inpcblbgrouphead *hdr, struct inpcblbgroup **grpp,
+    int i)
+{
+	struct inpcblbgroup *grp = *grpp;
+
+	for (; i + 1 < grp->il_inpcnt; ++i)
+		grp->il_inp[i] = grp->il_inp[i + 1];
+	grp->il_inpcnt--;
+
+	if (grp->il_inpsiz > INPCBLBGROUP_SIZMIN &&
+	    grp->il_inpcnt <= (grp->il_inpsiz / 4)) {
+		/* Shrink this group. */
+		struct inpcblbgroup *new_grp =
+		        in_pcblbgroup_resize(hdr, grp, grp->il_inpsiz / 2);
+		if (new_grp)
+			*grpp = new_grp;
+	}
+	return;
+}
+
+/*
+ * Add PCB to load balance group for SO_REUSEPORT option.
+ */
+static int
+in_pcbinslbgrouphash(struct inpcb *inp)
+{
+	struct inpcbinfo *pcbinfo;
+	struct inpcblbgrouphead *hdr;
+	struct inpcblbgroup *grp;
+	uint16_t hashmask, lport;
+	uint32_t group_index;
+	static int limit_logged = 0;
+
+	pcbinfo = inp->inp_pcbinfo;
+
+	INP_LOCK_ASSERT(inp);
+	INP_HASH_WLOCK_ASSERT(pcbinfo);
+
+	if (pcbinfo->ipi_lbgrouphashbase == NULL)
+		return (0);
+
+	hashmask = pcbinfo->ipi_lbgrouphashmask;
+	lport = inp->inp_lport;
+	group_index = INP_PCBLBGROUP_PORTHASH(lport, hashmask);
+	hdr = &pcbinfo->ipi_lbgrouphashbase[group_index];
+
+#ifdef INET6
+	/*
+	 * Don't allow IPv4 mapped INET6 wild socket.
+	 */
+	if ((inp->inp_vflag & INP_IPV4) &&
+	    inp->inp_laddr.s_addr == INADDR_ANY &&
+	    INP_CHECK_SOCKAF(inp->inp_socket, AF_INET6)) {
+		return (0);
+	}
+#endif
+
+	hdr = &pcbinfo->ipi_lbgrouphashbase[
+	    INP_PCBLBGROUP_PORTHASH(inp->inp_lport,
+	        pcbinfo->ipi_lbgrouphashmask)];
+	LIST_FOREACH(grp, hdr, il_list) {
+		if (grp->il_vflag == inp->inp_vflag &&
+		    grp->il_lport == inp->inp_lport &&
+		    memcmp(&grp->il_dependladdr,
+		        &inp->inp_inc.inc_ie.ie_dependladdr,
+		        sizeof(grp->il_dependladdr)) == 0) {
+			break;
+		}
+	}
+	if (grp == NULL) {
+		/* Create new load balance group. */
+		grp = in_pcblbgroup_alloc(hdr, inp->inp_vflag,
+		    inp->inp_lport, &inp->inp_inc.inc_ie.ie_dependladdr,
+		    INPCBLBGROUP_SIZMIN);
+		if (!grp)
+			return (ENOBUFS);
+	} else if (grp->il_inpcnt == grp->il_inpsiz) {
+		if (grp->il_inpsiz >= INPCBLBGROUP_SIZMAX) {
+			if (!limit_logged) {
+				limit_logged = 1;
+				printf("lb group port %d, limit reached\n",
+				    ntohs(grp->il_lport));
+			}
+			return (0);
+		}
+
+		/* Expand this local group. */
+		grp = in_pcblbgroup_resize(hdr, grp, grp->il_inpsiz * 2);
+		if (!grp)
+			return (ENOBUFS);
+	}
+
+	KASSERT(grp->il_inpcnt < grp->il_inpsiz,
+			("invalid local group size %d and count %d",
+			 grp->il_inpsiz, grp->il_inpcnt));
+
+	grp->il_inp[grp->il_inpcnt] = inp;
+	grp->il_inpcnt++;
+	return (0);
+}
+
+/*
+ * Remove PCB from load balance group.
+ */
+static void
+in_pcbremlbgrouphash(struct inpcb *inp)
+{
+	struct inpcbinfo *pcbinfo;
+	struct inpcblbgrouphead *hdr;
+	struct inpcblbgroup *grp;
+	int i;
+
+	pcbinfo = inp->inp_pcbinfo;
+
+	INP_LOCK_ASSERT(inp);
+	INP_HASH_WLOCK_ASSERT(pcbinfo);
+
+	if (pcbinfo->ipi_lbgrouphashbase == NULL)
+		return;
+
+	hdr = &pcbinfo->ipi_lbgrouphashbase[
+	    INP_PCBLBGROUP_PORTHASH(inp->inp_lport,
+	        pcbinfo->ipi_lbgrouphashmask)];
+
+	LIST_FOREACH(grp, hdr, il_list) {
+		for (i = 0; i < grp->il_inpcnt; ++i) {
+			if (grp->il_inp[i] != inp)
+				continue;
+
+			if (grp->il_inpcnt == 1) {
+				/* We are the last, free this local group. */
+				in_pcblbgroup_free(grp);
+			} else {
+				/* Pull up inpcbs, shrink group if possible. */
+				in_pcblbgroup_reorder(hdr, &grp, i);
+			}
+			return;
+		}
+	}
+}
+
 /*
  * Initialize an inpcbinfo -- we should be able to reduce the number of
  * arguments in time.
@@ -221,6 +420,8 @@ in_pcbinfo_init(struct inpcbinfo *pcbinfo, const char *name,
 	    &pcbinfo->ipi_hashmask);
 	pcbinfo->ipi_porthashbase = (inpcbporthead *)hashinit(porthash_nelements, 0,
 	    &pcbinfo->ipi_porthashmask);
+	pcbinfo->ipi_lbgrouphashbase = (inpcblbgrouphead *)hashinit(hash_nelements, 0,
+	    &pcbinfo->ipi_lbgrouphashmask);
 	// FIXME: uma_zone_set_max(pcbinfo->ipi_zone, maxsockets);
 }
 
@@ -1090,6 +1291,7 @@ in_pcbdrop(struct inpcb *inp)
 		struct inpcbport *phd = inp->inp_phd;
 
 		INP_HASH_WLOCK(inp->inp_pcbinfo);
+		in_pcbremlbgrouphash(inp);
 		LIST_REMOVE(inp, inp_hash);
 		LIST_REMOVE(inp, inp_portlist);
 		if (LIST_FIRST(&phd->phd_pcblist) == NULL) {
@@ -1340,6 +1542,61 @@ in_pcblookup_local(struct inpcbinfo *pcbinfo, struct in_addr laddr,
 }
 #undef INP_LOOKUP_MAPPED_PCB_COST
 
+static struct inpcb *
+in_pcblookup_lbgroup(const struct inpcbinfo *pcbinfo,
+  const struct in_addr *laddr, uint16_t lport, const struct in_addr *faddr,
+  uint16_t fport, int lookupflags)
+{
+	struct inpcb *local_wild = NULL;
+	const struct inpcblbgrouphead *hdr;
+	struct inpcblbgroup *grp;
+	struct inpcblbgroup *grp_local_wild;
+
+	INP_HASH_LOCK_ASSERT(pcbinfo);
+
+	hdr = &pcbinfo->ipi_lbgrouphashbase[
+		  INP_PCBLBGROUP_PORTHASH(lport, pcbinfo->ipi_lbgrouphashmask)];
+
+	/*
+	 * Order of socket selection:
+	 * 1. non-wild.
+	 * 2. wild (if lookupflags contains INPLOOKUP_WILDCARD).
+	 *
+	 * NOTE:
+	 * - Load balanced group does not contain jailed sockets
+	 * - Load balanced group does not contain IPv4 mapped INET6 wild sockets
+	 */
+	LIST_FOREACH(grp, hdr, il_list) {
+#ifdef INET6
+		if (!(grp->il_vflag & INP_IPV4))
+			continue;
+#endif
+
+		if (grp->il_lport == lport) {
+
+			uint32_t idx = 0;
+			int pkt_hash = INP_PCBLBGROUP_PKTHASH(faddr->s_addr,
+			    lport, fport);
+
+			idx = pkt_hash % grp->il_inpcnt;
+
+			if (grp->il_laddr.s_addr == laddr->s_addr) {
+				return (grp->il_inp[idx]);
+			} else {
+				if (grp->il_laddr.s_addr == INADDR_ANY &&
+					(lookupflags & INPLOOKUP_WILDCARD)) {
+					local_wild = grp->il_inp[idx];
+					grp_local_wild = grp;
+				}
+			}
+		}
+	}
+	if (local_wild != NULL) {
+		return (local_wild);
+	}
+	return (NULL);
+}
+
 /*
  * Lookup PCB in hash list, using pcbinfo tables.  This variation assumes
  * that the caller has locked the hash list, and will not perform any further
@@ -1386,6 +1643,18 @@ in_pcblookup_hash_locked(struct inpcbinfo *pcbinfo, struct in_addr faddr,
 	}
 	if (tmpinp != NULL)
 		return (tmpinp);
+
+	/*
+	 * Then look in lb group (for wildcard match).
+	 */
+	if (pcbinfo->ipi_lbgrouphashbase != NULL &&
+		(lookupflags & INPLOOKUP_WILDCARD)) {
+		inp = in_pcblookup_lbgroup(pcbinfo, &laddr, lport, &faddr,
+		    fport, lookupflags);
+		if (inp != NULL) {
+			return (inp);
+		}
+	}
 
 	/*
 	 * Then look for a wildcard match, if requested.
@@ -1553,6 +1822,18 @@ in_pcbinshash_internal(struct inpcb *inp)
 	    INP_PCBPORTHASH(inp->inp_lport, pcbinfo->ipi_porthashmask)];
 
 	/*
+	 * Add entry to load balance group.
+	 * Only do this if INP_REUSEPORT is set.
+	 */
+	if (inp->inp_flags2 & INP_REUSEPORT) {
+		int ret = in_pcbinslbgrouphash(inp);
+		if (ret) {
+			/* pcb lb group malloc fail (ret=ENOBUFS). */
+			return (ret);
+		}
+	}
+
+	/*
 	 * Go through port list and look for a head for this lport.
 	 */
 	LIST_FOREACH(phd, pcbporthash, phd_hash) {
@@ -1642,6 +1923,10 @@ in_pcbremlists(struct inpcb *inp)
 		struct inpcbport *phd = inp->inp_phd;
 
 		INP_HASH_WLOCK(pcbinfo);
+
+		/* XXX: Only do if SO_REUSEPORT set? */
+		in_pcbremlbgrouphash(inp);
+
 		LIST_REMOVE(inp, inp_hash);
 		LIST_REMOVE(inp, inp_portlist);
 		if (LIST_FIRST(&phd->phd_pcblist) == NULL) {

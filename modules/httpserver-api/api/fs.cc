@@ -6,12 +6,12 @@
  */
 
 #include "fs.hh"
-#include "osv/mount.h"
 #include "json/formatter.hh"
 #include "autogen/fs.json.hh"
 #include <string>
 #include <vector>
 #include <sys/statvfs.h>
+#include <mntent.h>
 
 namespace httpserver {
 
@@ -23,9 +23,9 @@ using namespace std;
 using namespace json;
 using namespace fs_json;
 
-static void fill_dfstat(DFStat& dfstat, const osv::mount_desc& mount, const struct statvfs& st) {
-    dfstat.filesystem = mount.special;
-    dfstat.mount = mount.path;
+static void fill_dfstat(DFStat& dfstat, mntent* mount, const struct statvfs& st) {
+    dfstat.filesystem = mount->mnt_fsname;
+    dfstat.mount = mount->mnt_dir;
     dfstat.btotal = st.f_blocks;
     dfstat.bfree = st.f_bfree;
     dfstat.ftotal = st.f_files;
@@ -46,21 +46,31 @@ void init(routes& routes) {
     getDFStats.set_handler("json",
                            [](const_req req)
     {
-        using namespace osv;
         const std::string onemount = req.param.at("mount");
         struct statvfs st;
         httpserver::json::DFStat dfstat;
         vector<httpserver::json::DFStat> dfstats;
 
-        for (mount_desc mount : osv::current_mounts()) {
-            if ((mount.type == "zfs" || mount.type == "rofs") && (onemount == "" || onemount == mount.path)) {
-                if (statvfs(mount.path.c_str(),&st) != 0) {
+        FILE *mounts_fp = setmntent("/proc/mounts", "r");
+        if (!mounts_fp) {
+            throw server_error_exception("failed to get mounts information");
+        }
+
+        struct mntent* mount;
+        mntent mnt;
+        char strings[4096];
+        while ((mount = getmntent_r(mounts_fp, &mnt, strings, sizeof(strings)))) {
+            std::string fstype(mount->mnt_type);
+            if ((fstype == "zfs" || fstype == "rofs") && (onemount == "" || onemount == mount->mnt_dir)) {
+                if (statvfs(mount->mnt_dir,&st) != 0) {
+                    endmntent(mounts_fp);
                     throw not_found_exception("mount does not exist");
                 }
                 fill_dfstat(dfstat, mount, st);
                 dfstats.push_back(dfstat);
             }
         };
+        endmntent(mounts_fp);
 
         // checking if a specific file system was requested and if we found it
         if (onemount != "" && dfstats.size() == 0) {
@@ -76,14 +86,24 @@ void init(routes& routes) {
             httpserver::json::DFStat dfstat;
             vector<httpserver::json::DFStat> res;
 
-            for (osv::mount_desc mount : osv::current_mounts()) {
-                if (mount.type == "zfs" || mount.type == "rofs") {
-                    if (statvfs(mount.path.c_str(),&st) == 0) {
+            FILE *mounts_fp = setmntent("/proc/mounts", "r");
+            if (!mounts_fp) {
+                throw server_error_exception("failed to get mounts information");
+            }
+
+            struct mntent* mount;
+            mntent mnt;
+            char strings[4096];
+            while ((mount = getmntent_r(mounts_fp, &mnt, strings, sizeof(strings)))) {
+                std::string fstype(mount->mnt_type);
+                if (fstype == "zfs" || fstype == "rofs") {
+                    if (statvfs(mount->mnt_dir,&st) == 0) {
                         fill_dfstat(dfstat, mount, st);
                         res.push_back(dfstat);
                     }
                 }
             }
+            endmntent(mounts_fp);
             return res;
         });
 

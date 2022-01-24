@@ -1,0 +1,1 @@
+../../musl_0.9.12/src/stdio/getchar.c

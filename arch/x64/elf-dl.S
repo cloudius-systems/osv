@@ -9,6 +9,7 @@
 .text
 
 .global __elf_resolve_pltgot
+.hidden __elf_resolve_pltgot
 
 // calling convension:
 // %rsp + 8: index

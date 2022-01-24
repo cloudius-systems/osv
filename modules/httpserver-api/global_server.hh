@@ -30,6 +30,11 @@ public:
     static global_server& get();
 
     /**
+     * cleanup routine: shutdown server and close all plugins
+     */
+    static void termination_handler();
+
+    /**
      * get the route object
      * @return a reference to the route object
      */

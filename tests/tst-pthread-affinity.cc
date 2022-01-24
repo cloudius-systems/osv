@@ -8,9 +8,11 @@
 #include <stdbool.h>
 #include <sys/time.h>
 #include <errno.h>
-#include <osv/sched.hh>
+#include <sched.h>
 #include <unistd.h>
 #include <atomic>
+#include <sys/sysinfo.h>
+#include <cstring>
 
 static std::atomic<unsigned> tests_total(0), tests_failed(0);
 
@@ -24,13 +26,13 @@ void report(const char* name, bool passed)
 
 void *get_processor(void *cpuid)
 {
-    unsigned int *c = static_cast<unsigned int *>(cpuid);
+    int *c = static_cast<int *>(cpuid);
 
-    report("started on the correct CPU", sched::thread::current()->get_cpu()->id == (*c));
+    report("started on the correct CPU", sched_getcpu() == (*c));
 
     usleep(1000);
 
-    report("re-scheduled on the correct CPU", sched::thread::current()->get_cpu()->id == (*c));
+    report("re-scheduled on the correct CPU", sched_getcpu() == (*c));
 
     return NULL;
 }
@@ -40,13 +42,13 @@ void *get_processor(void *cpuid)
 // current thread.
 void *test_pin_unpin(void *)
 {
-    unsigned ncpus = sched::cpus.size();
+    auto ncpus = get_nprocs();
     // The thread starts with affinity to all cpus
     cpu_set_t cs;
     CPU_ZERO(&cs);
     report("getaffinity", pthread_getaffinity_np(pthread_self(), sizeof(cs), &cs) == 0);
     bool success = true;
-    for (unsigned i = 0; i < ncpus; i++) {
+    for (int i = 0; i < ncpus; i++) {
         success = success && CPU_ISSET(i, &cs);
     }
     report("thread is initially unpinned", success);
@@ -57,20 +59,20 @@ void *test_pin_unpin(void *)
     CPU_ZERO(&cs);
     report("getaffinity", pthread_getaffinity_np(pthread_self(), sizeof(cs), &cs) == 0);
     success = CPU_ISSET(0, &cs);
-    for (unsigned i = 1; i < ncpus; i++) {
+    for (int i = 1; i < ncpus; i++) {
         success = success && !CPU_ISSET(i, &cs);
     }
     report("thread is now pinned to cpu 0", success);
     // Unpin the thread (set its affinity to all CPUs) and confirm it worked
     CPU_ZERO(&cs);
-    for (unsigned i = 0; i < ncpus; i++) {
+    for (int i = 0; i < ncpus; i++) {
         CPU_SET(i, &cs);
     }
     report("setaffinity", pthread_setaffinity_np(pthread_self(), sizeof(cs), &cs) == 0);
     CPU_ZERO(&cs);
     report("getaffinity", pthread_getaffinity_np(pthread_self(), sizeof(cs), &cs) == 0);
     success = true;
-    for (unsigned i = 0; i < ncpus; i++) {
+    for (int i = 0; i < ncpus; i++) {
         success = success && CPU_ISSET(i, &cs);
     }
     report("thread is now unpinned again", success);
@@ -87,7 +89,7 @@ int main(void)
     pthread_attr_t attr;
 
     printf("sequential test:\n");
-    for (size_t i = 0; i < sched::cpus.size(); i++) {
+    for (int i = 0; i < get_nprocs(); i++) {
         CPU_ZERO(&cs);
         CPU_SET(i, &cs);
         pthread_attr_init(&attr);
@@ -98,11 +100,11 @@ int main(void)
     }
 
     printf("parallel test:\n");
-    size_t* cpus = new size_t[sched::cpus.size()];
-    pthread_t* threads = new pthread_t[sched::cpus.size()];
-    pthread_attr_t* attrs = new pthread_attr_t[sched::cpus.size()];
+    int* cpus = new int[get_nprocs()];
+    pthread_t* threads = new pthread_t[get_nprocs()];
+    pthread_attr_t* attrs = new pthread_attr_t[get_nprocs()];
 
-    for (size_t i = 0; i < sched::cpus.size(); i++) {
+    for (int i = 0; i < get_nprocs(); i++) {
         cpus[i] = i;
         CPU_ZERO(&cs);
         CPU_SET(i, &cs);
@@ -110,15 +112,15 @@ int main(void)
         pthread_attr_setaffinity_np(&attrs[i], sizeof(cs), &cs);
     }
 
-    for (size_t i = 0; i < sched::cpus.size(); i++) {
+    for (int i = 0; i < get_nprocs(); i++) {
         pthread_create(&threads[i], &attrs[i], get_processor, &cpus[i]);
     }
 
-    for (size_t i = 0; i < sched::cpus.size(); i++) {
+    for (int i = 0; i < get_nprocs(); i++) {
         pthread_join(threads[i], NULL);
     }
 
-    for (size_t i = 0; i < sched::cpus.size(); i++) {
+    for (int i = 0; i < get_nprocs(); i++) {
         pthread_attr_destroy(&attrs[i]);
     }
 

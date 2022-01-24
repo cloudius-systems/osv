@@ -25,12 +25,16 @@
 #include <osv/rcu.hh>
 #include <osv/clock.hh>
 #include <osv/timer-set.hh>
+#include <osv/export.h>
 #include <string.h>
 
 typedef float runtime_t;
 
 extern "C" {
 void smp_main();
+#ifdef __aarch64__
+void destroy_current_cpu_terminating_thread();
+#endif
 };
 void smp_launch();
 
@@ -321,7 +325,12 @@ constexpr thread_runtime::duration thyst = std::chrono::milliseconds(5);
 constexpr thread_runtime::duration context_switch_penalty =
                                            std::chrono::microseconds(10);
 
-
+#ifdef __aarch64__
+struct thread_switch_data {
+   thread_state* old_thread_state = nullptr;
+   thread_state* new_thread_state = nullptr;
+};
+#endif
 /**
  * OSv thread
  */
@@ -419,6 +428,19 @@ public:
             return nullptr;
         }
         return new(p) thread(std::forward<Args>(args)...);
+    }
+    // Since make() doesn't necessarily allocate with "new", dispose() should
+    // be used to free it, not "delete". However, in practice our new and
+    // delete are the same, so delete is fine.
+    static void dispose(thread* p) {
+        p->~thread();
+        free(p);
+    }
+    using thread_unique_ptr = std::unique_ptr<thread, decltype(&thread::dispose)>;
+    template <typename... Args>
+    static thread_unique_ptr make_unique(Args&&... args) {
+        return thread_unique_ptr(make(std::forward<Args>(args)...),
+        thread::dispose);
     }
 private:
     explicit thread(std::function<void ()> func, attr attributes = attr(),
@@ -600,7 +622,9 @@ private:
             unsigned allowed_initial_states_mask = 1 << unsigned(status::waiting));
     static void sleep_impl(timer &tmr);
     void main();
+#ifdef __x86_64__
     void switch_to();
+#endif
     void switch_to_first();
     void prepare_wait();
     void wait();
@@ -702,7 +726,12 @@ private:
     std::vector<char*> _tls;
     bool _app;
     std::shared_ptr<osv::application_runtime> _app_runtime;
+public:
     void destroy();
+private:
+#ifdef __aarch64__
+    friend void ::destroy_current_cpu_terminating_thread();
+#endif
     friend class thread_ref_guard;
     friend void thread_main_c(thread* t);
     friend class wait_guard;
@@ -884,8 +913,13 @@ struct cpu : private timer_base::client {
      * @param preempt_after fire the preemption timer after this time period
      *                      (relevant only when "called_from_yield" is TRUE)
      */
+#ifdef __aarch64__
+    thread_switch_data schedule_next_thread(bool called_from_yield = false,
+                                            thread_runtime::duration preempt_after = thyst);
+#else
     void reschedule_from_interrupt(bool called_from_yield = false,
-                                thread_runtime::duration preempt_after = thyst);
+                                   thread_runtime::duration preempt_after = thyst);
+#endif
     void enqueue(thread& t);
     void init_idle_thread();
     virtual void timer_fired() override;
@@ -894,6 +928,12 @@ struct cpu : private timer_base::client {
     runtime_t c;
     int renormalize_count;
 };
+
+#ifdef __aarch64__
+extern "C" void reschedule_from_interrupt(cpu* cpu,
+                                          bool called_from_yield,
+                                          thread_runtime::duration preempt_after);
+#endif
 
 class cpu::notifier {
 public:
@@ -996,7 +1036,11 @@ inline bool preemptable()
 inline void preempt()
 {
     if (preemptable()) {
+#ifdef __aarch64__
+        reschedule_from_interrupt(sched::cpu::current(), false, thyst);
+#else
         sched::cpu::current()->reschedule_from_interrupt();
+#endif
     } else {
         // preempt_enable() will pick this up eventually
         need_reschedule = true;

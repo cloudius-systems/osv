@@ -20,7 +20,7 @@ u64 convert(const timespec& ts)
     return ts.tv_sec * 1000000000 + ts.tv_nsec;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int gettimeofday(struct timeval* tv, struct timezone* tz)
 {
     if (!tv) {
@@ -33,12 +33,14 @@ int gettimeofday(struct timeval* tv, struct timezone* tz)
     return 0;
 }
 
+OSV_LIBC_API
 int nanosleep(const struct timespec* req, struct timespec* rem)
 {
     sched::thread::sleep(std::chrono::nanoseconds(convert(*req)));
     return 0;
 }
 
+OSV_LIBC_API
 int usleep(useconds_t usec)
 {
     sched::thread::sleep(std::chrono::microseconds(usec));
@@ -55,6 +57,7 @@ static inline void fill_ts(std::chrono::duration<Rep, Period> d, timespec *ts)
     ts->tv_nsec = duration_cast<nanoseconds>(d).count() % 1000000000;
 }
 
+OSV_LIBC_API
 int clock_gettime(clockid_t clk_id, struct timespec* ts)
 {
     switch (clk_id) {
@@ -85,9 +88,10 @@ int clock_gettime(clockid_t clk_id, struct timespec* ts)
     return 0;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int __clock_gettime(clockid_t clk_id, struct timespec* ts) __attribute__((alias("clock_gettime")));
 
+OSV_LIBC_API
 int clock_getres(clockid_t clk_id, struct timespec* ts)
 {
     switch (clk_id) {
@@ -110,11 +114,13 @@ int clock_getres(clockid_t clk_id, struct timespec* ts)
     return 0;
 }
 
+OSV_LIBC_API
 int clock_getcpuclockid(pid_t pid, clockid_t* clock_id)
 {
     return CLOCK_PROCESS_CPUTIME_ID;
 }
 
+OSV_LIBC_API
 clock_t clock(void)
 {
     struct timespec ts;

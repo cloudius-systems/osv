@@ -3525,8 +3525,8 @@ tcp_net_channel_ipv4_packet(tcpcb* tp, mbuf* m)
 static void tcp_ipv4_connection_id(const tcpcb* tp, ipv4_tcp_conn_id* id)
 {
 	auto& conn = tp->t_inpcb->inp_inc.inc_ie;
-	id->src_addr = conn.ie_dependfaddr.ie46_foreign.ia46_addr4;
-	id->dst_addr = conn.ie_dependladdr.ie46_local.ia46_addr4;
+	id->src_addr = conn.ie_dependfaddr.id46_addr.ia46_addr4;
+	id->dst_addr = conn.ie_dependladdr.id46_addr.ia46_addr4;
 	id->src_port = ntohs(conn.ie_fport);
 	id->dst_port = ntohs(conn.ie_lport);
 }
@@ -3576,9 +3576,9 @@ tcp_net_channel_ipv6_packet(tcpcb* tp, mbuf* m)
 static void tcp_ipv6_connection_id(const tcpcb* tp, ipv6_tcp_conn_id* id)
 {
 	auto& conn = tp->t_inpcb->inp_inc.inc_ie;
-	id->src_addr = conn.ie_dependfaddr.ie6_foreign;
+	id->src_addr = conn.ie_dependfaddr.id6_addr;
 	in6_clearscope(&id->src_addr);
-	id->dst_addr = conn.ie_dependladdr.ie6_local;
+	id->dst_addr = conn.ie_dependladdr.id6_addr;
 	in6_clearscope(&id->dst_addr);
 	id->src_port = ntohs(conn.ie_fport);
 	id->dst_port = ntohs(conn.ie_lport);

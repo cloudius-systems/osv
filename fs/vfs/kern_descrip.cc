@@ -14,6 +14,7 @@
 #include <osv/debug.h>
 #include <osv/mutex.h>
 #include <osv/rcu.hh>
+#include <osv/export.h>
 #include <boost/range/algorithm/find.hpp>
 
 #include <bsd/sys/sys/queue.h>
@@ -61,7 +62,7 @@ int _fdalloc(struct file *fp, int *newfd, int min_fd)
     return EMFILE;
 }
 
-extern "C"
+extern "C" OSV_LIBC_API
 int getdtablesize(void)
 {
     return FDMAX;

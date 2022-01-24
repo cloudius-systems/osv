@@ -127,6 +127,7 @@ inline static size_t CPU_ALLOC_SIZE(size_t count) {
     return ((count + __NCPUBITS - 1) / __NCPUBITS) * sizeof (__cpu_mask);
 }
 
+int sched_getcpu(void);
 int sched_getaffinity(pid_t pid, size_t cpusetsize,
                              cpu_set_t *mask);
 

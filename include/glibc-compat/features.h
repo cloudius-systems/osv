@@ -10,6 +10,13 @@
 
 #include_next <features.h>
 
+/* Recently, some system header files started to rely on <features.h>
+ * already including <sys/cdefs.h>. So we need to do it.
+ */
+#include <sys/cdefs.h>
+
+#define hidden __attribute__((__visibility__("hidden")))
+
 #define __GNU_LIBRARY__ 6
 #define __GLIBC__       2
 #define __GLIBC_MINOR__ 20

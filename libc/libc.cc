@@ -43,9 +43,15 @@ int libc_error(int err)
 
 #undef errno
 
+OSV_HIDDEN
 int __thread errno;
 
 int* __errno_location()
+{
+    return &errno;
+}
+
+extern "C" int* ___errno_location()
 {
     return &errno;
 }

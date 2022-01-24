@@ -38,10 +38,12 @@
 
 #if defined(_KERNEL)
 #include <sys/systm.h>
+#define OSV_LIB_ZFS_API
 #else
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
+#define OSV_LIB_ZFS_API __attribute__((__visibility__("default")))
 #endif
 
 static zprop_desc_t zfs_prop_table[ZFS_NUM_PROPS];
@@ -54,7 +56,7 @@ const char *zfs_userquota_prop_prefixes[] = {
 	"groupquota@"
 };
 
-zprop_desc_t *
+OSV_LIB_ZFS_API zprop_desc_t *
 zfs_prop_get_table(void)
 {
 	return (zfs_prop_table);
@@ -415,7 +417,7 @@ zfs_prop_delegatable(zfs_prop_t prop)
 /*
  * Given a zfs dataset property name, returns the corresponding property ID.
  */
-zfs_prop_t
+OSV_LIB_ZFS_API zfs_prop_t
 zfs_name_to_prop(const char *propname)
 {
 	return (zprop_name_to_prop(propname, ZFS_TYPE_DATASET));
@@ -436,7 +438,7 @@ valid_char(char c)
 /*
  * Returns true if this is a valid user-defined property (one with a ':').
  */
-boolean_t
+OSV_LIB_ZFS_API boolean_t
 zfs_prop_user(const char *name)
 {
 	int i;
@@ -462,7 +464,7 @@ zfs_prop_user(const char *name)
  * Note that after the @, any character is valid (eg, another @, for SID
  * user@domain).
  */
-boolean_t
+OSV_LIB_ZFS_API boolean_t
 zfs_prop_userquota(const char *name)
 {
 	zfs_userquota_prop_t prop;
@@ -482,7 +484,7 @@ zfs_prop_userquota(const char *name)
  * Note that after the @, any character is valid (eg, another @, for
  * written@pool/fs@origin).
  */
-boolean_t
+OSV_LIB_ZFS_API boolean_t
 zfs_prop_written(const char *name)
 {
 	static const char *prefix = "written@";
@@ -493,7 +495,7 @@ zfs_prop_written(const char *name)
  * Tables of index types, plus functions to convert between the user view
  * (strings) and internal representation (uint64_t).
  */
-int
+OSV_LIB_ZFS_API int
 zfs_prop_string_to_index(zfs_prop_t prop, const char *string, uint64_t *index)
 {
 	return (zprop_string_to_index(prop, string, index, ZFS_TYPE_DATASET));
@@ -514,7 +516,7 @@ zfs_prop_random_value(zfs_prop_t prop, uint64_t seed)
 /*
  * Returns TRUE if the property applies to any of the given dataset types.
  */
-boolean_t
+OSV_LIB_ZFS_API boolean_t
 zfs_prop_valid_for_type(int prop, zfs_type_t types)
 {
 	return (zprop_valid_for_type(prop, types));
@@ -529,7 +531,7 @@ zfs_prop_get_type(zfs_prop_t prop)
 /*
  * Returns TRUE if the property is readonly.
  */
-boolean_t
+OSV_LIB_ZFS_API boolean_t
 zfs_prop_readonly(zfs_prop_t prop)
 {
 	return (zfs_prop_table[prop].pd_attr == PROP_READONLY ||
@@ -561,7 +563,7 @@ zfs_prop_default_numeric(zfs_prop_t prop)
  * Given a dataset property ID, returns the corresponding name.
  * Assuming the zfs dataset property ID is valid.
  */
-const char *
+OSV_LIB_ZFS_API const char *
 zfs_prop_to_name(zfs_prop_t prop)
 {
 	return (zfs_prop_table[prop].pd_name);
@@ -570,7 +572,7 @@ zfs_prop_to_name(zfs_prop_t prop)
 /*
  * Returns TRUE if the property is inheritable.
  */
-boolean_t
+OSV_LIB_ZFS_API boolean_t
 zfs_prop_inheritable(zfs_prop_t prop)
 {
 	return (zfs_prop_table[prop].pd_attr == PROP_INHERIT ||
@@ -583,7 +585,7 @@ zfs_prop_inheritable(zfs_prop_t prop)
  * Returns a string describing the set of acceptable values for the given
  * zfs property, or NULL if it cannot be set.
  */
-const char *
+OSV_LIB_ZFS_API const char *
 zfs_prop_values(zfs_prop_t prop)
 {
 	return (zfs_prop_table[prop].pd_values);
@@ -594,7 +596,7 @@ zfs_prop_values(zfs_prop_t prop)
  * (compression, checksum) are treated as strings in userland, even though they
  * are stored numerically on disk.
  */
-int
+OSV_LIB_ZFS_API int
 zfs_prop_is_string(zfs_prop_t prop)
 {
 	return (zfs_prop_table[prop].pd_proptype == PROP_TYPE_STRING ||
@@ -605,7 +607,7 @@ zfs_prop_is_string(zfs_prop_t prop)
  * Returns the column header for the given property.  Used only in
  * 'zfs list -o', but centralized here with the other property information.
  */
-const char *
+OSV_LIB_ZFS_API const char *
 zfs_prop_column_name(zfs_prop_t prop)
 {
 	return (zfs_prop_table[prop].pd_colname);
@@ -615,7 +617,7 @@ zfs_prop_column_name(zfs_prop_t prop)
  * Returns whether the given property should be displayed right-justified for
  * 'zfs list'.
  */
-boolean_t
+OSV_LIB_ZFS_API boolean_t
 zfs_prop_align_right(zfs_prop_t prop)
 {
 	return (zfs_prop_table[prop].pd_rightalign);

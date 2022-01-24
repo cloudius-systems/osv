@@ -7,6 +7,7 @@
 
 #include <sys/utsname.h>
 #include <string.h>
+#include "osv/export.h"
 
 // The Linux version we're pretending to be
 #define LINUX_MAJOR 3

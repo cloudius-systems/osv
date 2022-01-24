@@ -31,10 +31,14 @@ enum {
     R_X86_64_GOTPC32 = 26, //  word32 GOT + A - P
     R_X86_64_SIZE32 = 32, //  word32 Z + A
     R_X86_64_SIZE64 = 33, //  word64 Z + A
+    R_X86_64_TLSDESC = 36,
     R_X86_64_IRELATIVE = 37, //  word64 indirect(B + A)
 };
 
 /* for pltgot relocation */
 #define ARCH_JUMP_SLOT R_X86_64_JUMP_SLOT
+#define ARCH_TLSDESC R_X86_64_TLSDESC
+
+#define ELF_KERNEL_MACHINE_TYPE 62
 
 #endif /* ARCH_ELF_HH */

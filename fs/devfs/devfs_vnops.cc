@@ -198,6 +198,8 @@ devfs_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
 
 	DPRINTF(("devfs_readdir: %s\n", dir->d_name));
 	fp->f_offset++;
+    dir->d_off = fp->f_offset;
+
 	return 0;
 }
 

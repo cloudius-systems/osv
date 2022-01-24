@@ -1,14 +1,23 @@
 from tests.testing import *
 import socket
-import errno
+import errno, os
+
+arch = os.uname().machine
+def set_arch(_arch):
+    global arch
+    arch = _arch
 
 def is_broken_pipe_error(e):
     return isinstance(e, IOError) and e.errno == errno.EPIPE
 
 def tcp_close_without_reading(hypervisor, host_name):
+    global arch
     host_port = 7777
+    run_args = []
+    if os.uname().machine != arch:
+        run_args=['--arch', arch, '-c', '2']
     server = run_command_in_guest('/tests/misc-tcp-close-without-reading.so',
-        forward=[(host_port, 7777)], hypervisor=hypervisor)
+        forward=[(host_port, 7777)], hypervisor=hypervisor, run_py_args=run_args)
 
     wait_for_line(server, 'listening...')
 

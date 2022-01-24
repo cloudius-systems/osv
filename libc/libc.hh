@@ -10,7 +10,9 @@
 
 #include <errno.h>
 #include "internal/libc.h" // for the macros
+#include <osv/export.h>
 
+OSV_HIDDEN
 int libc_error(int err);
 
 template <typename T>

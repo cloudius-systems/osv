@@ -202,6 +202,8 @@ enum {
       // processor-specific use.
     DT_HIPROC = 0x7FFFFFFF, //
     DT_GNU_HASH = 0x6ffffef5,
+    DT_TLSDESC_PLT = 0x6ffffef6,
+    DT_TLSDESC_GOT = 0x6ffffef7,
 };
 
 enum {
@@ -433,6 +435,7 @@ protected:
     std::unique_ptr<char[]> _section_names_cache;
     bool _is_executable;
     bool is_core();
+    bool _init_called;
 
     std::unordered_map<std::string,void*> _cached_symbols;
 
@@ -454,12 +457,14 @@ protected:
     bool arch_relocate_rela(u32 type, u32 sym, void *addr,
                             Elf64_Sxword addend);
     bool arch_relocate_jump_slot(symbol_module& sym, void *addr, Elf64_Sxword addend);
+    void arch_relocate_tls_desc(u32 sym, void *addr, Elf64_Sxword addend);
     size_t static_tls_end() {
         if (is_core() || is_executable()) {
             return 0;
         }
         return _static_tls_offset + get_tls_size();
     }
+    size_t static_tls_offset() { return _static_tls_offset; }
 private:
     std::atomic<void*> _visibility_thread;
     std::atomic<VisibilityLevel> _visibility_level;

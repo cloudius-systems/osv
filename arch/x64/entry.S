@@ -8,6 +8,7 @@
 
 .macro exception_entry name, handler, has_error_code
 	.global \name
+	.hidden \name
         .type \name, @function
 	\name :
 	.cfi_startproc simple
@@ -92,6 +93,7 @@ exception_noerror_entry ex_xm, simd_exception
 
 .align 16
 .global interrupt_entry
+.hidden interrupt_entry
 interrupt_entry:
 vector = 32
 .rept 256 - 32
@@ -104,6 +106,7 @@ vector = 32
 exception_error_entry interrupt_entry_common, interrupt
 
 .global thread_main
+.hidden thread_main
 thread_main:
         .type thread_main, @function
 	.cfi_startproc simple
@@ -114,6 +117,7 @@ thread_main:
 	.cfi_endproc
 
 .global call_signal_handler_thunk
+.hidden call_signal_handler_thunk
 call_signal_handler_thunk:
         .type call_signal_handler_thunk, @function
         .cfi_startproc simple
@@ -161,6 +165,7 @@ call_signal_handler_thunk:
 
 .align 16
 .global syscall_entry
+.hidden syscall_entry
 syscall_entry:
     .type syscall_entry, @function
     .cfi_startproc simple

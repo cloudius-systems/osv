@@ -32,7 +32,7 @@
 #include "libtsm.hh"
 #include "shl_llog.hh"
 
-#define SHL_EXPORT __attribute__((visibility("default")))
+#define SHL_EXPORT __attribute__((visibility("hidden")))
 
 /* TSM screen */
 

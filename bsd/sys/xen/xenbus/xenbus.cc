@@ -225,32 +225,32 @@ xenbus_grant_ring(device_t dev, unsigned long ring_mfn, grant_ref_t *refp)
 int
 xenbus_alloc_evtchn(device_t dev, evtchn_port_t *port)
 {
-	struct evtchn_alloc_unbound alloc_unbound;
+	struct evtchn_op op;
 	int err;
 
-	alloc_unbound.dom        = DOMID_SELF;
-	alloc_unbound.remote_dom = xenbus_get_otherend_id(dev);
+	op.u.alloc_unbound.dom        = DOMID_SELF;
+	op.u.alloc_unbound.remote_dom = xenbus_get_otherend_id(dev);
 
 	err = HYPERVISOR_event_channel_op(EVTCHNOP_alloc_unbound,
-					  &alloc_unbound);
+					  &op.u);
 
 	if (err) {
 		xenbus_dev_fatal(dev, -err, "allocating event channel");
 		return (-err);
 	}
-	*port = alloc_unbound.port;
+	*port = op.u.alloc_unbound.port;
 	return (0);
 }
 
 int
 xenbus_free_evtchn(device_t dev, evtchn_port_t port)
 {
-	struct evtchn_close close;
+	struct evtchn_op op;
 	int err;
 
-	close.port = port;
+	op.u.close.port = port;
 
-	err = HYPERVISOR_event_channel_op(EVTCHNOP_close, &close);
+	err = HYPERVISOR_event_channel_op(EVTCHNOP_close, &op.u);
 	if (err) {
 		xenbus_dev_error(dev, -err, "freeing event channel %d", port);
 		return (-err);

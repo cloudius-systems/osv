@@ -1,14 +1,21 @@
 .PHONY: module clean
 
+include ../common.gmk
+ifneq ($(arch),$(host_arch))
+$(error Cannot provide JDK when cross-compiling)
+endif
+
 SRC = $(shell readlink -f ../..)
 
 javac_exe_path = $(shell realpath $$(which javac))
 javac_bin_path = $(shell dirname $(javac_exe_path))
 java_jdk_path = $(shell dirname $(javac_bin_path))
+libsunec_path = $(shell find $(java_jdk_path) -name libsunec.so)
 
 module:
-	$(SRC)/scripts/manifest_from_host.sh $(java_jdk_path)/jre/lib/amd64/libsunec.so > usr.manifest
-	$(SRC)/scripts/manifest_from_host.sh -l libfreeblpriv3.so >> usr.manifest
+	$(call very-quiet, $(SRC)/scripts/manifest_from_host.sh $(libsunec_path) > usr.manifest)
+	$(call very-quiet, $(SRC)/scripts/manifest_from_host.sh -li libfreeblpriv3.so >> usr.manifest)
+	$(call very-quiet, $(SRC)/scripts/manifest_from_host.sh -li libnss3.so >> usr.manifest)
 
 clean:
-	rm -rf usr.manifest
+	rm -f usr.manifest

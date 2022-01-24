@@ -51,6 +51,7 @@ private:
     int psci_version();                          /* query supported PSCI ver */
     int psci_to_errno(s32 psci_err);
     static int __attribute__ ((noinline)) invoke(u64 fid, u64 arg0 = 0, u64 arg1 = 0, u64 arg2 = 0);
+    static int (*invoke_method)(u64 fid, u64 arg0, u64 arg1, u64 arg2);
 
     struct {
         u32 major;

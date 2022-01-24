@@ -1,0 +1,5 @@
+io_cancel
+io_destroy
+io_getevents
+io_setup
+io_submit

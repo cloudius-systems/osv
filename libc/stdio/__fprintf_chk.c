@@ -15,4 +15,3 @@ __fprintf_chk(FILE *fp, int flag, const char *format, ...)
 
     return ret;
 }
-weak_alias(__fprintf_chk, ___fprintf_chk);

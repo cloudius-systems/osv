@@ -29,7 +29,11 @@ extern size_t jvm_heap_size;
 // sets up the class path, and runs the jar or class specified in these
 // parameters.
 
+#ifdef __aarch64__
+#define JVM_PATH         "/usr/lib/jvm/jre/lib/aarch64/server/libjvm.so"
+#else
 #define JVM_PATH         "/usr/lib/jvm/jre/lib/amd64/server/libjvm.so"
+#endif
 #define JVM9_PATH        "/usr/lib/jvm/java/lib/server/libjvm.so"
 
 #if defined(RUN_JAVA_NON_ISOLATED)

@@ -168,6 +168,7 @@ int readdir(vnode *vp, file *fp, dirent *dir) {
     dir->d_fileno = fp->f_offset;
 
     fp->f_offset++;
+    dir->d_off = fp->f_offset;
 
     return 0;
 }

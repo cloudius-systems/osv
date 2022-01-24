@@ -73,7 +73,7 @@ cpu_quiescent_state_thread::cpu_quiescent_state_thread(sched::cpu* cpu)
 void cpu_quiescent_state_thread::request(uint64_t generation)
 {
     auto r = _request.load(std::memory_order_relaxed);
-    while (generation > r && !_request.compare_exchange_weak(r, generation, std::memory_order_relaxed)) {
+    while (generation > r && !_request.compare_exchange_weak(r, generation, std::memory_order_acq_rel)) {
         // nothing to do
     }
     _t->wake();
@@ -81,16 +81,16 @@ void cpu_quiescent_state_thread::request(uint64_t generation)
 
 bool cpu_quiescent_state_thread::check(uint64_t generation)
 {
-    return _generation.load(std::memory_order_relaxed) >= generation;
+    return _generation.load(std::memory_order_acquire) >= generation;
 }
 
 void cpu_quiescent_state_thread::set_generation(uint64_t generation)
 {
-    _generation.store(generation, std::memory_order_relaxed);
+    _generation.store(generation, std::memory_order_release);
     // Wake the quiescent threads who might be interested in my _generation.
     for (auto cqst : cpu_quiescent_state_threads) {
         if (cqst != this &&
-                cqst->_requested.load(std::memory_order_relaxed)) {
+                cqst->_requested.load(std::memory_order_acquire)) {
             cqst->_t->wake();
         }
     }
@@ -135,7 +135,7 @@ void cpu_quiescent_state_thread::do_work()
         }
         if (toclean) {
             auto g = next_generation.fetch_add(1, std::memory_order_relaxed) + 1;
-            _requested.store(true, std::memory_order_relaxed);
+            _requested.store(true, std::memory_order_release);
             // copy cpu_quiescent_state_threads to prevent a hotplugged cpu
             // from changing the number of cpus we request a new generation on,
             // and the number of cpus we wait on
@@ -152,7 +152,7 @@ void cpu_quiescent_state_thread::do_work()
             while (true) {
                 sched::thread::wait_until([&cqsts, &g, this] {
                     return ( (_generation.load(std::memory_order_relaxed) <
-                                _request.load(std::memory_order_relaxed))
+                                _request.load(std::memory_order_acquire))
                              || all_at_generation(cqsts, g)); });
                 auto r = _request.load(std::memory_order_relaxed);
                 if (_generation.load(std::memory_order_relaxed) < r) {
@@ -177,7 +177,7 @@ void cpu_quiescent_state_thread::do_work()
             // wants to clean up, or we are woken to clean up our callbacks
             sched::thread::wait_until([=] {
                 return (_generation.load(std::memory_order_relaxed) <
-                        _request.load(std::memory_order_relaxed)) ||
+                        _request.load(std::memory_order_acquire)) ||
                         percpu_callbacks->ncallbacks[percpu_callbacks->buf]; });
             auto r = _request.load(std::memory_order_relaxed);
             if (_generation.load(std::memory_order_relaxed) < r) {

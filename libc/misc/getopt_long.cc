@@ -1,6 +1,7 @@
 #include <stddef.h>
 #include <getopt.h>
 #include <stdio.h>
+#include <osv/export.h>
 #include "getopt.hh"
 
 extern "C" {
@@ -52,11 +53,13 @@ static int __getopt_long(int argc, char *const *argv, const char *optstring, con
 	return __getopt(argc, argv, optstring);
 }
 
+OSV_LIBC_API
 int getopt_long(int argc, char *const *argv, const char *optstring, const struct option *longopts, int *idx)
 {
 	return __getopt_long(argc, argv, optstring, longopts, idx, 0);
 }
 
+OSV_LIBC_API
 int getopt_long_only(int argc, char *const *argv, const char *optstring, const struct option *longopts, int *idx)
 {
 	return __getopt_long(argc, argv, optstring, longopts, idx, 1);

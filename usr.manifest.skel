@@ -5,6 +5,7 @@
 /libzfs.so: libzfs.so
 /libuutil.so: libuutil.so
 /zfs.so: zfs.so
+/libsolaris.so: libsolaris.so
 /tools/mkfs.so: tools/mkfs/mkfs.so
 /tools/cpiod.so: tools/cpiod/cpiod.so
 /tools/mount-fs.so: tools/mount/mount-fs.so

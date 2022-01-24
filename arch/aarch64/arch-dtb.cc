@@ -190,6 +190,25 @@ u64 dtb_get_uart(int *irqid)
     return retval;
 }
 
+u64 dtb_get_rtc()
+{
+    u64 retval;
+    int node; size_t len;
+
+    if (!dtb)
+        return 0;
+
+    node = fdt_node_offset_by_compatible(dtb, -1, "arm,pl031");
+    if (node < 0)
+        return 0;
+
+    len = dtb_get_reg(node, &retval);
+    if (!len)
+        return 0;
+
+    return retval;
+}
+
 u64 dtb_get_mmio_serial_console(int *irqid)
 {
     int node;
@@ -218,6 +237,46 @@ u64 dtb_get_mmio_serial_console(int *irqid)
 
     *irqid = int_spec[0].irq_id;
     return address;
+}
+
+u64 dtb_get_cadence_uart(int *irqid)
+{
+    const char *compatible[] = {
+            "cdns,uart-r1p8",
+            "cdns,uart-r1p12",
+            "xlnx,xuartps",
+    };
+    unsigned int i;
+    int node;
+    struct dtb_int_spec int_spec[1];
+    u64 addr;
+
+    if (!dtb) {
+        return 0;
+    }
+
+    for (i = 0; i < sizeof(compatible)/sizeof(compatible[0]); i++) {
+        node = fdt_node_offset_by_compatible(dtb, -1, compatible[i]);
+        if (node >= 0)
+            break;
+    }
+
+    if (node < 0) {
+        return 0;
+    }
+
+    if (!dtb_get_reg(node, &addr)) {
+        return 0;
+    }
+
+    if (!dtb_get_int_spec(node, int_spec, 1)) {
+        return 0;
+    }
+
+    if (irqid) {
+        *irqid = int_spec[0].irq_id;
+    }
+    return addr;
 }
 
 #define VIRTIO_MMIO_DEV_COMPAT "virtio,mmio"
@@ -639,8 +698,37 @@ bool dtb_get_vmm_is_xen()
     return fdt_node_offset_by_compatible(dtb, -1, "xen,xen") >= 0;
 }
 
+const char *dtb_get_psci_method()
+{
+    const char *psci_compatible[] = {
+            "arm,psci",
+            "arm,psci-0.2",
+            "arm,psci-1.0",
+    };
+    unsigned int i;
+    int node;
+
+    for (i = 0; i < sizeof(psci_compatible)/sizeof(psci_compatible[0]); i++) {
+        node = fdt_node_offset_by_compatible(dtb, -1, psci_compatible[i]);
+        if (node >= 0)
+            break;
+    }
+
+    if (node < 0) {
+        return NULL;
+    }
+
+    const char *method = (char *)fdt_getprop(dtb, node, "method", NULL);
+    if (!method) {
+        return NULL;
+    }
+
+    return method;
+}
+
 void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
 {
+    void *olddtb;
     int node;
     char *cmdline_override;
     int len;
@@ -678,6 +766,17 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
     }
     if ((size_t)len > max_cmdline) {
         abort("dtb_setup: command line too long.\n");
+    }
+
+    if (fdt_pack(dtb) != 0) {
+        abort("dtb_setup: failed to pack dtb\n");
+    }
+
+    olddtb = dtb;
+    dtb = (void *)OSV_KERNEL_BASE;
+
+    if (fdt_open_into(olddtb, dtb, 0x10000) != 0) {
+        abort("dtb_setup: failed to move dtb (dtb too large?)\n");
     }
 
     cmdline = (char *)fdt_getprop(dtb, node, "bootargs", NULL);

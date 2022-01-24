@@ -17,8 +17,6 @@
 #include <alloca.h>
 
 extern "C" { /* see boot.S */
-    extern u64 smpboot_ttbr0;
-    extern u64 smpboot_ttbr1;
     extern init_stack *smp_stack_free;
     extern u64 start_secondary_cpu();
 }
@@ -47,6 +45,7 @@ void smp_init()
     if (nr_cpus < 1) {
         abort("smp_init: could not get cpus from device tree.\n");
     }
+    debug(fmt("%d CPUs detected\n") % nr_cpus);
     u64 *mpids = (u64 *)alloca(sizeof(u64) * nr_cpus);
     if (!dtb_get_cpus_mpid(mpids, nr_cpus)) {
         abort("smp_init: failed to get cpus mpids from device tree.\n");
@@ -69,7 +68,9 @@ void smp_init()
 
 void smp_launch()
 {
+#if CONF_logger_debug
     debug_early_entry("smp_launch");
+#endif
     for (auto c : sched::cpus) {
         auto name = osv::sprintf("balancer%d", c->id);
         if (c->arch.smp_idx == 0) {
@@ -85,8 +86,6 @@ void smp_launch()
         attr.stack(81920).pin(c).name(name);
         c->init_idle_thread();
         c->bringup_thread = new sched::thread([=] { secondary_bringup(c); }, attr, true);
-        smpboot_ttbr0 = processor::read_ttbr0();
-        smpboot_ttbr1 = processor::read_ttbr1();
         psci::_psci.cpu_on(c->arch.mpid, mmu::virt_to_phys(reinterpret_cast<void *>(start_secondary_cpu)));
     }
     while (smp_processors != sched::cpus.size())
@@ -95,7 +94,9 @@ void smp_launch()
 
 void smp_main()
 {
+#if CONF_logger_debug
     debug_early_entry("smp_main");
+#endif
     sched::cpu* cpu = smp_initial_find_current_cpu();
     assert(cpu);
     cpu->init_on_cpu();

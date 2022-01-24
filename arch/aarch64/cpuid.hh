@@ -13,6 +13,7 @@
 namespace processor {
 
 extern const std::string& features_str();
+extern const unsigned long hwcap32();
 
 /* bit positions would be compatible with Linux hwcap AT_HWCAP */
 enum hwcap_bit {
@@ -24,6 +25,7 @@ enum hwcap_bit {
     HWCAP_BIT_SHA1 = 5,
     HWCAP_BIT_SHA2 = 6,
     HWCAP_BIT_CRC32 = 7,
+    HWCAP_BIT_ATOMIC = 8,
 
     HWCAP_BIT_N
 };

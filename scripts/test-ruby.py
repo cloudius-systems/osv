@@ -10,7 +10,7 @@ import re
 from operator import attrgetter
 from tests.testing import *
 
-blacklist = [
+disabled_list = [
 ]
 
 class TestRunnerTest(SingleCommandTest):
@@ -41,13 +41,13 @@ def run_test(test):
 	failed_test += 1
 
 def is_not_skipped(test):
-    return test.name not in blacklist
+    return test.name not in disabled_list
 
 def run_tests_in_single_instance():
     run(filter(lambda test: not isinstance(test, TestRunnerTest), tests))
 
-    blacklist_tests = ' '.join(blacklist)
-    args = ["-s", "-e", "--nohalt /ruby.so %s" % (blacklist_tests)]
+    disabled_tests = ' '.join(disabled_list)
+    args = ["-s", "-e", "--nohalt /ruby.so %s" % (disabled_tests)]
     if subprocess.call(["./scripts/run.py"] + args):
         exit(1)
 

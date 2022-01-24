@@ -15,6 +15,12 @@
 
 namespace hw {
 
+    enum hw_device_type {
+        pci_device = 1,
+        virtio_over_pci_device = 2,
+        virtio_over_mmio_device = 3
+    };
+
     // generic id for device (pci or non-pci)
     class hw_device_id {
     public:
@@ -48,6 +54,8 @@ namespace hw {
 
         // Unique vendor/device ids
         virtual hw_device_id get_id() = 0;
+
+        virtual hw_device_type get_device_type() = 0;
 
         // Debug print of device
         virtual void print() = 0;

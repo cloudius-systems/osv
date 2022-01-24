@@ -10,9 +10,8 @@
 #include "autogen/hardware.json.hh"
 #include "processor.hh"
 #include "cpuid.hh"
-#include <osv/sched.hh>
-#include <osv/firmware.hh>
-#include <osv/hypervisor.hh>
+#include <osv/osv_c_wrappers.h>
+#include <sys/sysinfo.h>
 
 namespace httpserver {
 
@@ -30,26 +29,36 @@ extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
 }
 #endif
 
+static std::string from_c_string(char *c_str) {
+    if (c_str) {
+        std::string str(c_str);
+        free(c_str);
+        return str;
+    } else {
+        return std::string();
+    }
+}
+
 void init(routes& routes)
 {
     hardware_json_init_path("Hardware management API");
 
     processorFeatures.set_handler([](const_req req)
     {
-        return processor::features_str();
+        return from_c_string(osv_processor_features());
     });
 
     processorCount.set_handler([](const_req req)
     {
-        return sched::cpus.size();
+        return get_nprocs();
     });
 
     firmware_vendor.set_handler([](const_req) {
-        return osv::firmware_vendor();
+        return from_c_string(osv_firmware_vendor());
     });
 
     hypervisor_name.set_handler([](const_req) {
-        return osv::hypervisor_name();
+        return from_c_string(osv_hypervisor_name());
     });
 }
 

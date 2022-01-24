@@ -10,6 +10,12 @@
 #include <osv/elf.hh>
 #include <osv/sched.hh>
 
+#if CONF_debug_elf
+#define elf_debug(format,...) kprintf("ELF [tid:%d, mod:%d, %s]: " format, sched::thread::current()->id(), _module_index, _pathname.c_str(), ##__VA_ARGS__)
+#else
+#define elf_debug(...)
+#endif
+
 namespace elf {
 
 // This function is solely used to relocate symbols in OSv kernel ELF
@@ -105,7 +111,7 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
         // which provides dynamic access of thread local variable
         // This calculates the module index of the ELF containing the variable
         if (sym == STN_UNDEF) {
-            // The thread-local variable being accessed is within
+            // The thread-local variable (most likely static) being accessed is within
             // the SAME shared object as the caller
             *static_cast<u64*>(addr) = _module_index;
             // No need to calculate the offset to the beginning
@@ -114,11 +120,13 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
             // in DIFFERENT shared object that the caller
             *static_cast<u64*>(addr) = symbol(sym).obj->_module_index;
         }
+        elf_debug("arch_relocate_rela, R_X86_64_DTPMOD64 for sym:%d, mod ID:%ld\n", sym, (*static_cast<u64*>(addr)));
         break;
     case R_X86_64_DTPOFF64:
         // The thread-local variable being accessed is located
         // in DIFFERENT shared object that the caller
         *static_cast<u64*>(addr) = symbol(sym).symbol->st_value;
+        elf_debug("arch_relocate_rela, R_X86_64_DTPOFF64 for sym:%d, offset:%ld\n", sym, (*static_cast<u64*>(addr)));
         break;
     case R_X86_64_TPOFF64:
         // This type is intended to resolve symbols of thread-local variables in static TLS
@@ -143,11 +151,13 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
             }
             *static_cast<u64*>(addr) = sm.symbol->st_value + addend - tls_offset;
         } else {
-            // TODO: Which case does this handle?
+            // The static (local to this module) thread-local variable/s being accessed within
+            // same module so we just need to set the offset for corresponding static TLS block
             alloc_static_tls();
             auto tls_offset = static_tls_end() + sched::kernel_tls_size();
             *static_cast<u64*>(addr) = addend - tls_offset;
         }
+        elf_debug("arch_relocate_rela, R_X86_64_TPOFF64 for sym:%d, TP offset:%ld\n", sym, (*static_cast<u64*>(addr)));
         break;
     default:
         return false;
@@ -164,6 +174,11 @@ bool object::arch_relocate_jump_slot(symbol_module& sym, void *addr, Elf64_Sxwor
     } else {
         return false;
     }
+}
+
+void object::arch_relocate_tls_desc(u32 sym, void *addr, Elf64_Sxword addend)
+{
+    abort("Not implemented!");
 }
 
 void object::prepare_initial_tls(void* buffer, size_t size,

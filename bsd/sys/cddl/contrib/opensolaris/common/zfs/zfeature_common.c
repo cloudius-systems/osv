@@ -34,6 +34,7 @@
 #include <sys/fs/zfs.h>
 #include <sys/types.h>
 #include "zfeature_common.h"
+#include <osv/export.h>
 
 /*
  * Set to disable all feature checks while opening pools, allowing pools with
@@ -41,6 +42,7 @@
  */
 boolean_t zfeature_checks_disable = B_FALSE;
 
+OSV_LIB_SOLARIS_API
 zfeature_info_t spa_feature_table[SPA_FEATURES];
 
 /*
@@ -84,7 +86,7 @@ zfeature_is_valid_guid(const char *name)
 	return (has_colon);
 }
 
-boolean_t
+OSV_LIB_SOLARIS_API boolean_t
 zfeature_is_supported(const char *guid)
 {
 	if (zfeature_checks_disable)
@@ -108,7 +110,7 @@ zfeature_lookup_guid(const char *guid, zfeature_info_t **res)
 	return (ENOENT);
 }
 
-int
+OSV_LIB_SOLARIS_API int
 zfeature_lookup_name(const char *name, zfeature_info_t **res)
 {
 	for (int i = 0; i < SPA_FEATURES; i++) {
@@ -147,7 +149,7 @@ zfeature_register(int fid, const char *guid, const char *name, const char *desc,
 	feature->fi_depends = deps;
 }
 
-void
+OSV_LIB_SOLARIS_API void
 zpool_feature_init(void)
 {
 	zfeature_register(SPA_FEATURE_ASYNC_DESTROY,

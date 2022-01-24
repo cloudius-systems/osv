@@ -144,7 +144,7 @@ blk::blk(virtio_device& virtio_dev)
             [=] { t->wake(); });
     };
 
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
     int_factory.create_spi_edge_interrupt = [this,t]() {
         return new spi_interrupt(
                 gic::irq_type::IRQ_TYPE_EDGE,
@@ -333,7 +333,7 @@ int blk::make_request(struct bio* bio)
     }
 }
 
-u32 blk::get_driver_features()
+u64 blk::get_driver_features()
 {
     auto base = virtio_driver::get_driver_features();
     return (base | ( 1 << VIRTIO_BLK_F_SIZE_MAX)

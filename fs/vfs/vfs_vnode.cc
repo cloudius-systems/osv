@@ -289,7 +289,8 @@ vrele(struct vnode *vp)
 	/*
 	 * Deallocate fs specific vnode data
 	 */
-	VOP_INACTIVE(vp);
+	if (vp->v_op && vp->v_op->vop_inactive)
+		VOP_INACTIVE(vp);
 	vfs_unbusy(vp->v_mount);
 	delete vp;
 }

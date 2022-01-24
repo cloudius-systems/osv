@@ -6,6 +6,8 @@ import sys, argparse
 import subprocess, os
 from linux_distro import linux_distribution
 
+arch = os.uname().machine
+
 standard_ec2_packages = ['python-pip', 'wget']
 standard_ec2_post_install = ['pip install awscli &&'
                              'wget http://s3.amazonaws.com/ec2-downloads/ec2-api-tools.zip &&'
@@ -29,16 +31,17 @@ class Fedora(object):
                 'ant',
                 'autoconf',
                 'automake',
+                'binutils',
                 'bison',
                 'boost-static',
                 'curl',
                 'flex',
                 'gcc-c++',
-                'gcc-c++-aarch64-linux-gnu',
                 'gdb',
                 'genromfs',
                 'git',
                 'gnutls-utils',
+                'grep',
                 'libedit-devel',
                 'libstdc++-static',
                 'libtool',
@@ -63,26 +66,15 @@ class Fedora(object):
                 'yaml-cpp-devel',
                 'pax-utils',
                 'java-1.8.0-openjdk',
-                'lua-5.3.*',
-                'lua-devel-5.3.*',
+                'lua',
+                'lua-devel',
                  ]
+    if arch == 'x86_64':
+        packages = packages + [ 'gcc-c++-aarch64-linux-gnu' ]
+
     ec2_packages = standard_ec2_packages
     test_packages = ['openssl-devel']
     ec2_post_install = standard_ec2_post_install
-
-    class Fedora_25(object):
-        packages = []
-        ec2_packages = []
-        test_packages = []
-        ec2_post_install = None
-        version = '25'
-
-    class Fedora_26(object):
-        packages = []
-        ec2_packages = []
-        test_packages = []
-        ec2_post_install = None
-        version = '26'
 
     class Fedora_27(object):
         packages = []
@@ -126,10 +118,24 @@ class Fedora(object):
         ec2_post_install = None
         version = '32'
 
-    versions = [Fedora_25, Fedora_26, Fedora_27, Fedora_28, Fedora_29, Fedora_30, Fedora_31, Fedora_32]
+    class Fedora_33(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '33'
+
+    class Fedora_34(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '34'
+
+    versions = [Fedora_27, Fedora_28, Fedora_29, Fedora_30, Fedora_31, Fedora_32, Fedora_33, Fedora_34]
 
 class RHELbased(Fedora):
-    name = ['Scientific Linux', 'NauLinux', 'CentOS Linux', 'Red Hat Enterprise Linux', 'Oracle Linux']
+    name = ['Scientific Linux', 'NauLinux', 'Red Hat Enterprise Linux', 'Oracle Linux']
 
     class RHELbased_70(object):
         packages = []
@@ -168,6 +174,7 @@ class Debian(object):
                 'ant',
                 'autoconf',
                 'automake',
+                'binutils',
                 'bison',
                 'build-essential',
                 'curl',
@@ -177,6 +184,7 @@ class Debian(object):
                 'genromfs',
                 'git',
                 'gnutls-bin',
+                'grep',
                 'libboost-all-dev',
                 'libedit-dev',
                 'libmaven-shade-plugin-java',
@@ -224,16 +232,17 @@ class Ubuntu(object):
                 'ant',
                 'autoconf',
                 'automake',
+                'binutils',
                 'bison',
                 'build-essential',
                 'curl',
                 'flex',
-                'g++-multilib',
                 'gawk',
                 'gdb',
                 'genromfs',
                 'git',
                 'gnutls-bin',
+                'grep',
                 'libboost-all-dev',
                 'libedit-dev',
                 'libmaven-shade-plugin-java',
@@ -256,10 +265,33 @@ class Ubuntu(object):
                 'pax-utils',
                 'openjdk-8-jdk',
                 ]
+    if arch == 'x86_64':
+        packages = packages + [ 'g++-aarch64-linux-gnu', 'gdb-multiarch' ]
 
     ec2_packages = standard_ec2_packages
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
+
+    class Ubuntu_21_10(object):
+        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients', 'python3-dpkt']
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '21.10'
+
+    class Ubuntu_21_04(object):
+        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients', 'python3-dpkt']
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '21.04'
+
+    class Ubuntu_20_10(object):
+        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients', 'python3-dpkt']
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '20.10'
 
     class Ubuntu_20_04(object):
         packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients', 'python3-dpkt']
@@ -310,7 +342,7 @@ class Ubuntu(object):
         ec2_post_install = None
         version = '16.04'
 
-    versions = [Ubuntu_20_04, Ubuntu_19_10, Ubuntu_19_04, Ubuntu_18_10, Ubuntu_18_04, Ubuntu_17_04, Ubuntu_16_04]
+    versions = [Ubuntu_21_10, Ubuntu_21_04, Ubuntu_20_10, Ubuntu_20_04, Ubuntu_19_10, Ubuntu_19_04, Ubuntu_18_10, Ubuntu_18_04, Ubuntu_17_04, Ubuntu_16_04]
 
 class LinuxMint(Ubuntu):
     name = 'LinuxMint'
@@ -331,12 +363,57 @@ class LinuxMint(Ubuntu):
 
     versions = [LinuxMint_18_03, LinuxMint_19]
 
+class CentOS(object):
+    name = 'CentOS Linux'
+    install = 'yum -y install'
+    packages = [
+                'ant',
+                'autoconf',
+                'automake',
+                'binutils',
+                'curl',
+                'git',
+                'grep',
+                'gnutls-utils',
+                'libtool',
+                'maven',
+                'maven-shade-plugin',
+                'openssl',
+                'openssl-libs',
+                'openssl-devel',
+                'p11-kit',
+                'patch',
+                'python3-requests',
+                'qemu-img',
+                'tcpdump',
+                'unzip',
+                'wget',
+                'yaml-cpp-devel',
+                'pax-utils',
+                'java-1.8.0-openjdk',
+                'devtoolset-9-toolchain',
+                 ]
+
+    test_packages = ['openssl-devel']
+
+    class CentOS_7(object):
+        pre_install = 'yum -y install epel-release centos-release-scl centos-release-scl-rh https://packages.endpoint.com/rhel/7/os/x86_64/endpoint-repo-1.7-1.x86_64.rpm'
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        post_install = 'echo "---> Run \'scl enable devtoolset-9 bash\' or add \'source /opt/rh/devtoolset-9/enable\' to ~/.bashrc or ~/.bash_profile" to enable GCC 9 before building OSv !'
+        version = '7'
+
+    versions = [CentOS_7]
+
 distros = [
            Debian(),
            Fedora(),
            Ubuntu(),
            LinuxMint(),
-           RHELbased()
+           RHELbased(),
+           CentOS()
            ]
 
 parser = argparse.ArgumentParser(prog='setup')
@@ -361,6 +438,8 @@ for distro in distros:
             if dver.version == version or version.startswith(dver.version+'.'):
                 if hasattr(distro, 'pre_install'):
                     subprocess.check_call(distro.pre_install, shell=True)
+                if hasattr(dver, 'pre_install'):
+                    subprocess.check_call(dver.pre_install, shell=True)
                 pkg = distro.packages + dver.packages
                 if cmdargs.ec2:
                     pkg += distro.ec2_packages + dver.ec2_packages
@@ -372,6 +451,10 @@ for distro in distros:
                         subprocess.check_call(distro.ec2_post_install, shell=True)
                     if dver.ec2_post_install:
                         subprocess.check_call(dver.ec2_post_install, shell=True)
+                if hasattr(distro, 'post_install'):
+                    subprocess.check_call(distro.post_install, shell=True)
+                if hasattr(dver, 'post_install'):
+                    subprocess.check_call(dver.post_install, shell=True)
                 sys.exit(0)
         print ('Your distribution %s version %s is not supported by this script' % (name, version))
         sys.exit(1)

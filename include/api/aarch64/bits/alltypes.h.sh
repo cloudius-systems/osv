@@ -24,6 +24,7 @@ TYPEDEF unsigned long size_t;
 TYPEDEF long ssize_t;
 TYPEDEF long ptrdiff_t;
 TYPEDEF __builtin_va_list va_list;
+TYPEDEF __builtin_va_list __isoc_va_list;
 
 #ifndef __cplusplus
 TYPEDEF unsigned int wchar_t;
@@ -89,9 +90,9 @@ TYPEDEF unsigned pthread_key_t;
 TYPEDEF int pthread_spinlock_t;
 
 TYPEDEF struct { union { int __i[16]; size_t __s[8]; } __u; } pthread_attr_t;
-TYPEDEF unsigned long pthread_mutexattr_t;
-TYPEDEF unsigned long pthread_condattr_t;
-TYPEDEF unsigned long pthread_barrierattr_t;
+TYPEDEF unsigned pthread_mutexattr_t;
+TYPEDEF unsigned pthread_condattr_t;
+TYPEDEF unsigned pthread_barrierattr_t;
 TYPEDEF struct { unsigned __attr[2]; } pthread_rwlockattr_t;
 
 TYPEDEF struct { union { int __i[12]; void *__p[6]; } __u; } pthread_mutex_t;

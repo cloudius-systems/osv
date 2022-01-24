@@ -40,7 +40,7 @@ OSV_VERSION="$2"
 
 . .travis/cirp/install.sh
 
-ci-release-publisher publish --latest-release \
+ci-release-publisher --travis-api-url https://api.travis-ci.com publish --latest-release \
                              --latest-release-prerelease \
                              --latest-release-check-event-type push \
                              --numbered-release \

@@ -29,6 +29,7 @@
 .endm
 
 .global exception_vectors
+.hidden exception_vectors
 .type exception_vectors, @function
 .align 12
 exception_vectors:
@@ -59,6 +60,7 @@ exception_vectors:
 /* keep in sync with the struct in exceptions.hh */
 .macro push_state_to_exception_frame
         sub     sp, sp, #48 // make space for align2, align1+ESR, PSTATE, PC, SP
+        .cfi_adjust_cfa_offset 48
         push_pair x28, x29
         push_pair x26, x27
         push_pair x24, x25
@@ -101,7 +103,18 @@ exception_vectors:
         pop_pair x26, x27
         pop_pair x28, x29
         ldr     x30, [sp], #48
+        .cfi_adjust_cfa_offset -48
 .endm /* pop_state_to_exception_frame */
+
+.global thread_main
+.hidden thread_main
+thread_main:
+        .type thread_main, @function
+        .cfi_startproc simple
+        .cfi_undefined %x30
+        .cfi_def_cfa %sp, 0
+        bl thread_main_c
+        .cfi_endproc
 
 .equ ESR_EC_BEG,26          // Exception Class field begin in ESR
 .equ ESR_EC_END,31          // Exception Class field end in ESR
@@ -119,6 +132,7 @@ exception_vectors:
 .equ ESR_FLT_END,5
 
 .global entry_invalid
+.hidden entry_invalid
 .type entry_invalid, @function
 entry_invalid:
         mrs     x20, elr_el1       // Exception Link Register -> X20
@@ -132,46 +146,74 @@ entry_invalid:
         b       1b
 
 .global entry_sync
+.hidden entry_sync
 .type entry_sync, @function
 entry_sync:
+        .cfi_startproc simple
+        .cfi_signal_frame
+        .cfi_def_cfa sp, 0
+        .cfi_offset x30, -32 // Point to the elr register located at the -32 offset
+                             // of the exception frame to help gdb link to the
+                             // address when interrupt was raised
         push_state_to_exception_frame
         mrs     x1, esr_el1
+        str     w1, [sp, #272] // Store Exception Syndrom Register in the frame
         ubfm    x2, x1, #ESR_EC_BEG, #ESR_EC_END // Exception Class -> X2
         ubfm    x3, x1, #ESR_FLT_BEG, #ESR_FLT_END // FLT -> X3
         cmp     x2, #ESR_EC_DATA_ABORT
         b.eq    handle_mem_abort
         cmp     x2, #ESR_EC_INSN_ABORT
-        b.ne    entry_invalid
+        b.ne    unexpected_sync_exception
 handle_mem_abort:
-        cbz     x3, entry_invalid
+        cbz     x3, unexpected_sync_exception
         cmp     x3, #3
-        b.hi    entry_invalid
+        b.hi    unexpected_sync_exception
 
         mov     x0, sp  // save exception_frame to x0
         bl      page_fault
         pop_state_from_exception_frame
         eret
+        .cfi_endproc
+unexpected_sync_exception:
+        .cfi_startproc
+        mov     x0, sp  // save exception_frame to x0
+        bl      handle_unexpected_sync_exception
+        pop_state_from_exception_frame
+        bl      abort
+        .cfi_endproc
 
 .global entry_irq
+.hidden entry_irq
 .type entry_irq, @function
 entry_irq:
+        .cfi_startproc simple
+        .cfi_signal_frame
+        .cfi_def_cfa sp, 0
+        .cfi_offset x30, -32 // Point to the elr register located at the -32 offset
+                             // of the exception frame to help gdb link to the
+                             // address when interrupt was raised
         push_state_to_exception_frame
         mov     x0, sp
         bl      interrupt // extern "C"
         pop_state_from_exception_frame
         eret
+        .cfi_endproc
 
 .global entry_fiq
+.hidden entry_fiq
 .type entry_fiq, @function
 entry_fiq:
 .global entry_serror
+.hidden entry_serror
 .type entry_serror, @function
 entry_serror:
         b       entry_invalid
 
 .global call_signal_handler_thunk
+.hidden call_signal_handler_thunk
 call_signal_handler_thunk:
         .type call_signal_handler_thunk, @function
+        .cfi_startproc simple
         # stack contains a signal_frame
         /*
         .cfi_offset reg, offset
@@ -183,4 +225,60 @@ call_signal_handler_thunk:
         pop_pair...
         add sp, sp, 16 # error_code
         */
+        ret
+        .cfi_endproc
+
+// Keep fpu_state_save/load in sync with struct fpu_state in arch/aarch64/processor.hh
+// void fpu_state_save(fpu_state *s);
+.global fpu_state_save
+.hidden fpu_state_save
+.type fpu_state_save, @function
+fpu_state_save:
+        stp     q0, q1, [x0]
+        stp     q2, q3, [x0, #32]
+        stp     q4, q5, [x0, #64]
+        stp     q6, q7, [x0, #96]
+        stp     q8, q9, [x0, #128]
+        stp     q10, q11, [x0, #160]
+        stp     q12, q13, [x0, #192]
+        stp     q14, q15, [x0, #224]
+        stp     q16, q17, [x0, #256]
+        stp     q18, q19, [x0, #288]
+        stp     q20, q21, [x0, #320]
+        stp     q22, q23, [x0, #352]
+        stp     q24, q25, [x0, #384]
+        stp     q26, q27, [x0, #416]
+        stp     q28, q29, [x0, #448]
+        stp     q30, q31, [x0, #480]
+        mrs     x1, fpsr
+        str     w1, [x0, #512]
+        mrs     x1, fpcr
+        str     w1, [x0, #516]
+        ret
+
+// void fpu_state_load(fpu_state *s);
+.global fpu_state_load
+.hidden fpu_state_load
+.type fpu_state_load, @function
+fpu_state_load:
+        ldp     q0, q1, [x0]
+        ldp     q2, q3, [x0, #32]
+        ldp     q4, q5, [x0, #64]
+        ldp     q6, q7, [x0, #96]
+        ldp     q8, q9, [x0, #128]
+        ldp     q10, q11, [x0, #160]
+        ldp     q12, q13, [x0, #192]
+        ldp     q14, q15, [x0, #224]
+        ldp     q16, q17, [x0, #256]
+        ldp     q18, q19, [x0, #288]
+        ldp     q20, q21, [x0, #320]
+        ldp     q22, q23, [x0, #352]
+        ldp     q24, q25, [x0, #384]
+        ldp     q26, q27, [x0, #416]
+        ldp     q28, q29, [x0, #448]
+        ldp     q30, q31, [x0, #480]
+        ldr     w1, [x0, #512]
+        msr     fpsr, x1
+        ldr     w1, [x0, #516]
+        msr     fpcr, x1
         ret

@@ -317,7 +317,7 @@ net::net(virtio_device& dev)
             [=] { poll_task->wake(); });
     };
 
-#ifdef AARCH64_PORT_STUB
+#ifdef __aarch64__
     int_factory.create_spi_edge_interrupt = [this,poll_task]() {
         return new spi_interrupt(
             gic::irq_type::IRQ_TYPE_EDGE,
@@ -900,9 +900,9 @@ void net::txq::gc()
     vqueue->get_buf_gc();
 }
 
-u32 net::get_driver_features()
+u64 net::get_driver_features()
 {
-    u32 base = virtio_driver::get_driver_features();
+    auto base = virtio_driver::get_driver_features();
     return (base | (1 << VIRTIO_NET_F_MAC)        \
                  | (1 << VIRTIO_NET_F_MRG_RXBUF)  \
                  | (1 << VIRTIO_NET_F_STATUS)     \

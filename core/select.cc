@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <signal.h>
 #include <osv/poll.h>
+#include <osv/export.h>
 #include <osv/debug.h>
 #include <api/sys/select.h>
 #include <bsd/porting/synch.h>
@@ -17,6 +18,7 @@
 #define select_d(...)  tprintf_d("select", __VA_ARGS__)
 
 /* Basic select() implementation on top of poll() */
+OSV_LIBC_API
 int select (int nfds,
             fd_set * readfds,
             fd_set * writefds,
@@ -184,6 +186,7 @@ int select (int nfds,
 }
 
 /* Basic pselect() on top of select() */
+OSV_LIBC_API
 int pselect(int nfds, fd_set *readfds, fd_set *writefds,
             fd_set *exceptfds, const struct timespec *timeout_ts,
             const sigset_t *sigmask)
@@ -203,7 +206,8 @@ int pselect(int nfds, fd_set *readfds, fd_set *writefds,
     return ret;
 }
 
-extern "C" unsigned long int
+extern "C" OSV_LIBC_API
+unsigned long int
 __fdelt_chk (unsigned long int d)
 {
     if (d >= FD_SETSIZE)

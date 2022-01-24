@@ -38,11 +38,12 @@
 #include <sys/fs/zfs.h>
 #include <sys/nvpair.h>
 #include "zfs_comutil.h"
+#include <osv/export.h>
 
 /*
  * Are there allocatable vdevs?
  */
-boolean_t
+OSV_LIB_SOLARIS_API boolean_t
 zfs_allocatable_devs(nvlist_t *nv)
 {
 	uint64_t is_log;
@@ -64,7 +65,7 @@ zfs_allocatable_devs(nvlist_t *nv)
 	return (B_FALSE);
 }
 
-void
+OSV_LIB_SOLARIS_API void
 zpool_get_rewind_policy(nvlist_t *nvl, zpool_rewind_policy_t *zrpp)
 {
 	nvlist_t *policy;
@@ -142,7 +143,7 @@ zfs_zpl_version_map(int spa_version)
  * Return the min spa version for a corresponding spa version
  * -1 is returned if no mapping exists.
  */
-int
+OSV_LIB_SOLARIS_API int
 zfs_spa_version_map(int zpl_version)
 {
 	int i;
@@ -156,6 +157,7 @@ zfs_spa_version_map(int zpl_version)
 	return (version);
 }
 
+OSV_LIB_SOLARIS_API
 const char *zfs_history_event_names[LOG_END] = {
 	"invalid event",
 	"pool create",

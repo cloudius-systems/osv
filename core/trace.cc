@@ -61,16 +61,16 @@ constexpr size_t trace_page_size = 4096;  // need not match arch page size
 // Having a struct is more complex than it need be for just per-vcpu buffers,
 // _but_ it is in line with later on having rotating buffers, thus wwhy not do it already
 struct trace_buf {
-    std::unique_ptr<char[]>
+    std::unique_ptr<char[], decltype(&free)>
            _base;
     size_t _last;
     size_t _size;
 
     trace_buf() :
-            _base(nullptr), _last(0), _size(0) {
+            _base(nullptr, free), _last(0), _size(0) {
     }
     trace_buf(size_t size) :
-            _base(static_cast<char*>(aligned_alloc(sizeof(long), size))), _last(
+            _base(static_cast<char*>(aligned_alloc(sizeof(long), size)), free), _last(
                     0), _size(size) {
         static_assert(is_power_of_two(trace_page_size), "just checking");
         assert(is_power_of_two(size) && "size must be power of two");

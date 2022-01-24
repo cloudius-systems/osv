@@ -146,5 +146,11 @@ pt_element<N> make_pte(phys addr, bool leaf, unsigned perm = perm_rwx,
     return pte;
 }
 
+// On Intel x86_64 architecture which comes with strong memory model
+// it is not necessary to do anything extra after writes to page
+// tables entries to make them visible to page table walker.
+inline void synchronize_page_table_modifications() {
+}
+
 }
 #endif /* ARCH_MMU_HH_ */

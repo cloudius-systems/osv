@@ -669,6 +669,7 @@ ramfs_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
 //	dir->d_namelen = strlen(dir->d_name);
 
     fp->f_offset++;
+    dir->d_off = fp->f_offset;
 
     mutex_unlock(&ramfs_lock);
     return 0;

@@ -80,6 +80,8 @@ public:
     virtual std::string get_name() const { return _driver_name; }
     void read_config();
 
+    virtual u64 get_driver_features();
+
     int make_request(fuse_request&);
     dax_window* get_dax() {
         return (_dax.addr != mmio_nullptr) ? &_dax : nullptr;

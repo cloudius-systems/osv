@@ -12,6 +12,7 @@
 
 #include "exceptions.hh"
 #include "fault-fixup.hh"
+#include "dump.hh"
 
 __thread exception_frame* current_interrupt_frame;
 class interrupt_table idt __attribute__((init_priority((int)init_prio::idt)));
@@ -32,13 +33,17 @@ interrupt_desc::interrupt_desc(interrupt_desc *old)
 }
 
 interrupt_table::interrupt_table() {
+#if CONF_logger_debug
     debug_early_entry("interrupt_table::interrupt_table()");
+#endif
 
     gic::gic->init_cpu(0);
     gic::gic->init_dist(0);
 
     this->nr_irqs = gic::gic->nr_irqs;
+#if CONF_logger_debug
     debug_early("interrupt table: gic driver created.\n");
+#endif
 }
 
 void interrupt_table::enable_irq(int id)
@@ -60,7 +65,9 @@ void interrupt_table::register_interrupt(interrupt *interrupt)
         interrupt_desc *desc = new interrupt_desc(old, interrupt);
         this->irq_desc[id].assign(desc);
         osv::rcu_dispose(old);
+#if CONF_logger_debug
         debug_early_u64(" registered IRQ id=", (u64)id);
+#endif
         enable_irq(id);
     }
 }
@@ -103,7 +110,9 @@ void interrupt_table::unregister_interrupt(interrupt *interrupt)
 
         this->irq_desc[id].assign(desc);
         osv::rcu_dispose(old);
+#if CONF_logger_debug
         debug_early_u64("unregistered IRQ id=", (u64)id);
+#endif
         if (!desc) {
             disable_irq(id);
             return;
@@ -162,6 +171,19 @@ void interrupt(exception_frame* frame)
 
     current_interrupt_frame = nullptr;
     sched::preempt();
+}
+
+extern "C" { void handle_unexpected_sync_exception(exception_frame* frame); }
+
+#define ESR_EC_BEG  26 // Exception Class field begins in ESR at the bit 26th
+#define ESR_EC_END  31 // and ends at 31st
+#define ESR_EC_MASK 0b111111UL
+
+void handle_unexpected_sync_exception(exception_frame* frame)
+{
+    u64 exception_class = (frame->esr >> ESR_EC_BEG) & ESR_EC_MASK;
+    debug_ll("unexpected synchronous exception, EC: 0x%04x\n", exception_class);
+    dump_registers(frame);
 }
 
 bool fixup_fault(exception_frame* ef)

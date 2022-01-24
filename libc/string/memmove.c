@@ -3,7 +3,6 @@
 #include <stdio.h>
 #include <osv/string.h>
 
-#ifndef AARCH64_PORT_STUB
 void *memmove(void *dest, const void *src, size_t n)
 {
 	char *d = dest;
@@ -18,4 +17,3 @@ void *memmove(void *dest, const void *src, size_t n)
         return memcpy_backwards(d, s, n);
 	}
 }
-#endif

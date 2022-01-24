@@ -129,10 +129,16 @@ int main(int ac, char** av)
     do_test(true);
     std::cerr << "Starting join tests...\n";
     do_test(false);
-    std::cerr << "Starting thread-on-heap tests... (no load)\n";
-    do_heap_test(false);
-    std::cerr << "Starting thread-on-heap tests... (loaded)\n";
-    do_heap_test(true);
+    if (sched::cpus.size() >= 2) {
+        std::cerr << "Starting thread-on-heap tests... (no load)\n";
+        do_heap_test(false);
+        std::cerr << "Starting thread-on-heap tests... (loaded)\n";
+        do_heap_test(true);
+    } else {
+        // This test cannot be run on only one CPU, because we want to see
+        // the effect of pinning threads to different CPUs.
+        std::cout << "Cannot run the thread-on-heap tests with only one CPU.\n";
+    }
     std::cerr << "Passed\n";
 }
 

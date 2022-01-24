@@ -21,9 +21,9 @@
 
 #include "smp.hh"
 
-#ifndef AARCH64_PORT_STUB
+#ifdef __x86_64__
 #include "drivers/acpi.hh"
-#endif /* !AARCH64_PORT_STUB */
+#endif /* __x86_64__ */
 
 #include <osv/sched.hh>
 #include <osv/barrier.hh>
@@ -59,6 +59,7 @@
 
 #include "libc/network/__dns.hh"
 #include <processor.hh>
+#include <dlfcn.h>
 
 using namespace osv;
 using namespace osv::clock::literals;
@@ -88,10 +89,12 @@ void setup_tls(elf::init_table inittab)
 extern "C" {
     void premain();
     void vfs_init(void);
+    void pivot_rootfs(const char*);
     void unmount_devfs();
     int mount_zfs_rootfs(bool, bool);
     int mount_rofs_rootfs(bool);
     void rofs_disable_cache();
+    int mount_virtiofs_rootfs(bool);
 }
 
 void premain()
@@ -136,6 +139,7 @@ bool opt_power_off_on_abort = false;
 static bool opt_log_backtrace = false;
 static bool opt_mount = true;
 static bool opt_pivot = true;
+static std::string opt_rootfs;
 static bool opt_random = true;
 static bool opt_init = true;
 static std::string opt_console = "all";
@@ -163,8 +167,9 @@ static void usage()
     std::cout << "  --trace=arg           tracepoints to enable\n";
     std::cout << "  --trace-backtrace     log backtraces in the tracepoint log\n";
     std::cout << "  --leak                start leak detector after boot\n";
-    std::cout << "  --nomount             don't mount the ZFS file system\n";
-    std::cout << "  --nopivot             do not pivot the root from bootfs to the ZFS\n";
+    std::cout << "  --nomount             don't mount the root file system\n";
+    std::cout << "  --nopivot             do not pivot the root from bootfs to the root fs\n";
+    std::cout << "  --rootfs=arg          root filesystem to use (zfs, rofs, ramfs or virtiofs)\n";
     std::cout << "  --assign-net          assign virtio network to the application\n";
     std::cout << "  --maxnic=arg          maximum NIC number\n";
     std::cout << "  --norandom            don't initialize any random device\n";
@@ -274,6 +279,14 @@ static void parse_options(int loader_argc, char** loader_argv)
         }
         opt_console = v.front();
         debug("console=%s\n", opt_console);
+    }
+
+    if (options::option_value_exists(options_values, "rootfs")) {
+        auto v = options::extract_option_values(options_values, "rootfs");
+        if (v.size() > 1) {
+            printf("Ignoring '--rootfs' options after the first.");
+        }
+        opt_rootfs = v.front();
     }
 
     if (options::option_value_exists(options_values, "mount-fs")) {
@@ -403,23 +416,78 @@ void* do_main_thread(void *_main_args)
     if (opt_mount) {
         unmount_devfs();
 
-        // Try to mount rofs
-        if (mount_rofs_rootfs(opt_pivot) != 0) {
-            // Failed -> try to mount zfs
-            zfsdev::zfsdev_init();
-            auto error = mount_zfs_rootfs(opt_pivot, opt_extra_zfs_pools);
+        const auto libsolaris_file_name = "libsolaris.so";
+        if (opt_rootfs.compare("rofs") == 0) {
+            auto error = mount_rofs_rootfs(opt_pivot);
             if (error) {
-                debug("Could not mount zfs root filesystem.\n");
+                debug("Could not mount rofs root filesystem.\n");
             }
-            bsd_shrinker_init();
 
-            boot_time.event("ZFS mounted");
-        } else {
             if (opt_disable_rofs_cache) {
                 debug("Disabling ROFS memory cache.\n");
                 rofs_disable_cache();
             }
             boot_time.event("ROFS mounted");
+        } else if (opt_rootfs.compare("zfs") == 0) {
+            //Initialize ZFS filesystem driver implemented in libsolaris.so
+            //TODO: Consider calling dlclose() somewhere after ZFS is unmounted
+            if (dlopen(libsolaris_file_name, RTLD_LAZY)) {
+                zfsdev::zfsdev_init();
+                auto error = mount_zfs_rootfs(opt_pivot, opt_extra_zfs_pools);
+                if (error) {
+                    debug("Could not mount zfs root filesystem.\n");
+                }
+
+                bsd_shrinker_init();
+                boot_time.event("ZFS mounted");
+            } else {
+                debug("Could not load and/or initialize %s.\n", libsolaris_file_name);
+            }
+        } else if (opt_rootfs.compare("ramfs") == 0) {
+            // NOTE: The ramfs is already mounted, we just need to mount fstab
+            // entries. That's the only difference between this and --nomount.
+
+            // TODO: Avoid the hack of using pivot_rootfs() just for mounting
+            // the fstab entries.
+            pivot_rootfs("/");
+        } else if (opt_rootfs.compare("virtiofs") == 0) {
+            auto error = mount_virtiofs_rootfs(opt_pivot);
+            if (error) {
+                debug("Could not mount virtiofs root filesystem.\n");
+            }
+
+            boot_time.event("Virtio-fs mounted");
+        } else {
+            // Auto-discovery: try rofs -> virtio-fs -> ZFS
+            if (mount_rofs_rootfs(opt_pivot) == 0) {
+                if (opt_disable_rofs_cache) {
+                    debug("Disabling ROFS memory cache.\n");
+                    rofs_disable_cache();
+                }
+                boot_time.event("ROFS mounted");
+            } else if (mount_virtiofs_rootfs(opt_pivot) == 0) {
+                boot_time.event("Virtio-fs mounted");
+            } else {
+                //Initialize ZFS filesystem driver implemented in libsolaris.so
+                //TODO: Consider calling dlclose() somewhere after ZFS is unmounted
+                if (dlopen("libsolaris.so", RTLD_LAZY)) {
+                    zfsdev::zfsdev_init();
+                    auto error = mount_zfs_rootfs(opt_pivot, opt_extra_zfs_pools);
+                    if (error) {
+                        debug("Could not mount zfs root filesystem (while "
+                              "auto-discovering).\n");
+                        // Continue with ramfs (already mounted)
+                        // TODO: Avoid the hack of using pivot_rootfs() just for
+                        // mounting the fstab entries.
+                        pivot_rootfs("/");
+                    } else {
+                        bsd_shrinker_init();
+                        boot_time.event("ZFS mounted");
+                    }
+                } else {
+                    debug("Could not load and/or initialize %s.\n", libsolaris_file_name);
+                }
+            }
         }
     }
 
@@ -526,12 +594,12 @@ void* do_main_thread(void *_main_args)
     }
 
     boot_time.event("Total time");
-#ifndef AARCH64_PORT_STUB
+#ifdef __x86_64__
     // Some hypervisors like firecracker when booting OSv
     // look for this write to this port as a signal of end of
     // boot time.
     processor::outb(123, 0x3f0);
-#endif /* !AARCH64_PORT_STUB */
+#endif /* __x86_64__ */
 
     if (opt_bootchart) {
         boot_time.print_chart();
@@ -660,9 +728,9 @@ void main_cont(int loader_argc, char** loader_argv)
 
     memory::enable_debug_allocator();
 
-#ifndef AARCH64_PORT_STUB
+#ifdef __x86_64__
     acpi::init();
-#endif /* !AARCH64_PORT_STUB */
+#endif /* __x86_64__ */
 
     if (sched::cpus.size() > sched::max_cpus) {
         printf("Too many cpus, can't boot with greater than %u cpus.\n", sched::max_cpus);

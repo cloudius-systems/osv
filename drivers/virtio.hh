@@ -105,7 +105,7 @@ public:
 
 protected:
     // Actual drivers should implement this on top of the basic ring features
-    virtual u32 get_driver_features() { return 1 << VIRTIO_RING_F_INDIRECT_DESC | 1 << VIRTIO_RING_F_EVENT_IDX; }
+    virtual u64 get_driver_features() { return 1 << VIRTIO_RING_F_INDIRECT_DESC | 1 << VIRTIO_RING_F_EVENT_IDX; }
     void setup_features();
 protected:
     virtio_device& _dev;

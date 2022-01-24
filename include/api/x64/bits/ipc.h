@@ -1,1 +1,1 @@
-../../../../musl/arch/x86_64/bits/ipc.h
+../../../../musl/arch/generic/bits/ipc.h

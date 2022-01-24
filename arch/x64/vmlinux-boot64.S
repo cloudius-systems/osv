@@ -6,6 +6,7 @@
 .text
 .code64
 .global vmlinux_entry64
+.hidden vmlinux_entry64
 vmlinux_entry64:
     # The address of the boot_params structure is passed in the RSI
     # register so store it in RDI register so that it can be received
@@ -36,4 +37,4 @@ vmlinux_entry64:
     movl $0x18, 4(%rsp)
     movl $start32_from_64-OSV_KERNEL_VM_SHIFT, %eax # Because memory is mapped 1:1 subtract OSV_KERNEL_VM_SHIFT
     movl %eax, (%rsp)
-    lret
+    lretl

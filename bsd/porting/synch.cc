@@ -26,7 +26,7 @@ TRACEPOINT(trace_synch_wakeup_one_waking, "chan=%p thread=%p", void *, void *);
 
 struct synch_thread {
     sched::thread* _thread;
-    bool _awake;
+    std::atomic<bool> _awake;
 };
 
 class synch_port {
@@ -69,7 +69,7 @@ int synch_port::_msleep(void *chan, struct mtx *mtx,
     // Init the wait
     synch_thread wait;
     wait._thread = sched::thread::current();
-    wait._awake = false;
+    wait._awake.store(false, std::memory_order_release);
 
     if (mtx) {
         wait_lock = &mtx->_mutex;
@@ -100,7 +100,8 @@ int synch_port::_msleep(void *chan, struct mtx *mtx,
     {
         sched::thread::wait_until_interruptible([&] {
             return ( (timo_hz && t.expired()) ||
-                     (wait._awake) );
+                     (wait._awake.load(std::memory_order_acquire)) );
+
         });
     }
     catch (int e)
@@ -113,7 +114,7 @@ int synch_port::_msleep(void *chan, struct mtx *mtx,
         mutex_lock(wait_lock);
     }
     // msleep timeout
-    if (!wait._awake) {
+    if (!wait._awake.load(std::memory_order_acquire)) {
         trace_synch_msleep_expired(chan);
         if (chan) {
             // A pointer to the local "wait" may still be on the list -
@@ -146,7 +147,7 @@ void synch_port::wakeup(void* chan)
     for (auto it=ppp.first; it!=ppp.second; ++it) {
         synch_thread* wait = (*it).second;
         trace_synch_wakeup_waking(chan, wait->_thread);
-        wait->_thread->wake_with([&] { wait->_awake = true; });
+        wait->_thread->wake_with([&] { wait->_awake.store(true, std::memory_order_release); });
     }
     _evlist.erase(ppp.first, ppp.second);
     mutex_unlock(&_lock);
@@ -163,7 +164,7 @@ void synch_port::wakeup_one(void* chan)
         synch_thread* wait = (*it).second;
         _evlist.erase(it);
         trace_synch_wakeup_one_waking(chan, wait->_thread);
-        wait->_thread->wake_with([&] { wait->_awake = true; });
+        wait->_thread->wake_with([&] { wait->_awake.store(true, std::memory_order_release); });
     }
     mutex_unlock(&_lock);
 }

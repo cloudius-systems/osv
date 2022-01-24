@@ -37,8 +37,8 @@ struct arch_thread {
 
 struct arch_fpu {
     struct processor::fpu_state s;
-    void save() { processor::fpu_state_save(&s); }
-    void restore() { processor::fpu_state_load(&s); }
+    void save() { fpu_state_save(&s); }
+    void restore() { fpu_state_load(&s); }
 };
 
 // lock adapter for arch_fpu

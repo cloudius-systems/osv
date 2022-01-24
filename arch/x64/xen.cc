@@ -253,6 +253,11 @@ void hvm_xen_extract_boot_params()
         mb_info->mb.mmap_length += sizeof(e820ent);
     }
 
+    // Save ACPI RDSP address in the field of the osv_multiboot_info_type structure
+    // Ideally, we would wanted to save it under the acpi::pvh_rsdp_paddr but it is
+    // to early in the boot process as it would have been overwritten later in premain().
+    mb_info->pvh_rsdp = hvm_xen_start_info->rsdp_paddr;
+
     reset_bootchart(mb_info);
 }
 }

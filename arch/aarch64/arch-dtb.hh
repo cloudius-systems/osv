@@ -49,6 +49,13 @@ size_t dtb_get_phys_memory(u64 *addr);
  */
 u64 dtb_get_uart(int *irqid);
 
+/* u64 dtb_get_rtc()
+ *
+ * return the base address of the RTC (PL031)
+ * device or returns zero on failure.
+ */
+u64 dtb_get_rtc();
+
 /* u64 dtb_get_mmio_serial_console(int *irqid)
  *
  * return the base address of the serial console and writes the
@@ -56,6 +63,14 @@ u64 dtb_get_uart(int *irqid);
  * or returns zero on failure.
  */
 u64 dtb_get_mmio_serial_console(int *irqid);
+
+/* u64 dtb_get_cadence_uart(int *irqid)
+ *
+ * return the base address of the uart and writes the
+ * irqid of the uart interrupt to irqid,
+ * or returns zero on failure.
+ */
+u64 dtb_get_cadence_uart(int *irqid);
 
 /* dtb_collect_parsed_mmio_virtio_devices()
  *
@@ -152,5 +167,12 @@ bool dtb_get_pci_irqmap(u32 *bdfs, int *irq_ids, int n);
  */
 
 bool dtb_get_vmm_is_xen();
+
+/* const char *dtb_get_psci_method();
+ *
+ * Returns the PSCI method, "hvc" or "smc", if found in the device tree.
+ * Returne NULL otherwise.
+ */
+const char *dtb_get_psci_method();
 
 #endif /* ARCH_DTB_HH */

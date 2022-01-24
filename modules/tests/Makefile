@@ -1,16 +1,11 @@
 module: usr.manifest common.manifest fs.manifest build_all_tests
 
-# Paths set by scripts/build
-src := $(OSV_BASE)
-out := $(OSV_BUILD_PATH)
-arch := $(ARCH)
-fs_type := $(fs_type)
-# TODO: consider setting $(out) not to OSV_BUILD_PATH but to ./build/$ARCH.
-# TODO: need to set up CXX, etc., for cross compilation, as in the main
-# Makefile...
+include ../common.gmk
+include $(OSV_BASE)/conf/base.mk
 
-aarch64_gccbase = $(src)/build/downloaded_packages/aarch64/gcc/install
-aarch64_boostbase = $(src)/build/downloaded_packages/aarch64/boost/install
+configuration-defines = conf-preempt conf-debug_memory conf-logger_debug conf-INET6
+configuration = $(foreach cf,$(configuration-defines), \
+                      -D$(cf:conf-%=CONF_%)=$($(cf)))
 
 # Ask make to not delete "intermediate" results, such as the .o in the chain
 # .cc -> .o -> .so. Otherwise, during the first build, make considers the .o
@@ -19,75 +14,11 @@ aarch64_boostbase = $(src)/build/downloaded_packages/aarch64/boost/install
 # See commit fac05c95 for a longer explanation.
 .SECONDARY:
 
-quiet = $(if $V, $1, @echo " $2"; $1)
-very-quiet = $(if $V, $1, @$1)
-makedir = $(call very-quiet, mkdir -p $(dir $@))
-
-autodepend = -MD -MT $@ -MP
-
-include $(OSV_BASE)/conf/base.mk
-
-configuration-defines = conf-preempt conf-debug_memory conf-logger_debug conf-INET6
-configuration = $(foreach cf,$(configuration-defines), \
-                      -D$(cf:conf-%=CONF_%)=$($(cf)))
-
-
-INCLUDES = -I$(src)/arch/$(ARCH) -I$(src) -I$(src)/include \
-	-I$(src)/arch/common -isystem $(src)/include/glibc-compat
-
-ifeq ($(arch),aarch64)
-  CROSS_PREFIX = aarch64-linux-gnu-
-  CXX=$(CROSS_PREFIX)g++
-  CC=$(CROSS_PREFIX)gcc
-  LD=$(CROSS_PREFIX)ld
-  OBJCOPY=$(CROSS_PREFIX)objcopy
-  export STRIP=$(CROSS_PREFIX)strip
-
-  aarch64_libdir := $(dir $(shell find $(aarch64_gccbase)/ -name libstdc++.so))
-  LDFLAGS = -L$(aarch64_libdir)
-
-  aarch64-gcc-inc-base := $(dir $(shell find $(aarch64_gccbase)/ -name vector | grep -v -e debug/vector$$ -e profile/vector$$ -e experimental/vector$$))
-  aarch64-gcc-inc-base3 := $(dir $(shell dirname `find $(aarch64_gccbase)/ -name c++config.h | grep -v /32/`))
-  INCLUDES += -isystem $(aarch64-gcc-inc-base)
-  INCLUDES += -isystem $(aarch64-gcc-inc-base3)
-  INCLUDES += -isystem $(aarch64_boostbase)/usr/include
-else
-  INCLUDES += $(shell $(CXX) -E -xc++ - -v </dev/null 2>&1 | awk '/^End/ {exit} /^ .*c\+\+/ {print "-isystem" $$0}')
-endif
-
-INCLUDES += -isystem $(src)/include/api -isystem $(src)/include/api/$(ARCH)
-
-ifeq ($(arch),aarch64)
-  aarch64-gcc-inc-base2 := $(dir $(shell find $(aarch64_gccbase)/ -name unwind.h))
-  # must be after include/api, since it includes some libc-style headers:
-  INCLUDES += -isystem $(aarch64-gcc-inc-base2)
-endif
-
-INCLUDES += -isystem $(out)/gen/include
-
-ifeq ($(arch),aarch64)
-  post-includes-bsd = -isystem $(src)/bsd/sys
-  # For acessing machine/ in cpp xen drivers
-  post-includes-bsd += -isystem $(src)/bsd/
-  post-includes-bsd += -isystem $(src)/bsd/$(arch)
-  INCLUDES += $(post-includes-bsd)
-endif
-
-COMMON = $(autodepend) $(INCLUDES)
-
-ifeq ($(arch),aarch64)
-  COMMON += --sysroot $(aarch64_gccbase)
-endif
-
 COMMON += -g -O2 -fPIC -DBOOST_TEST_DYN_LINK \
 	-U _FORTIFY_SOURCE -D_KERNEL -D__OSV__ $(configuration) \
 	-Wall -Wno-pointer-arith -Wformat=0 -Wno-format-security
 
-ifeq ($(arch),aarch64)
-  COMMON += -nostdinc
-endif
-
-LIBS =
+LIBS = $(libgcc_s_dir)/libgcc_s.so.1
 
 CXXFLAGS = -std=gnu++11 $(COMMON)
 CFLAGS = -std=gnu99 $(COMMON)
@@ -115,18 +46,39 @@ $(out)/tests/rofs/%.o: $(src)/tests/%.c
 $(out)/%.so: $(out)/%.o
 	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(LIBS), LD $*.so)
 
-$(out)/tests/tst-non-fpic.o: CXXFLAGS:=$(subst -fPIC,-mcmodel=large,$(CXXFLAGS))
+$(out)/tests/tst-non-fpic.o: CXXFLAGS:=$(subst -fPIC,-fno-pic -mcmodel=large,$(CXXFLAGS))
 
 $(out)/tests/tst-getopt-pie.o: CXXFLAGS:=$(subst -fPIC,-fpie,$(CXXFLAGS))
 $(out)/tests/tst-getopt-pie.o: $(src)/tests/tst-getopt.cc
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX tests/tst-getopt-pie.cc)
 $(out)/tests/tst-getopt-pie.so: $(out)/tests/tst-getopt-pie.o
-	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -pie -o $@ $< $(LIBS), LD tests/tst-getopt-pie.so)
+	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -fpie -o $@ $< $(LIBS), LD tests/tst-getopt-pie.so)
 
 $(out)/tests/tst-non-pie.so: CXXFLAGS:=$(subst -fPIC,-no-pie,$(CXXFLAGS))
 $(out)/tests/tst-non-pie.so: $(src)/tests/tst-non-pie.cc
 	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $< $(LIBS), LD tests/tst-non-pie.so)
+
+$(out)/tests/options.o: $(src)/core/options.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+$(out)/tests/tst-options.so: $(out)/tests/tst-options.o $(out)/tests/options.o
+	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(out)/tests/options.o $(LIBS), LD tests/tst-options.so)
+
+$(out)/tests/commands.o: $(src)/core/commands.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+$(out)/tests/printf.o: $(src)/core/printf.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+$(out)/tests/debug.o: $(src)/core/debug.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+$(out)/tests/stresep.o: $(src)/libc/string/stresep.c
+	$(makedir)
+	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $<, CC $*.c)
+$(out)/tests/tst-commands.so: $(out)/tests/tst-commands.o $(out)/tests/commands.o $(out)/tests/stresep.o $(out)/tests/printf.o $(out)/tests/debug.o
+	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(out)/tests/commands.o $(out)/tests/stresep.o $(out)/tests/printf.o $(out)/tests/debug.o $(LIBS), LD tests/tst-commands.so)
 
 # The rofs test image mounts /tmp as ramfs and 4 tests that exercise file system
 # fail due to some unresolved bugs or other shortcomings of the ramfs implementation
@@ -144,7 +96,7 @@ rofs-only-tests := rofs/tst-chdir.so rofs/tst-symlink.so rofs/tst-readdir.so \
 	rofs/tst-concurrent-read.so
 
 zfs-only-tests := tst-readdir.so tst-fallocate.so tst-fs-link.so \
-	tst-concurrent-read.so
+	tst-concurrent-read.so misc-zfs-io.so tst-solaris-taskq.so
 
 specific-fs-tests := $($(fs_type)-only-tests)
 
@@ -184,7 +136,9 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-sigaltstack.so tst-fread.so tst-tcp-cork.so tst-tcp-v6.so \
 	tst-calloc.so tst-crypt.so tst-non-fpic.so tst-small-malloc.so \
 	tst-getopt.so tst-getopt-pie.so tst-non-pie.so tst-semaphore.so \
-	tst-elf-init.so tst-realloc.so tst-socket-timestamp.so tst-pktinfo.so
+	tst-elf-init.so tst-realloc.so tst-setjmp.so \
+	libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so \
+	tst-sigaction.so tst-socket-timestamp.so tst-pktinfo.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
 #TODO For now let us disable these tests for aarch64 until
@@ -192,8 +146,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 # The tst-ifaddrs.so is an exception and it does not compile due to some
 # missing headers
 ifeq ($(arch),x64)
-tests += libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so \
-	tst-syscall.so tst-ifaddrs.so tst-mmx-fpu.so
+tests += tst-syscall.so tst-ifaddrs.so tst-mmx-fpu.so
 endif
 
 tests += testrunner.so
@@ -210,6 +163,7 @@ $(out)/tests/misc-free-perf.so: COMMON += -faligned-new
 $(out)/tests/tst-mmap.so: COMMON += -fuse-ld=bfd
 $(out)/tests/tst-elf-permissions.so: COMMON += -fuse-ld=bfd
 $(out)/tests/tst-tls.so: COMMON += -fuse-ld=bfd
+$(out)/tests/tst-tls-pie.so: COMMON += -fuse-ld=bfd
 
 $(out)/tests/tst-dlfcn.so: COMMON += -rdynamic -ldl
 
@@ -217,7 +171,7 @@ $(out)/tests/tst-tls.so: \
 		$(src)/tests/tst-tls.cc \
 		$(out)/tests/libtls.so
 	$(makedir)
-	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) -D__SHARED_OBJECT__=1 -shared -o $@ $< tests/libtls.so, CXX tests/tst-tls.cc)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -pthread -D__SHARED_OBJECT__=1 -shared -o $@ $< tests/libtls.so, CXX tests/tst-tls.cc)
 
 $(out)/tests/tst-tls-pie.o: CXXFLAGS:=$(subst -fPIC,-fpie,$(CXXFLAGS))
 $(out)/tests/tst-tls-pie.o: $(src)/tests/tst-tls.cc
@@ -227,7 +181,7 @@ $(out)/tests/tst-tls-pie.so: \
 		$(out)/tests/tst-tls-pie.o \
 		$(out)/tests/libtls.so
 	$(makedir)
-	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -fuse-ld=bfd -pthread -pie -o $@ $< tests/libtls.so, LD tests/tst-tls-pie.so)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -pthread -fpie -o $@ $< $(LIBS) tests/libtls.so, LD tests/tst-tls-pie.so)
 
 $(out)/tests/libtls_gold.so: COMMON += -fuse-ld=gold
 $(out)/tests/libtls_gold.so: $(out)/tests/libtls.o
@@ -241,11 +195,6 @@ $(out)/tests/tst-tls-gold.so: \
 	$(makedir)
 	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -D__SHARED_OBJECT__=1 -shared -o $@ $< tests/libtls_gold.so, CXX tests/tst-tls.cc)
 
-ifeq ($(arch),aarch64)
-  aarch64_boost_libdir := $(dir $(shell find $(aarch64_boostbase)/ -name libboost_system.so))
-  LDFLAGS += -L$(aarch64_boost_libdir)
-endif
-
 common-boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	misc-bdev-write.so misc-bdev-wlatency.so misc-bdev-rw.so \
 	tst-promise.so tst-dlfcn.so tst-stat.so tst-wait-for.so \
@@ -254,13 +203,13 @@ common-boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	tst-poll.so tst-bitset-iter.so tst-timer-set.so tst-clock.so \
 	tst-rcu-hashtable.so tst-unordered-ring-mpsc.so \
 	tst-seek.so tst-ctype.so tst-wctype.so tst-string.so tst-time.so \
-	tst-tcp-v6.so
+	tst-dax.so tst-tcp-v6.so
 
 boost-tests := $(common-boost-tests)
 
-rofs-only-boost-tests :=
+rofs-only-boost-tests := rofs/tst-stdio.so
 
-zfs-only-boost-tests := tst-rename.so
+zfs-only-boost-tests := tst-rename.so tst-stdio.so
 
 boost-tests += $($(fs_type)-only-boost-tests)
 
@@ -276,15 +225,13 @@ solaris-tests := tst-solaris-taskq.so
 # FIXME: two of the test below can't compile now because of include path
 # (BSD and OSv header files get mixed up, etc.).
 #zfs-tests := misc-zfs-disk.so misc-zfs-io.so misc-zfs-arc.so
-zfs-tests := misc-zfs-io.so 
+zfs-tests := misc-zfs-io.so
 solaris-tests += $(zfs-tests)
-
-tests += $(solaris-tests)
 
 $(zfs-tests:%=$(out)/tests/%): COMMON+= \
         -DBUILDING_ZFS \
         -I$(src)/bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs \
-        -I$(src)/bsd/sys/cddl/contrib/opensolaris/common/zfs 
+        -I$(src)/bsd/sys/cddl/contrib/opensolaris/common/zfs
 
 $(solaris-tests:%=$(out)/tests/%): COMMON+= \
         -Wno-strict-aliasing \
@@ -308,32 +255,30 @@ build_all_tests: $(all_tests:%=$(out)/%)
 usr.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FORCE
 	@echo "  generating modules/tests/usr.manifest"
 	@cat $@.skel > $@
-	@if [ "$(arch)" = "x64" ]; then \
-		ldd $(addprefix $(out)/tests/,$(boost-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@; \
-	else \
-		./add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@; \
-	fi
+	@case "$(CROSS_PREFIX)" in \
+		"aarch64"*) ./add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@ ;; \
+		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests/,$(boost-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@ ;; \
+	esac
 	@echo $(all_tests) | tr ' ' '\n' | grep -v "tests/rofs/tst-.*.so" | awk '{print "/" $$0 ": ./" $$0}' >> $@
 	@echo $(all_tests) | tr ' ' '\n' | grep "tests/rofs/tst-.*.so" | sed 's/\.so//' | awk 'BEGIN { FS = "/" } ; { print "/tests/" $$3 "-rofs.so: ./tests/" $$2 "/" $$3 ".so"}' >> $@
-	./create_static.sh $(out) usr.manifest $(fs_type)
+	$(call very-quiet, ./create_static.sh $(out) usr.manifest $(fs_type))
 .PHONY: FORCE
 FORCE:
 
 common.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FORCE
 	@echo "  generating modules/tests/common.manifest"
 	@cat usr.manifest.skel > $@
-	@if [ "$(arch)" = "x64" ]; then \
-		ldd $(addprefix $(out)/tests/,$(boost-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@; \
-	else \
-		./add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@; \
-	fi
-	@echo $(common-tests) $(solaris-tests) | tr ' ' '\n' | awk '{print "/tests/" $$0 ": ./tests/" $$0}' >> $@
+	@case "$(CROSS_PREFIX)" in \
+		"aarch64"*) ./add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@ ;; \
+		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests/,$(boost-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@ ;; \
+	esac
+	@echo $(common-tests) | tr ' ' '\n' | awk '{print "/tests/" $$0 ": ./tests/" $$0}' >> $@
 
 fs.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) FORCE
 	@echo "  generating modules/tests/fs.manifest"
 	@echo $(specific-fs-tests) $($(fs_type)-only-boost-tests) | tr ' ' '\n' | grep -v "rofs/tst-.*.so" | awk '{print "/tests/" $$0 ": ./tests/" $$0}' > $@
 	@echo $(specific-fs-tests) $($(fs_type)-only-boost-tests) | tr ' ' '\n' | grep "rofs/tst-.*.so" | sed 's/\.so//' | awk 'BEGIN { FS = "/" } ; { print "/tests/" $$2 "-rofs.so: ./tests/" $$1 "/" $$2 ".so"}' >> $@
-	./create_static.sh $(out) fs.manifest $(fs_type)
+	$(call very-quiet, ./create_static.sh $(out) fs.manifest $(fs_type))
 
 clean:
 	-rm -f usr.manifest common.manifest fs.manifest

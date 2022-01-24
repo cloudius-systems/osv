@@ -8,7 +8,7 @@
 #include <iostream>
 #include <fstream>
 #include <mutex>
-#include <osv/debug.hh>
+#include <osv/osv_c_wrappers.h>
 #include <assert.h>
 
 #include <openssl/rand.h>
@@ -16,9 +16,16 @@
 
 #include "openssl-init.hh"
 
+static void debug_line(const char *line) {
+    auto debug_enabled = osv_debug_enabled();
+    if (debug_enabled) {
+        std::cout << line << std::endl;
+    }
+}
+
 static void seed_openssl()
 {
-    debug("Seeding OpenSSL...\n");
+    debug_line("Seeding OpenSSL...");
 
     for (;;) {
         char buf[32];
@@ -39,10 +46,10 @@ static void seed_openssl()
         // fedora's openssl-1.0.1h-5.fc20 needs 48 bytes instead
         // of 32, which is what is required by its upstream version
         // (tag OpenSSL_1_0_1h). In general, we should make no assumptions.
-        debug("Still not seeded, retrying\n");
+        debug_line("Still not seeded, retrying");
     }
 
-    debug("OpenSSL seeding done.\n");
+    debug_line("OpenSSL seeding done.");
 }
 
 void ensure_openssl_initialized()

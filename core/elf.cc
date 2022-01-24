@@ -26,15 +26,16 @@
 #include <osv/stubbing.hh>
 #include <sys/utsname.h>
 #include <osv/demangle.hh>
+#include <osv/export.h>
 #include <boost/version.hpp>
 #include <deque>
 
 #include "arch.hh"
+#include "arch-elf.hh"
+#include "cpuid.hh"
 
-#define ELF_DEBUG_ENABLED 0
-
-#if ELF_DEBUG_ENABLED
-#define elf_debug(format,...) kprintf("ELF [tid:%d, %s]: " format, sched::thread::current()->id(), _pathname.c_str(), ##__VA_ARGS__)
+#if CONF_debug_elf
+#define elf_debug(format,...) kprintf("ELF [tid:%d, mod:%d, %s]: " format, sched::thread::current()->id(), _module_index, _pathname.c_str(), ##__VA_ARGS__)
 #else
 #define elf_debug(...)
 #endif
@@ -92,8 +93,6 @@ void* symbol_module::relocated_addr() const
     }
     switch (symbol_type(*symbol)) {
     case STT_NOTYPE:
-        return reinterpret_cast<void*>(symbol->st_value);
-        break;
     case STT_OBJECT:
     case STT_FUNC:
         return base + symbol->st_value;
@@ -124,6 +123,7 @@ object::object(program& prog, std::string pathname)
     , _dynamic_table(nullptr)
     , _module_index(_prog.register_dtv(this))
     , _is_executable(false)
+    , _init_called(false)
     , _visibility_thread(nullptr)
     , _visibility_level(VisibilityLevel::Public)
 {
@@ -318,6 +318,9 @@ void file::load_elf_header()
         throw osv::invalid_elf_error(
                 "bad executable type (only shared-object, PIE or non-PIE executable supported)");
     }
+    if(_ehdr.e_machine != ELF_KERNEL_MACHINE_TYPE) {
+        throw osv::invalid_elf_error("machine type for " + _pathname + " differs from the kernel");
+    }
 }
 
 void file::read(Elf64_Off offset, void* data, size_t size)
@@ -376,7 +379,7 @@ void object::set_base(void* base)
     }
 
     _end = _base + q->p_vaddr + q->p_memsz;
-    elf_debug("The base set to: 0x%016x and end: 0x%016x\n", _base, _end);
+    elf_debug("The base set to: %018p and end: %018p\n", _base, _end);
 }
 
 void* object::base() const
@@ -417,7 +420,7 @@ void file::load_segment(const Elf64_Phdr& phdr)
             mmu::map_anon(_base + vstart + filesz, memsz - filesz, flag, perm);
         }
     }
-    elf_debug("Loaded and mapped PT_LOAD segment at: 0x%016x of size: 0x%x\n", _base + vstart, filesz); //TODO: Add memory?
+    elf_debug("Loaded and mapped PT_LOAD segment at: %018p of size: 0x%x\n", _base + vstart, filesz);
 }
 
 bool object::mlocked()
@@ -523,7 +526,7 @@ void object::process_headers()
             _tls_init_size = phdr.p_filesz;
             _tls_uninit_size = phdr.p_memsz - phdr.p_filesz;
             _tls_alignment = phdr.p_align;
-            elf_debug("Found TLS segment at 0x%016x of aligned size: %x\n", _tls_segment, get_aligned_tls_size());
+            elf_debug("Found TLS segment at %018p of aligned size: 0x%x\n", _tls_segment, get_aligned_tls_size());
             break;
         default:
             abort("Unknown p_type in executable %s: %d\n", pathname(), phdr.p_type);
@@ -786,29 +789,34 @@ void object::relocate_pltgot()
     for (auto p = rel; p < rel + nrel; ++p) {
         auto info = p->r_info;
         u32 type = info & 0xffffffff;
-        assert(type == ARCH_JUMP_SLOT);
         void *addr = _base + p->r_offset;
-        if (bind_now) {
-            // If on-load binding is requested (instead of the default lazy
-            // binding), try to resolve all the PLT entries now.
-            // If symbol cannot be resolved warn about it instead of aborting
-            u32 sym = info >> 32;
-            auto _sym = symbol(sym, true);
-            if (arch_relocate_jump_slot(_sym, addr, p->r_addend))
-                  continue;
-        }
-        if (original_plt) {
-            // Restore the link to the original plt.
-            // We know the JUMP_SLOT entries are in plt order, and that
-            // each plt entry is 16 bytes.
-            *static_cast<void**>(addr) = original_plt + (p-rel)*16;
+        assert(type == ARCH_JUMP_SLOT || type == ARCH_TLSDESC);
+        if (type == ARCH_JUMP_SLOT) {
+            if (bind_now) {
+                // If on-load binding is requested (instead of the default lazy
+                // binding), try to resolve all the PLT entries now.
+                // If symbol cannot be resolved warn about it instead of aborting
+                u32 sym = info >> 32;
+                auto _sym = symbol(sym, true);
+                if (arch_relocate_jump_slot(_sym, addr, p->r_addend))
+                    continue;
+            }
+            if (original_plt) {
+                // Restore the link to the original plt.
+                // We know the JUMP_SLOT entries are in plt order, and that
+                // each plt entry is 16 bytes.
+                *static_cast<void**>(addr) = original_plt + (p-rel)*16;
+            } else {
+                // The JUMP_SLOT entry already points back to the PLT, just
+                // make sure it is relocated relative to the object base.
+                *static_cast<u64*>(addr) += reinterpret_cast<u64>(_base);
+            }
         } else {
-            // The JUMP_SLOT entry already points back to the PLT, just
-            // make sure it is relocated relative to the object base.
-            *static_cast<u64*>(addr) += reinterpret_cast<u64>(_base);
+            u32 sym = info >> 32;
+            arch_relocate_tls_desc(sym, addr, p->r_addend);
         }
     }
-    elf_debug("Relocated %d PLT symbols in DT_JMPREL\n", nrel);
+    elf_debug("Relocated %d PLT symbols\n", nrel);
 
     // PLTGOT resolution has a special calling convention,
     // for x64 the symbol index and some word is pushed on the stack,
@@ -1171,11 +1179,15 @@ void object::run_init_funcs(int argc, char** argv)
         }
         elf_debug("Finished executing %d DT_INIT_ARRAYSZ functions\n", nr);
     }
+    _init_called = true;
 }
 
 // Run the object's static destructors or similar finalization
 void object::run_fini_funcs()
 {
+    if(!_init_called){
+        return;
+    }
     if (dynamic_exists(DT_FINI_ARRAY)) {
         auto funcs = dynamic_ptr<void (*)()>(DT_FINI_ARRAY);
         auto nr = dynamic_val(DT_FINI_ARRAYSZ) / sizeof(*funcs);
@@ -1211,7 +1223,7 @@ void object::alloc_static_tls()
     if (!_static_tls && tls_size) {
         _static_tls = true;
         _static_tls_offset = _static_tls_alloc.fetch_add(tls_size, std::memory_order_relaxed);
-        elf_debug("Allocated static TLS at 0x%016x of size: 0x%x\n", _static_tls_offset, tls_size);
+        elf_debug("Allocated static TLS at offset: 0x%x of size: 0x%x\n", _static_tls_offset, tls_size);
     }
 }
 
@@ -1303,22 +1315,29 @@ program::program(void* addr)
           // this library, it will not be visible for the application and
           // it will need to load its own version of this library.
 #if BOOST_VERSION < 106900
+#if HIDE_SYMBOLS < 1
           "libboost_system.so.1.55.0",
+#endif
 #endif
 #endif /* __x86_64__ */
 #ifdef __aarch64__
           "ld-linux-aarch64.so.1",
 #if BOOST_VERSION < 106900
+#if HIDE_SYMBOLS < 1
           "libboost_system-mt.so.1.55.0",
+#endif
 #endif
 #endif /* __aarch64__ */
           "libpthread.so.0",
           "libdl.so.2",
           "librt.so.1",
+#if HIDE_SYMBOLS < 1
           "libstdc++.so.6",
+#endif
           "libaio.so.1",
           "libxenstore.so.3.0",
           "libcrypt.so.1",
+          "libutil.so",
     };
     auto ml = new modules_list();
     ml->objects.push_back(_core.get());
@@ -1751,7 +1770,7 @@ init_table get_init(Elf64_Ehdr* header)
         } else if (phdr->p_type == PT_TLS) {
             ret.tls.start = reinterpret_cast<void*>(phdr->p_vaddr);
             ret.tls.filesize = phdr->p_filesz;
-            ret.tls.size = phdr->p_memsz;
+            ret.tls.size = align_up(phdr->p_memsz, (u64)64);
         }
     }
     return ret;
@@ -1870,7 +1889,7 @@ char *object::setup_tls()
             _module_index, _tls_segment, _tls_init_size, _tls_uninit_size);
 }
 
-extern "C"
+extern "C" OSV_LD_LINUX_x86_64_API
 void* __tls_get_addr(module_and_offset* mao)
 {
 #ifdef AARCH64_PORT_STUB
@@ -1895,7 +1914,7 @@ void* __tls_get_addr(module_and_offset* mao)
 // also uses a static area for uname, we can just return that.
 extern utsname utsname;
 
-extern "C"
+extern "C" OSV_LIBC_API
 unsigned long getauxval(unsigned long type)
 {
     switch (type) {
@@ -1914,6 +1933,10 @@ unsigned long getauxval(unsigned long type)
         return sysconf(_SC_PAGESIZE);
     case AT_CLKTCK:
         return sysconf(_SC_CLK_TCK);
+#ifdef __aarch64__
+    case AT_HWCAP:
+        return processor::hwcap32();
+#endif
 
     // Unimplemented, man page says we should return 0
     case AT_PHDR:
@@ -1923,7 +1946,9 @@ unsigned long getauxval(unsigned long type)
     case AT_ENTRY:
     case AT_EXECFD:
     case AT_EXECFN:
+#ifdef __x86_64__
     case AT_HWCAP:
+#endif
     case AT_ICACHEBSIZE:
     case AT_RANDOM:
     case AT_SECURE:

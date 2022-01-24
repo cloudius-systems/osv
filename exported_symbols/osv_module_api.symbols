@@ -1,0 +1,10 @@
+osv_cmdline
+osv_current_app_on_termination_request
+osv_debug_buffer
+osv_debug_enabled
+osv_firmware_vendor
+osv_get_all_app_threads
+osv_get_all_threads
+osv_hypervisor_name
+osv_processor_features
+osv_version

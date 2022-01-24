@@ -18,7 +18,11 @@
 
 #include <bsd/sys/sys/mbuf.h>
 
+#if BOOST_VERSION < 106600
 #include <boost/function_output_iterator.hpp>
+#else
+#include <boost/iterator/function_output_iterator.hpp>
+#endif
 
 namespace osv {
 

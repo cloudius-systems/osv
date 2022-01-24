@@ -9,9 +9,12 @@
 [submodule "modules/httpserver/swagger-ui"]
 	path = modules/httpserver-html5-gui/swagger-ui
 	url = ../../cloudius-systems/swagger-ui.git
-[submodule "musl"]
-	path = musl
-	url = ../../cloudius-systems/musl.git
 [submodule "modules/httpserver/osv-gui"]
 	path = modules/httpserver-html5-gui/osv-gui
 	url = ../../cloudius-systems/osv-gui.git
+[submodule "musl_0.9.12"]
+	path = musl_0.9.12
+	url = https://github.com/cloudius-systems/musl
+[submodule "musl_1.1.24"]
+	path = musl_1.1.24
+	url = https://github.com/osvunikernel/musl

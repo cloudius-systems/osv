@@ -19,6 +19,8 @@
 #include "drivers/virtio.hh"
 #include "drivers/virtio-pci-device.hh"
 
+extern bool opt_pci_disabled;
+
 namespace pci {
 
 void pci_device_print(u8 bus, u8 slot, u8 func)
@@ -42,6 +44,10 @@ void pci_device_print(u8 bus, u8 slot, u8 func)
 
 void pci_devices_print()
 {
+    if (opt_pci_disabled) {
+        return;
+    }
+
     u16 bus, slot, func;
 
     for (bus = 0; bus < 256; bus++) {

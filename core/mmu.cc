@@ -29,6 +29,10 @@
 #include <osv/rwlock.h>
 #include <numeric>
 
+// FIXME: Without this pragma, we get a lot of warnings that I don't know
+// how to explain or fix. For now, let's just ignore them :-(
+#pragma GCC diagnostic ignored "-Wstringop-overflow"
+
 extern void* elf_start;
 extern size_t elf_size;
 
@@ -351,6 +355,13 @@ template<typename PageOp>
 {
     map_level<PageOp, 4> pt_mapper(vma_start, vstart, size, page_mapper, slop);
     pt_mapper(hw_ptep<4>::force(mmu::get_root_pt(vstart)));
+    // On some architectures with weak memory model it is necessary
+    // to force writes to page table entries complete and instruction pipeline
+    // flushed so that new mappings are properly visible when relevant newly mapped
+    // virtual memory areas are accessed right after this point.
+    // So let us call arch-specific function to execute the logic above if
+    // applicable for given architecture.
+    synchronize_page_table_modifications();
 }
 
 template<typename PageOp, int ParentLevel> class map_level {
@@ -1205,6 +1216,13 @@ ulong populate_vma(vma *vma, void *v, size_t size, bool write = false)
     auto total = vma->has_flags(mmap_small) ?
         vma->operate_range(populate_small<Account>(map, vma->perm(), write, vma->map_dirty()), v, size) :
         vma->operate_range(populate<Account>(map, vma->perm(), write, vma->map_dirty()), v, size);
+
+    // On some architectures, the cpu data and instruction caches are separate (non-unified)
+    // and therefore it might be necessary to synchronize data cache with instruction cache
+    // after populating vma with executable code.
+    if (vma->perm() & perm_exec) {
+        synchronize_cpu_caches(v, size);
+    }
 
     return total;
 }

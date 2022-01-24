@@ -5,7 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <osv/debug.hh>
+#include <cstdio>
 #include <exception>
 #include <setjmp.h>
 #include <memory>
@@ -16,14 +16,14 @@ static void report(bool ok, const char* msg)
 {
     ++tests;
     fails += !ok;
-    debug("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
+    printf("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
 }
 
 jmp_buf env;
 static bool saw_unhandled = false;
 void myterminate()
 {
-    debug("caught unhandled exception\n");
+    printf("caught unhandled exception\n");
     saw_unhandled = true;
     longjmp(env, 1);
 }
@@ -78,6 +78,6 @@ int main(int ac, char** av)
     std::set_terminate(old);
 
 
-    debug("SUMMARY: %d tests, %d failures\n", tests, fails);
+    printf("SUMMARY: %d tests, %d failures\n", tests, fails);
 
 }

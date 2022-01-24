@@ -39,4 +39,4 @@ ARTIFACTS_DIR="$1"
 
 . .travis/cirp/install.sh
 
-ci-release-publisher collect "$ARTIFACTS_DIR"
+ci-release-publisher --travis-api-url https://api.travis-ci.com collect "$ARTIFACTS_DIR"

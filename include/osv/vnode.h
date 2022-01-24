@@ -40,6 +40,15 @@
 #include "file.h"
 #include "dirent.h"
 
+// Until musl adds these 2 macros to sys/stat.h
+// we are defining it here
+#ifndef ALLPERMS
+#define ALLPERMS (S_ISUID|S_ISGID|S_ISVTX|S_IRWXU|S_IRWXG|S_IRWXO)
+#endif
+#ifndef S_BLKSIZE
+#define S_BLKSIZE 512
+#endif
+
 __BEGIN_DECLS
 
 struct vfsops;

@@ -10,6 +10,7 @@
 .text
 
 .global __elf_resolve_pltgot
+.hidden __elf_resolve_pltgot
 
 // calling convention:
 // ip0: &pltgot(2)
@@ -40,5 +41,5 @@ __elf_resolve_pltgot:
 	ldp	x6, x7, [sp, #16]
 	ldp	x8, xzr, [sp], #(80)
 
-        pop_pair x17, x30
+        ldp     x17, x30, [sp], #16
         br      x16

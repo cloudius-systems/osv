@@ -319,6 +319,8 @@ std::string procfs_maps();
 
 unsigned long all_vmas_size();
 
+// Synchronize cpu data and instruction caches for specified area of virtual memory
+void synchronize_cpu_caches(void *v, size_t size);
 }
 
 #endif /* MMU_HH */

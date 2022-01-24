@@ -275,38 +275,38 @@ bind_local_port_to_irq(unsigned int local_port, int * port)
 int
 bind_listening_port_to_irq(unsigned int remote_domain, int * port)
 {
-        struct evtchn_alloc_unbound alloc_unbound;
+        struct evtchn_op alloc_unbound;
         int err;
 
-        alloc_unbound.dom        = DOMID_SELF;
-        alloc_unbound.remote_dom = remote_domain;
+        alloc_unbound.u.alloc_unbound.dom        = DOMID_SELF;
+        alloc_unbound.u.alloc_unbound.remote_dom = remote_domain;
 
         err = HYPERVISOR_event_channel_op(EVTCHNOP_alloc_unbound,
-                                          &alloc_unbound);
+                                          &alloc_unbound.u);
 
-        return err ? : bind_local_port_to_irq(alloc_unbound.port, port);
+        return err ? : bind_local_port_to_irq(alloc_unbound.u.alloc_unbound.port, port);
 }
 
 static int
 bind_interdomain_evtchn_to_irq(unsigned int remote_domain,
     unsigned int remote_port, int * port)
 {
-        struct evtchn_bind_interdomain bind_interdomain;
+        struct evtchn_op op;
         int err;
 
-        bind_interdomain.remote_dom  = remote_domain;
-        bind_interdomain.remote_port = remote_port;
+        op.u.bind_interdomain.remote_dom  = remote_domain;
+        op.u.bind_interdomain.remote_port = remote_port;
 
         err = HYPERVISOR_event_channel_op(EVTCHNOP_bind_interdomain,
-                                          &bind_interdomain);
+                                          &op.u);
 
-        return err ? : bind_local_port_to_irq(bind_interdomain.local_port, port);
+        return err ? : bind_local_port_to_irq(op.u.bind_interdomain.local_port, port);
 }
 
 static int 
 bind_virq_to_irq(unsigned int virq, unsigned int cpu, int * port)
 {
-	struct evtchn_bind_virq bind_virq;
+	struct evtchn_op op;
 	int evtchn = 0, irq;
 
 	mtx_lock_spin(&irq_mapping_update_lock);
@@ -315,11 +315,11 @@ bind_virq_to_irq(unsigned int virq, unsigned int cpu, int * port)
 		if ((irq = find_unbound_irq()) < 0)
 			goto out;
 
-		bind_virq.virq = virq;
-		bind_virq.vcpu = cpu;
-		HYPERVISOR_event_channel_op(EVTCHNOP_bind_virq, &bind_virq);
+		op.u.bind_virq.virq = virq;
+		op.u.bind_virq.vcpu = cpu;
+		HYPERVISOR_event_channel_op(EVTCHNOP_bind_virq, &op.u);
 
-		evtchn = bind_virq.port;
+		evtchn = op.u.bind_virq.port;
 
 		evtchn_to_irq[evtchn] = irq;
 		irq_info[irq] = mk_irq_info(IRQT_VIRQ, virq, evtchn);
@@ -341,7 +341,7 @@ out:
 static int 
 bind_ipi_to_irq(unsigned int ipi, unsigned int cpu, int * port)
 {
-	struct evtchn_bind_ipi bind_ipi;
+	struct evtchn_op op;
 	int irq;
 	int evtchn = 0;
 
@@ -351,9 +351,9 @@ bind_ipi_to_irq(unsigned int ipi, unsigned int cpu, int * port)
 		if ((irq = find_unbound_irq()) < 0)
 			goto out;
 
-		bind_ipi.vcpu = cpu;
-		HYPERVISOR_event_channel_op(EVTCHNOP_bind_ipi, &bind_ipi);
-		evtchn = bind_ipi.port;
+		op.u.bind_ipi.vcpu = cpu;
+		HYPERVISOR_event_channel_op(EVTCHNOP_bind_ipi, &op.u);
+		evtchn = op.u.bind_ipi.port;
 
 		evtchn_to_irq[evtchn] = irq;
 		irq_info[irq] = mk_irq_info(IRQT_IPI, ipi, evtchn);
@@ -375,15 +375,15 @@ out:
 static void 
 unbind_from_irq(int irq)
 {
-	struct evtchn_close close;
 	int evtchn = evtchn_from_irq(irq);
 	int cpu;
 
 	mtx_lock_spin(&irq_mapping_update_lock);
 
 	if ((--irq_bindcount[irq] == 0) && VALID_EVTCHN(evtchn)) {
-		close.port = evtchn;
-		HYPERVISOR_event_channel_op(EVTCHNOP_close, &close);
+		struct evtchn_op op;
+		op.u.close.port = evtchn;
+		HYPERVISOR_event_channel_op(EVTCHNOP_close, &op.u);
 
 		switch (type_from_irq(irq)) {
 		case IRQT_VIRQ:
@@ -799,7 +799,7 @@ pirq_query_unmask(int pirq)
 static void 
 xenpic_pirq_enable_intr(struct intsrc *isrc)
 {
-	struct evtchn_bind_pirq bind_pirq;
+	struct evtchn_op op;
 	int evtchn;
 	unsigned int irq;
 	
@@ -810,11 +810,11 @@ xenpic_pirq_enable_intr(struct intsrc *isrc)
 	if (VALID_EVTCHN(evtchn))
 		goto out;
 
-	bind_pirq.pirq  = irq;
+	op.u.bind_pirq.pirq  = irq;
 	/* NB. We are happy to share unless we are probing. */
-	bind_pirq.flags = probing_irq(irq) ? 0 : BIND_PIRQ__WILL_SHARE;
+	op.u.bind_pirq.flags = probing_irq(irq) ? 0 : BIND_PIRQ__WILL_SHARE;
 	
-	if (HYPERVISOR_event_channel_op(EVTCHNOP_bind_pirq, &bind_pirq) != 0) {
+	if (HYPERVISOR_event_channel_op(EVTCHNOP_bind_pirq, &op.u) != 0) {
 #ifndef XEN_PRIVILEGED_GUEST
 		panic("unexpected pirq call");
 #endif
@@ -823,7 +823,7 @@ xenpic_pirq_enable_intr(struct intsrc *isrc)
 		mtx_unlock_spin(&irq_mapping_update_lock);
 		return;
 	}
-	evtchn = bind_pirq.port;
+	evtchn = op.u.bind_pirq.port;
 
 	pirq_query_unmask(irq_to_pirq(irq));
 
@@ -916,8 +916,9 @@ unmask_evtchn(int port)
 
 	/* Slow path (hypercall) if this is a non-local port. */
 	if (unlikely(irq_is_legacy || (cpu != cpu_from_evtchn(port)))) {
-		struct evtchn_unmask unmask = { .port = port };
-		(void)HYPERVISOR_event_channel_op(EVTCHNOP_unmask, &unmask);
+		struct evtchn_op op;
+		op.u.unmask.port = port;
+		(void)HYPERVISOR_event_channel_op(EVTCHNOP_unmask, &op.u);
 		return;
 	}
 
@@ -942,8 +943,8 @@ void irq_resume(void)
 	evtchn_op_t op;
 	int         cpu, pirq, virq, ipi, irq, evtchn;
 
-	struct evtchn_bind_virq bind_virq;
-	struct evtchn_bind_ipi bind_ipi;	
+	struct evtchn_op op_bind_virq;
+	struct evtchn_op op_bind_ipi;	
 
 	init_evtchn_cpu_bindings();
 
@@ -984,10 +985,10 @@ void irq_resume(void)
 		    ("irq_info inconsistent"));
 
 		/* Get a new binding from Xen. */
-		bind_virq.virq = virq;
-		bind_virq.vcpu = 0;
-		HYPERVISOR_event_channel_op(EVTCHNOP_bind_virq, &bind_virq);
-		evtchn = bind_virq.port;
+		op_bind_virq.u.bind_virq.virq = virq;
+		op_bind_virq.u.bind_virq.vcpu = 0;
+		HYPERVISOR_event_channel_op(EVTCHNOP_bind_virq, &op_bind_virq.u);
+		evtchn = op_bind_virq.u.bind_virq.port;
         
 		/* Record the new mapping. */
 		evtchn_to_irq[evtchn] = irq;
@@ -1007,9 +1008,9 @@ void irq_resume(void)
 
 		/* Get a new binding from Xen. */
 		memset(&op, 0, sizeof(op));
-		bind_ipi.vcpu = 0;
-		HYPERVISOR_event_channel_op(EVTCHNOP_bind_ipi, &bind_ipi);
-		evtchn = bind_ipi.port;
+		op_bind_ipi.u.bind_ipi.vcpu = 0;
+		HYPERVISOR_event_channel_op(EVTCHNOP_bind_ipi, &op_bind_ipi.u);
+		evtchn = op_bind_ipi.u.bind_ipi.port;
         
 		/* Record the new mapping. */
 		evtchn_to_irq[evtchn] = irq;

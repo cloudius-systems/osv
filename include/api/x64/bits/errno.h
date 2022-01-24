@@ -1,1 +1,1 @@
-../../../../musl/arch/x86_64/bits/errno.h
+../../../../musl/arch/generic/bits/errno.h

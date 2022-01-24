@@ -22,10 +22,11 @@ usage() {
 
 	Options:
 	  --help|-h                     Print this help message
-	  arch=x64|aarch64              Specify the build architecture; default is x64
+	  arch=x64|aarch64              Specify the build architecture; default is the same as build host arch
 	  mode=release|debug            Specify the build mode; default is release
-	  export=none|selected|all      If 'selected' or 'all' export the app files to build/export
-	  fs=zfs|rofs|ramfs             Specify the filesystem of the image partition
+	  export=none|selected|all      If 'selected' or 'all' export the app files to <export_dir>
+	  export_dir=<dir>              The directory to export the files to; default is build/export
+	  fs=zfs|rofs|ramfs|virtiofs    Specify the filesystem of the image partition
 	  fs_size=N                     Specify the size of the image in bytes
 	  fs_size_mb=N                  Specify the size of the image in MiB
 	  app_local_exec_tls_size=N     Specify the size of app local TLS in bytes; the default is 64
@@ -79,10 +80,18 @@ do
 	image=*|modules=*|fs=*|usrskel=*|check|--append-manifest|--create-disk) ;;
 	clean)
 		stage1_args=clean ;;
-	*)	# yuck... Is there a prettier way to append to array?
-		args[${#args[@]}]="$i" ;;
+	arch=*)
+		eval ${i}
+		args+=("$i") ;;
+	*)
+		args+=("$i") ;;
 	esac
 done
+
+if [[ "${arch-}" == "aarch64" && -d "build/downloaded_packages/aarch64/toolchain/" ]]; then
+	. scripts/download_aarch64_toolchain.sh
+	export CROSS_PREFIX=aarch64-none-linux-gnu-
+fi
 
 make "${args[@]}" ${stage1_args} | tee build.out
 # check exit status of make
@@ -177,17 +186,32 @@ case $OUT in
 *)	OSV_BUILD_PATH=`pwd`/$OUT;;
 esac
 
+host_arch=$(uname -m)
+
 # Default manifest
 manifest=bootfs.manifest.skel
-fs_type=${vars[fs]-zfs}
+if [[ "$host_arch" == "aarch64" || "$arch" == "aarch64" ]]; then
+	# We default to ROFS as ZFS is not supported on ARM until the issue #1131 is fixed
+	fs_type=${vars[fs]-rofs}
+	if [[ "$fs_type" == "rofs" ]]; then
+		vars[create_disk]="true"
+	fi
+else
+	fs_type=${vars[fs]-zfs}
+fi
 usrskel_arg=
 case $fs_type in
-zfs);; # Nothing to change here. This is our default behavior
-rofs)	manifest=bootfs_empty.manifest.skel
+zfs)
+	;; # Nothing to change here. This is our default behavior
+rofs|virtiofs)
+	# Both are read-only (in OSv) and require nothing extra on bootfs to work
+	manifest=bootfs_empty.manifest.skel
 	usrskel_arg="--usrskel usr_rofs.manifest.skel";;
-ramfs)	manifest=$OUT/usr.manifest
+ramfs)
+	manifest=$OUT/usr.manifest
 	usrskel_arg="--usrskel usr_ramfs.manifest.skel";;
-*)	echo "Unknown filesystem \"$fs_type\"" >&2
+*)
+	echo "Unknown filesystem \"$fs_type\"" >&2
 	exit 2
 esac
 
@@ -256,16 +280,24 @@ kernel_end=$(($loader_size+2097151 & ~2097151))
 # the case in our old build.mk).
 cd $OUT
 
-if [[ "$arch" == 'aarch64' ]]; then
-	libgcc_s_dir=$(readlink -f ../downloaded_packages/aarch64/gcc/install/lib64)
-else
-	libgcc_s_dir=$(dirname $(readlink -f $(gcc -print-file-name=libgcc_s.so.1)))
+CC=gcc
+if [[ "$host_arch" == "x86_64" && "$arch" == 'aarch64' ]]; then
+    CC=${CROSS_PREFIX:-aarch64-linux-gnu-}gcc
 fi
+
+libgcc_s_path=$(${CC} -print-file-name=libgcc_s.so.1)
+if [[ "$libgcc_s_path" == "libgcc_s.so.1" ]]; then
+	cat <<-EOF
+	Unable to resolve libgcc_s.so.1 using "${CC}".
+	Looking in ../downloaded_packages/aarch64/gcc/install/lib64
+	EOF
+	libgcc_s_path="../downloaded_packages/aarch64/gcc/install/lib64/libgcc_s.so.1"
+fi
+libgcc_s_dir=$(dirname $(readlink -f ${libgcc_s_path}))
 
 if [ "$export" != "none" ]; then
 	export_dir=${vars[export_dir]-$SRC/build/export}
 	"$SRC"/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
-	exit 0
 fi
 
 if [[ ${vars[create_disk]} == "true" ]]; then
@@ -298,7 +330,7 @@ create_rofs_disk() {
 }
 
 if [[ "$arch" == 'aarch64' ]]; then
-	export STRIP=aarch64-linux-gnu-strip
+	export STRIP=${CROSS_PREFIX:-aarch64-linux-gnu-}strip
 fi
 
 case $fs_type in
@@ -312,9 +344,14 @@ rofs)
 	partition_size=`stat --printf %s rofs.img`
 	image_size=$((partition_offset + partition_size))
         create_rofs_disk ;;
-ramfs)
+ramfs|virtiofs)
+	# No need to create extra fs like above: ramfs is already created (as the
+	# bootfs) and virtio-fs is specified with virtiofsd at run time
 	qemu-img convert -f raw -O qcow2 loader.img usr.img ;;
 esac
+# Prepend the root fs type option to the command line (preserved by run.py)
+cmdline=$(cat cmdline)
+echo -n "--rootfs=${fs_type} ${cmdline}" > cmdline
 
 if [[ -f "$OSV_BUILD_PATH/usr.img" ]]; then
 	"$SRC"/scripts/imgedit.py setargs usr.img `cat cmdline`

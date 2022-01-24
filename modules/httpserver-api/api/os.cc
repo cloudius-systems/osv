@@ -6,22 +6,19 @@
  */
 
 #include <sys/utsname.h>
+#include <sys/time.h>
 #include "os.hh"
-#include "osv/version.hh"
 #include "json/formatter.hh"
 #include "autogen/os.json.hh"
 #include <sys/sysinfo.h>
 #include <time.h>
 #include <osv/shutdown.hh>
 #include <osv/power.hh>
-#include <osv/debug.hh>
-#include <osv/sched.hh>
 #include <api/unistd.h>
 #include <osv/commands.hh>
+#include <osv/osv_c_wrappers.h>
 #include <algorithm>
 #include "../java-base/balloon/balloon_api.hh"
-
-extern char debug_buffer[DEBUG_BUFFER_SIZE];
 
 namespace httpserver {
 
@@ -39,6 +36,16 @@ extern "C" void httpserver_plugin_register_routes(httpserver::routes* routes) {
 }
 #endif
 
+static std::string from_c_string(char *c_str) {
+    if (c_str) {
+        std::string str(c_str);
+        free(c_str);
+        return str;
+    } else {
+        return std::string();
+    }
+}
+
 void init(routes& routes)
 {
     os_json_init_path("OS core API");
@@ -48,7 +55,7 @@ void init(routes& routes)
     });
 
     os_version.set_handler([](const_req req) {
-        return osv::version();
+        return from_c_string(osv_version());
     });
 
     os_vendor.set_handler([](const_req req) {
@@ -103,7 +110,7 @@ void init(routes& routes)
 #endif
 
     os_dmesg.set_handler([](const_req req) {
-        return debug_buffer;
+        return osv_debug_buffer();
     });
 
     os_get_hostname.set_handler([](const_req req)
@@ -122,31 +129,39 @@ void init(routes& routes)
 #endif
 
     os_threads.set_handler([](const_req req) {
-        using namespace std::chrono;
         httpserver::json::Threads threads;
-        threads.time_ms = duration_cast<milliseconds>
-            (osv::clock::wall::now().time_since_epoch()).count();
+        timeval timeofday;
+        if (gettimeofday(&timeofday, nullptr)) {
+            return threads;
+        }
+        threads.time_ms = timeofday.tv_sec * 1000 + timeofday.tv_usec / 1000;
         httpserver::json::Thread thread;
-        sched::with_all_threads([&](sched::thread &t) {
-            thread.id = t.id();
-            thread.status = t.get_status();
-            auto tcpu = t.tcpu();
-            thread.cpu = tcpu ? tcpu->id : -1;
-            thread.cpu_ms = duration_cast<milliseconds>(t.thread_clock()).count();
-            thread.switches = t.stat_switches.get();
-            thread.migrations = t.stat_migrations.get();
-            thread.preemptions = t.stat_preemptions.get();
-            thread.name = t.name();
-            thread.priority = t.priority();
-            thread.stack_size = t.get_stack_info().size;
-            thread.status = t.get_status();
-            threads.list.push(thread);
-        });
+        osv_thread *osv_threads;
+        size_t threads_num;
+        if (!osv_get_all_threads(&osv_threads, &threads_num)) {
+            for (size_t i = 0; i < threads_num; i++) {
+                auto &t = osv_threads[i];
+                thread.id = t.id;
+                thread.status = t.status;
+                thread.cpu = t.cpu_id;
+                thread.cpu_ms = t.cpu_ms;
+                thread.switches = t.switches;
+                thread.migrations = t.migrations;
+                thread.preemptions = t.preemptions;
+                thread.name = t.name;
+                free(t.name);
+                thread.priority = t.priority;
+                thread.stack_size = t.stack_size;
+                thread.status = t.status;
+                threads.list.push(thread);
+            }
+            free(osv_threads);
+        }
         return threads;
     });
 
     os_get_cmdline.set_handler([](const_req req) {
-        return osv::getcmdline();
+        return from_c_string(osv_cmdline());
     });
 
 #if !defined(MONITORING)

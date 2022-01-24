@@ -337,6 +337,9 @@ sys_lseek(struct file *fp, off_t off, int type, off_t *origin)
 	case SEEK_END:
 		off = vp->v_size + off;
 		break;
+	default:
+		if (type != SEEK_SET)
+			return EINVAL;
 	}
 	if (off >= 0) {
 		error = VOP_SEEK(vp, fp, fp->f_offset, off);

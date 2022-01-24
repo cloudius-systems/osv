@@ -45,6 +45,7 @@
 #include <sys/nvpair.h>
 #include "zfs_namecheck.h"
 #include "zfs_deleg.h"
+#include <osv/export.h>
 
 static int
 valid_char(char c)
@@ -129,7 +130,7 @@ permset_namecheck(const char *path, namecheck_err_t *why, char *what)
  * We allow '%' here as we use that character internally to create unique
  * names for temporary clones (for online recv).
  */
-int
+OSV_LIB_SOLARIS_API int
 dataset_namecheck(const char *path, namecheck_err_t *why, char *what)
 {
 	const char *loc, *end;
@@ -247,7 +248,7 @@ dataset_namecheck(const char *path, namecheck_err_t *why, char *what)
  *
  *	/[component][/]*[component][/]
  */
-int
+OSV_LIB_SOLARIS_API int
 mountpoint_namecheck(const char *path, namecheck_err_t *why)
 {
 	const char *start, *end;
@@ -291,7 +292,7 @@ mountpoint_namecheck(const char *path, namecheck_err_t *why)
  * with a letter.  The pool names 'raidz' and 'mirror' are also reserved names
  * that cannot be used.
  */
-int
+OSV_LIB_SOLARIS_API int
 pool_namecheck(const char *pool, namecheck_err_t *why, char *what)
 {
 	const char *c;

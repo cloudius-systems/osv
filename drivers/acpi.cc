@@ -30,6 +30,7 @@ extern "C" {
 #include <osv/interrupt.hh>
 
 #include <osv/prio.hh>
+#include "acpi.hh"
 
 #define acpi_tag "acpi"
 #define acpi_d(...)   tprintf_d(acpi_tag, __VA_ARGS__)
@@ -50,9 +51,13 @@ ACPI_STATUS AcpiOsTerminate()
 ACPI_PHYSICAL_ADDRESS AcpiOsGetRootPointer()
 {
     ACPI_SIZE rsdp;
-    auto st = AcpiFindRootPointer(&rsdp);
-    if (ACPI_FAILURE(st)) {
-        abort();
+    if (acpi::pvh_rsdp_paddr) {
+        rsdp = acpi::pvh_rsdp_paddr;
+    } else {
+        auto st = AcpiFindRootPointer(&rsdp);
+        if (ACPI_FAILURE(st)) {
+            abort();
+        }
     }
     return rsdp;
 }
@@ -535,6 +540,8 @@ void AcpiOsVprintf(const char *Format, va_list Args)
 
 namespace acpi {
 
+uint64_t pvh_rsdp_paddr = 0;
+
 #define ACPI_MAX_INIT_TABLES 16
 
 static ACPI_TABLE_DESC TableArray[ACPI_MAX_INIT_TABLES];
@@ -547,11 +554,13 @@ bool is_enabled() {
 
 void early_init()
 {
-    ACPI_SIZE rsdp;
-    auto st = AcpiFindRootPointer(&rsdp);
-    if (ACPI_FAILURE(st)) {
-        acpi_w("Warning: Failed to find ACPI root pointer!\n");
-        return;
+    if (!acpi::pvh_rsdp_paddr) {
+        ACPI_SIZE rsdp;
+        auto st = AcpiFindRootPointer(&rsdp);
+        if (ACPI_FAILURE(st)) {
+            acpi_w("Warning: Failed to find ACPI root pointer!\n");
+            return;
+        }
     }
 
     ACPI_STATUS status;

@@ -32,8 +32,9 @@
 #include <bsd/sys/sys/ctype.h>
 
 #include <bsd/sys/netinet/in.h>
+#include <osv/export.h>
 
-int
+OSV_LIBC_API int
 inet_aton(const char *cp, struct in_addr *addr)
 {
 	u_long parts[4];

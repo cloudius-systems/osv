@@ -50,14 +50,14 @@ SECTIONS
     .got.plt : ALIGN (4096) { *(.got.plt) *(.igot.plt) } : dynamic : text
 
     .text : ALIGN (16) {
-        text_start = .;
+        HIDDEN(text_start = .);
         *(.text.unlikely .text.*_unlikely .text.unlikely.*)
         *(.text.exit .text.exit.*)
         *(.text.fixup)
         *(.text.startup .text.startup.*)
         *(.text.hot .text.hot.*)
         *(.text .stub .text.* .gnu.linkonce.t.*)
-        text_end = .;
+        HIDDEN(text_end = .);
     } : text
 
     . = ALIGN(16);
@@ -65,62 +65,63 @@ SECTIONS
         fault_fixup_start = .;
         *(.fixup)
         fault_fixup_end = .;
-    } : text
+    KEEP(*(.fixup)) } : text
 
-    .eh_frame : { *(.eh_frame) } : text
-    .eh_frame_hdr : { *(.eh_frame_hdr) } :text :eh_frame
+    .eh_frame : { *(.eh_frame) KEEP(*(.eh_frame)); } : text
+    .eh_frame_hdr : { *(.eh_frame_hdr) KEEP(*(.eh_frame_hdr)); } :text :eh_frame
     .rodata : { *(.rodata*) } :text
     .note : { *(.note*) } :text :note
 
-    .gcc_except_table : { *(.gcc_except_table) *(.gcc_except_table.*) } : text
+    .gcc_except_table : { *(.gcc_except_table) *(.gcc_except_table.*) KEEP(*(.gcc_except_table)); } : text
 
     .tracepoint_patch_sites : ALIGN(8) {
-        __tracepoint_patch_sites_start = .;
+        HIDDEN(__tracepoint_patch_sites_start = .);
         *(.tracepoint_patch_sites)
-        __tracepoint_patch_sites_end = .;
-    } : text
+        HIDDEN(__tracepoint_patch_sites_end = .);
+    KEEP(*(.tracepoint_patch_sites)); } : text
 
     .data.rel.ro : { *(.data.rel.ro.local* .gnu.linkonce.d.rel.ro.local.*) *(.data.rel.ro .data.rel.ro.* .gnu.linkonce.d.rel.ro.*) } : text
 
     .data : { *(.data .data.*) } : text
 
-    _init_array_start = .;
+    HIDDEN(_init_array_start = .);
     .init_array : ALIGN(16) {
         *(SORT_BY_NAME(.preinit_array.*) .preinit_array)
         *(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*))
         *(.init_array .ctors)
-    } : text
-    _init_array_end = .;
+    KEEP(*(.init_array .init_array.* .ctors.* .ctors)) } : text
+    HIDDEN(_init_array_end = .);
 
     .percpu : ALIGN (4096) {
-        _percpu_start = .;
+        HIDDEN(_percpu_start = .);
         *(.percpu)
         . = ALIGN(4096);
-        _percpu_end = .;
+        HIDDEN(_percpu_end = .);
     }
     .percpu_workers : ALIGN (4096) {
-        _percpu_workers_start = .;
+        HIDDEN(_percpu_workers_start = .);
         *(.percpu_workers)
-        _percpu_workers_end = .;
+        HIDDEN(_percpu_workers_end = .);
     }
     /* do not align tdata, tbss with .tdata : ALIGN (64),
        or the linker will offset the TLS loads accordingly! */
-    .tdata : { *(.tdata .tdata.* .gnu.linkonce.td.*) } : tls : text
-    .tbss : {
-        *(.tbss .tbss.* .gnu.linkonce.tb.*) *(.tcommon)
-        _pie_static_tls_start = .;
+    .tdata : {
+        HIDDEN(_pie_static_tls_start = .);
         /* This is a reserve intended for executables' (pie or non-pie) TLS block */
         . = . + APP_LOCAL_EXEC_TLS_SIZE;
-        _pie_static_tls_end = .;
+        HIDDEN(_pie_static_tls_end = .);
+        *(.tdata .tdata.* .gnu.linkonce.td.*)
     } : tls : text
-    .tls_template_size = SIZEOF(.tdata) + SIZEOF(.tbss);
+    .tbss : {
+        *(.tbss .tbss.* .gnu.linkonce.tb.*) *(.tcommon)
+    } : tls : text
+    HIDDEN(.tls_template_size = SIZEOF(.tdata) + SIZEOF(.tbss));
     .bss : { *(.dynbss .bss .bss.* .gnu.linkonce.b.*) } : text
-
     . = ALIGN(64);
-    tcb0 = .;
+    HIDDEN(tcb0 = .);
     . = . + .tls_template_size + 1024;
     . = ALIGN(4096);
-    .edata = .;
+    HIDDEN(.edata = .);
 
     .debug_info 0 : { *(.debug_info .gnu.linkonce.wi.*) }
     .debug_srcinfo 0 : { *(.debug_srcinfo) }

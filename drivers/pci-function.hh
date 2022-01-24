@@ -252,6 +252,7 @@ namespace pci {
 
         // Implement device interface
         virtual hw_device_id get_id();
+        virtual hw_device_type get_device_type() { return hw_device_type::pci_device; }
         virtual void print();
         virtual void reset();
 

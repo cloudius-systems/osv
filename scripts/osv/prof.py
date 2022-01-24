@@ -74,9 +74,11 @@ unimportant_prefixes = [
      'log',
      'trace_slow_path',
      'operator()',
+     '_FUN',
      'prof::cpu_sampler::timer_fired()',
-     'sched::timer_base::expire()',
+     'prof::cpu_sampler::timer_fired()',
      'sched::timer_list::fired()',
+     'std::function<void ()>::operator()() const',
      'interrupt_descriptor_table::invoke_interrupt(unsigned int)',
      'interrupt',
      'interrupt_entry_common'),
@@ -422,3 +424,34 @@ def print_profile(samples, symbol_resolver, caller_oriented=False,
                 order_by=order,
                 printer=printer,
                 node_filter=lambda node: node_filter(node, tree_root))
+
+def print_flame_profile(samples, symbol_resolver, min_hits_count=None, time_range=None):
+    hits_by_symbol_list = {}
+
+    def symbol_name(src_addr):
+        if src_addr.name:
+            return src_addr.name
+        else:
+            return str(src_addr.addr)
+
+    for sample in samples:
+        if time_range:
+            sample = sample.intersection(time_range)
+            if not sample:
+                continue
+
+        frames = list(debug.resolve_all(symbol_resolver, (addr - 1 for addr in sample.backtrace)))
+        frames = strip_garbage(frames)
+
+        if frames:
+            frames.reverse()
+            symbol_list = ';'.join(symbol_name(src_addr) for src_addr in frames)
+            hits = hits_by_symbol_list.get(symbol_list, None)
+            if not hits:
+                hits_by_symbol_list[symbol_list] = 1
+            else:
+                hits_by_symbol_list[symbol_list] = hits + 1
+
+    for symbol_list, hits in iter(hits_by_symbol_list.items()):
+        if not min_hits_count or hits >= min_hits_count:
+            print(symbol_list + ' ' + str(hits))

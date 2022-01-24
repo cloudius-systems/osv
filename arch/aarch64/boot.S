@@ -8,6 +8,7 @@
 .text
 .align 16
 .globl start_elf
+.hidden start_elf
 .type start_elf , "function"
 start_elf:
         /* elf program start address */
@@ -37,7 +38,7 @@ start_elf:
         bl      premain
 
         adrp    x3, __loader_argc
-        ldr     x0, [x3, #:lo12:__loader_argc]
+        ldr     w0, [x3, #:lo12:__loader_argc]
         adrp    x3, __loader_argv
         ldr     x1, [x3, #:lo12:__loader_argv]
         bl      main
@@ -150,6 +151,7 @@ init_mmu:
 
 .align 16
 .globl start_secondary_cpu
+.hidden start_secondary_cpu
 .type  start_secondary_cpu , "function"
 start_secondary_cpu:
         adrp    x0, exception_vectors
@@ -157,6 +159,8 @@ start_secondary_cpu:
         isb
 
         bl      init_cpu
+        bl      init_boot_pt
+        bl      init_mmu
         bl      init_secondary_pt
         bl      init_mmu
 
@@ -188,10 +192,11 @@ ident_pt_l4_ttbr0:
         .quad 0
         .endr
 ident_pt_l3_ttbr0:
-        .quad ident_pt_l2_0_ttbr0 + 0x3 // Map 0GB-2GB one-to-one
-        .quad ident_pt_l2_1_ttbr0 + 0x3 // Map 2GB-4GB one-to-one
-        .quad ident_pt_l2_2_ttbr0 + 0x3 // Map 4GB-6GB one-to-one
-        .rept 509
+        .quad ident_pt_l2_0_ttbr0 + 0x3 // Map 0GB-1GB one-to-one
+        .quad ident_pt_l2_1_ttbr0 + 0x3 // Map 1GB-2GB one-to-one
+        .quad ident_pt_l2_2_ttbr0 + 0x3 // Map 2GB-3GB one-to-one
+        .quad ident_pt_l2_3_ttbr0 + 0x3 // Map 3GB-4GB one-to-one
+        .rept 508
         .quad 0
         .endr
 ident_pt_l2_0_ttbr0:
@@ -215,6 +220,13 @@ ident_pt_l2_2_ttbr0:
         .quad offset + (index << 21) + 0x411
         index = index + 1
         .endr
+ident_pt_l2_3_ttbr0:
+        index = 0
+        offset = 0xC0000000
+        .rept 512
+        .quad offset + (index << 21) + 0x411
+        index = index + 1
+        .endr
 .align 12
 ident_pt_l4_ttbr1:
         .rept 512
@@ -228,11 +240,14 @@ init_stack_bottom = .
 init_stack_top = .
 
 .globl smp_stack_free
+.hidden smp_stack_free
 .type smp_stack_free , "object"
 smp_stack_free: .quad 0
 
 .globl smpboot_ttbr0
+.hidden smpboot_ttbr0
 .type smpboot_ttbr0 , "object"
+.hidden smpboot_ttbr1
 .globl smpboot_ttbr1
 .type smpboot_ttbr1 , "object"
 

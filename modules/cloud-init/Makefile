@@ -1,51 +1,46 @@
-SRC = $(shell readlink -f ../..)
-include $(SRC)/modules/java-base/common.gmk
+include ../common.gmk
 
-autodepend = -MD -MT $@ -MP
-CXXFLAGS  = -g -rdynamic -Wall -std=c++11 -fPIC $(INCLUDES) $(autodepend)
-src = $(SRC)
-arch = x64
+module_out := $(out)/modules/cloud-init
+
+CXXFLAGS  = -g -rdynamic -Wall -std=c++11 -fPIC $(COMMON)
 
 boost-libs := -lboost_system -lboost_filesystem
 
-HTTPSERVER_API_DIR = ../../modules/httpserver-api
-INCLUDES += -I$(HTTPSERVER_API_DIR)
+HTTPSERVER_API_DIR =  $(out)/modules/httpserver-api
+INCLUDES += -I../httpserver-api
 
 # the build target executable:
 TARGET = cloud-init
 CPP_FILES := client.cc cloud-init.cc data-source.cc main.cc template.cc cassandra-module.cc json.cc
-OBJ_FILES := $(addprefix obj/,$(CPP_FILES:.cc=.o))
+OBJ_FILES := $(addprefix $(module_out)/,$(CPP_FILES:.cc=.o))
 DEPS := $(OBJ_FILES:.o=.d)
 
 STUB_HTTPSERVER_LIBS = $(HTTPSERVER_API_DIR)/httpserver-stub.so
 LIBS = -lpthread $(boost-libs) $(DEPEDNDS_LIBS) -lyaml-cpp -L$(HTTPSERVER_API_DIR)/ -lhttpserver-api
 
-quiet = $(if $V, $1, @echo " $2"; $1)
-very-quiet = $(if $V, $1, @$1)
-
-
 module: all
 
-all: init $(TARGET).so tst-template
+all: init $(module_out)/$(TARGET).so $(module_out)/tst-template
 
 init:
-	$(call very-quiet, mkdir -p obj)
+	$(call very-quiet, mkdir -p $(module_out))
 
-tst-template: template.cc tst-template.cc
-	$(call quiet, $(CXX) -g -Wall -std=c++11 -o $@ $^ -lboost_unit_test_framework -DBOOST_TEST_DYN_LINK, LINK $@)
+$(module_out)/tst-template: template.cc tst-template.cc
+	$(call quiet, $(CXX) -g -Wall -std=c++11 $(LDFLAGS) -o $@ $^ -lboost_unit_test_framework -DBOOST_TEST_DYN_LINK, LINK $@)
 
-$(TARGET): $(OBJ_FILES)
-	$(call quiet, $(CXX) $(CXXFLAGS) -o $(TARGET) $^ $(LIBS) $(STUB_HTTPSERVER_LIBS), LINK $@)
+$(module_out)/$(TARGET): $(OBJ_FILES)
+	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) $(module_out)/-o $(TARGET) $^ $(LIBS) $(STUB_HTTPSERVER_LIBS), LINK $@)
 
-$(TARGET).so: $(OBJ_FILES)
-	$(call quiet, $(CXX) $(CXXFLAGS) $(STATIC_LIBS) -shared -o $(TARGET).so $^ $(LIBS), LINK $@)
+$(module_out)/$(TARGET).so: $(OBJ_FILES)
+	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) $(STATIC_LIBS) -shared -o $(module_out)/$(TARGET).so $^ $(LIBS), LINK $@)
+	echo '/usr/mgmt/cloud-init.so: ./modules/cloud-init/cloud-init.so' > usr.manifest
 
-obj/%.o: %.cc
+$(module_out)/%.o: %.cc
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $@)
 
 clean:
-	$(call quiet, $(RM) -f $(TARGET).so tst-template, CLEAN)
-	$(call very-quiet, $(RM) -rf obj)
+	$(call quiet, $(RM) -f $(module_out)/$(TARGET).so $(module_out)/tst-template, CLEAN)
+	$(call very-quiet, $(RM) -rf $(module_out))
 
 ifneq ($(MAKECMDGOALS),clean)
 -include $(DEPS)

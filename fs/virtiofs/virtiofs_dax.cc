@@ -8,6 +8,7 @@
 #include <algorithm>
 #include <mutex>
 
+#include <api/assert.h>
 #include <osv/debug.h>
 #include <osv/uio.h>
 
@@ -18,8 +19,9 @@
 
 namespace virtiofs {
 
-int dax_manager::read(virtiofs_inode& inode, uint64_t file_handle, u64 read_amt,
-    struct uio& uio, bool aggressive)
+template<typename W>
+int dax_manager<W>::read(virtiofs_inode& inode, uint64_t file_handle,
+    u64 read_amt, struct uio& uio, bool aggressive)
 {
     std::lock_guard<mutex> guard {_lock};
 
@@ -63,7 +65,7 @@ int dax_manager::read(virtiofs_inode& inode, uint64_t file_handle, u64 read_amt,
     }
 
 out:
-    auto req_data = _window->addr + (mp.mstart * _chunk_size) + coffset;
+    auto req_data = _window.data() + (mp.mstart * _chunk_size) + coffset;
     auto read_amt_act = std::min<size_t>(read_amt,
         (mp.nchunks * _chunk_size) - coffset);
     // NOTE: It shouldn't be necessary to use the mmio* interface (i.e. volatile
@@ -76,7 +78,8 @@ out:
     return error;
 }
 
-int dax_manager::map(uint64_t nodeid, uint64_t file_handle, chunk nchunks,
+template<typename W>
+int dax_manager<W>::map(uint64_t nodeid, uint64_t file_handle, chunk nchunks,
     chunk fstart, mapping_part& mapped, bool evict)
 {
     // If necessary, unmap just enough chunks
@@ -99,7 +102,8 @@ int dax_manager::map(uint64_t nodeid, uint64_t file_handle, chunk nchunks,
 
     // Map new chunks
     auto mstart = _window_chunks - empty;
-    auto error = map_ll(nodeid, file_handle, to_map, fstart, mstart);
+    auto error = _window.map(nodeid, file_handle, to_map * _chunk_size,
+        fstart * _chunk_size, mstart * _chunk_size);
     if (error) {
         return error;
     }
@@ -119,7 +123,8 @@ int dax_manager::map(uint64_t nodeid, uint64_t file_handle, chunk nchunks,
     return 0;
 }
 
-int dax_manager::unmap(chunk nchunks, mapping_part& unmapped, bool deep)
+template<typename W>
+int dax_manager<W>::unmap(chunk nchunks, mapping_part& unmapped, bool deep)
 {
     // Determine necessary changes
     chunk to_unmap = 0;
@@ -148,7 +153,8 @@ int dax_manager::unmap(chunk nchunks, mapping_part& unmapped, bool deep)
     // Apply changes
     if (deep) {
         auto mstart = first_empty() - to_unmap;
-        auto error = unmap_ll(to_unmap, mstart);
+        auto error = _window.unmap(to_unmap * _chunk_size,
+            mstart * _chunk_size);
         if (error) {
             return error;
         }
@@ -163,10 +169,10 @@ int dax_manager::unmap(chunk nchunks, mapping_part& unmapped, bool deep)
     return 0;
 }
 
-int dax_manager::map_ll(uint64_t nodeid, uint64_t file_handle, chunk nchunks,
-    chunk fstart, chunk mstart)
+int dax_window_impl::map(uint64_t nodeid, uint64_t fh, uint64_t len,
+    uint64_t fstart, uint64_t mstart)
 {
-    assert(mstart + nchunks <= _window_chunks);
+    assert(mstart + len <= _window->len);
 
     // NOTE: There are restrictions on the arguments to FUSE_SETUPMAPPING, from
     // the spec: "Alignment constraints for FUSE_SETUPMAPPING and
@@ -177,18 +183,18 @@ int dax_manager::map_ll(uint64_t nodeid, uint64_t file_handle, chunk nchunks,
     // - moffset: multiple of map_alignment from FUSE_INIT
     // In practice, map_alignment is the host's page size, because foffset and
     // moffset are passed to mmap() on the host. These are satisfied by
-    // _chunk_size being a multiple of map_alignment.
+    // the caller (chunk size being a multiple of map alignment in dax_manager).
 
     std::unique_ptr<fuse_setupmapping_in> in_args {
         new (std::nothrow) fuse_setupmapping_in()};
     if (!in_args) {
         return ENOMEM;
     }
-    in_args->fh = file_handle;
-    in_args->foffset = fstart * _chunk_size;
-    in_args->len = nchunks * _chunk_size;
+    in_args->fh = fh;
+    in_args->foffset = fstart;
+    in_args->len = len;
     in_args->flags = 0; // Read-only
-    in_args->moffset = mstart * _chunk_size;
+    in_args->moffset = mstart;
 
     virtiofs_debug("inode %lld, setting up mapping (foffset=%lld, len=%lld, "
                    "moffset=%lld)\n", nodeid, in_args->foffset, in_args->len,
@@ -203,9 +209,9 @@ int dax_manager::map_ll(uint64_t nodeid, uint64_t file_handle, chunk nchunks,
     return 0;
 }
 
-int dax_manager::unmap_ll(chunk nchunks, chunk mstart)
+int dax_window_impl::unmap(uint64_t len, uint64_t mstart)
 {
-    assert(mstart + nchunks <= _window_chunks);
+    assert(mstart + len <= _window->len);
 
     // NOTE: FUSE_REMOVEMAPPING accepts a fuse_removemapping_in followed by
     // fuse_removemapping_in.count fuse_removemapping_one arguments in general.
@@ -219,8 +225,8 @@ int dax_manager::unmap_ll(chunk nchunks, chunk mstart)
     auto r_one = new (in_args.get() + sizeof(fuse_removemapping_in))
         fuse_removemapping_one();
     r_in->count = 1;
-    r_one->moffset = mstart * _chunk_size;
-    r_one->len = nchunks * _chunk_size;
+    r_one->moffset = mstart;
+    r_one->len = len;
 
     // The nodeid is irrelevant for the current implementation of
     // FUSE_REMOVEMAPPING. If it needed to be set, would we need to make a
@@ -239,7 +245,9 @@ int dax_manager::unmap_ll(chunk nchunks, chunk mstart)
     return 0;
 }
 
-bool dax_manager::find(uint64_t nodeid, chunk fstart, mapping_part& found) const
+template<typename W>
+bool dax_manager<W>::find(uint64_t nodeid, chunk fstart, mapping_part& found)
+    const
 {
     for (auto& m : _mappings) {
         if (m.nodeid == nodeid &&
@@ -256,7 +264,8 @@ bool dax_manager::find(uint64_t nodeid, chunk fstart, mapping_part& found) const
     return false;
 }
 
-dax_manager::chunk dax_manager::first_empty() const
+template<typename W>
+typename dax_manager<W>::chunk dax_manager<W>::first_empty() const
 {
     if (_mappings.empty()) {
         return 0;
@@ -264,5 +273,9 @@ dax_manager::chunk dax_manager::first_empty() const
     auto& m {_mappings.back()};
     return m.mstart + m.nchunks;
 }
+
+// Explicitly instantiate the only uses of dax_manager.
+template class dax_manager<dax_window_impl>;
+template class dax_manager<dax_window_stub>;
 
 }

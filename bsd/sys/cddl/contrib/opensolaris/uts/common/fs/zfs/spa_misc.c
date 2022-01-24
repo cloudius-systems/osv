@@ -49,6 +49,7 @@
 #include <sys/ddt.h>
 #include "zfs_prop.h"
 #include "zfeature_common.h"
+#include <osv/export.h>
 
 /*
  * SPA locking
@@ -237,8 +238,10 @@ int spa_mode_global;
 
 #ifdef ZFS_DEBUG
 /* Everything except dprintf is on by default in debug builds */
+OSV_LIB_SOLARIS_API
 int zfs_flags = ~ZFS_DEBUG_DPRINTF;
 #else
+OSV_LIB_SOLARIS_API
 int zfs_flags = 0;
 #endif
 
@@ -1162,7 +1165,7 @@ spa_guid_exists(uint64_t pool_guid, uint64_t device_guid)
 	return (spa_by_guid(pool_guid, device_guid) != NULL);
 }
 
-char *
+OSV_LIB_SOLARIS_API char *
 spa_strdup(const char *s)
 {
 	size_t len;
@@ -1176,7 +1179,7 @@ spa_strdup(const char *s)
 	return (new);
 }
 
-void
+OSV_LIB_SOLARIS_API void
 spa_strfree(char *s)
 {
 	kmem_free(s, strlen(s) + 1);
@@ -1343,7 +1346,7 @@ spa_sync_pass(spa_t *spa)
 	return (spa->spa_sync_pass);
 }
 
-char *
+OSV_LIB_SOLARIS_API char *
 spa_name(spa_t *spa)
 {
 	return (spa->spa_name);
@@ -1585,7 +1588,7 @@ spa_boot_init()
 	spa_config_load();
 }
 
-void
+OSV_LIB_SOLARIS_API void
 spa_init(int mode)
 {
 	mutex_init(&spa_namespace_lock, NULL, MUTEX_DEFAULT, NULL);
@@ -1631,7 +1634,7 @@ spa_init(int mode)
 	l2arc_start();
 }
 
-void
+OSV_LIB_SOLARIS_API void
 spa_fini(void)
 {
 	l2arc_stop();

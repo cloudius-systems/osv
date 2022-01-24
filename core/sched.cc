@@ -135,7 +135,7 @@ public:
 private:
     mutex _mtx;
     std::list<thread*> _zombies;
-    std::unique_ptr<thread> _thread;
+    thread_unique_ptr _thread;
 };
 
 cpu::cpu(unsigned _id)
@@ -225,13 +225,34 @@ void thread::cputime_estimator_get(
 void cpu::schedule()
 {
     WITH_LOCK(irq_lock) {
+#ifdef __aarch64__
+        reschedule_from_interrupt(sched::cpu::current(), false, thyst);
+#else
         current()->reschedule_from_interrupt();
+#endif
     }
 }
 
+// In aarch64 port, the reschedule_from_interrupt() needs to be implemented
+// in assembly (please see arch/aarch64/sched.S) to give us better control
+// which registers are used and which ones are saved and restored during
+// the context switch. In essence, most of the original reschedule_from_interrupt()
+// code up to switch_to() is shared with aarch64-specific cpu::schedule_next_thread()
+// that is called from reschedule_from_interrupt() in arch/arch64/sched.S assembly.
+// The logic executed after switch_to() that makes up destroy_current_cpu_terminating_thread()
+// is called from arch/arch64/sched.S as well.
+// At the end, we define reschedule_from_interrupt() in C++ for x86_64 and schedule_next_thread()
+// and destroy_current_cpu_terminating_thread() in C++ for aarch64.
+#ifdef __aarch64__
+inline thread_switch_data cpu::schedule_next_thread(bool called_from_yield,
+                                                    thread_runtime::duration preempt_after)
+{
+    thread_switch_data switch_data;
+#else
 void cpu::reschedule_from_interrupt(bool called_from_yield,
                                     thread_runtime::duration preempt_after)
 {
+#endif
     trace_sched_sched();
     assert(sched::exception_depth <= 1);
     need_reschedule = false;
@@ -259,7 +280,11 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
         // lowest runtime, and update the timer until the next thread's turn.
         if (runqueue.empty()) {
             preemption_timer.cancel();
+#ifdef __aarch64__
+            return switch_data;
+#else
             return;
+#endif
         } else if (!called_from_yield) {
             auto &t = *runqueue.begin();
             if (p->_runtime.get_local() < t._runtime.get_local()) {
@@ -268,7 +293,11 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
                 if (delta > 0) {
                     preemption_timer.set(now + delta);
                 }
+#ifdef __aarch64__
+                return switch_data;
+#else
                 return;
+#endif
             }
         }
         // If we're here, p no longer has the lowest runtime. Before queuing
@@ -336,18 +365,38 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
     if (lazy_flush_tlb.exchange(false, std::memory_order_seq_cst)) {
         mmu::flush_tlb_local();
     }
+#ifdef __aarch64__
+    switch_data.old_thread_state = &(p->_state);
+    switch_data.new_thread_state = &(n->_state);
+    return switch_data;
+}
+#else
     n->switch_to();
+#endif
 
     // Note: after the call to n->switch_to(), we should no longer use any of
     // the local variables, nor "this" object, because we just switched to n's
     // stack and the values we can access now are those that existed in the
     // reschedule call which scheduled n out, and will now be returning.
     // So to get the current cpu, we must use cpu::current(), not "this".
+#ifdef __aarch64__
+extern "C" void destroy_current_cpu_terminating_thread()
+{
+#endif
     if (cpu::current()->terminating_thread) {
         cpu::current()->terminating_thread->destroy();
         cpu::current()->terminating_thread = nullptr;
     }
 }
+
+#ifdef __aarch64__
+extern "C" thread_switch_data cpu_schedule_next_thread(cpu* cpu,
+                                                       bool called_from_yield,
+                                                       thread_runtime::duration preempt_after)
+{
+    return cpu->schedule_next_thread(called_from_yield, preempt_after);
+}
+#endif
 
 void cpu::timer_fired()
 {
@@ -503,7 +552,7 @@ void thread::pin(cpu *target_cpu)
     // load balancer thread) but a "good-enough" dirty solution is to
     // temporarily create a new ad-hoc thread, "wakeme".
     bool do_wakeme = false;
-    std::unique_ptr<thread> wakeme(thread::make([&] () {
+    thread_unique_ptr wakeme(thread::make_unique([&] () {
         wait_until([&] { return do_wakeme; });
         t.wake();
     }, sched::thread::attr().pin(source_cpu)));
@@ -521,7 +570,11 @@ void thread::pin(cpu *target_cpu)
         // Note that wakeme is on the same CPU, and irq is disabled,
         // so it will not actually run until we stop running.
         wakeme->wake_with([&] { do_wakeme = true; });
+#ifdef __aarch64__
+        reschedule_from_interrupt(source_cpu, false, thyst);
+#else
         source_cpu->reschedule_from_interrupt();
+#endif
     }
     // wakeme will be implicitly join()ed here.
 }
@@ -537,7 +590,7 @@ void thread::pin(thread *t, cpu *target_cpu)
     // where the target thread is currently running. We start here a new
     // helper thread to follow the target thread's CPU. We could have also
     // re-used an existing thread (e.g., the load balancer thread).
-    std::unique_ptr<thread> helper(thread::make([&] {
+    thread_unique_ptr helper(thread::make_unique([&] {
         WITH_LOCK(irq_lock) {
             // This thread started on the same CPU as t, but by now t might
             // have moved. If that happened, we need to move too.
@@ -648,7 +701,7 @@ void thread::unpin()
         }
         return;
     }
-    std::unique_ptr<thread> helper(thread::make([this] {
+    thread_unique_ptr helper(thread::make_unique([this] {
         WITH_LOCK(preempt_lock) {
             // helper thread started on the same CPU as "this", but by now
             // "this" might migrated. If that happened helper need to migrate.
@@ -760,7 +813,11 @@ void thread::yield(thread_runtime::duration preempt_after)
     }
     trace_sched_yield_switch();
 
+#ifdef __aarch64__
+    reschedule_from_interrupt(cpu::current(), true, preempt_after);
+#else
     cpu::current()->reschedule_from_interrupt(true, preempt_after);
+#endif
 }
 
 void thread::set_priority(float priority)
@@ -916,7 +973,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
     , _migration_lock_counter(0)
     , _pinned(false)
     , _id(0)
-    , _cleanup([this] { delete this; })
+    , _cleanup([this] { dispose(this); })
     , _app(app)
     , _joiner(nullptr)
 {
@@ -1543,7 +1600,7 @@ bool operator<(const timer_base& t1, const timer_base& t2)
 }
 
 thread::reaper::reaper()
-    : _mtx{}, _zombies{}, _thread(thread::make([=] { reap(); }))
+    : _mtx{}, _zombies{}, _thread(thread::make_unique([=] { reap(); }))
 {
     _thread->start();
 }

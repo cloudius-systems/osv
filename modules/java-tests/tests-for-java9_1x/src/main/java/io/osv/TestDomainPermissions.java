@@ -1,0 +1,1 @@
+../../../../../../tests/src/main/java/io/osv/TestDomainPermissions.java

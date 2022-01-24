@@ -205,6 +205,7 @@ static int rofs_readdir(struct vnode *vnode, struct file *fp, struct dirent *dir
     }
 
     fp->f_offset++;
+    dir->d_off = fp->f_offset;
 
     return 0;
 }

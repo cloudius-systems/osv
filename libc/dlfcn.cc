@@ -124,7 +124,7 @@ int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
     return ret;
 }
 
-extern "C" int dladdr(void *addr, Dl_info *info)
+extern "C" int dladdr(const void *addr, Dl_info *info)
 {
     auto ei = elf::get_program()->lookup_addr(addr);
     info->dli_fname = ei.fname;

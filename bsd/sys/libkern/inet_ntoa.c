@@ -33,8 +33,9 @@
 #include <bsd/sys/sys/param.h>
 
 #include <bsd/sys/netinet/in.h>
+#include <osv/export.h>
 
-char *
+OSV_LIBC_API char *
 inet_ntoa(struct in_addr ina)
 {
 	static char buf[4*sizeof "123"];

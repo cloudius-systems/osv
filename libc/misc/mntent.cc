@@ -76,6 +76,7 @@ int mtab_file::read(struct uio *uio, int flags)
     return 0;
 }
 
+OSV_LIBC_API
 FILE *setmntent(const char *name, const char *mode)
 {
     if (!strcmp(name, "/proc/mounts") || !strcmp(name, "/etc/mnttab") || !strcmp(name, "/etc/mtab")) {
@@ -103,12 +104,14 @@ FILE *setmntent(const char *name, const char *mode)
     return fopen(name, mode);
 }
 
+OSV_LIBC_API
 int endmntent(FILE *f)
 {
     fclose(f);
     return 1;
 }
 
+OSV_LIBC_API
 struct mntent *getmntent_r(FILE *f, struct mntent *mnt, char *linebuf, int buflen)
 {
     int cnt, n[8];
@@ -145,6 +148,7 @@ struct mntent *getmntent_r(FILE *f, struct mntent *mnt, char *linebuf, int bufle
     return mnt;
 }
 
+OSV_LIBC_API
 struct mntent *getmntent(FILE *f)
 {
     static char linebuf[256];
@@ -167,6 +171,7 @@ bool is_mtab_file(FILE *fp)
     return true;
 }
 
+OSV_LIBC_API
 int addmntent(FILE *f, const struct mntent *mnt)
 {
     if (is_mtab_file(f)) {
@@ -179,6 +184,7 @@ int addmntent(FILE *f, const struct mntent *mnt)
         mnt->mnt_freq, mnt->mnt_passno) < 0;
 }
 
+OSV_LIBC_API
 char *hasmntopt(const struct mntent *mnt, const char *opt)
 {
     return strstr(mnt->mnt_opts, opt);

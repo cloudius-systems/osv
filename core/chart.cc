@@ -12,6 +12,9 @@ double boot_time_chart::to_msec(u64 time)
 
 void boot_time_chart::print_one_time(int index)
 {
+    if (!arrays[index].str) {
+        return;
+    }
     auto field = arrays[index].stamp;
     auto last = arrays[index - 1].stamp;
     auto initial = arrays[0].stamp;

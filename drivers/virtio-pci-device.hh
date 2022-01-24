@@ -71,6 +71,7 @@ public:
     virtual u16 get_type_id() = 0;
 
     virtual hw_device_id get_id() { return hw_device_id(VIRTIO_VENDOR_ID,get_type_id()); }
+    virtual hw_device_type get_device_type() { return hw_device_type::virtio_over_pci_device; }
     virtual void print() { _dev->print(); }
     virtual void reset() { _dev->reset(); }
 
@@ -83,6 +84,8 @@ public:
 
     virtual unsigned get_irq() { return 0; }
     size_t get_vring_alignment() { return VIRTIO_PCI_VRING_ALIGN; }
+
+    pci::device *get_pci_device() { return _dev; }
 
 protected:
     virtual bool parse_pci_config() = 0;

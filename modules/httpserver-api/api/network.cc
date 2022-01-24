@@ -10,7 +10,7 @@
 #include "../libtools/network_interface.hh"
 #include "exception.hh"
 #include <vector>
-#include <osv/clock.hh>
+#include <time.h>
 
 namespace httpserver {
 
@@ -57,13 +57,16 @@ void init(routes& routes)
     network_json_init_path("Hardware management API");
     network_json::listIfconfig.set_handler([](const_req req) {
         vector<Interface> res;
-        auto time = duration_cast<microseconds>
-                    (osv::clock::uptime::now().time_since_epoch()).count();
+        timespec time;
+        if (clock_gettime(CLOCK_BOOTTIME, &time)) {
+            return res;
+        }
+        auto time_mc = time.tv_sec * 1000000 + time.tv_nsec / 1000;
         for (unsigned int i = 0; i <= number_of_interfaces(); i++) {
             auto* ifp = get_interface_by_index(i);
 
             if (ifp != nullptr) {
-                res.push_back(get_interface(get_interface_name(ifp), ifp, time));
+                res.push_back(get_interface(get_interface_name(ifp), ifp, time_mc));
             }
         }
         return res;
@@ -76,8 +79,12 @@ void init(routes& routes)
         if (ifp == nullptr) {
             throw not_found_exception(string("Interface ") + name + " not found");
         }
-        auto time = duration_cast<microseconds>(osv::clock::uptime::now().time_since_epoch()).count();
-        return get_interface(name, ifp, time);
+        timespec time;
+        if (clock_gettime(CLOCK_BOOTTIME, &time)) {
+            throw not_found_exception("Failed to get time");
+        }
+        auto time_mc = time.tv_sec * 1000000 + time.tv_nsec / 1000;
+        return get_interface(name, ifp, time_mc);
     });
 
     network_json::getRoute.set_handler([](const_req req) {

@@ -1,4 +1,2 @@
-*.so
 autogen/*
-obj/*
 *.manifest

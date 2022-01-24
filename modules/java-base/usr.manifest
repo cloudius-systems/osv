@@ -6,4 +6,4 @@
 #
 
 [manifest]
-/usr/lib/jni/monitor.so: ${MODULE_DIR}/obj/jni/monitor.so
+/usr/lib/jni/monitor.so: ./modules/java-base/jni/monitor.so

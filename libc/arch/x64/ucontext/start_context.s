@@ -2,8 +2,11 @@
 .extern abort
 .extern exit
 .global __start_context
+.hidden __start_context
 .global _start_context
+.hidden _start_context
 .global start_context
+.hidden start_context
 .type __start_context,@function
 .type _start_context,@function
 .type start_context,@function

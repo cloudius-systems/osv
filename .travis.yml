@@ -1,13 +1,29 @@
 sudo: required
+dist: bionic
 language: c
+python: 3.6
 services:
   - docker
 branches:
   only:
   - master
   - ipv6
+addons:
+  apt:
+    packages:
+      - bridge-utils
+      - libpulse0
+      - libvirt-bin
+      - qemu-kvm
+      - virtinst
+      - ubuntu-vm-builder
+      - python3-pip
 before_install:
-  - pushd docker && docker build -t osv/builder -f ./Dockerfile.builder --build-arg DIST="ubuntu-19.10" --build-arg GIT_BRANCH="ipv6" . && popd
+  # Set up KVM
+  - sudo adduser $USER libvirt
+  - sudo adduser $USER kvm
+  - echo "$DOCKER_ACCESS_TOKEN" | docker login --username osvunikernel --password-stdin
+  - pushd docker && docker build -t osv/builder -f ./Dockerfile.builder --build-arg DIST="ubuntu-20.10" --build-arg GIT_BRANCH="ipv6" . && popd
   - docker run -it --privileged -d --name build osv/builder
 stages:
   - build_and_publish
@@ -19,6 +35,9 @@ jobs:
     - stage: build_and_publish
       script:
         - docker exec build ./scripts/build clean
+        - docker exec build ./scripts/build -j$(nproc) image=tests
+        - docker exec build lscpu
+        - docker exec build ./scripts/test.py -d tracing_smoke_test -d tst-time.so
         - docker exec build ./scripts/build-capstan-mpm-packages kernel
         - docker exec build ./scripts/build-capstan-mpm-packages unit_tests
         - docker exec build ./scripts/build-capstan-mpm-packages monitoring

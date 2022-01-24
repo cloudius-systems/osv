@@ -73,8 +73,14 @@ def set_imgargs(options):
     if options.hypervisor == 'qemu_microvm':
         execute = '--nopci ' + execute
 
-    if options.arch == 'aarch64':
-        execute = '--disable_rofs_cache ' + execute
+    if options.mount_fs:
+        execute = ' '.join('--mount-fs=%s' % m for m in options.mount_fs) + ' ' + execute
+
+    if options.ip:
+        execute = ' '.join('--ip=%s' % i for i in options.ip) + ' ' + execute
+
+    if options.bootchart:
+        execute = '--bootchart ' + execute
 
     options.osv_cmdline = execute
     if options.kernel or options.hypervisor == 'qemu_microvm' or options.arch == 'aarch64':
@@ -172,9 +178,10 @@ def start_osv_qemu(options):
         "-drive", "file=%s,if=none,id=hd1" % (options.cloud_init_image)]
 
     if options.virtio_fs_tag:
+        dax = (",cache-size=%s" % options.virtio_fs_dax) if options.virtio_fs_dax else ""
         args += [
         "-chardev", "socket,id=char0,path=/tmp/vhostqemu",
-        "-device", "vhost-user-fs-pci,queue-size=1024,chardev=char0,tag=%s" % options.virtio_fs_tag,
+        "-device", "vhost-user-fs-pci,queue-size=1024,chardev=char0,tag=%s%s" % (options.virtio_fs_tag, dax),
         "-object", "memory-backend-file,id=mem,size=%s,mem-path=/dev/shm,share=on" % options.memsize,
         "-numa", "node,memdev=mem"]
 
@@ -254,17 +261,25 @@ def start_osv_qemu(options):
     for a in options.pass_args or []:
         args += a.split()
 
+    virtiofsd = None
     if options.virtio_fs_dir:
-        try:
-            # Normally virtiofsd exits by itself but in future we should probably kill it if it did not
-            subprocess.Popen(["virtiofsd", "--socket-path=/tmp/vhostqemu", "-o",
-                              "source=%s" % options.virtio_fs_dir, "-o", "cache=always"], stdout=devnull, stderr=devnull)
-        except OSError as e:
-            if e.errno == errno.ENOENT:
-                print("virtiofsd binary not found. Please install the qemu-system-x86 package that comes with it (>= 4.2) and is in path.")
-            else:
-                print("OS error({0}): \"{1}\" while running virtiofsd {2}".
-                    format(e.errno, e.strerror, " ".join(args)))
+        virtiofsd_cmdline = ["virtiofsd", "--socket-path=/tmp/vhostqemu", "-o",
+            "source=%s" % options.virtio_fs_dir]
+        if options.dry_run:
+            print(format_args(virtiofsd_cmdline))
+        else:
+            try:
+                virtiofsd = subprocess.Popen(virtiofsd_cmdline, stdout=devnull,
+                    stderr=devnull)
+            except OSError as e:
+                if e.errno == errno.ENOENT:
+                    print("virtiofsd binary not found. Please install the qemu-system-%s package "
+                        "that comes with it (>= 4.2) and is in path." % options.arch,
+                        file=sys.stderr)
+                else:
+                    print("OS error(%d): \"%s\" while running virtiofsd %s" % \
+                        (e.errno, e.strerror, " ".join(args)), file=sys.stderr)
+                sys.exit()
 
     try:
         # Save the current settings of the stty
@@ -274,7 +289,7 @@ def start_osv_qemu(options):
         qemu_env = os.environ.copy()
 
         qemu_env['OSV_BRIDGE'] = options.bridge
-        qemu_path = options.qemu_path or ('qemu-system-%s' % options.arch)
+        qemu_path = options.qemu_path or qemu_env.get('QEMU_PATH') or ('qemu-system-%s' % options.arch)
         cmdline = [qemu_path] + args
         if options.dry_run:
             print(format_args(cmdline))
@@ -284,12 +299,21 @@ def start_osv_qemu(options):
                 sys.exit("qemu failed.")
     except OSError as e:
         if e.errno == errno.ENOENT:
-            print("'%s' binary not found. Please install the qemu-system-x86 package." % qemu_path)
+            print("'%s' binary not found. Please install the qemu-system-%s package." % \
+                (qemu_path, options.arch), file=sys.stderr)
         else:
-            print("OS error({0}): \"{1}\" while running qemu-system-{2} {3}".
-                format(e.errno, e.strerror, options.arch, " ".join(args)))
+            print("OS error(%d): \"%s\" while running qemu-system-%s %s" %
+                (e.errno, e.strerror, options.arch, " ".join(args)), file=sys.stderr)
     finally:
         cleanups()
+        # Clean up the spawned virtiofsd, if any
+        if virtiofsd is not None:
+            if virtiofsd.poll() is None:
+                virtiofsd.terminate()
+                try:
+                    virtiofsd.wait(5)
+                except subprocess.TimeoutExpired:
+                    virtiofsd.kill()
 
 def start_osv_xen(options):
     if options.hypervisor == "xen":
@@ -475,7 +499,7 @@ def choose_hypervisor(external_networking, arch):
     if os.path.exists('/dev/kvm') and arch == host_arch:
         return 'kvm'
     if (os.path.exists('/proc/xen/capabilities')
-        and 'control_d' in file('/proc/xen/capabilities').read()
+        and 'control_d' in open('/proc/xen/capabilities', 'r').read()
         and external_networking):
         return 'xen'
     return 'qemu'
@@ -579,6 +603,14 @@ if __name__ == "__main__":
                         help="virtio-fs device tag")
     parser.add_argument("--virtio-fs-dir", action="store",
                         help="path to the directory exposed via virtio-fs mount")
+    parser.add_argument("--virtio-fs-dax", action="store",
+                        help="DAX window size for virtio-fs device (disabled if not specified)")
+    parser.add_argument("--mount-fs", default=[], action="append",
+                        help="extra mounts (forwarded to respective kernel command line option)")
+    parser.add_argument("--ip", default=[], action="append",
+                        help="static ip addresses (forwarded to respective kernel command line option)")
+    parser.add_argument("--bootchart", action="store_true",
+                        help="bootchart mode (forwarded to respective kernel command line option")
     cmdargs = parser.parse_args()
 
     cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"

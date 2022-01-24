@@ -13,8 +13,13 @@
 #include "osv/trace.hh"
 #include "osv/dentry.h"
 #include "osv/mount.h"
+#include <osv/stubbing.hh>
 #include "libc/libc.hh"
 #include <safe-ptr.hh>
+
+#ifndef MAP_UNINITIALIZED
+#define MAP_UNINITIALIZED 0x4000000
+#endif
 
 TRACEPOINT(trace_memory_mmap, "addr=%p, length=%d, prot=%d, flags=%d, fd=%d, offset=%d", void *, size_t, int, int, int, off_t);
 TRACEPOINT(trace_memory_mmap_err, "%d", int);
@@ -79,6 +84,7 @@ unsigned libc_madvise_to_advise(int advice)
     return 0;
 }
 
+OSV_LIBC_API
 int mprotect(void *addr, size_t len, int prot)
 {
     // we don't support mprotecting() the linear map (e.g.., malloc() memory)
@@ -110,6 +116,7 @@ int mmap_validate(void *addr, size_t length, int flags, off_t offset)
     return 0;
 }
 
+OSV_LIBC_API
 void *mmap(void *addr, size_t length, int prot, int flags,
            int fd, off_t offset)
 {
@@ -130,6 +137,7 @@ void *mmap(void *addr, size_t length, int prot, int flags,
     auto mmap_flags = libc_flags_to_mmap(flags);
     auto mmap_perm  = libc_prot_to_perm(prot);
 
+#ifndef AARCH64_PORT_STUB
     if ((flags & MAP_32BIT) && !(flags & MAP_FIXED) && !addr) {
         // If addr is not specified, OSv by default starts mappings at address
         // 0x200000000000ul (see mmu::allocate()).  MAP_32BIT asks for a lower
@@ -137,6 +145,7 @@ void *mmap(void *addr, size_t length, int prot, int flags,
         // matter anyway.
         addr = (void*)0x2000000ul;
     }
+#endif
     if (flags & MAP_ANONYMOUS) {
         // We have already determined (see below) the region where the heap must be located. Now the JVM will request
         // fixed mappings inside that region
@@ -184,11 +193,6 @@ void *mmap(void *addr, size_t length, int prot, int flags,
     return ret;
 }
 
-extern "C" void *mmap64(void *addr, size_t length, int prot, int flags,
-                      int fd, off64_t offset)
-    __attribute__((alias("mmap")));
-
-
 int munmap_validate(void *addr, size_t length)
 {
     if (!mmu::is_page_aligned(addr) || length == 0) {
@@ -197,6 +201,7 @@ int munmap_validate(void *addr, size_t length)
     return 0;
 }
 
+OSV_LIBC_API
 int munmap(void *addr, size_t length)
 {
     trace_memory_munmap(addr, length);
@@ -214,11 +219,13 @@ int munmap(void *addr, size_t length)
     return ret;
 }
 
+OSV_LIBC_API
 int msync(void *addr, size_t length, int flags)
 {
     return mmu::msync(addr, length, flags).to_libc();
 }
 
+OSV_LIBC_API
 int mincore(void *addr, size_t length, unsigned char *vec)
 {
     if (!mmu::is_page_aligned(addr)) {
@@ -228,8 +235,39 @@ int mincore(void *addr, size_t length, unsigned char *vec)
     return mmu::mincore(addr, length, vec).to_libc();
 }
 
+OSV_LIBC_API
 int madvise(void *addr, size_t length, int advice)
 {
     auto err = mmu::advise(addr, length, libc_madvise_to_advise(advice));
     return err.to_libc();
+}
+
+OSV_LIBC_API
+int brk(void *addr)
+{
+    WARN_STUBBED();
+    errno = ENOMEM;
+    return -1;
+}
+
+OSV_LIBC_API
+void *sbrk(intptr_t increment)
+{
+    WARN_STUBBED();
+    errno = ENOMEM;
+    return (void *)-1;
+}
+
+static unsigned posix_madvise_to_advise(int advice)
+{
+    if (advice == POSIX_MADV_DONTNEED) {
+        return mmu::advise_dontneed;
+    }
+    return 0;
+}
+
+OSV_LIBC_API
+int posix_madvise(void *addr, size_t len, int advice) {
+    auto err = mmu::advise(addr, len, posix_madvise_to_advise(advice));
+    return err.get();
 }

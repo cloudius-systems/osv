@@ -191,4 +191,8 @@ bool fast_sigsegv_check(uintptr_t addr, exception_frame* ef)
 
     return false;
 }
+
+// The x86_64 is considered to conform to the von Neumann architecture with unified
+// data and instruction caches. Therefore we do not need to do anything as they are always in sync.
+void synchronize_cpu_caches(void *v, size_t size) {}
 }

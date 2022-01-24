@@ -12,7 +12,8 @@ import org.junit.runners.Suite;
 
 @RunWith(Suite.class)
 @Suite.SuiteClasses({
-        BasicTest.class
+        BasicTest.class,
+        LoggingTest.class
 })
 public class BasicTests {
 }

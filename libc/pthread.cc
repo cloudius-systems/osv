@@ -29,6 +29,7 @@
 
 #include <api/time.h>
 #include <osv/rwlock.h>
+#include <osv/export.h>
 
 #include "pthread.hh"
 
@@ -275,9 +276,9 @@ extern "C" int register_atfork(void (*prepare)(void), void (*parent)(void),
 
 extern "C" {
     int __register_atfork(void (*prepare)(void), void (*parent)(void),
-                          void (*child)(void), void *__dso_handle) __attribute__((alias("register_atfork")));
+                          void (*child)(void), void *__dso_handle) __attribute__((alias("register_atfork"))) OSV_LIBC_API;
     int __pthread_key_create(pthread_key_t* key, void (*dtor)(void*))
-        __attribute__((alias("pthread_key_create")));
+        __attribute__((alias("pthread_key_create"))) OSV_LIBPTHREAD_API;
 }
 
 
@@ -457,7 +458,8 @@ int pthread_mutex_unlock(pthread_mutex_t *m)
     return 0;
 }
 
-extern "C" int pthread_yield()
+extern "C" OSV_LIBPTHREAD_API
+int pthread_yield()
 {
     sched::thread::yield();
     return 0;
@@ -528,6 +530,7 @@ int pthread_rwlock_unlock(pthread_rwlock_t *rw)
     return 0;
 }
 
+OSV_LIBC_API
 int pthread_sigmask(int how, const sigset_t* set, sigset_t* oldset)
 {
     return sigprocmask(how, set, oldset);
@@ -993,13 +996,26 @@ int pthread_getschedparam(pthread_t thread, int *policy,
     return 0;
 }
 
+OSV_LIBPTHREAD_API
 int pthread_kill(pthread_t thread, int sig)
 {
-    WARN_STUBBED();
+    // We are assuming that if pthread_kill() is called with thread
+    // equal to pthread_self(), then most likely it was called by
+    // raise() (see below) so we simply delegate to kill().
+    // This an approximation as it reality multithreaded apps
+    // may actually send signal to the current thread by directly
+    // calling pthread_kill() for a reason and then thread specific mask
+    // would apply, etc. But OSv does not really support sending signals to
+    // specific threads so we are silently ignoring such case for now.
+    if (thread == current_pthread) {
+        return kill(getpid(), sig);
+    }
 
+    WARN_STUBBED();
     return EINVAL;
 }
 
+OSV_LIBPTHREAD_API
 int raise(int sig)
 {
     return pthread_kill(pthread_self(), sig);
@@ -1181,3 +1197,6 @@ int pthread_attr_getaffinity_np(const pthread_attr_t *attr, size_t cpusetsize,
 
     return 0;
 }
+
+extern "C" void _pthread_cleanup_push(struct __ptcb *cb, void (*f)(void *), void *x) {} //TODO: Check if it can be stubbed like this
+extern "C" void _pthread_cleanup_pop(struct __ptcb *cb, int run) {} //TODO: Check if it can be stubbed like this

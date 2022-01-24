@@ -35,6 +35,7 @@
 #include <boost/lockfree/stack.hpp>
 #include <boost/lockfree/policies.hpp>
 #include <osv/migration-lock.hh>
+#include <osv/export.h>
 
 TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d, align=%d", void *, size_t,
            size_t);
@@ -1323,15 +1324,18 @@ private:
     std::unique_ptr<sched::thread> _fill_thread;
 };
 
+std::atomic<unsigned int> l1_initialized_cnt{};
 PERCPU(l1*, percpu_l1);
 static sched::cpu::notifier _notifier([] () {
     *percpu_l1 = new l1(sched::cpu::current());
+    if (++l1_initialized_cnt == sched::cpus.size()) {
+        l1_pool_stats.resize(sched::cpus.size());
+    }
     // N per-cpu threads for L1 page pool, 1 thread for L2 page pool
     // Switch to smp_allocator only when all the N + 1 threads are ready
     if (smp_allocator_cnt++ == sched::cpus.size()) {
         smp_allocator = true;
     }
-    l1_pool_stats.resize(sched::cpus.size());
 });
 static inline l1& get_l1()
 {
@@ -2007,6 +2011,7 @@ void* malloc(size_t size)
     return buf;
 }
 
+OSV_LIBC_API
 void* realloc(void* obj, size_t size)
 {
     void* buf = std_realloc(obj, size);
@@ -2014,7 +2019,8 @@ void* realloc(void* obj, size_t size)
     return buf;
 }
 
-extern "C" void *reallocarray(void *ptr, size_t nmemb, size_t elem_size)
+extern "C" OSV_LIBC_API
+void *reallocarray(void *ptr, size_t nmemb, size_t elem_size)
 {
     size_t bytes;
     if (__builtin_mul_overflow(nmemb, elem_size, &bytes)) {
@@ -2024,6 +2030,7 @@ extern "C" void *reallocarray(void *ptr, size_t nmemb, size_t elem_size)
     return realloc(ptr, nmemb * elem_size);
 }
 
+OSV_LIBC_API
 size_t malloc_usable_size(void* obj)
 {
     if ( obj == nullptr ) {
@@ -2076,6 +2083,7 @@ void *aligned_alloc(size_t alignment, size_t size)
 // that size be a multiple of alignment.
 // memalign() is considered to be an obsolete SunOS-ism, but Linux's glibc
 // supports it, and some applications still use it.
+OSV_LIBC_API
 void *memalign(size_t alignment, size_t size)
 {
     return aligned_alloc(alignment, size);

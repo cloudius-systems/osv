@@ -70,10 +70,21 @@ void parse_madt()
             register_cpu(nr_cpus++, lapic->Id, lapic->ProcessorId);
             break;
         }
+        case ACPI_MADT_TYPE_LOCAL_X2APIC: {
+            auto x2apic = get_parent_from_member(s, &ACPI_MADT_LOCAL_X2APIC::Header);
+            if (!(x2apic->LapicFlags & ACPI_MADT_ENABLED)) {
+                break;
+            }
+            register_cpu(nr_cpus++, x2apic->LocalApicId, x2apic->Uid);
+            break;
+        }
         default:
             break;
         }
         subtable += s->Length;
+    }
+    if (!nr_cpus) { // No MP table was found or no cpu was found in there -> assume uni-processor
+        register_cpu(nr_cpus++, 0);
     }
     debug(fmt("%d CPUs detected\n") % nr_cpus);
 }

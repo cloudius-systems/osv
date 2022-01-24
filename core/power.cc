@@ -7,6 +7,7 @@
 
 #include <osv/power.hh>
 #include <osv/debug.hh>
+#include <osv/export.h>
 #include <smp.hh>
 #include <processor.hh>
 #include <arch.hh>
@@ -20,6 +21,7 @@
 // is questionable (e.g., abort()) so a debug() call might call further
 // problems.
 
+OSV_LIBC_API
 int reboot(int cmd)
 {
     switch (cmd) {

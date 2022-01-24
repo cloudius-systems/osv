@@ -9,6 +9,9 @@
  * address.
  */
 
+/* errno */
+___errno_location = __errno_location;
+
 /* network */
 __res_init = res_init;
 
@@ -26,14 +29,15 @@ __finitel = finitel;
 
 /* locale */
 __toupper_l = toupper_l;
-__setlocale = setlocale;
+newlocale = __newlocale;
 
 /* multibyte */
 __mbrlen = mbrlen;
 
-/* memory */
+/* mman */
 __munmap = munmap;
 __mmap = mmap;
+mmap64 = mmap;
 
 /* stdio */
 __dup3 = dup3;
@@ -41,3 +45,34 @@ __dup3 = dup3;
 /* string */
 __strtok_r = strtok_r;
 __strndup = strndup;
+__stpcpy = stpcpy;
+__stpncpy = stpncpy;
+__strdup = strdup;
+strerrordesc_np = strerror;
+
+/* time */
+__gmtime_r = gmtime_r;
+__strftime_l = strftime_l;
+
+/* vfs */
+statfs64 = statfs;
+fstatfs64 = fstatfs;
+statvfs64 = statvfs;
+fstatvfs64 = fstatvfs;
+preadv64 = preadv;
+pwritev64 = pwritev;
+stat64 = stat;
+fstat64 = fstat;
+lstat64 = lstat;
+fstatat64 = fstatat;
+__lseek = lseek;
+
+__getauxval = getauxval;
+__getpagesize = getpagesize;
+
+/* Since we do nothing for those anyway, they are equal. */
+_exit = exit;
+_Exit = exit;
+
+__dn_expand = dn_expand;
+__sysconf = sysconf;

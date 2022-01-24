@@ -159,6 +159,13 @@ elif cmd == 'setsize':
     f.seek(0x10)
     f.write(struct.pack('H', blocks))
     f.close()
+elif cmd == 'setsize_aarch64':
+    img = args[0]
+    size = int(args[1])
+    f = nbd_file(img)
+    f.seek(0x10)
+    f.write(struct.pack('<Q', size))
+    f.close()
 elif cmd == 'setpartition':
     img = args[0]
     partition = int(args[1])
