@@ -68,7 +68,7 @@ cpuid_bit cpuid_bits[] = {
 
 constexpr unsigned nr_cpuid_bits = sizeof(cpuid_bits) / sizeof(*cpuid_bits);
 
-void process_cpuid_bit(features_type& features, const cpuid_bit& b)
+static void process_cpuid_bit(features_type& features, const cpuid_bit& b)
 {
     bool subleaf = b.leaf == 7;
     auto base = b.leaf & 0xf0000000;
@@ -96,7 +96,7 @@ void process_cpuid_bit(features_type& features, const cpuid_bit& b)
     features.*(b.flag) = (w >> b.bit) & 1;
 }
 
-void process_xen_bits(features_type &features)
+static void process_xen_bits(features_type &features)
 {
     signature sig = { 0x566e6558, 0x65584d4d, 0x4d4d566e };
 
@@ -110,13 +110,13 @@ void process_xen_bits(features_type &features)
     }
 }
 
-void process_hyperv_bits(features_type &features) {
+static void process_hyperv_bits(features_type &features) {
     if(hyperv_identify() && hyperv_is_timecount_available()) {
         features.hyperv_clocksource = true;
     }
 }
 
-void process_cpuid(features_type& features)
+static void process_cpuid(features_type& features)
 {
     for (unsigned i = 0; i < nr_cpuid_bits; ++i) {
         process_cpuid_bit(features, cpuid_bits[i]);
