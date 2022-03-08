@@ -7,6 +7,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include "arch-setup.hh"
 #include <osv/sched.hh>
 #include <osv/mempool.hh>
@@ -16,7 +17,9 @@
 #include <osv/boot.hh>
 #include <osv/debug.hh>
 #include <osv/commands.hh>
+#if CONF_drivers_xen
 #include <osv/xen.hh>
+#endif
 
 #include "arch-mmu.hh"
 #include "arch-dtb.hh"
@@ -24,7 +27,9 @@
 #include "drivers/console.hh"
 #include "drivers/pl011.hh"
 #include "early-console.hh"
+#if CONF_drivers_pci
 #include <osv/pci.hh>
+#endif
 #include "drivers/mmio-isa-serial.hh"
 
 #include <alloca.h>
@@ -41,6 +46,7 @@ void setup_temporary_phys_map()
     mmu::flush_tlb_all();
 }
 
+#if CONF_drivers_pci
 void arch_setup_pci()
 {
     pci::set_pci_ecam(dtb_get_pci_is_ecam());
@@ -71,6 +77,7 @@ void arch_setup_pci()
     mmu::linear_map((void *)ranges[1], (mmu::phys)ranges[1], ranges_len[1],
                     mmu::page_size, mmu::mattr::dev);
 }
+#endif
 
 extern bool opt_pci_disabled;
 void arch_setup_free_memory()
@@ -101,12 +108,14 @@ void arch_setup_free_memory()
                         mmu::mattr::dev);
     }
 
+#if CONF_drivers_cadence
     if (console::Cadence_Console::active) {
         // linear_map [TTBR0 - UART]
         addr = (mmu::phys)console::aarch64_console.cadence.get_base_addr();
         mmu::linear_map((void *)addr, addr, 0x1000, mmu::page_size,
                         mmu::mattr::dev);
     }
+#endif
 
     /* linear_map [TTBR0 - GIC DIST and GIC CPU] */
     u64 dist, cpu;
@@ -120,15 +129,19 @@ void arch_setup_free_memory()
     mmu::linear_map((void *)cpu, (mmu::phys)cpu, cpu_len, mmu::page_size,
                     mmu::mattr::dev);
 
+#if CONF_drivers_pci
     if (!opt_pci_disabled) {
         arch_setup_pci();
     }
+#endif
 
     // get rid of the command line, before memory is unmapped
     console::mmio_isa_serial_console::clean_cmdline(cmdline);
     osv::parse_cmdline(cmdline);
 
+#if CONF_drivers_mmio
     dtb_collect_parsed_mmio_virtio_devices();
+#endif
 
     mmu::switch_to_runtime_page_tables();
 
@@ -155,17 +168,28 @@ void arch_init_premain()
 }
 
 #include "drivers/driver.hh"
+#if CONF_drivers_virtio
 #include "drivers/virtio.hh"
-#include "drivers/virtio-rng.hh"
-#include "drivers/virtio-blk.hh"
-#include "drivers/virtio-net.hh"
 #include "drivers/virtio-mmio.hh"
+#endif
+#if CONF_drivers_virtio_rng
+#include "drivers/virtio-rng.hh"
+#endif
+#if CONF_drivers_virtio_blk
+#include "drivers/virtio-blk.hh"
+#endif
+#if CONF_drivers_virtio_net
+#include "drivers/virtio-net.hh"
+#endif
+#if CONF_drivers_virtio_fs
 #include "drivers/virtio-fs.hh"
+#endif
 
 void arch_init_drivers()
 {
     extern boot_time_chart boot_time;
 
+#if CONF_drivers_pci
     if (!opt_pci_disabled) {
         int irqmap_count = dtb_get_pci_irqmap_count();
         if (irqmap_count > 0) {
@@ -189,16 +213,27 @@ void arch_init_drivers()
             boot_time.event("pci enumerated");
         }
     }
+#endif
 
+#if CONF_drivers_mmio
     // Register any parsed virtio-mmio devices
     virtio::register_mmio_devices(device_manager::instance());
+#endif
 
     // Initialize all drivers
     hw::driver_manager* drvman = hw::driver_manager::instance();
+#if CONF_drivers_virtio_rng
     drvman->register_driver(virtio::rng::probe);
+#endif
+#if CONF_drivers_virtio_blk
     drvman->register_driver(virtio::blk::probe);
+#endif
+#if CONF_drivers_virtio_net
     drvman->register_driver(virtio::net::probe);
+#endif
+#if CONF_drivers_virtio_fs
     drvman->register_driver(virtio::fs::probe);
+#endif
     boot_time.event("drivers probe");
     drvman->load_all();
     drvman->list_drivers();
@@ -208,11 +243,13 @@ void arch_init_early_console()
 {
     console::mmio_isa_serial_console::_phys_mmio_address = 0;
 
+#if CONF_drivers_xen
     if (is_xen()) {
         new (&console::aarch64_console.xen) console::XEN_Console();
         console::arch_early_console = console::aarch64_console.xen;
         return;
     }
+#endif
 
     int irqid;
     u64 mmio_serial_address = dtb_get_mmio_serial_console(&irqid);
@@ -225,6 +262,7 @@ void arch_init_early_console()
         return;
     }
 
+#if CONF_drivers_cadence
     mmio_serial_address = dtb_get_cadence_uart(&irqid);
     if (mmio_serial_address) {
         new (&console::aarch64_console.cadence) console::Cadence_Console();
@@ -234,6 +272,7 @@ void arch_init_early_console()
         console::Cadence_Console::active = true;
         return;
     }
+#endif
 
     new (&console::aarch64_console.pl011) console::PL011_Console();
     console::arch_early_console = console::aarch64_console.pl011;

@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include <osv/types.h>
 #include <osv/debug.h>
 #include <stdlib.h>
@@ -16,7 +17,9 @@
 #include <osv/mempool.hh>
 #include <osv/commands.hh>
 #include <osv/elf.hh>
+#if CONF_drivers_mmio
 #include "drivers/virtio-mmio.hh"
+#endif
 
 #define DTB_INTERRUPT_CELLS 3
 
@@ -279,6 +282,7 @@ u64 dtb_get_cadence_uart(int *irqid)
     return addr;
 }
 
+#if CONF_drivers_mmio
 #define VIRTIO_MMIO_DEV_COMPAT "virtio,mmio"
 #define DTB_MAX_VIRTIO_MMIO_DEV_COUNT 8
 static virtio::mmio_device_info dtb_dtb_virtio_mmio_devices_infos[DTB_MAX_VIRTIO_MMIO_DEV_COUNT];
@@ -321,6 +325,7 @@ void dtb_collect_parsed_mmio_virtio_devices()
 	virtio::add_mmio_device_configuration(dtb_dtb_virtio_mmio_devices_infos[idx]);
     }
 }
+#endif
 
 /* this gets the virtual timer irq, we are not interested
  * about the other timers.
@@ -796,7 +801,9 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
         abort("dtb_setup: failed to parse pci_irq_map.\n");
     }
 
+#if CONF_drivers_mmio
     dtb_parse_mmio_virtio_devices();
+#endif
 
     register u64 edata;
     asm volatile ("adrp %0, .edata" : "=r"(edata));

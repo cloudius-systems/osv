@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 extern "C" {
 #include "acpi.h"
 }
@@ -15,7 +16,9 @@ extern "C" {
 #include <osv/mmu.hh>
 #include <osv/mmio.hh>
 #include "arch.hh"
+#if CONF_drivers_xen
 #include <osv/xen.hh>
+#endif
 #include <osv/irqlock.hh>
 #include "rtc.hh"
 #include <osv/percpu.hh>
@@ -146,8 +149,10 @@ s64 hpetclock::boot_time()
 
 void __attribute__((constructor(init_prio::hpet))) hpet_init()
 {
+#if CONF_drivers_xen
     XENPV_ALTERNATIVE(
     {
+#endif
         auto c = clock::get();
 
         // HPET should be only used as a fallback, if no other pvclocks
@@ -178,5 +183,7 @@ void __attribute__((constructor(init_prio::hpet))) hpet_init()
         else {
             clock::register_clock(new hpet_32bit_clock(hpet_mmio_address));
         }
+#if CONF_drivers_xen
     }, {});
+#endif
 }

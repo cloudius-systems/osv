@@ -5,10 +5,15 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include "cpuid.hh"
 #include "processor.hh"
+#if CONF_drivers_xen
 #include "xen.hh"
+#endif
+#if CONF_drivers_hyperv
 #include <dev/hyperv/include/hyperv.h>
+#endif
 
 namespace processor {
 
@@ -96,6 +101,7 @@ static void process_cpuid_bit(features_type& features, const cpuid_bit& b)
     features.*(b.flag) = (w >> b.bit) & 1;
 }
 
+#if CONF_drivers_xen
 static void process_xen_bits(features_type &features)
 {
     signature sig = { 0x566e6558, 0x65584d4d, 0x4d4d566e };
@@ -109,20 +115,27 @@ static void process_xen_bits(features_type &features)
         break;
     }
 }
+#endif
 
+#if CONF_drivers_hyperv
 static void process_hyperv_bits(features_type &features) {
     if(hyperv_identify() && hyperv_is_timecount_available()) {
         features.hyperv_clocksource = true;
     }
 }
+#endif
 
 static void process_cpuid(features_type& features)
 {
     for (unsigned i = 0; i < nr_cpuid_bits; ++i) {
         process_cpuid_bit(features, cpuid_bits[i]);
     }
+#if CONF_drivers_xen
     process_xen_bits(features);
+#endif
+#if CONF_drivers_hyperv
     process_hyperv_bits(features);
+#endif
 }
 
 }
@@ -140,6 +153,7 @@ const std::string& features_str()
         }
     }
 
+#if CONF_drivers_xen
     // FIXME: Even though Xen does not have its features in cpuid, there has to
     // be a better way to do it, by creating a string map directly from the xen
     // PV features. But since we add features here very rarely, leave it be for now.
@@ -152,6 +166,7 @@ const std::string& features_str()
     if (features().xen_pci) {
         cpuid_str += std::string("xen_pci ");
     }
+#endif
     cpuid_str.pop_back();
 
     return cpuid_str;

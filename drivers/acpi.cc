@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include <map>
 #include <memory>
 
@@ -19,7 +20,9 @@ extern "C" {
 #include <osv/shutdown.hh>
 #include "processor.hh"
 #include <osv/align.hh>
+#if CONF_drivers_xen
 #include <osv/xen.hh>
+#endif
 
 #include <osv/debug.h>
 #include <osv/mutex.h>
@@ -635,5 +638,9 @@ void init()
 
 void __attribute__((constructor(init_prio::acpi))) acpi_init_early()
 {
-     XENPV_ALTERNATIVE({ acpi::early_init(); }, {});
+#if CONF_drivers_xen
+    XENPV_ALTERNATIVE({ acpi::early_init(); }, {});
+#else
+    acpi::early_init();
+#endif
 }

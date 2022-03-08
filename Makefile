@@ -82,6 +82,25 @@ ifeq (,$(wildcard conf/$(arch).mk))
 endif
 include conf/$(arch).mk
 
+# This parameter can be passed in to the build command to specify name of
+# a drivers profile. The drivers profile allows to build custom kernel with
+# a specific set of drivers enabled in the corresponding makefile include
+# file - conf/profiles/$(arch)/$(drivers_profile).mk). The default profile is
+# 'all' which incorporates all drivers into kernel.
+# In general the profiles set variables named conf_drivers_*, which then in turn
+# are used in the rules below to decide which object files are linked into
+# kernel.
+drivers_profile?=all
+ifeq (,$(wildcard conf/profiles/$(arch)/$(drivers_profile).mk))
+    $(error unsupported drivers profile $(drivers_profile))
+endif
+include conf/profiles/$(arch)/$(drivers_profile).mk
+# The base profile disables all drivers unless they are explicitly enabled
+# by the profile file included in the line above. The base profile also enforces
+# certain dependencies between drivers, for example the ide driver needs pci support, etc.
+# For more details please read comments in the profile file.
+include conf/profiles/$(arch)/base.mk
+
 CROSS_PREFIX ?= $(if $(filter-out $(arch),$(host_arch)),$(arch)-linux-gnu-)
 CXX=$(CROSS_PREFIX)g++
 CC=$(CROSS_PREFIX)gcc
@@ -617,10 +636,13 @@ bsd += bsd/sys/netinet/cc/cc_cubic.o
 bsd += bsd/sys/netinet/cc/cc_htcp.o
 bsd += bsd/sys/netinet/cc/cc_newreno.o
 bsd += bsd/sys/netinet/arpcache.o
+ifeq ($(conf_drivers_xen),1)
 bsd += bsd/sys/xen/evtchn.o
+endif
 
 ifeq ($(arch),x64)
 $(out)/bsd/%.o: COMMON += -DXEN -DXENHVM
+ifeq ($(conf_drivers_xen),1)
 bsd += bsd/sys/xen/gnttab.o
 bsd += bsd/sys/xen/xenstore/xenstore.o
 bsd += bsd/sys/xen/xenbus/xenbus.o
@@ -628,7 +650,10 @@ bsd += bsd/sys/xen/xenbus/xenbusb.o
 bsd += bsd/sys/xen/xenbus/xenbusb_front.o
 bsd += bsd/sys/dev/xen/netfront/netfront.o
 bsd += bsd/sys/dev/xen/blkfront/blkfront.o
+endif
+ifeq ($(conf_drivers_hyperv),1)
 bsd += bsd/sys/dev/hyperv/vmbus/hyperv.o
+endif
 endif
 
 bsd += bsd/sys/dev/random/hash.o
@@ -817,54 +842,101 @@ drivers += drivers/random.o
 drivers += drivers/zfs.o
 drivers += drivers/null.o
 drivers += drivers/device.o
+ifeq ($(conf_drivers_pci),1)
 drivers += drivers/pci-generic.o
 drivers += drivers/pci-device.o
 drivers += drivers/pci-function.o
 drivers += drivers/pci-bridge.o
+endif
 drivers += drivers/driver.o
 
 ifeq ($(arch),x64)
+ifeq ($(conf_drivers_vga),1)
 drivers += $(libtsm)
-drivers += drivers/vga.o drivers/kbd.o drivers/isa-serial.o
+drivers += drivers/vga.o
+endif
+drivers += drivers/kbd.o drivers/isa-serial.o
 drivers += arch/$(arch)/pvclock-abi.o
+
+ifeq ($(conf_drivers_virtio),1)
 drivers += drivers/virtio.o
+ifeq ($(conf_drivers_pci),1)
 drivers += drivers/virtio-pci-device.o
+endif
 drivers += drivers/virtio-vring.o
+ifeq ($(conf_drivers_mmio),1)
 drivers += drivers/virtio-mmio.o
+endif
 drivers += drivers/virtio-net.o
-drivers += drivers/vmxnet3.o
-drivers += drivers/vmxnet3-queues.o
 drivers += drivers/virtio-blk.o
 drivers += drivers/virtio-scsi.o
 drivers += drivers/virtio-rng.o
 drivers += drivers/virtio-fs.o
-drivers += drivers/kvmclock.o drivers/xenclock.o drivers/hypervclock.o
+endif
+
+ifeq ($(conf_drivers_vmxnet3),1)
+drivers += drivers/vmxnet3.o
+drivers += drivers/vmxnet3-queues.o
+endif
+drivers += drivers/kvmclock.o
+ifeq ($(conf_drivers_hyperv),1)
+drivers += drivers/hypervclock.o
+endif
+ifeq ($(conf_drivers_acpi),1)
 drivers += drivers/acpi.o
+endif
+ifeq ($(conf_drivers_hpet),1)
 drivers += drivers/hpet.o
-drivers += drivers/rtc.o
-drivers += drivers/xenfront.o drivers/xenfront-xenbus.o drivers/xenfront-blk.o
+endif
+ifeq ($(conf_drivers_pvpanic),1)
 drivers += drivers/pvpanic.o
+endif
+drivers += drivers/rtc.o
+ifeq ($(conf_drivers_ahci),1)
 drivers += drivers/ahci.o
-drivers += drivers/ide.o
+endif
+ifeq ($(conf_drivers_scsi),1)
 drivers += drivers/scsi-common.o
+endif
+ifeq ($(conf_drivers_ide),1)
+drivers += drivers/ide.o
+endif
+ifeq ($(conf_drivers_pvscsi),1)
 drivers += drivers/vmw-pvscsi.o
+endif
+
+ifeq ($(conf_drivers_xen),1)
+drivers += drivers/xenclock.o
+drivers += drivers/xenfront.o drivers/xenfront-xenbus.o drivers/xenfront-blk.o
 drivers += drivers/xenplatform-pci.o
+endif
 endif # x64
 
 ifeq ($(arch),aarch64)
 drivers += drivers/mmio-isa-serial.o
 drivers += drivers/pl011.o
 drivers += drivers/pl031.o
+ifeq ($(conf_drivers_cadence),1)
 drivers += drivers/cadence-uart.o
+endif
+ifeq ($(conf_drivers_xen),1)
 drivers += drivers/xenconsole.o
+endif
+
+ifeq ($(conf_drivers_virtio),1)
 drivers += drivers/virtio.o
+ifeq ($(conf_drivers_pci),1)
 drivers += drivers/virtio-pci-device.o
+endif
+ifeq ($(conf_drivers_mmio),1)
 drivers += drivers/virtio-mmio.o
+endif
 drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-rng.o
 drivers += drivers/virtio-blk.o
 drivers += drivers/virtio-net.o
 drivers += drivers/virtio-fs.o
+endif
 endif # aarch64
 
 objects += arch/$(arch)/arch-trace.o
@@ -883,11 +955,15 @@ objects += arch/$(arch)/cpuid.o
 objects += arch/$(arch)/firmware.o
 objects += arch/$(arch)/hypervisor.o
 objects += arch/$(arch)/interrupt.o
+ifeq ($(conf_drivers_pci),1)
 objects += arch/$(arch)/pci.o
 objects += arch/$(arch)/msi.o
+endif
 objects += arch/$(arch)/power.o
 objects += arch/$(arch)/feexcept.o
+ifeq ($(conf_drivers_xen),1)
 objects += arch/$(arch)/xen.o
+endif
 
 $(out)/arch/x64/string-ssse3.o: CXXFLAGS += -mssse3
 
@@ -917,10 +993,14 @@ objects += arch/x64/entry-xen.o
 objects += arch/x64/vmlinux.o
 objects += arch/x64/vmlinux-boot64.o
 objects += arch/x64/pvh-boot.o
+ifeq ($(conf_drivers_acpi),1)
 objects += $(acpi)
+endif
 endif # x64
 
+ifeq ($(conf_drivers_xen),1)
 objects += core/xen_intr.o
+endif
 objects += core/math.o
 objects += core/spinlock.o
 objects += core/lfmutex.o
@@ -1847,9 +1927,11 @@ fs_objs += rofs/rofs_vfsops.o \
 	rofs/rofs_cache.o \
 	rofs/rofs_common.o
 
+ifeq ($(conf_drivers_virtio),1)
 fs_objs += virtiofs/virtiofs_vfsops.o \
 	virtiofs/virtiofs_vnops.o \
 	virtiofs/virtiofs_dax.o
+endif
 
 fs_objs += pseudofs/pseudofs.o
 fs_objs += procfs/procfs_vnops.o
@@ -2055,7 +2137,7 @@ $(out)/tools/cpiod/cpiod.so: $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.
 # re-created on every compilation. "generated-headers" is used as an order-
 # only dependency on C compilation rules above, so we don't try to compile
 # C code before generating these headers.
-generated-headers: $(out)/gen/include/bits/alltypes.h perhaps-modify-version-h
+generated-headers: $(out)/gen/include/bits/alltypes.h perhaps-modify-version-h perhaps-modify-drivers-config-h
 .PHONY: generated-headers
 
 # While other generated headers only need to be generated once, version.h
@@ -2065,6 +2147,17 @@ generated-headers: $(out)/gen/include/bits/alltypes.h perhaps-modify-version-h
 perhaps-modify-version-h:
 	$(call quiet, sh scripts/gen-version-header $(out)/gen/include/osv/version.h, GEN gen/include/osv/version.h)
 .PHONY: perhaps-modify-version-h
+
+# Using 'if ($(conf_drivers_*),1)' in the rules below is enough to include whole object
+# files. Sometimes though we need to enable or disable portions of the code specific
+# to given driver (the arch-setup.cc is best example). To that end the rule below
+# generates drivers_config.h header file with the macros CONF_drivers_* which is
+# then included by relevant source files.
+# This allows for fairly rapid rebuilding of the kernel for specified profiles
+# as only few files need to be re-compiled.
+perhaps-modify-drivers-config-h:
+	$(call quiet, sh scripts/gen-drivers-config-header $(arch) $(out)/gen/include/osv/drivers_config.h, GEN gen/include/osv/drivers_config.h)
+.PHONY: perhaps-modify-drivers-config-h
 
 $(out)/gen/include/bits/alltypes.h: include/api/$(arch)/bits/alltypes.h.sh
 	$(makedir)

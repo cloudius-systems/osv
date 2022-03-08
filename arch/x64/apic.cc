@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include "apic.hh"
 #include "msr.hh"
 #include <osv/xen.hh>

@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include <smp.hh>
 #include "processor.hh"
 #include "msr.hh"
@@ -12,10 +13,12 @@
 #include "ioapic.hh"
 #include <osv/mmu.hh>
 #include <string.h>
+#if CONF_drivers_acpi
 extern "C" {
 #include "acpi.h"
 }
 #include <drivers/acpi.hh>
+#endif
 #include <boost/intrusive/parent_from_member.hpp>
 #include <osv/debug.hh>
 #include <osv/sched.hh>
@@ -49,6 +52,7 @@ static void register_cpu(unsigned cpu_id, u32 apic_id, u32 acpi_id = 0)
     sched::cpus.push_back(c);
 }
 
+#if CONF_drivers_acpi
 void parse_madt()
 {
     char madt_sig[] = ACPI_SIG_MADT;
@@ -88,6 +92,7 @@ void parse_madt()
     }
     debug(fmt("%d CPUs detected\n") % nr_cpus);
 }
+#endif
 
 #define MPF_IDENTIFIER (('_'<<24) | ('P'<<16) | ('M'<<8) | '_')
 struct mpf_structure {
@@ -195,11 +200,15 @@ void parse_mp_table()
 
 void smp_init()
 {
+#if CONF_drivers_acpi
     if (acpi::is_enabled()) {
         parse_madt();
     } else {
+#endif
         parse_mp_table();
+#if CONF_drivers_acpi
     }
+#endif
 
     sched::current_cpu = sched::cpus[0];
     for (auto c : sched::cpus) {

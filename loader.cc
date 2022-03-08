@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include "fs/fs.hh"
 #include <bsd/init.hh>
 #include <bsd/net.hh>
@@ -20,7 +21,9 @@
 #include "smp.hh"
 
 #ifdef __x86_64__
+#if CONF_drivers_acpi
 #include "drivers/acpi.hh"
+#endif
 #endif /* __x86_64__ */
 
 #include <osv/sched.hh>
@@ -43,7 +46,9 @@
 #include <osv/sampler.hh>
 #include <osv/app.hh>
 #include <osv/firmware.hh>
+#if CONF_drivers_xen
 #include <osv/xen.hh>
+#endif
 #include <osv/options.hh>
 #include <dirent.h>
 #include <iostream>
@@ -672,7 +677,9 @@ void main_cont(int loader_argc, char** loader_argv)
 
     setenv("OSV_VERSION", osv::version().c_str(), 1);
 
+#if CONF_drivers_xen
     xen::irq_init();
+#endif
     smp_launch();
     setenv("OSV_CPUS", std::to_string(sched::cpus.size()).c_str(), 1);
     boot_time.event("SMP launched");
@@ -685,7 +692,9 @@ void main_cont(int loader_argc, char** loader_argv)
     memory::enable_debug_allocator();
 
 #ifdef __x86_64__
+#if CONF_drivers_acpi
     acpi::init();
+#endif
 #endif /* __x86_64__ */
 
     if (sched::cpus.size() > sched::max_cpus) {

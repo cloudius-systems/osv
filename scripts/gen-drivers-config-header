@@ -1,0 +1,37 @@
+#!/bin/sh
+
+if [ "$#" -ne 2 ]; then
+  echo "usage: $(basename $0) ARCH OUTPUT" >&2
+  exit 1
+fi
+
+arch=$1
+
+output=$2
+
+drivers_config_base_file=`dirname "$0"`/../conf/profiles/$arch/base.mk
+
+tmp=$(mktemp)
+
+cat >$tmp <<EOL
+/* This file is generated automatically. */
+#ifndef OSV_DRIVERS_CONFIG_H
+#define OSV_DRIVERS_CONFIG_H
+
+EOL
+
+cat $drivers_config_base_file | grep "export conf" | cut --delimiter=_ -f 2- | cut --delimiter=? -f 1 | \
+sort | uniq | awk '{ printf("#define CONF_%s %s\n", $0, ENVIRON["conf_"$0]) }' >> $tmp
+
+cat >>$tmp <<EOL
+
+#endif
+EOL
+
+if cmp -s $tmp $output
+then
+    rm $tmp
+else
+    mkdir -p $(dirname $output)
+    mv $tmp $output
+fi

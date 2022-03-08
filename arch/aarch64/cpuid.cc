@@ -5,9 +5,12 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include "cpuid.hh"
 #include "processor.hh"
+#if CONF_drivers_xen
 #include "xen.hh"
+#endif
 
 namespace processor {
 
@@ -131,7 +134,9 @@ const unsigned long hwcap32()
 
 void process_cpuid(features_type& features)
 {
+#if CONF_drivers_xen
     xen::get_features(features);
+#endif
 }
 
 const features_type& features()

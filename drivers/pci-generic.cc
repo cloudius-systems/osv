@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include <sstream>
 #include <iomanip>
 
@@ -16,8 +17,10 @@
 #include "drivers/pci-function.hh"
 #include "drivers/pci-bridge.hh"
 #include "drivers/pci-device.hh"
+#if CONF_drivers_virtio
 #include "drivers/virtio.hh"
 #include "drivers/virtio-pci-device.hh"
+#endif
 
 extern bool opt_pci_disabled;
 
@@ -102,6 +105,7 @@ bool check_bus(u16 bus)
             }
 
             hw_device *dev_to_register = dev;
+#if CONF_drivers_virtio
             //
             // Create virtio_device if vendor is VIRTIO_VENDOR_ID
             if (dev->get_vendor_id() == virtio::VIRTIO_VENDOR_ID) {
@@ -117,6 +121,7 @@ bool check_bus(u16 bus)
                     pci_e("Error: expected regular pci device %02x:%02x.%x",
                           bus, slot, func);
             }
+#endif
 
             if (dev_to_register && !device_manager::instance()->register_device(dev_to_register)) {
                 pci_e("Error: couldn't register device %02x:%02x.%x",

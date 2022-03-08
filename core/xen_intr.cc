@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#define CONF_drivers_xen 1
 #include <osv/xen.hh>
 #include <osv/xen_intr.hh>
 #include <bsd/porting/bus.h>

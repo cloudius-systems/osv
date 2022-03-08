@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 .text
 .align 16
 .globl start_elf
@@ -31,8 +32,10 @@ start_elf:
         adrp    x1, dtb                     // store dtb (arch-setup.cc)
         str     x5, [x1, #:lo12:dtb]
 
+#if CONF_drivers_xen
         mov     x29, xzr
         bl      init_xen
+#endif
 
         mov     x29, xzr
         bl      premain
