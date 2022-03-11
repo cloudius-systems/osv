@@ -2036,7 +2036,7 @@ $(out)/dummy-shlib.so: $(out)/dummy-shlib.o
 	$(call quiet, $(CXX) -nodefaultlibs -shared $(gcc-sysroot) -o $@ $^, LINK $@)
 
 stage1_targets = $(out)/arch/$(arch)/boot.o $(out)/loader.o $(out)/runtime.o $(drivers:%=$(out)/%) $(objects:%=$(out)/%) $(out)/dummy-shlib.so
-stage1: $(stage1_targets) links $(out)/version_script
+stage1: $(stage1_targets) links $(out)/default_version_script
 .PHONY: stage1
 
 loader_options_dep = $(out)/arch/$(arch)/loader_options.ld
@@ -2047,20 +2047,35 @@ $(loader_options_dep): stage1
 	fi
 
 ifeq ($(conf_hide_symbols),1)
+version_script_file:=$(out)/version_script
+#Detect which version script to be used and copy to $(out)/version_script
+#so that loader.elf/kernel.elf is rebuilt accordingly if version script has changed
+ifdef conf_version_script
+ifeq (,$(wildcard $(conf_version_script)))
+    $(error Missing version script: $(conf_version_script))
+endif
+ifneq ($(shell cmp $(out)/version_script $(conf_version_script)),)
+$(shell cp $(conf_version_script) $(out)/version_script)
+endif
+else
+ifneq ($(shell cmp $(out)/version_script $(out)/default_version_script),)
+$(shell cp $(out)/default_version_script $(out)/version_script)
+endif
+endif
 linker_archives_options = --no-whole-archive $(libstdc++.a) $(libgcc.a) $(libgcc_eh.a) $(boost-libs) \
-  --exclude-libs libstdc++.a --gc-sections --version-script=$(out)/version_script
+  --exclude-libs libstdc++.a --gc-sections
 else
 linker_archives_options = --whole-archive $(libstdc++.a) $(libgcc_eh.a) $(boost-libs) --no-whole-archive $(libgcc.a)
 endif
 
-$(out)/version_script: exported_symbols/*.symbols exported_symbols/$(arch)/*.symbols
-	$(call quiet, scripts/generate_version_script.sh $(out)/version_script, GEN version_script)
+$(out)/default_version_script: exported_symbols/*.symbols exported_symbols/$(arch)/*.symbols
+	$(call quiet, scripts/generate_version_script.sh $(out)/default_version_script, GEN default_version_script)
 
-$(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(loader_options_dep)
+$(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(loader_options_dep) $(version_script_file)
 	$(call quiet, $(LD) -o $@ --defsym=OSV_KERNEL_BASE=$(kernel_base) \
 	    --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
-	    $(^:%.ld=-T %.ld) \
+            $(patsubst %version_script,--version-script=%version_script,$(patsubst %.ld,-T %.ld,$^)) \
 	    $(linker_archives_options) $(conf_linker_extra_options), \
 		LINK loader.elf)
 	@# Build libosv.so matching this loader.elf. This is not a separate
@@ -2069,11 +2084,11 @@ $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(lo
 	@scripts/libosv.py $(out)/osv.syms $(out)/libosv.ld `scripts/osv-version.sh` | $(CC) -c -o $(out)/osv.o -x assembler -
 	$(call quiet, $(CC) $(out)/osv.o -nostdlib -shared -o $(out)/libosv.so -T $(out)/libosv.ld, LIBOSV.SO)
 
-$(out)/kernel.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/empty_bootfs.o $(loader_options_dep)
+$(out)/kernel.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/empty_bootfs.o $(loader_options_dep) $(version_script_file)
 	$(call quiet, $(LD) -o $@ --defsym=OSV_KERNEL_BASE=$(kernel_base) \
 	    --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
-	    $(^:%.ld=-T %.ld) \
+            $(patsubst %version_script,--version-script=%version_script,$(patsubst %.ld,-T %.ld,$^)) \
 	    $(linker_archives_options) $(conf_linker_extra_options), \
 		LINK kernel.elf)
 	$(call quiet, $(STRIP) $(out)/kernel.elf -o $(out)/kernel-stripped.elf, STRIP kernel.elf -> kernel-stripped.elf )
