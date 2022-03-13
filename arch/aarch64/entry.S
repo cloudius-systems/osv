@@ -22,10 +22,10 @@
         Lower Exception level, from AArch32              0x600     0x680     0x700     0x780
  */
 
-.macro vector_entry label idx
+.macro vector_entry level, type
 /* every entry is at 2^7 bits distance */
 .align 7
-        b       \label
+        b       entry_\level\()_\type
 .endm
 
 .global exception_vectors
@@ -34,28 +34,28 @@
 .align 12
 exception_vectors:
         /* Current Exception level with SP_EL0 : unused */
-        vector_entry entry_invalid  0   // Synchronous
-        vector_entry entry_invalid  1   // IRQ or vIRQ
-        vector_entry entry_invalid  2   // FIQ or vFIQ
-        vector_entry entry_invalid  3   // SError or vSError
+        vector_entry curr_el_sp0      sync   // Synchronous
+        vector_entry curr_el_sp0      irq    // IRQ or vIRQ
+        vector_entry curr_el_sp0      fiq    // FIQ or vFIQ
+        vector_entry curr_el_sp0      serror // SError or vSError
 
         /* Current Exception level with SP_ELx : only actually used */
-        vector_entry entry_sync     4
-        vector_entry entry_irq      5
-        vector_entry entry_fiq      6
-        vector_entry entry_serror   7
+        vector_entry curr_el_spx      sync
+        vector_entry curr_el_spx      irq
+        vector_entry curr_el_spx      fiq
+        vector_entry curr_el_spx      serror
 
         /* Lower Exception level in AArch64 : unused since we don't go to EL0 */
-        vector_entry entry_invalid  8
-        vector_entry entry_invalid  9
-        vector_entry entry_invalid 10
-        vector_entry entry_invalid 11
+        vector_entry lower_el_aarch64 sync
+        vector_entry lower_el_aarch64 irq
+        vector_entry lower_el_aarch64 fiq
+        vector_entry lower_el_aarch64 serror
 
         /* Lower Exception level in AArch32 : no El0, no AArch32 */
-        vector_entry entry_invalid 12
-        vector_entry entry_invalid 13
-        vector_entry entry_invalid 14
-        vector_entry entry_invalid 15
+        vector_entry lower_el_aarch32 sync
+        vector_entry lower_el_aarch32 irq
+        vector_entry lower_el_aarch32 fiq
+        vector_entry lower_el_aarch32 serror
 
 /* keep in sync with the struct in exceptions.hh */
 .macro push_state_to_exception_frame
@@ -131,24 +131,61 @@ thread_main:
 .equ ESR_FLT_BEG,2 // we strip LL
 .equ ESR_FLT_END,5
 
-.global entry_invalid
-.hidden entry_invalid
-.type entry_invalid, @function
-entry_invalid:
-        mrs     x20, elr_el1       // Exception Link Register -> X20
-        mrs     x21, spsr_el1      // Saved PSTATE -> X21
-        mrs     x22, esr_el1       // Exception Syndrome Register -> X22
+.macro entry_unexpected_exception level, type, level_id, type_id
+.global entry_\level\()_\type
+.hidden entry_\level\()_\type
+.type entry_\level\()_\type, @function
+entry_\level\()_\type:
+        .cfi_startproc simple
+        .cfi_signal_frame
+        .cfi_def_cfa sp, 0
+        .cfi_offset x30, -32 // Point to the elr register located at the -32 offset
+                             // of the exception frame to help gdb link to the
+                             // address when interrupt was raised
+        push_state_to_exception_frame
+        mrs     x1, esr_el1
+        str     w1, [sp, #272] // Store Exception Syndrom Register in the frame
+        mov     x0, sp         // Save exception_frame to x0
+        mov     x1, \level_id
+        mov     x2, \type_id
+        bl      handle_unexpected_exception
+        pop_state_from_exception_frame
+        bl      abort
+        .cfi_endproc
+.endm
 
-        ubfm    x23, x22, #ESR_EC_BEG, #ESR_EC_END   // Exception Class -> X23
-        ubfm    x24, x22, #ESR_ISS_BEG, #ESR_ISS_END // Instruction-Specific Syndrome -> X24
+.equ CURR_EL_SP0, 0x0
+.equ CURR_EL_SPX, 0x1
+.equ LOWER_EL_AARCH64, 0x2
+.equ LOWER_EL_AARCH32, 0x3
 
-1:      wfi
-        b       1b
+.equ EX_TYPE_SYNC, 0x0
+.equ EX_TYPE_IRQ, 0x1
+.equ EX_TYPE_FIQ, 0x2
+.equ EX_TYPE_SERROR, 0x3
 
-.global entry_sync
-.hidden entry_sync
-.type entry_sync, @function
-entry_sync:
+entry_unexpected_exception curr_el_sp0, sync, #CURR_EL_SP0, #EX_TYPE_SYNC
+entry_unexpected_exception curr_el_sp0, irq, #CURR_EL_SP0, #EX_TYPE_IRQ
+entry_unexpected_exception curr_el_sp0, fiq, #CURR_EL_SP0, #EX_TYPE_FIQ
+entry_unexpected_exception curr_el_sp0, serror, #CURR_EL_SP0, #EX_TYPE_SERROR
+
+entry_unexpected_exception curr_el_spx, fiq, #CURR_EL_SPX, #EX_TYPE_FIQ
+entry_unexpected_exception curr_el_spx, serror, #CURR_EL_SPX, #EX_TYPE_SERROR
+
+entry_unexpected_exception lower_el_aarch64, sync, #LOWER_EL_AARCH64, #EX_TYPE_SYNC
+entry_unexpected_exception lower_el_aarch64, irq, #LOWER_EL_AARCH64, #EX_TYPE_IRQ
+entry_unexpected_exception lower_el_aarch64, fiq, #LOWER_EL_AARCH64, #EX_TYPE_FIQ
+entry_unexpected_exception lower_el_aarch64, serror, #LOWER_EL_AARCH64, #EX_TYPE_SERROR
+
+entry_unexpected_exception lower_el_aarch32, sync, #LOWER_EL_AARCH32, #EX_TYPE_SYNC
+entry_unexpected_exception lower_el_aarch32, irq, #LOWER_EL_AARCH32, #EX_TYPE_IRQ
+entry_unexpected_exception lower_el_aarch32, fiq, #LOWER_EL_AARCH32, #EX_TYPE_FIQ
+entry_unexpected_exception lower_el_aarch32, serror, #LOWER_EL_AARCH32, #EX_TYPE_SERROR
+
+.global entry_curr_el_spx_sync
+.hidden entry_curr_el_spx_sync
+.type entry_curr_el_spx_sync, @function
+entry_curr_el_spx_sync:
         .cfi_startproc simple
         .cfi_signal_frame
         .cfi_def_cfa sp, 0
@@ -177,15 +214,17 @@ handle_mem_abort:
 unexpected_sync_exception:
         .cfi_startproc
         mov     x0, sp  // save exception_frame to x0
-        bl      handle_unexpected_sync_exception
+        mov     x1, #CURR_EL_SPX
+        mov     x2, #EX_TYPE_SYNC
+        bl      handle_unexpected_exception
         pop_state_from_exception_frame
         bl      abort
         .cfi_endproc
 
-.global entry_irq
-.hidden entry_irq
-.type entry_irq, @function
-entry_irq:
+.global entry_curr_el_spx_irq
+.hidden entry_curr_el_spx_irq
+.type entry_curr_el_spx_irq, @function
+entry_curr_el_spx_irq:
         .cfi_startproc simple
         .cfi_signal_frame
         .cfi_def_cfa sp, 0
@@ -198,16 +237,6 @@ entry_irq:
         pop_state_from_exception_frame
         eret
         .cfi_endproc
-
-.global entry_fiq
-.hidden entry_fiq
-.type entry_fiq, @function
-entry_fiq:
-.global entry_serror
-.hidden entry_serror
-.type entry_serror, @function
-entry_serror:
-        b       entry_invalid
 
 .global call_signal_handler_thunk
 .hidden call_signal_handler_thunk
