@@ -1879,6 +1879,18 @@ linear_vma::linear_vma(void* virt, phys phys, size_t size, mattr mem_attr, const
 linear_vma::~linear_vma() {
 }
 
+std::string sysfs_linear_maps() {
+    std::ostringstream os;
+    WITH_LOCK(linear_vma_set_mutex.for_read()) {
+        for(auto *vma : linear_vma_set) {
+            char mattr = vma->_mem_attr == mmu::mattr::normal ? 'n' : 'd';
+            osv::fprintf(os, "%18x %18x %12x rwxp %c %s\n",
+                vma->_virt_addr, (void*)vma->_phys_addr, vma->_size, mattr, vma->_name.c_str());
+        }
+    }
+    return os.str();
+}
+
 void linear_map(void* _virt, phys addr, size_t size, const char* name,
                 size_t slop, mattr mem_attr)
 {

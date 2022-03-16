@@ -330,6 +330,7 @@ error  advise(void* addr, size_t size, int advice);
 void vm_fault(uintptr_t addr, exception_frame* ef);
 
 std::string procfs_maps();
+std::string sysfs_linear_maps();
 
 unsigned long all_vmas_size();
 

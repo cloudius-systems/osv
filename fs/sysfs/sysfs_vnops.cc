@@ -95,6 +95,7 @@ sysfs_mount(mount* mp, const char *dev, int flags, const void* data)
     auto memory = make_shared<pseudo_dir_node>(inode_count++);
     memory->add("free_page_ranges", inode_count++, sysfs_free_page_ranges);
     memory->add("pools", inode_count++, sysfs_memory_pools);
+    memory->add("linear_maps", inode_count++, mmu::sysfs_linear_maps);
 
     auto osv_extension = make_shared<pseudo_dir_node>(inode_count++);
     osv_extension->add("memory", memory);
