@@ -1643,11 +1643,40 @@ class osv_percpu(gdb.Command):
                     return
             gdb.write('%s\n'%target)
 
+class osv_linear_mmap(gdb.Command):
+    def __init__(self):
+        gdb.Command.__init__(self, 'osv linear_mmap',
+                             gdb.COMMAND_USER, gdb.COMPLETE_NONE)
+    def invoke(self, arg, for_tty):
+        l = str(gdb.lookup_global_symbol('mmu::linear_vma_set').value())
+        linear_vmas = re.findall('\[([0-9]+)\] = (0x[0-9a-zA-Z]+)', l)
+
+        gdb.write("%16s %16s %8s %4s %7s %s\n" % ("vaddr", "paddr", "size", "perm", "memattr", "name"))
+
+        char_ptr = gdb.lookup_type('char').pointer()
+        for desc in linear_vmas:
+            addr = desc[1]
+            vma = gdb.parse_and_eval('(struct mmu::linear_vma *)' + addr)
+
+            vaddr = vma['_virt_addr']
+            paddr = vma['_phys_addr']
+            size = vma['_size']
+            if vma['_mem_attr'] == 0:
+                memattr = 'normal'
+            else:
+                memattr = 'dev'
+            name = vma['_name'].cast(char_ptr).string()
+
+            # dispatch time ns  ticks callout function
+            gdb.write("%16x %16x %8x rwxp %7s %s\n" %
+                      (vaddr, paddr, size, memattr, name))
+
 osv()
 osv_heap()
 osv_memory()
 osv_waiters()
 osv_mmap()
+osv_linear_mmap()
 osv_vma_find()
 osv_zfs()
 osv_syms()
