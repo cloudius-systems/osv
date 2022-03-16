@@ -174,7 +174,7 @@ void __attribute__((constructor(init_prio::hpet))) hpet_init()
 
         // Check what type of main counter - 32-bit or 64-bit - is available and
         // construct relevant hpet clock instance
-        mmioaddr_t hpet_mmio_address = mmio_map(hpet_address.Address, 4096);
+        mmioaddr_t hpet_mmio_address = mmio_map(hpet_address.Address, 4096, "hpet");
 
         auto cap = mmio_getl(hpet_mmio_address + HPET_CAP);
         if (cap & HPET_CAP_COUNT_SIZE) {

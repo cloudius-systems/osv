@@ -61,7 +61,7 @@ void arch_setup_pci()
     pci::set_pci_cfg(pci_cfg, pci_cfg_len);
     pci_cfg = pci::get_pci_cfg(&pci_cfg_len);
     mmu::linear_map((void *)pci_cfg, (mmu::phys)pci_cfg, pci_cfg_len,
-		    mmu::page_size, mmu::mattr::dev);
+		    "pci_cfg", mmu::page_size, mmu::mattr::dev);
 
     /* linear_map [TTBR0 - PCI I/O and memory ranges] */
     u64 ranges[2]; size_t ranges_len[2];
@@ -73,9 +73,9 @@ void arch_setup_pci()
     ranges[0] = pci::get_pci_io(&ranges_len[0]);
     ranges[1] = pci::get_pci_mem(&ranges_len[1]);
     mmu::linear_map((void *)ranges[0], (mmu::phys)ranges[0], ranges_len[0],
-                    mmu::page_size, mmu::mattr::dev);
+                    "pci_io", mmu::page_size, mmu::mattr::dev);
     mmu::linear_map((void *)ranges[1], (mmu::phys)ranges[1], ranges_len[1],
-                    mmu::page_size, mmu::mattr::dev);
+                    "pci_mem", mmu::page_size, mmu::mattr::dev);
 }
 #endif
 
@@ -94,17 +94,19 @@ void arch_setup_free_memory()
     /* linear_map [TTBR1] */
     for (auto&& area : mmu::identity_mapped_areas) {
         auto base = reinterpret_cast<void*>(get_mem_area_base(area));
-        mmu::linear_map(base + addr, addr, memory::phys_mem_size);
+        mmu::linear_map(base + addr, addr, memory::phys_mem_size,
+            area == mmu::mem_area::main ? "main" :
+            area == mmu::mem_area::page ? "page" : "mempool");
     }
 
     /* linear_map [TTBR0 - boot, DTB and ELF] */
     mmu::linear_map((void *)mmu::mem_addr, (mmu::phys)mmu::mem_addr,
-                    addr - mmu::mem_addr);
+                    addr - mmu::mem_addr, "kernel");
 
     if (console::PL011_Console::active) {
         /* linear_map [TTBR0 - UART] */
         addr = (mmu::phys)console::aarch64_console.pl011.get_base_addr();
-        mmu::linear_map((void *)addr, addr, 0x1000, mmu::page_size,
+        mmu::linear_map((void *)addr, addr, 0x1000, "pl011", mmu::page_size,
                         mmu::mattr::dev);
     }
 
@@ -112,7 +114,7 @@ void arch_setup_free_memory()
     if (console::Cadence_Console::active) {
         // linear_map [TTBR0 - UART]
         addr = (mmu::phys)console::aarch64_console.cadence.get_base_addr();
-        mmu::linear_map((void *)addr, addr, 0x1000, mmu::page_size,
+        mmu::linear_map((void *)addr, addr, 0x1000, "cadence", mmu::page_size,
                         mmu::mattr::dev);
     }
 #endif
@@ -124,9 +126,9 @@ void arch_setup_free_memory()
         abort("arch-setup: failed to get GICv2 information from dtb.\n");
     }
     gic::gic = new gic::gic_driver(dist, cpu);
-    mmu::linear_map((void *)dist, (mmu::phys)dist, dist_len, mmu::page_size,
+    mmu::linear_map((void *)dist, (mmu::phys)dist, dist_len, "gic_dist", mmu::page_size,
                     mmu::mattr::dev);
-    mmu::linear_map((void *)cpu, (mmu::phys)cpu, cpu_len, mmu::page_size,
+    mmu::linear_map((void *)cpu, (mmu::phys)cpu, cpu_len, "gic_cpu", mmu::page_size,
                     mmu::mattr::dev);
 
 #if CONF_drivers_pci

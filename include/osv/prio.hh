@@ -16,6 +16,7 @@ enum {
     cpus,
     fpranges,
     pt_root,
+    linear_vma_set,
     mempool,
     routecache,
     pagecache,

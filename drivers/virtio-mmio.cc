@@ -112,7 +112,7 @@ void mmio_device::register_interrupt(interrupt_factory irq_factory)
 
 bool mmio_device::parse_config()
 {
-    _addr_mmio = mmio_map(_dev_info._address, _dev_info._size);
+    _addr_mmio = mmio_map(_dev_info._address, _dev_info._size, "virtio_mmio_cfg");
 
     u32 magic = mmio_getl(_addr_mmio + VIRTIO_MMIO_MAGIC_VALUE);
     if (magic != ('v' | 'i' << 8 | 'r' << 16 | 't' << 24)) {

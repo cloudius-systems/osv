@@ -43,6 +43,20 @@ constexpr inline unsigned pt_index(void *virt, unsigned level)
 
 struct page_allocator;
 
+struct linear_vma {
+    void* _virt_addr;
+    phys _phys_addr;
+    size_t _size;
+    mattr _mem_attr;
+    std::string _name;
+
+    linear_vma(void* virt, phys phys, size_t size, mattr mem_attr, const char* name);
+    ~linear_vma();
+
+    uintptr_t v_start() const { return reinterpret_cast<uintptr_t>(_virt_addr); }
+    uintptr_t v_end() const { return reinterpret_cast<uintptr_t>(_virt_addr + _size); }
+};
+
 class vma {
 public:
     vma(addr_range range, unsigned perm, unsigned flags, bool map_dirty, page_allocator *page_ops = nullptr);
@@ -298,7 +312,7 @@ bool is_page_aligned(void* addr)
 // an architecture-specific meaning.
 // Currently mem_attr is ignored on x86_64. For aarch64 specifics see
 // definitions in arch/aarch64/arch-mmu.hh
-void linear_map(void* virt, phys addr, size_t size,
+void linear_map(void* virt, phys addr, size_t size, const char* name,
                 size_t slop = mmu::page_size,
                 mattr mem_attr = mmu::mattr_default);
 

@@ -28,6 +28,7 @@
 #include <osv/rcu.hh>
 #include <osv/rwlock.h>
 #include <numeric>
+#include <set>
 
 // FIXME: Without this pragma, we get a lot of warnings that I don't know
 // how to explain or fix. For now, let's just ignore them :-(
@@ -45,6 +46,16 @@ typedef boost::format fmt;
 extern const char text_start[], text_end[];
 
 namespace mmu {
+
+struct linear_vma_compare {
+    bool operator()(const linear_vma* a, const linear_vma* b) {
+        return a->_virt_addr < b->_virt_addr;
+    }
+};
+
+__attribute__((init_priority((int)init_prio::linear_vma_set)))
+std::set<linear_vma*, linear_vma_compare> linear_vma_set;
+rwlock_t linear_vma_set_mutex;
 
 namespace bi = boost::intrusive;
 
@@ -1857,7 +1868,18 @@ int shm_file::close()
     return 0;
 }
 
-void linear_map(void* _virt, phys addr, size_t size,
+linear_vma::linear_vma(void* virt, phys phys, size_t size, mattr mem_attr, const char* name) {
+    _virt_addr = virt;
+    _phys_addr = phys;
+    _size = size;
+    _mem_attr = mem_attr;
+    _name = name;
+}
+
+linear_vma::~linear_vma() {
+}
+
+void linear_map(void* _virt, phys addr, size_t size, const char* name,
                 size_t slop, mattr mem_attr)
 {
     uintptr_t virt = reinterpret_cast<uintptr_t>(_virt);
@@ -1865,6 +1887,10 @@ void linear_map(void* _virt, phys addr, size_t size,
     assert((virt & (slop - 1)) == (addr & (slop - 1)));
     linear_page_mapper phys_map(addr, size, mem_attr);
     map_range(virt, virt, size, phys_map, slop);
+    auto _vma = new linear_vma(_virt, addr, size, mem_attr, name);
+    WITH_LOCK(linear_vma_set_mutex.for_write()) {
+       linear_vma_set.insert(_vma);
+    }
 }
 
 void free_initial_memory_range(uintptr_t addr, size_t size)

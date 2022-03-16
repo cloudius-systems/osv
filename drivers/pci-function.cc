@@ -84,7 +84,7 @@ namespace pci {
     void bar::map()
     {
         if (_is_mmio) {
-            _addr_mmio = mmio_map(get_addr64(), get_size());
+            _addr_mmio = mmio_map(get_addr64(), get_size(), "pci_bar");
         }
     }
 

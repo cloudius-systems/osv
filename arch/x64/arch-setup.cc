@@ -164,7 +164,10 @@ void arch_setup_free_memory()
     });
     for (auto&& area : mmu::identity_mapped_areas) {
         auto base = reinterpret_cast<void*>(get_mem_area_base(area));
-        mmu::linear_map(base, 0, initial_map, initial_map);
+        mmu::linear_map(base, 0, initial_map,
+            area == mmu::mem_area::main ? "main" :
+            area == mmu::mem_area::page ? "page" : "mempool",
+            initial_map);
     }
     // Map the core, loaded by the boot loader
     // In order to properly setup mapping between virtual
@@ -176,7 +179,7 @@ void arch_setup_free_memory()
     // as expressed by the assignment below
     elf_start = reinterpret_cast<void*>(elf_phys_start + OSV_KERNEL_VM_SHIFT);
     elf_size = edata_phys - elf_phys_start;
-    mmu::linear_map(elf_start, elf_phys_start, elf_size, OSV_KERNEL_BASE);
+    mmu::linear_map(elf_start, elf_phys_start, elf_size, "kernel", OSV_KERNEL_BASE);
     // get rid of the command line, before low memory is unmapped
     parse_cmdline(mb);
     // now that we have some free memory, we can start mapping the rest
@@ -205,7 +208,9 @@ void arch_setup_free_memory()
         }
         for (auto&& area : mmu::identity_mapped_areas) {
             auto base = reinterpret_cast<void*>(get_mem_area_base(area));
-            mmu::linear_map(base + ent.addr, ent.addr, ent.size, ~0);
+            mmu::linear_map(base + ent.addr, ent.addr, ent.size,
+               area == mmu::mem_area::main ? "main" :
+               area == mmu::mem_area::page ? "page" : "mempool", ~0);
         }
         mmu::free_initial_memory_range(ent.addr, ent.size);
     });
