@@ -90,6 +90,37 @@ public:
     boost::intrusive::set_member_hook<> _vma_list_hook;
 };
 
+struct vma_range {
+    const void* _vma;
+    bool _is_linear;
+
+    vma_range(const linear_vma* v) {
+       _vma = v;
+       _is_linear = true;
+    }
+
+    vma_range(const vma* v) {
+       _vma = v;
+       _is_linear = false;
+    }
+
+    uintptr_t start() const {
+       if (_is_linear) {
+          return static_cast<const linear_vma*>(_vma)->v_start();
+       } else {
+          return static_cast<const vma*>(_vma)->start();
+       }
+    }
+
+    uintptr_t end() const {
+       if (_is_linear) {
+          return static_cast<const linear_vma*>(_vma)->v_end();
+       } else {
+          return static_cast<const vma*>(_vma)->end();
+       }
+    }
+};
+
 class anon_vma : public vma {
 public:
     anon_vma(addr_range range, unsigned perm, unsigned flags);

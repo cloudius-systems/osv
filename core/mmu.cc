@@ -47,6 +47,17 @@ extern const char text_start[], text_end[];
 
 namespace mmu {
 
+struct vma_range_compare {
+    bool operator()(const vma_range& a, const vma_range& b) {
+        return a.start() < b.start();
+    }
+};
+
+//Set of all vma ranges - both linear and non-linear ones
+__attribute__((init_priority((int)init_prio::vma_range_set)))
+std::set<vma_range, vma_range_compare> vma_range_set;
+rwlock_t vma_range_set_mutex;
+
 struct linear_vma_compare {
     bool operator()(const linear_vma* a, const linear_vma* b) {
         return a->_virt_addr < b->_virt_addr;
@@ -66,6 +77,9 @@ public:
     }
 };
 
+constexpr uintptr_t lower_vma_limit = 0x0;
+constexpr uintptr_t upper_vma_limit = 0x800000000000;
+
 typedef boost::intrusive::set<vma,
                               bi::compare<vma_compare>,
                               bi::member_hook<vma,
@@ -78,9 +92,15 @@ struct vma_list_type : vma_list_base {
     vma_list_type() {
         // insert markers for the edges of allocatable area
         // simplifies searches
-        insert(*new anon_vma(addr_range(0, 0), 0, 0));
-        uintptr_t e = 0x800000000000;
-        insert(*new anon_vma(addr_range(e, e), 0, 0));
+        auto lower_edge = new anon_vma(addr_range(lower_vma_limit, lower_vma_limit), 0, 0);
+        insert(*lower_edge);
+        auto upper_edge = new anon_vma(addr_range(upper_vma_limit, upper_vma_limit), 0, 0);
+        insert(*upper_edge);
+
+        WITH_LOCK(vma_range_set_mutex.for_write()) {
+            vma_range_set.insert(vma_range(lower_edge));
+            vma_range_set.insert(vma_range(upper_edge));
+        }
     }
 };
 
@@ -954,27 +974,41 @@ static error protect(const void *addr, size_t size, unsigned int perm)
     return no_error();
 }
 
+class vma_range_addr_compare {
+public:
+    bool operator()(const vma_range& x, uintptr_t y) const { return x.start() < y; }
+    bool operator()(uintptr_t x, const vma_range& y) const { return x < y.start(); }
+};
+
 uintptr_t find_hole(uintptr_t start, uintptr_t size)
 {
     bool small = size < huge_page_size;
     uintptr_t good_enough = 0;
 
-    // FIXME: use lower_bound or something
-    auto p = vma_list.begin();
+    SCOPE_LOCK(vma_range_set_mutex.for_read());
+    //Find first vma range which starts before the start parameter or is the 1st one
+    auto p = std::lower_bound(vma_range_set.begin(), vma_range_set.end(), start, vma_range_addr_compare());
+    if (p != vma_range_set.begin()) {
+        --p;
+    }
     auto n = std::next(p);
-    while (n != vma_list.end()) {
+    while (n->start() <= upper_vma_limit) { //we only go up to the upper mmap vma limit
+        //See if desired hole fits between p and n vmas
         if (start >= p->end() && start + size <= n->start()) {
             return start;
         }
+        //See if shifting start to the end of p makes desired hole fit between p and n
         if (p->end() >= start && n->start() - p->end() >= size) {
             good_enough = p->end();
             if (small) {
                 return good_enough;
             }
+            //See if huge hole fits between p and n
             if (n->start() - align_up(good_enough, huge_page_size) >= size) {
                 return align_up(good_enough, huge_page_size);
             }
         }
+        //If nothing worked move next in the list
         p = n;
         ++n;
     }
@@ -999,6 +1033,9 @@ ulong evacuate(uintptr_t start, uintptr_t end)
                 memory::stats::on_jvm_heap_free(size);
             }
             vma_list.erase(dead);
+            WITH_LOCK(vma_range_set_mutex.for_write()) {
+                vma_range_set.erase(vma_range(&dead));
+            }
             delete &dead;
         }
     }
@@ -1140,6 +1177,9 @@ uintptr_t allocate(vma *v, uintptr_t start, size_t size, bool search)
     v->set(start, start+size);
 
     vma_list.insert(*v);
+    WITH_LOCK(vma_range_set_mutex.for_write()) {
+        vma_range_set.insert(vma_range(v));
+    }
 
     return start;
 }
@@ -1493,6 +1533,9 @@ void anon_vma::split(uintptr_t edge)
     vma* n = new anon_vma(addr_range(edge, _range.end()), _perm, _flags);
     set(_range.start(), edge);
     vma_list.insert(*n);
+    WITH_LOCK(vma_range_set_mutex.for_write()) {
+        vma_range_set.insert(vma_range(n));
+    }
 }
 
 error anon_vma::sync(uintptr_t start, uintptr_t end)
@@ -1600,6 +1643,9 @@ jvm_balloon_vma::~jvm_balloon_vma()
     // for a dangling mapping representing a balloon that was already moved
     // out.
     vma_list.erase(*this);
+    WITH_LOCK(vma_range_set_mutex.for_write()) {
+        vma_range_set.erase(vma_range(this));
+    }
     assert(!(_real_flags & mmap_jvm_balloon));
     mmu::map_anon(addr(), size(), _real_flags, _real_perm);
 
@@ -1667,6 +1713,9 @@ ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b)
                     // Since we will change its position in the tree, for the sake of future
                     // lookups we need to reinsert it.
                     vma_list.erase(*jvma);
+                    WITH_LOCK(vma_range_set_mutex.for_write()) {
+                        vma_range_set.erase(vma_range(jvma));
+                    }
                     if (jvma->start() < start) {
                         assert(jvma->partial() >= (jvma->end() - start));
                         jvma->set(jvma->start(), start);
@@ -1675,11 +1724,17 @@ ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b)
                         jvma->set(end, jvma->end());
                     }
                     vma_list.insert(*jvma);
+                    WITH_LOCK(vma_range_set_mutex.for_write()) {
+                        vma_range_set.insert(vma_range(jvma));
+                    }
                 } else {
                     // Note how v and jvma are different. This is because this one,
                     // we will delete.
                     auto& v = *i--;
                     vma_list.erase(v);
+                    WITH_LOCK(vma_range_set_mutex.for_write()) {
+                        vma_range_set.erase(vma_range(&v));
+                    }
                     // Finish the move. In practice, it will temporarily remap an
                     // anon mapping here, but this should be rare. Let's not
                     // complicate the code to optimize it. There are no
@@ -1692,6 +1747,9 @@ ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b)
 
         evacuate(start, start + size);
         vma_list.insert(*vma);
+        WITH_LOCK(vma_range_set_mutex.for_write()) {
+            vma_range_set.insert(vma_range(vma));
+        }
         return vma->size();
     }
     return 0;
@@ -1753,6 +1811,9 @@ void file_vma::split(uintptr_t edge)
     vma *n = _file->mmap(addr_range(edge, _range.end()), _flags, _perm, off).release();
     set(_range.start(), edge);
     vma_list.insert(*n);
+    WITH_LOCK(vma_range_set_mutex.for_write()) {
+        vma_range_set.insert(vma_range(n));
+    }
 }
 
 error file_vma::sync(uintptr_t start, uintptr_t end)
@@ -1902,6 +1963,9 @@ void linear_map(void* _virt, phys addr, size_t size, const char* name,
     auto _vma = new linear_vma(_virt, addr, size, mem_attr, name);
     WITH_LOCK(linear_vma_set_mutex.for_write()) {
        linear_vma_set.insert(_vma);
+    }
+    WITH_LOCK(vma_range_set_mutex.for_write()) {
+       vma_range_set.insert(vma_range(_vma));
     }
 }
 
