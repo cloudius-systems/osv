@@ -83,28 +83,38 @@ int	atomic_cmpset_long(volatile u_long *dst, u_long expect, u_long src);
 
 static __inline u_int atomic_fetchadd_int(volatile u_int *p, u_int val)
 {
-    u_int result;
-    u_int status;
-    __asm __volatile("1: ldaxr %w0, %1 ; "
-                     "   add   %w2, %w2, %w0 ; "
-                     "   stlxr %w3, %w2, %1 ; "
-                     "   cbnz  %w3, 1b ; "
-                     : "=&r"(result), "+Q"(*p), "+r"(val), "=&r"(status));
+    u_int tmp, ret;
+    u_int res;
 
-    return result;
+    __asm __volatile(
+        "1: ldxr    %w2, [%3]      \n"
+        "   add     %w0, %w2, %w4  \n"
+        "   stxr    %w1, %w0, [%3] \n"
+        "   cbnz    %w1, 1b        \n"
+        : "=&r"(tmp), "=&r"(res), "=&r"(ret)
+        : "r" (p), "r" (val)
+        : "memory"
+    );
+
+    return ret;
 }
 
 static __inline u_long atomic_fetchadd_long(volatile u_long *p, u_long val)
 {
-    u_long result;
-    u_int status;
-    __asm __volatile("1: ldaxr %0, %1 ; "
-                     "   add   %2, %2, %0 ; "
-                     "   stlxr %w3, %2, %1 ; "
-                     "   cbnz  %w3, 1b ; "
-                     : "=&r"(result), "+Q"(*p), "+r"(val), "=&r"(status));
+    u_long tmp, ret;
+    u_int res;
 
-    return result;
+    __asm __volatile(
+        "1: ldxr    %2, [%3]      \n"
+        "   add     %0, %2, %4    \n"
+        "   stxr    %w1, %0, [%3] \n"
+        "   cbnz    %w1, 1b       \n"
+        : "=&r"(tmp), "=&r"(res), "=&r"(ret)
+        : "r" (p), "r" (val)
+        : "memory"
+    );
+
+    return ret;
 }
 
 static __inline void atomic_store_rel_int(volatile u_int *p, u_int val)
