@@ -40,18 +40,29 @@ bool do_expect(T actual, T expected, const char *actuals, const char *expecteds,
 
 int main(int argc, char **argv)
 {
-    // Test that the x86 SYSCALL instruction works, and produces the same
+    // Test that the x86 SYSCALL and aarch64 SVC instructions work, and produce the same
     // results as the syscall() function (with expected differences in how
     // errors are returned).
     unsigned long syscall_nr = __NR_gettid;
     long tid = 0;
 
-    asm ("movq %1, %%rax\n"
+#ifdef __x86_64__
+    asm ("movq %[syscall_no], %%rax\n"
          "syscall\n"
-         "movq %%rax, %0\n"
-         : "=m" (tid)
-         : "m" (syscall_nr)
+         "movq %%rax, %[tid]\n"
+         : [tid]"=m" (tid)
+         : [syscall_no]"m" (syscall_nr)
          : "rax", "rdi");
+#endif
+
+#ifdef __aarch64__
+    asm ("mov x8, %[syscall_no]\n"
+         "svc #0\n"
+         "mov %[tid], x0\n"
+         : [tid]"=r" (tid)
+         : [syscall_no]"r" (syscall_nr)
+         : "x0", "x8");
+#endif
 
     std::cout << "got tid=" << tid << std::endl;
     expect(tid >= 0, true);
@@ -68,17 +79,38 @@ int main(int argc, char **argv)
     off_t offset = 0;
     void* buf = NULL;
 
+    syscall_nr = __NR_mmap;
+
+#ifdef __x86_64__
     asm ("movq %[addr], %%rdi\n"
          "movq %[length], %%rsi\n"
          "movl %[prot], %%edx\n"
          "movq %[flags], %%r10\n"
          "movq %[fd], %%r8\n"
          "movq %[offset], %%r9\n"
-         "movq $9, %%rax\n"
+         "movq %[syscall_no], %%rax\n"
          "syscall\n"
          "movq %%rax, %[buf]\n"
          : [buf] "=m" (buf)
-         : [addr] "m" (addr), [length] "m" (length), [prot] "m" (prot), [flags] "m" (flags), [fd] "m" (fd), [offset] "m" (offset));
+         : [addr] "m" (addr), [length] "m" (length), [prot] "m" (prot),
+           [flags] "m" (flags), [fd] "m" (fd), [offset] "m" (offset), [syscall_no] "m" (syscall_nr));
+#endif
+
+#ifdef __aarch64__
+    asm ("mov x0, %[addr]\n"
+         "mov x1, %[length]\n"
+         "mov x2, %[prot]\n"
+         "mov x3, %[flags]\n"
+         "mov x4, %[fd]\n"
+         "mov x5, %[offset]\n"
+         "mov x8, %[syscall_no]\n"
+         "svc #0\n"
+         "mov %[buf], x0\n"
+         : [buf] "=r" (buf)
+         : [addr] "r" (addr), [length] "r" (length), [prot] "r" (prot),
+           [flags] "r" (flags), [fd] "r" (fd), [offset] "r" (offset), [syscall_no] "r" (syscall_nr)
+         : "x0", "x1", "x2", "x3", "x4", "x5", "x8");
+#endif
 
     assert(((long)buf) >= 0);
     munmap(buf, length);
