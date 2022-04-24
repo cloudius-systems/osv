@@ -498,12 +498,22 @@ OSV_LIBC_API long syscall(long number, ...)
 }
 long __syscall(long number, ...)  __attribute__((alias("syscall")));
 
+#ifdef __x86_64__
 // In x86-64, a SYSCALL instruction has exactly 6 parameters, because this is the number of registers
 // alloted for passing them (additional parameters *cannot* be passed on the stack). So we can get
 // 7 arguments to this function (syscall number plus its 6 parameters). Because in the x86-64 ABI the
 // seventh argument is on the stack, we must pass the arguments explicitly to the syscall() function
 // and can't just call it without any arguments and hope everything will be passed on
 extern "C" long syscall_wrapper(long number, long p1, long p2, long p3, long p4, long p5, long p6)
+#endif
+#ifdef __aarch64__
+// In aarch64, the first 8 parameters to a procedure call are passed in the x0-x7 registers and
+// the parameters of syscall call (SVC intruction) in are passed in x0-x5 registers and syscall number
+// in x8 register before. To avoid shuffling the arguments around we make syscall_wrapper()
+// accept the syscall parameters as is but accept the syscall number as the last 7th argument which
+// the code in entry.S arranges.
+extern "C" long syscall_wrapper(long p1, long p2, long p3, long p4, long p5, long p6, long number)
+#endif
 {
     int errno_backup = errno;
     // syscall and function return value are in rax

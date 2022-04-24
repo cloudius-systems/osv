@@ -120,6 +120,7 @@ thread_main:
 .equ ESR_EC_END,31          // Exception Class field end in ESR
 .equ ESR_EC_DATA_ABORT,0x25 // Exception Class Data Abort value
 .equ ESR_EC_INSN_ABORT,0x21 // Exception Class Instruction Abort value
+.equ ESR_EC_SVC64,0x15      // Exception Class for SVC (System Call) in 64-bit state
 
 .equ ESR_ISS_BEG,0          // Instruction-Specific Syndrome field begin in ESR
 .equ ESR_ISS_END,23         // Instruction-Specific Syndrome field end in ESR
@@ -197,6 +198,8 @@ entry_curr_el_spx_sync:
         str     w1, [sp, #272] // Store Exception Syndrom Register in the frame
         ubfm    x2, x1, #ESR_EC_BEG, #ESR_EC_END // Exception Class -> X2
         ubfm    x3, x1, #ESR_FLT_BEG, #ESR_FLT_END // FLT -> X3
+        cmp     x2, #ESR_EC_SVC64
+        b.eq    handle_system_call
         cmp     x2, #ESR_EC_DATA_ABORT
         b.eq    handle_mem_abort
         cmp     x2, #ESR_EC_INSN_ABORT
@@ -208,6 +211,29 @@ handle_mem_abort:
 
         mov     x0, sp  // save exception_frame to x0
         bl      page_fault
+        pop_state_from_exception_frame
+        eret
+        .cfi_endproc
+handle_system_call:
+        .cfi_startproc
+        //see https://man7.org/linux/man-pages/man2/syscall.2.html for details
+        //about calling convention for arm64
+
+        //because we used x1, x2, x3 and x4 above we need to restore them from the frame
+        ldp x1, x2, [sp, #8]
+        ldp x3, x4, [sp, #24]
+
+        mov x6, x8      // copy syscall number passed in x8 to the last 7th argument of the syscall_wrapper
+
+        msr daifclr, #2 // enable interrupts, so that the functions called by syscall_wrapper can sleep
+        isb
+
+        bl syscall_wrapper
+
+        msr daifset, #2 // disable interrupts
+        isb
+
+        str     x0, [sp, #0] // copy the result in x0 directly into the frame so that it can be restored
         pop_state_from_exception_frame
         eret
         .cfi_endproc
