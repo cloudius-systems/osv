@@ -39,15 +39,31 @@ reschedule_from_interrupt:
         isb
 
         str     x29, [x0, #0]     //Save frame pointer of the old thread
+
+        mrs     x2, spsel         //Fetch old thread stack selector
+        msr     spsel, #1         //Select SP_ELx
         mov     x3, sp            //Fetch old thread stack pointer
+
         adr     x4, 1f            //Fetch old thread instruction point
         stp     x3, x4, [x0, #16] //Save old thread sp and pc
+
+        msr     spsel, #0         //Select SP_EL0
+        mov     x3, sp            //Fetch old thread exception stack pointer
+        stp     x3, x2, [x0, #40] //Save old thread exception stack pointer and stack selector
 
         ldp     x29, x0, [x1, #0] //Set frame pointer of the new thread and this (x0) of the new thread
                                   //Please note that the pc may point to thread_main_c(thread*) which is
                                   //why we have to set x0 (1st argument) to new thread object
         ldp     x3, x4, [x1, #16] //Fetch new thread sp and pc
-        mov     sp, x3            //Set new thread stack pointer
+
+        msr     spsel, #1         //Select SP_ELx
+        mov     sp, x3            //Restore new thread stack pointer
+
+        ldp     x3, x2, [x1, #40] //Load new thread exception stack pointer and stack selector
+        msr     spsel, #0         //Select SP_EL0
+        mov     sp, x3            //Restore new thread exception stack pointer
+        msr     spsel, x2         //Restore new thread stack selector (1-SP_ELx,0-SP_EL0)
+
         blr     x4                //Jump to the new thread pc
 
 1:

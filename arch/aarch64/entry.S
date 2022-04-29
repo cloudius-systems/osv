@@ -57,9 +57,16 @@ exception_vectors:
         vector_entry lower_el_aarch32 fiq
         vector_entry lower_el_aarch32 serror
 
-/* keep in sync with the struct in exceptions.hh */
-.macro push_state_to_exception_frame
-        sub     sp, sp, #48 // make space for align2, align1+ESR, PSTATE, PC, SP
+/* keep in sync with the struct in exceptions.hh
+   the switch argument (1 or 0) indicates if we would be switching from
+   SP_ELx -> SP_EL0 (1) or staying on the same stack - SP_EL0 -> SP_EL0 (0) */
+.macro push_state_to_exception_frame switch
+        // Regardless which stack (pointed by SP_ELx or SP_EL0) was in use when
+        // exception was taken, the stack is always reset to SP_ELx before exception
+        // handler is executed. To make sure the exception handler uses the exception
+        // stack pointed by SP_EL0 we need to set SPSEL to #0.
+        msr spsel, #0               // switch to exception stack by selecting SP_EL0
+        sub     sp, sp, #48         // make space for align2, align1+ESR, PSTATE, PC, SP
         .cfi_adjust_cfa_offset 48
         push_pair x28, x29
         push_pair x26, x27
@@ -76,7 +83,13 @@ exception_vectors:
         push_pair x4, x5
         push_pair x2, x3
         push_pair x0, x1
+        .if \switch == 1
+        msr spsel, #1                // switch to regular stack (SP_ELx) for brief moment to read it
+        mov     x1, sp               // fetch SP of regular stack (spsel 1)
+        msr spsel, #0                // switch back to exception stack
+        .else
         add     x1, sp, #288         // x1 := old SP (48 + 16 * 15 = 288)
+        .endif
         mrs     x2, elr_el1
         mrs     x3, spsr_el1
         stp     x30, x1, [sp, #240]  // store lr, old SP
@@ -102,6 +115,10 @@ exception_vectors:
         pop_pair x24, x25
         pop_pair x26, x27
         pop_pair x28, x29
+        // please note we do not need to explicitly switch the stack when returning
+        // from exception by resetting the stack selector register, as it will
+        // happen automatically based on the value of spsr_el1 which we restored above
+        // (the spsr_el1 holds PSTATE and EL and SP selector)
         ldr     x30, [sp], #48
         .cfi_adjust_cfa_offset -48
 .endm /* pop_state_to_exception_frame */
@@ -143,7 +160,7 @@ entry_\level\()_\type:
         .cfi_offset x30, -32 // Point to the elr register located at the -32 offset
                              // of the exception frame to help gdb link to the
                              // address when interrupt was raised
-        push_state_to_exception_frame
+        push_state_to_exception_frame 1
         mrs     x1, esr_el1
         str     w1, [sp, #272] // Store Exception Syndrom Register in the frame
         mov     x0, sp         // Save exception_frame to x0
@@ -165,8 +182,6 @@ entry_\level\()_\type:
 .equ EX_TYPE_FIQ, 0x2
 .equ EX_TYPE_SERROR, 0x3
 
-entry_unexpected_exception curr_el_sp0, sync, #CURR_EL_SP0, #EX_TYPE_SYNC
-entry_unexpected_exception curr_el_sp0, irq, #CURR_EL_SP0, #EX_TYPE_IRQ
 entry_unexpected_exception curr_el_sp0, fiq, #CURR_EL_SP0, #EX_TYPE_FIQ
 entry_unexpected_exception curr_el_sp0, serror, #CURR_EL_SP0, #EX_TYPE_SERROR
 
@@ -183,38 +198,39 @@ entry_unexpected_exception lower_el_aarch32, irq, #LOWER_EL_AARCH32, #EX_TYPE_IR
 entry_unexpected_exception lower_el_aarch32, fiq, #LOWER_EL_AARCH32, #EX_TYPE_FIQ
 entry_unexpected_exception lower_el_aarch32, serror, #LOWER_EL_AARCH32, #EX_TYPE_SERROR
 
-.global entry_curr_el_spx_sync
-.hidden entry_curr_el_spx_sync
-.type entry_curr_el_spx_sync, @function
-entry_curr_el_spx_sync:
+.macro entry_curr_el_sync stack, switch
+.global entry_curr_el_sp\stack\()_sync
+.hidden entry_curr_el_sp\stack\()_sync
+.type entry_curr_el_sp\stack\()_sync, @function
+entry_curr_el_sp\stack\()_sync:
         .cfi_startproc simple
         .cfi_signal_frame
         .cfi_def_cfa sp, 0
         .cfi_offset x30, -32 // Point to the elr register located at the -32 offset
                              // of the exception frame to help gdb link to the
                              // address when interrupt was raised
-        push_state_to_exception_frame
+        push_state_to_exception_frame \switch
         mrs     x1, esr_el1
         str     w1, [sp, #272] // Store Exception Syndrom Register in the frame
         ubfm    x2, x1, #ESR_EC_BEG, #ESR_EC_END // Exception Class -> X2
         ubfm    x3, x1, #ESR_FLT_BEG, #ESR_FLT_END // FLT -> X3
         cmp     x2, #ESR_EC_SVC64
-        b.eq    handle_system_call
+        b.eq    handle_system_call_sp\stack
         cmp     x2, #ESR_EC_DATA_ABORT
-        b.eq    handle_mem_abort
+        b.eq    handle_mem_abort_sp\stack
         cmp     x2, #ESR_EC_INSN_ABORT
-        b.ne    unexpected_sync_exception
-handle_mem_abort:
-        cbz     x3, unexpected_sync_exception
+        b.ne    unexpected_sync_exception_sp\stack
+handle_mem_abort_sp\stack:
+        cbz     x3, unexpected_sync_exception_sp\stack
         cmp     x3, #3
-        b.hi    unexpected_sync_exception
+        b.hi    unexpected_sync_exception_sp\stack
 
         mov     x0, sp  // save exception_frame to x0
         bl      page_fault
         pop_state_from_exception_frame
         eret
         .cfi_endproc
-handle_system_call:
+handle_system_call_sp\stack:
         .cfi_startproc
         //see https://man7.org/linux/man-pages/man2/syscall.2.html for details
         //about calling convention for arm64
@@ -237,7 +253,7 @@ handle_system_call:
         pop_state_from_exception_frame
         eret
         .cfi_endproc
-unexpected_sync_exception:
+unexpected_sync_exception_sp\stack:
         .cfi_startproc
         mov     x0, sp  // save exception_frame to x0
         mov     x1, #CURR_EL_SPX
@@ -246,23 +262,32 @@ unexpected_sync_exception:
         pop_state_from_exception_frame
         bl      abort
         .cfi_endproc
+.endm
 
-.global entry_curr_el_spx_irq
-.hidden entry_curr_el_spx_irq
-.type entry_curr_el_spx_irq, @function
-entry_curr_el_spx_irq:
+entry_curr_el_sync 0, 0 // the synchronous exception handler used when the SP_EL0 is active
+entry_curr_el_sync x, 1 // the synchronous exception handler used when the SP_ELx is active
+
+.macro entry_curr_el_irq stack, switch
+.global entry_curr_el_sp\stack\()_irq
+.hidden entry_curr_el_sp\stack\()_irq
+.type entry_curr_el_sp\stack\()_irq, @function
+entry_curr_el_sp\stack\()_irq:
         .cfi_startproc simple
         .cfi_signal_frame
         .cfi_def_cfa sp, 0
         .cfi_offset x30, -32 // Point to the elr register located at the -32 offset
                              // of the exception frame to help gdb link to the
                              // address when interrupt was raised
-        push_state_to_exception_frame
+        push_state_to_exception_frame \switch
         mov     x0, sp
         bl      interrupt // extern "C"
         pop_state_from_exception_frame
         eret
         .cfi_endproc
+.endm
+
+entry_curr_el_irq 0, 0 // the asynchronous exception handler used when the SP_EL0 is active
+entry_curr_el_irq x, 1 // the asynchronous exception handler used when the SP_ELx is active
 
 .global call_signal_handler_thunk
 .hidden call_signal_handler_thunk
