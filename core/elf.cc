@@ -1294,7 +1294,11 @@ void create_main_program()
 program::program(void* addr)
     : _next_alloc(addr)
 {
+#ifdef __x86_64__
     void *program_base = (void*)(ELF_IMAGE_START + OSV_KERNEL_VM_SHIFT);
+#else
+    void *program_base = (void*)(ELF_IMAGE_START);
+#endif
     _core = std::make_shared<memory_image>(*this, program_base);
     _core->set_base(program_base);
     assert(_core->module_index() == core_module_index);

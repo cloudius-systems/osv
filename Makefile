@@ -318,8 +318,12 @@ kernel-defines = -D_KERNEL $(source-dialects) $(cc-hide-flags) $(gc-flags)
 # To add something that will *not* be part of the main kernel, you can do:
 #
 #   mydir/*.o EXTRA_FLAGS = <MY_STUFF>
+ifeq ($(arch),x64)
 EXTRA_FLAGS = -D__OSV_CORE__ -DOSV_KERNEL_BASE=$(kernel_base) -DOSV_KERNEL_VM_BASE=$(kernel_vm_base) \
 	-DOSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) -DOSV_LZKERNEL_BASE=$(lzkernel_base)
+else
+EXTRA_FLAGS = -D__OSV_CORE__ -DOSV_KERNEL_VM_BASE=$(kernel_vm_base)
+endif
 EXTRA_LIBS =
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -Wno-format-security \
 	-D __BSD_VISIBLE=1 -U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
@@ -497,12 +501,13 @@ acpi = $(patsubst %.c, %.o, $(acpi-source))
 
 $(acpi:%=$(out)/%): CFLAGS += -fno-strict-aliasing -Wno-stringop-truncation
 
+kernel_vm_shift := $(shell printf "0x%X" $(shell expr $$(( $(kernel_vm_base) - $(kernel_base) )) ))
+
 endif # x64
 
 ifeq ($(arch),aarch64)
 
-kernel_base := 0x40080000
-kernel_vm_base := $(kernel_base)
+kernel_vm_base := 0xfc0080000 #63GB
 app_local_exec_tls_size := 0x40
 
 include $(libfdt_base)/Makefile.libfdt
@@ -516,7 +521,7 @@ $(out)/preboot.bin: $(out)/preboot.elf
 	$(call quiet, $(OBJCOPY) -O binary $^ $@, OBJCOPY $@)
 
 edata = $(shell readelf --syms $(out)/loader.elf | grep "\.edata" | awk '{print "0x" $$2}')
-image_size = $$(( $(edata) - $(kernel_base) ))
+image_size = $$(( $(edata) - $(kernel_vm_base) ))
 
 $(out)/loader.img: $(out)/preboot.bin $(out)/loader-stripped.elf
 	$(call quiet, dd if=$(out)/preboot.bin of=$@ > /dev/null 2>&1, DD $@ preboot.bin)
@@ -525,8 +530,6 @@ $(out)/loader.img: $(out)/preboot.bin $(out)/loader-stripped.elf
 	$(call quiet, scripts/imgedit.py setargs "-f raw $@" $(cmdline), IMGEDIT $@)
 
 endif # aarch64
-
-kernel_vm_shift := $(shell printf "0x%X" $(shell expr $$(( $(kernel_vm_base) - $(kernel_base) )) ))
 
 $(out)/bsd/sys/crypto/rijndael/rijndael-api-fst.o: COMMON+=-fno-strict-aliasing
 $(out)/bsd/sys/crypto/sha2/sha2.o: COMMON+=-fno-strict-aliasing
@@ -2071,9 +2074,16 @@ endif
 $(out)/default_version_script: exported_symbols/*.symbols exported_symbols/$(arch)/*.symbols
 	$(call quiet, scripts/generate_version_script.sh $(out)/default_version_script, GEN default_version_script)
 
+ifeq ($(arch),aarch64)
+def_symbols = --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base)
+else
+def_symbols = --defsym=OSV_KERNEL_BASE=$(kernel_base) \
+              --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) \
+              --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift)
+endif
+
 $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(loader_options_dep) $(version_script_file)
-	$(call quiet, $(LD) -o $@ --defsym=OSV_KERNEL_BASE=$(kernel_base) \
-	    --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) \
+	$(call quiet, $(LD) -o $@ $(def_symbols) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
             $(patsubst %version_script,--version-script=%version_script,$(patsubst %.ld,-T %.ld,$^)) \
 	    $(linker_archives_options) $(conf_linker_extra_options), \
@@ -2085,8 +2095,7 @@ $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(lo
 	$(call quiet, $(CC) $(out)/osv.o -nostdlib -shared -o $(out)/libosv.so -T $(out)/libosv.ld, LIBOSV.SO)
 
 $(out)/kernel.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/empty_bootfs.o $(loader_options_dep) $(version_script_file)
-	$(call quiet, $(LD) -o $@ --defsym=OSV_KERNEL_BASE=$(kernel_base) \
-	    --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) \
+	$(call quiet, $(LD) -o $@ $(def_symbols) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
             $(patsubst %version_script,--version-script=%version_script,$(patsubst %.ld,-T %.ld,$^)) \
 	    $(linker_archives_options) $(conf_linker_extra_options), \

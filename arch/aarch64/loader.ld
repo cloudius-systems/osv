@@ -18,8 +18,11 @@ SECTIONS
 	 *
 	 * We can't export the ELF header base as a symbol, because ld
 	 * insists on moving stuff around if we do.
+	 *
+	 * We add 0x10000 (64 KB) below to create space for our copy of DTB tree
+	 * (see dtb_setup() in arch-dtb.cc)
 	 */
-    . = OSV_KERNEL_BASE + 0x10000 + 0x1000;
+    . = OSV_KERNEL_VM_BASE + 0x10000 + 0x1000;
 
     .dynamic : ALIGN(16) { *(.dynamic) } : dynamic : text
 

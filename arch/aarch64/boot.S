@@ -14,16 +14,25 @@
 start_elf:
         /* elf program start address */
         /* input: x3=elf header x4=cmdline x5=dtb */
+        bl      calculate_virt_offset
+        /* x6 contains virt-phys offset */
         adrp    x0, exception_vectors
+        add     x0, x0, x6    // apply virt-phys offset to make it virtual address
         msr     vbar_el1, x0
         isb
 
-        bl      validate_el // check that we are at EL1 or die
+        bl      validate_el   // check that we are at EL1 or die
         bl      init_stack
-        bl      zero_bss    // initialize bss contents to 0
+        bl      zero_bss      // initialize bss contents to 0
         bl      init_cpu
-        bl      init_boot_pt
+        bl      fixup_boot_pt // apply virt-phys offset to the boot mapping tables
+        bl      init_boot_pt  // set mapping table registers
+        /* at this point the virtual memory is not yet enabled but we are ready to enable it */
         bl      init_mmu
+
+        /* after we returned from init_mmu we are operating in the virtual memory space */
+        adrp    x0, kernel_vm_shift
+        str     x6, [x0]      // save the kernel VM shift under kernel_vm_shift
 
         adrp    x1, elf_header              // store elf header address
         str     x3, [x1, #:lo12:elf_header]
@@ -36,7 +45,6 @@ start_elf:
         mov     x29, xzr
         bl      init_xen
 #endif
-
         mov     x29, xzr
         bl      premain
 
@@ -48,12 +56,19 @@ start_elf:
 
         bl      halt
 
+calculate_virt_offset:
+        adr     x0, text_start // fetch physical address of text_start
+        ldr     x6, =(OSV_KERNEL_VM_BASE + 0x20000) // calculate virtual address of text_start per loader.ld
+        sub     x6, x6, x0
+        ret
+
 init_stack:
         mov     x0, #1     // select SP_ELx
         msr     spsel, x0
         isb
 
         adrp    x0, init_stack_top
+        add     x0, x0, x6 // make it virtual address
         mov     sp, x0
         ret
 
@@ -119,12 +134,80 @@ init_cpu:
         isb
         ret
 
+fixup_boot_pt:
+        // x6 contains kernel phys/virt offset
+        mov     x29, x30 // save link register so wa can call fixup_pt_entry
+
+        /* we need to fix the addresses of the ident subtables to make them physical */
+        /* as the virt-phys mapping structures use physical addresses during walk-up */
+
+        // subtract p/v offset from the address of the subtable ident_pt_l3_ttbr0
+        adrp    x0, ident_pt_l4_ttbr0
+        bl      fixup_pt_entry
+
+        // subtract p/v offset from the address of the subtable ident_pt_l2_0_ttbr0
+        adrp    x0, ident_pt_l3_ttbr0
+        bl      fixup_pt_entry
+        // subtract p/v offset from the address of the subtable ident_pt_l2_1_ttbr0
+        add     x0, x0, #8
+        bl      fixup_pt_entry
+        // subtract p/v offset from the address of the subtable ident_pt_l2_2_ttbr0
+        add     x0, x0, #8
+        bl      fixup_pt_entry
+        // subtract p/v offset from the address of the subtable ident_pt_l2_3_ttbr0
+        add     x0, x0, #8
+        bl      fixup_pt_entry
+        // subtract p/v offset from the address of the subtable kernel_pt_l2_63_ttbr0
+        add     x0, x0, #480  //=60*8
+        bl      fixup_pt_entry
+
+        // fix 63-64 GB mapping which maps the kernel code
+
+        // From https://www.kernel.org/doc/Documentation/arm64/booting.txt:
+        //"The Image must be placed text_offset bytes from a 2MB aligned base
+        // address anywhere in usable system RAM and called there."
+
+        // Given the kernel can be loaded in any place of the allowed range of physical memory
+        // we have to dynamically figure out the physical address so that we can correctly
+        // initialize the pt entries of the 63th GB of the virtual memory which is where
+        // the kernel is expected to be per loader.ld.
+
+        // We use the physical address of the symbol text_start located in the 1st 2MB
+        // of the kernel text to identify which 2MB of RAM the kernel ELF is loaded.
+        // Then we use this information to map the 63-rd GB of virtual memory into
+        // whatever 2 MB-aligned area of physical memory the kernel is loaded.
+
+        // round-up to whole 2MB and store in x2
+        adrp    x0, text_start
+        lsr     x2, x0, #21
+        lsl     x2, x2, #21
+
+        // start with pt entry stored at kernel_pt_l2_63_ttbr0 (x0)
+        adrp    x0, kernel_pt_l2_63_ttbr0
+        mov     x7, #512
+kernel_pt_loop:
+        ldr     x1, [x0]   // load initial value of pt entry at address stored in x0
+        add     x1, x1, x2 // add the physical address offset
+        str     x1, [x0]   // store the fixed pt value
+
+        add     x0, x0, #8 // fix another 2MB
+        sub     x7, x7, #1
+        cbnz    x7, kernel_pt_loop
+
+        mov     x30, x29   // restore link register (x30) so we can properly return ret
+
+fixup_pt_entry:
+        ldr     x1, [x0]   // x0 contains address of the entry, x6 contains offset
+        sub     x1, x1, x6 // apply kernel offset
+        str     x1, [x0]   // store the fixed pt entry back into memory
+        ret
+
 init_boot_pt:
         adrp    x0, ident_pt_l4_ttbr0
         adrp    x1, ident_pt_l4_ttbr1
         ret
 
-init_secondary_pt:
+init_runtime_pt:
         adrp    x1, smpboot_ttbr0
         ldr     x0, [x1], #8
         ldr     x1, [x1]
@@ -150,6 +233,21 @@ init_mmu:
         msr     sctlr_el1, x0
         isb
 
+        // Apply offset to switch to the kernel VM address so that we jump
+        // into virtual memory space of where kernel is mapped (63-rd GB)
+        add     x30, x30, x6
+        ret
+
+switch_to_runtime_pt:
+        msr     ttbr0_el1, x0
+        msr     ttbr1_el1, x1
+        isb
+
+        dsb sy  //Flush TLB
+        tlbi vmalle1
+        dsb sy
+        isb
+
         ret
 
 .align 16
@@ -157,15 +255,20 @@ init_mmu:
 .hidden start_secondary_cpu
 .type  start_secondary_cpu , "function"
 start_secondary_cpu:
+        bl      calculate_virt_offset
+        /* x6 contains virt-phys offset */
         adrp    x0, exception_vectors
+        add     x0, x0, x6    // apply virt-phys offset to make it virtual address
         msr     vbar_el1, x0
         isb
 
         bl      init_cpu
-        bl      init_boot_pt
+        bl      init_boot_pt  // use the boot mapping tables fixed by start_elf on primary CPU
         bl      init_mmu
-        bl      init_secondary_pt
-        bl      init_mmu
+        /* after we returned from init_mmu we are operating in the virtual memory space */
+        /* but on secondary CPU we can subsequently switch to the runtime mapping tables */
+        bl      init_runtime_pt
+        bl      switch_to_runtime_pt
 
         ldr     x0, =smp_stack_free    /* ptr */
         ldr     x1, [x0]               /* old value */
@@ -199,7 +302,11 @@ ident_pt_l3_ttbr0:
         .quad ident_pt_l2_1_ttbr0 + 0x3 // Map 1GB-2GB one-to-one
         .quad ident_pt_l2_2_ttbr0 + 0x3 // Map 2GB-3GB one-to-one
         .quad ident_pt_l2_3_ttbr0 + 0x3 // Map 3GB-4GB one-to-one
-        .rept 508
+        .rept 59
+        .quad 0
+        .endr
+        .quad kernel_pt_l2_63_ttbr0 + 0x3 // Map 63GB-64GB -> 1GB-2GB
+        .rept 448
         .quad 0
         .endr
 ident_pt_l2_0_ttbr0:
@@ -226,6 +333,13 @@ ident_pt_l2_2_ttbr0:
 ident_pt_l2_3_ttbr0:
         index = 0
         offset = 0xC0000000
+        .rept 512
+        .quad offset + (index << 21) + 0x411
+        index = index + 1
+        .endr
+kernel_pt_l2_63_ttbr0:
+        index = 0
+        offset = 0
         .rept 512
         .quad offset + (index << 21) + 0x411
         index = index + 1
@@ -257,6 +371,12 @@ smp_stack_free: .quad 0
 .align 12
 smpboot_ttbr0:  .quad 0
 smpboot_ttbr1:  .quad 0
+
+.hidden kernel_vm_shift
+.globl kernel_vm_shift
+.type kernel_vm_shift, "object"
+.align 16
+kernel_vm_shift: .quad 0
 
 /* hmm should we provide an interrupt stack?
 . = . + 4096*10

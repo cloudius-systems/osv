@@ -111,8 +111,17 @@ void premain()
 
     arch_init_premain();
 
+#ifdef __x86_64__
+    auto elf_header_virt_address = (void*)elf_header + OSV_KERNEL_VM_SHIFT;
+#endif
+
+#ifdef __aarch64__
+    extern u64 kernel_vm_shift;
+    auto elf_header_virt_address = (void*)elf_header + kernel_vm_shift;
+#endif
+
     auto inittab = elf::get_init(reinterpret_cast<elf::Elf64_Ehdr*>(
-        (void*)elf_header + OSV_KERNEL_VM_SHIFT));
+        elf_header_virt_address));
 
     if (inittab.tls.start == nullptr) {
         debug_early("premain: failed to get TLS data from ELF\n");

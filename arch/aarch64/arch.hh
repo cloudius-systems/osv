@@ -18,7 +18,7 @@ namespace arch {
 
 #define CACHELINE_ALIGNED __attribute__((aligned(64)))
 #define INSTR_SIZE_MIN 4
-#define ELF_IMAGE_START (OSV_KERNEL_BASE + 0x10000)
+#define ELF_IMAGE_START (OSV_KERNEL_VM_BASE + 0x10000)
 
 inline void irq_disable()
 {

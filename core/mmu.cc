@@ -125,12 +125,25 @@ phys pte_level_mask(unsigned level)
     return ~((phys(1) << shift) - 1);
 }
 
+#ifdef __x86_64__
 static void *elf_phys_start = (void*)OSV_KERNEL_BASE;
+#endif
+
+#ifdef __aarch64__
+void *elf_phys_start;
+extern "C" u64 kernel_vm_shift;
+#endif
+
 void* phys_to_virt(phys pa)
 {
     void* phys_addr = reinterpret_cast<void*>(pa);
     if ((phys_addr >= elf_phys_start) && (phys_addr < elf_phys_start + elf_size)) {
+#ifdef __x86_64__
         return (void*)(phys_addr + OSV_KERNEL_VM_SHIFT);
+#endif
+#ifdef __aarch64__
+        return (void*)(phys_addr + kernel_vm_shift);
+#endif
     }
 
     return phys_mem + pa;
@@ -141,7 +154,12 @@ phys virt_to_phys_pt(void* virt);
 phys virt_to_phys(void *virt)
 {
     if ((virt >= elf_start) && (virt < elf_start + elf_size)) {
+#ifdef __x86_64__
         return reinterpret_cast<phys>((void*)(virt - OSV_KERNEL_VM_SHIFT));
+#endif
+#ifdef __aarch64__
+        return reinterpret_cast<phys>((void*)(virt - kernel_vm_shift));
+#endif
     }
 
 #if CONF_debug_memory

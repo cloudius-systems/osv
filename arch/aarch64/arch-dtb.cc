@@ -778,7 +778,7 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
     }
 
     olddtb = dtb;
-    dtb = (void *)OSV_KERNEL_BASE;
+    dtb = (void *)OSV_KERNEL_VM_BASE;
 
     if (fdt_open_into(olddtb, dtb, 0x10000) != 0) {
         abort("dtb_setup: failed to move dtb (dtb too large?)\n");
@@ -808,15 +808,17 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
     register u64 edata;
     asm volatile ("adrp %0, .edata" : "=r"(edata));
 
-    /* import from loader.cc */
+    /* import from loader.cc and core/mmu.cc */
     extern elf::Elf64_Ehdr *elf_header;
     extern size_t elf_size;
     extern void *elf_start;
+    extern u64 kernel_vm_shift;
 
-    elf_start = reinterpret_cast<void *>(elf_header);
+    mmu::elf_phys_start = reinterpret_cast<void *>(elf_header);
+    elf_start = mmu::elf_phys_start + kernel_vm_shift;
     elf_size = (u64)edata - (u64)elf_start;
 
     /* remove amount of memory used for ELF from avail memory */
-    mmu::phys addr = (mmu::phys)elf_start + elf_size;
+    mmu::phys addr = (mmu::phys)mmu::elf_phys_start + elf_size;
     memory::phys_mem_size -= addr - mmu::mem_addr;
 }

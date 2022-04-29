@@ -86,9 +86,9 @@ void arch_setup_free_memory()
 
     /* import from loader.cc */
     extern size_t elf_size;
-    extern void *elf_start;
+    extern elf::Elf64_Ehdr* elf_header;
 
-    mmu::phys addr = (mmu::phys)elf_start + elf_size;
+    mmu::phys addr = (mmu::phys)elf_header + elf_size;
     mmu::free_initial_memory_range(addr, memory::phys_mem_size);
 
     /* linear_map [TTBR1] */
@@ -100,7 +100,11 @@ void arch_setup_free_memory()
     }
 
     /* linear_map [TTBR0 - boot, DTB and ELF] */
-    mmu::linear_map((void *)mmu::mem_addr, (mmu::phys)mmu::mem_addr,
+    /* physical memory layout - relative to the 2MB-aligned address PA stored in mmu::mem_addr
+       PA +     0x0 - PA + 0x80000: boot
+       PA + 0x80000 - PA + 0x90000: DTB copy
+       PA + 0x90000 -       [addr]: kernel ELF */
+    mmu::linear_map((void *)(OSV_KERNEL_VM_BASE - 0x80000), (mmu::phys)mmu::mem_addr,
                     addr - mmu::mem_addr, "kernel");
 
     if (console::PL011_Console::active) {

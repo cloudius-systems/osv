@@ -19,6 +19,7 @@
 namespace mmu {
 constexpr int max_phys_addr_size = 48;
 extern u64 mem_addr; /* set by the dtb_setup constructor */
+extern void *elf_phys_start;
 
 enum class mattr {
     normal,
