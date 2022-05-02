@@ -26,7 +26,7 @@ template<class T, unsigned MaxSizePerCpu>
 class unordered_ring_mpsc
 {
 private:
-    std::vector<ring_spsc<T,MaxSizePerCpu>> rings;
+    std::vector<ring_spsc<T,unsigned,MaxSizePerCpu>> rings;
 public:
     using ring_mpsc_t = unordered_ring_mpsc<T,MaxSizePerCpu>;
 

@@ -64,7 +64,7 @@ public:
 
 private:
 
-    ring_spsc<int, 4096> _ring;
+    ring_spsc<int,unsigned,4096> _ring;
 
     int _stats[2][max_random] = {};
 

@@ -17,8 +17,8 @@ using namespace std;
 
 int main(int argc, char *argv[])
 {
-    ring_spsc<int, 256> test_ring;
-    unsigned count;
+    ring_spsc<int, unsigned short, 256> test_ring;
+    unsigned short count;
     int val;
 
     for (count = 1; count != 0; count++) {

@@ -20,7 +20,7 @@
 //
 // spsc ring of fixed size
 //
-template<class T, unsigned MaxSize, unsigned MaxSizeMask = MaxSize - 1>
+template<class T, typename COUNTER_TYPE, COUNTER_TYPE MaxSize, COUNTER_TYPE MaxSizeMask = MaxSize - 1>
 class ring_spsc {
 public:
     ring_spsc(): _begin(0), _end(0)
@@ -31,7 +31,7 @@ public:
     template<typename... Args>
     inline bool emplace(Args&&... args)
     {
-        unsigned end = _end.load(std::memory_order_relaxed);
+        COUNTER_TYPE end = _end.load(std::memory_order_relaxed);
 
         //
         // It's ok to load _begin with relaxed ordering (in the size()) since
@@ -56,7 +56,7 @@ public:
 
     bool pop(T& element)
     {
-        unsigned beg = _begin.load(std::memory_order_relaxed);
+        COUNTER_TYPE beg = _begin.load(std::memory_order_relaxed);
 
         if (empty()) {
             return false;
@@ -83,15 +83,15 @@ public:
      * @return TRUE if there are no elements
      */
     bool empty() const {
-        unsigned beg = _begin.load(std::memory_order_relaxed);
-        unsigned end = _end.load(std::memory_order_acquire);
+        COUNTER_TYPE beg = _begin.load(std::memory_order_relaxed);
+        COUNTER_TYPE end = _end.load(std::memory_order_acquire);
         return beg == end;
     }
 
     const T& front() const {
         DEBUG_ASSERT(!empty(), "calling front() on an empty queue!");
 
-        unsigned beg = _begin.load(std::memory_order_relaxed);
+        COUNTER_TYPE beg = _begin.load(std::memory_order_relaxed);
 
         return _ring[beg & MaxSizeMask];
     }
@@ -102,16 +102,16 @@ public:
      *
      * @return the current number of the elements.
      */
-    unsigned size() const {
-        unsigned end = _end.load(std::memory_order_relaxed);
-        unsigned beg = _begin.load(std::memory_order_relaxed);
+    COUNTER_TYPE size() const {
+        COUNTER_TYPE end = _end.load(std::memory_order_relaxed);
+        COUNTER_TYPE beg = _begin.load(std::memory_order_relaxed);
 
         return (end - beg);
     }
 
 private:
-    std::atomic<unsigned> _begin CACHELINE_ALIGNED;
-    std::atomic<unsigned> _end CACHELINE_ALIGNED;
+    std::atomic<COUNTER_TYPE> _begin CACHELINE_ALIGNED;
+    std::atomic<COUNTER_TYPE> _end CACHELINE_ALIGNED;
     T _ring[MaxSize];
 };
 

@@ -21,7 +21,7 @@ struct linked_object {
 };
 
 using _clock = std::chrono::high_resolution_clock;
-using queue_t = ring_spsc<void*,64*1024*1024>;
+using queue_t = ring_spsc<void*,unsigned,64*1024*1024>;
 
 // Manages threads, allocates each thread on a different CPU
 class thread_allocator

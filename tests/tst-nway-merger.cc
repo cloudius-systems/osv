@@ -69,7 +69,7 @@ public:
     bool empty() const { return _r.empty(); }
 
 private:
-    ring_spsc<T, MaxSize> _r;
+    ring_spsc<T,unsigned,MaxSize> _r;
 };
 
 typedef my_spsc_ring<my_struct, 8> my_spsc_queue;

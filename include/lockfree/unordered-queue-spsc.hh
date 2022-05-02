@@ -26,7 +26,7 @@ namespace lockfree {
 template <typename LT, unsigned RingSize>
 class unordered_queue_spsc {
 private:
-    ring_spsc<LT*,RingSize> _ring;
+    ring_spsc<LT*,unsigned,RingSize> _ring;
     unordered_queue_mpsc<LT> _queue;
 public:
 
