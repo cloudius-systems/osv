@@ -27,7 +27,7 @@ struct exception_frame {
     u64 spsr;
     u32 esr;
     u32 align1;
-    u64 align2; /* align to 16 */
+    u64 far;
 
     void *get_pc(void) { return (void *)elr; }
     unsigned int get_error(void) { return esr; }
