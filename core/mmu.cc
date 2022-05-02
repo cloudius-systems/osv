@@ -242,7 +242,15 @@ bool change_perm(hw_ptep<N> ptep, unsigned int perm)
     pte.set_rsvd_bit(0, !perm);
     ptep.write(pte);
 
+#ifdef __x86_64__
     return old & ~perm;
+#endif
+#ifdef __aarch64__
+    //TODO: This will trigger full tlb flush in slightly more cases than on x64
+    //and in future we should investigate more precise and hopefully lighter
+    //mechanism. But for now it will do it.
+    return old != perm;
+#endif
 }
 
 template<int N>
