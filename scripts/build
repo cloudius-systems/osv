@@ -190,15 +190,7 @@ host_arch=$(uname -m)
 
 # Default manifest
 manifest=bootfs.manifest.skel
-if [[ "$host_arch" == "aarch64" || "$arch" == "aarch64" ]]; then
-	# We default to ROFS as ZFS is not supported on ARM until the issue #1131 is fixed
-	fs_type=${vars[fs]-rofs}
-	if [[ "$fs_type" == "rofs" ]]; then
-		vars[create_disk]="true"
-	fi
-else
-	fs_type=${vars[fs]-zfs}
-fi
+fs_type=${vars[fs]-zfs}
 usrskel_arg=
 case $fs_type in
 zfs)
@@ -214,6 +206,10 @@ ramfs)
 	echo "Unknown filesystem \"$fs_type\"" >&2
 	exit 2
 esac
+
+if [[ "$host_arch" == "aarch64" || "$arch" == "aarch64" ]]; then
+	vars[create_disk]="true"
+fi
 
 if test -n "${vars[usrskel]}"
 then
@@ -305,7 +301,9 @@ if [[ ${vars[create_disk]} == "true" ]]; then
 	bare="$SRC"/scripts/disk.bin
 	raw_disk=disk
 	qcow2_disk=disk
-	upload_kernel_mode="-k"
+	if [[ "$arch" == 'x64' ]]; then
+		upload_kernel_mode="-k"
+	fi
 else
 	partition_offset=$kernel_end
 	bare=loader.img
@@ -318,7 +316,7 @@ create_zfs_disk() {
 	"$SRC"/scripts/imgedit.py setpartition "-f raw ${raw_disk}.raw" 2 $partition_offset $partition_size
 	qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
 	qemu-img resize $qcow2_disk.img ${image_size}b >/dev/null 2>&1
-	"$SRC"/scripts/upload_manifest.py -o $qcow2_disk.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir" $upload_kernel_mode
+	"$SRC"/scripts/upload_manifest.py --arch=$arch -o $qcow2_disk.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir" $upload_kernel_mode
 }
 
 create_rofs_disk() {
