@@ -59,7 +59,7 @@ static void handle_access_flag_fault(exception_frame *ef, u64 addr) {
     auto leaf_pte = l0_ptep.read();
 
     leaf_pte.set_accessed(true);
-    if (ACCESS_FLAG_FAULT_LEVEL_3(ef->esr)) {
+    if (ACCESS_FLAG_FAULT_LEVEL_3_WHEN_WRITE(ef->esr)) {
         leaf_pte.set_dirty(true);
     }
 
