@@ -7,6 +7,10 @@ import subprocess, os
 from linux_distro import linux_distribution
 
 arch = os.uname().machine
+if arch == 'x86_64':
+   qemu_extention = 'x86'
+else:
+   qemu_extention = 'arm'
 
 standard_ec2_packages = ['python-pip', 'wget']
 standard_ec2_post_install = ['pip install awscli &&'
@@ -59,7 +63,7 @@ class Fedora(object):
                 'python3-dpkt',
                 'python3-requests',
                 'qemu-img',
-                'qemu-system-x86',
+                'qemu-system-%s' % qemu_extention,
                 'tcpdump',
                 'unzip',
                 'wget',
@@ -132,7 +136,14 @@ class Fedora(object):
         ec2_post_install = None
         version = '34'
 
-    versions = [Fedora_27, Fedora_28, Fedora_29, Fedora_30, Fedora_31, Fedora_32, Fedora_33, Fedora_34]
+    class Fedora_35(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '35'
+
+    versions = [Fedora_27, Fedora_28, Fedora_29, Fedora_30, Fedora_31, Fedora_32, Fedora_33, Fedora_34, Fedora_35]
 
 class RHELbased(Fedora):
     name = ['Scientific Linux', 'NauLinux', 'Red Hat Enterprise Linux', 'Oracle Linux']
@@ -198,7 +209,7 @@ class Debian(object):
                 'p11-kit',
                 'python-dpkt',
                 'python-requests',
-                'qemu-system-x86',
+                'qemu-system-%s' % qemu_extention,
                 'qemu-utils',
                 'tcpdump',
                 'unzip',
@@ -255,7 +266,7 @@ class Ubuntu(object):
                 'openssl',
                 'p11-kit',
                 'python3-requests',
-                'qemu-system-x86',
+                'qemu-system-%s' % qemu_extention,
                 'qemu-utils',
                 'tcpdump',
                 'unzip',
@@ -271,6 +282,13 @@ class Ubuntu(object):
     ec2_packages = standard_ec2_packages
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
+
+    class Ubuntu_22_04(object):
+        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients', 'python3-dpkt']
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '22.04'
 
     class Ubuntu_21_10(object):
         packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients', 'python3-dpkt']
@@ -342,7 +360,7 @@ class Ubuntu(object):
         ec2_post_install = None
         version = '16.04'
 
-    versions = [Ubuntu_21_10, Ubuntu_21_04, Ubuntu_20_10, Ubuntu_20_04, Ubuntu_19_10, Ubuntu_19_04, Ubuntu_18_10, Ubuntu_18_04, Ubuntu_17_04, Ubuntu_16_04]
+    versions = [Ubuntu_22_04, Ubuntu_21_10, Ubuntu_21_04, Ubuntu_20_10, Ubuntu_20_04, Ubuntu_19_10, Ubuntu_19_04, Ubuntu_18_10, Ubuntu_18_04, Ubuntu_17_04, Ubuntu_16_04]
 
 class LinuxMint(Ubuntu):
     name = 'LinuxMint'
