@@ -1191,24 +1191,18 @@ def setup_libstdcxx():
     # "libstdc++.so.6.0.20" shared object is loaded into the debugger.
     # But because OSv is statically linked, we miss that auto-loading, so we
     #  need to look for, and run, this script explicitly.
-    sys.path += [glob('/usr/share/gcc-*/python')[0]]
+    gcc_python_dirs = glob('/usr/share/gcc-*/python')
+    if len(gcc_python_dirs) == 0: #If the above does not work try different place
+        gcc_python_dirs = glob('/usr/share/gcc/python')
+    if len(gcc_python_dirs) == 0:
+       print("!!! Could not locate the libstdc++.so.6.0.20-gdb.py")
+       return
+    sys.path += [gcc_python_dirs[0]]
     for base, dirnames, filenames in os.walk(gdb.PYTHONDIR + '/../auto-load'):
         for filename in fnmatch.filter(filenames, 'libstdc++.so.*-gdb.py'):
             script = os.path.join(base, filename)
             exec(compile(open(script).read(), script, 'exec'))
             return
-    # The following commented code is similar, but takes the python script
-    # from external/ instead of the one installed on the system. This might
-    # be useful if "make build_env=external" was used. However, there's a
-    # snag - the Python script we have in external/ might not be compatible
-    # with the version of Python installed on the system (there's right now
-    # a transition between Python 2 and Python 3 making things difficult).
-    #gcc = external + '/gcc.bin'
-    #sys.path += [gcc + '/usr/share/gdb/auto-load/usr/lib64',
-    #             glob(gcc + '/usr/share/gcc-*/python')[0],
-    #             ]
-    #main = glob(gcc + '/usr/share/gdb/auto-load/usr/lib64/libstdc++.so.*.py')[0]
-    #exec(compile(open(main).read(), main, 'exec'))
 
 def sig_to_string(sig):
     '''Convert a tracepoing signature to a string'''
