@@ -508,7 +508,9 @@ mbrlen
 mbrtowc
 mbsinit
 mbsnrtowcs
+__mbsnrtowcs_chk
 mbsrtowcs
+__mbsrtowcs_chk
 mbstowcs
 mbtowc
 memalign
@@ -1040,8 +1042,11 @@ wcwidth
 wmemchr
 wmemcmp
 wmemcpy
+__wmemcpy_chk
 wmemmove
+__wmemmove_chk
 wmemset
+__wmemset_chk
 wprintf
 write
 writev
