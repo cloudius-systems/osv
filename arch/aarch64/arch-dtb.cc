@@ -381,9 +381,12 @@ bool dtb_get_gic_v2(u64 *dist, size_t *dist_len, u64 *cpu, size_t *cpu_len)
     return true;
 }
 
-/* this gets the cpus node and returns the number of cpu elements in it. */
+/* this parses the cpus node and mpidr values and returns the number of cpu in it. */
+#define DTB_MAX_CPU_COUNT 32
 static int dtb_cpu_count = -1;
-static int dtb_parse_cpus_count()
+static u64 dtb_cpus_mpids[DTB_MAX_CPU_COUNT];
+
+static int dtb_parse_cpus()
 {
     int node, subnode, count;
     if (!dtb)
@@ -393,9 +396,24 @@ static int dtb_parse_cpus_count()
     if (node < 0)
         return -1;
 
+    u64 *mpids = dtb_cpus_mpids;
     for (count = 0, subnode = fdt_first_subnode(dtb, node);
          subnode >= 0;
-         count++,   subnode = fdt_next_subnode(dtb, subnode)) {
+         subnode = fdt_next_subnode(dtb, subnode)) {
+
+        if (count > DTB_MAX_CPU_COUNT) {
+            abort("dtb_parse_cpus_mpid: number of cpus greater than maximum. Increase the DTB_MAX_CPU_COUNT!\n");
+        }
+
+        // Only count subnode that have a property "device_type" with value "cpu"
+        auto property = fdt_get_property(dtb, subnode, "device_type", NULL);
+        if (property) {
+            if (!strncmp("cpu", property->data, 3)) {
+                (void)dtb_get_reg(subnode, mpids);
+                mpids++;
+                count++;
+            }
+        }
     }
     return count;
 }
@@ -403,33 +421,6 @@ static int dtb_parse_cpus_count()
 int dtb_get_cpus_count()
 {
     return dtb_cpu_count;
-}
-
-/* this gets the cpu mpidr values for all cpus */
-#define DTB_MAX_CPU_COUNT 32
-static u64 dtb_cpus_mpids[DTB_MAX_CPU_COUNT];
-bool dtb_parse_cpus_mpid(u64 *mpids, int n)
-{
-    int node, subnode;
-
-    if (n > DTB_MAX_CPU_COUNT) {
-        abort("dtb_parse_cpus_mpid: number of cpus greater than maximum. Increase the DTB_MAX_CPU_COUNT!\n");
-    }
-
-    if (!dtb)
-        return false;
-
-    node = fdt_path_offset(dtb, "/cpus");
-    if (node < 0)
-        return false;
-
-    for (subnode = fdt_first_subnode(dtb, node);
-         n > 0 && subnode >= 0;
-         subnode = fdt_next_subnode(dtb, subnode), n--, mpids++) {
-
-        (void)dtb_get_reg(subnode, mpids);
-    }
-    return true;
 }
 
 bool dtb_get_cpus_mpid(u64 *mpids, int n) {
@@ -789,9 +780,9 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
         abort("dtb_setup: cannot find cmdline after dtb move.\n");
     }
     // Parse some dtb configuration ahead of time
-    dtb_cpu_count = dtb_parse_cpus_count();
-    if (!dtb_parse_cpus_mpid(dtb_cpus_mpids, dtb_cpu_count)) {
-        abort("dtb_setup: failed to parse cpu mpid.\n");
+    dtb_cpu_count = dtb_parse_cpus();
+    if (dtb_cpu_count == -1) {
+        abort("dtb_setup: failed to parse the cpus node.\n");
     }
 
     dtb_timer_irq = dtb_parse_timer_irq();
