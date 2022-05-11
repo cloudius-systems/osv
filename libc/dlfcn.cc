@@ -6,6 +6,7 @@
  */
 
 #include <dlfcn.h>
+#include <__dlfcn.h>
 #include <osv/elf.hh>
 #include <link.h>
 #include <osv/debug.hh>
@@ -141,4 +142,23 @@ extern "C" int dladdr(const void *addr, Dl_info *info)
 extern "C" char *dlerror(void)
 {
     return dlerror_set(nullptr);
+}
+
+extern "C" int _dl_find_object(void *address, dl_find_object* result)
+{   //
+    // Find ELF object with a mapping containing the passed in
+    // address and if found populate the result structure as described
+    // in http://www.gnu.org/software/libc/manual/html_node/Dynamic-Linker-Introspection.html
+    auto eo = elf::get_program()->object_containing_addr(address);
+    if (eo) {
+        result->dlfo_map_start = eo->base();
+        result->dlfo_map_end = eo->end();
+        result->dlfo_eh_frame = eo->eh_frame_addr();
+        //TODO: For now we are neglecting to populate the result->dlfo_link_map field
+        //as it is not very well documented what exactly should go there. Eventually,
+        //once we understand the purpose of this field better, we should populate it as well.
+      return 0;
+   } else {
+      return -1;
+   }
 }

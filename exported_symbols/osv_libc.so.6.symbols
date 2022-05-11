@@ -86,6 +86,7 @@ dirfd
 dirname
 div
 dl_iterate_phdr
+_dl_find_object
 dngettext
 dprintf
 drand48
