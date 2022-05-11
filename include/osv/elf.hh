@@ -383,6 +383,7 @@ public:
     ulong get_tls_size();
     ulong get_aligned_tls_size();
     void copy_local_tls(void* to_addr);
+    void* eh_frame_addr() { return _eh_frame; }
 protected:
     virtual void load_segment(const Elf64_Phdr& segment) = 0;
     virtual void unload_segment(const Elf64_Phdr& segment) = 0;
@@ -436,6 +437,7 @@ protected:
     bool _is_executable;
     bool is_core();
     bool _init_called;
+    void* _eh_frame;
 
     std::unordered_map<std::string,void*> _cached_symbols;
 

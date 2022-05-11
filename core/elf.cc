@@ -124,6 +124,7 @@ object::object(program& prog, std::string pathname)
     , _module_index(_prog.register_dtv(this))
     , _is_executable(false)
     , _init_called(false)
+    , _eh_frame(0)
     , _visibility_thread(nullptr)
     , _visibility_level(VisibilityLevel::Public)
 {
@@ -517,9 +518,11 @@ void object::process_headers()
         case PT_PHDR:
         case PT_GNU_STACK:
         case PT_GNU_RELRO:
-        case PT_GNU_EH_FRAME:
         case PT_PAX_FLAGS:
         case PT_GNU_PROPERTY:
+            break;
+        case PT_GNU_EH_FRAME:
+            _eh_frame = _base + phdr.p_vaddr;
             break;
         case PT_TLS:
             _tls_segment = _base + phdr.p_vaddr;
