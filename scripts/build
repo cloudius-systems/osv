@@ -227,6 +227,21 @@ if [[ ${vars[append_manifest]} == "true" && $modules == "!default" ]]; then
 	modules="empty"
 fi
 
+CC=gcc
+if [[ "$host_arch" == "x86_64" && "$arch" == 'aarch64' ]]; then
+    CC=${CROSS_PREFIX:-aarch64-linux-gnu-}gcc
+fi
+
+libgcc_s_path=$(${CC} -print-file-name=libgcc_s.so.1)
+if [[ "$libgcc_s_path" == "libgcc_s.so.1" ]]; then
+	cat <<-EOF
+	Unable to resolve libgcc_s.so.1 using "${CC}".
+	Looking in build/downloaded_packages/aarch64/gcc/install/lib64
+	EOF
+	libgcc_s_path="build/downloaded_packages/aarch64/gcc/install/lib64/libgcc_s.so.1"
+fi
+libgcc_s_dir=$(dirname $(readlink -f ${libgcc_s_path}))
+
 # The parentheses start a subshell. Whatever is exported there, doesn't affect the external shell
 (
 	# Note: the double-quotes and almost everything in the line below is important to correctly allow spaces
@@ -240,7 +255,7 @@ fi
 		esac
 	done
 	# Export the variables we already have. This makes it unnecessary to do "fs__type=$fstype ..."
-	export fs_type mode OSV_BUILD_PATH
+	export fs_type mode OSV_BUILD_PATH libgcc_s_dir
 	# Other variables we wanted to rename, I don't know why
 	export ARCH=$arch OSV_BASE=$SRC
 	# Run what we wanted to run. It will inherit everything we exported above.
@@ -275,21 +290,6 @@ kernel_end=$(($loader_size+2097151 & ~2097151))
 # The python scripts called below assume the current directory is $OUT (as was
 # the case in our old build.mk).
 cd $OUT
-
-CC=gcc
-if [[ "$host_arch" == "x86_64" && "$arch" == 'aarch64' ]]; then
-    CC=${CROSS_PREFIX:-aarch64-linux-gnu-}gcc
-fi
-
-libgcc_s_path=$(${CC} -print-file-name=libgcc_s.so.1)
-if [[ "$libgcc_s_path" == "libgcc_s.so.1" ]]; then
-	cat <<-EOF
-	Unable to resolve libgcc_s.so.1 using "${CC}".
-	Looking in ../downloaded_packages/aarch64/gcc/install/lib64
-	EOF
-	libgcc_s_path="../downloaded_packages/aarch64/gcc/install/lib64/libgcc_s.so.1"
-fi
-libgcc_s_dir=$(dirname $(readlink -f ${libgcc_s_path}))
 
 if [ "$export" != "none" ]; then
 	export_dir=${vars[export_dir]-$SRC/build/export}
