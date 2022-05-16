@@ -38,6 +38,7 @@
 #include <sys/file.h>
 #include <sys/unistd.h>
 #include <sys/random.h>
+#include <sys/vfs.h>
 
 #include <unordered_map>
 
@@ -490,6 +491,10 @@ OSV_LIBC_API long syscall(long number, ...)
 #endif
     SYSCALL3(mkdirat, int, char*, mode_t);
     SYSCALL3(tgkill, int, int, int);
+    SYSCALL0(getgid);
+    SYSCALL0(getuid);
+    SYSCALL3(lseek, int, off_t, int);
+    SYSCALL2(statfs, const char *, struct statfs *);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
