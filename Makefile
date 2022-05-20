@@ -1451,6 +1451,7 @@ libc += multibyte/__mbsnrtowcs_chk.o
 musl += multibyte/mbsrtowcs.o
 libc += multibyte/__mbsrtowcs_chk.o
 musl += multibyte/mbstowcs.o
+libc += multibyte/__mbstowcs_chk.o
 musl += multibyte/mbtowc.o
 musl += multibyte/wcrtomb.o
 musl += multibyte/wcsnrtombs.o
