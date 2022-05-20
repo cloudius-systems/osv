@@ -13,6 +13,7 @@
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+#include <string.h>
 
 #include <iostream>
 
@@ -116,6 +117,12 @@ int main(int argc, char **argv)
     munmap(buf, length);
 
     assert(close(fd) == 0);
+
+    assert(chdir("/proc") == 0);
+    unsigned long size = 4096;
+    char path[size];
+    assert(syscall(__NR_getcwd, path, size) == 6);
+    assert(strcmp("/proc", path) == 0);
 
     // test that unknown system call results in a ENOSYS (see issue #757)
     expect_errno_l(syscall(999), ENOSYS);
