@@ -216,6 +216,15 @@ int main(int argc, char **argv)
     report(unlink("/tmp/tst-readdir/d")==0, "unlink");
     report(rmdir("/tmp/tst-readdir")==0, "rmdir");
     report(rmdir("/tmp/tst-readdir-empty")==0, "rmdir empty");
+
+    auto tmp_dir = opendir("/tmp");
+    report(tmp_dir,"opendir /tmp");
+    report(mkdirat(dirfd(tmp_dir), "tst-mkdirat", 0777)==0, "mkdirat");
+    auto mk_dir = opendir("/tmp/tst-mkdirat");
+    report(mk_dir,"opendir /tmp/tst-mkdirat");
+    report(rmdir("/tmp/tst-mkdirat")==0, "rmdir empty");
+    report(closedir(mk_dir)==0, "closedir /tmp/tst-mkdirat");
+    report(closedir(tmp_dir)==0, "closedir /tmp");
 #endif
 
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);

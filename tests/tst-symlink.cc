@@ -262,7 +262,6 @@ int main(int argc, char **argv)
     report(symlink(N1, path) == 0, "symlink");
     report(unlink(path) == 0, "unlink");
 
-    printf("-->Smok\n");
     fill_buf(path, 257);
     rc = symlink(N1, path);
     error = errno;
@@ -366,12 +365,23 @@ int main(int argc, char **argv)
     report(search_dir(D2, N5) == true, "Symlink search");
 
     report(rename(D2, D3) == 0, "rename(d2, d3)");
+    auto test_dir = opendir(TESTDIR);
+    report(test_dir, "opendir");
+    rc = readlinkat(dirfd(test_dir), D3, path, sizeof(path));
+    report(rc >= 0, "readlinkat");
+    path[rc] = 0;
+    report(strcmp(path, D1) == 0, "readlinkat path");
     rc = readlink(D3, path, sizeof(path));
     report(rc >= 0, "readlink");
     path[rc] = 0;
     report(strcmp(path, D1) == 0, "readlink path");
 
     report(rename(D1, D4) == 0, "rename(d1, d4)");
+    rc = readlinkat(dirfd(test_dir), D3, path, sizeof(path));
+    report(rc >= 0, "readlinkat");
+    path[rc] = 0;
+    report(strcmp(path, D1) == 0, "readlinkat path");
+    report(closedir(test_dir) == 0, "closedir(test_dir)");
     rc = readlink(D3, path, sizeof(path));
     report(rc >= 0, "readlink");
     path[rc] = 0;
