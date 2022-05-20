@@ -42,6 +42,8 @@ bool do_expect(T actual, T expected, const char *actuals, const char *expecteds,
 int main(int argc, char **argv)
 {
     expect(mkdir("/tmp/tst-remove", 0777), 0);
+    auto tst_remove_dir = open("/tmp/tst-remove", O_DIRECTORY);
+    expect(tst_remove_dir != -1, true);
 
     /********* test unlink() **************/
     // unlink() non-existant file returns ENOENT
@@ -79,12 +81,24 @@ int main(int argc, char **argv)
     expect_errno(rmdir("/tmp/tst-remove/f"), ENOTDIR);
     expect(unlink("/tmp/tst-remove/f"), 0);
 
-    /********* test remove() ***************/
-    // TODO...
+    /********* test unlinkat() ***************/
+    expect(mknod("/tmp/tst-remove/u", 0777|S_IFREG, 0), 0);
+    expect(unlinkat(tst_remove_dir, "u", 0), 0);
 
+    expect(mknod("/tmp/tst-remove/u2", 0777|S_IFREG, 0), 0);
+    expect(chdir("/tmp/tst-remove"), 0);
+    expect(unlinkat(AT_FDCWD, "u2", 0), 0);
+
+    expect(mkdir("/tmp/tst-remove/ud", 0777), 0);
+    expect(unlinkat(tst_remove_dir, "ud", AT_REMOVEDIR), 0);
+
+    expect(mkdir("/tmp/tst-remove/ud2", 0777), 0);
+    expect(chdir("/tmp/tst-remove"), 0);
+    expect(unlinkat(AT_FDCWD, "ud2", AT_REMOVEDIR), 0);
 
     // Finally remove the temporary directory (assumes the above left
     // nothing in it)
+    expect(close(tst_remove_dir), 0);
     expect(rmdir("/tmp/tst-remove"), 0);
 
 

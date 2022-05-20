@@ -1164,11 +1164,13 @@ int unlink(const char *pathname)
 OSV_LIBC_API
 int unlinkat(int dirfd, const char *pathname, int flags)
 {
-    //TODO: Really implement it
-    if (dirfd != AT_FDCWD || flags) {
-        UNIMPLEMENTED("unlinkat() with non-zero flags or dirfd != AT_FDCWD");
-    }
-    return unlink(pathname);
+    return vfs_fun_at2(dirfd, pathname, [flags](const char *path) {
+        if (flags & AT_REMOVEDIR) {
+            return rmdir(path);
+        } else {
+            return unlink(path);
+        }
+    });
 }
 
 TRACEPOINT(trace_vfs_stat, "\"%s\" %p", const char*, struct stat*);

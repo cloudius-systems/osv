@@ -495,6 +495,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL0(getuid);
     SYSCALL3(lseek, int, off_t, int);
     SYSCALL2(statfs, const char *, struct statfs *);
+    SYSCALL3(unlinkat, int, const char *, int);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
