@@ -790,6 +790,71 @@ int readdir64_r(DIR *dir, struct dirent64 *entry,
 extern "C" OSV_LIBC_API
 struct dirent *readdir64(DIR *dir) __attribute__((alias("readdir")));
 
+struct linux_dirent64 {
+    u64            d_ino;
+    s64            d_off;
+    unsigned short d_reclen;
+    unsigned char  d_type;
+    char           d_name[];
+};
+
+#undef getdents64
+extern "C"
+ssize_t sys_getdents64(int fd, void *dirp, size_t count)
+{
+    auto *dir = fdopendir(fd);
+    if (dir) {
+        // We have verified that fd points to a valid directory
+        // but we do NOT need the DIR handle so just delete it
+        delete dir;
+
+        struct file *fp;
+        int error = fget(fd, &fp);
+        if (error) {
+            errno = error;
+            return -1;
+        }
+
+        size_t bytes_read = 0;
+        off_t last_off = -1;
+        errno = 0;
+
+        // Iterate over as many entries as there is space in the buffer
+        // by directly calling sys_readdir()
+        struct dirent entry;
+        while ((error = sys_readdir(fp, &entry)) == 0) {
+            auto rec_len = offsetof(linux_dirent64, d_name) + strlen(entry.d_name) + 1;
+            if (rec_len <= count) {
+                auto *ldirent = static_cast<linux_dirent64*>(dirp + bytes_read);
+                ldirent->d_ino = entry.d_ino;
+                ldirent->d_off = entry.d_off;
+                ldirent->d_type = entry.d_type;
+                strcpy(ldirent->d_name, entry.d_name);
+                ldirent->d_reclen = rec_len;
+                count -= rec_len;
+                bytes_read += rec_len;
+                last_off = entry.d_off;
+            } else {
+                if (last_off >= 0)
+                    sys_seekdir(fp, last_off);
+                break;
+            }
+        }
+
+        fdrop(fp);
+
+        if (error && error != ENOENT) {
+            errno = error;
+            return -1;
+        } else {
+            errno = 0;
+            return bytes_read;
+        }
+    } else {
+        return -1;
+    }
+}
+
 OSV_LIBC_API
 void rewinddir(DIR *dirp)
 {

@@ -424,6 +424,9 @@ static int tgkill(int tgid, int tid, int sig)
     return -1;
 }
 
+#define __NR_sys_getdents64 __NR_getdents64
+extern "C" ssize_t sys_getdents64(int fd, void *dirp, size_t count);
+
 OSV_LIBC_API long syscall(long number, ...)
 {
     // Save FPU state and restore it at the end of this function
@@ -512,6 +515,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL2(statfs, const char *, struct statfs *);
     SYSCALL3(unlinkat, int, const char *, int);
     SYSCALL3(symlinkat, const char *, int, const char *);
+    SYSCALL3(sys_getdents64, int, void *, size_t);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
