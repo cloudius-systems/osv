@@ -1132,6 +1132,19 @@ int symlink(const char *oldpath, const char *newpath)
     return 0;
 }
 
+OSV_LIBC_API
+int symlinkat(const char *oldpath, int newdirfd, const char *newpath)
+{
+    if (!oldpath) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    return vfs_fun_at2(newdirfd, newpath, [oldpath](const char * path) {
+        return symlink(oldpath, path);
+    });
+}
+
 TRACEPOINT(trace_vfs_unlink, "\"%s\"", const char*);
 TRACEPOINT(trace_vfs_unlink_ret, "");
 TRACEPOINT(trace_vfs_unlink_err, "%d", int);

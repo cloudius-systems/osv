@@ -887,6 +887,7 @@ swprintf
 __swprintf_chk
 swscanf
 symlink
+symlinkat
 sync
 syscall
 sysconf

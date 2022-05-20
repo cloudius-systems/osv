@@ -1081,6 +1081,7 @@ swab
 swprintf
 swscanf
 symlink
+symlinkat
 sync
 syscall
 sysconf
