@@ -516,6 +516,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL3(unlinkat, int, const char *, int);
     SYSCALL3(symlinkat, const char *, int, const char *);
     SYSCALL3(sys_getdents64, int, void *, size_t);
+    SYSCALL4(renameat, int, const char *, int, const char *);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);

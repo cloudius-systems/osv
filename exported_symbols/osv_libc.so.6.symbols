@@ -696,6 +696,7 @@ register_printf_specifier
 register_printf_type
 remove
 rename
+renameat
 __res_init
 rewind
 rewinddir

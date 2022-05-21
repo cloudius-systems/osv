@@ -73,6 +73,9 @@ static void assert_rename_fails(const fs::path &src, const fs::path &dst, std::v
     BOOST_TEST_MESSAGE("Renaming " + src.string() + " to " + dst.string());
     BOOST_REQUIRE(rename(src.c_str(), dst.c_str()) == -1);
     assert_one_of(errno, errnos);
+    BOOST_TEST_MESSAGE("Renaming(at) " + src.string() + " to " + dst.string());
+    BOOST_REQUIRE(renameat(AT_FDCWD, src.c_str(), AT_FDCWD, dst.c_str()) == -1);
+    assert_one_of(errno, errnos);
 }
 
 static void assert_renames(const fs::path src, const fs::path dst)
@@ -82,11 +85,27 @@ static void assert_renames(const fs::path src, const fs::path dst)
     BOOST_REQUIRE_MESSAGE(result == 0, fmt("Rename should succeed, errno=%d") % errno);
 }
 
-static void test_rename(const fs::path &src, const fs::path &dst)
+static void assert_renames_at(const fs::path src, const fs::path dst)
+{
+    BOOST_TEST_MESSAGE("Renaming " + src.string() + " to " + dst.string());
+    auto src_dir_fd = open(src.parent_path().c_str(), O_DIRECTORY);
+    auto dst_dir_fd = open(dst.parent_path().c_str(), O_DIRECTORY);
+    int result = renameat(src_dir_fd, src.filename().c_str(), dst_dir_fd, dst.filename().c_str());
+    BOOST_REQUIRE_MESSAGE(result == 0, fmt("Renameat should succeed, errno=%d") % errno);
+    close(src_dir_fd);
+    close(dst_dir_fd);
+}
+
+static void test_rename(const fs::path &src, const fs::path &dst, bool at = false)
 {
     prepare_file(src);
 
-    assert_renames(src, dst);
+    if (at) {
+        assert_renames_at(src, dst);
+    }
+    else {
+        assert_renames(src, dst);
+    }
 
     check_file(dst);
     BOOST_CHECK_MESSAGE(!fs::exists(src), "Old file should not exist");
@@ -136,6 +155,10 @@ BOOST_AUTO_TEST_CASE(test_renaming_in_the_same_directory)
             dir / "file1",
             dir / "file2");
 
+    test_rename(
+            dir / "file1",
+            dir / "file2", true);
+
     test_rename_from_open_file(
             dir / "file1",
             dir / "file2");
@@ -149,8 +172,16 @@ BOOST_AUTO_TEST_CASE(test_renaming_in_the_same_directory)
             dir / "aaaaa");
 
     test_rename(
+            dir / "a",
+            dir / "aaaaa", true);
+
+    test_rename(
             dir / "aaaaaaaaa",
             dir / "aa");
+
+    test_rename(
+            dir / "aaaaaaaaa",
+            dir / "aa", true);
 }
 
 BOOST_AUTO_TEST_CASE(test_renaming_to_child_path_should_fail) {
@@ -170,12 +201,24 @@ BOOST_AUTO_TEST_CASE(test_moving_file_to_another_directory)
             dir / sub / "file");
 
     test_rename(
+            dir / "file",
+            dir / sub / "file", true);
+
+    test_rename(
             dir / sub / "file2",
             dir / "file2");
 
     test_rename(
+            dir / sub / "file2",
+            dir / "file2", true);
+
+    test_rename(
             dir / sub / "a",
             dir / "aaaa");
+
+    test_rename(
+            dir / sub / "a",
+            dir / "aaaa", true);
 }
 
 BOOST_AUTO_TEST_CASE(test_renaming_when_destination_is_substring)
@@ -201,6 +244,7 @@ BOOST_AUTO_TEST_CASE(test_renaming_works_with_non_uniform_paths)
 
     test_rename(file, dir / "/file2");
     test_rename(file, dir / "/sub///file2");
+    test_rename(file, dir / "/sub///file2", true);
 }
 
 BOOST_AUTO_TEST_CASE(test_file_can_be_located_using_different_paths_after_rename)

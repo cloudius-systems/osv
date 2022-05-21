@@ -1043,6 +1043,36 @@ int rename(const char *oldpath, const char *newpath)
     return -1;
 }
 
+OSV_LIBC_API
+int renameat(int olddirfd, const char *oldpath,
+             int newdirfd, const char *newpath)
+{
+    if (!oldpath || !newpath) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (newpath[0] == '/' || newdirfd == AT_FDCWD) {
+        return vfs_fun_at2(olddirfd, oldpath, [newpath](const char *path) {
+            return rename(path, newpath);
+        });
+    } else {
+        char absolute_newpath[PATH_MAX];
+        auto error = vfs_fun_at(newdirfd, newpath, [&absolute_newpath](const char *absolute_path) {
+            strcpy(absolute_newpath, absolute_path);
+            return 0;
+        });
+
+        if (error) {
+            return error;
+        } else {
+            return vfs_fun_at2(olddirfd, oldpath, [absolute_newpath](const char *path) {
+                return rename(path, absolute_newpath);
+            });
+        }
+    }
+}
+
 TRACEPOINT(trace_vfs_chdir, "\"%s\"", const char*);
 TRACEPOINT(trace_vfs_chdir_ret, "");
 TRACEPOINT(trace_vfs_chdir_err, "%d", int);

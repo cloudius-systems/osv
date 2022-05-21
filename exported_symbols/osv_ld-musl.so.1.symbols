@@ -868,6 +868,7 @@ remquo
 remquof
 remquol
 rename
+renameat
 res_init
 res_mkquery
 rewind
