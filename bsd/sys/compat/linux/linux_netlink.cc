@@ -588,7 +588,7 @@ netlink_process_getaddr_msg(struct socket *so, struct nlmsghdr *nlm)
 			if (!ifa->ifa_addr)
 				continue;
 
-			nlh = nlmsg_begin(m, nlm->nlmsg_pid, nlm->nlmsg_seq, LINUX_RTM_GETADDR, sizeof(*ifm), nlm->nlmsg_flags);
+			nlh = nlmsg_begin(m, nlm->nlmsg_pid, nlm->nlmsg_seq, LINUX_RTM_NEWADDR, sizeof(*ifm), nlm->nlmsg_flags);
 			if (!nlh) {
 				error = ENOBUFS;
 				goto done;
@@ -720,7 +720,7 @@ netlink_getneigh_lle_cb(struct lltable *llt, struct llentry *lle, void *data)
 	struct nlmsghdr *nlm = cbdata->nlm;
 	struct mbuf *m = cbdata->m;
 	struct ndmsg *ndm;
-	struct nlmsghdr *nlh = nlmsg_begin(m, nlm->nlmsg_pid, nlm->nlmsg_seq, LINUX_RTM_GETNEIGH, sizeof(*ndm), nlm->nlmsg_flags);
+	struct nlmsghdr *nlh = nlmsg_begin(m, nlm->nlmsg_pid, nlm->nlmsg_seq, LINUX_RTM_NEWNEIGH, sizeof(*ndm), nlm->nlmsg_flags);
 
 	if (!nlh) {
 		return ENOBUFS;
@@ -753,7 +753,7 @@ netlink_getneigh_lle_cb(struct lltable *llt, struct llentry *lle, void *data)
 		}
 	}
 #endif
-	
+
 	if (nla_put(m, NDA_LLADDR, 6, lle->ll_addr.mac16)) {
 		return ENOBUFS;
 	}
@@ -875,29 +875,29 @@ extern struct domain netlinkdomain;		/* or at least forward */
 
 static struct protosw netlinksw[] = {
 	initialize_with([] (protosw& x) {
-	x.pr_type =			SOCK_RAW;
+	x.pr_type =		SOCK_RAW;
 	x.pr_domain =		&netlinkdomain;
 	x.pr_flags =		PR_ATOMIC|PR_ADDR;
 	x.pr_output =		netlink_output;
 	x.pr_ctlinput =		raw_ctlinput;
-	x.pr_init =			raw_init;
+	x.pr_init =		raw_init;
 	x.pr_usrreqs =		&netlink_usrreqs;
 	}),
 	initialize_with([] (protosw& x) {
-	x.pr_type =			SOCK_DGRAM;
+	x.pr_type =		SOCK_DGRAM;
 	x.pr_domain =		&netlinkdomain;
 	x.pr_flags =		PR_ATOMIC|PR_ADDR;
 	x.pr_output =		netlink_output;
 	x.pr_ctlinput =		raw_ctlinput;
-	x.pr_init =			raw_init;
+	x.pr_init =		raw_init;
 	x.pr_usrreqs =		&netlink_usrreqs;
 	}),
 };
 
 struct domain netlinkdomain = initialize_with([] (domain& x) {
-	x.dom_family =			PF_NETLINK;
-	x.dom_name =			"netlink";
-	x.dom_protosw =			netlinksw;
+	x.dom_family =		PF_NETLINK;
+	x.dom_name =		"netlink";
+	x.dom_protosw =		netlinksw;
 	x.dom_protoswNPROTOSW =	&netlinksw[sizeof(netlinksw)/sizeof(netlinksw[0])];
 });
 
