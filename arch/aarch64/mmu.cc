@@ -14,6 +14,59 @@
 #include "arch-cpu.hh"
 #include "exceptions.hh"
 
+#define ACCESS_FLAG_FAULT_LEVEL_3(esr)            ((esr & 0b0111111) == 0x0b) // 0xb = 0b1011 indicates level 3
+#define ACCESS_FLAG_FAULT_LEVEL_3_WHEN_WRITE(esr) ((esr & 0b1111111) == 0x4b)
+
+TRACEPOINT(trace_mmu_vm_access_flag_fault, "addr=%p", void *);
+
+template <typename T>
+T* phys_to_virt_cast(mmu::phys pa)
+{
+    void *virt = mmu::phys_mem + pa;
+    return static_cast<T*>(virt);
+}
+
+static void handle_access_flag_fault(exception_frame *ef, u64 addr) {
+    trace_mmu_vm_access_flag_fault((void*)addr);
+
+    // The access bit of a PTE (Page Table Entry) at level 3 got cleared and we need
+    // to set it to handle this page fault. Therefore we need to do a page walk
+    // to navigate down to the level 3 and identify relevant PTE.
+
+    // Start with root PTE
+    auto root_pt = mmu::get_root_pt(addr);
+    auto root_ptep = mmu::hw_ptep<4>::force(root_pt);
+
+    // Identify PTEP (PTE Pointer) at level 0 (the template parameter is reversed)
+    // First identify the ptep table at this level
+    auto l3_ptep_table = mmu::hw_ptep<3>::force(phys_to_virt_cast<mmu::pt_element<3>>(root_ptep.read().next_pt_addr()));
+    // Then access ptep at the index encoded in the virtual address
+    auto l3_ptep = l3_ptep_table.at(mmu::pt_index(reinterpret_cast<void*>(addr), 3));
+
+    // Identify PTEP at level 1 (first identify the ptep table and then the relevant ptep)
+    auto l2_ptep_table = mmu::hw_ptep<2>::force(phys_to_virt_cast<mmu::pt_element<2>>(l3_ptep.read().next_pt_addr()));
+    auto l2_ptep = l2_ptep_table.at(mmu::pt_index(reinterpret_cast<void*>(addr), 2));
+
+    // Identify PTEP at level 2 (first identify the ptep table and then the relevant ptep)
+    auto l1_ptep_table = mmu::hw_ptep<1>::force(phys_to_virt_cast<mmu::pt_element<1>>(l2_ptep.read().next_pt_addr()));
+    auto l1_ptep = l1_ptep_table.at(mmu::pt_index(reinterpret_cast<void*>(addr), 1));
+
+    // Identify PTEP at level 3 (first identify the ptep table and then the relevant ptep)
+    auto l0_ptep_table = mmu::hw_ptep<0>::force(phys_to_virt_cast<mmu::pt_element<0>>(l1_ptep.read().next_pt_addr()));
+    auto l0_ptep = l0_ptep_table.at(mmu::pt_index(reinterpret_cast<void*>(addr), 0));
+
+    // Read leaf PTE
+    auto leaf_pte = l0_ptep.read();
+
+    leaf_pte.set_accessed(true);
+    if (ACCESS_FLAG_FAULT_LEVEL_3_WHEN_WRITE(ef->esr)) {
+        leaf_pte.set_dirty(true);
+    }
+
+    l0_ptep.write(leaf_pte);
+    mmu::synchronize_page_table_modifications();
+}
+
 void page_fault(exception_frame *ef)
 {
     sched::fpu_lock fpu;
@@ -37,6 +90,10 @@ void page_fault(exception_frame *ef)
 
     if (!ef->elr) {
         abort("trying to execute null pointer");
+    }
+
+    if (ACCESS_FLAG_FAULT_LEVEL_3(ef->esr)) {
+        return handle_access_flag_fault(ef, addr);
     }
 
     /* vm_fault might sleep, so check that the thread is preemptable,

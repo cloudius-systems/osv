@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include <osv/sched.hh>
 #include <osv/elf.hh>
 #include <stdlib.h>
@@ -48,7 +49,9 @@
 #include <boost/range/adaptor/reversed.hpp>
 #include <osv/align.hh>
 #include <osv/stubbing.hh>
+#if CONF_drivers_acpi
 #include "drivers/pvpanic.hh"
+#endif
 #include <api/sys/resource.h>
 #include <api/math.h>
 #include <osv/shutdown.hh>
@@ -128,7 +131,9 @@ void abort(const char *fmt, ...)
         debug_early("Halting.\n");
     }
 #ifndef AARCH64_PORT_STUB
+#if CONF_drivers_acpi
     panic::pvpanic::panicked();
+#endif
 #endif /* !AARCH64_PORT_STUB */
 
     if (opt_power_off_on_abort) {
@@ -374,6 +379,8 @@ long sysconf(int name)
     case _SC_THREAD_SAFE_FUNCTIONS: return 1;
     case _SC_GETGR_R_SIZE_MAX: return 1;
     case _SC_OPEN_MAX: return FDMAX;
+    case _SC_MINSIGSTKSZ: return MINSIGSTKSZ;
+    case _SC_SIGSTKSZ: return SIGSTKSZ;
     default:
         debug(fmt("sysconf(): stubbed for parameter %1%\n") % name);
         errno = EINVAL;

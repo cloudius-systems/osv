@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include "apic.hh"
 #include "msr.hh"
 #include <osv/xen.hh>
@@ -102,7 +103,7 @@ void apic_driver::read_base()
 xapic::xapic()
     : apic_driver()
 {
-    mmu::linear_map(static_cast<void*>(_base_virt), _apic_base, 4096);
+    mmu::linear_map(static_cast<void*>(_base_virt), _apic_base, 4096, "xapic");
     xapic::enable();
 }
 

@@ -86,6 +86,7 @@ dirfd
 dirname
 div
 dl_iterate_phdr
+_dl_find_object
 dngettext
 dprintf
 drand48
@@ -508,7 +509,9 @@ mbrlen
 mbrtowc
 mbsinit
 mbsnrtowcs
+__mbsnrtowcs_chk
 mbsrtowcs
+__mbsrtowcs_chk
 mbstowcs
 mbtowc
 memalign
@@ -693,6 +696,7 @@ register_printf_specifier
 register_printf_type
 remove
 rename
+renameat
 __res_init
 rewind
 rewinddir
@@ -884,6 +888,7 @@ swprintf
 __swprintf_chk
 swscanf
 symlink
+symlinkat
 sync
 syscall
 sysconf
@@ -1040,8 +1045,11 @@ wcwidth
 wmemchr
 wmemcmp
 wmemcpy
+__wmemcpy_chk
 wmemmove
+__wmemmove_chk
 wmemset
+__wmemset_chk
 wprintf
 write
 writev

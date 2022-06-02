@@ -43,6 +43,20 @@ constexpr inline unsigned pt_index(void *virt, unsigned level)
 
 struct page_allocator;
 
+struct linear_vma {
+    void* _virt_addr;
+    phys _phys_addr;
+    size_t _size;
+    mattr _mem_attr;
+    std::string _name;
+
+    linear_vma(void* virt, phys phys, size_t size, mattr mem_attr, const char* name);
+    ~linear_vma();
+
+    uintptr_t v_start() const { return reinterpret_cast<uintptr_t>(_virt_addr); }
+    uintptr_t v_end() const { return reinterpret_cast<uintptr_t>(_virt_addr + _size); }
+};
+
 class vma {
 public:
     vma(addr_range range, unsigned perm, unsigned flags, bool map_dirty, page_allocator *page_ops = nullptr);
@@ -74,6 +88,37 @@ protected:
     page_allocator *_page_ops;
 public:
     boost::intrusive::set_member_hook<> _vma_list_hook;
+};
+
+struct vma_range {
+    const void* _vma;
+    bool _is_linear;
+
+    vma_range(const linear_vma* v) {
+       _vma = v;
+       _is_linear = true;
+    }
+
+    vma_range(const vma* v) {
+       _vma = v;
+       _is_linear = false;
+    }
+
+    uintptr_t start() const {
+       if (_is_linear) {
+          return static_cast<const linear_vma*>(_vma)->v_start();
+       } else {
+          return static_cast<const vma*>(_vma)->start();
+       }
+    }
+
+    uintptr_t end() const {
+       if (_is_linear) {
+          return static_cast<const linear_vma*>(_vma)->v_end();
+       } else {
+          return static_cast<const vma*>(_vma)->end();
+       }
+    }
 };
 
 class anon_vma : public vma {
@@ -298,7 +343,7 @@ bool is_page_aligned(void* addr)
 // an architecture-specific meaning.
 // Currently mem_attr is ignored on x86_64. For aarch64 specifics see
 // definitions in arch/aarch64/arch-mmu.hh
-void linear_map(void* virt, phys addr, size_t size,
+void linear_map(void* virt, phys addr, size_t size, const char* name,
                 size_t slop = mmu::page_size,
                 mattr mem_attr = mmu::mattr_default);
 
@@ -316,6 +361,7 @@ error  advise(void* addr, size_t size, int advice);
 void vm_fault(uintptr_t addr, exception_frame* ef);
 
 std::string procfs_maps();
+std::string sysfs_linear_maps();
 
 unsigned long all_vmas_size();
 

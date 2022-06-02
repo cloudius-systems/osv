@@ -7,6 +7,8 @@ from contextlib import closing
 import io
 StringIO = io.StringIO
 
+host_arch = os.uname().machine
+
 def find_free_port():
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
         s.bind(('localhost', 0))
@@ -137,7 +139,11 @@ def main():
             make_option('-k',
                         dest='kernel',
                         action='store_true',
-                        help='run OSv in direct kernel mode')
+                        help='run OSv in direct kernel mode'),
+            make_option('--arch',
+                        dest='arch',
+                        default=host_arch,
+                        help="specify QEMU architecture: x86_64, aarch64")
     ])
 
     (options, args) = opt.parse_args()
@@ -155,7 +161,10 @@ def main():
         kernel_mode_flag = '-k --kernel-path build/release/loader-stripped.elf'
     else:
         kernel_mode_flag = ''
-    osv = subprocess.Popen('cd ../..; scripts/run.py %s --vnc none -m 512 -c1 -i "%s" --block-device-cache unsafe -s -e "--norandom --nomount --noinit /tools/mkfs.so; /tools/cpiod.so --prefix /zfs/zfs/; /zfs.so set compression=off osv" --forward tcp:127.0.0.1:%s-:10000' % (kernel_mode_flag,image_path,upload_port), shell=True, stdout=subprocess.PIPE)
+    arch = options.arch
+    if arch == 'x64':
+        arch = 'x86_64'
+    osv = subprocess.Popen('cd ../..; scripts/run.py %s --arch=%s --vnc none -m 512 -c1 -i "%s" --block-device-cache unsafe -s -e "--norandom --nomount --noinit /tools/mkfs.so; /tools/cpiod.so --prefix /zfs/zfs/; /zfs.so set compression=off osv" --forward tcp:127.0.0.1:%s-:10000' % (kernel_mode_flag,arch,image_path,upload_port), shell=True, stdout=subprocess.PIPE)
 
     upload(osv, manifest, depends, upload_port)
 

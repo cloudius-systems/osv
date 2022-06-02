@@ -5,8 +5,8 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include <bsd/porting/netport.h>
-
 #include "fs/fs.hh"
 #include <bsd/init.hh>
 #include <bsd/net.hh>
@@ -22,7 +22,9 @@
 #include "smp.hh"
 
 #ifdef __x86_64__
+#if CONF_drivers_acpi
 #include "drivers/acpi.hh"
+#endif
 #endif /* __x86_64__ */
 
 #include <osv/sched.hh>
@@ -45,7 +47,9 @@
 #include <osv/sampler.hh>
 #include <osv/app.hh>
 #include <osv/firmware.hh>
+#if CONF_drivers_xen
 #include <osv/xen.hh>
+#endif
 #include <osv/options.hh>
 #include <dirent.h>
 #include <iostream>
@@ -108,8 +112,17 @@ void premain()
 
     arch_init_premain();
 
+#ifdef __x86_64__
+    auto elf_header_virt_address = (void*)elf_header + OSV_KERNEL_VM_SHIFT;
+#endif
+
+#ifdef __aarch64__
+    extern u64 kernel_vm_shift;
+    auto elf_header_virt_address = (void*)elf_header + kernel_vm_shift;
+#endif
+
     auto inittab = elf::get_init(reinterpret_cast<elf::Elf64_Ehdr*>(
-        (void*)elf_header + OSV_KERNEL_VM_SHIFT));
+        elf_header_virt_address));
 
     if (inittab.tls.start == nullptr) {
         debug_early("premain: failed to get TLS data from ELF\n");
@@ -716,7 +729,9 @@ void main_cont(int loader_argc, char** loader_argv)
 
     setenv("OSV_VERSION", osv::version().c_str(), 1);
 
+#if CONF_drivers_xen
     xen::irq_init();
+#endif
     smp_launch();
     setenv("OSV_CPUS", std::to_string(sched::cpus.size()).c_str(), 1);
     boot_time.event("SMP launched");
@@ -729,7 +744,9 @@ void main_cont(int loader_argc, char** loader_argv)
     memory::enable_debug_allocator();
 
 #ifdef __x86_64__
+#if CONF_drivers_acpi
     acpi::init();
+#endif
 #endif /* __x86_64__ */
 
     if (sched::cpus.size() > sched::max_cpus) {

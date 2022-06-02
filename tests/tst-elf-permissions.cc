@@ -20,9 +20,19 @@ static int test_text_section() __attribute__((noinline));
 // solution is to take advantage from the fact that gcc passes section name
 // verbatim to the assembler and thus adding '#' makes whatever gcc appends
 // to the directive ignored.
+#ifdef __x86_64__
 static int test_data_section() __attribute__((noinline, section(".data #")));
+#endif
+#ifdef __aarch64__
+static int test_data_section() __attribute__((noinline, section(".data //")));
+#endif
 
+#ifdef __x86_64__
 static int test_gnu_relro __attribute__((section(".got #")));
+#endif
+#ifdef __aarch64__
+static int test_gnu_relro __attribute__((section(".got //")));
+#endif
 
 volatile int value = 123;
 static int test_text_section()

@@ -138,7 +138,8 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-getopt.so tst-getopt-pie.so tst-non-pie.so tst-semaphore.so \
 	tst-elf-init.so tst-realloc.so tst-setjmp.so \
 	libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so \
-	tst-sigaction.so tst-socket-timestamp.so tst-pktinfo.so
+	tst-sigaction.so tst-syscall.so tst-ifaddrs.so tst-getdents.so \
+	tst-socket-timestamp.so tst-pktinfo.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
 #TODO For now let us disable these tests for aarch64 until
@@ -146,7 +147,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 # The tst-ifaddrs.so is an exception and it does not compile due to some
 # missing headers
 ifeq ($(arch),x64)
-tests += tst-syscall.so tst-ifaddrs.so tst-mmx-fpu.so
+tests += tst-mmx-fpu.so
 endif
 
 tests += testrunner.so

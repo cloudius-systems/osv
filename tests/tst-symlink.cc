@@ -25,6 +25,9 @@
 
 #define N1    "f1"
 #define N2    "f2_AAA"
+#define N2B   "f2_BBB"
+#define N2B   "f2_BBB"
+#define N2C   "f2_CCC"
 #define N3    "f3"
 #define N4    "f4"
 #define N5    "f5"
@@ -91,6 +94,8 @@ int main(int argc, char **argv)
 #endif
 
     report(chdir(TESTDIR) == 0, "chdir");
+    auto test_dir = opendir(TESTDIR);
+    report(test_dir, "opendir");
 
     /*
      * test to check
@@ -115,6 +120,10 @@ int main(int argc, char **argv)
 #else
     report(symlink(N1, N2) == 0, "symlink");
     report(search_dir(TESTDIR, N2) == true, "search dir");
+    report(symlinkat(N1, dirfd(test_dir), N2B) == 0, "symlinkat");
+    report(search_dir(TESTDIR, N2B) == true, "search dir N2B");
+    report(symlinkat(N1, AT_FDCWD, N2C) == 0, "symlinkat");
+    report(search_dir(TESTDIR, N2C) == true, "search dir N2B");
 #endif
 
 #if defined(READ_ONLY_FS)
@@ -125,6 +134,8 @@ int main(int argc, char **argv)
 #else
     report(access(N1, R_OK | W_OK) == 0, "access");
     report(access(N2, R_OK | W_OK) == 0, "access");
+    report(access(N2B, R_OK | W_OK) == 0, "access");
+    report(access(N2C, R_OK | W_OK) == 0, "access");
 #endif
 
     rc = readlink(N2, path, sizeof(path));
@@ -157,6 +168,8 @@ int main(int argc, char **argv)
     error = errno;
     report(rc < 0 && errno == ENOENT, "ENOENT expected");
     report(unlink(N2) == 0, "unlink");
+    report(unlinkat(dirfd(test_dir),N2B,0) == 0, "unlinkat");
+    report(unlinkat(dirfd(test_dir),N2C,0) == 0, "unlinkat");
 
     /*
      * IO Tests 1: write(file), read(symlink), truncate(symlink)
@@ -262,7 +275,6 @@ int main(int argc, char **argv)
     report(symlink(N1, path) == 0, "symlink");
     report(unlink(path) == 0, "unlink");
 
-    printf("-->Smok\n");
     fill_buf(path, 257);
     rc = symlink(N1, path);
     error = errno;
@@ -366,12 +378,20 @@ int main(int argc, char **argv)
     report(search_dir(D2, N5) == true, "Symlink search");
 
     report(rename(D2, D3) == 0, "rename(d2, d3)");
+    rc = readlinkat(dirfd(test_dir), D3, path, sizeof(path));
+    report(rc >= 0, "readlinkat");
+    path[rc] = 0;
+    report(strcmp(path, D1) == 0, "readlinkat path");
     rc = readlink(D3, path, sizeof(path));
     report(rc >= 0, "readlink");
     path[rc] = 0;
     report(strcmp(path, D1) == 0, "readlink path");
 
     report(rename(D1, D4) == 0, "rename(d1, d4)");
+    rc = readlinkat(dirfd(test_dir), D3, path, sizeof(path));
+    report(rc >= 0, "readlinkat");
+    path[rc] = 0;
+    report(strcmp(path, D1) == 0, "readlinkat path");
     rc = readlink(D3, path, sizeof(path));
     report(rc >= 0, "readlink");
     path[rc] = 0;
@@ -388,6 +408,8 @@ int main(int argc, char **argv)
     report(unlink(D3) == 0, "unlink(d3)");
     report(rmdir(D4) == 0, "rmdir");
 #endif
+
+    report(closedir(test_dir) == 0, "closedir(test_dir)");
 
 #if defined(READ_ONLY_FS)
     report(-1 == rmdir(TESTDIR) && errno == ENOTEMPTY, "rmdir");

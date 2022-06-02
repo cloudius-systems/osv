@@ -11,6 +11,7 @@
 #include "cpuid.hh"
 #include <osv/barrier.hh>
 #include <osv/debug.hh>
+#define CONF_drivers_xen 1
 #include <osv/xen.hh>
 #include "processor.hh"
 #include "xenfront.hh"

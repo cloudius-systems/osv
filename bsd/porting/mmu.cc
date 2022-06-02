@@ -15,7 +15,7 @@
 
 void *pmap_mapdev(uint64_t paddr, size_t size)
 {
-    return (void *)mmio_map(paddr, size);
+    return (void *)mmio_map(paddr, size, "xen_store");
 }
 
 uint64_t virt_to_phys(void *virt)

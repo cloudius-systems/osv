@@ -190,15 +190,7 @@ host_arch=$(uname -m)
 
 # Default manifest
 manifest=bootfs.manifest.skel
-if [[ "$host_arch" == "aarch64" || "$arch" == "aarch64" ]]; then
-	# We default to ROFS as ZFS is not supported on ARM until the issue #1131 is fixed
-	fs_type=${vars[fs]-rofs}
-	if [[ "$fs_type" == "rofs" ]]; then
-		vars[create_disk]="true"
-	fi
-else
-	fs_type=${vars[fs]-zfs}
-fi
+fs_type=${vars[fs]-zfs}
 usrskel_arg=
 case $fs_type in
 zfs)
@@ -214,6 +206,10 @@ ramfs)
 	echo "Unknown filesystem \"$fs_type\"" >&2
 	exit 2
 esac
+
+if [[ "$host_arch" == "aarch64" || "$arch" == "aarch64" ]]; then
+	vars[create_disk]="true"
+fi
 
 if test -n "${vars[usrskel]}"
 then
@@ -231,6 +227,21 @@ if [[ ${vars[append_manifest]} == "true" && $modules == "!default" ]]; then
 	modules="empty"
 fi
 
+CC=gcc
+if [[ "$host_arch" == "x86_64" && "$arch" == 'aarch64' ]]; then
+    CC=${CROSS_PREFIX:-aarch64-linux-gnu-}gcc
+fi
+
+libgcc_s_path=$(${CC} -print-file-name=libgcc_s.so.1)
+if [[ "$libgcc_s_path" == "libgcc_s.so.1" ]]; then
+	cat <<-EOF
+	Unable to resolve libgcc_s.so.1 using "${CC}".
+	Looking in build/downloaded_packages/aarch64/gcc/install/lib64
+	EOF
+	libgcc_s_path="build/downloaded_packages/aarch64/gcc/install/lib64/libgcc_s.so.1"
+fi
+libgcc_s_dir=$(dirname $(readlink -f ${libgcc_s_path}))
+
 # The parentheses start a subshell. Whatever is exported there, doesn't affect the external shell
 (
 	# Note: the double-quotes and almost everything in the line below is important to correctly allow spaces
@@ -244,7 +255,7 @@ fi
 		esac
 	done
 	# Export the variables we already have. This makes it unnecessary to do "fs__type=$fstype ..."
-	export fs_type mode OSV_BUILD_PATH
+	export fs_type mode OSV_BUILD_PATH libgcc_s_dir
 	# Other variables we wanted to rename, I don't know why
 	export ARCH=$arch OSV_BASE=$SRC
 	# Run what we wanted to run. It will inherit everything we exported above.
@@ -280,21 +291,6 @@ kernel_end=$(($loader_size+2097151 & ~2097151))
 # the case in our old build.mk).
 cd $OUT
 
-CC=gcc
-if [[ "$host_arch" == "x86_64" && "$arch" == 'aarch64' ]]; then
-    CC=${CROSS_PREFIX:-aarch64-linux-gnu-}gcc
-fi
-
-libgcc_s_path=$(${CC} -print-file-name=libgcc_s.so.1)
-if [[ "$libgcc_s_path" == "libgcc_s.so.1" ]]; then
-	cat <<-EOF
-	Unable to resolve libgcc_s.so.1 using "${CC}".
-	Looking in ../downloaded_packages/aarch64/gcc/install/lib64
-	EOF
-	libgcc_s_path="../downloaded_packages/aarch64/gcc/install/lib64/libgcc_s.so.1"
-fi
-libgcc_s_dir=$(dirname $(readlink -f ${libgcc_s_path}))
-
 if [ "$export" != "none" ]; then
 	export_dir=${vars[export_dir]-$SRC/build/export}
 	"$SRC"/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
@@ -305,7 +301,9 @@ if [[ ${vars[create_disk]} == "true" ]]; then
 	bare="$SRC"/scripts/disk.bin
 	raw_disk=disk
 	qcow2_disk=disk
-	upload_kernel_mode="-k"
+	if [[ "$arch" == 'x64' ]]; then
+		upload_kernel_mode="-k"
+	fi
 else
 	partition_offset=$kernel_end
 	bare=loader.img
@@ -318,7 +316,7 @@ create_zfs_disk() {
 	"$SRC"/scripts/imgedit.py setpartition "-f raw ${raw_disk}.raw" 2 $partition_offset $partition_size
 	qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
 	qemu-img resize $qcow2_disk.img ${image_size}b >/dev/null 2>&1
-	"$SRC"/scripts/upload_manifest.py -o $qcow2_disk.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir" $upload_kernel_mode
+	"$SRC"/scripts/upload_manifest.py --arch=$arch -o $qcow2_disk.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir" $upload_kernel_mode
 }
 
 create_rofs_disk() {

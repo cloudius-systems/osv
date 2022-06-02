@@ -6,6 +6,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#define CONF_drivers_xen 1
 #include "xen.hh"
 #include "xenplatform-pci.hh"
 

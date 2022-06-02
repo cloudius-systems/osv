@@ -31,14 +31,6 @@ firecracker_disabled_list= [
     "tcp_close_without_reading_on_qemu"
 ]
 
-#At this point there are 128 out of 134 unit tests that pass on aarch64.
-#The remaining ones are disabled below until we fix the issues that prevent them from passing.
-aarch64_disabled_list= [
-    "tst-sigaltstack.so",          #Most likely fails due to the lack of signals support on aarch64 - see #1151
-    "tst-elf-permissions.so",      #Hangs - most likely fails due to the lack of signals support on aarch64 - see #1152
-    "tst-mmap.so",                 #Hangs - most likely fails due to the lack of signals support on aarch64 - see #1153
-]
-
 class TestRunnerTest(SingleCommandTest):
     def __init__(self, name):
         super(TestRunnerTest, self).__init__(name, '/tests/%s' % name)
@@ -185,7 +177,6 @@ if __name__ == "__main__":
         disabled_list.extend(qemu_disabled_list)
 
     if cmdargs.arch == 'aarch64':
-        disabled_list.extend(aarch64_disabled_list)
         if host_arch != cmdargs.arch:
             #Until the issue #1143 is resolved, we need to force running with 2 CPUs in TCG mode
             run_py_args = run_py_args + ['-c', '2']

@@ -173,16 +173,38 @@ void interrupt(exception_frame* frame)
     sched::preempt();
 }
 
-extern "C" { void handle_unexpected_sync_exception(exception_frame* frame); }
+extern "C" { void handle_unexpected_exception(exception_frame* frame, u64 level, u64 type); }
+
+#define EX_TYPE_SYNC 0x0
+#define EX_TYPE_IRQ 0x1
+#define EX_TYPE_FIQ 0x2
+#define EX_TYPE_SERROR 0x3
 
 #define ESR_EC_BEG  26 // Exception Class field begins in ESR at the bit 26th
 #define ESR_EC_END  31 // and ends at 31st
 #define ESR_EC_MASK 0b111111UL
 
-void handle_unexpected_sync_exception(exception_frame* frame)
+void handle_unexpected_exception(exception_frame* frame, u64 level, u64 type)
 {
-    u64 exception_class = (frame->esr >> ESR_EC_BEG) & ESR_EC_MASK;
-    debug_ll("unexpected synchronous exception, EC: 0x%04x\n", exception_class);
+    switch (type) {
+        case EX_TYPE_SYNC:
+           {
+               u64 exception_class = (frame->esr >> ESR_EC_BEG) & ESR_EC_MASK;
+               debug_ll("unexpected synchronous exception at level:%ld, EC: 0x%04x\n", level, exception_class);
+           }
+           break;
+        case EX_TYPE_IRQ:
+           debug_ll("unexpected IRQ exception at level:%ld\n", level);
+           break;
+        case EX_TYPE_FIQ:
+           debug_ll("unexpected FIQ exception at level:%ld\n", level);
+           break;
+        case EX_TYPE_SERROR:
+           debug_ll("unexpected system error at level:%ld\n", level);
+           break;
+        default:
+           debug_ll("unexpected exception type:%ld at level:%ld\n", type, level);
+    }
     dump_registers(frame);
 }
 

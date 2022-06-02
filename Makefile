@@ -82,6 +82,25 @@ ifeq (,$(wildcard conf/$(arch).mk))
 endif
 include conf/$(arch).mk
 
+# This parameter can be passed in to the build command to specify name of
+# a drivers profile. The drivers profile allows to build custom kernel with
+# a specific set of drivers enabled in the corresponding makefile include
+# file - conf/profiles/$(arch)/$(drivers_profile).mk). The default profile is
+# 'all' which incorporates all drivers into kernel.
+# In general the profiles set variables named conf_drivers_*, which then in turn
+# are used in the rules below to decide which object files are linked into
+# kernel.
+drivers_profile?=all
+ifeq (,$(wildcard conf/profiles/$(arch)/$(drivers_profile).mk))
+    $(error unsupported drivers profile $(drivers_profile))
+endif
+include conf/profiles/$(arch)/$(drivers_profile).mk
+# The base profile disables all drivers unless they are explicitly enabled
+# by the profile file included in the line above. The base profile also enforces
+# certain dependencies between drivers, for example the ide driver needs pci support, etc.
+# For more details please read comments in the profile file.
+include conf/profiles/$(arch)/base.mk
+
 CROSS_PREFIX ?= $(if $(filter-out $(arch),$(host_arch)),$(arch)-linux-gnu-)
 CXX=$(CROSS_PREFIX)g++
 CC=$(CROSS_PREFIX)gcc
@@ -299,8 +318,12 @@ kernel-defines = -D_KERNEL $(source-dialects) $(cc-hide-flags) $(gc-flags)
 # To add something that will *not* be part of the main kernel, you can do:
 #
 #   mydir/*.o EXTRA_FLAGS = <MY_STUFF>
+ifeq ($(arch),x64)
 EXTRA_FLAGS = -D__OSV_CORE__ -DOSV_KERNEL_BASE=$(kernel_base) -DOSV_KERNEL_VM_BASE=$(kernel_vm_base) \
 	-DOSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) -DOSV_LZKERNEL_BASE=$(lzkernel_base)
+else
+EXTRA_FLAGS = -D__OSV_CORE__ -DOSV_KERNEL_VM_BASE=$(kernel_vm_base)
+endif
 EXTRA_LIBS =
 COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -Wno-format-security \
 	-D __BSD_VISIBLE=1 -U _FORTIFY_SOURCE -fno-stack-protector $(INCLUDES) \
@@ -478,12 +501,13 @@ acpi = $(patsubst %.c, %.o, $(acpi-source))
 
 $(acpi:%=$(out)/%): CFLAGS += -fno-strict-aliasing -Wno-stringop-truncation
 
+kernel_vm_shift := $(shell printf "0x%X" $(shell expr $$(( $(kernel_vm_base) - $(kernel_base) )) ))
+
 endif # x64
 
 ifeq ($(arch),aarch64)
 
-kernel_base := 0x40080000
-kernel_vm_base := $(kernel_base)
+kernel_vm_base := 0xfc0080000 #63GB
 app_local_exec_tls_size := 0x40
 
 include $(libfdt_base)/Makefile.libfdt
@@ -497,7 +521,7 @@ $(out)/preboot.bin: $(out)/preboot.elf
 	$(call quiet, $(OBJCOPY) -O binary $^ $@, OBJCOPY $@)
 
 edata = $(shell readelf --syms $(out)/loader.elf | grep "\.edata" | awk '{print "0x" $$2}')
-image_size = $$(( $(edata) - $(kernel_base) ))
+image_size = $$(( $(edata) - $(kernel_vm_base) ))
 
 $(out)/loader.img: $(out)/preboot.bin $(out)/loader-stripped.elf
 	$(call quiet, dd if=$(out)/preboot.bin of=$@ > /dev/null 2>&1, DD $@ preboot.bin)
@@ -506,8 +530,6 @@ $(out)/loader.img: $(out)/preboot.bin $(out)/loader-stripped.elf
 	$(call quiet, scripts/imgedit.py setargs "-f raw $@" $(cmdline), IMGEDIT $@)
 
 endif # aarch64
-
-kernel_vm_shift := $(shell printf "0x%X" $(shell expr $$(( $(kernel_vm_base) - $(kernel_base) )) ))
 
 $(out)/bsd/sys/crypto/rijndael/rijndael-api-fst.o: COMMON+=-fno-strict-aliasing
 $(out)/bsd/sys/crypto/sha2/sha2.o: COMMON+=-fno-strict-aliasing
@@ -650,10 +672,13 @@ bsd += bsd/sys/netinet6/route6.o
 bsd += bsd/sys/netinet6/scope6.o
 bsd += bsd/sys/netinet6/udp6_usrreq.o
 endif
+ifeq ($(conf_drivers_xen),1)
 bsd += bsd/sys/xen/evtchn.o
+endif
 
 ifeq ($(arch),x64)
 $(out)/bsd/%.o: COMMON += -DXEN -DXENHVM
+ifeq ($(conf_drivers_xen),1)
 bsd += bsd/sys/xen/gnttab.o
 bsd += bsd/sys/xen/xenstore/xenstore.o
 bsd += bsd/sys/xen/xenbus/xenbus.o
@@ -661,7 +686,10 @@ bsd += bsd/sys/xen/xenbus/xenbusb.o
 bsd += bsd/sys/xen/xenbus/xenbusb_front.o
 bsd += bsd/sys/dev/xen/netfront/netfront.o
 bsd += bsd/sys/dev/xen/blkfront/blkfront.o
+endif
+ifeq ($(conf_drivers_hyperv),1)
 bsd += bsd/sys/dev/hyperv/vmbus/hyperv.o
+endif
 endif
 
 bsd += bsd/sys/dev/random/hash.o
@@ -850,54 +878,101 @@ drivers += drivers/random.o
 drivers += drivers/zfs.o
 drivers += drivers/null.o
 drivers += drivers/device.o
+ifeq ($(conf_drivers_pci),1)
 drivers += drivers/pci-generic.o
 drivers += drivers/pci-device.o
 drivers += drivers/pci-function.o
 drivers += drivers/pci-bridge.o
+endif
 drivers += drivers/driver.o
 
 ifeq ($(arch),x64)
+ifeq ($(conf_drivers_vga),1)
 drivers += $(libtsm)
-drivers += drivers/vga.o drivers/kbd.o drivers/isa-serial.o
+drivers += drivers/vga.o
+endif
+drivers += drivers/kbd.o drivers/isa-serial.o
 drivers += arch/$(arch)/pvclock-abi.o
+
+ifeq ($(conf_drivers_virtio),1)
 drivers += drivers/virtio.o
+ifeq ($(conf_drivers_pci),1)
 drivers += drivers/virtio-pci-device.o
+endif
 drivers += drivers/virtio-vring.o
+ifeq ($(conf_drivers_mmio),1)
 drivers += drivers/virtio-mmio.o
+endif
 drivers += drivers/virtio-net.o
-drivers += drivers/vmxnet3.o
-drivers += drivers/vmxnet3-queues.o
 drivers += drivers/virtio-blk.o
 drivers += drivers/virtio-scsi.o
 drivers += drivers/virtio-rng.o
 drivers += drivers/virtio-fs.o
-drivers += drivers/kvmclock.o drivers/xenclock.o drivers/hypervclock.o
+endif
+
+ifeq ($(conf_drivers_vmxnet3),1)
+drivers += drivers/vmxnet3.o
+drivers += drivers/vmxnet3-queues.o
+endif
+drivers += drivers/kvmclock.o
+ifeq ($(conf_drivers_hyperv),1)
+drivers += drivers/hypervclock.o
+endif
+ifeq ($(conf_drivers_acpi),1)
 drivers += drivers/acpi.o
+endif
+ifeq ($(conf_drivers_hpet),1)
 drivers += drivers/hpet.o
-drivers += drivers/rtc.o
-drivers += drivers/xenfront.o drivers/xenfront-xenbus.o drivers/xenfront-blk.o
+endif
+ifeq ($(conf_drivers_pvpanic),1)
 drivers += drivers/pvpanic.o
+endif
+drivers += drivers/rtc.o
+ifeq ($(conf_drivers_ahci),1)
 drivers += drivers/ahci.o
-drivers += drivers/ide.o
+endif
+ifeq ($(conf_drivers_scsi),1)
 drivers += drivers/scsi-common.o
+endif
+ifeq ($(conf_drivers_ide),1)
+drivers += drivers/ide.o
+endif
+ifeq ($(conf_drivers_pvscsi),1)
 drivers += drivers/vmw-pvscsi.o
+endif
+
+ifeq ($(conf_drivers_xen),1)
+drivers += drivers/xenclock.o
+drivers += drivers/xenfront.o drivers/xenfront-xenbus.o drivers/xenfront-blk.o
 drivers += drivers/xenplatform-pci.o
+endif
 endif # x64
 
 ifeq ($(arch),aarch64)
 drivers += drivers/mmio-isa-serial.o
 drivers += drivers/pl011.o
 drivers += drivers/pl031.o
+ifeq ($(conf_drivers_cadence),1)
 drivers += drivers/cadence-uart.o
+endif
+ifeq ($(conf_drivers_xen),1)
 drivers += drivers/xenconsole.o
+endif
+
+ifeq ($(conf_drivers_virtio),1)
 drivers += drivers/virtio.o
+ifeq ($(conf_drivers_pci),1)
 drivers += drivers/virtio-pci-device.o
+endif
+ifeq ($(conf_drivers_mmio),1)
 drivers += drivers/virtio-mmio.o
+endif
 drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-rng.o
 drivers += drivers/virtio-blk.o
 drivers += drivers/virtio-net.o
 drivers += drivers/virtio-fs.o
+endif
 endif # aarch64
 
 objects += arch/$(arch)/arch-trace.o
@@ -916,11 +991,15 @@ objects += arch/$(arch)/cpuid.o
 objects += arch/$(arch)/firmware.o
 objects += arch/$(arch)/hypervisor.o
 objects += arch/$(arch)/interrupt.o
+ifeq ($(conf_drivers_pci),1)
 objects += arch/$(arch)/pci.o
 objects += arch/$(arch)/msi.o
+endif
 objects += arch/$(arch)/power.o
 objects += arch/$(arch)/feexcept.o
+ifeq ($(conf_drivers_xen),1)
 objects += arch/$(arch)/xen.o
+endif
 
 $(out)/arch/x64/string-ssse3.o: CXXFLAGS += -mssse3
 
@@ -949,10 +1028,15 @@ objects += arch/x64/apic-clock.o
 objects += arch/x64/entry-xen.o
 objects += arch/x64/vmlinux.o
 objects += arch/x64/vmlinux-boot64.o
+objects += arch/x64/pvh-boot.o
+ifeq ($(conf_drivers_acpi),1)
 objects += $(acpi)
+endif
 endif # x64
 
+ifeq ($(conf_drivers_xen),1)
 objects += core/xen_intr.o
+endif
 objects += core/math.o
 objects += core/spinlock.o
 objects += core/lfmutex.o
@@ -1396,8 +1480,11 @@ musl += multibyte/mbrlen.o
 musl += multibyte/mbrtowc.o
 musl += multibyte/mbsinit.o
 musl += multibyte/mbsnrtowcs.o
+libc += multibyte/__mbsnrtowcs_chk.o
 musl += multibyte/mbsrtowcs.o
+libc += multibyte/__mbsrtowcs_chk.o
 musl += multibyte/mbstowcs.o
+libc += multibyte/__mbstowcs_chk.o
 musl += multibyte/mbtowc.o
 musl += multibyte/wcrtomb.o
 musl += multibyte/wcsnrtombs.o
@@ -1730,8 +1817,11 @@ musl += string/wcswcs.o
 musl += string/wmemchr.o
 musl += string/wmemcmp.o
 musl += string/wmemcpy.o
+libc += string/__wmemcpy_chk.o
 musl += string/wmemmove.o
+libc += string/__wmemmove_chk.o
 musl += string/wmemset.o
+libc += string/__wmemset_chk.o
 
 musl += temp/__randname.o
 musl += temp/mkdtemp.o
@@ -1880,9 +1970,11 @@ fs_objs += rofs/rofs_vfsops.o \
 	rofs/rofs_cache.o \
 	rofs/rofs_common.o
 
+ifeq ($(conf_drivers_virtio),1)
 fs_objs += virtiofs/virtiofs_vfsops.o \
 	virtiofs/virtiofs_vnops.o \
 	virtiofs/virtiofs_dax.o
+endif
 
 fs_objs += pseudofs/pseudofs.o
 fs_objs += procfs/procfs_vnops.o
@@ -1987,7 +2079,7 @@ $(out)/dummy-shlib.so: $(out)/dummy-shlib.o
 	$(call quiet, $(CXX) -nodefaultlibs -shared $(gcc-sysroot) -o $@ $^, LINK $@)
 
 stage1_targets = $(out)/arch/$(arch)/boot.o $(out)/loader.o $(out)/runtime.o $(drivers:%=$(out)/%) $(objects:%=$(out)/%) $(out)/dummy-shlib.so
-stage1: $(stage1_targets) links $(out)/version_script
+stage1: $(stage1_targets) links $(out)/default_version_script
 .PHONY: stage1
 
 loader_options_dep = $(out)/arch/$(arch)/loader_options.ld
@@ -1998,20 +2090,42 @@ $(loader_options_dep): stage1
 	fi
 
 ifeq ($(conf_hide_symbols),1)
+version_script_file:=$(out)/version_script
+#Detect which version script to be used and copy to $(out)/version_script
+#so that loader.elf/kernel.elf is rebuilt accordingly if version script has changed
+ifdef conf_version_script
+ifeq (,$(wildcard $(conf_version_script)))
+    $(error Missing version script: $(conf_version_script))
+endif
+ifneq ($(shell cmp $(out)/version_script $(conf_version_script)),)
+$(shell cp $(conf_version_script) $(out)/version_script)
+endif
+else
+ifneq ($(shell cmp $(out)/version_script $(out)/default_version_script),)
+$(shell cp $(out)/default_version_script $(out)/version_script)
+endif
+endif
 linker_archives_options = --no-whole-archive $(libstdc++.a) $(libgcc.a) $(libgcc_eh.a) $(boost-libs) \
-  --exclude-libs libstdc++.a --gc-sections --version-script=$(out)/version_script
+  --exclude-libs libstdc++.a --gc-sections
 else
 linker_archives_options = --whole-archive $(libstdc++.a) $(libgcc_eh.a) $(boost-libs) --no-whole-archive $(libgcc.a)
 endif
 
-$(out)/version_script: exported_symbols/*.symbols exported_symbols/$(arch)/*.symbols
-	$(call quiet, scripts/generate_version_script.sh $(out)/version_script, GEN version_script)
+$(out)/default_version_script: exported_symbols/*.symbols exported_symbols/$(arch)/*.symbols
+	$(call quiet, scripts/generate_version_script.sh $(out)/default_version_script, GEN default_version_script)
 
-$(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(loader_options_dep)
-	$(call quiet, $(LD) -o $@ --defsym=OSV_KERNEL_BASE=$(kernel_base) \
-	    --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) \
+ifeq ($(arch),aarch64)
+def_symbols = --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base)
+else
+def_symbols = --defsym=OSV_KERNEL_BASE=$(kernel_base) \
+              --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) \
+              --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift)
+endif
+
+$(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(loader_options_dep) $(version_script_file)
+	$(call quiet, $(LD) -o $@ $(def_symbols) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
-	    $(^:%.ld=-T %.ld) \
+            $(patsubst %version_script,--version-script=%version_script,$(patsubst %.ld,-T %.ld,$^)) \
 	    $(linker_archives_options) $(conf_linker_extra_options), \
 		LINK loader.elf)
 	@# Build libosv.so matching this loader.elf. This is not a separate
@@ -2020,11 +2134,10 @@ $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(lo
 	@scripts/libosv.py $(out)/osv.syms $(out)/libosv.ld `scripts/osv-version.sh` | $(CC) -c -o $(out)/osv.o -x assembler -
 	$(call quiet, $(CC) $(out)/osv.o -nostdlib -shared -o $(out)/libosv.so -T $(out)/libosv.ld, LIBOSV.SO)
 
-$(out)/kernel.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/empty_bootfs.o $(loader_options_dep)
-	$(call quiet, $(LD) -o $@ --defsym=OSV_KERNEL_BASE=$(kernel_base) \
-	    --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base) --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift) \
+$(out)/kernel.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/empty_bootfs.o $(loader_options_dep) $(version_script_file)
+	$(call quiet, $(LD) -o $@ $(def_symbols) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
-	    $(^:%.ld=-T %.ld) \
+            $(patsubst %version_script,--version-script=%version_script,$(patsubst %.ld,-T %.ld,$^)) \
 	    $(linker_archives_options) $(conf_linker_extra_options), \
 		LINK kernel.elf)
 	$(call quiet, $(STRIP) $(out)/kernel.elf -o $(out)/kernel-stripped.elf, STRIP kernel.elf -> kernel-stripped.elf )
@@ -2088,7 +2201,7 @@ $(out)/tools/cpiod/cpiod.so: $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.
 # re-created on every compilation. "generated-headers" is used as an order-
 # only dependency on C compilation rules above, so we don't try to compile
 # C code before generating these headers.
-generated-headers: $(out)/gen/include/bits/alltypes.h perhaps-modify-version-h
+generated-headers: $(out)/gen/include/bits/alltypes.h perhaps-modify-version-h perhaps-modify-drivers-config-h
 .PHONY: generated-headers
 
 # While other generated headers only need to be generated once, version.h
@@ -2098,6 +2211,17 @@ generated-headers: $(out)/gen/include/bits/alltypes.h perhaps-modify-version-h
 perhaps-modify-version-h:
 	$(call quiet, sh scripts/gen-version-header $(out)/gen/include/osv/version.h, GEN gen/include/osv/version.h)
 .PHONY: perhaps-modify-version-h
+
+# Using 'if ($(conf_drivers_*),1)' in the rules below is enough to include whole object
+# files. Sometimes though we need to enable or disable portions of the code specific
+# to given driver (the arch-setup.cc is best example). To that end the rule below
+# generates drivers_config.h header file with the macros CONF_drivers_* which is
+# then included by relevant source files.
+# This allows for fairly rapid rebuilding of the kernel for specified profiles
+# as only few files need to be re-compiled.
+perhaps-modify-drivers-config-h:
+	$(call quiet, sh scripts/gen-drivers-config-header $(arch) $(out)/gen/include/osv/drivers_config.h, GEN gen/include/osv/drivers_config.h)
+.PHONY: perhaps-modify-drivers-config-h
 
 $(out)/gen/include/bits/alltypes.h: include/api/$(arch)/bits/alltypes.h.sh
 	$(makedir)

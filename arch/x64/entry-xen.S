@@ -3,6 +3,7 @@
 # This work is open source software, licensed under the terms of the
 # BSD license as described in the LICENSE file in the top-level directory.
 
+#include <osv/drivers_config.h>
 #include <xen/interface/elfnote.h>
 
 #define elfnote(type, valtype, value) \
@@ -21,6 +22,7 @@
 #define elfnote_val(type, value) elfnote(type, .quad, value)
 #define elfnote_str(type, value) elfnote(type, .asciz, value)
 
+#if CONF_drivers_xen
 elfnote_val(XEN_ELFNOTE_ENTRY, xen_start)
 elfnote_val(XEN_ELFNOTE_HYPERCALL_PAGE, hypercall_page)
 elfnote_val(XEN_ELFNOTE_VIRT_BASE, OSV_KERNEL_VM_SHIFT)
@@ -30,6 +32,7 @@ elfnote_str(XEN_ELFNOTE_GUEST_VERSION, "?.?")
 elfnote_str(XEN_ELFNOTE_LOADER, "generic")
 elfnote_str(XEN_ELFNOTE_FEATURES, "!writable_page_tables")
 elfnote_str(XEN_ELFNOTE_BSD_SYMTAB, "yes")
+#endif
 elfnote_val(XEN_ELFNOTE_PHYS32_ENTRY, hvm_xen_start-OSV_KERNEL_VM_SHIFT)
 
 .data
@@ -41,6 +44,7 @@ elfnote_val(XEN_ELFNOTE_PHYS32_ENTRY, hvm_xen_start-OSV_KERNEL_VM_SHIFT)
 xen_bootstrap_end: .quad 0
 
 .text
+#if CONF_drivers_xen
 .align 4096
 .globl hypercall_page
 .hidden hypercall_page
@@ -54,6 +58,7 @@ xen_start:
     call xen_init
     mov $0x0, %rdi
     jmp start64
+#endif
 
 .code32
 hvm_xen_start:

@@ -38,6 +38,7 @@
 #include <sys/file.h>
 #include <sys/unistd.h>
 #include <sys/random.h>
+#include <sys/vfs.h>
 
 #include <unordered_map>
 
@@ -365,6 +366,20 @@ static int sys_exit_group(int ret)
     return 0;
 }
 
+#define __NR_sys_getcwd __NR_getcwd
+static long sys_getcwd(char *buf, unsigned long size)
+{
+    if (!buf) {
+        errno = EINVAL;
+        return -1;
+    }
+    auto ret = getcwd(buf, size);
+    if (!ret) {
+        return -1;
+    }
+    return strlen(ret) + 1;
+}
+
 #define __NR_sys_ioctl __NR_ioctl
 //
 // We need to define explicit sys_ioctl that takes these 3 parameters to conform
@@ -408,6 +423,9 @@ static int tgkill(int tgid, int tid, int sig)
     errno = ENOSYS;
     return -1;
 }
+
+#define __NR_sys_getdents64 __NR_getdents64
+extern "C" ssize_t sys_getdents64(int fd, void *dirp, size_t count);
 
 OSV_LIBC_API long syscall(long number, ...)
 {
@@ -481,6 +499,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL2(nanosleep, const struct timespec*, struct timespec *);
     SYSCALL4(fstatat, int, const char *, struct stat *, int);
     SYSCALL1(sys_exit_group, int);
+    SYSCALL2(sys_getcwd, char *, unsigned long);
     SYSCALL4(readlinkat, int, const char *, char *, size_t);
     SYSCALL0(getpid);
     SYSCALL3(set_mempolicy, int, unsigned long *, unsigned long);
@@ -490,6 +509,14 @@ OSV_LIBC_API long syscall(long number, ...)
 #endif
     SYSCALL3(mkdirat, int, char*, mode_t);
     SYSCALL3(tgkill, int, int, int);
+    SYSCALL0(getgid);
+    SYSCALL0(getuid);
+    SYSCALL3(lseek, int, off_t, int);
+    SYSCALL2(statfs, const char *, struct statfs *);
+    SYSCALL3(unlinkat, int, const char *, int);
+    SYSCALL3(symlinkat, const char *, int, const char *);
+    SYSCALL3(sys_getdents64, int, void *, size_t);
+    SYSCALL4(renameat, int, const char *, int, const char *);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
@@ -498,12 +525,22 @@ OSV_LIBC_API long syscall(long number, ...)
 }
 long __syscall(long number, ...)  __attribute__((alias("syscall")));
 
+#ifdef __x86_64__
 // In x86-64, a SYSCALL instruction has exactly 6 parameters, because this is the number of registers
 // alloted for passing them (additional parameters *cannot* be passed on the stack). So we can get
 // 7 arguments to this function (syscall number plus its 6 parameters). Because in the x86-64 ABI the
 // seventh argument is on the stack, we must pass the arguments explicitly to the syscall() function
 // and can't just call it without any arguments and hope everything will be passed on
 extern "C" long syscall_wrapper(long number, long p1, long p2, long p3, long p4, long p5, long p6)
+#endif
+#ifdef __aarch64__
+// In aarch64, the first 8 parameters to a procedure call are passed in the x0-x7 registers and
+// the parameters of syscall call (SVC intruction) in are passed in x0-x5 registers and syscall number
+// in x8 register before. To avoid shuffling the arguments around we make syscall_wrapper()
+// accept the syscall parameters as is but accept the syscall number as the last 7th argument which
+// the code in entry.S arranges.
+extern "C" long syscall_wrapper(long p1, long p2, long p3, long p4, long p5, long p6, long number)
+#endif
 {
     int errno_backup = errno;
     // syscall and function return value are in rax

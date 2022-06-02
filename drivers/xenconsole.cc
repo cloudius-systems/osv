@@ -83,7 +83,7 @@ void XEN_Console::dev_start()
             INTR_TYPE_MISC, &_irq) != 0)
         throw std::runtime_error("fail to bind evtchn");
 
-    _interface = (xencons_interface*)mmio_map(_pfn << PAGE_SHIFT, PAGE_SIZE);
+    _interface = (xencons_interface*)mmio_map(_pfn << PAGE_SHIFT, PAGE_SIZE, "xen_console");
 }
 
 void XEN_Console::flush()

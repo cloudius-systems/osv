@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#define CONF_drivers_xen 1
 #include "xen.hh"
 #include <osv/debug.hh>
 #include <osv/mmu.hh>
@@ -12,20 +13,17 @@
 #include "processor.hh"
 #include "cpuid.hh"
 #include "exceptions.hh"
-#include "arch-setup.hh"
 #include <osv/interrupt.hh>
 #include <osv/sched.hh>
 #include <bsd/porting/pcpu.h>
 #include <machine/xen/xen-os.h>
 #include <xen/evtchn.h>
-#include <xen/interface/arch-x86/hvm/start_info.h>
 
 shared_info_t *HYPERVISOR_shared_info;
 uint8_t xen_features[XENFEAT_NR_SUBMAPS * 32];
 // make sure xen_start_info is not in .bss, or it will be overwritten
 // by init code, as xen_init() is called before .bss initialization
 struct start_info* xen_start_info __attribute__((section(".data")));
-struct hvm_start_info* hvm_xen_start_info __attribute__((section(".data")));
 
 namespace xen {
 
@@ -225,39 +223,4 @@ void xen_init(struct start_info* si)
     xen_start_info = si;
 }
 
-#define OSV_MULTI_BOOT_INFO_ADDR      0x1000
-#define OSV_E820_TABLE_ADDR           0x2000
-
-extern "C"
-void hvm_xen_extract_boot_params()
-{
-    // Set location of multiboot info struct at arbitrary place in lower memory
-    // to copy to (happens to be the same as in boot16.S)
-    osv_multiboot_info_type* mb_info = reinterpret_cast<osv_multiboot_info_type*>(OSV_MULTI_BOOT_INFO_ADDR);
-
-    // Copy command line pointer from boot params
-    mb_info->mb.cmdline = hvm_xen_start_info->cmdline_paddr;
-
-    // Copy e820 information from boot params
-    mb_info->mb.mmap_length = 0;
-    mb_info->mb.mmap_addr = OSV_E820_TABLE_ADDR;
-
-    struct hvm_memmap_table_entry *source_e820_table = reinterpret_cast<struct hvm_memmap_table_entry *>(hvm_xen_start_info->memmap_paddr);
-    struct e820ent *dest_e820_table = reinterpret_cast<struct e820ent *>(mb_info->mb.mmap_addr);
-
-    for (uint32_t e820_index = 0; e820_index < hvm_xen_start_info->memmap_entries; e820_index++) {
-        dest_e820_table[e820_index].ent_size = 20;
-        dest_e820_table[e820_index].type = source_e820_table[e820_index].type;
-        dest_e820_table[e820_index].addr = source_e820_table[e820_index].addr;
-        dest_e820_table[e820_index].size = source_e820_table[e820_index].size;
-        mb_info->mb.mmap_length += sizeof(e820ent);
-    }
-
-    // Save ACPI RDSP address in the field of the osv_multiboot_info_type structure
-    // Ideally, we would wanted to save it under the acpi::pvh_rsdp_paddr but it is
-    // to early in the boot process as it would have been overwritten later in premain().
-    mb_info->pvh_rsdp = hvm_xen_start_info->rsdp_paddr;
-
-    reset_bootchart(mb_info);
-}
 }

@@ -37,7 +37,7 @@ extern void* memory::alloc_page();
 class net_channel {
 private:
     std::function<void (mbuf*)> _process_packet;
-    ring_spsc<mbuf*, 256> _queue;
+    ring_spsc<mbuf*, unsigned, 256> _queue;
     sched::thread_handle _waiting_thread CACHELINE_ALIGNED;
     // extra list of threads to wake
     osv::rcu_ptr<std::vector<pollreq*>> _pollers;

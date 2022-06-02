@@ -82,7 +82,7 @@ ifeq ($(CXX_INCLUDES),)
     ifeq (,$(gcc-inc-base2))
       $(error Could not find standard gcc headers like "unwind.h" under $(aarch64_gccbase) directory. Please run "./scripts/download_aarch64_packages.py")
     endif
-    STANDARD_GCC_INCLUDES = -isystem $(gcc-inc-base2)
+    STANDARD_GCC_INCLUDES = -isystem $(gcc-inc-base2) -isystem $(aarch64_gccbase)/usr/include
 
     gcc-sysroot = --sysroot $(aarch64_gccbase)
     standard-includes-flag = -nostdinc

@@ -151,7 +151,7 @@ public:
 
 private:
     lockfree::queue_mpsc<wait_record> _waitq;
-    ring_spsc<value_type, CpuTxqSize> _r;
+    ring_spsc<value_type, unsigned, CpuTxqSize> _r;
 
     //
     // We don't want to wake the waiters when the Tx worker is going to sleep.

@@ -22,6 +22,9 @@ VERSION_SCRIPT_END=$(cat <<"EOF"
 EOF
 )
 
+ALL_SYMBOLS_FILE=$(dirname $VERSION_SCRIPT_FILE)/all.symbols
+cat exported_symbols/*.symbols exported_symbols/$ARCH/*.symbols | sort -d | uniq > $ALL_SYMBOLS_FILE
+
 echo "$VERSION_SCRIPT_START" > $VERSION_SCRIPT_FILE
 
 #Firstly output list of symbols from files common to all architectures

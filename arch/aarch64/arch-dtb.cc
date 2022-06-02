@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include <osv/types.h>
 #include <osv/debug.h>
 #include <stdlib.h>
@@ -16,7 +17,9 @@
 #include <osv/mempool.hh>
 #include <osv/commands.hh>
 #include <osv/elf.hh>
+#if CONF_drivers_mmio
 #include "drivers/virtio-mmio.hh"
+#endif
 
 #define DTB_INTERRUPT_CELLS 3
 
@@ -279,6 +282,7 @@ u64 dtb_get_cadence_uart(int *irqid)
     return addr;
 }
 
+#if CONF_drivers_mmio
 #define VIRTIO_MMIO_DEV_COMPAT "virtio,mmio"
 #define DTB_MAX_VIRTIO_MMIO_DEV_COUNT 8
 static virtio::mmio_device_info dtb_dtb_virtio_mmio_devices_infos[DTB_MAX_VIRTIO_MMIO_DEV_COUNT];
@@ -321,6 +325,7 @@ void dtb_collect_parsed_mmio_virtio_devices()
 	virtio::add_mmio_device_configuration(dtb_dtb_virtio_mmio_devices_infos[idx]);
     }
 }
+#endif
 
 /* this gets the virtual timer irq, we are not interested
  * about the other timers.
@@ -376,9 +381,12 @@ bool dtb_get_gic_v2(u64 *dist, size_t *dist_len, u64 *cpu, size_t *cpu_len)
     return true;
 }
 
-/* this gets the cpus node and returns the number of cpu elements in it. */
+/* this parses the cpus node and mpidr values and returns the number of cpu in it. */
+#define DTB_MAX_CPU_COUNT 32
 static int dtb_cpu_count = -1;
-static int dtb_parse_cpus_count()
+static u64 dtb_cpus_mpids[DTB_MAX_CPU_COUNT];
+
+static int dtb_parse_cpus()
 {
     int node, subnode, count;
     if (!dtb)
@@ -388,9 +396,24 @@ static int dtb_parse_cpus_count()
     if (node < 0)
         return -1;
 
+    u64 *mpids = dtb_cpus_mpids;
     for (count = 0, subnode = fdt_first_subnode(dtb, node);
          subnode >= 0;
-         count++,   subnode = fdt_next_subnode(dtb, subnode)) {
+         subnode = fdt_next_subnode(dtb, subnode)) {
+
+        if (count > DTB_MAX_CPU_COUNT) {
+            abort("dtb_parse_cpus_mpid: number of cpus greater than maximum. Increase the DTB_MAX_CPU_COUNT!\n");
+        }
+
+        // Only count subnode that have a property "device_type" with value "cpu"
+        auto property = fdt_get_property(dtb, subnode, "device_type", NULL);
+        if (property) {
+            if (!strncmp("cpu", property->data, 3)) {
+                (void)dtb_get_reg(subnode, mpids);
+                mpids++;
+                count++;
+            }
+        }
     }
     return count;
 }
@@ -398,33 +421,6 @@ static int dtb_parse_cpus_count()
 int dtb_get_cpus_count()
 {
     return dtb_cpu_count;
-}
-
-/* this gets the cpu mpidr values for all cpus */
-#define DTB_MAX_CPU_COUNT 32
-static u64 dtb_cpus_mpids[DTB_MAX_CPU_COUNT];
-bool dtb_parse_cpus_mpid(u64 *mpids, int n)
-{
-    int node, subnode;
-
-    if (n > DTB_MAX_CPU_COUNT) {
-        abort("dtb_parse_cpus_mpid: number of cpus greater than maximum. Increase the DTB_MAX_CPU_COUNT!\n");
-    }
-
-    if (!dtb)
-        return false;
-
-    node = fdt_path_offset(dtb, "/cpus");
-    if (node < 0)
-        return false;
-
-    for (subnode = fdt_first_subnode(dtb, node);
-         n > 0 && subnode >= 0;
-         subnode = fdt_next_subnode(dtb, subnode), n--, mpids++) {
-
-        (void)dtb_get_reg(subnode, mpids);
-    }
-    return true;
 }
 
 bool dtb_get_cpus_mpid(u64 *mpids, int n) {
@@ -773,7 +769,7 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
     }
 
     olddtb = dtb;
-    dtb = (void *)OSV_KERNEL_BASE;
+    dtb = (void *)OSV_KERNEL_VM_BASE;
 
     if (fdt_open_into(olddtb, dtb, 0x10000) != 0) {
         abort("dtb_setup: failed to move dtb (dtb too large?)\n");
@@ -784,9 +780,9 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
         abort("dtb_setup: cannot find cmdline after dtb move.\n");
     }
     // Parse some dtb configuration ahead of time
-    dtb_cpu_count = dtb_parse_cpus_count();
-    if (!dtb_parse_cpus_mpid(dtb_cpus_mpids, dtb_cpu_count)) {
-        abort("dtb_setup: failed to parse cpu mpid.\n");
+    dtb_cpu_count = dtb_parse_cpus();
+    if (dtb_cpu_count == -1) {
+        abort("dtb_setup: failed to parse the cpus node.\n");
     }
 
     dtb_timer_irq = dtb_parse_timer_irq();
@@ -796,20 +792,24 @@ void  __attribute__((constructor(init_prio::dtb))) dtb_setup()
         abort("dtb_setup: failed to parse pci_irq_map.\n");
     }
 
+#if CONF_drivers_mmio
     dtb_parse_mmio_virtio_devices();
+#endif
 
     register u64 edata;
     asm volatile ("adrp %0, .edata" : "=r"(edata));
 
-    /* import from loader.cc */
+    /* import from loader.cc and core/mmu.cc */
     extern elf::Elf64_Ehdr *elf_header;
     extern size_t elf_size;
     extern void *elf_start;
+    extern u64 kernel_vm_shift;
 
-    elf_start = reinterpret_cast<void *>(elf_header);
+    mmu::elf_phys_start = reinterpret_cast<void *>(elf_header);
+    elf_start = mmu::elf_phys_start + kernel_vm_shift;
     elf_size = (u64)edata - (u64)elf_start;
 
     /* remove amount of memory used for ELF from avail memory */
-    mmu::phys addr = (mmu::phys)elf_start + elf_size;
+    mmu::phys addr = (mmu::phys)mmu::elf_phys_start + elf_size;
     memory::phys_mem_size -= addr - mmu::mem_addr;
 }

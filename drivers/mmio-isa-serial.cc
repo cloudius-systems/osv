@@ -31,7 +31,7 @@ void mmio_isa_serial_console::early_init(u64 mmio_phys_address)
 void mmio_isa_serial_console::memory_map()
 {
     if (_phys_mmio_address) {
-        _addr_mmio = mmio_map(_phys_mmio_address, mmu::page_size);
+        _addr_mmio = mmio_map(_phys_mmio_address, mmu::page_size, "isa_serial_console");
     }
 }
 

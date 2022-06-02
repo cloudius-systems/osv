@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include "arch.hh"
 #include "arch-cpu.hh"
 #include "arch-setup.hh"
@@ -13,7 +14,9 @@
 #include "processor.hh"
 #include "processor-flags.h"
 #include "msr.hh"
+#if CONF_drivers_xen
 #include <osv/xen.hh>
+#endif
 #include <osv/elf.hh>
 #include <osv/types.h>
 #include <alloca.h>
@@ -21,15 +24,21 @@
 #include <osv/boot.hh>
 #include <osv/commands.hh>
 #include "dmi.hh"
+#if CONF_drivers_acpi
 #include "drivers/acpi.hh"
+#endif
 
 osv_multiboot_info_type* osv_multiboot_info;
 
+#if CONF_drivers_mmio
 #include "drivers/virtio-mmio.hh"
+#endif
 void parse_cmdline(multiboot_info_type& mb)
 {
     auto p = reinterpret_cast<char*>(mb.cmdline);
+#if CONF_drivers_mmio
     virtio::parse_mmio_device_configuration(p);
+#endif
     osv::parse_cmdline(p);
 }
 
@@ -155,7 +164,10 @@ void arch_setup_free_memory()
     });
     for (auto&& area : mmu::identity_mapped_areas) {
         auto base = reinterpret_cast<void*>(get_mem_area_base(area));
-        mmu::linear_map(base, 0, initial_map, initial_map);
+        mmu::linear_map(base, 0, initial_map,
+            area == mmu::mem_area::main ? "main" :
+            area == mmu::mem_area::page ? "page" : "mempool",
+            initial_map);
     }
     // Map the core, loaded by the boot loader
     // In order to properly setup mapping between virtual
@@ -167,7 +179,7 @@ void arch_setup_free_memory()
     // as expressed by the assignment below
     elf_start = reinterpret_cast<void*>(elf_phys_start + OSV_KERNEL_VM_SHIFT);
     elf_size = edata_phys - elf_phys_start;
-    mmu::linear_map(elf_start, elf_phys_start, elf_size, OSV_KERNEL_BASE);
+    mmu::linear_map(elf_start, elf_phys_start, elf_size, "kernel", OSV_KERNEL_BASE);
     // get rid of the command line, before low memory is unmapped
     parse_cmdline(mb);
     // now that we have some free memory, we can start mapping the rest
@@ -196,7 +208,9 @@ void arch_setup_free_memory()
         }
         for (auto&& area : mmu::identity_mapped_areas) {
             auto base = reinterpret_cast<void*>(get_mem_area_base(area));
-            mmu::linear_map(base + ent.addr, ent.addr, ent.size, ~0);
+            mmu::linear_map(base + ent.addr, ent.addr, ent.size,
+               area == mmu::mem_area::main ? "main" :
+               area == mmu::mem_area::page ? "page" : "mempool", ~0);
         }
         mmu::free_initial_memory_range(ent.addr, ent.size);
     });
@@ -214,8 +228,13 @@ void arch_setup_tls(void *tls, const elf::tls_data& info)
 
 static inline void disable_pic()
 {
+#if CONF_drivers_xen
     // PIC not present in Xen
     XENPV_ALTERNATIVE({ processor::outb(0xff, 0x21); processor::outb(0xff, 0xa1); }, {});
+#else
+    processor::outb(0xff, 0x21);
+    processor::outb(0xff, 0xa1);
+#endif
 }
 
 extern "C" void syscall_entry(void);
@@ -247,53 +266,105 @@ void arch_init_premain()
     if (omb.disk_err)
 	debug_early_u64("Error reading disk (real mode): ", static_cast<u64>(omb.disk_err));
 
+#if CONF_drivers_acpi
     acpi::pvh_rsdp_paddr = omb.pvh_rsdp;
+#endif
 
     disable_pic();
 }
 
 #include "drivers/driver.hh"
+#if CONF_drivers_acpi
 #include "drivers/pvpanic.hh"
+#endif
+#if CONF_drivers_virtio
 #include "drivers/virtio.hh"
+#endif
+#if CONF_drivers_virtio_blk
 #include "drivers/virtio-blk.hh"
+#endif
+#if CONF_drivers_virtio_scsi
 #include "drivers/virtio-scsi.hh"
+#endif
+#if CONF_drivers_virtio_net
 #include "drivers/virtio-net.hh"
+#endif
+#if CONF_drivers_virtio_rng
 #include "drivers/virtio-rng.hh"
+#endif
+#if CONF_drivers_virtio_fs
 #include "drivers/virtio-fs.hh"
+#endif
+#if CONF_drivers_xen
 #include "drivers/xenplatform-pci.hh"
+#endif
+#if CONF_drivers_ahci
 #include "drivers/ahci.hh"
+#endif
+#if CONF_drivers_pvscsi
 #include "drivers/vmw-pvscsi.hh"
+#endif
+#if CONF_drivers_vmxnet3
 #include "drivers/vmxnet3.hh"
+#endif
+#if CONF_drivers_ide
 #include "drivers/ide.hh"
+#endif
 
 extern bool opt_pci_disabled;
 void arch_init_drivers()
 {
+#if CONF_drivers_acpi
     // initialize panic drivers
     panic::pvpanic::probe_and_setup();
     boot_time.event("pvpanic done");
+#endif
 
+#if CONF_drivers_pci
     if (!opt_pci_disabled) {
         // Enumerate PCI devices
         pci::pci_device_enumeration();
         boot_time.event("pci enumerated");
     }
+#endif
 
+#if CONF_drivers_mmio
     // Register any parsed virtio-mmio devices
     virtio::register_mmio_devices(device_manager::instance());
+#endif
 
     // Initialize all drivers
     hw::driver_manager* drvman = hw::driver_manager::instance();
+#if CONF_drivers_virtio_blk
     drvman->register_driver(virtio::blk::probe);
+#endif
+#if CONF_drivers_virtio_scsi
     drvman->register_driver(virtio::scsi::probe);
+#endif
+#if CONF_drivers_virtio_net
     drvman->register_driver(virtio::net::probe);
+#endif
+#if CONF_drivers_virtio_rng
     drvman->register_driver(virtio::rng::probe);
+#endif
+#if CONF_drivers_virtio_fs
     drvman->register_driver(virtio::fs::probe);
+#endif
+#if CONF_drivers_xen
     drvman->register_driver(xenfront::xenplatform_pci::probe);
+#endif
+#if CONF_drivers_ahci
     drvman->register_driver(ahci::hba::probe);
+#endif
+#if CONF_drivers_pvscsi
     drvman->register_driver(vmw::pvscsi::probe);
+#endif
+#if CONF_drivers_vmxnet3
     drvman->register_driver(vmw::vmxnet3::probe);
+#endif
+#if CONF_drivers_ide
     drvman->register_driver(ide::ide_drive::probe);
+#endif
     boot_time.event("drivers probe");
     drvman->load_all();
     drvman->list_drivers();
@@ -301,7 +372,9 @@ void arch_init_drivers()
 
 #include "drivers/console.hh"
 #include "drivers/isa-serial.hh"
+#if CONF_drivers_vga
 #include "drivers/vga.hh"
+#endif
 #include "early-console.hh"
 
 void arch_init_early_console()
@@ -311,15 +384,21 @@ void arch_init_early_console()
 
 bool arch_setup_console(std::string opt_console)
 {
+#if CONF_drivers_vga
     hw::driver_manager* drvman = hw::driver_manager::instance();
+#endif
 
     if (opt_console.compare("serial") == 0) {
         console::console_driver_add(&console::arch_early_console);
+#if CONF_drivers_vga
     } else if (opt_console.compare("vga") == 0) {
         drvman->register_driver(console::VGAConsole::probe);
+#endif
     } else if (opt_console.compare("all") == 0) {
         console::console_driver_add(&console::arch_early_console);
+#if CONF_drivers_vga
         drvman->register_driver(console::VGAConsole::probe);
+#endif
     } else {
         return false;
     }

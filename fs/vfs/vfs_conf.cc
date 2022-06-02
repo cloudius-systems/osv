@@ -38,6 +38,7 @@
  * vfs_conf.c - File system configuration.
  */
 
+#include <osv/drivers_config.h>
 #include <limits.h>
 #include <unistd.h>
 #include <string.h>
@@ -52,11 +53,15 @@ extern struct vfsops nfs_vfsops;
 extern struct vfsops procfs_vfsops;
 extern struct vfsops sysfs_vfsops;
 extern struct vfsops zfs_vfsops;
+#if CONF_drivers_virtio_fs
 extern struct vfsops virtiofs_vfsops;
+#endif
 
 extern int ramfs_init(void);
 extern int rofs_init(void);
+#if CONF_drivers_virtio_fs
 extern int virtiofs_init(void);
+#endif
 extern int devfs_init(void);
 extern int nfs_init(void);
 extern int procfs_init(void);
@@ -74,6 +79,8 @@ const struct vfssw vfssw[] = {
 	{"sysfs",	sysfs_init,	&sysfs_vfsops},
 	{"zfs",		zfs_init,	&zfs_vfsops},
 	{"rofs", 	rofs_init, 	&rofs_vfsops},
+#if CONF_drivers_virtio_fs
 	{"virtiofs", 	virtiofs_init, 	&virtiofs_vfsops},
+#endif
 	{nullptr,	fs_noop,	nullptr},
 };

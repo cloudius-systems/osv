@@ -23,6 +23,7 @@ def fedora_download_commands(fedora_version):
     gcc_packages = ['gcc',
                     'glibc',
                     'glibc-devel',
+                    'kernel-headers',
                     'libgcc',
                     'libstdc++',
                     'libstdc++-devel',

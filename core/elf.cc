@@ -124,6 +124,7 @@ object::object(program& prog, std::string pathname)
     , _module_index(_prog.register_dtv(this))
     , _is_executable(false)
     , _init_called(false)
+    , _eh_frame(0)
     , _visibility_thread(nullptr)
     , _visibility_level(VisibilityLevel::Public)
 {
@@ -517,9 +518,11 @@ void object::process_headers()
         case PT_PHDR:
         case PT_GNU_STACK:
         case PT_GNU_RELRO:
-        case PT_GNU_EH_FRAME:
         case PT_PAX_FLAGS:
         case PT_GNU_PROPERTY:
+            break;
+        case PT_GNU_EH_FRAME:
+            _eh_frame = _base + phdr.p_vaddr;
             break;
         case PT_TLS:
             _tls_segment = _base + phdr.p_vaddr;
@@ -1294,7 +1297,11 @@ void create_main_program()
 program::program(void* addr)
     : _next_alloc(addr)
 {
+#ifdef __x86_64__
     void *program_base = (void*)(ELF_IMAGE_START + OSV_KERNEL_VM_SHIFT);
+#else
+    void *program_base = (void*)(ELF_IMAGE_START);
+#endif
     _core = std::make_shared<memory_image>(*this, program_base);
     _core->set_base(program_base);
     assert(_core->module_index() == core_module_index);

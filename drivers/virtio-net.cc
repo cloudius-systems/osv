@@ -6,6 +6,7 @@
  */
 
 
+#include <osv/drivers_config.h>
 #include <sys/cdefs.h>
 
 #include "drivers/virtio.hh"
@@ -303,6 +304,7 @@ net::net(virtio_device& dev)
     ether_ifattach(_ifn, _config.mac);
 
     interrupt_factory int_factory;
+#if CONF_drivers_pci
     int_factory.register_msi_bindings = [this,poll_task](interrupt_manager &msi) {
        msi.easy_register({
            { 0, [&] { this->_rxq.vqueue->disable_interrupts(); }, poll_task },
@@ -316,6 +318,7 @@ net::net(virtio_device& dev)
             [=] { return this->ack_irq(); },
             [=] { poll_task->wake(); });
     };
+#endif
 
 #ifdef __aarch64__
     int_factory.create_spi_edge_interrupt = [this,poll_task]() {
@@ -326,11 +329,13 @@ net::net(virtio_device& dev)
             [=] { poll_task->wake(); });
     };
 #else
+#if CONF_drivers_mmio
     int_factory.create_gsi_edge_interrupt = [this,poll_task]() {
         return new gsi_edge_interrupt(
             _dev.get_irq(),
             [=] { if (this->ack_irq()) poll_task->wake(); });
     };
+#endif
 #endif
 
     _dev.register_interrupt(int_factory);

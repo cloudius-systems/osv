@@ -160,21 +160,8 @@ int open(const char *pathname, int flags, ...)
 
 LFS64(open);
 
-OSV_LIBC_API
-int openat(int dirfd, const char *pathname, int flags, ...)
+static int vfs_fun_at(int dirfd, const char *pathname, std::function<int(const char *)> fun)
 {
-    mode_t mode = 0;
-    if (flags & O_CREAT) {
-        va_list ap;
-        va_start(ap, flags);
-        mode = apply_umask(va_arg(ap, mode_t));
-        va_end(ap);
-    }
-
-    if (pathname[0] == '/' || dirfd == AT_FDCWD) {
-        return open(pathname, flags, mode);
-    }
-
     struct file *fp;
     int error = fget(dirfd, &fp);
     if (error) {
@@ -191,15 +178,47 @@ int openat(int dirfd, const char *pathname, int flags, ...)
     /* build absolute path */
     strlcpy(p, fp->f_dentry->d_mount->m_path, PATH_MAX);
     strlcat(p, fp->f_dentry->d_path, PATH_MAX);
-    strlcat(p, "/", PATH_MAX);
-    strlcat(p, pathname, PATH_MAX);
+    if (pathname) {
+        strlcat(p, "/", PATH_MAX);
+        strlcat(p, pathname, PATH_MAX);
+    }
 
-    error = open(p, flags, mode);
+    error = fun(p);
 
     vn_unlock(vp);
     fdrop(fp);
 
     return error;
+}
+
+static int vfs_fun_at2(int dirfd, const char *pathname, std::function<int(const char *)> fun)
+{
+    if (!pathname) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (pathname[0] == '/' || dirfd == AT_FDCWD) {
+        return fun(pathname);
+    }
+
+    return vfs_fun_at(dirfd, pathname, fun);
+}
+
+OSV_LIBC_API
+int openat(int dirfd, const char *pathname, int flags, ...)
+{
+    mode_t mode = 0;
+    if (flags & O_CREAT) {
+        va_list ap;
+        va_start(ap, flags);
+        mode = apply_umask(va_arg(ap, mode_t));
+        va_end(ap);
+    }
+
+    return vfs_fun_at2(dirfd, pathname, [flags, mode](const char *path) {
+        return open(path, flags, mode);
+    });
 }
 LFS64(openat);
 
@@ -602,6 +621,11 @@ extern "C" OSV_LIBC_API
 int __fxstatat(int ver, int dirfd, const char *pathname, struct stat *st,
         int flags)
 {
+    if (!pathname) {
+        errno = EINVAL;
+        return -1;
+    }
+
     if (pathname[0] == '/' || dirfd == AT_FDCWD) {
         return stat(pathname, st);
     }
@@ -611,35 +635,14 @@ int __fxstatat(int ver, int dirfd, const char *pathname, struct stat *st,
         return fstat(dirfd, st);
     }
 
-    struct file *fp;
-    int error = fget(dirfd, &fp);
-    if (error) {
-        errno = error;
-        return -1;
-    }
-
-    struct vnode *vp = fp->f_dentry->d_vnode;
-    vn_lock(vp);
-
-    std::unique_ptr<char []> up (new char[PATH_MAX]);
-    char *p = up.get();
-    /* build absolute path */
-    strlcpy(p, fp->f_dentry->d_mount->m_path, PATH_MAX);
-    strlcat(p, fp->f_dentry->d_path, PATH_MAX);
-    strlcat(p, "/", PATH_MAX);
-    strlcat(p, pathname, PATH_MAX);
-
-    if (flags & AT_SYMLINK_NOFOLLOW) {
-        error = lstat(p, st);
-    }
-    else {
-        error = stat(p, st);
-    }
-
-    vn_unlock(vp);
-    fdrop(fp);
-
-    return error;
+    return vfs_fun_at(dirfd, pathname, [flags,st](const char *absolute_path) {
+        if (flags & AT_SYMLINK_NOFOLLOW) {
+            return lstat(absolute_path, st);
+        }
+        else {
+            return stat(absolute_path, st);
+        }
+    });
 }
 
 LFS64(__fxstatat);
@@ -787,6 +790,71 @@ int readdir64_r(DIR *dir, struct dirent64 *entry,
 extern "C" OSV_LIBC_API
 struct dirent *readdir64(DIR *dir) __attribute__((alias("readdir")));
 
+struct linux_dirent64 {
+    u64            d_ino;
+    s64            d_off;
+    unsigned short d_reclen;
+    unsigned char  d_type;
+    char           d_name[];
+};
+
+#undef getdents64
+extern "C"
+ssize_t sys_getdents64(int fd, void *dirp, size_t count)
+{
+    auto *dir = fdopendir(fd);
+    if (dir) {
+        // We have verified that fd points to a valid directory
+        // but we do NOT need the DIR handle so just delete it
+        delete dir;
+
+        struct file *fp;
+        int error = fget(fd, &fp);
+        if (error) {
+            errno = error;
+            return -1;
+        }
+
+        size_t bytes_read = 0;
+        off_t last_off = -1;
+        errno = 0;
+
+        // Iterate over as many entries as there is space in the buffer
+        // by directly calling sys_readdir()
+        struct dirent entry;
+        while ((error = sys_readdir(fp, &entry)) == 0) {
+            auto rec_len = offsetof(linux_dirent64, d_name) + strlen(entry.d_name) + 1;
+            if (rec_len <= count) {
+                auto *ldirent = static_cast<linux_dirent64*>(dirp + bytes_read);
+                ldirent->d_ino = entry.d_ino;
+                ldirent->d_off = entry.d_off;
+                ldirent->d_type = entry.d_type;
+                strcpy(ldirent->d_name, entry.d_name);
+                ldirent->d_reclen = rec_len;
+                count -= rec_len;
+                bytes_read += rec_len;
+                last_off = entry.d_off;
+            } else {
+                if (last_off >= 0)
+                    sys_seekdir(fp, last_off);
+                break;
+            }
+        }
+
+        fdrop(fp);
+
+        if (error && error != ENOENT) {
+            errno = error;
+            return -1;
+        } else {
+            errno = 0;
+            return bytes_read;
+        }
+    } else {
+        return -1;
+    }
+}
+
 OSV_LIBC_API
 void rewinddir(DIR *dirp)
 {
@@ -870,37 +938,9 @@ int mkdirat(int dirfd, const char *pathname, mode_t mode)
 {
     mode = apply_umask(mode);
 
-	if (pathname[0] == '/' || dirfd == AT_FDCWD) {
-        // Supplied path is either absolute or relative to cwd
-        return mkdir(pathname, mode);
-    }
-
-    // Supplied path is relative to folder specified by dirfd
-    struct file *fp;
-    int error = fget(dirfd, &fp);
-    if (error) {
-        errno = error;
-        return -1;
-    }
-
-    struct vnode *vp = fp->f_dentry->d_vnode;
-    vn_lock(vp);
-
-    std::unique_ptr<char []> up (new char[PATH_MAX]);
-    char *p = up.get();
-
-    /* build absolute path */
-    strlcpy(p, fp->f_dentry->d_mount->m_path, PATH_MAX);
-    strlcat(p, fp->f_dentry->d_path, PATH_MAX);
-    strlcat(p, "/", PATH_MAX);
-    strlcat(p, pathname, PATH_MAX);
-
-    error = mkdir(p, mode);
-
-    vn_unlock(vp);
-    fdrop(fp);
-
-    return error;
+    return vfs_fun_at2(dirfd, pathname, [mode](const char *path) {
+        return mkdir(path, mode);
+    });
 }
 
 TRACEPOINT(trace_vfs_rmdir, "\"%s\"", const char*);
@@ -1001,6 +1041,36 @@ int rename(const char *oldpath, const char *newpath)
     trace_vfs_rename_err(error);
     errno = error;
     return -1;
+}
+
+OSV_LIBC_API
+int renameat(int olddirfd, const char *oldpath,
+             int newdirfd, const char *newpath)
+{
+    if (!oldpath || !newpath) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (newpath[0] == '/' || newdirfd == AT_FDCWD) {
+        return vfs_fun_at2(olddirfd, oldpath, [newpath](const char *path) {
+            return rename(path, newpath);
+        });
+    } else {
+        char absolute_newpath[PATH_MAX];
+        auto error = vfs_fun_at(newdirfd, newpath, [&absolute_newpath](const char *absolute_path) {
+            strcpy(absolute_newpath, absolute_path);
+            return 0;
+        });
+
+        if (error) {
+            return error;
+        } else {
+            return vfs_fun_at2(olddirfd, oldpath, [absolute_newpath](const char *path) {
+                return rename(path, absolute_newpath);
+            });
+        }
+    }
 }
 
 TRACEPOINT(trace_vfs_chdir, "\"%s\"", const char*);
@@ -1157,6 +1227,19 @@ int symlink(const char *oldpath, const char *newpath)
     return 0;
 }
 
+OSV_LIBC_API
+int symlinkat(const char *oldpath, int newdirfd, const char *newpath)
+{
+    if (!oldpath) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    return vfs_fun_at2(newdirfd, newpath, [oldpath](const char * path) {
+        return symlink(oldpath, path);
+    });
+}
+
 TRACEPOINT(trace_vfs_unlink, "\"%s\"", const char*);
 TRACEPOINT(trace_vfs_unlink_ret, "");
 TRACEPOINT(trace_vfs_unlink_err, "%d", int);
@@ -1189,11 +1272,13 @@ int unlink(const char *pathname)
 OSV_LIBC_API
 int unlinkat(int dirfd, const char *pathname, int flags)
 {
-    //TODO: Really implement it
-    if (dirfd != AT_FDCWD || flags) {
-        UNIMPLEMENTED("unlinkat() with non-zero flags or dirfd != AT_FDCWD");
-    }
-    return unlink(pathname);
+    return vfs_fun_at2(dirfd, pathname, [flags](const char *path) {
+        if (flags & AT_REMOVEDIR) {
+            return rmdir(path);
+        } else {
+            return unlink(path);
+        }
+    });
 }
 
 TRACEPOINT(trace_vfs_stat, "\"%s\" %p", const char*, struct stat*);
@@ -1717,35 +1802,9 @@ int faccessat(int dirfd, const char *pathname, int mode, int flags)
         UNIMPLEMENTED("faccessat() with AT_SYMLINK_NOFOLLOW");
     }
 
-    if (pathname[0] == '/' || dirfd == AT_FDCWD) {
-        return access(pathname, mode);
-    }
-
-    struct file *fp;
-    int error = fget(dirfd, &fp);
-    if (error) {
-        errno = error;
-        return -1;
-    }
-
-    struct vnode *vp = fp->f_dentry->d_vnode;
-    vn_lock(vp);
-
-    std::unique_ptr<char []> up (new char[PATH_MAX]);
-    char *p = up.get();
-
-    /* build absolute path */
-    strlcpy(p, fp->f_dentry->d_mount->m_path, PATH_MAX);
-    strlcat(p, fp->f_dentry->d_path, PATH_MAX);
-    strlcat(p, "/", PATH_MAX);
-    strlcat(p, pathname, PATH_MAX);
-
-    error = access(p, mode);
-
-    vn_unlock(vp);
-    fdrop(fp);
-
-    return error;
+    return vfs_fun_at2(dirfd, pathname, [mode](const char *path) {
+        return access(path, mode);
+    });
 }
 
 extern "C" OSV_LIBC_API
@@ -1928,35 +1987,9 @@ ssize_t readlink(const char *pathname, char *buf, size_t bufsize)
 OSV_LIBC_API
 ssize_t readlinkat(int dirfd, const char *pathname, char *buf, size_t bufsize)
 {
-    if (pathname[0] == '/' || dirfd == AT_FDCWD) {
-        return readlink(pathname, buf, bufsize);
-    }
-
-    struct file *fp;
-    int error = fget(dirfd, &fp);
-    if (error) {
-        errno = error;
-        return -1;
-    }
-
-    struct vnode *vp = fp->f_dentry->d_vnode;
-    vn_lock(vp);
-
-    std::unique_ptr<char []> up (new char[PATH_MAX]);
-    char *p = up.get();
-
-    /* build absolute path */
-    strlcpy(p, fp->f_dentry->d_mount->m_path, PATH_MAX);
-    strlcat(p, fp->f_dentry->d_path, PATH_MAX);
-    strlcat(p, "/", PATH_MAX);
-    strlcat(p, pathname, PATH_MAX);
-
-    error = readlink(p, buf, bufsize);
-
-    vn_unlock(vp);
-    fdrop(fp);
-
-    return error;
+    return vfs_fun_at2(dirfd, pathname, [buf, bufsize](const char *path) {
+        return readlink(path, buf, bufsize);
+    });
 }
 
 TRACEPOINT(trace_vfs_fallocate, "%d %d 0x%x 0x%x", int, int, loff_t, loff_t);
@@ -2004,9 +2037,7 @@ OSV_LIBC_API
 int futimesat(int dirfd, const char *pathname, const struct timeval times[2])
 {
     struct stat st;
-    struct file *fp;
     int error;
-    char *absolute_path;
 
     if ((pathname && pathname[0] == '/') || dirfd == AT_FDCWD)
         return utimes(pathname, times);
@@ -2026,24 +2057,9 @@ int futimesat(int dirfd, const char *pathname, const struct timeval times[2])
         }
     }
 
-    error = fget(dirfd, &fp);
-    if (error)
-        goto out_errno;
-
-    /* build absolute path */
-    absolute_path = (char*)malloc(PATH_MAX);
-    strlcpy(absolute_path, fp->f_dentry->d_mount->m_path, PATH_MAX);
-    strlcat(absolute_path, fp->f_dentry->d_path, PATH_MAX);
-
-    if (pathname) {
-        strlcat(absolute_path, "/", PATH_MAX);
-        strlcat(absolute_path, pathname, PATH_MAX);
-    }
-
-    error = utimes(absolute_path, times);
-    free(absolute_path);
-
-    fdrop(fp);
+    error = vfs_fun_at(dirfd, pathname, [times](const char *absolute_path) {
+        return utimes(absolute_path, times);
+    });
 
     if (error)
         goto out_errno;

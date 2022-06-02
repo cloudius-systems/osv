@@ -7,6 +7,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include "arch-setup.hh"
 #include <osv/sched.hh>
 #include <osv/mempool.hh>
@@ -16,7 +17,9 @@
 #include <osv/boot.hh>
 #include <osv/debug.hh>
 #include <osv/commands.hh>
+#if CONF_drivers_xen
 #include <osv/xen.hh>
+#endif
 
 #include "arch-mmu.hh"
 #include "arch-dtb.hh"
@@ -24,7 +27,9 @@
 #include "drivers/console.hh"
 #include "drivers/pl011.hh"
 #include "early-console.hh"
+#if CONF_drivers_pci
 #include <osv/pci.hh>
+#endif
 #include "drivers/mmio-isa-serial.hh"
 
 #include <alloca.h>
@@ -41,6 +46,7 @@ void setup_temporary_phys_map()
     mmu::flush_tlb_all();
 }
 
+#if CONF_drivers_pci
 void arch_setup_pci()
 {
     pci::set_pci_ecam(dtb_get_pci_is_ecam());
@@ -55,7 +61,7 @@ void arch_setup_pci()
     pci::set_pci_cfg(pci_cfg, pci_cfg_len);
     pci_cfg = pci::get_pci_cfg(&pci_cfg_len);
     mmu::linear_map((void *)pci_cfg, (mmu::phys)pci_cfg, pci_cfg_len,
-		    mmu::page_size, mmu::mattr::dev);
+		    "pci_cfg", mmu::page_size, mmu::mattr::dev);
 
     /* linear_map [TTBR0 - PCI I/O and memory ranges] */
     u64 ranges[2]; size_t ranges_len[2];
@@ -67,10 +73,11 @@ void arch_setup_pci()
     ranges[0] = pci::get_pci_io(&ranges_len[0]);
     ranges[1] = pci::get_pci_mem(&ranges_len[1]);
     mmu::linear_map((void *)ranges[0], (mmu::phys)ranges[0], ranges_len[0],
-                    mmu::page_size, mmu::mattr::dev);
+                    "pci_io", mmu::page_size, mmu::mattr::dev);
     mmu::linear_map((void *)ranges[1], (mmu::phys)ranges[1], ranges_len[1],
-                    mmu::page_size, mmu::mattr::dev);
+                    "pci_mem", mmu::page_size, mmu::mattr::dev);
 }
+#endif
 
 extern bool opt_pci_disabled;
 void arch_setup_free_memory()
@@ -79,34 +86,42 @@ void arch_setup_free_memory()
 
     /* import from loader.cc */
     extern size_t elf_size;
-    extern void *elf_start;
+    extern elf::Elf64_Ehdr* elf_header;
 
-    mmu::phys addr = (mmu::phys)elf_start + elf_size;
+    mmu::phys addr = (mmu::phys)elf_header + elf_size;
     mmu::free_initial_memory_range(addr, memory::phys_mem_size);
 
     /* linear_map [TTBR1] */
     for (auto&& area : mmu::identity_mapped_areas) {
         auto base = reinterpret_cast<void*>(get_mem_area_base(area));
-        mmu::linear_map(base + addr, addr, memory::phys_mem_size);
+        mmu::linear_map(base + addr, addr, memory::phys_mem_size,
+            area == mmu::mem_area::main ? "main" :
+            area == mmu::mem_area::page ? "page" : "mempool");
     }
 
     /* linear_map [TTBR0 - boot, DTB and ELF] */
-    mmu::linear_map((void *)mmu::mem_addr, (mmu::phys)mmu::mem_addr,
-                    addr - mmu::mem_addr);
+    /* physical memory layout - relative to the 2MB-aligned address PA stored in mmu::mem_addr
+       PA +     0x0 - PA + 0x80000: boot
+       PA + 0x80000 - PA + 0x90000: DTB copy
+       PA + 0x90000 -       [addr]: kernel ELF */
+    mmu::linear_map((void *)(OSV_KERNEL_VM_BASE - 0x80000), (mmu::phys)mmu::mem_addr,
+                    addr - mmu::mem_addr, "kernel");
 
     if (console::PL011_Console::active) {
         /* linear_map [TTBR0 - UART] */
         addr = (mmu::phys)console::aarch64_console.pl011.get_base_addr();
-        mmu::linear_map((void *)addr, addr, 0x1000, mmu::page_size,
+        mmu::linear_map((void *)addr, addr, 0x1000, "pl011", mmu::page_size,
                         mmu::mattr::dev);
     }
 
+#if CONF_drivers_cadence
     if (console::Cadence_Console::active) {
         // linear_map [TTBR0 - UART]
         addr = (mmu::phys)console::aarch64_console.cadence.get_base_addr();
-        mmu::linear_map((void *)addr, addr, 0x1000, mmu::page_size,
+        mmu::linear_map((void *)addr, addr, 0x1000, "cadence", mmu::page_size,
                         mmu::mattr::dev);
     }
+#endif
 
     /* linear_map [TTBR0 - GIC DIST and GIC CPU] */
     u64 dist, cpu;
@@ -115,20 +130,24 @@ void arch_setup_free_memory()
         abort("arch-setup: failed to get GICv2 information from dtb.\n");
     }
     gic::gic = new gic::gic_driver(dist, cpu);
-    mmu::linear_map((void *)dist, (mmu::phys)dist, dist_len, mmu::page_size,
+    mmu::linear_map((void *)dist, (mmu::phys)dist, dist_len, "gic_dist", mmu::page_size,
                     mmu::mattr::dev);
-    mmu::linear_map((void *)cpu, (mmu::phys)cpu, cpu_len, mmu::page_size,
+    mmu::linear_map((void *)cpu, (mmu::phys)cpu, cpu_len, "gic_cpu", mmu::page_size,
                     mmu::mattr::dev);
 
+#if CONF_drivers_pci
     if (!opt_pci_disabled) {
         arch_setup_pci();
     }
+#endif
 
     // get rid of the command line, before memory is unmapped
     console::mmio_isa_serial_console::clean_cmdline(cmdline);
     osv::parse_cmdline(cmdline);
 
+#if CONF_drivers_mmio
     dtb_collect_parsed_mmio_virtio_devices();
+#endif
 
     mmu::switch_to_runtime_page_tables();
 
@@ -155,17 +174,28 @@ void arch_init_premain()
 }
 
 #include "drivers/driver.hh"
+#if CONF_drivers_virtio
 #include "drivers/virtio.hh"
-#include "drivers/virtio-rng.hh"
-#include "drivers/virtio-blk.hh"
-#include "drivers/virtio-net.hh"
 #include "drivers/virtio-mmio.hh"
+#endif
+#if CONF_drivers_virtio_rng
+#include "drivers/virtio-rng.hh"
+#endif
+#if CONF_drivers_virtio_blk
+#include "drivers/virtio-blk.hh"
+#endif
+#if CONF_drivers_virtio_net
+#include "drivers/virtio-net.hh"
+#endif
+#if CONF_drivers_virtio_fs
 #include "drivers/virtio-fs.hh"
+#endif
 
 void arch_init_drivers()
 {
     extern boot_time_chart boot_time;
 
+#if CONF_drivers_pci
     if (!opt_pci_disabled) {
         int irqmap_count = dtb_get_pci_irqmap_count();
         if (irqmap_count > 0) {
@@ -189,16 +219,27 @@ void arch_init_drivers()
             boot_time.event("pci enumerated");
         }
     }
+#endif
 
+#if CONF_drivers_mmio
     // Register any parsed virtio-mmio devices
     virtio::register_mmio_devices(device_manager::instance());
+#endif
 
     // Initialize all drivers
     hw::driver_manager* drvman = hw::driver_manager::instance();
+#if CONF_drivers_virtio_rng
     drvman->register_driver(virtio::rng::probe);
+#endif
+#if CONF_drivers_virtio_blk
     drvman->register_driver(virtio::blk::probe);
+#endif
+#if CONF_drivers_virtio_net
     drvman->register_driver(virtio::net::probe);
+#endif
+#if CONF_drivers_virtio_fs
     drvman->register_driver(virtio::fs::probe);
+#endif
     boot_time.event("drivers probe");
     drvman->load_all();
     drvman->list_drivers();
@@ -208,11 +249,13 @@ void arch_init_early_console()
 {
     console::mmio_isa_serial_console::_phys_mmio_address = 0;
 
+#if CONF_drivers_xen
     if (is_xen()) {
         new (&console::aarch64_console.xen) console::XEN_Console();
         console::arch_early_console = console::aarch64_console.xen;
         return;
     }
+#endif
 
     int irqid;
     u64 mmio_serial_address = dtb_get_mmio_serial_console(&irqid);
@@ -225,6 +268,7 @@ void arch_init_early_console()
         return;
     }
 
+#if CONF_drivers_cadence
     mmio_serial_address = dtb_get_cadence_uart(&irqid);
     if (mmio_serial_address) {
         new (&console::aarch64_console.cadence) console::Cadence_Console();
@@ -234,6 +278,7 @@ void arch_init_early_console()
         console::Cadence_Console::active = true;
         return;
     }
+#endif
 
     new (&console::aarch64_console.pl011) console::PL011_Console();
     console::arch_early_console = console::aarch64_console.pl011;

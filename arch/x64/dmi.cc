@@ -53,7 +53,7 @@ static void dmi_table(u32 base, u16 len, u16 num)
 {
     u8* const table_virt = mmu::phys_cast<u8>(base);
 
-    mmu::linear_map(static_cast<void*>(table_virt), base, len);
+    mmu::linear_map(static_cast<void*>(table_virt), base, len, "smbios");
 
     auto start = reinterpret_cast<const char*>(table_virt);
 
@@ -131,7 +131,7 @@ void dmi_probe()
 
     u8* const dmi_virt = mmu::phys_cast<u8>(dmi_base);
 
-    mmu::linear_map(static_cast<void*>(dmi_virt), dmi_base, 0x10000);
+    mmu::linear_map(static_cast<void*>(dmi_virt), dmi_base, 0x10000, "dmi");
 
     auto start = reinterpret_cast<const char*>(dmi_virt);
 

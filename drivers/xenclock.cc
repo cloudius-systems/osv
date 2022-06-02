@@ -14,6 +14,7 @@
 #include "string.h"
 #include "cpuid.hh"
 #include <osv/barrier.hh>
+#define CONF_drivers_xen 1
 #include <osv/xen.hh>
 #include <osv/debug.hh>
 #include <osv/prio.hh>

@@ -5,17 +5,20 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include <osv/power.hh>
 #include <osv/debug.hh>
 #include <smp.hh>
 #include <processor.hh>
 #include <arch.hh>
 
+#if CONF_drivers_acpi
 extern "C" {
 #include "acpi.h"
 }
 
 #include <drivers/acpi.hh>
+#endif
 
 namespace osv {
 
@@ -29,6 +32,7 @@ void halt(void)
 
 void poweroff(void)
 {
+#if CONF_drivers_acpi
     if (acpi::is_enabled()) {
         ACPI_STATUS status = AcpiEnterSleepStatePrep(ACPI_STATE_S5);
         if (ACPI_FAILURE(status)) {
@@ -41,6 +45,7 @@ void poweroff(void)
             halt();
         }
     } else {
+#endif
         // On hypervisors that do not support ACPI like firecracker we
         // resort to a reset using the 8042 PS/2 Controller ("keyboard controller")
         // as a way to shutdown the VM
@@ -49,7 +54,9 @@ void poweroff(void)
         // then cause triple fault by loading a broken IDT and triggering an interrupt.
         processor::lidt(processor::desc_ptr(0, 0));
         __asm__ __volatile__("int3");
+#if CONF_drivers_acpi
     }
+#endif
 
     // We shouldn't get here on x86.
     halt();
@@ -71,9 +78,11 @@ static void kbd_reboot(void) {
 
 void reboot(void)
 {
+#if CONF_drivers_acpi
     // Method 1: AcpiReset, does not work on qemu or kvm now because the reset
     // register is not supported. Nevertheless, we should try it first
     AcpiReset();
+#endif
     // Method 2: "fast reset" via System Control Port A (port 0x92)
     processor::outb(1, 0x92);
     // Method 3: Reset using the 8042 PS/2 Controller ("keyboard controller")

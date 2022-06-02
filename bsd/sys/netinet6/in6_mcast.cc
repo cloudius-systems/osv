@@ -995,7 +995,7 @@ in6m_merge(struct in6_multi *inm, /*const*/ struct in6_mfilter *imf)
 		if ((imf->im6f_st[1] != MCAST_EXCLUDE) ||
 		    (imf->im6f_st[1] == MCAST_EXCLUDE && nsrc1 > 0))
 			CTR1(KTR_MLD, "%s: --asm on inm at t1", __func__);
-			--inm->in6m_st[1].iss_asm;
+		--inm->in6m_st[1].iss_asm;
 	}
 
 	/* Increment ASM listener count on transition to ASM mode. */

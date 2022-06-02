@@ -21,7 +21,7 @@
 pl031::pl031(u64 address)
 {
     _address = address;
-    mmu::linear_map((void *)_address, _address, mmu::page_size, mmu::page_size,
+    mmu::linear_map((void *)_address, _address, mmu::page_size, "pl031", mmu::page_size,
                     mmu::mattr::dev);
 }
 

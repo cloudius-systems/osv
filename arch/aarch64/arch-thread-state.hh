@@ -15,6 +15,9 @@ struct thread_state {
     void* sp;
     void* pc;
     void* tcb;
+
+    void* exception_sp; //SP_EL0
+    u64 stack_selector; //1 - selects SP_ELx (default), 0 - selects SP_EL0 (exceptions)
 };
 
 #endif /* ARCH_THREAD_STATE_HH_ */

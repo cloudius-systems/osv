@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <osv/drivers_config.h>
 #include <string>
 
 #include <osv/debug.h>
@@ -101,6 +102,7 @@ fs::fs(virtio_device& virtio_dev)
     auto* queue = get_virt_queue(VQ_REQUEST);
 
     interrupt_factory int_factory;
+#if CONF_drivers_pci
     int_factory.register_msi_bindings = [queue, t](interrupt_manager& msi) {
         msi.easy_register({
             {VQ_HIPRIO, nullptr, nullptr},
@@ -114,13 +116,16 @@ fs::fs(virtio_device& virtio_dev)
             [=] { return this->ack_irq(); },
             [=] { t->wake(); });
     };
+#endif
 
 #ifdef __x86_64__
+#if CONF_drivers_mmio
     int_factory.create_gsi_edge_interrupt = [this, t]() {
         return new gsi_edge_interrupt(
             _dev.get_irq(),
             [=] { if (this->ack_irq()) t->wake(); });
     };
+#endif
 #endif
 
     _dev.register_interrupt(int_factory);

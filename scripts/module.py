@@ -57,12 +57,15 @@ def expand(text, variables):
 
     return re.sub(r'\${(?P<name>.*)}', resolve, text)
 
-def append_manifest(file_path, dst_file, variables={}):
+def append_manifest(file_path, dst_file, libgcc_s_dir, variables={}):
     with open(file_path) as src_file:
         for line in src_file:
             line = line.rstrip()
             if line != '[manifest]':
-                dst_file.write(expand(line + '\n', variables))
+                expanded_line = expand(line + '\n', variables)
+                if len(libgcc_s_dir) > 0:
+                    expanded_line = expanded_line.replace('%(libgcc_s_dir)s',libgcc_s_dir)
+                dst_file.write(expanded_line)
 
 def generate_manifests(modules, basic_apps, usrskel='default'):
     for manifest_type in ["usr", "bootfs"]:
@@ -77,14 +80,14 @@ def generate_manifests(modules, basic_apps, usrskel='default'):
             manifest.write('[manifest]\n')
 
             if manifest_skel != 'none':
-                append_manifest(os.path.join(resolve.get_osv_base(), manifest_skel), manifest)
+                append_manifest(os.path.join(resolve.get_osv_base(), manifest_skel), manifest, os.getenv('libgcc_s_dir'))
 
             for module in modules:
                 module_manifest = os.path.join(module.local_path, manifest_name)
 
                 if os.path.exists(module_manifest):
                     print("Appending %s to %s" % (module_manifest, manifest_name))
-                    append_manifest(module_manifest, manifest, variables={
+                    append_manifest(module_manifest, manifest, os.getenv('libgcc_s_dir'), variables={
                         'MODULE_DIR': module.local_path,
                         'OSV_BASE': resolve.get_osv_base()
                     })
