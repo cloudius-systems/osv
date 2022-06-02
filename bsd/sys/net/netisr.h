@@ -61,6 +61,7 @@
 #define	NETISR_IPV6	10
 #define	NETISR_NATM	11
 #define	NETISR_EPAIR	12		/* if_epair(4) */
+#define	NETISR_NETLINK	13		/* Linux NETLINK */
 
 /*
  * Protocol ordering and affinity policy constants.  See the detailed
