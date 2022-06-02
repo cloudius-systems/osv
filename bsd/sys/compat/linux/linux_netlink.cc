@@ -599,10 +599,6 @@ netlink_process_getaddr_msg(struct socket *so, struct nlmsghdr *nlm)
 			ifm->ifa_prefixlen = get_sockaddr_mask_prefix_len(ifa->ifa_netmask);
 			ifm->ifa_flags = ifp->if_flags | ifp->if_drv_flags;
 			ifm->ifa_scope = 0; // FIXME:
-			if (nla_put_string(m, IFA_LABEL, ifp->if_xname)) {
-				error = ENOBUFS;
-				goto done;
-			}
 #ifdef INET6
 			if (ifa->ifa_addr && ifa->ifa_addr->sa_family == AF_INET6){
 				// FreeBSD embeds the IPv6 scope ID in the IPv6 address
@@ -634,6 +630,10 @@ netlink_process_getaddr_msg(struct socket *so, struct nlmsghdr *nlm)
 					error = ENOBUFS;
 					goto done;
 				}
+			}
+			if (nla_put_string(m, IFA_LABEL, ifp->if_xname)) {
+				error = ENOBUFS;
+				goto done;
 			}
 			nlmsg_end(m, nlh);
 		}
