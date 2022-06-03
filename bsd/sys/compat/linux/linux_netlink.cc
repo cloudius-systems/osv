@@ -506,7 +506,7 @@ netlink_senderr(struct socket *so, struct nlmsghdr *nlm, int error)
 		return ENOBUFS;
 	}
 	err = (struct nlmsgerr *) nlmsg_data(hdr);
-	err->error = error;
+	err->error = -error; //Per netlink spec - "Negative errno or 0 for acknowledgements"
 	if (nlm) {
 		err->msg = *nlm;
 	} else {
