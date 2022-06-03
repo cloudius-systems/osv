@@ -830,7 +830,7 @@ netlink_process_getneigh_msg(struct socket *so, struct nlmsghdr *nlm)
 	struct netlink_getneigh_lle_cbdata cbdata;
 	int error;
 
-	if (nlm->nlmsg_len < sizeof (struct ndmsg)) {
+	if (nlm->nlmsg_len < NLMSG_LENGTH(sizeof (struct ndmsg))) {
 		return EINVAL;
 	}
 
@@ -892,7 +892,7 @@ netlink_process_msg(struct mbuf *m, struct socket *so)
 
 flush:
 	if (error) {
-		netlink_senderr(so, nlm, error);
+		error = netlink_senderr(so, nlm, error);
 	}
 	if (m) {
 		m_freem(m);
