@@ -118,6 +118,7 @@ static int get_sockaddr_mask_prefix_len(struct bsd_sockaddr *sa)
 }
 
 
+static
 void *nl_m_put(struct mbuf *m0, int len)
 {
 	struct mbuf *m, *n;
@@ -151,6 +152,7 @@ void *nl_m_put(struct mbuf *m0, int len)
 	return data;
 }
 
+static
 struct nlmsghdr * nlmsg_put(struct mbuf *m, uint32_t pid, uint32_t seq, int type, int len, int flags)
 {
 	struct nlmsghdr *nlh;
@@ -170,16 +172,19 @@ struct nlmsghdr * nlmsg_put(struct mbuf *m, uint32_t pid, uint32_t seq, int type
 	return nlh;
 }
 
+static
 struct nlmsghdr * nlmsg_begin(struct mbuf *m, uint32_t pid, uint32_t seq, int type, int len, int flags)
 {
 	return nlmsg_put(m, pid, seq, type, len, flags);
 }
 
+static
 void nlmsg_end(struct mbuf *m, struct nlmsghdr *nlh)
 {
 	nlh->nlmsg_len = m->M_dat.MH.MH_pkthdr.len - ((uintptr_t)nlh - (uintptr_t)m->m_hdr.mh_data);
 }
 
+static
 int nla_put(struct mbuf *m, int attrtype, int len, const void *src)
 {
 	struct nlattr *nla;
@@ -198,16 +203,18 @@ int nla_put(struct mbuf *m, int attrtype, int len, const void *src)
 }
 
 template<class T>
-int nla_put_type(struct mbuf *m, int attrtype, T val)
+static int nla_put_type(struct mbuf *m, int attrtype, T val)
 {
 	return nla_put(m, attrtype, sizeof(val), &val);
 }
 
+static
 int nla_put_string(struct mbuf *m, int attrtype, const char *str)
 {
 	return nla_put(m, attrtype, strlen(str) + 1, str);
 }
 
+static
 int nla_put_sockaddr(struct mbuf *m, int attrtype, struct bsd_sockaddr *sa)
 {
 	void *data;
