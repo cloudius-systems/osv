@@ -61,6 +61,14 @@ struct bsd_sockaddr_nl {
 	uint32_t	nl_groups;    /* Multicast groups mask */
 };
 
+struct netlinkcb {
+	struct rawcb	raw;
+	pid_t		nl_pid;
+};
+
+std::atomic<pid_t> _nl_next_gen_pid(2);
+
+
 MALLOC_DEFINE(M_NETLINK, "netlink", "netlink socket");
 
 static struct	bsd_sockaddr netlink_src = { 2, PF_NETLINK, };
@@ -311,16 +319,18 @@ netlink_close(struct socket *so)
 static int
 netlink_attach(struct socket *so, int proto, struct thread *td)
 {
+	struct netlinkcb *ncb;
 	struct rawcb *rp;
 	int s, error;
 
 	KASSERT(so->so_pcb == NULL, ("netlink_attach: so_pcb != NULL"));
 
 	/* XXX */
-	rp = (rawcb *)malloc(sizeof *rp);
-	if (rp == NULL)
+	ncb = (netlinkcb *)malloc(sizeof *ncb);
+	if (ncb == NULL)
 		return ENOBUFS;
-	bzero(rp, sizeof *rp);
+	bzero(ncb, sizeof *ncb);
+	rp = &ncb->raw;
 
 	/*
 	 * The splnet() is necessary to block protocols from sending
@@ -362,7 +372,14 @@ netlink_bind(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 				__FILE__, __LINE__, __FUNCTION__, nam->sa_len, sizeof(struct bsd_sockaddr_nl));
 			return EINVAL;
 		}
-		// TODO: stash the nl_pid somewhere
+		auto *ncb = reinterpret_cast<netlinkcb*>(rp);
+		bsd_sockaddr_nl *nl_sock_addr = (bsd_sockaddr_nl*)nam;
+		if (nl_sock_addr->nl_pid == 0) { // kernel needs to assign pid
+			auto assigned_pid = _nl_next_gen_pid.fetch_add(1, std::memory_order_relaxed);
+			ncb->nl_pid = assigned_pid;
+		} else {
+			ncb->nl_pid = nl_sock_addr->nl_pid;
+		}
 		return 0;
 	}
 	return (raw_usrreqs.pru_bind(so, nam, td)); /* xxx just EINVAL */
