@@ -501,14 +501,14 @@ DB_SHOW_ALL_COMMAND(lltables, db_show_all_lltables)
 /*
  * Iterate over all lltables
  */
-int lltable_foreach(int (*func)(struct lltable *llt, void *cbdata), void *cbdata)
+int lltable_foreach(struct socket *so, int (*func)(struct socket *so, struct lltable *llt, void *cbdata), void *cbdata)
 {
 	struct lltable *llt;
 	int error = 0;
 
 	LLTABLE_RLOCK();
 	SLIST_FOREACH(llt, &V_lltables, llt_link) {
-		if ((error = func(llt, cbdata)) != 0)
+		if ((error = func(so, llt, cbdata)) != 0)
 			break;
 	}
 	LLTABLE_RUNLOCK();
@@ -519,7 +519,7 @@ int lltable_foreach(int (*func)(struct lltable *llt, void *cbdata), void *cbdata
 /*
  * Iterate over all llentries in the lltable
  */
-int lltable_foreach_lle(struct lltable *llt, int (*func)(struct lltable *llt, struct llentry *lle, void *cbdata), void *cbdata)
+int lltable_foreach_lle(struct socket *so, struct lltable *llt, int (*func)(struct socket *so, struct lltable *llt, struct llentry *lle, void *cbdata), void *cbdata)
 {
 	struct llentry *lle;
 	int i;
@@ -530,7 +530,7 @@ int lltable_foreach_lle(struct lltable *llt, int (*func)(struct lltable *llt, st
 			/* skip deleted entries */
 			if ((lle->la_flags & LLE_DELETED) == LLE_DELETED)
 				continue;
-			if ((error = func(llt, lle, cbdata)) != 0)
+			if ((error = func(so, llt, lle, cbdata)) != 0)
 				break;
 		}
 	}

@@ -436,10 +436,27 @@ netlink_shutdown(struct socket *so)
 	return (raw_usrreqs.pru_shutdown(so));
 }
 
+static pid_t
+get_socket_pid(struct socket *so)
+{
+	struct rawcb *rp = sotorawcb(so);
+	struct netlinkcb *ncb = (netlinkcb *)rp;
+	return ncb->nl_pid;
+}
+
 static int
 netlink_sockaddr(struct socket *so, struct bsd_sockaddr **nam)
 {
-	return (raw_usrreqs.pru_sockaddr(so, nam));
+	struct bsd_sockaddr_nl *sin;
+
+	sin = (bsd_sockaddr_nl*)malloc(sizeof *sin);
+	bzero(sin, sizeof *sin);
+	sin->nl_family = AF_NETLINK;
+	sin->nl_len = sizeof(*sin);
+	sin->nl_pid = get_socket_pid(so);
+
+	*nam = (bsd_sockaddr*)sin;
+	return 0;
 }
 
 static struct pr_usrreqs netlink_usrreqs = initialize_with([] (pr_usrreqs& x) {
@@ -474,7 +491,7 @@ netlink_senderr(struct socket *so, struct nlmsghdr *nlm, int error)
 	}
 
 	if ((hdr = (struct nlmsghdr *)nlmsg_put(m,
-						nlm ? nlm->nlmsg_pid : 0,
+						get_socket_pid(so),
 						nlm ? nlm->nlmsg_seq : 0,
 						NLMSG_ERROR, sizeof(*err),
 						nlm ? nlm->nlmsg_flags : 0)) == NULL) {
@@ -513,7 +530,7 @@ netlink_process_getlink_msg(struct socket *so, struct nlmsghdr *nlm)
 	TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
 		IF_ADDR_RLOCK(ifp);
 
-		nlh = nlmsg_begin(m, nlm->nlmsg_pid, nlm->nlmsg_seq, LINUX_RTM_NEWLINK, sizeof(*ifm), nlm->nlmsg_flags);
+		nlh = nlmsg_begin(m, get_socket_pid(so), nlm->nlmsg_seq, LINUX_RTM_NEWLINK, sizeof(*ifm), nlm->nlmsg_flags);
 		if (!nlh) {
 			error = ENOBUFS;
 			goto done;
@@ -547,7 +564,7 @@ netlink_process_getlink_msg(struct socket *so, struct nlmsghdr *nlm)
 		IF_ADDR_RUNLOCK(ifp);
 		nlmsg_end(m, nlh);
 	}
-	nlh = nlmsg_put(m, nlm->nlmsg_pid, nlm->nlmsg_seq, NLMSG_DONE, 0, nlm->nlmsg_flags);
+	nlh = nlmsg_put(m, get_socket_pid(so), nlm->nlmsg_seq, NLMSG_DONE, 0, nlm->nlmsg_flags);
 
 done:
 	if (ifp != NULL)
@@ -605,7 +622,7 @@ netlink_process_getaddr_msg(struct socket *so, struct nlmsghdr *nlm)
 			if (!ifa->ifa_addr)
 				continue;
 
-			nlh = nlmsg_begin(m, nlm->nlmsg_pid, nlm->nlmsg_seq, LINUX_RTM_NEWADDR, sizeof(*ifm), nlm->nlmsg_flags);
+			nlh = nlmsg_begin(m, get_socket_pid(so), nlm->nlmsg_seq, LINUX_RTM_NEWADDR, sizeof(*ifm), nlm->nlmsg_flags);
 			if (!nlh) {
 				error = ENOBUFS;
 				goto done;
@@ -663,7 +680,7 @@ netlink_process_getaddr_msg(struct socket *so, struct nlmsghdr *nlm)
 
 		IF_ADDR_RUNLOCK(ifp);
 	}
-	nlh = nlmsg_put(m, nlm->nlmsg_pid, nlm->nlmsg_seq, NLMSG_DONE, 0, nlm->nlmsg_flags);
+	nlh = nlmsg_put(m, get_socket_pid(so), nlm->nlmsg_seq, NLMSG_DONE, 0, nlm->nlmsg_flags);
 done:
 	if (ifp != NULL)
 		IF_ADDR_RUNLOCK(ifp);
@@ -728,7 +745,7 @@ struct netlink_getneigh_lle_cbdata {
 };
 
 static int
-netlink_getneigh_lle_cb(struct lltable *llt, struct llentry *lle, void *data)
+netlink_getneigh_lle_cb(struct socket *so, struct lltable *llt, struct llentry *lle, void *data)
 {
 	struct netlink_getneigh_lle_cbdata *cbdata = (struct netlink_getneigh_lle_cbdata *) data;
 	int ndm_family = netlink_bsd_to_linux_family(llt->llt_af);
@@ -743,7 +760,7 @@ netlink_getneigh_lle_cb(struct lltable *llt, struct llentry *lle, void *data)
 	struct nlmsghdr *nlm = cbdata->nlm;
 	struct mbuf *m = cbdata->m;
 	struct ndmsg *ndm;
-	struct nlmsghdr *nlh = nlmsg_begin(m, nlm->nlmsg_pid, nlm->nlmsg_seq, LINUX_RTM_NEWNEIGH, sizeof(*ndm), nlm->nlmsg_flags);
+	struct nlmsghdr *nlh = nlmsg_begin(m, get_socket_pid(so), nlm->nlmsg_seq, LINUX_RTM_NEWNEIGH, sizeof(*ndm), nlm->nlmsg_flags);
 
 	if (!nlh) {
 		return ENOBUFS;
@@ -788,7 +805,7 @@ netlink_getneigh_lle_cb(struct lltable *llt, struct llentry *lle, void *data)
 
 
 static int
-netlink_getneigh_lltable_cb(struct lltable *llt, void *cbdata)
+netlink_getneigh_lltable_cb(struct socket *so, struct lltable *llt, void *cbdata)
 {
 	struct netlink_getneigh_lle_cbdata *data = (struct netlink_getneigh_lle_cbdata *) cbdata;
 	int error = 0;
@@ -799,7 +816,7 @@ netlink_getneigh_lltable_cb(struct lltable *llt, void *cbdata)
 		return 0;
 
 	IF_AFDATA_RLOCK(llt->llt_ifp);
-	error = lltable_foreach_lle(llt, netlink_getneigh_lle_cb, data);
+	error = lltable_foreach_lle(so, llt, netlink_getneigh_lle_cb, data);
 	IF_AFDATA_RUNLOCK(llt->llt_ifp);
 
 	return error;
@@ -829,10 +846,10 @@ netlink_process_getneigh_msg(struct socket *so, struct nlmsghdr *nlm)
 	cbdata.family = ndm->ndm_family;
 	cbdata.state = ndm->ndm_state;
 
-	error = lltable_foreach(netlink_getneigh_lltable_cb, &cbdata);
+	error = lltable_foreach(so, netlink_getneigh_lltable_cb, &cbdata);
 
 	if (!error) {
-		nlh = nlmsg_put(m, nlm->nlmsg_pid, nlm->nlmsg_seq, NLMSG_DONE, 0, nlm->nlmsg_flags);
+		nlh = nlmsg_put(m, get_socket_pid(so), nlm->nlmsg_seq, NLMSG_DONE, 0, nlm->nlmsg_flags);
 		netlink_dispatch(so, m);
 	} else {
 		m_free(m);

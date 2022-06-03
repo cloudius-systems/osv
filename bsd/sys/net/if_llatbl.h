@@ -201,12 +201,12 @@ struct llentry  *llentry_alloc(struct ifnet *, struct lltable *,
 /*
  * Iterate over all lltables
  */
-int lltable_foreach(int (*func)(struct lltable *llt, void *cbdata), void *cbdata);
+int lltable_foreach(struct socket *so, int (*func)(struct socket *so, struct lltable *llt, void *cbdata), void *cbdata);
 
 /*
  * Iterate over all llentries in the lltable
  */
-int lltable_foreach_lle(struct lltable *llt, int (*func)(struct lltable *llt, struct llentry *lle, void *cbdata), void *cbdata);
+int lltable_foreach_lle(struct socket *so, struct lltable *llt, int (*func)(struct socket *so, struct lltable *llt, struct llentry *lle, void *cbdata), void *cbdata);
 
 __END_DECLS
 
