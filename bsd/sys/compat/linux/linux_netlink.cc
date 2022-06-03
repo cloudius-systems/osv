@@ -616,8 +616,11 @@ netlink_process_getaddr_msg(struct socket *so, struct nlmsghdr *nlm)
 					in6_clearscope(&broadaddr.sin6_addr);
 					p_broadaddr = (struct bsd_sockaddr *)&broadaddr;
 				}
-				if (nla_put_sockaddr(m, IFA_ADDRESS, p_addr) ||
-					nla_put_sockaddr(m, IFA_BROADCAST, p_broadaddr)){
+				if (nla_put_sockaddr(m, IFA_ADDRESS, p_addr)){
+					error = ENOBUFS;
+					goto done;
+				}
+				if (!(ifm->ifa_flags & IFF_LOOPBACK) && nla_put_sockaddr(m, IFA_BROADCAST, p_broadaddr)){
 					error = ENOBUFS;
 					goto done;
 				}
@@ -625,8 +628,11 @@ netlink_process_getaddr_msg(struct socket *so, struct nlmsghdr *nlm)
 			else
 #endif
 			{
-				if (nla_put_sockaddr(m, IFA_ADDRESS, ifa->ifa_addr) ||
-					nla_put_sockaddr(m, IFA_BROADCAST, ifa->ifa_broadaddr)){
+				if (nla_put_sockaddr(m, IFA_ADDRESS, ifa->ifa_addr)){
+					error = ENOBUFS;
+					goto done;
+				}
+				if (!(ifm->ifa_flags & IFF_LOOPBACK) && nla_put_sockaddr(m, IFA_BROADCAST, ifa->ifa_broadaddr)){
 					error = ENOBUFS;
 					goto done;
 				}
