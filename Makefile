@@ -1503,10 +1503,12 @@ musl += network/getservbyname_r.o
 musl += network/getservbyname.o
 musl += network/getservbyport_r.o
 musl += network/getservbyport.o
-libc += network/getifaddrs.o
-libc += network/if_nameindex.o
+musl += network/getifaddrs.o
+musl += network/if_nameindex.o
 musl += network/if_freenameindex.o
 musl += network/res_init.o
+musl += network/netlink.o
+$(out)/musl/src/network/netlink.o: CFLAGS += --include libc/syscall_to_function.h --include libc/network/__netlink.h
 
 musl += prng/rand.o
 musl += prng/rand_r.o
