@@ -198,7 +198,8 @@ common-boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	tst-bsd-tcp1-zsndrcv.so tst-async.so tst-rcu-list.so tst-tcp-listen.so \
 	tst-poll.so tst-bitset-iter.so tst-timer-set.so tst-clock.so \
 	tst-rcu-hashtable.so tst-unordered-ring-mpsc.so \
-	tst-seek.so tst-ctype.so tst-wctype.so tst-string.so tst-time.so tst-dax.so
+	tst-seek.so tst-ctype.so tst-wctype.so tst-string.so tst-time.so tst-dax.so \
+	tst-net_if_test.so
 
 boost-tests := $(common-boost-tests)
 

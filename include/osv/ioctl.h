@@ -21,7 +21,6 @@
 #undef SIOCADDRT
 #undef SIOCDELRT
 #undef SIOCRTMSG
-#undef SIOCGIFNAME
 #undef SIOCSIFLINK
 #undef SIOCGIFMEM
 #undef SIOCSIFMEM

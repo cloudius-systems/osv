@@ -199,7 +199,6 @@ linux_gifhwaddr(struct ifnet *ifp, struct l_ifreq *ifr)
     return (ENOENT);
 }
 
-
 /*
  * Fix the interface address field in bsd_ifreq. The bsd stack expects a
  * length/family byte members, while linux and everyone else use a short family
@@ -223,6 +222,16 @@ linux_to_bsd_ifreq(struct bsd_ifreq *ifr_p)
 }
 
 /*
+ * FreeBSD ifru_index is short but Linux is an int so need to clear extra bits.
+ */
+static inline void
+bsd_to_linux_ifreq_ifindex(struct bsd_ifreq *ifr_p)
+{
+    void *ptr = &ifr_p->ifr_index;
+    *(int *)(ptr) = ifr_p->ifr_index;
+}
+
+/*
  * Socket related ioctls
  */
 
@@ -241,8 +250,8 @@ linux_ioctl_socket(socket_file *fp, u_long cmd, void *data)
     switch (cmd) {
     case SIOCSIFADDR:
     case SIOCSIFNETMASK:
-    case SIOCSIFDSTADDR: 
-    case SIOCSIFBRDADDR: 
+    case SIOCSIFDSTADDR:
+    case SIOCSIFBRDADDR:
         if ((ifp = ifunit_ref((char *)data)) == NULL)
             return (EINVAL);
         linux_to_bsd_ifreq((struct bsd_ifreq *)data) ;
@@ -251,11 +260,29 @@ linux_ioctl_socket(socket_file *fp, u_long cmd, void *data)
 
     case SIOCGIFMTU:
     case SIOCSIFMTU:
-    case SIOCGIFINDEX:
         if ((ifp = ifunit_ref((char *)data)) == NULL)
             return (EINVAL);
         error = fp->bsd_ioctl(cmd, data);
         break;
+
+    case SIOCGIFINDEX:
+        if ((ifp = ifunit_ref((char *)data)) == NULL)
+            return (EINVAL);
+        error = fp->bsd_ioctl(cmd, data);
+        bsd_to_linux_ifreq_ifindex((struct bsd_ifreq *)data);
+        break;
+
+    case SIOCGIFNAME:
+    {
+        struct l_ifreq *linux_ifreq = (struct l_ifreq *)data;
+        auto index = linux_ifreq->ifr_ifru.ifru_ifindex;
+        if ((ifp = ifnet_byindex_ref(index)) == NULL)
+            return (EINVAL);
+        if (!linux_ifreq->ifr_name)
+            return (EINVAL);
+        strncpy(linux_ifreq->ifr_name, ifp->if_xname, LINUX_IFNAMSIZ);
+        break;
+    }
 
     case SIOCGIFADDR:
     case SIOCGIFDSTADDR:
