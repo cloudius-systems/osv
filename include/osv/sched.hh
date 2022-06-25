@@ -19,6 +19,7 @@
 #include <osv/mutex.h>
 #include <atomic>
 #include "osv/lockless-queue.hh"
+#include <array>
 #include <list>
 #include <memory>
 #include <vector>
