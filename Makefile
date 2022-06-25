@@ -574,6 +574,7 @@ bsd += bsd/sys/kern/subr_sbuf.o
 bsd += bsd/sys/kern/subr_eventhandler.o
 bsd += bsd/sys/kern/subr_hash.o
 bsd += bsd/sys/kern/subr_taskqueue.o
+$(out)/bsd/sys/kern/subr_taskqueue.o: COMMON += -Wno-dangling-pointer
 bsd += bsd/sys/kern/sys_socket.o
 bsd += bsd/sys/kern/subr_disk.o
 bsd += bsd/porting/route.o
