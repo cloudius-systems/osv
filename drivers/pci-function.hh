@@ -357,7 +357,7 @@ namespace pci {
             }
         };
 
-        struct hash : std::unary_function< const function*, std::size_t> {
+        struct hash {
             std::size_t operator() ( const function* const key ) const {
                 return (size_t)((key->_device_id<<16)+ key->_vendor_id);
             }
