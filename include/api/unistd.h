@@ -179,6 +179,7 @@ char *getusershell(void);
 int acct(const char *);
 long syscall(long, ...);
 long __syscall(long, ...);
+int getentropy(void *, size_t);
 #endif
 
 #ifdef _GNU_SOURCE

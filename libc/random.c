@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2018 Waldemar Kozaczuk
+ * Copyright (C) 2022 Nadav Har'El
  *
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
@@ -48,4 +49,15 @@ ssize_t getrandom(void *buf, size_t count, unsigned int flags)
 
     close(fd);
     return read;
+}
+
+int getentropy(void *buf,  size_t len)
+{
+    if (len > 256) {
+        errno = EIO;
+        return -1;
+    } else if (len == 0) {
+        return 0;
+    }
+    return getrandom(buf, len, 0) >= 0;
 }
