@@ -1170,6 +1170,7 @@ musl += math/__invtrigl.o
 musl += math/__polevll.o
 musl += math/__rem_pio2.o
 musl += math/__rem_pio2_large.o
+$(out)/musl/src/math/__rem_pio2_large.o: CFLAGS += -Wno-maybe-uninitialized
 musl += math/__rem_pio2f.o
 musl += math/__rem_pio2l.o
 musl += math/__signbit.o
