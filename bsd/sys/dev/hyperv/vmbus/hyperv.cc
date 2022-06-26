@@ -62,8 +62,10 @@ static void                     hypercall_memfree();
 u_int                           hyperv_features;
 u_int                           hyperv_recommends;
 
+#if 0
 static u_int                    hyperv_pm_features;
 static u_int                    hyperv_features3;
+#endif
 
 hyperv_tc64_t                   hyperv_tc64;
 
@@ -135,8 +137,10 @@ hyperv_identify()
         return (false);
     }
     hyperv_features = regs.a;
+#if 0
     hyperv_pm_features = regs.c;
     hyperv_features3 = regs.d;
+#endif
 
     regs = processor::cpuid(CPUID_LEAF_HV_RECOMMENDS);
     hyperv_recommends = regs.a;
