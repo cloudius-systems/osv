@@ -771,22 +771,23 @@ MAKE_SYMBOL(notify_remote_via_evtchn);
 static inline void 
 pirq_unmask_notify(int pirq)
 {
-	struct physdev_eoi eoi = { .irq = pirq };
+	physdev_op_arg arg;
+	arg.eoi = { .irq = pirq };
 
 	if (unlikely(test_bit(pirq, &pirq_needs_unmask_notify[0]))) {
-		(void)HYPERVISOR_physdev_op(PHYSDEVOP_eoi, &eoi);
+		(void)HYPERVISOR_physdev_op(PHYSDEVOP_eoi, &arg);
 	}
 }
 
 static inline void 
 pirq_query_unmask(int pirq)
 {
-	struct physdev_irq_status_query irq_status_query;
+	physdev_op_arg arg;
 
-	irq_status_query.irq = pirq;
-	(void)HYPERVISOR_physdev_op(PHYSDEVOP_IRQ_STATUS_QUERY, &irq_status_query);
+	arg.irq_status_query.irq = pirq;
+	(void)HYPERVISOR_physdev_op(PHYSDEVOP_IRQ_STATUS_QUERY, &arg);
 	clear_bit(pirq, &pirq_needs_unmask_notify[0]);
-	if ( irq_status_query.flags & PHYSDEVOP_IRQ_NEEDS_UNMASK_NOTIFY )
+	if (arg.irq_status_query.flags & PHYSDEVOP_IRQ_NEEDS_UNMASK_NOTIFY)
 		set_bit(pirq, &pirq_needs_unmask_notify[0]);
 }
 
