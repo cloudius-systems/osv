@@ -1142,8 +1142,6 @@ musl += locale/catgets.o
 libc += locale/catopen.o
 libc += locale/duplocale.o
 libc += locale/freelocale.o
-musl += locale/iconv.o
-musl += locale/iconv_close.o
 libc += locale/intl.o
 libc += locale/langinfo.o
 musl += locale/localeconv.o
@@ -2085,8 +2083,16 @@ endif
 endif
 linker_archives_options = --no-whole-archive $(libstdc++.a) $(libgcc.a) $(libgcc_eh.a) $(boost-libs) \
   --exclude-libs libstdc++.a --gc-sections
+ifneq ($(shell grep -c iconv $(out)/version_script),0)
+musl += locale/iconv.o
+musl += locale/iconv_close.o
+else
+libc += locale/iconv_stubs.o
+endif
 else
 linker_archives_options = --whole-archive $(libstdc++.a) $(libgcc_eh.a) $(boost-libs) --no-whole-archive $(libgcc.a)
+musl += locale/iconv.o
+musl += locale/iconv_close.o
 endif
 
 $(out)/default_version_script: exported_symbols/*.symbols exported_symbols/$(arch)/*.symbols
