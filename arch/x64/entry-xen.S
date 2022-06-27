@@ -8,6 +8,7 @@
 
 #define elfnote(type, valtype, value) \
         .pushsection .note.xen, "a", @note; \
+        .align 4; \
         .long 2f-1f; \
         .long 3f-2f; \
         .long type; \
@@ -17,7 +18,8 @@
 2: \
         valtype value; \
 3: \
-        .align 4
+        .align 4; \
+        .popsection
 
 #define elfnote_val(type, value) elfnote(type, .quad, value)
 #define elfnote_str(type, value) elfnote(type, .asciz, value)

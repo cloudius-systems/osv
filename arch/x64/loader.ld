@@ -57,6 +57,11 @@ SECTIONS
         HIDDEN(memcpy_decode_end = .);
     KEEP(*(.memcpy_decode)) } :text
 
+    /* .note.gnu.property sections should be discarded */
+    /DISCARD/ : {
+       *(.note.gnu.property)
+    }
+
     .eh_frame : AT(ADDR(.eh_frame) - OSV_KERNEL_VM_SHIFT) { *(.eh_frame) KEEP(*(.eh_frame)); } : text
     .rodata : AT(ADDR(.rodata) - OSV_KERNEL_VM_SHIFT) { *(.rodata*) } :text
     .eh_frame : AT(ADDR(.eh_frame) - OSV_KERNEL_VM_SHIFT) { *(.eh_frame) KEEP(*(.eh_frame)); } :text
