@@ -607,6 +607,7 @@ void* do_main_thread(void *_main_args)
         for (int i = 0; i < count; i++) {
             if (!strcmp(".", namelist[i]->d_name) ||
                     !strcmp("..", namelist[i]->d_name)) {
+                free(namelist[i]);
                 continue;
             }
             std::string fn("/init/");
