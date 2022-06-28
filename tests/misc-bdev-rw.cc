@@ -8,6 +8,17 @@
 
 #define MB (1024*1024)
 
+/*
+This test requires a standalone block device (not a one
+actively used by given filesystem) and can be created and
+mounted like so:
+
+dd if=/dev/zero of=/tmp/test1.raw bs=1M count=512
+qemu-img convert -O qcow2 /tmp/test1.raw /tmp/test1.img
+
+./scripts/run.py -e '/tests/misc-bdev-rw.so vblk1' --cloud-init-image /tmp/test1.img
+*/
+
 using namespace std;
 
 atomic<int> bio_inflights(0);
@@ -89,7 +100,7 @@ int main(int argc, char const *argv[])
     long written = 0;
 
     //Do all writes
-    for(auto i = 1; i < 32; i++)
+    for(auto i = 1; i < 511; i++)
     {
         const size_t buff_size = i * memory::page_size;
 
