@@ -19,6 +19,10 @@
 #include <random>
 #include <iostream>
 
+// To run this test you need netcat running in another terminal
+// to echo the data back to this program like so:
+//   ncat -l -k -p 9999 -e /bin/cat
+
 using namespace std;
 
 using std::mutex;
@@ -50,7 +54,7 @@ private:
         ~test_thread();
         void run();
     private:
-        void do_connection();
+        void do_connection(int c);
     private:
         tcp_test_client& _client;
         unique_lock<mutex> _lock;
@@ -87,7 +91,7 @@ tcp_test_client::test_thread::~test_thread()
     _thread.join();
 }
 
-void tcp_test_client::test_thread::do_connection()
+void tcp_test_client::test_thread::do_connection(int c)
 {
     uint64_t transfer = _client._dist_transfer(_client._rand);
     reverse_lock<decltype(_lock)> rev_lock(_lock);
@@ -105,6 +109,7 @@ void tcp_test_client::test_thread::do_connection()
     socket.connect(endpoint);
     std::array<uint32_t, 1024> send_buffer, receive_buffer;
     uint64_t done = 0, rdone = 0;
+    std::cout << "Thread: " << _thread.get_id() << ", connection: " << c << " transfering " << transfer << " bytes" << std::endl;
     while (done < transfer) {
         iota(send_buffer.begin(), send_buffer.end(), done / sizeof(uint32_t));
         uint64_t offset = 0;
@@ -140,6 +145,7 @@ void tcp_test_client::test_thread::do_connection()
     if (_client.done()) {
         _client._condvar.notify_all();
     }
+    std::cout << "Thread: " << _thread.get_id() << ", connection: " << c << " transfered and received all data back!" << std::endl;
 }
 
 void tcp_test_client::test_thread::run()
@@ -149,7 +155,7 @@ void tcp_test_client::test_thread::run()
         auto lifetime = _client._dist_lifetime(_client._rand);
 
         for (auto i = 0; i < lifetime; ++i) {
-            do_connection();
+            do_connection(i);
         }
     } catch (...) {
         // capture the first exception

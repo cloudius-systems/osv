@@ -494,10 +494,12 @@ kern_sendit(int s,
 	so = (struct socket *)file_data(fp);
 
 	// Create a local copy of the user's iovec - sosend() is going to change it!
-	std::vector<iovec> uio_iov(mp->msg_iov, mp->msg_iov + mp->msg_iovlen);
+	assert(mp->msg_iovlen <= UIO_MAXIOV);
+	struct iovec uio_iov[mp->msg_iovlen];
+	memcpy(uio_iov, mp->msg_iov, sizeof(uio_iov));
 
-	auio.uio_iov = uio_iov.data();
-	auio.uio_iovcnt = uio_iov.size();
+	auio.uio_iov = uio_iov;
+	auio.uio_iovcnt = mp->msg_iovlen;;
 	auio.uio_rw = UIO_WRITE;
 	auio.uio_offset = 0;			/* XXX */
 	auio.uio_resid = 0;
@@ -585,10 +587,12 @@ kern_recvit(int s, struct msghdr *mp, struct mbuf **controlp, ssize_t* bytes)
 	so = (socket*)file_data(fp);
 
 	// Create a local copy of the user's iovec - sorecieve() is going to change it!
-	std::vector<iovec> uio_iov(mp->msg_iov, mp->msg_iov + mp->msg_iovlen);
+	assert(mp->msg_iovlen <= UIO_MAXIOV);
+	struct iovec uio_iov[mp->msg_iovlen];
+	memcpy(uio_iov, mp->msg_iov, sizeof(uio_iov));
 
-	auio.uio_iov = uio_iov.data();
-	auio.uio_iovcnt = uio_iov.size();
+	auio.uio_iov = uio_iov;
+	auio.uio_iovcnt = mp->msg_iovlen;
 	auio.uio_rw = UIO_READ;
 	auio.uio_offset = 0;			/* XXX */
 	auio.uio_resid = 0;
@@ -653,7 +657,7 @@ out:
 	if (fromsa)
 		free(fromsa);
 
-	if (error == 0 && controlp != NULL)  
+	if (error == 0 && controlp != NULL)
 		*controlp = control;
 	else  if (control)
 		m_freem(control);
@@ -1038,10 +1042,12 @@ zcopy_tx(int s, struct zmsghdr *zm)
 	if (so->so_type != SOCK_STREAM)
 		return (EINVAL);
 	// Create a local copy of the user's iovec - sosend() is going to change it!
-	std::vector<iovec> uio_iov(mp->msg_iov, mp->msg_iov + mp->msg_iovlen);
+	assert(mp->msg_iovlen <= UIO_MAXIOV);
+	struct iovec uio_iov[mp->msg_iovlen];
+	memcpy(uio_iov, mp->msg_iov, sizeof(uio_iov));
 
-	auio.uio_iov = uio_iov.data();
-	auio.uio_iovcnt = uio_iov.size();
+	auio.uio_iov = uio_iov;
+	auio.uio_iovcnt = mp->msg_iovlen;
 	auio.uio_rw = UIO_WRITE;
 	auio.uio_offset = 0;
 	auio.uio_resid = 0;
