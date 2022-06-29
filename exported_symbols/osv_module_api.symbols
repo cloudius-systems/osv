@@ -7,4 +7,5 @@ osv_get_all_app_threads
 osv_get_all_threads
 osv_hypervisor_name
 osv_processor_features
+osv_run_app
 osv_version
