@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <osv/sched.hh>
 #include "osv/trace.hh"
+#include <osv/export.h>
 
 #include <bsd/porting/netport.h>
 #include <bsd/porting/synch.h>
@@ -169,7 +170,7 @@ void synch_port::wakeup_one(void* chan)
     mutex_unlock(&_lock);
 }
 
-extern "C" int _msleep(void *chan, struct mtx *mtx, int priority, const char *wmesg,
+extern "C" OSV_LIBSOLARIS_API int _msleep(void *chan, struct mtx *mtx, int priority, const char *wmesg,
      int timo)
 {
     return (synch_port::instance()->_msleep(chan, mtx, priority, wmesg, timo));
@@ -180,12 +181,12 @@ extern "C" int tsleep(void *chan, int priority, const char *wmesg, int timo)
     return (_msleep(chan, 0, priority, wmesg, timo));
 }
 
-extern "C" void bsd_pause(const char *wmesg, int timo)
+extern "C" OSV_LIBSOLARIS_API void bsd_pause(const char *wmesg, int timo)
 {
     _msleep(0, 0, 0, wmesg, timo);
 }
 
-extern "C" void wakeup(void* chan)
+extern "C" OSV_LIBSOLARIS_API void wakeup(void* chan)
 {
     synch_port::instance()->wakeup(chan);
 }

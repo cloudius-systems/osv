@@ -10,6 +10,7 @@
  */
 
 #include <osv/debug.h>
+#include <osv/export.h>
 
 #include "../libc/stdio/stdio_impl.h"
 #include <assert.h>
@@ -44,6 +45,7 @@ int vkprintf(const char *restrict fmt, va_list ap)
 	return vfprintf(&f, fmt, ap);
 }
 
+OSV_LIBSOLARIS_API
 int kprintf(const char *restrict fmt, ...)
 {
 	int ret;

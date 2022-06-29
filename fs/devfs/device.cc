@@ -53,6 +53,7 @@
 #include <osv/device.h>
 #include <osv/debug.h>
 #include <osv/buf.h>
+#include <osv/export.h>
 
 #include <geom/geom_disk.h>
 
@@ -322,7 +323,7 @@ device_destroy(struct device *dev)
  * should be handled by an each device driver if it is
  * needed.
  */
-int
+OSV_LIBSOLARIS_API int
 device_open(const char *name, int mode, struct device **devp)
 {
 	struct devops *ops;
@@ -356,7 +357,7 @@ device_open(const char *name, int mode, struct device **devp)
  * Even if the target driver does not have close routine,
  * this function does not return any errors.
  */
-int
+OSV_LIBSOLARIS_API int
 device_close(struct device *dev)
 {
 	struct devops *ops;

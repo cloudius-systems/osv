@@ -47,6 +47,7 @@
 #include <string.h>
 #endif
 #include <bsd/sys/crypto/sha2/sha2.h>
+#include <osv/export.h>
 
 /*
  * ASSERT NOTE:
@@ -321,6 +322,7 @@ static const char *sha2_hex_digits = "0123456789abcdef";
 
 
 /*** SHA-256: *********************************************************/
+OSV_LIBSOLARIS_API
 void SHA256_Init(SHA256_CTX* context) {
 	if (context == (SHA256_CTX*)0) {
 		return;
@@ -505,6 +507,7 @@ static void SHA256_Transform(SHA256_CTX* context, const sha2_word32* data) {
 
 #endif /* SHA2_UNROLL_TRANSFORM */
 
+OSV_LIBSOLARIS_API
 void SHA256_Update(SHA256_CTX* context, const sha2_byte *data, size_t len) {
 	unsigned int	freespace, usedspace;
 
@@ -553,6 +556,7 @@ void SHA256_Update(SHA256_CTX* context, const sha2_byte *data, size_t len) {
 	usedspace = freespace = 0;
 }
 
+OSV_LIBSOLARIS_API
 void SHA256_Final(sha2_byte digest[SHA256_DIGEST_LENGTH], SHA256_CTX* context) {
 	sha2_word32	*d = (sha2_word32*)digest;
 	unsigned int	usedspace;

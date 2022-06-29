@@ -6,6 +6,7 @@
  */
 
 #include <osv/mount.h>
+#include <osv/export.h>
 
 #define zfs_mount   ((vfsop_mount_t)vfs_nullop)
 #define zfs_umount  ((vfsop_umount_t)vfs_nullop)
@@ -43,7 +44,7 @@ extern "C" int zfs_init(void)
 //Normally (without ZFS enabled) the zfs_vfsops points to dummy
 //noop functions. So when libsolaris.so is loaded, we provide the
 //function below to be called to register real vfsops for ZFS
-extern "C" void zfs_update_vfsops(struct vfsops* _vfsops) {
+extern "C" OSV_LIBSOLARIS_API void zfs_update_vfsops(struct vfsops* _vfsops) {
     zfs_vfsops.vfs_mount = _vfsops->vfs_mount;
     zfs_vfsops.vfs_unmount = _vfsops->vfs_unmount;
     zfs_vfsops.vfs_sync = _vfsops->vfs_sync;

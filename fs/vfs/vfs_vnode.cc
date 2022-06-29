@@ -41,12 +41,15 @@
 
 #include <osv/prex.h>
 #include <osv/vnode.h>
+#include <osv/export.h>
 #include "vfs.h"
 
+OSV_LIBSOLARIS_API
 enum vtype iftovt_tab[16] = {
 	VNON, VFIFO, VCHR, VNON, VDIR, VNON, VBLK, VNON,
 	VREG, VNON, VLNK, VNON, VSOCK, VNON, VNON, VBAD,
 };
+OSV_LIBSOLARIS_API
 int vttoif_tab[10] = {
 	0, S_IFREG, S_IFDIR, S_IFBLK, S_IFCHR, S_IFLNK,
 	S_IFSOCK, S_IFIFO, S_IFMT, S_IFMT
@@ -165,7 +168,7 @@ vn_unlock(struct vnode *vp)
  * Increment its reference count and lock it.
  * Returns 1 if vnode was found in cache; otherwise returns 0.
  */
-int
+OSV_LIBSOLARIS_API int
 vget(struct mount *mp, uint64_t ino, struct vnode **vpp)
 {
 	struct vnode *vp;
@@ -270,7 +273,7 @@ vref(struct vnode *vp)
  * when it is finished with the vnode.
  * If count drops to zero, call inactive routine and return to freelist.
  */
-void
+OSV_LIBSOLARIS_API void
 vrele(struct vnode *vp)
 {
 	ASSERT(vp);

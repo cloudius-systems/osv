@@ -9,15 +9,17 @@
 #include <stddef.h>
 #include <assert.h>
 #include <osv/sched.hh>
+#include <osv/export.h>
 
 #include <bsd/porting/curthread.h>
 #include <bsd/porting/netport.h>
 #include <bsd/porting/kthread.h>
 #include <bsd/sys/sys/kthread.h>
 
+OSV_LIBSOLARIS_API
 struct proc proc0;
 
-int
+OSV_LIBSOLARIS_API int
 kthread_add(void (*func)(void *), void *arg, struct proc *p,
 		struct thread **newtdp, int flags, int pages,
 		const char *fmt, ...)
@@ -57,19 +59,19 @@ int kproc_create(void (*func)(void *), void *arg, struct proc **p,
     return 0;
 }
 
-void
+OSV_LIBSOLARIS_API void
 kthread_exit(void)
 {
     sched::thread::exit();
 }
 
-struct thread *
+OSV_LIBSOLARIS_API struct thread *
 get_curthread(void)
 {
     return reinterpret_cast<struct thread *>(sched::thread::current());
 }
 
-struct proc *
+OSV_LIBSOLARIS_API struct proc *
 get_curproc(void)
 {
     return reinterpret_cast<struct proc *>(sched::thread::current());

@@ -53,6 +53,7 @@
 #include <osv/prex.h>
 #include <osv/vnode.h>
 #include <osv/vfs_file.hh>
+#include <osv/export.h>
 #include "vfs.h"
 #include <fs/fs.hh>
 
@@ -105,7 +106,7 @@ out:
 	return (error);
 }
 
-int
+OSV_LIBSOLARIS_API int
 sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 {
 	file *fp;
@@ -241,7 +242,7 @@ sys_close(struct file *fp)
 	return 0;
 }
 
-int
+OSV_LIBSOLARIS_API int
 sys_read(struct file *fp, const struct iovec *iov, size_t niov,
 		off_t offset, size_t *count)
 {
@@ -280,7 +281,7 @@ sys_read(struct file *fp, const struct iovec *iov, size_t niov,
     return error;
 }
 
-int
+OSV_LIBSOLARIS_API int
 sys_write(struct file *fp, const struct iovec *iov, size_t niov,
 		off_t offset, size_t *count)
 {

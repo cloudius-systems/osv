@@ -48,6 +48,7 @@
 #include <osv/device.h>
 #include <osv/debug.h>
 #include <osv/mutex.h>
+#include <osv/export.h>
 #include "vfs.h"
 
 #include <memory>
@@ -219,7 +220,7 @@ sys_mount(const char *dev, const char *dir, const char *fsname, int flags, const
     return error;
 }
 
-void
+OSV_LIBSOLARIS_API void
 release_mp_dentries(struct mount *mp)
 {
     /* Decrement referece count of root vnode */
@@ -417,7 +418,7 @@ vfs_findroot(const char *path, struct mount **mp, char **root)
 /*
  * Mark a mount point as busy.
  */
-void
+OSV_LIBSOLARIS_API void
 vfs_busy(struct mount *mp)
 {
     SCOPE_LOCK(mount_lock);
@@ -428,14 +429,14 @@ vfs_busy(struct mount *mp)
 /*
  * Mark a mount point as busy.
  */
-void
+OSV_LIBSOLARIS_API void
 vfs_unbusy(struct mount *mp)
 {
     SCOPE_LOCK(mount_lock);
     mp->m_count--;
 }
 
-int
+OSV_LIBSOLARIS_API int
 vfs_nullop(void)
 {
     return 0;

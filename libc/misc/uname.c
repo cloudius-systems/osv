@@ -24,6 +24,7 @@ _Static_assert(KERNEL_VERSION(LINUX_MAJOR, LINUX_MINOR, LINUX_PATCH)
 #define str(s) #s
 #define str2(s) str(s)
 
+OSV_LIBSOLARIS_API
 struct utsname utsname = {
 	.sysname	= "Linux",	/* lie, to avoid confusing the payload. */
 	.nodename	= "osv.local",

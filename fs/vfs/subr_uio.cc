@@ -39,8 +39,9 @@
 #include <stdlib.h>
 #include <string.h>
 #include <osv/uio.h>
+#include <osv/export.h>
 
-int
+OSV_LIBSOLARIS_API int
 uiomove(void *cp, size_t n, struct uio *uio)
 {
 	assert(uio->uio_rw == UIO_READ || uio->uio_rw == UIO_WRITE);

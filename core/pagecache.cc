@@ -13,6 +13,7 @@
 #include <boost/variant.hpp>
 #include <osv/pagecache.hh>
 #include <osv/mempool.hh>
+#include <osv/export.h>
 #include <fs/vfs/vfs.h>
 #include <fs/vfs/vfs_id.h>
 #include <osv/trace.hh>
@@ -30,7 +31,7 @@ void (*arc_buf_get_hashkey_fun)(arc_buf_t*, uint64_t[4]);
 
 //This needs to be a C-style function so it can be called
 //from libsolaris.so
-extern "C" void register_pagecache_arc_funs(
+extern "C" OSV_LIBSOLARIS_API void register_pagecache_arc_funs(
     void (*_arc_unshare_buf_fun)(arc_buf_t*),
     void (*_arc_share_buf_fun)(arc_buf_t*),
     void (*_arc_buf_accessed_fun)(const uint64_t[4]),
@@ -773,6 +774,6 @@ constexpr double access_scanner::_min_cpu;
 //The access_scanner thread is ZFS specific so it
 //is initialized by calling the function below if libsolaris.so
 //is loaded.
-extern "C" void start_pagecache_access_scanner() {
+extern "C" OSV_LIBSOLARIS_API void start_pagecache_access_scanner() {
     pagecache::s_access_scanner = new pagecache::access_scanner();
 }

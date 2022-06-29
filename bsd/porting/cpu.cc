@@ -6,11 +6,12 @@
  */
 
 #include <osv/sched.hh>
+#include <osv/export.h>
 #include <bsd/porting/netport.h>
 #include <machine/cpu.h>
 #include "processor.hh"
 
-extern "C" int get_cpuid(void)
+extern "C" OSV_LIBSOLARIS_API int get_cpuid(void)
 {
     return sched::cpu::current()->id;
 }

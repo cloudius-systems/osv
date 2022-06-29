@@ -8,6 +8,7 @@
 #include <mutex>
 #include <osv/sched.hh>
 #include <osv/rwlock.h>
+#include <osv/export.h>
 
 rwlock::rwlock()
     : _readers(0),
@@ -180,56 +181,67 @@ bool rwlock::has_readers()
     return _readers;
 }
 
+OSV_LIBSOLARIS_API
 void rwlock_init(rwlock_t* rw)
 {
     new (rw) rwlock;
 }
 
+OSV_LIBSOLARIS_API
 void rwlock_destroy(rwlock_t* rw)
 {
     rw->~rwlock();
 }
 
+OSV_LIBSOLARIS_API
 void rw_rlock(rwlock_t* rw)
 {
     rw->rlock();
 }
 
+OSV_LIBSOLARIS_API
 void rw_wlock(rwlock_t* rw)
 {
     rw->wlock();
 }
 
+OSV_LIBSOLARIS_API
 int rw_try_rlock(rwlock_t* rw)
 {
     return rw->try_rlock();
 }
 
+OSV_LIBSOLARIS_API
 int rw_try_wlock(rwlock_t* rw)
 {
     return rw->try_wlock();
 }
 
+OSV_LIBSOLARIS_API
 void rw_runlock(rwlock_t* rw)
 {
     rw->runlock();
 }
 
+OSV_LIBSOLARIS_API
 void rw_wunlock(rwlock_t* rw)
 {
     rw->wunlock();
 }
 
+OSV_LIBSOLARIS_API
 int rw_try_upgrade(rwlock_t* rw)
 {
     return rw->try_upgrade();
 }
 
+OSV_LIBSOLARIS_API
 void rw_downgrade(rwlock_t* rw)
 {
     rw->downgrade();
 }
 
+OSV_LIBSOLARIS_API
 int rw_wowned(rwlock_t* rw)
 {
     return rw->wowned();

@@ -11,6 +11,7 @@
 #include <bsd/porting/netport.h>
 #include <bsd/porting/uma_stub.h>
 #include <osv/preempt-lock.hh>
+#include <osv/export.h>
 
 void* uma_zone::cache::alloc()
 {
@@ -84,6 +85,7 @@ void * uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
     return (ptr);
 }
 
+OSV_LIBSOLARIS_API
 void * uma_zalloc(uma_zone_t zone, int flags)
 {
     return uma_zalloc_arg(zone, NULL, flags);
@@ -120,6 +122,7 @@ void uma_zfree_arg(uma_zone_t zone, void *item, void *udata)
     }
 }
 
+OSV_LIBSOLARIS_API
 void uma_zfree(uma_zone_t zone, void *item)
 {
     uma_zfree_arg(zone, item, NULL);
@@ -140,6 +143,7 @@ int uma_zone_set_max(uma_zone_t zone, int nitems)
     return (nitems);
 }
 
+OSV_LIBSOLARIS_API
 uma_zone_t uma_zcreate(const char *name, size_t size, uma_ctor ctor,
             uma_dtor dtor, uma_init uminit, uma_fini fini,
             int align, u_int32_t flags)
@@ -202,6 +206,7 @@ u_int32_t *uma_find_refcnt(uma_zone_t zone, void *item)
     return &(UMA_ITEM_HDR(zone, item))->refcnt;
 }
 
+OSV_LIBSOLARIS_API
 void uma_zdestroy(uma_zone_t zone)
 {
     delete zone;

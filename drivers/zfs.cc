@@ -8,6 +8,7 @@
 #include "drivers/zfs.hh"
 
 #include <osv/device.h>
+#include <osv/export.h>
 
 namespace zfsdev {
 
@@ -68,6 +69,6 @@ void zfsdev_init(void)
 }
 
 //Needs to be a C-style function so it can be called from libsolaris.so
-extern "C" void register_osv_zfs_ioctl( int (*osv_zfs_ioctl_fun)(unsigned long, void*)) {
+extern "C" OSV_LIBSOLARIS_API void register_osv_zfs_ioctl( int (*osv_zfs_ioctl_fun)(unsigned long, void*)) {
     zfsdev::osv_zfs_ioctl_fun = osv_zfs_ioctl_fun;
 }

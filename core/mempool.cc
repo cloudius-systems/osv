@@ -61,6 +61,7 @@ static size_t object_size(void* v);
 
 std::atomic<unsigned int> smp_allocator_cnt{};
 bool smp_allocator = false;
+OSV_LIBSOLARIS_API
 unsigned char *osv_reclaimer_thread;
 
 namespace memory {
@@ -421,7 +422,7 @@ __thread unsigned emergency_alloc_level = 0;
 
 reclaimer_lock_type reclaimer_lock;
 
-extern "C" void thread_mark_emergency()
+extern "C" OSV_LIBSOLARIS_API void thread_mark_emergency()
 {
     emergency_alloc_level = 1;
 }

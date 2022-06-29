@@ -36,6 +36,8 @@
 #include <stdarg.h>
 #include <ctype.h>
 
+#include <osv/export.h>
+
 #define        SBMALLOC(size)          malloc(size)
 #define        SBFREE(buf)             free(buf)
 
@@ -147,7 +149,7 @@ sbuf_newbuf(struct sbuf *s, char *buf, int length, int flags)
  * If buf is non-NULL, it points to a static or already-allocated string
  * big enough to hold at least length characters.
  */
-struct sbuf *
+OSV_LIBSOLARIS_API struct sbuf *
 sbuf_new(struct sbuf *s, char *buf, int length, int flags)
 {
 
@@ -784,7 +786,7 @@ sbuf_vprintf(struct sbuf *s, const char *fmt, va_list ap)
 /*
  * Format the given arguments and append the resulting string to an sbuf.
  */
-int
+OSV_LIBSOLARIS_API int
 sbuf_printf(struct sbuf *s, const char *fmt, ...)
 {
 	va_list ap;
@@ -843,7 +845,7 @@ sbuf_error(const struct sbuf *s)
 /*
  * Finish off an sbuf.
  */
-int
+OSV_LIBSOLARIS_API int
 sbuf_finish(struct sbuf *s)
 {
 
@@ -901,7 +903,7 @@ sbuf_len(struct sbuf *s)
 /*
  * Clear an sbuf, free its buffer if necessary.
  */
-void
+OSV_LIBSOLARIS_API void
 sbuf_delete(struct sbuf *s)
 {
 	int isdyn;

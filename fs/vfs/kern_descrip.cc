@@ -185,6 +185,7 @@ void fhold(struct file* fp)
     __sync_fetch_and_add(&fp->f_count, 1);
 }
 
+OSV_LIBSOLARIS_API
 int fdrop(struct file *fp)
 {
     int o = fp->f_count, n;
@@ -253,6 +254,7 @@ void file::epoll_del(epoll_ptr ep)
     }
 }
 
+OSV_LIBSOLARIS_API
 dentry* file_dentry(file* fp)
 {
     return fp->f_dentry.get();
@@ -268,16 +270,19 @@ bool is_nonblock(struct file *f)
     return (f->f_flags & FNONBLOCK);
 }
 
+OSV_LIBSOLARIS_API
 int file_flags(file *f)
 {
     return f->f_flags;
 }
 
+OSV_LIBSOLARIS_API
 off_t file_offset(file* f)
 {
     return f->f_offset;
 }
 
+OSV_LIBSOLARIS_API
 void file_setoffset(file* f, off_t o)
 {
     f->f_offset = o;

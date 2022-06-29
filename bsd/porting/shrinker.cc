@@ -7,6 +7,7 @@
 
 #include <osv/mempool.hh>
 #include <osv/debug.hh>
+#include <osv/export.h>
 #include <sys/eventhandler.h>
 #include <algorithm>
 
@@ -105,7 +106,7 @@ void bsd_shrinker_init(void)
 
 //This needs to be a C-style function so it can be called
 //from libsolaris.so
-extern "C" void register_shrinker_arc_funs(
+extern "C" OSV_LIBSOLARIS_API void register_shrinker_arc_funs(
     size_t (*_arc_lowmem_fun)(void *, int),
     size_t (*_arc_sized_adjust_fun)(int64_t)) {
     arc_lowmem_fun = _arc_lowmem_fun;

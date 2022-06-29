@@ -11,6 +11,7 @@
 #include <osv/prio.hh>
 #include <osv/printf.hh>
 #include <osv/aligned_new.hh>
+#include <osv/export.h>
 #include "processor.hh"
 #include "psci.hh"
 #include "arch-dtb.hh"
@@ -21,6 +22,7 @@ extern "C" { /* see boot.S */
     extern u64 start_secondary_cpu();
 }
 
+OSV_LIBSOLARIS_API
 volatile unsigned smp_processors = 1;
 
 sched::cpu* smp_initial_find_current_cpu()
