@@ -35,6 +35,7 @@ lockfree_mutex_unlock
 mmu_map
 mmu_unmap
 _msleep
+nmount
 osv_reclaimer_thread
 physmem
 proc0
@@ -89,4 +90,5 @@ vm_throttling_needed
 vrele
 vttoif_tab
 wakeup
+zfsdev_init
 zfs_update_vfsops

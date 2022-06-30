@@ -7,22 +7,21 @@
 
 #include <assert.h>
 #include <string.h>
-#include <osv/device.h>
-#include <osv/run.hh>
-#include <fs/vfs/vfs.h>
 #include <iostream>
-#include "drivers/zfs.hh"
 
-using namespace osv;
+#include <osv/osv_c_wrappers.h>
+
 using namespace std;
 
-// Created to guarantee that shared objects resources will
-// be surely released at the function prologue.
 static void run_cmd(const char *cmdpath, vector<string> args)
 {
-    int ret;
-    auto ok = run(cmdpath, args, &ret);
-    assert(ok && ret == 0);
+    std::vector<const char*> cargs{};
+
+    for(const auto& arg: args)
+        cargs.push_back(arg.c_str());
+
+    auto ret = osv_run_app(cmdpath, cargs.data(), cargs.size());
+    assert(ret == 0);
 }
 
 // Get extra blk devices for pool creation.
@@ -51,10 +50,11 @@ static void get_blk_devices(vector<string> &zpool_args)
     closedir(dir);
 }
 
+extern "C" void zfsdev_init();
 static void mkfs(void)
 {
     // Create zfs device, then /etc/mnttab which is required by libzfs
-    zfsdev::zfsdev_init();
+    zfsdev_init();
 
     // Manually create /etc/mnttab, a file required by libzfs.
     mkdir("/etc", 0755);
@@ -82,6 +82,7 @@ static void mkfs(void)
     run_cmd("/zfs.so", {"zfs", "set", "compression=lz4", "osv"});
 }
 
+__attribute__((__visibility__("default")))
 int main(int ac, char** av)
 {
     cout << "Running mkfs...\n";

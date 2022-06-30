@@ -2438,7 +2438,7 @@ void mount_rootfs(void)
         kprintf("failed to mount devfs, error = %s\n", strerror(ret));
 }
 
-extern "C"
+extern "C" OSV_LIBSOLARIS_API
 int nmount(struct iovec *iov, unsigned niov, int flags)
 {
     struct args {

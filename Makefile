@@ -406,6 +406,9 @@ autodepend = -MD -MT $@ -MP
 tools := tools/mkfs/mkfs.so tools/cpiod/cpiod.so
 
 $(out)/tools/%.o: COMMON += -fPIC
+$(out)/tools/cpiod/options.o: core/options.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -fPIC -c -o $@ $<, CXX core/options.cc)
 
 tools += tools/uush/uush.so
 tools += tools/uush/ls.so
@@ -2167,15 +2170,29 @@ $(out)/bootfs.bin: scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep)
 $(out)/bootfs.o: $(out)/bootfs.bin
 $(out)/bootfs.o: ASFLAGS += -I$(out)
 
+# Standard C++ library
+libstd_dir := $(dir $(shell $(CXX) -print-file-name=libstdc++.so))
+ifeq ($(filter /%,$(libstd_dir)),)
+ifeq ($(arch),aarch64)
+    libstd_dir := $(dir $(shell find $(aarch64_gccbase)/ -name libstdc++.so))
+    ifeq ($(libstd_dir),)
+        $(error Error: libstdc++.so needs to be installed.)
+    endif
+    LDFLAGS := -L$(libstd_dir)
+else
+    $(error Error: libstdc++.so needs to be installed.)
+endif
+endif
+
 $(out)/empty_bootfs.o: ASFLAGS += -I$(out)
 
 $(out)/tools/mkfs/mkfs.so: $(out)/tools/mkfs/mkfs.o $(out)/libzfs.so
 	$(makedir)
-	$(call quiet, $(CC) $(CFLAGS) -o $@ $(out)/tools/mkfs/mkfs.o -L$(out) -lzfs, LINK mkfs.so)
+	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ $(out)/tools/mkfs/mkfs.o $(LDFLAGS) -L$(out) -lzfs, LINK mkfs.so)
 
-$(out)/tools/cpiod/cpiod.so: $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o $(out)/libzfs.so
+$(out)/tools/cpiod/cpiod.so: $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o $(out)/tools/cpiod/options.o $(out)/libzfs.so
 	$(makedir)
-	$(call quiet, $(CC) $(CFLAGS) -o $@ $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o -L$(out) -lzfs, LINK cpiod.so)
+	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o $(out)/tools/cpiod/options.o $(LDFLAGS) -L$(out) -lzfs, LINK cpiod.so)
 
 ################################################################################
 # The dependencies on header files are automatically generated only after the
