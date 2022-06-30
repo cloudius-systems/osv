@@ -594,7 +594,7 @@ if __name__ == "__main__":
     parser.add_argument("-k", "--kernel", action="store_true",
                         help="Run OSv in QEMU kernel mode as PVH.")
     parser.add_argument("--kernel-path", action="store",
-                        help="path to kernel.elf. defaults to build/$mode/kernel.elf")
+                        help="path to loader-stripped.elf. defaults to build/$mode/loader-stripped.elf")
     parser.add_argument("--virtio", action="store", choices=["legacy","transitional","modern"], default="transitional",
                         help="specify virtio version: legacy, transitional or modern")
     parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default=host_arch,
@@ -618,7 +618,7 @@ if __name__ == "__main__":
         default_kernel_file_name = "loader.img"
         default_image_file_name = "disk.img"
     else:
-        default_kernel_file_name = "kernel.elf"
+        default_kernel_file_name = "loader-stripped.elf"
         default_image_file_name = "usr.img"
     cmdargs.kernel_file = os.path.abspath(cmdargs.kernel_path or os.path.join(osv_base, "build/%s/%s" % (cmdargs.opt_path, default_kernel_file_name)))
     cmdargs.image_file = os.path.abspath(cmdargs.image or os.path.join(osv_base, "build/%s/%s" % (cmdargs.opt_path, default_image_file_name)))

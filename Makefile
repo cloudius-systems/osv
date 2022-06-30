@@ -144,9 +144,12 @@ endif
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
 
-all: $(out)/loader.img links $(out)/kernel.elf
+all: $(out)/loader.img links $(out)/zfs_builder-stripped.elf
 ifeq ($(arch),x64)
 all: $(out)/vmlinuz.bin
+endif
+ifeq ($(arch),aarch64)
+all: $(out)/zfs_builder.img
 endif
 .PHONY: all
 
@@ -529,6 +532,12 @@ image_size = $$(( $(edata) - $(kernel_vm_base) ))
 $(out)/loader.img: $(out)/preboot.bin $(out)/loader-stripped.elf
 	$(call quiet, dd if=$(out)/preboot.bin of=$@ > /dev/null 2>&1, DD $@ preboot.bin)
 	$(call quiet, dd if=$(out)/loader-stripped.elf of=$@ conv=notrunc obs=4096 seek=16 > /dev/null 2>&1, DD $@ loader-stripped.elf)
+	$(call quiet, scripts/imgedit.py setsize_aarch64 "-f raw $@" $(image_size), IMGEDIT $@)
+	$(call quiet, scripts/imgedit.py setargs "-f raw $@" $(cmdline), IMGEDIT $@)
+
+$(out)/zfs_builder.img: $(out)/preboot.bin $(out)/zfs_builder-stripped.elf
+	$(call quiet, dd if=$(out)/preboot.bin of=$@ > /dev/null 2>&1, DD $@ preboot.bin)
+	$(call quiet, dd if=$(out)/zfs_builder-stripped.elf of=$@ conv=notrunc obs=4096 seek=16 > /dev/null 2>&1, DD $@ zfs_builder-stripped.elf)
 	$(call quiet, scripts/imgedit.py setsize_aarch64 "-f raw $@" $(image_size), IMGEDIT $@)
 	$(call quiet, scripts/imgedit.py setargs "-f raw $@" $(cmdline), IMGEDIT $@)
 
@@ -2068,7 +2077,7 @@ $(loader_options_dep): stage1
 ifeq ($(conf_hide_symbols),1)
 version_script_file:=$(out)/version_script
 #Detect which version script to be used and copy to $(out)/version_script
-#so that loader.elf/kernel.elf is rebuilt accordingly if version script has changed
+#so that loader.elf/zfs_builder.elf is rebuilt accordingly if version script has changed
 ifdef conf_version_script
 ifeq (,$(wildcard $(conf_version_script)))
     $(error Missing version script: $(conf_version_script))
@@ -2121,13 +2130,14 @@ $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(lo
 	@scripts/libosv.py $(out)/osv.syms $(out)/libosv.ld `scripts/osv-version.sh` | $(CC) -c -o $(out)/osv.o -x assembler -
 	$(call quiet, $(CC) $(out)/osv.o -nostdlib -shared -o $(out)/libosv.so -T $(out)/libosv.ld, LIBOSV.SO)
 
-$(out)/kernel.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/empty_bootfs.o $(loader_options_dep) $(version_script_file)
+$(out)/zfs_builder.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/zfs_builder_bootfs.o $(loader_options_dep) $(version_script_file)
 	$(call quiet, $(LD) -o $@ $(def_symbols) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
             $(patsubst %version_script,--version-script=%version_script,$(patsubst %.ld,-T %.ld,$^)) \
 	    $(linker_archives_options) $(conf_linker_extra_options), \
-		LINK kernel.elf)
-	$(call quiet, $(STRIP) $(out)/kernel.elf -o $(out)/kernel-stripped.elf, STRIP kernel.elf -> kernel-stripped.elf )
+		LINK zfs_builder.elf)
+$(out)/zfs_builder-stripped.elf:  $(out)/zfs_builder.elf
+	$(call quiet, $(STRIP) $(out)/zfs_builder.elf -o $(out)/zfs_builder-stripped.elf, STRIP zfs_builder.elf -> zfs_builder-stripped.elf )
 
 $(out)/bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__'
 
@@ -2163,9 +2173,8 @@ libgcc_s_dir := ../../$(aarch64_gccbase)/lib64
 endif
 
 $(out)/bootfs.bin: scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep) $(tools:%=$(out)/%) \
-		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so $(out)/libvdso.so
-	$(call quiet, olddir=`pwd`; cd $(out); "$$olddir"/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m "$$olddir"/$(bootfs_manifest) \
-		-D libgcc_s_dir=$(libgcc_s_dir), MKBOOTFS $@)
+		$(out)/libenviron.so $(out)/libvdso.so $(out)/libsolaris.so
+	$(call quiet, olddir=`pwd`; cd $(out); "$$olddir"/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m "$$olddir"/$(bootfs_manifest), MKBOOTFS $@)
 
 $(out)/bootfs.o: $(out)/bootfs.bin
 $(out)/bootfs.o: ASFLAGS += -I$(out)
@@ -2184,7 +2193,17 @@ else
 endif
 endif
 
-$(out)/empty_bootfs.o: ASFLAGS += -I$(out)
+$(shell mkdir -p $(out) && cp zfs_builder_bootfs.manifest.skel $(out)/zfs_builder_bootfs.manifest)
+ifeq ($(conf_hide_symbols),1)
+$(shell echo "/usr/lib/libstdc++.so.6: $$(readlink -f $(libstd_dir))/libstdc++.so" >> $(out)/zfs_builder_bootfs.manifest)
+endif
+$(out)/zfs_builder_bootfs.bin: scripts/mkbootfs.py $(zfs_builder_bootfs_manifest) $(tools:%=$(out)/%) \
+		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so $(out)/libvdso.so $(out)/libsolaris.so
+	$(call quiet, olddir=`pwd`; cd $(out); "$$olddir"/scripts/mkbootfs.py -o zfs_builder_bootfs.bin -d zfs_builder_bootfs.bin.d -m zfs_builder_bootfs.manifest \
+		-D libgcc_s_dir=$(libgcc_s_dir), MKBOOTFS $@)
+
+$(out)/zfs_builder_bootfs.o: $(out)/zfs_builder_bootfs.bin
+$(out)/zfs_builder_bootfs.o: ASFLAGS += -I$(out)
 
 $(out)/tools/mkfs/mkfs.so: $(out)/tools/mkfs/mkfs.o $(out)/libzfs.so
 	$(makedir)

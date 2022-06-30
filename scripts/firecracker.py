@@ -370,7 +370,7 @@ if __name__ == "__main__":
     parser.add_argument("-i", "--image", action="store", default=None, metavar="CMD",
                         help="path to disk image file. defaults to ../build/last/usr.img")
     parser.add_argument("-k", "--kernel", action="store", default=None, metavar="CMD",
-                        help="path to kernel loader file. defaults to ../build/last/kernel.elf")
+                        help="path to kernel loader file. defaults to ../build/last/loader-stripped.elf")
     parser.add_argument("-n", "--networking", action="store_true",
                         help="needs root to setup tap networking first time")
     parser.add_argument("-b", "--bridge", action="store", default=None,
@@ -390,7 +390,7 @@ if __name__ == "__main__":
         default_kernel_file_name = "loader.img"
         default_image_file_name = "disk.img"
     else:
-        default_kernel_file_name = "kernel.elf"
+        default_kernel_file_name = "loader-stripped.elf"
         default_image_file_name = "usr.img"
     cmdargs.kernel_path = os.path.abspath(cmdargs.kernel or os.path.join(osv_base, "build/%s/%s" % (cmdargs.opt_path, default_kernel_file_name)))
     cmdargs.image_path = os.path.abspath(cmdargs.image or os.path.join(osv_base, "build/%s/%s" % (cmdargs.opt_path, default_image_file_name)))

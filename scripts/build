@@ -301,9 +301,6 @@ if [[ ${vars[create_disk]} == "true" ]]; then
 	bare="$SRC"/scripts/disk.bin
 	raw_disk=disk
 	qcow2_disk=disk
-	if [[ "$arch" == 'x64' ]]; then
-		upload_kernel_mode="-k"
-	fi
 else
 	partition_offset=$kernel_end
 	bare=loader.img
@@ -316,7 +313,7 @@ create_zfs_disk() {
 	"$SRC"/scripts/imgedit.py setpartition "-f raw ${raw_disk}.raw" 2 $partition_offset $partition_size
 	qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
 	qemu-img resize $qcow2_disk.img ${image_size}b >/dev/null 2>&1
-	"$SRC"/scripts/upload_manifest.py --arch=$arch -o $qcow2_disk.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir" $upload_kernel_mode
+	"$SRC"/scripts/upload_manifest.py --arch=$arch -o $qcow2_disk.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
 }
 
 create_rofs_disk() {

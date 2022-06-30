@@ -136,10 +136,6 @@ def main():
                         metavar='VAR=DATA',
                         action='callback',
                         callback=add_var),
-            make_option('-k',
-                        dest='kernel',
-                        action='store_true',
-                        help='run OSv in direct kernel mode'),
             make_option('--arch',
                         dest='arch',
                         default=host_arch,
@@ -157,14 +153,18 @@ def main():
 
     image_path = os.path.abspath(options.output)
     upload_port = find_free_port()
-    if options.kernel:
-        kernel_mode_flag = '-k --kernel-path build/release/loader-stripped.elf'
-    else:
-        kernel_mode_flag = ''
     arch = options.arch
     if arch == 'x64':
         arch = 'x86_64'
-    osv = subprocess.Popen('cd ../..; scripts/run.py %s --arch=%s --vnc none -m 512 -c1 -i "%s" --block-device-cache unsafe -s -e "--norandom --nomount --noinit /tools/mkfs.so; /tools/cpiod.so --prefix /zfs/zfs/; /zfs.so set compression=off osv" --forward tcp:127.0.0.1:%s-:10000' % (kernel_mode_flag,arch,image_path,upload_port), shell=True, stdout=subprocess.PIPE)
+
+    if arch == 'aarch64':
+        console = ''
+        zfs_builder_name = 'zfs_builder.img'
+    else:
+        console = '--console=serial'
+        zfs_builder_name = 'zfs_builder-stripped.elf'
+
+    osv = subprocess.Popen('cd ../..; scripts/run.py -k --kernel-path build/release/%s --arch=%s --vnc none -m 512 -c1 -i "%s" --block-device-cache unsafe -s -e "%s --norandom --nomount --noinit /tools/mkfs.so; /tools/cpiod.so --prefix /zfs/zfs/; /zfs.so set compression=off osv" --forward tcp:127.0.0.1:%s-:10000' % (zfs_builder_name,arch,image_path,console,upload_port), shell=True, stdout=subprocess.PIPE)
 
     upload(osv, manifest, depends, upload_port)
 
