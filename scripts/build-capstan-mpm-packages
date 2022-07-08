@@ -237,9 +237,9 @@ created: $(date +'%Y-%m-%d %H:%M')
 description: "OSv kernel"
 platform: "$PLATFORM"
 EOF
-  #Copy kernel.elf
+  #Copy loader.elf
   mkdir -p $CAPSTAN_LOCAL_REPO/repository/osv-kernel/
-  cp -a $OSV_BUILD/kernel.elf $CAPSTAN_LOCAL_REPO/repository/osv-kernel/osv-kernel.elf
+  cp -a $OSV_BUILD/loader-stripped.elf $CAPSTAN_LOCAL_REPO/repository/osv-kernel/osv-kernel.elf
   cp $CAPSTAN_LOCAL_REPO/repository/osv-loader/index.yaml $CAPSTAN_LOCAL_REPO/repository/osv-kernel/index.yaml
 
   # Create bootstrap package
