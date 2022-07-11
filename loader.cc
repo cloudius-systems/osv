@@ -406,6 +406,31 @@ static void stop_all_remaining_app_threads()
     }
 }
 
+static void load_zfs_library_and_mount_zfs_root(const char* mount_error_msg, bool pivot_when_error = false)
+{
+    // Load and initialize ZFS filesystem driver implemented in libsolaris.so
+    const auto libsolaris_file_name = "libsolaris.so";
+    //TODO: Consider calling dlclose() somewhere after ZFS is unmounted
+    if (dlopen(libsolaris_file_name, RTLD_LAZY)) {
+        zfsdev::zfsdev_init();
+        auto error = mount_zfs_rootfs(opt_pivot, opt_extra_zfs_pools);
+        if (error) {
+            debug(mount_error_msg);
+            if (pivot_when_error) {
+                // Continue with ramfs (already mounted)
+                // TODO: Avoid the hack of using pivot_rootfs() just for
+                // mounting the fstab entries.
+                pivot_rootfs("/");
+            }
+        } else {
+            bsd_shrinker_init();
+            boot_time.event("ZFS mounted");
+        }
+    } else {
+        debug("Could not load and/or initialize %s.\n", libsolaris_file_name);
+    }
+}
+
 void* do_main_thread(void *_main_args)
 {
     auto app_cmdline = static_cast<char*>(_main_args);
@@ -424,7 +449,6 @@ void* do_main_thread(void *_main_args)
     if (opt_mount) {
         unmount_devfs();
 
-        const auto libsolaris_file_name = "libsolaris.so";
         if (opt_rootfs.compare("rofs") == 0) {
             auto error = mount_rofs_rootfs(opt_pivot);
             if (error) {
@@ -437,20 +461,7 @@ void* do_main_thread(void *_main_args)
             }
             boot_time.event("ROFS mounted");
         } else if (opt_rootfs.compare("zfs") == 0) {
-            //Initialize ZFS filesystem driver implemented in libsolaris.so
-            //TODO: Consider calling dlclose() somewhere after ZFS is unmounted
-            if (dlopen(libsolaris_file_name, RTLD_LAZY)) {
-                zfsdev::zfsdev_init();
-                auto error = mount_zfs_rootfs(opt_pivot, opt_extra_zfs_pools);
-                if (error) {
-                    debug("Could not mount zfs root filesystem.\n");
-                }
-
-                bsd_shrinker_init();
-                boot_time.event("ZFS mounted");
-            } else {
-                debug("Could not load and/or initialize %s.\n", libsolaris_file_name);
-            }
+            load_zfs_library_and_mount_zfs_root("Could not mount zfs root filesystem.\n");
         } else if (opt_rootfs.compare("ramfs") == 0) {
             // NOTE: The ramfs is already mounted, we just need to mount fstab
             // entries. That's the only difference between this and --nomount.
@@ -476,25 +487,7 @@ void* do_main_thread(void *_main_args)
             } else if (mount_virtiofs_rootfs(opt_pivot) == 0) {
                 boot_time.event("Virtio-fs mounted");
             } else {
-                //Initialize ZFS filesystem driver implemented in libsolaris.so
-                //TODO: Consider calling dlclose() somewhere after ZFS is unmounted
-                if (dlopen("libsolaris.so", RTLD_LAZY)) {
-                    zfsdev::zfsdev_init();
-                    auto error = mount_zfs_rootfs(opt_pivot, opt_extra_zfs_pools);
-                    if (error) {
-                        debug("Could not mount zfs root filesystem (while "
-                              "auto-discovering).\n");
-                        // Continue with ramfs (already mounted)
-                        // TODO: Avoid the hack of using pivot_rootfs() just for
-                        // mounting the fstab entries.
-                        pivot_rootfs("/");
-                    } else {
-                        bsd_shrinker_init();
-                        boot_time.event("ZFS mounted");
-                    }
-                } else {
-                    debug("Could not load and/or initialize %s.\n", libsolaris_file_name);
-                }
+                load_zfs_library_and_mount_zfs_root("Could not mount zfs root filesystem (while auto-discovering).\n", true);
             }
         }
     }
