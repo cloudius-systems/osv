@@ -142,6 +142,8 @@ void read_partition_table(struct device *dev)
 		new_dev->max_io_size = dev->max_io_size;
 		new_dev->private_data = dev->private_data;
 		device_set_softc(new_dev, device_get_softc(dev));
+
+		kprintf("devfs: created device %s for a partition at offset:%ld with size:%ld\n", dev_name, new_dev->offset, new_dev->size);
 	}
 
 	sched_unlock();
