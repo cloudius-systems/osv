@@ -91,7 +91,7 @@ rofs-only-tests := rofs/tst-chdir.so rofs/tst-symlink.so rofs/tst-readdir.so \
 	rofs/tst-concurrent-read.so
 
 zfs-only-tests := tst-readdir.so tst-fallocate.so tst-fs-link.so \
-	tst-concurrent-read.so misc-zfs-io.so tst-solaris-taskq.so
+	tst-concurrent-read.so tst-solaris-taskq.so
 
 specific-fs-tests := $($(fs_type)-only-tests)
 
@@ -134,7 +134,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-elf-init.so tst-realloc.so tst-setjmp.so \
 	libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so \
 	tst-sigaction.so tst-syscall.so tst-ifaddrs.so tst-getdents.so \
-	tst-netlink.so
+	tst-netlink.so misc-zfs-io.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
 #TODO For now let us disable these tests for aarch64 until
