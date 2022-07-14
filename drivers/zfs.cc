@@ -61,16 +61,24 @@ zfs_device::~zfs_device()
     device_destroy(_zfs_dev);
 }
 
+static bool zfsdev_initialized = false;
+
 void zfsdev_init(void)
 {
-    new zfs_device();
+    if (!zfsdev_initialized) {
+        new zfs_device();
+        zfsdev_initialized = true;
+    }
 }
 
 }
 
 extern "C" OSV_LIBSOLARIS_API void zfsdev_init()
 {
-    new zfsdev::zfs_device();
+    if (!zfsdev::zfsdev_initialized) {
+        new zfsdev::zfs_device();
+        zfsdev::zfsdev_initialized = true;
+    }
 }
 
 

@@ -143,6 +143,7 @@ int main(int loader_argc, char **loader_argv)
     sched::init([=] { main_cont(loader_argc, loader_argv); });
 }
 
+static bool opt_preload_zfs_library = false;
 static bool opt_extra_zfs_pools = false;
 static bool opt_disable_rofs_cache = false;
 static bool opt_leak = false;
@@ -202,7 +203,8 @@ static void usage()
     std::cout << "  --disable_rofs_cache  disable ROFS memory cache\n";
     std::cout << "  --nopci               disable PCI enumeration\n";
     std::cout << "  --extra-zfs-pools     import extra ZFS pools\n";
-    std::cout << "  --mount-fs=arg        mount extra filesystem, format:<fs_type,url,path>\n\n";
+    std::cout << "  --mount-fs=arg        mount extra filesystem, format:<fs_type,url,path>\n";
+    std::cout << "  --preload-zfs-library preload ZFS library from /usr/lib/fs\n\n";
 }
 
 static void handle_parse_error(const std::string &message)
@@ -231,6 +233,10 @@ static void parse_options(int loader_argc, char** loader_argv)
 
     if (extract_option_flag(options_values, "disable_rofs_cache")) {
         opt_disable_rofs_cache = true;
+    }
+
+    if (extract_option_flag(options_values, "preload-zfs-library")) {
+        opt_preload_zfs_library = true;
     }
 
     if (extract_option_flag(options_values, "extra-zfs-pools")) {
@@ -406,12 +412,22 @@ static void stop_all_remaining_app_threads()
     }
 }
 
-static void load_zfs_library_and_mount_zfs_root(const char* mount_error_msg, bool pivot_when_error = false)
+static void load_zfs_library(std::function<void()> on_load_fun = nullptr)
 {
     // Load and initialize ZFS filesystem driver implemented in libsolaris.so
-    const auto libsolaris_file_name = "libsolaris.so";
-    //TODO: Consider calling dlclose() somewhere after ZFS is unmounted
-    if (dlopen(libsolaris_file_name, RTLD_LAZY)) {
+    const auto libsolaris_path = "/usr/lib/fs/libsolaris.so";
+    if (dlopen(libsolaris_path, RTLD_LAZY)) {
+        if (on_load_fun) {
+           on_load_fun();
+        }
+    } else {
+        debug("Could not load and/or initialize %s.\n", libsolaris_path);
+    }
+}
+
+static void load_zfs_library_and_mount_zfs_root(const char* mount_error_msg, bool pivot_when_error = false)
+{
+    load_zfs_library([mount_error_msg, pivot_when_error]() {
         zfsdev::zfsdev_init();
         auto error = mount_zfs_rootfs(opt_pivot, opt_extra_zfs_pools);
         if (error) {
@@ -426,9 +442,7 @@ static void load_zfs_library_and_mount_zfs_root(const char* mount_error_msg, boo
             bsd_shrinker_init();
             boot_time.event("ZFS mounted");
         }
-    } else {
-        debug("Could not load and/or initialize %s.\n", libsolaris_file_name);
-    }
+    });
 }
 
 void* do_main_thread(void *_main_args)
@@ -490,6 +504,10 @@ void* do_main_thread(void *_main_args)
                 load_zfs_library_and_mount_zfs_root("Could not mount zfs root filesystem (while auto-discovering).\n", true);
             }
         }
+    }
+
+    if (opt_preload_zfs_library) {
+        load_zfs_library();
     }
 
     bool has_if = false;

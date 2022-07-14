@@ -36,9 +36,12 @@ struct vfsops zfs_vfsops = {
     nullptr,        /* vnops */
 };
 
-extern "C" int zfs_init(void)
+extern "C" {
+OSV_LIBSOLARIS_API bool zfs_driver_initialized = false;
+int zfs_init(void)
 {
     return 0;
+}
 }
 
 //Normally (without ZFS enabled) the zfs_vfsops points to dummy

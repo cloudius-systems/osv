@@ -91,4 +91,5 @@ vrele
 vttoif_tab
 wakeup
 zfsdev_init
+zfs_driver_initialized
 zfs_update_vfsops

@@ -2383,7 +2383,7 @@ $(out)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/zprop_common.o: bsd/sys/cd
 
 $(out)/libzfs.so: $(libzfs-objects) $(out)/libuutil.so $(out)/libsolaris.so
 	$(makedir)
-	$(call quiet, $(CC) $(CFLAGS) -o $@ $(libzfs-objects) -L$(out) -luutil -lsolaris, LINK libzfs.so)
+	$(call quiet, $(CC) $(CFLAGS) -o $@ $(libzfs-objects) -L$(out) -luutil, LINK libzfs.so)
 
 #include $(src)/bsd/cddl/contrib/opensolaris/cmd/zpool/build.mk:
 zpool-cmd-file-list = zpool_iter  zpool_main  zpool_util  zpool_vdev

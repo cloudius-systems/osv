@@ -62,6 +62,7 @@
 #include <osv/ioctl.h>
 #include <osv/trace.hh>
 #include <osv/run.hh>
+#include <osv/mount.h>
 #include <drivers/console.hh>
 
 #include "vfs.h"
@@ -82,6 +83,9 @@
 #include <osv/clock.hh>
 #include <api/utime.h>
 #include <chrono>
+
+#include "drivers/zfs.hh"
+#include "bsd/porting/shrinker.h"
 
 using namespace std;
 
@@ -2493,6 +2497,18 @@ static void mount_fs(mntent *m)
         return;
     }
 
+    bool zfs = strcmp(m->mnt_type, "zfs") == 0;
+    if (zfs) {
+        // Ignore if ZFS root pool is already mounted because we can only have one root pool
+        std::vector<osv::mount_desc> mounts = osv::current_mounts();
+        for (auto &mount : mounts) {
+            if (mount.type == "zfs" && mount.special.rfind("/dev")) {
+                kprintf("ZFS root pool is already mounted at %s\n", m->mnt_dir);
+                return;
+            }
+        }
+    }
+
     auto mount_dir = opendir(m->mnt_dir);
     if (!mount_dir) {
         if (mkdir(m->mnt_dir, 0755) < 0) {
@@ -2505,14 +2521,23 @@ static void mount_fs(mntent *m)
         closedir(mount_dir);
     }
 
-    if ((m->mnt_opts != nullptr) && strcmp(m->mnt_opts, MNTOPT_DEFAULTS)) {
-        printf("Warning: opts %s, ignored for fs %s\n", m->mnt_opts, m->mnt_type);
+    if (zfs) {
+        m->mnt_opts = "osv/zfs";
+    } else {
+        if ((m->mnt_opts != nullptr) && strcmp(m->mnt_opts, MNTOPT_DEFAULTS)) {
+            printf("Warning: opts %s, ignored for fs %s\n", m->mnt_opts, m->mnt_type);
+        }
+        m->mnt_opts = nullptr;
     }
 
-    // FIXME: Right now, ignoring mntops. In the future we may have an option parser
-    auto ret = sys_mount(m->mnt_fsname, m->mnt_dir, m->mnt_type, 0, nullptr);
+    // FIXME: Right now, ignoring mntops except for ZFS. In the future we may have an option parser
+    auto ret = sys_mount(m->mnt_fsname, m->mnt_dir, m->mnt_type, 0, (void*)m->mnt_opts);
     if (ret) {
         printf("failed to mount %s, error = %s\n", m->mnt_type, strerror(ret));
+    } else {
+        if (zfs) {
+            bsd_shrinker_init();
+        }
     }
 }
 
@@ -2531,8 +2556,12 @@ extern "C" void pivot_rootfs(const char* path)
             if (len >= 3 && strcmp(dirent->d_name + (len - 3), ".so") == 0) {
                 auto lib_path = std::string("/usr/lib/fs/") + dirent->d_name;
                 auto module = dlopen(lib_path.c_str(), RTLD_LAZY);
-                if (module)
-                    debugf("VFS: Initialized filesystem library: %s\n", lib_path.c_str());
+                if (module) {
+                    if (strcmp(dirent->d_name, "libsolaris.so") == 0) {
+                        zfsdev::zfsdev_init();
+                    }
+                    debugf("VFS: initialized filesystem library: %s\n", lib_path.c_str());
+                }
             }
         }
 
@@ -2645,6 +2674,17 @@ extern "C" void unmount_rootfs(void)
     if (ret) {
         kprintf("Warning: unmount_rootfs: failed to unmount /proc, "
             "error = %s\n", strerror(ret));
+    }
+
+    std::vector<osv::mount_desc> mounts = osv::current_mounts();
+    for (auto &m : mounts) {
+        if (m.type == "zfs" && m.special.rfind("/dev") == 0 && m.path != "/") {
+            ret = sys_umount2(m.path.c_str(), MNT_FORCE);
+            if (ret) {
+                kprintf("Warning: unmount_rootfs: failed to unmount %s, "
+                    "error = %s\n", m.path.c_str(), strerror(ret));
+            }
+        }
     }
 
     ret = sys_umount2("/", MNT_FORCE);

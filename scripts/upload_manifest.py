@@ -164,7 +164,7 @@ def main():
         console = '--console=serial'
         zfs_builder_name = 'zfs_builder-stripped.elf'
 
-    osv = subprocess.Popen('cd ../..; scripts/run.py -k --kernel-path build/release/%s --arch=%s --vnc none -m 512 -c1 -i "%s" --block-device-cache unsafe -s -e "%s --norandom --nomount --noinit /tools/mkfs.so; /tools/cpiod.so --prefix /zfs/zfs/; /zfs.so set compression=off osv" --forward tcp:127.0.0.1:%s-:10000' % (zfs_builder_name,arch,image_path,console,upload_port), shell=True, stdout=subprocess.PIPE)
+    osv = subprocess.Popen('cd ../..; scripts/run.py -k --kernel-path build/release/%s --arch=%s --vnc none -m 512 -c1 -i "%s" --block-device-cache unsafe -s -e "%s --norandom --nomount --noinit --preload-zfs-library /tools/mkfs.so; /tools/cpiod.so --prefix /zfs/zfs/; /zfs.so set compression=off osv" --forward tcp:127.0.0.1:%s-:10000' % (zfs_builder_name,arch,image_path,console,upload_port), shell=True, stdout=subprocess.PIPE)
 
     upload(osv, manifest, depends, upload_port)
 
