@@ -177,6 +177,11 @@ def start_osv_qemu(options):
         "-device", "virtio-blk-pci,id=blk1,bootindex=1,drive=hd1,scsi=off%s" % options.virtio_device_suffix,
         "-drive", "file=%s,if=none,id=hd1" % (options.cloud_init_image)]
 
+    if options.second_disk_image:
+        args += [
+        "-device", "virtio-blk-pci,id=blk1,drive=hd1,scsi=off%s" % options.virtio_device_suffix,
+        "-drive", "file=%s,if=none,id=hd1" % (options.second_disk_image)]
+
     if options.virtio_fs_tag:
         dax = (",cache-size=%s" % options.virtio_fs_dax) if options.virtio_fs_dax else ""
         args += [
@@ -589,6 +594,8 @@ if __name__ == "__main__":
                         help="specify gdb port number")
     parser.add_argument("--script", action="store",
                         help="XEN define configuration script for vif")
+    parser.add_argument("--second-disk-image", action="store",
+                        help="Path to the optional second disk image that should be attached to the instance")
     parser.add_argument("--cloud-init-image", action="store",
                         help="Path to the optional cloud-init image that should be attached to the instance")
     parser.add_argument("-k", "--kernel", action="store_true",
@@ -629,6 +636,11 @@ if __name__ == "__main__":
         cmdargs.cloud_init_image = os.path.abspath(cmdargs.cloud_init_image)
         if not os.path.exists(cmdargs.cloud_init_image):
             raise Exception('Cloud-init image %s does not exist.' % cmdargs.cloud_init_image)
+
+    if cmdargs.second_disk_image:
+        cmdargs.second_disk_image = os.path.abspath(cmdargs.second_disk_image)
+        if not os.path.exists(cmdargs.second_disk_image):
+            raise Exception('Second disk image %s does not exist.' % cmdargs.second_disk_image)
 
     if cmdargs.virtio_fs_dir and not os.path.exists(cmdargs.virtio_fs_dir):
         raise Exception('Directory %s to be exposed through virtio-fs does not exist.' % cmdargs.virtio_fs_dir)

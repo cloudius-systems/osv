@@ -51,7 +51,7 @@ static void get_blk_devices(vector<string> &zpool_args)
 }
 
 extern "C" void zfsdev_init();
-static void mkfs(void)
+static void mkfs(int ac, char** av)
 {
     // Create zfs device, then /etc/mnttab which is required by libzfs
     zfsdev_init();
@@ -62,8 +62,8 @@ static void mkfs(void)
     assert(fd != -1);
     close(fd);
 
-    vector<string> zpool_args = {"zpool", "create", "-f", "-R", "/zfs", "osv",
-        "/dev/vblk0.1"};
+    const char *dev_name = ac == 2 ? av[1] : "/dev/vblk0.1";
+    vector<string> zpool_args = {"zpool", "create", "-f", "-R", "/zfs", "osv", dev_name};
 
     get_blk_devices(zpool_args);
 
@@ -86,7 +86,7 @@ __attribute__((__visibility__("default")))
 int main(int ac, char** av)
 {
     cout << "Running mkfs...\n";
-    mkfs();
+    mkfs(ac, av);
     sync();
     return 0;
 }

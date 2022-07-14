@@ -10,10 +10,9 @@ def export_package(manifest, dest):
     abs_dest = os.path.abspath(dest)
     print("[INFO] exporting into directory %s" % abs_dest)
 
-    # Remove and create the base directory where we are going to put all package files.
-    if os.path.exists(abs_dest):
-        shutil.rmtree(abs_dest)
-    os.makedirs(abs_dest)
+    # Create the base directory where we are going to put all package files.
+    if not os.path.exists(abs_dest):
+        os.makedirs(abs_dest)
 
     files = list(expand(manifest))
     files = [(x, unsymlink(y % defines)) for (x, y) in files]
