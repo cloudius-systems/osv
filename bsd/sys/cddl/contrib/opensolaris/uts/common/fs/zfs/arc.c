@@ -134,6 +134,7 @@
 #include <sys/sdt.h>
 
 #include <bsd/porting/mmu.h>
+#include <osv/export.h>
 
 #ifdef illumos
 #ifndef _KERNEL
@@ -444,6 +445,7 @@ static arc_stats_t arc_stats = {
 		}							\
 	}
 
+OSV_LIB_SOLARIS_API
 kstat_t			*arc_ksp;
 static arc_state_t	*arc_anon;
 static arc_state_t	*arc_mru;
@@ -2328,7 +2330,7 @@ arc_flush(spa_t *spa)
 	ASSERT(spa || arc_eviction_list == NULL);
 }
 
-void
+OSV_LIB_SOLARIS_API void
 arc_shrink(void)
 {
 	if (arc_c > arc_c_min) {

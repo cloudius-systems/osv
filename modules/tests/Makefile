@@ -134,13 +134,9 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-elf-init.so tst-realloc.so tst-setjmp.so \
 	libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so \
 	tst-sigaction.so tst-syscall.so tst-ifaddrs.so tst-getdents.so \
-	tst-netlink.so misc-zfs-io.so
+	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
-#TODO For now let us disable these tests for aarch64 until
-# we support floating point numbers, TLS and correct syscall handling
-# The tst-ifaddrs.so is an exception and it does not compile due to some
-# missing headers
 ifeq ($(arch),x64)
 tests += tst-mmx-fpu.so
 endif
@@ -222,10 +218,9 @@ tests += $(boost-tests)
 
 solaris-tests := tst-solaris-taskq.so
 
-# FIXME: two of the test below can't compile now because of include path
-# (BSD and OSv header files get mixed up, etc.).
+#FIXME: the misc-zfs-disk.c does not compile due to some header issues
 #zfs-tests := misc-zfs-disk.so misc-zfs-io.so misc-zfs-arc.so
-zfs-tests := misc-zfs-io.so
+zfs-tests := misc-zfs-io.so misc-zfs-arc.so
 solaris-tests += $(zfs-tests)
 
 $(zfs-tests:%=$(out)/tests/%): COMMON+= \

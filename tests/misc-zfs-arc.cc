@@ -5,9 +5,6 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <osv/mutex.h>
-#include <osv/mempool.hh>
-#include <osv/run.hh>
 #include <osv/debug.hh>
 
 #include "stat.hh"
@@ -19,6 +16,7 @@
 #include <sys/stat.h>
 #include <sys/param.h>
 #include <sys/mman.h>
+#include <sys/sysinfo.h>
 #include <boost/program_options.hpp>
 #include <chrono>
 #include <unordered_map>
@@ -30,6 +28,9 @@ typedef u_long ulong_t;
 #include <bsd/sys/cddl/compat/opensolaris/sys/kstat.h>
 #include <machine/atomic.h>
 #include <bsd/porting/netport.h>
+
+#include <osv/osv_c_wrappers.h>
+#include <pthread.h>
 
 #define MB (1024 * 1024)
 
@@ -52,7 +53,7 @@ struct arc_data {
     uint64_t size;
 };
 
-static mutex_t kstat_map_mutex;
+static pthread_mutex_t kstat_map_mutex;
 static unordered_map<const char *, struct kstat_named *> kstat_map;
 
 static struct kstat_named *kstat_map_lookup(const char *name)
@@ -86,18 +87,20 @@ static uint64_t *get_kstat_by_name(const kstat_t *ksp, const char *name)
 
     assert(ksp && ksp->ks_data);
 
-    WITH_LOCK(kstat_map_mutex) {
-        knp = kstat_map_lookup(name);
+    pthread_mutex_lock(&kstat_map_mutex);
+    knp = kstat_map_lookup(name);
 
-        /* If knp is NULL, kstat_named wasn't found in the hash */
+    /* If knp is NULL, kstat_named wasn't found in the hash */
+    if (!knp) {
+        /* Then do the manual search and insert it into the hash */
+        knp = kstat_map_insert(ksp, name);
         if (!knp) {
-            /* Then do the manual search and insert it into the hash */
-            knp = kstat_map_insert(ksp, name);
-            if (!knp) {
-                return 0;
-            }
+            pthread_mutex_unlock(&kstat_map_mutex);
+            return 0;
         }
     }
+    pthread_mutex_unlock(&kstat_map_mutex);
+
     assert(knp->data_type == KSTAT_DATA_UINT64);
 
     return &(knp->value.ui64);
@@ -297,7 +300,6 @@ static int run_test(const kstat_t *ksp, int argc, char **argv)
     struct arc_data data;
     struct stat st;
     char path[PATH_MAX];
-    int ret;
 
     snprintf(path, PATH_MAX, "%s/%s", TESTDIR, argv[0]);
     printf("Running %s", path);
@@ -318,7 +320,7 @@ static int run_test(const kstat_t *ksp, int argc, char **argv)
 
     create_arc_data(ksp, data);
 
-    osv::run(path, argc, argv, &ret);
+    int ret = osv_run_app(path, (const char**)argv, argc);
 
     report_arc_data(ksp, data);
 
@@ -353,36 +355,44 @@ static void memory_pressure_scenario(const kstat_t *ksp)
 /*
  * Test used to check performance on linear workloads.
  */
-static int arc_linear_test(const kstat_t *ksp, bool all_cached)
+static int arc_linear_test(const kstat_t *ksp, bool all_cached, const char *test_file)
 {
-    char *args[3] = { 0 };
+    char *args[5] = { 0 };
     int argc, ret = 0;
 
     args[0] = strdup("misc-zfs-io.so");
     args[1] = strdup("--no-unlink");
-    argc = 2;
+    args[2] = strdup("--file-path");
+    args[3] = strdup(test_file);
+    argc = 4;
     if (all_cached) {
-        args[2] = strdup("--all-cached");
-        argc = 3;
+        args[4] = strdup("--all-cached");
+        argc = 5;
     }
     ret = run_test(ksp, argc, args);
 
     free(args[0]);
     free(args[1]);
     free(args[2]);
+    free(args[3]);
+    free(args[4]);
 
     args[0] = strdup("misc-zfs-io.so");
     args[1] = strdup("--rdonly");
-    argc = 2;
+    args[2] = strdup("--file-path");
+    args[3] = strdup(test_file);
+    argc = 4;
     if (all_cached) {
-        args[2] = strdup("--all-cached");
-        argc = 3;
+        args[4] = strdup("--all-cached");
+        argc = 5;
     }
     ret = run_test(ksp, argc, args);
 
     free(args[0]);
     free(args[1]);
     free(args[2]);
+    free(args[3]);
+    free(args[4]);
 
     zfs_arc_statistics(ksp);
 
@@ -392,16 +402,20 @@ static int arc_linear_test(const kstat_t *ksp, bool all_cached)
 /*
  * Test used to check performance on non-linear workloads.
  */
-static int arc_nonlinear_test(const kstat_t *ksp)
+static int arc_nonlinear_test(const kstat_t *ksp, const char *test_file)
 {
-    char *args[2];
+    char *args[4];
     int ret = 0;
 
     args[0] = strdup("misc-zfs-io.so");
     args[1] = strdup("--random");
-    ret = run_test(ksp, 2, args);
+    args[2] = strdup("--file-path");
+    args[3] = strdup(test_file);
+    ret = run_test(ksp, 4, args);
     free(args[0]);
     free(args[1]);
+    free(args[2]);
+    free(args[3]);
 
     zfs_arc_statistics(ksp);
 
@@ -424,7 +438,9 @@ int main(int argc, char **argv)
         ("check-arc-shrink",
             "check ARC shrink functionality")
         ("test", po::value<std::string>(),
-            "analyze ARC performance on a given testcase, e.g. --test tst-001.so");
+            "analyze ARC performance on a given testcase, e.g. --test tst-001.so")
+        ("test-file", po::value<std::string>(),
+            "path to a test file, defaults to /zfs-io-file");
 
     po::variables_map vm;
     po::store(po::parse_command_line(argc, argv, desc), vm);
@@ -443,7 +459,12 @@ int main(int argc, char **argv)
     }
 
     printf("System Memory:        %luMB\n", kmem_size() / MB);
-    printf("\tFree: %luMB\n", memory::stats::free() / MB);
+    struct sysinfo info;
+    if (sysinfo(&info)) {
+        fprintf(stderr, "Error: Could not retrieve free memory information\n");
+        return -1;
+    }
+    printf("\tFree: %luMB\n", info.freeram / MB);
     printf("\tUsed: %luMB\n", kmem_used() / MB);
     zfs_arc_statistics(arc_kstat_p);
 
@@ -458,6 +479,11 @@ int main(int argc, char **argv)
             new_arc_target / MB);
     }
 
+    const char *test_file = "/zfs-io-file";
+    if (vm.count("test-file")) {
+        test_file = strdup(vm["test-file"].as<std::string>().c_str());
+    }
+
     if (vm.count("check-arc-shrink")) {
         ret = check_arc_shrink(arc_kstat_p);
         printf("Result: ARC shrink %s.\n", ret == 0 ? "worked" : "didn't work");
@@ -467,11 +493,11 @@ int main(int argc, char **argv)
         free(arg0);
     } else {
         printf("\n*** NON-LINEAR WORKLOAD; PREFETCH SHOULDN'T BE EFFECTIVE ***\n");
-        ret = arc_nonlinear_test(arc_kstat_p);
+        ret = arc_nonlinear_test(arc_kstat_p, test_file);
         printf("\n*** CHECK ARC PERFORMANCE WHEN DATA IS ALL CACHED ***\n");
-        ret |= arc_linear_test(arc_kstat_p, true);
+        ret |= arc_linear_test(arc_kstat_p, true, test_file);
         printf("\n*** READAHEAD AND PAGE REPLACEMENT SCENARIO ***\n");
-        ret |= arc_linear_test(arc_kstat_p, false);
+        ret |= arc_linear_test(arc_kstat_p, false, test_file);
         printf("\n*** MEMORY PRESSURE SCENARIO ***\n");
         memory_pressure_scenario(arc_kstat_p);
     }
