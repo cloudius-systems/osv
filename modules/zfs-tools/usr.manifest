@@ -1,4 +1,5 @@
 [manifest]
 /zpool.so: zpool.so
+/zfs.so: zfs.so
 /libzfs.so: libzfs.so
 /libuutil.so: libuutil.so
