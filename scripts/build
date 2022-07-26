@@ -207,6 +207,7 @@ rofs|rofs_with_zfs|virtiofs)
 	manifest=bootfs_empty.manifest.skel
 	usrskel_arg="--usrskel usr_rofs.manifest.skel";;
 ramfs)
+	cp "$SRC"/static/etc/fstab fstab
 	manifest=$OUT/usr.manifest
 	usrskel_arg="--usrskel usr_ramfs.manifest.skel";;
 *)
@@ -369,9 +370,14 @@ case $fs_type in
 zfs)
 	partition_size=$((fs_size - partition_offset))
 	image_size=$fs_size
+	cp "$SRC"/static/etc/fstab fstab
 	create_zfs_disk ;;
 rofs)
 	rm -rf rofs.img
+	cp "$SRC"/static/etc/fstab_rofs fstab
+	if [[ ${vars[create_zfs_disk]} == "true" ]]; then
+		echo "/dev/vblk1.1 /data      zfs       defaults 0 0" >> fstab
+	fi
 	"$SRC"/scripts/gen-rofs-img.py -o rofs.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
 	partition_size=`stat --printf %s rofs.img`
 	image_size=$((partition_offset + partition_size))
@@ -379,6 +385,8 @@ rofs)
 rofs_with_zfs)
 	# Create disk with rofs image on it 1st partition
 	rm -rf rofs.img
+	cp "$SRC"/static/etc/fstab_rofs fstab
+	echo "/dev/vblk0.2 /data      zfs       defaults 0 0" >> fstab
 	"$SRC"/scripts/gen-rofs-img.py -o rofs.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
 	partition_size=`stat --printf %s rofs.img`
 	image_size=$((fs_size+partition_size))
