@@ -110,11 +110,17 @@ def list_trace(args):
             return format_packet_sample(sample)
         return sample.format_data(sample)
 
+    def name_filter(sample):
+        if args.tracepoint:
+            return sample.name.startswith(args.tracepoint)
+        else:
+            return True
+
     backtrace_formatter = get_backtrace_formatter(args)
     time_range = get_time_range(args)
     with get_trace_reader(args) as reader:
         for t in reader.get_traces():
-            if t.time in time_range:
+            if t.time in time_range and name_filter(t):
                 print(t.format(backtrace_formatter, data_formatter=data_formatter))
 
 def mem_analys(args):
@@ -671,6 +677,8 @@ if __name__ == "__main__":
     cmd_list = subparsers.add_parser("list", help="list trace")
     add_trace_listing_options(cmd_list)
     cmd_list.add_argument("--tcpdump", action="store_true")
+    cmd_list.add_argument("-t", "--tracepoint", action="store",
+        help="prefix of name of the tracepoint to show; shows all by default")
     cmd_list.set_defaults(func=list_trace, paginate=True)
 
     cmd_wakeup_latency = subparsers.add_parser("wakeup-latency")
