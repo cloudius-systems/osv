@@ -1309,7 +1309,7 @@ def make_symbolic(addr):
 
 def dump_trace(out_func):
     indents = defaultdict(int)
-    bt_formatter = BacktraceFormatter(symbol_resolver, symbol_formatter)
+    bt_formatter = BacktraceFormatter(symbol_resolver, symbol_formatter, True)
 
     def lookup_tp(name):
         return gdb.lookup_global_symbol(name).value().dereference()

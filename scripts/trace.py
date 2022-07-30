@@ -102,7 +102,7 @@ def get_backtrace_formatter(args):
     if not args.backtrace:
         return lambda backtrace: ''
 
-    return trace.BacktraceFormatter(symbol_resolver(args), src_addr_formatter(args))
+    return trace.BacktraceFormatter(symbol_resolver(args), src_addr_formatter(args), True if args.multiline else False)
 
 def list_trace(args):
     def data_formatter(sample):
@@ -667,6 +667,7 @@ def add_trace_listing_options(parser):
     add_symbol_resolution_options(parser)
     parser.add_argument("-b", "--backtrace", action="store_true", help="show backtrace")
     parser.add_argument("--no-header", action="store_true", help="do not show the header")
+    parser.add_argument("-l", "--multiline", action="store_true", help="show backtrace in multiple lines")
 
 def convert_dump(args):
     if os.path.isfile(args.dumpfile):

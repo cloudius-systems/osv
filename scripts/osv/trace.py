@@ -22,9 +22,10 @@ def format_time(time):
     return "%12.9f" % nanos_to_seconds(time)
 
 class BacktraceFormatter:
-    def __init__(self, resolver, formatter):
+    def __init__(self, resolver, formatter, multiline):
         self.resolver = resolver
         self.formatter = formatter
+        self.multiline = multiline
 
     def __call__(self, backtrace):
         if not backtrace:
@@ -32,15 +33,18 @@ class BacktraceFormatter:
 
         frames = list(debug.resolve_all(self.resolver, (x - 1 for x in backtrace if x)))
 
-        while frames[0].name and frames[0].name.startswith("tracepoint"):
+        while frames[0].name and (frames[0].name.startswith("tracepoint") or frames[0].filename.endswith("trace.hh")):
             frames.pop(0)
 
-        return '   [' + ', '.join(map(self.formatter, frames)) + ']'
+        if self.multiline:
+            return '\n  ' + '\n  '.join(map(self.formatter, frames)) + '\n'
+        else:
+            return '   [' + ', '.join(map(self.formatter, frames)) + ']'
 
 def simple_symbol_formatter(src_addr):
     return '0x%x' % src_addr.addr
 
-default_backtrace_formatter = BacktraceFormatter(debug.DummyResolver(), simple_symbol_formatter)
+default_backtrace_formatter = BacktraceFormatter(debug.DummyResolver(), simple_symbol_formatter, False)
 
 class TimeRange(object):
     """
