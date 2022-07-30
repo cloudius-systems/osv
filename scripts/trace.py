@@ -106,8 +106,11 @@ def get_backtrace_formatter(args):
 
 def list_trace(args):
     def data_formatter(sample):
-        if args.tcpdump and is_net_packet_sample(sample):
-            return format_packet_sample(sample)
+        if args.tcpdump:
+            if is_net_packet_sample(sample):
+                return format_packet_sample(sample)
+            if is_tcp_state_sample(sample):
+                return format_tcp_state_sample(sample)
         return sample.format_data(sample)
 
     def name_filter(sample):
@@ -368,8 +371,40 @@ def format_packet_sample(sample):
     proc.wait()
     return packet_line
 
+# See http://tcpipguide.com/free/t_TCPOperationalOverviewandtheTCPFiniteStateMachineF-2.htm
+tcp_states = {
+    0: 'CLOSED',       # closed
+    1: 'LISTEN',       # listening for connection
+    2: 'SYN_SENT',     # active, have sent syn
+    3: 'SYN_RECEIVED', # have sent and received syn
+# states < ESTABLISHED are those where connections not established
+    4: 'ESTABLISHED',  # established
+    5: 'CLOSE_WAIT',   # received fin, waiting for close
+# states > CLOSE_WAIT are those where user has closed
+    6: 'FIN_WAIT_1',   # have closed, sent fin
+    7: 'CLOSING',      # closed exchanged FIN; awaiting FIN ACK
+    8: 'LAST_ACK',     # had fin and close; awaiting FIN ACK
+# states > CLOSE_WAIT and < FIN_WAIT_2 await ACK of FIN
+    9: 'FIN_WAIT_2',   # have closed, fin is acked
+    10: 'TIME_WAIT'
+}
+
+def format_tcp_state_sample(sample):
+    sample_str = sample.format_data(sample)
+    states = re.findall(".*(\d+) -> (\d+).*", sample_str)
+    if states == []:
+        return sample_str
+    else:
+        [(state_from, state_to)] = states
+        state_from_str = tcp_states.get(int(state_from))
+        state_to_str = tcp_states.get(int(state_to))
+        return "%s%s -> %s" % (sample_str[:-6], state_from_str or 'Unknown', state_to_str or 'Unknown')
+
 def is_net_packet_sample(sample):
     return sample.name.startswith('net_packet_')
+
+def is_tcp_state_sample(sample):
+    return sample.name == "tcp_state"
 
 def is_input_net_packet_sample(sample):
     return sample.name == "net_packet_in"
