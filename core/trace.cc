@@ -697,7 +697,7 @@ std::string
 trace::create_trace_dump()
 {
     semaphore signal(0);
-    std::vector<trace_buf> copies;
+    std::vector<trace_buf> copies(sched::cpus.size());
 
     auto is_valid_tracepoint = [](const tracepoint_base * tp_test) {
         for (auto & tp : tracepoint_base::tp_list) {
@@ -717,7 +717,7 @@ trace::create_trace_dump()
             irq.save();
             arch::irq_disable_notrace();
             auto * tbp = percpu_trace_buffer.for_cpu(cpu);
-            copies.emplace_back(*tbp);
+            copies[i] = trace_buf(*tbp);
             irq.restore();
             signal.post();
         }, sched::thread::attr().pin(cpu)));
