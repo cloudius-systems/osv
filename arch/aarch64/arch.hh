@@ -79,7 +79,7 @@ inline void irq_flag_notrace::save() {
 }
 
 inline void irq_flag_notrace::restore() {
-    asm volatile("msr daif, x0" :: "r"(daif) : "memory");
+    asm volatile("msr daif, %0" :: "r"(daif) : "memory");
 }
 
 inline bool irq_flag_notrace::enabled() const {
