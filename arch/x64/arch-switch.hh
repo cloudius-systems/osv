@@ -142,6 +142,15 @@ void thread::init_stack()
     if (!stack.begin) {
         stack.begin = malloc(stack.size);
         stack.deleter = stack.default_deleter;
+    } else {
+        // The thread will run thread_main_c() with preemption disabled
+        // for a short while (see 695375f65303e13df1b9de798577ee9a4f8f9892)
+        // so page faults are forbidden - so we need the top of the stack
+        // to be pre-faulted. When we call malloc() above ourselves above
+        // we know this is the case, but if the user allocates the stack
+        // with mmap without MAP_STACK or MAP_POPULATE, this might not be
+        // the case, so we need to fault it in now, with preemption on.
+        (void) *((volatile char*)stack.begin + stack.size - 1);
     }
     void** stacktop = reinterpret_cast<void**>(stack.begin + stack.size);
     _state.rbp = this;
