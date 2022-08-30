@@ -141,7 +141,12 @@ namespace pthread_private {
             return {attr.stack_begin, attr.stack_size};
         }
         size_t size = attr.stack_size;
-        void *addr = mmu::map_anon(nullptr, size, mmu::mmap_populate, mmu::perm_rw);
+#if CONF_lazy_stack
+        unsigned stack_flags = mmu::mmap_stack;
+#else
+        unsigned stack_flags = mmu::mmap_populate;
+#endif
+        void *addr = mmu::map_anon(nullptr, size, stack_flags, mmu::perm_rw);
         mmu::mprotect(addr, attr.guard_size, 0);
         sched::thread::stack_info si{addr, size};
         si.deleter = free_stack;
