@@ -22,6 +22,9 @@ sgi_interrupt::~sgi_interrupt()
 
 void sgi_interrupt::send(sched::cpu* cpu)
 {
+#if CONF_lazy_stack_invariant
+    assert(!arch::irq_enabled() || !sched::preemptable());
+#endif
     gic::gic->send_sgi(gic::sgi_filter::SGI_TARGET_LIST,
                        cpu->arch.smp_idx, get_id());
 }

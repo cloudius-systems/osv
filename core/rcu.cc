@@ -118,6 +118,9 @@ void cpu_quiescent_state_thread::do_work()
 {
     while (true) {
         bool toclean = false;
+#if CONF_lazy_stack_invariant
+        assert(!sched::thread::current()->is_app());
+#endif
         WITH_LOCK(preempt_lock) {
             auto p = &*percpu_callbacks;
             if (p->ncallbacks[p->buf]) {
@@ -242,7 +245,7 @@ void rcu_flush()
             rcu_defer([&] { s.post(); });
             // rcu_defer() might not wake the cleanup thread until enough deferred
             // callbacks have accumulated, so wake it up now.
-            percpu_quiescent_state_thread->wake();
+            percpu_quiescent_state_thread->wake_from_kernel_or_with_irq_disabled();
         }, sched::thread::attr().pin(c)));
         t->start();
         t->join();

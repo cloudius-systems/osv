@@ -29,7 +29,7 @@ XEN_Console::XEN_Console()
 
 void XEN_Console::handle_intr()
 {
-    _thread->wake();
+    _thread->wake_with_irq_disabled();
 }
 
 void XEN_Console::write(const char *str, size_t len) {

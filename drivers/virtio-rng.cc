@@ -89,7 +89,7 @@ size_t rng::get_random_bytes(char* buf, size_t size)
 
 void rng::handle_irq()
 {
-    _thread->wake();
+    _thread->wake_with_irq_disabled();
 }
 
 bool rng::ack_irq()

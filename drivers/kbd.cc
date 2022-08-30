@@ -81,7 +81,7 @@ static uint32_t ctlmap[256] =
 };
 
 Keyboard::Keyboard(sched::thread* poll_thread)
-    : _irq(1, [=] { poll_thread->wake(); })
+    : _irq(1, [=] { poll_thread->wake_with_irq_disabled(); })
 {
   shiftcode[0x1D] = MOD_CTL;
   shiftcode[0x2A] = MOD_SHIFT;

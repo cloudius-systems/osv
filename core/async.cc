@@ -160,6 +160,9 @@ public:
                 return _timer.expired() || !_queue.empty();
             });
 
+#if CONF_lazy_stack_invariant
+            assert(!sched::thread::current()->is_app());
+#endif
             WITH_LOCK(preempt_lock) {
                 _timer.cancel();
 
@@ -224,6 +227,9 @@ private:
         }
 
         auto& master = *task.master;
+#if CONF_lazy_stack_invariant
+        assert(!sched::thread::current()->is_app());
+#endif
         DROP_LOCK(preempt_lock) {
             master.fire(task);
         }

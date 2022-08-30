@@ -126,7 +126,7 @@ static inline void set_affinity_and_wake(
         v->msix_unmask_entries();
     }
 
-    t->wake();
+    t->wake_with_irq_disabled();
 }
 
 bool interrupt_manager::easy_register(std::initializer_list<msix_binding> bindings)

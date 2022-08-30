@@ -116,6 +116,9 @@ void timerfd::wakeup_thread_func()
                     _blocked_reader.wake_one();
                     poll_wake(this, POLLIN);
                 } else {
+#if CONF_lazy_stack_invariant
+                    assert(!sched::thread::current()->is_app());
+#endif
                     tmr.cancel();
                 }
             } else {

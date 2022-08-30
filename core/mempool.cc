@@ -154,6 +154,9 @@ void pool::collect_garbage()
 
 static void garbage_collector_fn()
 {
+#if CONF_lazy_stack_invariant
+    assert(!sched::thread::current()->is_app());
+#endif
     WITH_LOCK(preempt_lock) {
         pool::collect_garbage();
     }
@@ -1352,9 +1355,12 @@ void l1::fill_thread()
     auto& pbuf = get_l1();
     for (;;) {
         sched::thread::wait_until([&] {
-                WITH_LOCK(preempt_lock) {
-                    return pbuf.nr < pbuf.watermark_lo || pbuf.nr > pbuf.watermark_hi;
-                }
+#if CONF_lazy_stack_invariant
+            assert(!sched::thread::current()->is_app());
+#endif
+            WITH_LOCK(preempt_lock) {
+                return pbuf.nr < pbuf.watermark_lo || pbuf.nr > pbuf.watermark_hi;
+            }
         });
         if (pbuf.nr < pbuf.watermark_lo) {
             while (pbuf.nr + page_batch::nr_pages < pbuf.max / 2) {

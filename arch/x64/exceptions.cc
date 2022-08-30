@@ -220,6 +220,9 @@ void interrupt_descriptor_table::unregister_interrupt(gsi_level_interrupt *inter
 
 void interrupt_descriptor_table::invoke_interrupt(unsigned vector)
 {
+#if CONF_lazy_stack_invariant
+    assert(!arch::irq_enabled());
+#endif
     WITH_LOCK(osv::rcu_read_lock) {
         unsigned i, nr_shared;
         bool handled = false;

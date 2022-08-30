@@ -109,7 +109,7 @@ void Cadence_Console::irq_handler()
     // IRQ must be cleared after character is read from FIFO
     uart->cisr = cisr;
 
-    _thread->wake();
+    _thread->wake_with_irq_disabled();
 }
 
 void Cadence_Console::dev_start() {

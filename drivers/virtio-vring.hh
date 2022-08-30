@@ -234,7 +234,7 @@ class virtio_driver;
 
         void wakeup_waiter()
         {
-            _waiter.wake();
+            _waiter.wake_from_kernel_or_with_irq_disabled();
         }
 
 

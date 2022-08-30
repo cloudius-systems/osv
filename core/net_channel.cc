@@ -40,13 +40,16 @@ void net_channel::process_queue()
 
 void net_channel::wake_pollers()
 {
+#if CONF_lazy_stack_invariant
+    assert(!sched::thread::current()->is_app());
+#endif
     WITH_LOCK(osv::rcu_read_lock) {
         auto pl = _pollers.read();
         if (pl) {
             for (pollreq* pr : *pl) {
                 // net_channel is self synchronizing
                 pr->_awake.store(true, std::memory_order_relaxed);
-                pr->_poll_thread.wake();
+                pr->_poll_thread.wake_from_kernel_or_with_irq_disabled();
             }
         }
         // can't call epoll_wake from rcu, so copy the data
@@ -128,6 +131,9 @@ void classifier::remove(ipv4_tcp_conn_id id)
 
 bool classifier::post_packet(mbuf* m)
 {
+#if CONF_lazy_stack_invariant
+    assert(!sched::thread::current()->is_app());
+#endif
     WITH_LOCK(osv::rcu_read_lock) {
         if (auto nc = classify_ipv4_tcp(m)) {
             log_packet_in(m, NETISR_ETHER);

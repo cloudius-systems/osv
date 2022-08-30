@@ -502,6 +502,9 @@ void itimer::work()
                         _owner_thread->interrupted(true);
                     }
                 } else {
+#if CONF_lazy_stack_invariant
+                    assert(!sched::thread::current()->is_app());
+#endif
                     tmr.cancel();
                 }
             } else {

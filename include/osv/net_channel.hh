@@ -46,7 +46,10 @@ public:
     bool push(mbuf* m) { return _queue.push(m); }
     // consumer: wake the consumer (best used after multiple push()s)
     void wake() {
-        _waiting_thread.wake();
+#if CONF_lazy_stack_invariant
+        assert(!sched::thread::current()->is_app());
+#endif
+        _waiting_thread.wake_from_kernel_or_with_irq_disabled();
         if (_pollers || !_epollers.empty()) {
             wake_pollers();
         }

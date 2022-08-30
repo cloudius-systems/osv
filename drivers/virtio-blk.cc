@@ -143,7 +143,7 @@ blk::blk(virtio_device& virtio_dev)
         return new pci_interrupt(
             pci_dev,
             [=] { return this->ack_irq(); },
-            [=] { t->wake(); });
+            [=] { t->wake_with_irq_disabled(); });
     };
 #endif
 
@@ -153,14 +153,14 @@ blk::blk(virtio_device& virtio_dev)
                 gic::irq_type::IRQ_TYPE_EDGE,
                 _dev.get_irq(),
                 [=] { return this->ack_irq(); },
-                [=] { t->wake(); });
+                [=] { t->wake_with_irq_disabled(); });
     };
 #else
 #if CONF_drivers_mmio
     int_factory.create_gsi_edge_interrupt = [this,t]() {
         return new gsi_edge_interrupt(
                 _dev.get_irq(),
-                [=] { if (this->ack_irq()) t->wake(); });
+                [=] { if (this->ack_irq()) t->wake_with_irq_disabled(); });
     };
 #endif
 #endif

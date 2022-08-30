@@ -23,7 +23,7 @@ void isa_serial_console::early_init()
 }
 
 void isa_serial_console::dev_start() {
-    _irq.reset(new gsi_edge_interrupt(4, [&] { _thread->wake(); }));
+    _irq.reset(new gsi_edge_interrupt(4, [&] { _thread->wake_with_irq_disabled(); }));
     enable_interrupt();
 }
 

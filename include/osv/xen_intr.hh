@@ -15,7 +15,7 @@ namespace xen {
 class xen_irq {
 public:
     explicit xen_irq(interrupt *intr);
-    void wake() { (*_thread)->wake(); }
+    void wake() { (*_thread)->wake_with_irq_disabled(); }
     static void register_irq(int vector, driver_intr_t handler, void *arg);
     static void unregister_irq(int vector);
 private:
