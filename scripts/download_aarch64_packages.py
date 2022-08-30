@@ -34,6 +34,7 @@ def fedora_download_commands(fedora_version):
                       'boost-filesystem',
                       'boost-test',
                       'boost-chrono',
+                      'boost-program-options',
                       'boost-timer']
     script_path = '%s/scripts/download_fedora_aarch64_rpm_package.sh' % osv_root
 
@@ -55,6 +56,8 @@ def ubuntu_download_commands(boost_long_version):
                       'libboost-test%s-dev' % boost_short_version,
                       'libboost-timer%s' % boost_short_version,
                       'libboost-timer%s-dev' % boost_short_version,
+                      'libboost-program-options%s' % boost_short_version,
+                      'libboost-program-options%s-dev' % boost_short_version,
                       'libboost-chrono%s' % boost_short_version,
                       'libboost-chrono%s-dev' % boost_short_version]
 
