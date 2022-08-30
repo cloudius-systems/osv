@@ -113,6 +113,9 @@ void abort(const char *fmt, ...)
         do {} while (true);
     }
 
+#if CONF_lazy_stack
+    sched::ensure_next_stack_page_if_preemptable();
+#endif
     arch::irq_disable();
 
     static char msg[1024];

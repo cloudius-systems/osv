@@ -224,6 +224,9 @@ void thread::cputime_estimator_get(
 // scheduler on a different CPU would be disastrous.
 void cpu::schedule()
 {
+#if CONF_lazy_stack
+    sched::ensure_next_stack_page_if_preemptable();
+#endif
     WITH_LOCK(irq_lock) {
 #ifdef __aarch64__
         reschedule_from_interrupt(sched::cpu::current(), false, thyst);
@@ -566,6 +569,9 @@ void thread::pin(cpu *target_cpu)
         t.wake();
     }, sched::thread::attr().pin(source_cpu)));
     wakeme->start();
+#if CONF_lazy_stack
+    sched::ensure_next_stack_page_if_preemptable();
+#endif
     WITH_LOCK(irq_lock) {
         trace_sched_migrate(&t, target_cpu->id);
         t.stat_migrations.incr();
@@ -822,6 +828,12 @@ void thread::yield(thread_runtime::duration preempt_after)
 {
     trace_sched_yield();
     auto t = current();
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    sched::ensure_next_stack_page_if_preemptable();
+#endif
     std::lock_guard<irq_lock_type> guard(irq_lock);
     // FIXME: drive by IPI
     cpu::current()->handle_incoming_wakeups();
@@ -1258,6 +1270,12 @@ void thread::wake_impl(detached_state* st, unsigned allowed_initial_states_mask)
 
 void thread::wake()
 {
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    sched::ensure_next_stack_page_if_preemptable();
+#endif
     WITH_LOCK(rcu_read_lock) {
         wake_impl(_detached_state.get());
     }
@@ -1604,6 +1622,12 @@ timer_base::timer_base(timer_base::client& t)
 
 timer_base::~timer_base()
 {
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    sched::ensure_next_stack_page_if_preemptable();
+#endif
     cancel();
 }
 
