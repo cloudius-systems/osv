@@ -371,7 +371,8 @@ $(out)/bsd/%.o: INCLUDES += -isystem bsd/
 # for machine/
 $(out)/bsd/%.o: INCLUDES += -isystem bsd/$(arch)
 
-configuration-defines = conf-preempt conf-debug_memory conf-logger_debug conf-debug_elf
+configuration-defines = conf-preempt conf-debug_memory conf-logger_debug conf-debug_elf \
+			conf-lazy_stack conf-lazy_stack_invariant
 
 configuration = $(foreach cf,$(configuration-defines), \
                       -D$(cf:conf-%=CONF_%)=$($(cf)))
