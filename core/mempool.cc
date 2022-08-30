@@ -216,6 +216,12 @@ TRACEPOINT(trace_pool_free_different_cpu, "this=%p, obj=%p, obj_cpu=%d", void*, 
 void* pool::alloc()
 {
     void * ret = nullptr;
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     WITH_LOCK(preempt_lock) {
 
         // We enable preemption because add_page() may take a Mutex.
@@ -255,8 +261,14 @@ void pool::add_page()
 {
     // FIXME: this function allocated a page and set it up but on rare cases
     // we may add this page to the free list of a different cpu, due to the
-    // enablment of preemption
+    // enablement of preemption
     void* page = untracked_alloc_page();
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     WITH_LOCK(preempt_lock) {
         page_header* header = new (page) page_header;
         header->cpu_id = mempool_cpuid();
@@ -321,6 +333,12 @@ void pool::free(void* object)
 {
     trace_pool_free(this, object);
 
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     WITH_LOCK(preempt_lock) {
 
         free_object* obj = static_cast<free_object*>(object);
@@ -1260,6 +1278,9 @@ public:
         while (!(pb = try_alloc_page_batch())) {
             WITH_LOCK(migration_lock) {
                 DROP_LOCK(preempt_lock) {
+#if CONF_lazy_stack_invariant
+                    assert(sched::preemptable());
+#endif
                     refill();
                 }
             }
@@ -1272,6 +1293,9 @@ public:
         while (!try_free_page_batch(pb)) {
             WITH_LOCK(migration_lock) {
                 DROP_LOCK(preempt_lock) {
+#if CONF_lazy_stack_invariant
+                    assert(sched::preemptable());
+#endif
                     unfill();
                 }
             }
@@ -1377,6 +1401,12 @@ void l1::fill_thread()
 
 void l1::refill()
 {
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     SCOPE_LOCK(preempt_lock);
     auto& pbuf = get_l1();
     if (pbuf.nr + page_batch::nr_pages < pbuf.max / 2) {
@@ -1398,6 +1428,12 @@ void l1::refill()
 
 void l1::unfill()
 {
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     SCOPE_LOCK(preempt_lock);
     auto& pbuf = get_l1();
     if (pbuf.nr > page_batch::nr_pages + pbuf.max / 2) {
@@ -1411,6 +1447,12 @@ void l1::unfill()
 
 void* l1::alloc_page_local()
 {
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     SCOPE_LOCK(preempt_lock);
     auto& pbuf = get_l1();
     if (pbuf.nr < pbuf.watermark_lo) {
@@ -1424,6 +1466,12 @@ void* l1::alloc_page_local()
 
 bool l1::free_page_local(void* v)
 {
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     SCOPE_LOCK(preempt_lock);
     auto& pbuf = get_l1();
     if (pbuf.nr > pbuf.watermark_hi) {

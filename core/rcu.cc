@@ -196,6 +196,12 @@ using namespace rcu;
 
 void rcu_defer(std::function<void ()>&& func)
 {
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     WITH_LOCK(preempt_lock) {
         auto p = &*percpu_callbacks;
         while (p->ncallbacks[p->buf] == p->callbacks[p->buf].size()) {

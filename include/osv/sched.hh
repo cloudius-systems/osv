@@ -1336,6 +1336,13 @@ template <class Action>
 inline
 void thread::wake_with(Action action)
 {
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+    assert(preemptable());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     return do_wake_with(action, (1 << unsigned(status::waiting)));
 }
 

@@ -1654,6 +1654,12 @@ object *program::object_containing_addr(const void *addr)
 {
     object *ret = nullptr;
     module_delete_disable();
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     WITH_LOCK(osv::rcu_read_lock) {
          const auto &modules = _modules_rcu.read()->objects;
          for (object *module : modules) {
@@ -1819,6 +1825,12 @@ void program::free_dtv(object* obj)
 program::modules_list program::modules_get() const
 {
     modules_list ret;
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     WITH_LOCK(osv::rcu_read_lock) {
         auto modules = _modules_rcu.read();
         auto needed = modules->objects.size();

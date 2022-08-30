@@ -470,6 +470,13 @@ lock:
     void push_cpu(void* cooky) {
         bool success = false;
 
+#if CONF_lazy_stack_invariant
+        assert(arch::irq_enabled());
+        assert(sched::preemptable());
+#endif
+#if CONF_lazy_stack
+        arch::ensure_next_stack_page();
+#endif
         sched::preempt_disable();
 
         cpu_queue_type* local_cpuq = _cpuq->get();
@@ -509,6 +516,12 @@ lock:
                 return;
             }
 
+#if CONF_lazy_stack_invariant
+            assert(arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+            arch::ensure_next_stack_page();
+#endif
             sched::preempt_disable();
 
             // Refresh: we could have been moved to a different CPU

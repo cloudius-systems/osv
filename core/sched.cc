@@ -704,6 +704,12 @@ void thread::unpin()
     // to pin, unpin, or migrate the same thread, we need to run the actual
     // unpinning code on the same CPU as the target thread.
     if (this == current()) {
+#if CONF_lazy_stack_invariant
+        assert(arch::irq_enabled() && sched::preemptable());
+#endif
+#if CONF_lazy_stack
+        arch::ensure_next_stack_page();
+#endif
         WITH_LOCK(preempt_lock) {
             if (_pinned) {
                 _pinned = false;
@@ -882,6 +888,12 @@ static thread_runtime::duration total_app_time_exited(0);
 
 thread_runtime::duration thread::thread_clock() {
     if (this == current()) {
+#if CONF_lazy_stack_invariant
+        assert(arch::irq_enabled() && sched::preemptable());
+#endif
+#if CONF_lazy_stack
+        arch::ensure_next_stack_page();
+#endif
         WITH_LOCK (preempt_lock) {
             // Inside preempt_lock, we are running and the scheduler can't
             // intervene and change _total_cpu_time or _running_since
@@ -1158,6 +1170,13 @@ void thread::prepare_wait()
 {
     // After setting the thread's status to "waiting", we must not preempt it,
     // as it is no longer in "running" state and therefore will not return.
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+    assert(sched::preemptable());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     preempt_disable();
     assert(_detached_state->st.load() == status::running);
     _detached_state->st.store(status::waiting);
@@ -1257,6 +1276,12 @@ void thread::wake_with_irq_disabled()
 void thread::wake_lock(mutex* mtx, wait_record* wr)
 {
     // must be called with mtx held
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     WITH_LOCK(rcu_read_lock) {
         auto st = _detached_state.get();
         // We want to send_lock() to this thread, but we want to be sure we're the only
@@ -1283,6 +1308,12 @@ void thread::wake_lock(mutex* mtx, wait_record* wr)
 
 bool thread::unsafe_stop()
 {
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     WITH_LOCK(rcu_read_lock) {
         auto st = _detached_state.get();
         auto expected = status::waiting;
@@ -1338,6 +1369,13 @@ void thread::complete()
     }
     // If this thread gets preempted after changing status it will never be
     // scheduled again to set terminating_thread. So must disable preemption.
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+    assert(preemptable());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     preempt_disable();
     _detached_state->st.store(status::terminating);
     // We want to run destroy() here, but can't because it cause the stack we're
@@ -1462,6 +1500,13 @@ void thread::sleep_impl(timer &t)
 
 void thread_handle::wake()
 {
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+    assert(sched::preemptable());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     WITH_LOCK(rcu_read_lock) {
         thread::detached_state* ds = _t.read();
         if (ds) {
@@ -1589,6 +1634,13 @@ void timer_base::set_with_irq_disabled(osv::clock::uptime::time_point time)
 void timer_base::set(osv::clock::uptime::time_point time)
 {
     trace_timer_set(this, time.time_since_epoch().count());
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+    assert(sched::preemptable());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     irq_save_lock_type irq_lock;
     WITH_LOCK(irq_lock) {
         _state = state::armed;

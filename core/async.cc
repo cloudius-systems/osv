@@ -104,6 +104,12 @@ public:
 
     void insert(percpu_timer_task& task)
     {
+#if CONF_lazy_stack_invariant
+        assert(arch::irq_enabled() && sched::preemptable());
+#endif
+#if CONF_lazy_stack
+        arch::ensure_next_stack_page();
+#endif
         WITH_LOCK(preempt_lock) {
             trace_async_timer_task_insert(this, &task);
 
@@ -125,6 +131,12 @@ public:
 
     percpu_timer_task& borrow_task()
     {
+#if CONF_lazy_stack_invariant
+        assert(arch::irq_enabled() && sched::preemptable());
+#endif
+#if CONF_lazy_stack
+        arch::ensure_next_stack_page();
+#endif
         WITH_LOCK(preempt_lock) {
             auto task = released_timer_tasks.pop();
             if (task) {
@@ -142,6 +154,12 @@ public:
     {
         auto task = new one_shot_task(std::move(callback));
 
+#if CONF_lazy_stack_invariant
+        assert(arch::irq_enabled() && sched::preemptable());
+#endif
+#if CONF_lazy_stack
+        arch::ensure_next_stack_page();
+#endif
         WITH_LOCK(preempt_lock) {
             if (_queue.empty()) {
                 _thread->wake();

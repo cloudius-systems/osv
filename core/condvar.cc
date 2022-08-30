@@ -35,6 +35,13 @@ int condvar::wait(mutex* user_mutex, sched::timer* tmr)
     _user_mutex = user_mutex;
     // This preempt_disable() is just an optimization, to avoid context
     // switch between the two unlocks.
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+    assert(sched::preemptable());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     sched::preempt_disable();
     user_mutex->unlock();
     _m.unlock();

@@ -34,6 +34,12 @@ void * uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
 {
     void * ptr;
 
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     WITH_LOCK(preempt_lock) {
         ptr = (*zone->percpu_cache)->alloc();
     }
@@ -101,6 +107,12 @@ void uma_zfree_arg(uma_zone_t zone, void *item, void *udata)
         zone->uz_dtor(item, zone->uz_size, udata);
     }
 
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     WITH_LOCK(preempt_lock) {
         if ((*zone->percpu_cache)->free(item)) {
             return;
