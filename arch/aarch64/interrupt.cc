@@ -31,6 +31,11 @@ void sgi_interrupt::send(sched::cpu* cpu)
 
 void sgi_interrupt::send_allbutself()
 {
+#if CONF_lazy_stack
+    if (sched::preemptable() && arch::irq_enabled()) {
+        arch::ensure_next_stack_page();
+    }
+#endif
     gic::gic->send_sgi(gic::sgi_filter::SGI_TARGET_ALL_BUT_SELF,
                        0, get_id());
 }
