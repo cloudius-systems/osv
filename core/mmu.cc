@@ -1413,6 +1413,9 @@ bool access_fault(vma& vma, unsigned int error_code)
 TRACEPOINT(trace_mmu_vm_fault, "addr=%p, error_code=%x", uintptr_t, unsigned int);
 TRACEPOINT(trace_mmu_vm_fault_sigsegv, "addr=%p, error_code=%x, %s", uintptr_t, unsigned int, const char*);
 TRACEPOINT(trace_mmu_vm_fault_ret, "addr=%p, error_code=%x", uintptr_t, unsigned int);
+#if CONF_lazy_stack
+TRACEPOINT(trace_mmu_vm_stack_fault, "thread=%d, addr=%p, page_no=%d", unsigned int, uintptr_t, unsigned int);
+#endif
 
 static void vm_sigsegv(uintptr_t addr, exception_frame* ef)
 {
@@ -1438,6 +1441,14 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
         trace_mmu_vm_fault_sigsegv(addr, ef->get_error(), "fast");
         return;
     }
+#if CONF_lazy_stack
+    auto stack = sched::thread::current()->get_stack_info();
+    void *v_addr = reinterpret_cast<void*>(addr);
+    if (v_addr >= stack.begin && v_addr < stack.begin + stack.size) {
+        trace_mmu_vm_stack_fault(sched::thread::current()->id(), addr,
+            ((u64)(stack.begin + stack.size - addr)) / 4096);
+    }
+#endif
     addr = align_down(addr, mmu::page_size);
     WITH_LOCK(vma_list_mutex.for_read()) {
         auto vma = find_intersecting_vma(addr);
