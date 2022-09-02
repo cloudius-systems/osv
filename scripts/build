@@ -22,7 +22,7 @@ usage() {
 
 	Options:
 	  --help|-h                     Print this help message
-	  arch=x64|aarch64              Specify the build architecture; default is the same as build host arch
+	  arch=x64|aarch64|riscv64      Specify the build architecture; default is the same as build host arch
 	  mode=release|debug            Specify the build mode; default is release
 	  export=none|selected|all      If 'selected' or 'all' export the app files to <export_dir>
 	  export_dir=<dir>              The directory to export the files to; default is build/export
@@ -238,6 +238,9 @@ fi
 CC=gcc
 if [[ "$host_arch" == "x86_64" && "$arch" == 'aarch64' ]]; then
     CC=${CROSS_PREFIX:-aarch64-linux-gnu-}gcc
+fi
+if [[ "$host_arch" == "x86_64" && "$arch" == 'riscv64' ]]; then
+    CC=${CROSS_PREFIX:-riscv64-linux-gnu-}gcc
 fi
 
 libgcc_s_path=$(${CC} -print-file-name=libgcc_s.so.1)

@@ -51,7 +51,7 @@ endif
 include conf/$(mode).mk
 
 
-# By default, detect HOST_CXX's architecture - x64 or aarch64.
+# By default, detect HOST_CXX's architecture - x64 or aarch64 or riscv64.
 # But also allow the user to specify a cross-compiled target architecture
 # by setting either "ARCH" or "arch" in the make command line, or the "ARCH"
 # environment variable.
@@ -59,6 +59,7 @@ HOST_CXX := g++
 
 detect_arch = $(word 1, $(shell { echo "x64        __x86_64__";  \
                                   echo "aarch64    __aarch64__"; \
+                                  echo "riscv64    __riscv64__"; \
                        } | $1 -E -xc - | grep ' 1$$'))
 
 host_arch := $(call detect_arch, $(HOST_CXX))
@@ -111,7 +112,7 @@ OBJCOPY=$(CROSS_PREFIX)objcopy
 # Our makefile puts all compilation results in a single directory, $(out),
 # instead of mixing them with the source code. This allows us to compile
 # different variants of the code - for different mode (release or debug)
-# or arch (x86 or aarch64) side by side. It also makes "make clean" very
+# or arch (x86 or aarch64 or riscv64) side by side. It also makes "make clean" very
 # simple, as all compilation results are in $(out) and can be removed in
 # one fell swoop.
 out = build/$(mode).$(arch)
@@ -149,6 +150,9 @@ ifeq ($(arch),x64)
 all: $(out)/vmlinuz.bin
 endif
 ifeq ($(arch),aarch64)
+all: $(out)/zfs_builder.img
+endif
+ifeq ($(arch),riscv64)
 all: $(out)/zfs_builder.img
 endif
 .PHONY: all
@@ -1076,8 +1080,12 @@ environ_musl =
 
 ifeq ($(arch),x64)
 musl_arch = x86_64
-else
+endif
+ifeq ($(arch),aarch64)
 musl_arch = aarch64
+endif
+ifeq ($(arch),riscv64)
+musl_arch = riscv64
 endif
 
 libc += internal/_chk_fail.o
