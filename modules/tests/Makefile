@@ -134,7 +134,8 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-elf-init.so tst-realloc.so tst-setjmp.so \
 	libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so \
 	tst-sigaction.so tst-syscall.so tst-ifaddrs.so tst-getdents.so \
-	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-pthread-create.so
+	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-pthread-create.so \
+	misc-futex-perf.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
 ifeq ($(arch),x64)
