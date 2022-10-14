@@ -46,12 +46,12 @@ constexpr uintptr_t mem_area_size = uintptr_t(1) << 44;
 
 constexpr uintptr_t get_mem_area_base(mem_area area)
 {
-    return 0xffff800000000000 | uintptr_t(area) << 44;
+    return 0x400000000000 | uintptr_t(area) << 44;
 }
 
 static inline mem_area get_mem_area(void* addr)
 {
-    return mem_area(reinterpret_cast<uintptr_t>(addr) >> 44 & 7);
+    return mem_area(reinterpret_cast<uintptr_t>(addr) >> 44 & 3);
 }
 
 constexpr void* translate_mem_area(mem_area from, mem_area to, void* addr)

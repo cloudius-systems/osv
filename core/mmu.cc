@@ -78,7 +78,7 @@ public:
 };
 
 constexpr uintptr_t lower_vma_limit = 0x0;
-constexpr uintptr_t upper_vma_limit = 0x800000000000;
+constexpr uintptr_t upper_vma_limit = 0x400000000000;
 
 typedef boost::intrusive::set<vma,
                               bi::compare<vma_compare>,
