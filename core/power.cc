@@ -24,7 +24,7 @@
 OSV_LIBC_API
 int reboot(int cmd)
 {
-    switch (cmd) {
+    switch ((unsigned)cmd) {
     case RB_POWER_OFF:
         printf("Power down\n");
         osv::poweroff();

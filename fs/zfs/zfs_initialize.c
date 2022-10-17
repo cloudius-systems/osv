@@ -52,11 +52,16 @@ extern void zfs_update_vfsops(struct vfsops* _vfsops);
 extern void start_pagecache_access_scanner();
 
 extern int zfs_init(void);
+extern bool zfs_driver_initialized;
 
 //This init function gets called on loading of libsolaris.so
 //and it initializes all necessary resources (threads, etc) used by the code in
 //libsolaris.so. This initialization is necessary before ZFS can be mounted.
 void __attribute__((constructor)) zfs_initialize(void) {
+    if (zfs_driver_initialized) {
+        debug("zfs: driver has been ALREADY initialized!\n");
+        return;
+    }
     // These 3 functions used to be called at the end of bsd_init()
     // and are intended to initialize various resources, mainly thread pools
     // (threads named 'system_taskq_*' and 'solthread-0x*')
@@ -85,6 +90,7 @@ void __attribute__((constructor)) zfs_initialize(void) {
     //functions in the kernel
     zfs_init();
 
+    zfs_driver_initialized = true;
     debug("zfs: driver has been initialized!\n");
 }
 

@@ -14,6 +14,7 @@
 #include <osv/sched.hh>
 #include <osv/debug.hh>
 #include <osv/debug.h>
+#include <osv/export.h>
 
 #include "early-console.hh"
 
@@ -144,7 +145,7 @@ void logger::wrt(const char* tag, logger_severity severity, const char* _fmt, va
 }
 
 extern "C" {
-void tprintf(const char* tag, logger_severity severity, const char* _fmt, ...)
+OSV_LIBSOLARIS_API void tprintf(const char* tag, logger_severity severity, const char* _fmt, ...)
 {
     va_list ap;
     va_start(ap, _fmt);
@@ -220,6 +221,7 @@ extern "C" {
         }
     }
 
+    OSV_LIBSOLARIS_API
     void debug(const char *msg)
     {
         fill_debug_buffer(msg, strlen(msg));

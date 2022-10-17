@@ -10,6 +10,7 @@
 #include <errno.h>
 #include <osv/trace.hh>
 #include <osv/wait_record.hh>
+#include <osv/export.h>
 
 TRACEPOINT(trace_condvar_wait, "%p", condvar *);
 TRACEPOINT(trace_condvar_wake_one, "%p", condvar *);
@@ -34,6 +35,13 @@ int condvar::wait(mutex* user_mutex, sched::timer* tmr)
     _user_mutex = user_mutex;
     // This preempt_disable() is just an optimization, to avoid context
     // switch between the two unlocks.
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+    assert(sched::preemptable());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     sched::preempt_disable();
     user_mutex->unlock();
     _m.unlock();
@@ -161,7 +169,7 @@ void condvar::wake_all()
     }
 }
 
-extern "C"
+extern "C" OSV_LIBSOLARIS_API
 int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, uint64_t expiration)
 {
     if (expiration) {
@@ -172,11 +180,13 @@ int condvar_wait(condvar_t *condvar, mutex_t* user_mutex, uint64_t expiration)
     }
 }
 
+OSV_LIBSOLARIS_API
 void condvar_wake_one(condvar_t *condvar)
 {
     condvar->wake_one();
 }
 
+OSV_LIBSOLARIS_API
 void condvar_wake_all(condvar_t *condvar)
 {
     condvar->wake_all();

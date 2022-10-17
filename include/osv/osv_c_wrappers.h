@@ -127,6 +127,11 @@ bool osv_debug_enabled();
  */
 void osv_current_app_on_termination_request(void (*handler)());
 
+/*
+ * Start an app and wait until it terminates
+ */
+int osv_run_app(const char *app_path, const char *args[], int args_len);
+
 #ifdef __cplusplus
 }
 #endif

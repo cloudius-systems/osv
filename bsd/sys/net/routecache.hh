@@ -44,18 +44,11 @@
 #ifndef INCLUDED_ROUTECACHE_HH
 #define INCLUDED_ROUTECACHE_HH
 
-// FIXME: probably most of these includes are unnecessary
 #include <bsd/porting/netport.h>
-#include <bsd/porting/sync_stub.h>
-#include <bsd/sys/sys/param.h>
-#include <bsd/sys/sys/mbuf.h>
-#include <bsd/sys/sys/socket.h>
-#include <bsd/sys/sys/domain.h>
 #include <bsd/sys/net/if.h>
 #include <bsd/sys/net/if_dl.h>
 #include <bsd/sys/netinet/in.h>
 #include <bsd/sys/netinet/in_var.h>
-
 #include <bsd/sys/net/route.h>
 
 #include <osv/rcu.hh>
@@ -89,6 +82,10 @@ public:
 #endif
         return *this;
     }
+
+    bool is_loopback(void) const {
+        return (rt_ifp && (rt_ifp->if_flags & IFF_LOOPBACK)) ? true : false;
+    }
 };
 
 // Silly routing table implementation, allowing search given address in list
@@ -117,10 +114,35 @@ public:
         }
         entries.emplace_front(a, n, r);
     }
+    // address should be in host order
+    bool is_loopback_net(u32 address) const {
+        return ((address >> IN_CLASSA_NSHIFT) == IN_LOOPBACKNET) ? true : false;
+    }
     nonlockable_rtentry *search(u32 address) {
         for (silly_rtable_entry &e : entries) {
-            if ((e.address & e.netmask) == (address & e.netmask)) {
-                return &e.rte;
+            if (e.rte.is_loopback() == false) {
+                // The interface associated with this entry is non-loopback
+                // so it is enough to compare the networks of the addresses
+                if ((e.address & e.netmask) == (address & e.netmask)) {
+                    return &e.rte;
+                }
+            } else {
+                // Given the interface associated with this entry is a loopback one,
+                // consider addresses like 127.0.0.1 or 127.0.0.2 as a match
+                if (is_loopback_net(address)) {
+                    return &e.rte;
+                }
+                // Otherwise, we shouldn't use this entry on IP addresses just because they're
+                // on the same network as our non-loopback address. So match the entire
+                // address.
+                // This would handle a case when this route entry was added
+                // when looking up a non-loopback address like 192.168.122.15 but
+                // "converted" or handled as loopback as part of an optimization.
+                // The good practical example is an app like golang-httpclient
+                // which calls httpserver-api listening on 192.168.122.15
+                if (e.address == address) {
+                    return &e.rte;
+                }
             }
         }
         return nullptr;
@@ -142,6 +164,12 @@ public:
         // route.cc).
         assert(fibnum == 0);
 
+#if CONF_lazy_stack_invariant
+        assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+        arch::ensure_next_stack_page();
+#endif
         WITH_LOCK(osv::rcu_read_lock) {
             auto *c = cache.read();
             auto entry = c->search(dst->sin_addr.s_addr);

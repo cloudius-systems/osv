@@ -9,6 +9,7 @@
 #include <osv/trace.hh>
 #include <osv/sched.hh>
 #include <osv/wait_record.hh>
+#include <osv/export.h>
 
 namespace lockfree {
 
@@ -278,16 +279,16 @@ bool mutex::owned() const
 // functions, and make the methods inline, calling these functions with
 // "this" as a parameter. But this would be un-C++-like :(
 extern "C" {
-__attribute__((flatten)) void lockfree_mutex_lock(void *m) {
+OSV_LIBSOLARIS_API __attribute__((flatten)) void lockfree_mutex_lock(void *m) {
     static_cast<lockfree::mutex *>(m)->lock();
 }
-__attribute__ ((flatten)) void lockfree_mutex_unlock(void *m) {
+OSV_LIBSOLARIS_API __attribute__ ((flatten)) void lockfree_mutex_unlock(void *m) {
     static_cast<lockfree::mutex *>(m)->unlock();
 }
-__attribute__ ((flatten)) bool lockfree_mutex_try_lock(void *m) {
+OSV_LIBSOLARIS_API __attribute__ ((flatten)) bool lockfree_mutex_try_lock(void *m) {
     return static_cast<lockfree::mutex *>(m)->try_lock();
 }
-__attribute__ ((flatten)) bool lockfree_mutex_owned(void *m) {
+OSV_LIBSOLARIS_API __attribute__ ((flatten)) bool lockfree_mutex_owned(void *m) {
     return static_cast<lockfree::mutex *>(m)->owned();
 }
 }

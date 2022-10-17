@@ -1127,6 +1127,7 @@ zpool_clear_label(int fd)
  * poolname or guid (but not both) are provided by the caller when trying
  * to import a specific pool.
  */
+#define MAX_MOUNTED_DEVS 64
 static nvlist_t *
 zpool_find_import_impl(libzfs_handle_t *hdl, importargs_t *iarg)
 {
@@ -1146,6 +1147,8 @@ zpool_find_import_impl(libzfs_handle_t *hdl, importargs_t *iarg)
 	avl_tree_t slice_cache;
 	rdsk_node_t *slice;
 	void *cookie;
+	char *excluded_dev_names[MAX_MOUNTED_DEVS];
+	int excluded_dev_count = 0;
 
 	if (dirs == 0) {
 		dirs = 1;
@@ -1229,6 +1232,28 @@ zpool_find_import_impl(libzfs_handle_t *hdl, importargs_t *iarg)
 		}
 #endif
 
+#ifdef __OSV__
+		// Iterate over all mounts and identify the devices we wanted to exlude
+		FILE *ent = fopen("/etc/fstab", "r");
+		if (ent) {
+			struct mnttab m;
+			while (getmntent(ent, &m) == 0) {
+				if (strcmp("none", m.mnt_special) == 0) {
+					continue;
+				}
+				char *dev_name = excluded_dev_names[excluded_dev_count++] = strdup(m.mnt_special + 5);
+				// If the device has a '.' in it it means it corresponds to a disk partion
+				// and in this case we should skip the parent disk as well as it will make
+				// the pool discovery slow. For example for 'vblk0.1' exclude 'vblk0' as well but
+				// not 'vblk0.2'
+				char *dot_pos = strchr(dev_name, '.');
+				if (dot_pos) {
+					excluded_dev_names[excluded_dev_count++] = strndup(dev_name, dot_pos - dev_name);
+				}
+			}
+			fclose(ent);
+		}
+#endif
 		/*
 		 * This is not MT-safe, but we have no MT consumers of libzfs
 		 */
@@ -1238,12 +1263,20 @@ zpool_find_import_impl(libzfs_handle_t *hdl, importargs_t *iarg)
 			    (name[1] == 0 || (name[1] == '.' && name[2] == 0)))
 				continue;
 #ifdef __OSV__
-			/* In OSv, mount_zfs_roofs() always mounts /dev/vblk0.1
-			 * before calling zpool import, so this device is
-			 * already mounted, and trying to do it again while
-			 * it is already mounted is surprisingly slow.
+			/* Trying to call zpool import on a device that we
+			 * have already mounted ZFS root pool from before,
+			 * is surprisingly slow. So let us try to avoid it
+			 * by filtering it out using a list of mounted devices
+			 * identified before in excluded_dev_names.
 			 */
-			if (!strcmp(name, "vblk0.1"))
+			bool skip_entry = false;
+			for (int i = 0; i < excluded_dev_count; i++) {
+				if (!strcmp(name, excluded_dev_names[i])) {
+					skip_entry = true;
+					break;
+				}
+			}
+			if (skip_entry)
 				continue;
 #endif
 
@@ -1255,6 +1288,11 @@ zpool_find_import_impl(libzfs_handle_t *hdl, importargs_t *iarg)
 			slice->rn_nozpool = B_FALSE;
 			avl_add(&slice_cache, slice);
 		}
+#ifdef __OSV__
+		while (excluded_dev_count) {
+			free(excluded_dev_names[--excluded_dev_count]);
+		}
+#endif
 
 #ifndef __OSV__
 skipdir:

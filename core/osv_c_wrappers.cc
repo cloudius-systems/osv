@@ -143,6 +143,15 @@ void osv_current_app_on_termination_request(void (*handler)()) {
     osv::this_application::on_termination_request(handler);
 }
 
+extern "C" OSV_MODULE_API
+int osv_run_app(const char *app_path, const char *args[], int args_len) {
+    int ret;
+    std::vector<std::string> _args(args, args + args_len);
+    auto ok = run(app_path, _args, &ret);
+    assert(ok);
+    return ret;
+}
+
 extern bool verbose;
 extern "C" OSV_MODULE_API
 bool osv_debug_enabled() {

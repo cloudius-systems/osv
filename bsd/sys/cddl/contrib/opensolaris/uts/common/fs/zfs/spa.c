@@ -4206,6 +4206,7 @@ spa_import_rootpool(const char *name)
 	}
 	spa->spa_is_root = B_TRUE;
 	spa->spa_import_flags = ZFS_IMPORT_VERBATIM;
+	spa->spa_dev_path = name;
 
 	/*
 	 * Build up a vdev tree based on the boot device's label config.

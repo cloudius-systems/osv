@@ -217,7 +217,7 @@ int dax_window_impl::unmap(uint64_t len, uint64_t mstart)
     // fuse_removemapping_in.count fuse_removemapping_one arguments in general.
     auto in_args_size = sizeof(fuse_removemapping_in) +
         sizeof(fuse_removemapping_one);
-    std::unique_ptr<u8> in_args {new (std::nothrow) u8[in_args_size]};
+    std::unique_ptr<u8[]> in_args {new (std::nothrow) u8[in_args_size]};
     if (!in_args) {
         return ENOMEM;
     }

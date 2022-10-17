@@ -19,6 +19,8 @@
 #include <bsd/sys/sys/param.h>
 #include <bsd/sys/sys/libkern.h>
 
+#include <osv/export.h>
+
 #define	ARC4_RESEED_BYTES 65536
 #define	ARC4_RESEED_SECONDS 300
 #define	ARC4_KEYBYTES (256 / 8)
@@ -32,6 +34,7 @@ static struct mtx arc4_mtx;
 static u_int8_t arc4_randbyte(void);
 
 /* FIXME: OSv - use real random */
+OSV_LIBSOLARIS_API
 int read_random(void* buf, int count)
 {
     struct timeval tv;

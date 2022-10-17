@@ -54,6 +54,7 @@ int blk::_instance = 0;
 
 
 struct blk_priv {
+    devop_strategy_t strategy;
     blk* drv;
 };
 
@@ -63,7 +64,6 @@ blk_strategy(struct bio *bio)
     struct blk_priv *prv = reinterpret_cast<struct blk_priv*>(bio->bio_dev->private_data);
 
     trace_virtio_blk_strategy(bio);
-    bio->bio_offset += bio->bio_dev->offset;
     prv->drv->make_request(bio);
 }
 
@@ -90,7 +90,7 @@ static struct devops blk_devops {
     blk_write,
     no_ioctl,
     no_devctl,
-    blk_strategy,
+    multiplex_strategy,
 };
 
 struct driver blk_driver = {
@@ -143,7 +143,7 @@ blk::blk(virtio_device& virtio_dev)
         return new pci_interrupt(
             pci_dev,
             [=] { return this->ack_irq(); },
-            [=] { t->wake(); });
+            [=] { t->wake_with_irq_disabled(); });
     };
 #endif
 
@@ -153,14 +153,14 @@ blk::blk(virtio_device& virtio_dev)
                 gic::irq_type::IRQ_TYPE_EDGE,
                 _dev.get_irq(),
                 [=] { return this->ack_irq(); },
-                [=] { t->wake(); });
+                [=] { t->wake_with_irq_disabled(); });
     };
 #else
 #if CONF_drivers_mmio
     int_factory.create_gsi_edge_interrupt = [this,t]() {
         return new gsi_edge_interrupt(
                 _dev.get_irq(),
-                [=] { if (this->ack_irq()) t->wake(); });
+                [=] { if (this->ack_irq()) t->wake_with_irq_disabled(); });
     };
 #endif
 #endif
@@ -180,8 +180,10 @@ blk::blk(virtio_device& virtio_dev)
 
     dev = device_create(&blk_driver, dev_name.c_str(), D_BLK);
     prv = reinterpret_cast<struct blk_priv*>(dev->private_data);
+    prv->strategy = blk_strategy;
     prv->drv = this;
     dev->size = prv->drv->size();
+    dev->max_io_size = _config.seg_max ? (_config.seg_max - 1) * mmu::page_size : UINT_MAX;
     read_partition_table(dev);
 
     debugf("virtio-blk: Add blk device instances %d as %s, devsize=%lld\n", _id, dev_name.c_str(), dev->size);
@@ -208,6 +210,8 @@ void blk::read_config()
     if (get_guest_feature_bit(VIRTIO_BLK_F_SEG_MAX)) {
         READ_CONFIGURATION_FIELD(blk_config,seg_max,_config.seg_max)
         trace_virtio_blk_read_config_seg_max(_config.seg_max);
+    } else {
+        _config.seg_max = 0;
     }
     if (get_guest_feature_bit(VIRTIO_BLK_F_GEOMETRY)) {
         READ_CONFIGURATION_FIELD(blk_config,geometry,_config.geometry)

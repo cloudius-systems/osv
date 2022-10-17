@@ -26,7 +26,8 @@ usage() {
 	  mode=release|debug            Specify the build mode; default is release
 	  export=none|selected|all      If 'selected' or 'all' export the app files to <export_dir>
 	  export_dir=<dir>              The directory to export the files to; default is build/export
-	  fs=zfs|rofs|ramfs|virtiofs    Specify the filesystem of the image partition
+	  fs=zfs|rofs|rofs_with_zfs|    Specify the filesystem of the image partition
+	     ramfs|virtiofs
 	  fs_size=N                     Specify the size of the image in bytes
 	  fs_size_mb=N                  Specify the size of the image in MiB
 	  app_local_exec_tls_size=N     Specify the size of app local TLS in bytes; the default is 64
@@ -36,6 +37,8 @@ usage() {
 	  -j<N>                         Set number of parallel jobs for make
 	  --append-manifest             Append build/<mode>/append.manifest to usr.manifest
 	  --create-disk                 Instead of usr.img create kernel-less disk.img
+	  --create-zfs-disk             Create extra empty disk with ZFS filesystem
+	  --use-openzfs                 Build and manipulate ZFS images using on host OpenZFS tools
 
 	Examples:
 	  ./scripts/build -j4 fs=rofs image=native-example   # Create image with native-example app
@@ -77,7 +80,7 @@ do
 	case $i in
 	--help|-h)
 		usage ;;
-	image=*|modules=*|fs=*|usrskel=*|check|--append-manifest|--create-disk) ;;
+	image=*|modules=*|fs=*|usrskel=*|check|--append-manifest|--create-disk|--create-zfs-disk|--use-openzfs) ;;
 	clean)
 		stage1_args=clean ;;
 	arch=*)
@@ -159,11 +162,15 @@ do
 		vars[append_manifest]="true";;
 	--create-disk)
 		vars[create_disk]="true";;
+	--create-zfs-disk)
+		vars[create_zfs_disk]="true";;
+	--use-openzfs)
+		vars[use_openzfs]="true";;
 	esac
 done
 
 # fs_size_mb is in megabytes (1024*1024 bytes)
-fs_size_mb=${vars[fs_size_mb]-256}
+fs_size_mb=${vars[fs_size_mb]-512}
 # fs_size is in bytes
 fs_size=${vars[fs_size]-$(($fs_size_mb*1024*1024))}
 # size must be a multiple of 512. Round it down
@@ -195,11 +202,12 @@ usrskel_arg=
 case $fs_type in
 zfs)
 	;; # Nothing to change here. This is our default behavior
-rofs|virtiofs)
+rofs|rofs_with_zfs|virtiofs)
 	# Both are read-only (in OSv) and require nothing extra on bootfs to work
 	manifest=bootfs_empty.manifest.skel
 	usrskel_arg="--usrskel usr_rofs.manifest.skel";;
 ramfs)
+	cp "$SRC"/static/etc/fstab fstab
 	manifest=$OUT/usr.manifest
 	usrskel_arg="--usrskel usr_ramfs.manifest.skel";;
 *)
@@ -293,6 +301,7 @@ cd $OUT
 
 if [ "$export" != "none" ]; then
 	export_dir=${vars[export_dir]-$SRC/build/export}
+	rm -rf "$export_dir"
 	"$SRC"/scripts/export_manifest.py -e "$export_dir" -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
 fi
 
@@ -301,9 +310,6 @@ if [[ ${vars[create_disk]} == "true" ]]; then
 	bare="$SRC"/scripts/disk.bin
 	raw_disk=disk
 	qcow2_disk=disk
-	if [[ "$arch" == 'x64' ]]; then
-		upload_kernel_mode="-k"
-	fi
 else
 	partition_offset=$kernel_end
 	bare=loader.img
@@ -314,9 +320,17 @@ fi
 create_zfs_disk() {
 	cp $bare $raw_disk.raw
 	"$SRC"/scripts/imgedit.py setpartition "-f raw ${raw_disk}.raw" 2 $partition_offset $partition_size
-	qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
-	qemu-img resize $qcow2_disk.img ${image_size}b >/dev/null 2>&1
-	"$SRC"/scripts/upload_manifest.py --arch=$arch -o $qcow2_disk.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir" $upload_kernel_mode
+	if [[ ${vars[use_openzfs]} == "true" ]]; then
+		#We use raw disk on purpose so that zfs-image-on-host.sh can use loop device which is faster to copy files to
+		qemu-img resize ${raw_disk}.raw ${image_size}b >/dev/null 2>&1
+		"$SRC"/scripts/zfs-image-on-host.sh build ${raw_disk}.raw 1 osv zfs true
+		qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
+	else
+		qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
+		qemu-img resize $qcow2_disk.img ${image_size}b >/dev/null 2>&1
+		"$SRC"/scripts/upload_manifest.py --arch=$arch -o $qcow2_disk.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
+	fi
+	rm ${raw_disk}.raw
 }
 
 create_rofs_disk() {
@@ -327,6 +341,27 @@ create_rofs_disk() {
 	qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
 }
 
+create_zfs_filesystem() {
+	local image_path=$1
+	if [[ ${vars[use_openzfs]} == "true" ]]; then
+		local partition=$3
+		"$SRC"/scripts/zfs-image-on-host.sh build $image_path $partition osv zfs false
+	else
+		local device_path=$2
+		local qemu_arch=$arch
+		if [[ "$qemu_arch" == 'aarch64' ]]; then
+			console=''
+			zfs_builder_name='zfs_builder.img'
+		else
+			qemu_arch='x86_64'
+			console='--console=serial'
+			zfs_builder_name='zfs_builder-stripped.elf'
+		fi
+		"$SRC"/scripts/run.py -k --kernel-path $zfs_builder_name --arch=$qemu_arch --vnc none -m 512 -c1 -i ${image_path} --block-device-cache unsafe \
+			-s -e "${console} --norandom --nomount --noinit --preload-zfs-library /tools/mkfs.so ${device_path}; /zfs.so set compression=off osv"
+	fi
+}
+
 if [[ "$arch" == 'aarch64' ]]; then
 	export STRIP=${CROSS_PREFIX:-aarch64-linux-gnu-}strip
 fi
@@ -335,13 +370,34 @@ case $fs_type in
 zfs)
 	partition_size=$((fs_size - partition_offset))
 	image_size=$fs_size
-        create_zfs_disk ;;
+	cp "$SRC"/static/etc/fstab fstab
+	create_zfs_disk ;;
 rofs)
 	rm -rf rofs.img
+	cp "$SRC"/static/etc/fstab_rofs fstab
+	if [[ ${vars[create_zfs_disk]} == "true" ]]; then
+		echo "/dev/vblk1.1 /data      zfs       defaults 0 0" >> fstab
+	fi
 	"$SRC"/scripts/gen-rofs-img.py -o rofs.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
 	partition_size=`stat --printf %s rofs.img`
 	image_size=$((partition_offset + partition_size))
-        create_rofs_disk ;;
+	create_rofs_disk ;;
+rofs_with_zfs)
+	# Create disk with rofs image on it 1st partition
+	rm -rf rofs.img
+	cp "$SRC"/static/etc/fstab_rofs fstab
+	echo "/dev/vblk0.2 /data      zfs       defaults 0 0" >> fstab
+	"$SRC"/scripts/gen-rofs-img.py -o rofs.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
+	partition_size=`stat --printf %s rofs.img`
+	image_size=$((fs_size+partition_size))
+	create_rofs_disk
+	# Resize the disk to fit ZFS on it after rofs
+	qemu-img resize $qcow2_disk.img ${image_size}b >/dev/null 2>&1
+	# Create filesystem on ZFS partition
+	zfs_partition_offset=$((partition_offset + partition_size))
+	zfs_partition_size=$((image_size-zfs_partition_offset))
+	"$SRC"/scripts/imgedit.py setpartition "$qcow2_disk.img" 3 $zfs_partition_offset $zfs_partition_size
+	create_zfs_filesystem $qcow2_disk.img "/dev/vblk0.2" 2;;
 ramfs|virtiofs)
 	# No need to create extra fs like above: ramfs is already created (as the
 	# bootfs) and virtio-fs is specified with virtiofsd at run time
@@ -353,6 +409,19 @@ echo -n "--rootfs=${fs_type} ${cmdline}" > cmdline
 
 if [[ -f "$OSV_BUILD_PATH/usr.img" ]]; then
 	"$SRC"/scripts/imgedit.py setargs usr.img `cat cmdline`
+fi
+
+if [[ ${vars[create_zfs_disk]} == "true" ]]; then
+	partition_offset=512
+	partition_size=$((fs_size - partition_offset))
+	image_size=$fs_size
+	raw_disk=zfs_disk
+	qcow2_disk=zfs_disk
+	cp "$SRC"/scripts/disk.bin $raw_disk.raw
+	"$SRC"/scripts/imgedit.py setpartition "-f raw ${raw_disk}.raw" 2 $partition_offset $partition_size
+	qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
+	qemu-img resize $qcow2_disk.img ${image_size}b >/dev/null 2>&1
+	create_zfs_filesystem $qcow2_disk.img "/dev/vblk0.1" 1
 fi
 
 # Support "build check"

@@ -234,7 +234,7 @@ public:
         , _stopped(false)
         , _counter(0)
         , _thread(sched::thread::make([this] { process_interrupts(); }))
-        , _intr(gsi, [this] { _counter.fetch_add(1); _thread->wake(); })
+        , _intr(gsi, [this] { _counter.fetch_add(1); _thread->wake_with_irq_disabled(); })
     {
         _thread->start();
     }

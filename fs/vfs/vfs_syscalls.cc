@@ -53,6 +53,7 @@
 #include <osv/prex.h>
 #include <osv/vnode.h>
 #include <osv/vfs_file.hh>
+#include <osv/export.h>
 #include "vfs.h"
 #include <fs/fs.hh>
 
@@ -105,7 +106,7 @@ out:
 	return (error);
 }
 
-int
+OSV_LIBSOLARIS_API int
 sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 {
 	file *fp;
@@ -241,7 +242,7 @@ sys_close(struct file *fp)
 	return 0;
 }
 
-int
+OSV_LIBSOLARIS_API int
 sys_read(struct file *fp, const struct iovec *iov, size_t niov,
 		off_t offset, size_t *count)
 {
@@ -266,8 +267,11 @@ sys_read(struct file *fp, const struct iovec *iov, size_t niov,
     struct uio uio;
     // Unfortunately, the current implementation of fp->read zeros the
     // iov_len fields when it reads from disk, so we have to copy iov.
-    std::vector<iovec> copy_iov(iov, iov + niov);
-    uio.uio_iov = copy_iov.data();
+    assert(niov <= UIO_MAXIOV);
+    struct iovec copy_iov[niov];
+    memcpy(copy_iov, iov, sizeof(copy_iov));
+
+    uio.uio_iov = copy_iov;
     uio.uio_iovcnt = niov;
     uio.uio_offset = offset;
     uio.uio_resid = bytes;
@@ -277,7 +281,7 @@ sys_read(struct file *fp, const struct iovec *iov, size_t niov,
     return error;
 }
 
-int
+OSV_LIBSOLARIS_API int
 sys_write(struct file *fp, const struct iovec *iov, size_t niov,
 		off_t offset, size_t *count)
 {
@@ -302,8 +306,11 @@ sys_write(struct file *fp, const struct iovec *iov, size_t niov,
     struct uio uio;
     // Unfortunately, the current implementation of fp->write zeros the
     // iov_len fields when it writes to disk, so we have to copy iov.
-    std::vector<iovec> copy_iov(iov, iov + niov);
-    uio.uio_iov = copy_iov.data();
+    assert(niov <= UIO_MAXIOV);
+    struct iovec copy_iov[niov];
+    memcpy(copy_iov, iov, sizeof(copy_iov));
+
+    uio.uio_iov = copy_iov;
     uio.uio_iovcnt = niov;
     uio.uio_offset = offset;
     uio.uio_resid = bytes;

@@ -38,6 +38,7 @@
 #include <bsd/sys/sys/priority.h>
 #include <bsd/sys/sys/taskqueue.h>
 
+#include <osv/export.h>
 
 struct taskqueue_busy {
 	struct task	*tb_running;
@@ -113,7 +114,7 @@ _taskqueue_create(const char *name, int mflags,
 	return queue;
 }
 
-struct taskqueue *
+OSV_LIBSOLARIS_API struct taskqueue *
 taskqueue_create(const char *name, int mflags,
 		 taskqueue_enqueue_fn enqueue, void *context)
 {
@@ -134,7 +135,7 @@ taskqueue_terminate(struct thread **pp, struct taskqueue *tq)
 	}
 }
 
-void
+OSV_LIBSOLARIS_API void
 taskqueue_free(struct taskqueue *queue)
 {
 
@@ -190,7 +191,8 @@ taskqueue_enqueue_locked(struct taskqueue *queue, struct task *task)
 
 	return (0);
 }
-int
+
+OSV_LIBSOLARIS_API int
 taskqueue_enqueue(struct taskqueue *queue, struct task *task)
 {
 	int res;
@@ -396,7 +398,7 @@ taskqueue_drain_timeout(struct taskqueue *queue,
 }
 #endif
 
-int
+OSV_LIBSOLARIS_API int
 taskqueue_start_threads(struct taskqueue **tqp, int count, int pri,
 			const char *name, ...)
 {
@@ -482,7 +484,7 @@ taskqueue_thread_loop(void *arg)
 	kthread_exit();
 }
 
-void
+OSV_LIBSOLARIS_API void
 taskqueue_thread_enqueue(void *context)
 {
 	struct taskqueue **tqp, *tq;
@@ -496,7 +498,7 @@ taskqueue_thread_enqueue(void *context)
 
 //TASKQUEUE_DEFINE_THREAD(thread);
 
-int
+OSV_LIBSOLARIS_API int
 taskqueue_member(struct taskqueue *queue, struct thread *td)
 {
 	int i, j, ret = 0;

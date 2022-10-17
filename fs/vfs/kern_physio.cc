@@ -13,13 +13,14 @@
 
 #include <osv/device.h>
 #include <osv/bio.h>
+#include <osv/export.h>
 #include <sys/param.h>
 #include <assert.h>
 #include <sys/refcount.h>
 #include <osv/mutex.h>
 #include <osv/waitqueue.hh>
 
-struct bio *
+OSV_LIBSOLARIS_API struct bio *
 alloc_bio(void)
 {
 	auto *b = new (std::nothrow) bio();
@@ -28,13 +29,13 @@ alloc_bio(void)
 	return b;
 }
 
-void
+OSV_LIBSOLARIS_API void
 destroy_bio(struct bio *bio)
 {
 	delete bio;
 }
 
-int
+OSV_LIBSOLARIS_API int
 bio_wait(struct bio *bio)
 {
 	SCOPE_LOCK(bio->bio_mutex);

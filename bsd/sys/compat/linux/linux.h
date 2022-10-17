@@ -142,6 +142,7 @@ struct l_ifreq {
 		char		ifru_slave[LINUX_IFNAMSIZ];
                 char            ifru_newname[LINUX_IFNAMSIZ];
 		l_uintptr_t	ifru_data;
+		int             ifru_ifindex;
 	} ifr_ifru;
 } __packed;
 

@@ -243,6 +243,7 @@ struct spa {
 #ifndef sun
 	boolean_t	spa_splitting_newspa;	/* creating new spa in split */
 #endif
+	const char	*spa_dev_path;		/* device spa is mounted */
 };
 
 extern const char *spa_config_path;

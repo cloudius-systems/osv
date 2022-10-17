@@ -19,6 +19,7 @@
 #include <osv/mutex.h>
 #include <atomic>
 #include "osv/lockless-queue.hh"
+#include <array>
 #include <list>
 #include <memory>
 #include <vector>
@@ -185,6 +186,7 @@ public:
     explicit timer_base(client& t);
     ~timer_base();
     void set(osv::clock::uptime::time_point time);
+    void set_with_irq_disabled(osv::clock::uptime::time_point time);
     void reset(osv::clock::uptime::time_point time);
     // Set a timer using absolute wall-clock time.
     // CAVEAT EMPTOR: Internally timers are kept using the monotonic (uptime)
@@ -201,6 +203,10 @@ public:
     template <class Rep, class Period>
     void set(std::chrono::duration<Rep, Period> duration) {
         set(osv::clock::uptime::now() + duration);
+    }
+    template <class Rep, class Period>
+    void set_with_irq_disabled(std::chrono::duration<Rep, Period> duration) {
+        set_with_irq_disabled(osv::clock::uptime::now() + duration);
     }
     osv::clock::uptime::time_point get_timeout() {
         return _time;
@@ -467,6 +473,7 @@ public:
     static void wait_for(mutex& mtx, waitable&&... waitables);
 
     void wake();
+    void wake_with_irq_disabled();
     cpu* get_cpu() const {
         return _detached_state.get()->_cpu;
     }
@@ -479,6 +486,8 @@ public:
     void wake_lock(mutex* mtx, wait_record* wr);
     bool interrupted();
     void interrupted(bool f);
+    template <class Action>
+    inline void wake_with_irq_or_preemption_disabled(Action action);
     template <class Action>
     inline void wake_with(Action action);
     // for mutex internal use
@@ -816,6 +825,7 @@ public:
     }
     void reset(thread& t) { _t.assign(t._detached_state.get()); }
     void wake();
+    void wake_from_kernel_or_with_irq_disabled();
     void clear() { _t.assign(nullptr); }
     operator bool() const { return _t; }
     bool operator==(const thread_handle& x) const {
@@ -1032,6 +1042,15 @@ inline bool preemptable()
 {
     return !get_preempt_counter();
 }
+
+#if CONF_lazy_stack
+inline void ensure_next_stack_page_if_preemptable() {
+    if (!preemptable()) {
+        return;
+    }
+    arch::ensure_next_stack_page();
+}
+#endif
 
 inline void preempt()
 {
@@ -1317,8 +1336,22 @@ void thread::sleep(std::chrono::duration<Rep, Period> duration)
 
 template <class Action>
 inline
+void thread::wake_with_irq_or_preemption_disabled(Action action)
+{
+    return do_wake_with(action, (1 << unsigned(status::waiting)));
+}
+
+template <class Action>
+inline
 void thread::wake_with(Action action)
 {
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+    assert(preemptable());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     return do_wake_with(action, (1 << unsigned(status::waiting)));
 }
 
@@ -1326,6 +1359,14 @@ template <class Action>
 inline
 void thread::wake_with_from_mutex(Action action)
 {
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    if (preemptable()) {
+        arch::ensure_next_stack_page();
+    }
+#endif
     return do_wake_with(action, (1 << unsigned(status::waiting))
                               | (1 << unsigned(status::sending_lock)));
 }

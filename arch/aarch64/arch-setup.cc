@@ -36,12 +36,11 @@
 
 void setup_temporary_phys_map()
 {
-    // duplicate 1:1 mapping into phys_mem
+    // duplicate 1:1 mapping into the lower part of phys_mem
     u64 *pt_ttbr0 = reinterpret_cast<u64*>(processor::read_ttbr0());
-    u64 *pt_ttbr1 = reinterpret_cast<u64*>(processor::read_ttbr1());
     for (auto&& area : mmu::identity_mapped_areas) {
         auto base = reinterpret_cast<void*>(get_mem_area_base(area));
-        pt_ttbr1[mmu::pt_index(base, 3)] = pt_ttbr0[0];
+        pt_ttbr0[mmu::pt_index(base, 3)] = pt_ttbr0[0];
     }
     mmu::flush_tlb_all();
 }

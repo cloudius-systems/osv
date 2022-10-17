@@ -177,6 +177,11 @@ def start_osv_qemu(options):
         "-device", "virtio-blk-pci,id=blk1,bootindex=1,drive=hd1,scsi=off%s" % options.virtio_device_suffix,
         "-drive", "file=%s,if=none,id=hd1" % (options.cloud_init_image)]
 
+    if options.second_disk_image:
+        args += [
+        "-device", "virtio-blk-pci,id=blk1,drive=hd1,scsi=off%s" % options.virtio_device_suffix,
+        "-drive", "file=%s,if=none,id=hd1" % (options.second_disk_image)]
+
     if options.virtio_fs_tag:
         dax = (",cache-size=%s" % options.virtio_fs_dax) if options.virtio_fs_dax else ""
         args += [
@@ -589,12 +594,14 @@ if __name__ == "__main__":
                         help="specify gdb port number")
     parser.add_argument("--script", action="store",
                         help="XEN define configuration script for vif")
+    parser.add_argument("--second-disk-image", action="store",
+                        help="Path to the optional second disk image that should be attached to the instance")
     parser.add_argument("--cloud-init-image", action="store",
                         help="Path to the optional cloud-init image that should be attached to the instance")
     parser.add_argument("-k", "--kernel", action="store_true",
                         help="Run OSv in QEMU kernel mode as PVH.")
     parser.add_argument("--kernel-path", action="store",
-                        help="path to kernel.elf. defaults to build/$mode/kernel.elf")
+                        help="path to loader-stripped.elf. defaults to build/$mode/loader-stripped.elf")
     parser.add_argument("--virtio", action="store", choices=["legacy","transitional","modern"], default="transitional",
                         help="specify virtio version: legacy, transitional or modern")
     parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default=host_arch,
@@ -618,7 +625,7 @@ if __name__ == "__main__":
         default_kernel_file_name = "loader.img"
         default_image_file_name = "disk.img"
     else:
-        default_kernel_file_name = "kernel.elf"
+        default_kernel_file_name = "loader-stripped.elf"
         default_image_file_name = "usr.img"
     cmdargs.kernel_file = os.path.abspath(cmdargs.kernel_path or os.path.join(osv_base, "build/%s/%s" % (cmdargs.opt_path, default_kernel_file_name)))
     cmdargs.image_file = os.path.abspath(cmdargs.image or os.path.join(osv_base, "build/%s/%s" % (cmdargs.opt_path, default_image_file_name)))
@@ -629,6 +636,11 @@ if __name__ == "__main__":
         cmdargs.cloud_init_image = os.path.abspath(cmdargs.cloud_init_image)
         if not os.path.exists(cmdargs.cloud_init_image):
             raise Exception('Cloud-init image %s does not exist.' % cmdargs.cloud_init_image)
+
+    if cmdargs.second_disk_image:
+        cmdargs.second_disk_image = os.path.abspath(cmdargs.second_disk_image)
+        if not os.path.exists(cmdargs.second_disk_image):
+            raise Exception('Second disk image %s does not exist.' % cmdargs.second_disk_image)
 
     if cmdargs.virtio_fs_dir and not os.path.exists(cmdargs.virtio_fs_dir):
         raise Exception('Directory %s to be exposed through virtio-fs does not exist.' % cmdargs.virtio_fs_dir)

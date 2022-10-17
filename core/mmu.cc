@@ -47,6 +47,17 @@ extern const char text_start[], text_end[];
 
 namespace mmu {
 
+#if CONF_lazy_stack
+// We need to ensure that lazy stack is populated deeply enough (2 pages)
+// for all the cases when the vma_list_mutex is taken for write to prevent
+// page faults triggered on stack. The page-fault handling logic would
+// attempt to take same vma_list_mutex fo read and end up with a deadlock.
+#define PREVENT_STACK_PAGE_FAULT \
+    arch::ensure_next_two_stack_pages();
+#else
+#define PREVENT_STACK_PAGE_FAULT
+#endif
+
 struct vma_range_compare {
     bool operator()(const vma_range& a, const vma_range& b) {
         return a.start() < b.start();
@@ -78,7 +89,7 @@ public:
 };
 
 constexpr uintptr_t lower_vma_limit = 0x0;
-constexpr uintptr_t upper_vma_limit = 0x800000000000;
+constexpr uintptr_t upper_vma_limit = 0x400000000000;
 
 typedef boost::intrusive::set<vma,
                               bi::compare<vma_compare>,
@@ -1271,6 +1282,7 @@ static void nohugepage(void* addr, size_t length)
 
 error advise(void* addr, size_t size, int advice)
 {
+    PREVENT_STACK_PAGE_FAULT
     WITH_LOCK(vma_list_mutex.for_write()) {
         if (!ismapped(addr, size)) {
             return make_error(ENOMEM);
@@ -1310,6 +1322,7 @@ void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
     auto* vma = new mmu::anon_vma(addr_range(start, start + size), perm, flags);
+    PREVENT_STACK_PAGE_FAULT
     SCOPE_LOCK(vma_list_mutex.for_write());
     auto v = (void*) allocate(vma, start, size, search);
     if (flags & mmap_populate) {
@@ -1336,6 +1349,7 @@ void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
     auto start = reinterpret_cast<uintptr_t>(addr);
     auto *vma = f->mmap(addr_range(start, start + size), flags | mmap_file, perm, offset).release();
     void *v;
+    PREVENT_STACK_PAGE_FAULT
     WITH_LOCK(vma_list_mutex.for_write()) {
         v = (void*) allocate(vma, start, size, search);
         if (flags & mmap_populate) {
@@ -1399,6 +1413,9 @@ bool access_fault(vma& vma, unsigned int error_code)
 TRACEPOINT(trace_mmu_vm_fault, "addr=%p, error_code=%x", uintptr_t, unsigned int);
 TRACEPOINT(trace_mmu_vm_fault_sigsegv, "addr=%p, error_code=%x, %s", uintptr_t, unsigned int, const char*);
 TRACEPOINT(trace_mmu_vm_fault_ret, "addr=%p, error_code=%x", uintptr_t, unsigned int);
+#if CONF_lazy_stack
+TRACEPOINT(trace_mmu_vm_stack_fault, "thread=%d, addr=%p, page_no=%d", unsigned int, uintptr_t, unsigned int);
+#endif
 
 static void vm_sigsegv(uintptr_t addr, exception_frame* ef)
 {
@@ -1424,6 +1441,14 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
         trace_mmu_vm_fault_sigsegv(addr, ef->get_error(), "fast");
         return;
     }
+#if CONF_lazy_stack
+    auto stack = sched::thread::current()->get_stack_info();
+    void *v_addr = reinterpret_cast<void*>(addr);
+    if (v_addr >= stack.begin && v_addr < stack.begin + stack.size) {
+        trace_mmu_vm_stack_fault(sched::thread::current()->id(), addr,
+            ((u64)(stack.begin + stack.size - addr)) / 4096);
+    }
+#endif
     addr = align_down(addr, mmu::page_size);
     WITH_LOCK(vma_list_mutex.for_read()) {
         auto vma = find_intersecting_vma(addr);
@@ -1708,6 +1733,7 @@ ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b)
 
     auto* vma = new mmu::jvm_balloon_vma(jvm_addr, start, start + size, b, v->perm(), v->flags());
 
+    PREVENT_STACK_PAGE_FAULT
     WITH_LOCK(vma_list_mutex.for_write()) {
         // This means that the mapping that we had before was a balloon mapping
         // that was laying around and wasn't updated to an anon mapping. If we
@@ -2014,6 +2040,7 @@ void free_initial_memory_range(uintptr_t addr, size_t size)
 
 error mprotect(const void *addr, size_t len, unsigned perm)
 {
+    PREVENT_STACK_PAGE_FAULT
     SCOPE_LOCK(vma_list_mutex.for_write());
 
     if (!ismapped(addr, len)) {
@@ -2025,6 +2052,7 @@ error mprotect(const void *addr, size_t len, unsigned perm)
 
 error munmap(const void *addr, size_t length)
 {
+    PREVENT_STACK_PAGE_FAULT
     SCOPE_LOCK(vma_list_mutex.for_write());
 
     length = align_up(length, mmu::page_size);

@@ -247,6 +247,13 @@ void tracepoint_base::update()
     WITH_LOCK(trace_control_lock) {
         bool empty;
 
+#if CONF_lazy_stack_invariant
+        assert(arch::irq_enabled());
+        assert(sched::preemptable());
+#endif
+#if CONF_lazy_stack
+        arch::ensure_next_stack_page();
+#endif
         WITH_LOCK(osv::rcu_read_lock) {
             auto& probes = *probes_ptr.read();
 
@@ -376,6 +383,11 @@ extern "C" void __cyg_profile_func_enter(void *this_fn, void *call_site)
     }
     arch::irq_flag_notrace irq;
     irq.save();
+#if CONF_lazy_stack
+    if (sched::preemptable() && irq.enabled()) {
+        arch::ensure_next_stack_page();
+    }
+#endif
     arch::irq_disable_notrace();
     if (func_trace_nesting++ == 0) {
         trace_function_entry(this_fn, call_site);
@@ -391,6 +403,11 @@ extern "C" void __cyg_profile_func_exit(void *this_fn, void *call_site)
     }
     arch::irq_flag_notrace irq;
     irq.save();
+#if CONF_lazy_stack
+    if (sched::preemptable() && irq.enabled()) {
+        arch::ensure_next_stack_page();
+    }
+#endif
     arch::irq_disable_notrace();
     if (func_trace_nesting++ == 0) {
         trace_function_exit(this_fn, call_site);
@@ -697,7 +714,7 @@ std::string
 trace::create_trace_dump()
 {
     semaphore signal(0);
-    std::vector<trace_buf> copies;
+    std::vector<trace_buf> copies(sched::cpus.size());
 
     auto is_valid_tracepoint = [](const tracepoint_base * tp_test) {
         for (auto & tp : tracepoint_base::tp_list) {
@@ -717,7 +734,7 @@ trace::create_trace_dump()
             irq.save();
             arch::irq_disable_notrace();
             auto * tbp = percpu_trace_buffer.for_cpu(cpu);
-            copies.emplace_back(*tbp);
+            copies[i] = trace_buf(*tbp);
             irq.restore();
             signal.post();
         }, sched::thread::attr().pin(cpu)));

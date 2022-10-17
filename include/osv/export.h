@@ -35,6 +35,9 @@
 //
 // This is to expose some OSv functions intended to be used by modules
 #define OSV_MODULE_API __attribute__((__visibility__("default")))
+//
+// This is to expose various FreeBSD specific functions needed by libsolaris.so (ZFS filesystem impl)
+#define OSV_LIBSOLARIS_API __attribute__((__visibility__("default")))
 
 // In some very few cases, when source files are compiled without visibility
 // flag in order to expose most symbols in the corresponding file, there are some specific

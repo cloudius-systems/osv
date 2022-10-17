@@ -22,12 +22,20 @@ sgi_interrupt::~sgi_interrupt()
 
 void sgi_interrupt::send(sched::cpu* cpu)
 {
+#if CONF_lazy_stack_invariant
+    assert(!arch::irq_enabled() || !sched::preemptable());
+#endif
     gic::gic->send_sgi(gic::sgi_filter::SGI_TARGET_LIST,
                        cpu->arch.smp_idx, get_id());
 }
 
 void sgi_interrupt::send_allbutself()
 {
+#if CONF_lazy_stack
+    if (sched::preemptable() && arch::irq_enabled()) {
+        arch::ensure_next_stack_page();
+    }
+#endif
     gic::gic->send_sgi(gic::sgi_filter::SGI_TARGET_ALL_BUT_SELF,
                        0, get_id());
 }

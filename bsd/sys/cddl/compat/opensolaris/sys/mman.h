@@ -32,6 +32,7 @@
 
 #include_next <sys/mman.h>
 
+#undef mmap64
 #define	mmap64(_a,_b,_c,_d,_e,_f)	mmap(_a,_b,_c,_d,_e,_f)
 
 #endif

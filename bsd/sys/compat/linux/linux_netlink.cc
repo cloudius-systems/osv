@@ -61,6 +61,14 @@ struct bsd_sockaddr_nl {
 	uint32_t	nl_groups;    /* Multicast groups mask */
 };
 
+struct netlinkcb {
+	struct rawcb	raw;
+	pid_t		nl_pid;
+};
+
+std::atomic<pid_t> _nl_next_gen_pid(2);
+
+
 MALLOC_DEFINE(M_NETLINK, "netlink", "netlink socket");
 
 static struct	bsd_sockaddr netlink_src = { 2, PF_NETLINK, };
@@ -110,6 +118,7 @@ static int get_sockaddr_mask_prefix_len(struct bsd_sockaddr *sa)
 }
 
 
+static
 void *nl_m_put(struct mbuf *m0, int len)
 {
 	struct mbuf *m, *n;
@@ -143,6 +152,7 @@ void *nl_m_put(struct mbuf *m0, int len)
 	return data;
 }
 
+static
 struct nlmsghdr * nlmsg_put(struct mbuf *m, uint32_t pid, uint32_t seq, int type, int len, int flags)
 {
 	struct nlmsghdr *nlh;
@@ -162,16 +172,19 @@ struct nlmsghdr * nlmsg_put(struct mbuf *m, uint32_t pid, uint32_t seq, int type
 	return nlh;
 }
 
+static
 struct nlmsghdr * nlmsg_begin(struct mbuf *m, uint32_t pid, uint32_t seq, int type, int len, int flags)
 {
 	return nlmsg_put(m, pid, seq, type, len, flags);
 }
 
+static
 void nlmsg_end(struct mbuf *m, struct nlmsghdr *nlh)
 {
 	nlh->nlmsg_len = m->M_dat.MH.MH_pkthdr.len - ((uintptr_t)nlh - (uintptr_t)m->m_hdr.mh_data);
 }
 
+static
 int nla_put(struct mbuf *m, int attrtype, int len, const void *src)
 {
 	struct nlattr *nla;
@@ -190,16 +203,18 @@ int nla_put(struct mbuf *m, int attrtype, int len, const void *src)
 }
 
 template<class T>
-int nla_put_type(struct mbuf *m, int attrtype, T val)
+static int nla_put_type(struct mbuf *m, int attrtype, T val)
 {
 	return nla_put(m, attrtype, sizeof(val), &val);
 }
 
+static
 int nla_put_string(struct mbuf *m, int attrtype, const char *str)
 {
 	return nla_put(m, attrtype, strlen(str) + 1, str);
 }
 
+static
 int nla_put_sockaddr(struct mbuf *m, int attrtype, struct bsd_sockaddr *sa)
 {
 	void *data;
@@ -311,16 +326,18 @@ netlink_close(struct socket *so)
 static int
 netlink_attach(struct socket *so, int proto, struct thread *td)
 {
+	struct netlinkcb *ncb;
 	struct rawcb *rp;
 	int s, error;
 
 	KASSERT(so->so_pcb == NULL, ("netlink_attach: so_pcb != NULL"));
 
 	/* XXX */
-	rp = (rawcb *)malloc(sizeof *rp);
-	if (rp == NULL)
+	ncb = (netlinkcb *)malloc(sizeof *ncb);
+	if (ncb == NULL)
 		return ENOBUFS;
-	bzero(rp, sizeof *rp);
+	bzero(ncb, sizeof *ncb);
+	rp = &ncb->raw;
 
 	/*
 	 * The splnet() is necessary to block protocols from sending
@@ -362,7 +379,14 @@ netlink_bind(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 				__FILE__, __LINE__, __FUNCTION__, nam->sa_len, sizeof(struct bsd_sockaddr_nl));
 			return EINVAL;
 		}
-		// TODO: stash the nl_pid somewhere
+		auto *ncb = reinterpret_cast<netlinkcb*>(rp);
+		bsd_sockaddr_nl *nl_sock_addr = (bsd_sockaddr_nl*)nam;
+		if (nl_sock_addr->nl_pid == 0) { // kernel needs to assign pid
+			auto assigned_pid = _nl_next_gen_pid.fetch_add(1, std::memory_order_relaxed);
+			ncb->nl_pid = assigned_pid;
+		} else {
+			ncb->nl_pid = nl_sock_addr->nl_pid;
+		}
 		return 0;
 	}
 	return (raw_usrreqs.pru_bind(so, nam, td)); /* xxx just EINVAL */
@@ -419,10 +443,27 @@ netlink_shutdown(struct socket *so)
 	return (raw_usrreqs.pru_shutdown(so));
 }
 
+static pid_t
+get_socket_pid(struct socket *so)
+{
+	struct rawcb *rp = sotorawcb(so);
+	struct netlinkcb *ncb = (netlinkcb *)rp;
+	return ncb->nl_pid;
+}
+
 static int
 netlink_sockaddr(struct socket *so, struct bsd_sockaddr **nam)
 {
-	return (raw_usrreqs.pru_sockaddr(so, nam));
+	struct bsd_sockaddr_nl *sin;
+
+	sin = (bsd_sockaddr_nl*)malloc(sizeof *sin);
+	bzero(sin, sizeof *sin);
+	sin->nl_family = AF_NETLINK;
+	sin->nl_len = sizeof(*sin);
+	sin->nl_pid = get_socket_pid(so);
+
+	*nam = (bsd_sockaddr*)sin;
+	return 0;
 }
 
 static struct pr_usrreqs netlink_usrreqs = initialize_with([] (pr_usrreqs& x) {
@@ -457,7 +498,7 @@ netlink_senderr(struct socket *so, struct nlmsghdr *nlm, int error)
 	}
 
 	if ((hdr = (struct nlmsghdr *)nlmsg_put(m,
-						nlm ? nlm->nlmsg_pid : 0,
+						get_socket_pid(so),
 						nlm ? nlm->nlmsg_seq : 0,
 						NLMSG_ERROR, sizeof(*err),
 						nlm ? nlm->nlmsg_flags : 0)) == NULL) {
@@ -465,7 +506,7 @@ netlink_senderr(struct socket *so, struct nlmsghdr *nlm, int error)
 		return ENOBUFS;
 	}
 	err = (struct nlmsgerr *) nlmsg_data(hdr);
-	err->error = error;
+	err->error = -error; //Per netlink spec - "Negative errno or 0 for acknowledgements"
 	if (nlm) {
 		err->msg = *nlm;
 	} else {
@@ -496,7 +537,7 @@ netlink_process_getlink_msg(struct socket *so, struct nlmsghdr *nlm)
 	TAILQ_FOREACH(ifp, &V_ifnet, if_link) {
 		IF_ADDR_RLOCK(ifp);
 
-		nlh = nlmsg_begin(m, nlm->nlmsg_pid, nlm->nlmsg_seq, LINUX_RTM_NEWLINK, sizeof(*ifm), nlm->nlmsg_flags);
+		nlh = nlmsg_begin(m, get_socket_pid(so), nlm->nlmsg_seq, LINUX_RTM_NEWLINK, sizeof(*ifm), nlm->nlmsg_flags);
 		if (!nlh) {
 			error = ENOBUFS;
 			goto done;
@@ -530,7 +571,7 @@ netlink_process_getlink_msg(struct socket *so, struct nlmsghdr *nlm)
 		IF_ADDR_RUNLOCK(ifp);
 		nlmsg_end(m, nlh);
 	}
-	nlh = nlmsg_put(m, nlm->nlmsg_pid, nlm->nlmsg_seq, NLMSG_DONE, 0, nlm->nlmsg_flags);
+	nlh = nlmsg_put(m, get_socket_pid(so), nlm->nlmsg_seq, NLMSG_DONE, 0, nlm->nlmsg_flags);
 
 done:
 	if (ifp != NULL)
@@ -588,7 +629,7 @@ netlink_process_getaddr_msg(struct socket *so, struct nlmsghdr *nlm)
 			if (!ifa->ifa_addr)
 				continue;
 
-			nlh = nlmsg_begin(m, nlm->nlmsg_pid, nlm->nlmsg_seq, LINUX_RTM_GETADDR, sizeof(*ifm), nlm->nlmsg_flags);
+			nlh = nlmsg_begin(m, get_socket_pid(so), nlm->nlmsg_seq, LINUX_RTM_NEWADDR, sizeof(*ifm), nlm->nlmsg_flags);
 			if (!nlh) {
 				error = ENOBUFS;
 				goto done;
@@ -599,10 +640,6 @@ netlink_process_getaddr_msg(struct socket *so, struct nlmsghdr *nlm)
 			ifm->ifa_prefixlen = get_sockaddr_mask_prefix_len(ifa->ifa_netmask);
 			ifm->ifa_flags = ifp->if_flags | ifp->if_drv_flags;
 			ifm->ifa_scope = 0; // FIXME:
-			if (nla_put_string(m, IFA_LABEL, ifp->if_xname)) {
-				error = ENOBUFS;
-				goto done;
-			}
 #ifdef INET6
 			if (ifa->ifa_addr && ifa->ifa_addr->sa_family == AF_INET6){
 				// FreeBSD embeds the IPv6 scope ID in the IPv6 address
@@ -620,8 +657,11 @@ netlink_process_getaddr_msg(struct socket *so, struct nlmsghdr *nlm)
 					in6_clearscope(&broadaddr.sin6_addr);
 					p_broadaddr = (struct bsd_sockaddr *)&broadaddr;
 				}
-				if (nla_put_sockaddr(m, IFA_ADDRESS, p_addr) ||
-					nla_put_sockaddr(m, IFA_BROADCAST, p_broadaddr)){
+				if (nla_put_sockaddr(m, IFA_ADDRESS, p_addr)){
+					error = ENOBUFS;
+					goto done;
+				}
+				if (!(ifm->ifa_flags & IFF_LOOPBACK) && nla_put_sockaddr(m, IFA_BROADCAST, p_broadaddr)){
 					error = ENOBUFS;
 					goto done;
 				}
@@ -629,18 +669,25 @@ netlink_process_getaddr_msg(struct socket *so, struct nlmsghdr *nlm)
 			else
 #endif
 			{
-				if (nla_put_sockaddr(m, IFA_ADDRESS, ifa->ifa_addr) ||
-					nla_put_sockaddr(m, IFA_BROADCAST, ifa->ifa_broadaddr)){
+				if (nla_put_sockaddr(m, IFA_ADDRESS, ifa->ifa_addr)){
 					error = ENOBUFS;
 					goto done;
 				}
+				if (!(ifm->ifa_flags & IFF_LOOPBACK) && nla_put_sockaddr(m, IFA_BROADCAST, ifa->ifa_broadaddr)){
+					error = ENOBUFS;
+					goto done;
+				}
+			}
+			if (nla_put_string(m, IFA_LABEL, ifp->if_xname)) {
+				error = ENOBUFS;
+				goto done;
 			}
 			nlmsg_end(m, nlh);
 		}
 
 		IF_ADDR_RUNLOCK(ifp);
 	}
-	nlh = nlmsg_put(m, nlm->nlmsg_pid, nlm->nlmsg_seq, NLMSG_DONE, 0, nlm->nlmsg_flags);
+	nlh = nlmsg_put(m, get_socket_pid(so), nlm->nlmsg_seq, NLMSG_DONE, 0, nlm->nlmsg_flags);
 done:
 	if (ifp != NULL)
 		IF_ADDR_RUNLOCK(ifp);
@@ -705,7 +752,7 @@ struct netlink_getneigh_lle_cbdata {
 };
 
 static int
-netlink_getneigh_lle_cb(struct lltable *llt, struct llentry *lle, void *data)
+netlink_getneigh_lle_cb(struct socket *so, struct lltable *llt, struct llentry *lle, void *data)
 {
 	struct netlink_getneigh_lle_cbdata *cbdata = (struct netlink_getneigh_lle_cbdata *) data;
 	int ndm_family = netlink_bsd_to_linux_family(llt->llt_af);
@@ -720,7 +767,7 @@ netlink_getneigh_lle_cb(struct lltable *llt, struct llentry *lle, void *data)
 	struct nlmsghdr *nlm = cbdata->nlm;
 	struct mbuf *m = cbdata->m;
 	struct ndmsg *ndm;
-	struct nlmsghdr *nlh = nlmsg_begin(m, nlm->nlmsg_pid, nlm->nlmsg_seq, LINUX_RTM_GETNEIGH, sizeof(*ndm), nlm->nlmsg_flags);
+	struct nlmsghdr *nlh = nlmsg_begin(m, get_socket_pid(so), nlm->nlmsg_seq, LINUX_RTM_NEWNEIGH, sizeof(*ndm), nlm->nlmsg_flags);
 
 	if (!nlh) {
 		return ENOBUFS;
@@ -753,7 +800,7 @@ netlink_getneigh_lle_cb(struct lltable *llt, struct llentry *lle, void *data)
 		}
 	}
 #endif
-	
+
 	if (nla_put(m, NDA_LLADDR, 6, lle->ll_addr.mac16)) {
 		return ENOBUFS;
 	}
@@ -765,7 +812,7 @@ netlink_getneigh_lle_cb(struct lltable *llt, struct llentry *lle, void *data)
 
 
 static int
-netlink_getneigh_lltable_cb(struct lltable *llt, void *cbdata)
+netlink_getneigh_lltable_cb(struct socket *so, struct lltable *llt, void *cbdata)
 {
 	struct netlink_getneigh_lle_cbdata *data = (struct netlink_getneigh_lle_cbdata *) cbdata;
 	int error = 0;
@@ -776,7 +823,7 @@ netlink_getneigh_lltable_cb(struct lltable *llt, void *cbdata)
 		return 0;
 
 	IF_AFDATA_RLOCK(llt->llt_ifp);
-	error = lltable_foreach_lle(llt, netlink_getneigh_lle_cb, data);
+	error = lltable_foreach_lle(so, llt, netlink_getneigh_lle_cb, data);
 	IF_AFDATA_RUNLOCK(llt->llt_ifp);
 
 	return error;
@@ -790,7 +837,7 @@ netlink_process_getneigh_msg(struct socket *so, struct nlmsghdr *nlm)
 	struct netlink_getneigh_lle_cbdata cbdata;
 	int error;
 
-	if (nlm->nlmsg_len < sizeof (struct ndmsg)) {
+	if (nlm->nlmsg_len < NLMSG_LENGTH(sizeof (struct ndmsg))) {
 		return EINVAL;
 	}
 
@@ -806,10 +853,10 @@ netlink_process_getneigh_msg(struct socket *so, struct nlmsghdr *nlm)
 	cbdata.family = ndm->ndm_family;
 	cbdata.state = ndm->ndm_state;
 
-	error = lltable_foreach(netlink_getneigh_lltable_cb, &cbdata);
+	error = lltable_foreach(so, netlink_getneigh_lltable_cb, &cbdata);
 
 	if (!error) {
-		nlh = nlmsg_put(m, nlm->nlmsg_pid, nlm->nlmsg_seq, NLMSG_DONE, 0, nlm->nlmsg_flags);
+		nlh = nlmsg_put(m, get_socket_pid(so), nlm->nlmsg_seq, NLMSG_DONE, 0, nlm->nlmsg_flags);
 		netlink_dispatch(so, m);
 	} else {
 		m_free(m);
@@ -852,7 +899,7 @@ netlink_process_msg(struct mbuf *m, struct socket *so)
 
 flush:
 	if (error) {
-		netlink_senderr(so, nlm, error);
+		error = netlink_senderr(so, nlm, error);
 	}
 	if (m) {
 		m_freem(m);
@@ -875,29 +922,29 @@ extern struct domain netlinkdomain;		/* or at least forward */
 
 static struct protosw netlinksw[] = {
 	initialize_with([] (protosw& x) {
-	x.pr_type =			SOCK_RAW;
+	x.pr_type =		SOCK_RAW;
 	x.pr_domain =		&netlinkdomain;
 	x.pr_flags =		PR_ATOMIC|PR_ADDR;
 	x.pr_output =		netlink_output;
 	x.pr_ctlinput =		raw_ctlinput;
-	x.pr_init =			raw_init;
+	x.pr_init =		raw_init;
 	x.pr_usrreqs =		&netlink_usrreqs;
 	}),
 	initialize_with([] (protosw& x) {
-	x.pr_type =			SOCK_DGRAM;
+	x.pr_type =		SOCK_DGRAM;
 	x.pr_domain =		&netlinkdomain;
 	x.pr_flags =		PR_ATOMIC|PR_ADDR;
 	x.pr_output =		netlink_output;
 	x.pr_ctlinput =		raw_ctlinput;
-	x.pr_init =			raw_init;
+	x.pr_init =		raw_init;
 	x.pr_usrreqs =		&netlink_usrreqs;
 	}),
 };
 
 struct domain netlinkdomain = initialize_with([] (domain& x) {
-	x.dom_family =			PF_NETLINK;
-	x.dom_name =			"netlink";
-	x.dom_protosw =			netlinksw;
+	x.dom_family =		PF_NETLINK;
+	x.dom_name =		"netlink";
+	x.dom_protosw =		netlinksw;
 	x.dom_protoswNPROTOSW =	&netlinksw[sizeof(netlinksw)/sizeof(netlinksw[0])];
 });
 

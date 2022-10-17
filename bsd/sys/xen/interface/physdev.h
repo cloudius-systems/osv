@@ -168,19 +168,22 @@ struct physdev_manage_pci {
 typedef struct physdev_manage_pci physdev_manage_pci_t;
 DEFINE_XEN_GUEST_HANDLE(physdev_manage_pci_t);
 
+typedef union {
+    struct physdev_irq_status_query      irq_status_query;
+    struct physdev_set_iopl              set_iopl;
+    struct physdev_set_iobitmap          set_iobitmap;
+    struct physdev_apic                  apic_op;
+    struct physdev_irq                   irq_op;
+    struct physdev_eoi                   eoi;
+} physdev_op_arg;
+
 /*
  * Argument to physdev_op_compat() hypercall. Superceded by new physdev_op()
  * hypercall since 0x00030202.
  */
 struct physdev_op {
     uint32_t cmd;
-    union {
-        struct physdev_irq_status_query      irq_status_query;
-        struct physdev_set_iopl              set_iopl;
-        struct physdev_set_iobitmap          set_iobitmap;
-        struct physdev_apic                  apic_op;
-        struct physdev_irq                   irq_op;
-    } u;
+    physdev_op_arg u;
 };
 typedef struct physdev_op physdev_op_t;
 DEFINE_XEN_GUEST_HANDLE(physdev_op_t);

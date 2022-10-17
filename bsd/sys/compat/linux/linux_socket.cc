@@ -60,6 +60,7 @@
 #include <bsd/sys/compat/linux/linux.h>
 #include <bsd/sys/compat/linux/linux_socket.h>
 #include <bsd/sys/compat/linux/linux_netlink.h>
+#include <osv/stubbing.hh>
 
 #define __NEED_sa_family_t
 #include <bits/alltypes.h>

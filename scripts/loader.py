@@ -27,7 +27,7 @@ class status_enum_class(object):
     pass
 status_enum = status_enum_class()
 
-phys_mem = 0xffff800000000000
+phys_mem = 0x400000000000
 
 def pt_index(addr, level):
     return (addr >> (12 + 9 * level)) & 511
@@ -1309,7 +1309,7 @@ def make_symbolic(addr):
 
 def dump_trace(out_func):
     indents = defaultdict(int)
-    bt_formatter = BacktraceFormatter(symbol_resolver, symbol_formatter)
+    bt_formatter = BacktraceFormatter(symbol_resolver, symbol_formatter, True)
 
     def lookup_tp(name):
         return gdb.lookup_global_symbol(name).value().dereference()
@@ -1317,7 +1317,7 @@ def dump_trace(out_func):
     tp_fn_exit = lookup_tp('gdb_trace_function_exit')
 
     for trace in all_traces():
-        thread = trace.thread.id
+        thread = trace.thread.ptr
         time = trace.time
         cpu = trace.cpu
         tp = trace.tp

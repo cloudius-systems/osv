@@ -46,8 +46,8 @@ jobs:
         - cp /tmp/osv-version "$ARTIFACTS_DIR"
         - docker cp build:/root/.capstan/repository/osv-loader/osv-loader.qemu "$ARTIFACTS_DIR"
         - gzip "$ARTIFACTS_DIR"/osv-loader.qemu
-        - docker cp build:/git-repos/osv/build/release/kernel-stripped.elf "$ARTIFACTS_DIR"/kernel.elf
-        - gzip "$ARTIFACTS_DIR"/kernel.elf
+        - docker cp build:/git-repos/osv/build/release/loader-stripped.elf "$ARTIFACTS_DIR"/loader.elf
+        - gzip "$ARTIFACTS_DIR"/loader.elf
         - docker cp build:/root/.capstan/repository/osv-loader/index.yaml "$ARTIFACTS_DIR"
         - docker cp build:/root/.capstan/packages/osv.bootstrap.mpm "$ARTIFACTS_DIR"
         - docker cp build:/root/.capstan/packages/osv.bootstrap.yaml "$ARTIFACTS_DIR"

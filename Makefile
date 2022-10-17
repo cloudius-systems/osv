@@ -144,9 +144,12 @@ endif
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
 
-all: $(out)/loader.img links $(out)/kernel.elf
+all: $(out)/loader.img links $(out)/zfs_builder-stripped.elf
 ifeq ($(arch),x64)
 all: $(out)/vmlinuz.bin
+endif
+ifeq ($(arch),aarch64)
+all: $(out)/zfs_builder.img
 endif
 .PHONY: all
 
@@ -368,7 +371,8 @@ $(out)/bsd/%.o: INCLUDES += -isystem bsd/
 # for machine/
 $(out)/bsd/%.o: INCLUDES += -isystem bsd/$(arch)
 
-configuration-defines = conf-preempt conf-debug_memory conf-logger_debug conf-debug_elf conf-INET6
+configuration-defines = conf-preempt conf-debug_memory conf-logger_debug conf-debug_elf conf-INET6 \
+			conf-lazy_stack conf-lazy_stack_invariant
 
 configuration = $(foreach cf,$(configuration-defines), \
                       -D$(cf:conf-%=CONF_%)=$($(cf)))
@@ -406,6 +410,9 @@ autodepend = -MD -MT $@ -MP
 tools := tools/mkfs/mkfs.so tools/cpiod/cpiod.so
 
 $(out)/tools/%.o: COMMON += -fPIC
+$(out)/tools/cpiod/options.o: core/options.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -fPIC -c -o $@ $<, CXX core/options.cc)
 
 tools += tools/uush/uush.so
 tools += tools/uush/ls.so
@@ -523,10 +530,19 @@ $(out)/preboot.bin: $(out)/preboot.elf
 edata = $(shell readelf --syms $(out)/loader.elf | grep "\.edata" | awk '{print "0x" $$2}')
 image_size = $$(( $(edata) - $(kernel_vm_base) ))
 
+builder_edata = $(shell readelf --syms $(out)/zfs_builder.elf | grep "\.edata" | awk '{print "0x" $$2}')
+builder_image_size = $$(( $(builder_edata) - $(kernel_vm_base) ))
+
 $(out)/loader.img: $(out)/preboot.bin $(out)/loader-stripped.elf
 	$(call quiet, dd if=$(out)/preboot.bin of=$@ > /dev/null 2>&1, DD $@ preboot.bin)
 	$(call quiet, dd if=$(out)/loader-stripped.elf of=$@ conv=notrunc obs=4096 seek=16 > /dev/null 2>&1, DD $@ loader-stripped.elf)
 	$(call quiet, scripts/imgedit.py setsize_aarch64 "-f raw $@" $(image_size), IMGEDIT $@)
+	$(call quiet, scripts/imgedit.py setargs "-f raw $@" $(cmdline), IMGEDIT $@)
+
+$(out)/zfs_builder.img: $(out)/preboot.bin $(out)/zfs_builder-stripped.elf
+	$(call quiet, dd if=$(out)/preboot.bin of=$@ > /dev/null 2>&1, DD $@ preboot.bin)
+	$(call quiet, dd if=$(out)/zfs_builder-stripped.elf of=$@ conv=notrunc obs=4096 seek=16 > /dev/null 2>&1, DD $@ zfs_builder-stripped.elf)
+	$(call quiet, scripts/imgedit.py setsize_aarch64 "-f raw $@" $(builder_image_size), IMGEDIT $@)
 	$(call quiet, scripts/imgedit.py setargs "-f raw $@" $(cmdline), IMGEDIT $@)
 
 endif # aarch64
@@ -574,6 +590,7 @@ bsd += bsd/sys/kern/subr_sbuf.o
 bsd += bsd/sys/kern/subr_eventhandler.o
 bsd += bsd/sys/kern/subr_hash.o
 bsd += bsd/sys/kern/subr_taskqueue.o
+$(out)/bsd/sys/kern/subr_taskqueue.o: COMMON += -Wno-dangling-pointer
 bsd += bsd/sys/kern/sys_socket.o
 bsd += bsd/sys/kern/subr_disk.o
 bsd += bsd/porting/route.o
@@ -1173,8 +1190,6 @@ musl += locale/catgets.o
 libc += locale/catopen.o
 libc += locale/duplocale.o
 libc += locale/freelocale.o
-musl += locale/iconv.o
-musl += locale/iconv_close.o
 libc += locale/intl.o
 libc += locale/langinfo.o
 musl += locale/localeconv.o
@@ -1201,6 +1216,7 @@ musl += math/__invtrigl.o
 musl += math/__polevll.o
 musl += math/__rem_pio2.o
 musl += math/__rem_pio2_large.o
+$(out)/musl/src/math/__rem_pio2_large.o: CFLAGS += -Wno-maybe-uninitialized
 musl += math/__rem_pio2f.o
 musl += math/__rem_pio2l.o
 musl += math/__signbit.o
@@ -1527,19 +1543,22 @@ musl += network/inet_aton.o
 musl += network/inet_pton.o
 musl += network/inet_ntop.o
 musl += network/proto.o
-libc += network/if_indextoname.o
-libc += network/if_nametoindex.o
+musl += network/if_indextoname.o
+$(out)/musl/src/network/if_indextoname.o: CFLAGS += --include libc/syscall_to_function.h --include libc/network/__socket.h -Wno-stringop-truncation
+musl += network/if_nametoindex.o
+$(out)/musl/src/network/if_nametoindex.o: CFLAGS += --include libc/syscall_to_function.h --include libc/network/__socket.h -Wno-stringop-truncation
 musl += network/gai_strerror.o
 musl += network/h_errno.o
 musl += network/getservbyname_r.o
 musl += network/getservbyname.o
 musl += network/getservbyport_r.o
 musl += network/getservbyport.o
-libc += network/getifaddrs.o
-libc += network/netlink.o
-libc += network/if_nameindex.o
+musl += network/getifaddrs.o
+musl += network/if_nameindex.o
 musl += network/if_freenameindex.o
 musl += network/res_init.o
+musl += network/netlink.o
+$(out)/musl/src/network/netlink.o: CFLAGS += --include libc/syscall_to_function.h --include libc/network/__netlink.h
 
 musl += prng/rand.o
 musl += prng/rand_r.o
@@ -1726,7 +1745,9 @@ musl += stdlib/ldiv.o
 musl += stdlib/llabs.o
 musl += stdlib/lldiv.o
 musl += stdlib/qsort.o
+$(out)/musl/src/stdlib/qsort.o: COMMON += -Wno-dangling-pointer
 libc += stdlib/qsort_r.o
+$(out)/libc/stdlib/qsort_r.o: COMMON += -Wno-dangling-pointer
 libc += stdlib/strtol.o
 libc += stdlib/strtod.o
 libc += stdlib/wcstol.o
@@ -1837,7 +1858,7 @@ musl += time/__secs_to_tm.o
 musl += time/__tm_to_secs.o
 libc += time/__tz.o
 $(out)/libc/time/__tz.o: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include
-musl += time/__year_to_secs.o
+libc += time/__year_to_secs.o
 musl += time/asctime.o
 musl += time/asctime_r.o
 musl += time/ctime.o
@@ -2092,7 +2113,7 @@ $(loader_options_dep): stage1
 ifeq ($(conf_hide_symbols),1)
 version_script_file:=$(out)/version_script
 #Detect which version script to be used and copy to $(out)/version_script
-#so that loader.elf/kernel.elf is rebuilt accordingly if version script has changed
+#so that loader.elf/zfs_builder.elf is rebuilt accordingly if version script has changed
 ifdef conf_version_script
 ifeq (,$(wildcard $(conf_version_script)))
     $(error Missing version script: $(conf_version_script))
@@ -2101,14 +2122,25 @@ ifneq ($(shell cmp $(out)/version_script $(conf_version_script)),)
 $(shell cp $(conf_version_script) $(out)/version_script)
 endif
 else
+ifeq ($(shell test -e $(out)/version_script || echo -n no),no)
+$(shell cp $(out)/default_version_script $(out)/version_script)
+endif
 ifneq ($(shell cmp $(out)/version_script $(out)/default_version_script),)
 $(shell cp $(out)/default_version_script $(out)/version_script)
 endif
 endif
 linker_archives_options = --no-whole-archive $(libstdc++.a) $(libgcc.a) $(libgcc_eh.a) $(boost-libs) \
   --exclude-libs libstdc++.a --gc-sections
+ifneq ($(shell grep -c iconv $(out)/version_script),0)
+musl += locale/iconv.o
+musl += locale/iconv_close.o
+else
+libc += locale/iconv_stubs.o
+endif
 else
 linker_archives_options = --whole-archive $(libstdc++.a) $(libgcc_eh.a) $(boost-libs) --no-whole-archive $(libgcc.a)
+musl += locale/iconv.o
+musl += locale/iconv_close.o
 endif
 
 $(out)/default_version_script: exported_symbols/*.symbols exported_symbols/$(arch)/*.symbols
@@ -2134,13 +2166,14 @@ $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(lo
 	@scripts/libosv.py $(out)/osv.syms $(out)/libosv.ld `scripts/osv-version.sh` | $(CC) -c -o $(out)/osv.o -x assembler -
 	$(call quiet, $(CC) $(out)/osv.o -nostdlib -shared -o $(out)/libosv.so -T $(out)/libosv.ld, LIBOSV.SO)
 
-$(out)/kernel.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/empty_bootfs.o $(loader_options_dep) $(version_script_file)
+$(out)/zfs_builder.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/zfs_builder_bootfs.o $(loader_options_dep) $(version_script_file)
 	$(call quiet, $(LD) -o $@ $(def_symbols) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
             $(patsubst %version_script,--version-script=%version_script,$(patsubst %.ld,-T %.ld,$^)) \
 	    $(linker_archives_options) $(conf_linker_extra_options), \
-		LINK kernel.elf)
-	$(call quiet, $(STRIP) $(out)/kernel.elf -o $(out)/kernel-stripped.elf, STRIP kernel.elf -> kernel-stripped.elf )
+		LINK zfs_builder.elf)
+$(out)/zfs_builder-stripped.elf:  $(out)/zfs_builder.elf
+	$(call quiet, $(STRIP) $(out)/zfs_builder.elf -o $(out)/zfs_builder-stripped.elf, STRIP zfs_builder.elf -> zfs_builder-stripped.elf )
 
 $(out)/bsd/%.o: COMMON += -DSMP -D'__FBSDID(__str__)=extern int __bogus__'
 
@@ -2176,22 +2209,45 @@ libgcc_s_dir := ../../$(aarch64_gccbase)/lib64
 endif
 
 $(out)/bootfs.bin: scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep) $(tools:%=$(out)/%) \
-		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so $(out)/libvdso.so
-	$(call quiet, olddir=`pwd`; cd $(out); "$$olddir"/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m "$$olddir"/$(bootfs_manifest) \
-		-D libgcc_s_dir=$(libgcc_s_dir), MKBOOTFS $@)
+		$(out)/libenviron.so $(out)/libvdso.so $(out)/libsolaris.so
+	$(call quiet, olddir=`pwd`; cd $(out); "$$olddir"/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m "$$olddir"/$(bootfs_manifest), MKBOOTFS $@)
 
 $(out)/bootfs.o: $(out)/bootfs.bin
 $(out)/bootfs.o: ASFLAGS += -I$(out)
 
-$(out)/empty_bootfs.o: ASFLAGS += -I$(out)
+# Standard C++ library
+libstd_dir := $(dir $(shell $(CXX) -print-file-name=libstdc++.so))
+ifeq ($(filter /%,$(libstd_dir)),)
+ifeq ($(arch),aarch64)
+    libstd_dir := $(dir $(shell find $(aarch64_gccbase)/ -name libstdc++.so))
+    ifeq ($(libstd_dir),)
+        $(error Error: libstdc++.so needs to be installed.)
+    endif
+    LDFLAGS := -L$(libstd_dir)
+else
+    $(error Error: libstdc++.so needs to be installed.)
+endif
+endif
+
+$(shell mkdir -p $(out) && cp zfs_builder_bootfs.manifest.skel $(out)/zfs_builder_bootfs.manifest)
+ifeq ($(conf_hide_symbols),1)
+$(shell echo "/usr/lib/libstdc++.so.6: $$(readlink -f $(libstd_dir))/libstdc++.so" >> $(out)/zfs_builder_bootfs.manifest)
+endif
+$(out)/zfs_builder_bootfs.bin: scripts/mkbootfs.py $(zfs_builder_bootfs_manifest) $(tools:%=$(out)/%) \
+		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so $(out)/libvdso.so $(out)/libsolaris.so
+	$(call quiet, olddir=`pwd`; cd $(out); "$$olddir"/scripts/mkbootfs.py -o zfs_builder_bootfs.bin -d zfs_builder_bootfs.bin.d -m zfs_builder_bootfs.manifest \
+		-D libgcc_s_dir=$(libgcc_s_dir), MKBOOTFS $@)
+
+$(out)/zfs_builder_bootfs.o: $(out)/zfs_builder_bootfs.bin
+$(out)/zfs_builder_bootfs.o: ASFLAGS += -I$(out)
 
 $(out)/tools/mkfs/mkfs.so: $(out)/tools/mkfs/mkfs.o $(out)/libzfs.so
 	$(makedir)
-	$(call quiet, $(CC) $(CFLAGS) -o $@ $(out)/tools/mkfs/mkfs.o -L$(out) -lzfs, LINK mkfs.so)
+	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ $(out)/tools/mkfs/mkfs.o $(LDFLAGS) -L$(out) -lzfs, LINK mkfs.so)
 
-$(out)/tools/cpiod/cpiod.so: $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o $(out)/libzfs.so
+$(out)/tools/cpiod/cpiod.so: $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o $(out)/tools/cpiod/options.o $(out)/libzfs.so
 	$(makedir)
-	$(call quiet, $(CC) $(CFLAGS) -o $@ $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o -L$(out) -lzfs, LINK cpiod.so)
+	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.o $(out)/tools/cpiod/options.o $(LDFLAGS) -L$(out) -lzfs, LINK cpiod.so)
 
 ################################################################################
 # The dependencies on header files are automatically generated only after the
@@ -2363,7 +2419,7 @@ $(out)/bsd/cddl/contrib/opensolaris/lib/libzfs/common/zprop_common.o: bsd/sys/cd
 
 $(out)/libzfs.so: $(libzfs-objects) $(out)/libuutil.so $(out)/libsolaris.so
 	$(makedir)
-	$(call quiet, $(CC) $(CFLAGS) -o $@ $(libzfs-objects) -L$(out) -luutil -lsolaris, LINK libzfs.so)
+	$(call quiet, $(CC) $(CFLAGS) -o $@ $(libzfs-objects) -L$(out) -luutil, LINK libzfs.so)
 
 #include $(src)/bsd/cddl/contrib/opensolaris/cmd/zpool/build.mk:
 zpool-cmd-file-list = zpool_iter  zpool_main  zpool_util  zpool_vdev

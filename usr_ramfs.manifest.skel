@@ -5,9 +5,8 @@
 /tools/umount.so: tools/mount/umount.so
 /usr/lib/libgcc_s.so.1: %(libgcc_s_dir)s/libgcc_s.so.1
 /&/etc/hosts: ../../static/&
-
 /etc/mnttab: ->/proc/mounts
-/&/etc/fstab: ../../static/&
+/etc/fstab: fstab
 /dev: ../../static
 /proc: ../../static
 /sys: ../../static

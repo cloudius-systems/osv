@@ -34,6 +34,8 @@
 #include <bsd/sys/sys/eventhandler.h>
 #include <machine/atomic.h>
 
+#include <osv/export.h>
+
 MALLOC_DEFINE(M_EVENTHANDLER, "eventhandler", "Event handler records");
 
 /* List of 'slow' lists */
@@ -127,7 +129,7 @@ eventhandler_register_internal(struct eventhandler_list *list,
     return(epn);
 }
 
-eventhandler_tag
+OSV_LIBSOLARIS_API eventhandler_tag
 eventhandler_register(struct eventhandler_list *list, const char *name, 
 		      void *func, void *arg, int priority)
 {
@@ -143,7 +145,7 @@ eventhandler_register(struct eventhandler_list *list, const char *name,
     return (eventhandler_register_internal(list, name, &eg->ee));
 }
 
-void
+OSV_LIBSOLARIS_API void
 eventhandler_deregister(struct eventhandler_list *list, eventhandler_tag tag)
 {
     struct eventhandler_entry	*ep = tag;
@@ -189,7 +191,7 @@ _eventhandler_find_list(const char *name)
  * Lookup a "slow" list by name.  Returns with the list locked.
  * Returns the list locked
  */
-struct eventhandler_list *
+OSV_LIBSOLARIS_API struct eventhandler_list *
 eventhandler_find_list(const char *name)
 {
     struct eventhandler_list	*list;

@@ -20,6 +20,19 @@ namespace arch {
 #define INSTR_SIZE_MIN 1
 #define ELF_IMAGE_START OSV_KERNEL_BASE
 
+#if CONF_lazy_stack
+inline void ensure_next_stack_page() {
+    char i;
+    asm volatile("movb -4096(%%rsp), %0" : "=r"(i));
+}
+
+inline void ensure_next_two_stack_pages() {
+    char i;
+    asm volatile("movb -4096(%%rsp), %0" : "=r"(i));
+    asm volatile("movb -8192(%%rsp), %0" : "=r"(i));
+}
+#endif
+
 inline void irq_disable()
 {
     processor::cli();

@@ -276,7 +276,7 @@ void port::req_done()
             _slot_free++;
 
             // Wakeup the thread waiting for a free slot
-            _cmd_send_waiter.wake();
+            _cmd_send_waiter.wake_from_kernel_or_with_irq_disabled();
         }
     }
 }

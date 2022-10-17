@@ -198,3 +198,11 @@ elif cmd == 'setpartition':
     f.seek(partition + 12)
     f.write(struct.pack('I', size // 512))
     f.close()
+elif cmd == 'getpartition_offset':
+    img = args[0]
+    partition = int(args[1])
+    partition = 0x1be + ((partition - 1) * 0x10)
+    with nbd_file(img) as f:
+        f.seek(partition + 8)
+        (offset,) = struct.unpack("I", f.read(4))
+        print(offset * 512)

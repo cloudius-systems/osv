@@ -26,6 +26,7 @@ extern "C" {
 #include <osv/prio.hh>
 #include "osv/percpu.hh"
 #include <osv/aligned_new.hh>
+#include <osv/export.h>
 
 extern "C" { void smp_main(void); }
 
@@ -38,6 +39,7 @@ extern char smpboot[], smpboot_end[];
 using namespace processor;
 
 extern bool smp_allocator;
+OSV_LIBSOLARIS_API
 volatile unsigned smp_processors = 1;
 
 using boost::intrusive::get_parent_from_member;

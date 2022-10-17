@@ -277,7 +277,7 @@ void pvscsi::req_done()
             barrier();
             s->cmp_cons_idx++;
 
-            _waiter.wake();
+            _waiter.wake_from_kernel_or_with_irq_disabled();
         }
     }
 }

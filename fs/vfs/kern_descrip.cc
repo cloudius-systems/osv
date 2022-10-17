@@ -145,6 +145,12 @@ int fget(int fd, struct file **out_fp)
     if (fd < 0 || fd >= FDMAX)
         return EBADF;
 
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     WITH_LOCK(rcu_read_lock) {
         fp = gfdt[fd].read();
         if (fp == nullptr) {
@@ -185,6 +191,7 @@ void fhold(struct file* fp)
     __sync_fetch_and_add(&fp->f_count, 1);
 }
 
+OSV_LIBSOLARIS_API
 int fdrop(struct file *fp)
 {
     int o = fp->f_count, n;
@@ -253,6 +260,7 @@ void file::epoll_del(epoll_ptr ep)
     }
 }
 
+OSV_LIBSOLARIS_API
 dentry* file_dentry(file* fp)
 {
     return fp->f_dentry.get();
@@ -268,16 +276,19 @@ bool is_nonblock(struct file *f)
     return (f->f_flags & FNONBLOCK);
 }
 
+OSV_LIBSOLARIS_API
 int file_flags(file *f)
 {
     return f->f_flags;
 }
 
+OSV_LIBSOLARIS_API
 off_t file_offset(file* f)
 {
     return f->f_offset;
 }
 
+OSV_LIBSOLARIS_API
 void file_setoffset(file* f, off_t o)
 {
     f->f_offset = o;

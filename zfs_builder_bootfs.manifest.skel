@@ -1,0 +1,10 @@
+[manifest]
+/libvdso.so: libvdso.so
+/libuutil.so: libuutil.so
+/zpool.so: zpool.so
+/usr/lib/fs/libsolaris.so: libsolaris.so
+/libzfs.so: libzfs.so
+/zfs.so: zfs.so
+/tools/mkfs.so: tools/mkfs/mkfs.so
+/tools/cpiod.so: tools/cpiod/cpiod.so
+/usr/lib/libgcc_s.so.1: %(libgcc_s_dir)s/libgcc_s.so.1

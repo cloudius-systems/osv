@@ -348,6 +348,11 @@ public:
         if (active) {
             arch::irq_flag_notrace irq;
             irq.save();
+#if CONF_lazy_stack
+            if (sched::preemptable() && irq.enabled()) {
+                arch::ensure_next_stack_page();
+            }
+#endif
             arch::irq_disable_notrace();
             log(as);
             run_probes();

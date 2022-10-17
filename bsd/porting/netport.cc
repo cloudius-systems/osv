@@ -14,12 +14,16 @@
 #include <bsd/sys/net/if_var.h>
 #include <bsd/sys/net/if_media.h>
 
+#include <osv/export.h>
+
+OSV_LIBSOLARIS_API
 int copyin(const void *uaddr, void *kaddr, size_t len)
 {
     memcpy(kaddr, uaddr, len);
     return (0);
 }
 
+OSV_LIBSOLARIS_API
 int copyout(const void *kaddr, void *uaddr, size_t len)
 {
     memcpy(uaddr, kaddr, len);
@@ -57,6 +61,7 @@ int copystr(const void *kfaddr, void *kdaddr, size_t len, size_t *done)
     return do_copystr(kfaddr, kdaddr, len, done);
 }
 
+OSV_LIBSOLARIS_API
 int copyinstr(const void *uaddr, void *kaddr, size_t len, size_t *done)
 {
     return do_copystr(uaddr, kaddr, len, done);
@@ -159,4 +164,5 @@ ifmedia_ioctl(struct ifnet *ifp, struct bsd_ifreq *ifr, struct ifmedia *ifm, u_l
     return -ENOSYS;
 }
 
+OSV_LIBSOLARIS_API
 size_t physmem;

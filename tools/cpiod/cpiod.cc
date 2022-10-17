@@ -142,6 +142,7 @@ static void handle_parse_error(const std::string &message)
     exit(1);
 }
 
+__attribute__((__visibility__("default")))
 int main(int ac, char** av)
 {
     int port = 10000;

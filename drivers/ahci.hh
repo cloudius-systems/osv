@@ -242,7 +242,7 @@ public:
     void enable_irq();
     void wait_device_ready();
     void wait_ci_ready(u8 slot);
-    void wakeup() { _irq_thread->wake(); }
+    void wakeup() { _irq_thread->wake_with_irq_disabled(); }
     bool linkup() { return _linkup; }
 
     u32 port2hba(u32 port_reg)

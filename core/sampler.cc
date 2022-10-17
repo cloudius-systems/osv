@@ -32,9 +32,14 @@ private:
     sched::timer_base _timer;
     bool _active;
 
-    void rearm()
+    void arm()
     {
         _timer.set(_config.period);
+    }
+
+    void rearm()
+    {
+        _timer.set_with_irq_disabled(_config.period);
     }
 
 public:
@@ -54,7 +59,11 @@ public:
     {
         assert(!_active);
         _active = true;
-        rearm();
+        if (arch::irq_enabled()) {
+            arm();
+        } else {
+            rearm();
+        }
     }
 
     void stop()
@@ -97,7 +106,11 @@ static void start_on_current()
 
     if (prev_active + 1 == _n_cpus) {
         _started = true;
-        _controller.wake();
+        if (arch::irq_enabled()) {
+            _controller.wake();
+        } else {
+            _controller.wake_from_kernel_or_with_irq_disabled();
+        }
     }
 }
 
@@ -110,7 +123,11 @@ static void stop_on_current()
     _sampler->stop();
 
     if (--_active_cpus == 0) {
-        _controller.wake();
+        if (arch::irq_enabled()) {
+            _controller.wake();
+        } else {
+            _controller.wake_from_kernel_or_with_irq_disabled();
+        }
     }
 }
 
@@ -170,6 +187,12 @@ void stop_sampler() throw()
 
     WITH_LOCK(migration_lock) {
         stop_sampler_ipi.send_allbutself();
+#if CONF_lazy_stack_invariant
+        assert(arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+        sched::ensure_next_stack_page_if_preemptable();
+#endif
         stop_on_current();
     }
 

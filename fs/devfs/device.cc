@@ -53,6 +53,7 @@
 #include <osv/device.h>
 #include <osv/debug.h>
 #include <osv/buf.h>
+#include <osv/export.h>
 
 #include <geom/geom_disk.h>
 
@@ -141,6 +142,8 @@ void read_partition_table(struct device *dev)
 		new_dev->max_io_size = dev->max_io_size;
 		new_dev->private_data = dev->private_data;
 		device_set_softc(new_dev, device_get_softc(dev));
+
+		kprintf("devfs: created device %s for a partition at offset:%ld with size:%ld\n", dev_name, new_dev->offset, new_dev->size);
 	}
 
 	sched_unlock();
@@ -322,7 +325,7 @@ device_destroy(struct device *dev)
  * should be handled by an each device driver if it is
  * needed.
  */
-int
+OSV_LIBSOLARIS_API int
 device_open(const char *name, int mode, struct device **devp)
 {
 	struct devops *ops;
@@ -356,7 +359,7 @@ device_open(const char *name, int mode, struct device **devp)
  * Even if the target driver does not have close routine,
  * this function does not return any errors.
  */
-int
+OSV_LIBSOLARIS_API int
 device_close(struct device *dev)
 {
 	struct devops *ops;

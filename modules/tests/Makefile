@@ -96,7 +96,7 @@ rofs-only-tests := rofs/tst-chdir.so rofs/tst-symlink.so rofs/tst-readdir.so \
 	rofs/tst-concurrent-read.so
 
 zfs-only-tests := tst-readdir.so tst-fallocate.so tst-fs-link.so \
-	tst-concurrent-read.so misc-zfs-io.so tst-solaris-taskq.so
+	tst-concurrent-read.so tst-solaris-taskq.so
 
 specific-fs-tests := $($(fs_type)-only-tests)
 
@@ -139,13 +139,10 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-elf-init.so tst-realloc.so tst-setjmp.so \
 	libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so \
 	tst-sigaction.so tst-syscall.so tst-ifaddrs.so tst-getdents.so \
-	tst-socket-timestamp.so tst-pktinfo.so
+	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-pthread-create.so \
+	misc-futex-perf.so tst-socket-timestamp.so tst-pktinfo.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
-#TODO For now let us disable these tests for aarch64 until
-# we support floating point numbers, TLS and correct syscall handling
-# The tst-ifaddrs.so is an exception and it does not compile due to some
-# missing headers
 ifeq ($(arch),x64)
 tests += tst-mmx-fpu.so
 endif
@@ -203,8 +200,8 @@ common-boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	tst-bsd-tcp1-zsndrcv.so tst-async.so tst-rcu-list.so tst-tcp-listen.so \
 	tst-poll.so tst-bitset-iter.so tst-timer-set.so tst-clock.so \
 	tst-rcu-hashtable.so tst-unordered-ring-mpsc.so \
-	tst-seek.so tst-ctype.so tst-wctype.so tst-string.so tst-time.so \
-	tst-dax.so tst-tcp-v6.so
+	tst-seek.so tst-ctype.so tst-wctype.so tst-string.so tst-time.so tst-dax.so \
+	tst-net_if_test.so
 
 boost-tests := $(common-boost-tests)
 
@@ -218,15 +215,18 @@ $(boost-tests:%=$(out)/tests/%): LIBS += \
 	-lboost_unit_test_framework \
 	-lboost_filesystem
 
+boost-program-options-tests := misc-tcp.so misc-zfs-arc.so
+$(boost-program-options-tests:%=$(out)/tests/%): LIBS += \
+	-lboost_program_options
+
 common-tests := $(tests) $(common-boost-tests)
 tests += $(boost-tests)
 
 solaris-tests := tst-solaris-taskq.so
 
-# FIXME: two of the test below can't compile now because of include path
-# (BSD and OSv header files get mixed up, etc.).
+#FIXME: the misc-zfs-disk.c does not compile due to some header issues
 #zfs-tests := misc-zfs-disk.so misc-zfs-io.so misc-zfs-arc.so
-zfs-tests := misc-zfs-io.so
+zfs-tests := misc-zfs-io.so misc-zfs-arc.so
 solaris-tests += $(zfs-tests)
 
 $(zfs-tests:%=$(out)/tests/%): COMMON+= \
@@ -258,7 +258,7 @@ usr.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FOR
 	@cat $@.skel > $@
 	@case "$(CROSS_PREFIX)" in \
 		"aarch64"*) ./add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@ ;; \
-		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests/,$(boost-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@ ;; \
+		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests/,$(boost-tests)) $(addprefix $(out)/tests/,$(boost-program-options-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@ ;; \
 	esac
 	@echo $(all_tests) | tr ' ' '\n' | grep -v "tests/rofs/tst-.*.so" | awk '{print "/" $$0 ": ./" $$0}' >> $@
 	@echo $(all_tests) | tr ' ' '\n' | grep "tests/rofs/tst-.*.so" | sed 's/\.so//' | awk 'BEGIN { FS = "/" } ; { print "/tests/" $$3 "-rofs.so: ./tests/" $$2 "/" $$3 ".so"}' >> $@
@@ -271,7 +271,7 @@ common.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel 
 	@cat usr.manifest.skel > $@
 	@case "$(CROSS_PREFIX)" in \
 		"aarch64"*) ./add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@ ;; \
-		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests/,$(boost-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@ ;; \
+		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests/,$(boost-tests)) $(addprefix $(out)/tests/,$(boost-program-options-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@ ;; \
 	esac
 	@echo $(common-tests) | tr ' ' '\n' | awk '{print "/tests/" $$0 ": ./tests/" $$0}' >> $@
 

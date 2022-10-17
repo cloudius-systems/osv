@@ -11,6 +11,7 @@
 #include "bsd/sys/cddl/compat/opensolaris/sys/kcondvar.h"
 #include "bsd/cddl/compat/opensolaris/include/mnttab.h"
 #include <osv/mount.h>
+#include <osv/export.h>
 
 extern "C" {
     #include <time.h>
@@ -58,6 +59,7 @@ size_t get_physmem(void)
     return memory::phys_mem_size / memory::page_size;
 }
 
+OSV_LIBSOLARIS_API
 int cv_timedwait(kcondvar_t *cv, mutex_t *mutex, clock_t tmo)
 {
     if (tmo <= 0) {

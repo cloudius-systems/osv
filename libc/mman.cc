@@ -43,12 +43,7 @@ unsigned libc_flags_to_mmap(int flags)
         mmap_flags |= mmu::mmap_populate;
     }
     if (flags & MAP_STACK) {
-        // OSv currently requires that stacks be pinned (see issue #143). So
-        // if an application wants to mmap() a stack for pthread_attr_setstack
-        // and did us the courtesy of telling this to ue (via MAP_STACK),
-        // let's return the courtesy by returning pre-faulted memory.
-        // FIXME: If issue #143 is fixed, this workaround should be removed.
-        mmap_flags |= mmu::mmap_populate;
+        mmap_flags |= mmu::mmap_stack;
     }
     if (flags & MAP_SHARED) {
         mmap_flags |= mmu::mmap_shared;

@@ -245,7 +245,7 @@ public:
         if (!_activity_ring.push(key)) {
             _activity_ring_overflow.store(true, std::memory_order_relaxed);
         }
-        _activity_ring_owner.wake();
+        _activity_ring_owner.wake_from_kernel_or_with_irq_disabled();
     }
 };
 

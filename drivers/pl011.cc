@@ -66,7 +66,7 @@ bool PL011_Console::ack_irq() {
 }
 
 void PL011_Console::irq_handler() {
-    _thread->wake();
+    _thread->wake_with_irq_disabled();
 }
 
 void PL011_Console::dev_start() {

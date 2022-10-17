@@ -224,6 +224,9 @@ void thread::cputime_estimator_get(
 // scheduler on a different CPU would be disastrous.
 void cpu::schedule()
 {
+#if CONF_lazy_stack
+    sched::ensure_next_stack_page_if_preemptable();
+#endif
     WITH_LOCK(irq_lock) {
 #ifdef __aarch64__
         reschedule_from_interrupt(sched::cpu::current(), false, thyst);
@@ -291,7 +294,7 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
                 preemption_timer.cancel();
                 auto delta = p->_runtime.time_until(t._runtime.get_local());
                 if (delta > 0) {
-                    preemption_timer.set(now + delta);
+                    preemption_timer.set_with_irq_disabled(now + delta);
                 }
 #ifdef __aarch64__
                 return switch_data;
@@ -352,11 +355,11 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
             auto& t = *runqueue.begin();
             auto delta = n->_runtime.time_until(t._runtime.get_local());
             if (delta > 0) {
-                preemption_timer.set(now + delta);
+                preemption_timer.set_with_irq_disabled(now + delta);
             }
         }
     } else {
-        preemption_timer.set(now + preempt_after);
+        preemption_timer.set_with_irq_disabled(now + preempt_after);
     }
 
     if (app_thread.load(std::memory_order_relaxed) != n->_app) { // don't write into a cache line if it can be avoided
@@ -444,6 +447,9 @@ void cpu::do_idle()
                 }
             }
         }
+#if CONF_lazy_stack_invariant
+        assert(!thread::current()->is_app());
+#endif
         std::unique_lock<irq_lock_type> guard(irq_lock);
         handle_incoming_wakeups();
         if (!runqueue.empty()) {
@@ -462,6 +468,9 @@ void cpu::idle()
     // The idle thread must not sleep, because the whole point is that the
     // scheduler can always find at least one runnable thread.
     // We set preempt_disable just to help us verify this.
+#if CONF_lazy_stack_invariant
+    assert(!thread::current()->is_app());
+#endif
     preempt_disable();
 
     if (id == 0) {
@@ -477,6 +486,9 @@ void cpu::idle()
 
 void cpu::handle_incoming_wakeups()
 {
+#if CONF_lazy_stack_invariant
+    assert(!arch::irq_enabled() || !thread::current()->is_app());
+#endif
     cpu_set queues_with_wakes{incoming_wakeups_mask.fetch_clear()};
     if (!queues_with_wakes) {
         return;
@@ -557,6 +569,9 @@ void thread::pin(cpu *target_cpu)
         t.wake();
     }, sched::thread::attr().pin(source_cpu)));
     wakeme->start();
+#if CONF_lazy_stack
+    sched::ensure_next_stack_page_if_preemptable();
+#endif
     WITH_LOCK(irq_lock) {
         trace_sched_migrate(&t, target_cpu->id);
         t.stat_migrations.incr();
@@ -569,7 +584,7 @@ void thread::pin(cpu *target_cpu)
         t._detached_state->st.store(thread::status::waiting);
         // Note that wakeme is on the same CPU, and irq is disabled,
         // so it will not actually run until we stop running.
-        wakeme->wake_with([&] { do_wakeme = true; });
+        wakeme->wake_with_irq_or_preemption_disabled([&] { do_wakeme = true; });
 #ifdef __aarch64__
         reschedule_from_interrupt(source_cpu, false, thyst);
 #else
@@ -591,6 +606,9 @@ void thread::pin(thread *t, cpu *target_cpu)
     // helper thread to follow the target thread's CPU. We could have also
     // re-used an existing thread (e.g., the load balancer thread).
     thread_unique_ptr helper(thread::make_unique([&] {
+#if CONF_lazy_stack_invariant
+        assert(!thread::current()->is_app());
+#endif
         WITH_LOCK(irq_lock) {
             // This thread started on the same CPU as t, but by now t might
             // have moved. If that happened, we need to move too.
@@ -658,7 +676,7 @@ void thread::pin(thread *t, cpu *target_cpu)
                 // comment above).
                 if (t->_detached_state->st.load(std::memory_order_relaxed) == status::waking) {
                     t->_detached_state->st.store(status::waiting);
-                    t->wake();
+                    t->wake_with_irq_disabled();
                 }
                 break;
             case status::queued:
@@ -672,7 +690,7 @@ void thread::pin(thread *t, cpu *target_cpu)
                 t->remote_thread_local_var(current_cpu) = target_cpu;
                 // pretend the thread was waiting, so we can wake it
                 t->_detached_state->st.store(status::waiting);
-                t->wake();
+                t->wake_with_irq_disabled();
                 break;
             default:
                 // Thread is in an unexpected state (for example, already
@@ -692,6 +710,12 @@ void thread::unpin()
     // to pin, unpin, or migrate the same thread, we need to run the actual
     // unpinning code on the same CPU as the target thread.
     if (this == current()) {
+#if CONF_lazy_stack_invariant
+        assert(arch::irq_enabled() && sched::preemptable());
+#endif
+#if CONF_lazy_stack
+        arch::ensure_next_stack_page();
+#endif
         WITH_LOCK(preempt_lock) {
             if (_pinned) {
                 _pinned = false;
@@ -702,6 +726,9 @@ void thread::unpin()
         return;
     }
     thread_unique_ptr helper(thread::make_unique([this] {
+#if CONF_lazy_stack_invariant
+        assert(!thread::current()->is_app());
+#endif
         WITH_LOCK(preempt_lock) {
             // helper thread started on the same CPU as "this", but by now
             // "this" might migrated. If that happened helper need to migrate.
@@ -741,6 +768,9 @@ void cpu::load_balance()
         if (min->load() >= (load() - 1)) {
             continue;
         }
+#if CONF_lazy_stack_invariant
+        assert(!thread::current()->is_app());
+#endif
         WITH_LOCK(irq_lock) {
             auto i = std::find_if(runqueue.rbegin(), runqueue.rend(),
                     [](thread& t) { return t._migration_lock_counter == 0; });
@@ -798,6 +828,12 @@ void thread::yield(thread_runtime::duration preempt_after)
 {
     trace_sched_yield();
     auto t = current();
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    sched::ensure_next_stack_page_if_preemptable();
+#endif
     std::lock_guard<irq_lock_type> guard(irq_lock);
     // FIXME: drive by IPI
     cpu::current()->handle_incoming_wakeups();
@@ -864,6 +900,12 @@ static thread_runtime::duration total_app_time_exited(0);
 
 thread_runtime::duration thread::thread_clock() {
     if (this == current()) {
+#if CONF_lazy_stack_invariant
+        assert(arch::irq_enabled() && sched::preemptable());
+#endif
+#if CONF_lazy_stack
+        arch::ensure_next_stack_page();
+#endif
         WITH_LOCK (preempt_lock) {
             // Inside preempt_lock, we are running and the scheduler can't
             // intervene and change _total_cpu_time or _running_since
@@ -1140,6 +1182,13 @@ void thread::prepare_wait()
 {
     // After setting the thread's status to "waiting", we must not preempt it,
     // as it is no longer in "running" state and therefore will not return.
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+    assert(sched::preemptable());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     preempt_disable();
     assert(_detached_state->st.load() == status::running);
     _detached_state->st.store(status::waiting);
@@ -1175,7 +1224,7 @@ void thread::destroy()
             ds->st.store(status::terminated);
         } else {
             // The joiner won the race, and will wait. We need to wake it.
-            joiner->wake_with([&] { ds->st.store(status::terminated); });
+            joiner->wake_with_irq_or_preemption_disabled([&] { ds->st.store(status::terminated); });
         }
     }
 }
@@ -1200,6 +1249,9 @@ void thread::wake_impl(detached_state* st, unsigned allowed_initial_states_mask)
         unsigned c = cpu::current()->id;
         // we can now use st->t here, since the thread cannot terminate while
         // it's waking, but not afterwards, when it may be running
+#if CONF_lazy_stack_invariant
+        assert(!sched::preemptable());
+#endif
         irq_save_lock_type irq_lock;
         WITH_LOCK(irq_lock) {
             tcpu->incoming_wakeups[c].push_back(*st->t);
@@ -1218,6 +1270,22 @@ void thread::wake_impl(detached_state* st, unsigned allowed_initial_states_mask)
 
 void thread::wake()
 {
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    sched::ensure_next_stack_page_if_preemptable();
+#endif
+    WITH_LOCK(rcu_read_lock) {
+        wake_impl(_detached_state.get());
+    }
+}
+
+void thread::wake_with_irq_disabled()
+{
+#if CONF_lazy_stack_invariant
+    assert(!arch::irq_enabled());
+#endif
     WITH_LOCK(rcu_read_lock) {
         wake_impl(_detached_state.get());
     }
@@ -1226,6 +1294,12 @@ void thread::wake()
 void thread::wake_lock(mutex* mtx, wait_record* wr)
 {
     // must be called with mtx held
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     WITH_LOCK(rcu_read_lock) {
         auto st = _detached_state.get();
         // We want to send_lock() to this thread, but we want to be sure we're the only
@@ -1252,6 +1326,12 @@ void thread::wake_lock(mutex* mtx, wait_record* wr)
 
 bool thread::unsafe_stop()
 {
+#if CONF_lazy_stack_invariant
+    assert(sched::preemptable() && arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     WITH_LOCK(rcu_read_lock) {
         auto st = _detached_state.get();
         auto expected = status::waiting;
@@ -1307,6 +1387,13 @@ void thread::complete()
     }
     // If this thread gets preempted after changing status it will never be
     // scheduled again to set terminating_thread. So must disable preemption.
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+    assert(preemptable());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     preempt_disable();
     _detached_state->st.store(status::terminating);
     // We want to run destroy() here, but can't because it cause the stack we're
@@ -1395,7 +1482,7 @@ void thread::set_cleanup(std::function<void ()> cleanup)
 
 void thread::timer_fired()
 {
-    wake();
+    wake_with_irq_disabled();
 }
 
 unsigned int thread::id() const
@@ -1431,6 +1518,26 @@ void thread::sleep_impl(timer &t)
 
 void thread_handle::wake()
 {
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+    assert(sched::preemptable());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
+    WITH_LOCK(rcu_read_lock) {
+        thread::detached_state* ds = _t.read();
+        if (ds) {
+            thread::wake_impl(ds);
+        }
+    }
+}
+
+void thread_handle::wake_from_kernel_or_with_irq_disabled()
+{
+#if CONF_lazy_stack_invariant
+    assert(!sched::thread::current()->is_app() || !arch::irq_enabled());
+#endif
     WITH_LOCK(rcu_read_lock) {
         thread::detached_state* ds = _t.read();
         if (ds) {
@@ -1515,6 +1622,12 @@ timer_base::timer_base(timer_base::client& t)
 
 timer_base::~timer_base()
 {
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+#endif
+#if CONF_lazy_stack
+    sched::ensure_next_stack_page_if_preemptable();
+#endif
     cancel();
 }
 
@@ -1526,9 +1639,32 @@ void timer_base::expire()
     _t.timer_fired();
 }
 
+void timer_base::set_with_irq_disabled(osv::clock::uptime::time_point time)
+{
+#if CONF_lazy_stack_invariant
+    assert(!arch::irq_enabled());
+#endif
+    trace_timer_set(this, time.time_since_epoch().count());
+    _state = state::armed;
+    _time = time;
+
+    auto& timers = cpu::current()->timers;
+    _t._active_timers.push_back(*this);
+    if (timers._list.insert(*this)) {
+        timers.rearm();
+    }
+};
+
 void timer_base::set(osv::clock::uptime::time_point time)
 {
     trace_timer_set(this, time.time_since_epoch().count());
+#if CONF_lazy_stack_invariant
+    assert(arch::irq_enabled());
+    assert(sched::preemptable());
+#endif
+#if CONF_lazy_stack
+    arch::ensure_next_stack_page();
+#endif
     irq_save_lock_type irq_lock;
     WITH_LOCK(irq_lock) {
         _state = state::armed;
@@ -1566,6 +1702,9 @@ void timer_base::reset(osv::clock::uptime::time_point time)
 
     auto& timers = cpu::current()->timers;
 
+#if CONF_lazy_stack_invariant
+    assert(!thread::current()->is_app() || !sched::preemptable());
+#endif
     irq_save_lock_type irq_lock;
     WITH_LOCK(irq_lock) {
         if (_state == state::armed) {

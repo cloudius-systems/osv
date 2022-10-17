@@ -72,7 +72,7 @@ static void seq_read(int fd, char *buf, unsigned long size, unsigned long offset
 
 int main(int argc, char **argv)
 {
-    char fpath[64] = "/zfs-io-file";
+    const char *fpath = "/zfs-io-file";
     char buf[BUF_SIZE];
     unsigned size;
     int fd;
@@ -90,6 +90,8 @@ int main(int argc, char **argv)
             all_cached = true;
         } else if (!strcmp("--no-unlink", argv[i])) {
             unlink_file = false;
+        } else if (!strcmp("--file-path", argv[i]) && (i + 1) < argc) {
+            fpath = argv[i + 1];
         }
     }
 
@@ -140,7 +142,7 @@ int main(int argc, char **argv)
 
     close(fd);
     if (unlink_file) {
-        unlink("/zfs-io-file");
+        unlink(fpath);
     }
 
     return 0;
