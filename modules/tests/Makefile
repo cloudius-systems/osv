@@ -133,7 +133,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-pthread-setcancelstate.so tst-pin.so tst-run.so \
 	tst-pthread-affinity-inherit.so tst-sem-timed-wait.so \
 	tst-ttyname.so tst-pthread-barrier.so tst-feexcept.so tst-math.so \
-	tst-sigaltstack.so tst-fread.so tst-tcp-cork.so tst-tcp-v6.so \
+	tst-sigaltstack.so tst-fread.so tst-tcp-cork.so \
 	tst-calloc.so tst-crypt.so tst-non-fpic.so tst-small-malloc.so \
 	tst-getopt.so tst-getopt-pie.so tst-non-pie.so tst-semaphore.so \
 	tst-elf-init.so tst-realloc.so tst-setjmp.so \
@@ -201,7 +201,7 @@ common-boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	tst-poll.so tst-bitset-iter.so tst-timer-set.so tst-clock.so \
 	tst-rcu-hashtable.so tst-unordered-ring-mpsc.so \
 	tst-seek.so tst-ctype.so tst-wctype.so tst-string.so tst-time.so tst-dax.so \
-	tst-net_if_test.so
+	tst-net_if_test.so tst-tcp-v6.so
 
 boost-tests := $(common-boost-tests)
 
