@@ -1796,6 +1796,7 @@ musl += string/wcsncasecmp_l.o
 musl += string/wcsncat.o
 musl += string/wcsncmp.o
 musl += string/wcsncpy.o
+libc += string/__wcsncpy_chk.o
 musl += string/wcsnlen.o
 musl += string/wcspbrk.o
 musl += string/wcsrchr.o
