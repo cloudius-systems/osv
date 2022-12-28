@@ -61,7 +61,7 @@ jobs:
         - docker cp build:/root/.capstan/packages/osv.rofs-tests.yaml "$ARTIFACTS_DIR"
         - docker cp build:/root/.capstan/packages/osv.httpserver-monitoring-api.mpm.x86_64 "$ARTIFACTS_DIR"
         - docker cp build:/root/.capstan/packages/osv.httpserver-monitoring-api.yaml "$ARTIFACTS_DIR"
-        - docker exec rm -rf ./build/release.x64
+        - docker exec build rm -rf ./build/release.x64
         - docker exec build ./scripts/build-capstan-mpm-packages kernel conf_hide_symbols=1 fs=rofs loader_image=osv-loader-hidden
         - docker cp build:/root/.capstan/repository/osv-loader-hidden/osv-loader-hidden.qemu.x86_64 "$ARTIFACTS_DIR"/osv-loader-hidden.qemu.x86_64
         - gzip "$ARTIFACTS_DIR"/osv-loader-hidden.qemu.x86_64
