@@ -143,7 +143,17 @@ class Fedora(object):
         ec2_post_install = None
         version = '35'
 
-    versions = [Fedora_27, Fedora_28, Fedora_29, Fedora_30, Fedora_31, Fedora_32, Fedora_33, Fedora_34, Fedora_35]
+    class Fedora_37(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '37'
+
+    versions = [
+        Fedora_27, Fedora_28, Fedora_29, Fedora_30, Fedora_31, Fedora_32, Fedora_33, Fedora_34, Fedora_35, Fedora_37
+    ]
+
 
 class RHELbased(Fedora):
     name = ['Scientific Linux', 'NauLinux', 'Red Hat Enterprise Linux', 'Oracle Linux']
