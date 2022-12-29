@@ -16,6 +16,7 @@
 #include "routes.hh"
 
 #include <string>
+#include <map>
 
 namespace http {
 
