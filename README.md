@@ -5,7 +5,7 @@
  or feel free to pickup any [good issues for newcomers](https://github.com/cloudius-systems/osv/labels/good-for-newcomers).
  For details on how to format and send patches, please read
  [this wiki](https://github.com/cloudius-systems/osv/wiki/Formatting-and-sending-patches)
- (__we do NOT accept pull requests__).***
+ (__we do accept pull requests as well__).***
 
 # OSv
 
@@ -15,7 +15,7 @@ operating systems which were designed for a vast range of physical machines. Bui
 the ground up for effortless deployment and management of microservices
 and serverless apps, with superior performance.
 
-OSv has been designed to run unmodified x86-64 and AArch64 Linux
+OSv has been designed to run unmodified x86-64 and aarch64 Linux
 binaries **as is**, which effectively makes it a **Linux binary compatible unikernel**
 (for more details about Linux ABI compatibility please read
 [this doc](https://github.com/cloudius-systems/osv/wiki/OSv-Linux-ABI-Compatibility)).
@@ -33,7 +33,7 @@ as well as native images produced
 by [**GraalVM**](https://github.com/cloudius-systems/osv-apps/tree/master/graalvm-example)
 and [WebAssembly/Wasmer](https://github.com/cloudius-systems/osv-apps/tree/master/webassembly).
 
-OSv can boot as fast as **~5 ms** on Firecracker using as low as 15 MB of memory.
+OSv can boot as fast as **~5 ms** on Firecracker using as low as 11 MB of memory.
 OSv can run on many hypervisors including QEMU/KVM,
 [Firecracker](https://github.com/cloudius-systems/osv/wiki/Running-OSv-on-Firecracker),
 [Cloud Hypervisor](https://github.com/cloudius-systems/osv/wiki/Running-OSv-on-Cloud-Hypervisor),
@@ -88,6 +88,10 @@ the [main wiki page](https://github.com/cloudius-systems/osv/wiki) and http://os
 Unfortunately, some of that information may be outdated (especially on http://osv.io/), so it is always
 best to ask on the [mailing list](https://groups.google.com/forum/#!forum/osv-dev) if in doubt.
 
+## Component Diagram
+In the diagram below, you can see the major components of OSv across the logical layers. Starting with libc at the top, which is greatly based on musl, then the core layer in the middle, comprised of ELF dynamic linker, VFS, networking stack, thread scheduler, page cache, RCU, and memory management components. Then finally down, the layer composed of the clock, block, and networking device drivers that allow OSv to interact with hypervisors like VMware and VirtualBox or the ones based on KVM and XEN.
+![Component Diagram](../master/documentation/OSv_Component_Diagram.png)
+
 ## Metrics and Performance
 
 There are no official **up-to date** performance metrics comparing OSv to other unikernels or Linux.
@@ -102,10 +106,10 @@ So OSv is probably not best suited to run MySQL or ElasticSearch, but should del
 
 ### Kernel Size
 
-At this moment (as of July 2021) the size of the uncompressed OSv kernel (`kernel.elf` artifact) is around
-6.7 MB (the compressed is ~ 2.7 MB). This is not that small comparing to Linux kernel and quite large comparing
-to other unikernels. However, bear in mind that OSv kernel (being unikernel) provides **subset** of functionality
- of the following Linux libraries (see their approximate size on Linux host):
+At this moment (as of December 2022) the size of the universal OSv kernel (`loader.elf` artifact) *built with all symbols hidden* is around
+3.6 MB. The size of the kernel linked with full `libstdc++.so.6` library and ZFS filesystem library included is 6.8 MB. Please read the [Modularization](https://github.com/cloudius-systems/osv/wiki/Modularization) wiki to better understand how kernel can be built and futher reduced in size and customized to run on specific hypervisor or specific app.
+
+The size of OSv kernel may be considered quite large comparing to other unikernels. However, bear in mind that OSv kernel (being unikernel) provides **subset** of functionality of the following Linux libraries (see their approximate size on Linux host):
 - `libresolv.so.2` (_100 K_)
 - `libc.so.6` (_2 MB_)
 - `libm.so.6` (_1.4 MB_)
@@ -117,13 +121,6 @@ to other unikernels. However, bear in mind that OSv kernel (being unikernel) pro
 - `libaio.so.1` (_16 K_)
 - `libxenstore.so.3.0` (_32 K_)
 - `libcrypt.so.1` (_44 K_)
-
-The equivalent static version of `libstdc++.so.6` is actually linked `--whole-archive` so that
-any C++ apps can run without having to add `libstdc++.so.6` to the image (whether it needs it or not).
-Finally, OSv kernel comes with ZFS implementation which in theory later can be extracted as a 
-[separate library](https://github.com/cloudius-systems/osv/issues/1009). The
-point of this is to illustrate that comparing OSv kernel size to Linux kernel size does not
-quite make sense.
 
 ### Boot Time
 
@@ -148,31 +145,30 @@ a lot, so redirecting standard output and error to a file might speed up perform
 You can always see boot time breakdown by adding `--bootchart` parameter:
 ```
 ./scripts/run.py -e '--bootchart /hello'
-OSv v0.54.0-197-g1f0df4e4
+OSv v0.57.0-6-gb442a218
 eth0: 192.168.122.15
-	disk read (real mode): 25.85ms, (+25.85ms)
-	uncompress lzloader.elf: 45.11ms, (+19.26ms)
-	TLS initialization: 45.72ms, (+0.61ms)
-	.init functions: 47.61ms, (+1.89ms)
-	SMP launched: 48.08ms, (+0.47ms)
-	VFS initialized: 50.99ms, (+2.91ms)
-	Network initialized: 51.12ms, (+0.14ms)
-	pvpanic done: 51.25ms, (+0.13ms)
-	pci enumerated: 61.55ms, (+10.29ms)
-	drivers probe: 61.55ms, (+0.00ms)
-	drivers loaded: 135.91ms, (+74.36ms)
-	ROFS mounted: 136.98ms, (+1.07ms)
-	Total time: 138.16ms, (+1.18ms)
+	disk read (real mode): 58.62ms, (+58.62ms)
+	uncompress lzloader.elf: 77.20ms, (+18.58ms)
+	TLS initialization: 77.96ms, (+0.76ms)
+	.init functions: 79.75ms, (+1.79ms)
+	SMP launched: 80.11ms, (+0.36ms)
+	VFS initialized: 81.62ms, (+1.52ms)
+	Network initialized: 81.78ms, (+0.15ms)
+	pvpanic done: 81.91ms, (+0.14ms)
+	pci enumerated: 93.89ms, (+11.98ms)
+	drivers probe: 93.89ms, (+0.00ms)
+	drivers loaded: 174.80ms, (+80.91ms)
+	ROFS mounted: 176.88ms, (+2.08ms)
+	Total time: 178.01ms, (+1.13ms)
 Cmdline: /hello
 Hello from C code
 ```
 
 ### Memory Utilization
 
-OSv needs at least 15 M of memory to run a _hello world_ app. Even though it is half of
-what it was 2 years ago, it is still quite a lot comparing to other unikernels. We are planning to further lower
-this number by reducing size of the kernel, adding [self-tuning logic to L1/L2 memory pools](https://github.com/cloudius-systems/osv/issues/1013) and
-making application threads use [lazily allocated stacks](https://github.com/cloudius-systems/osv/issues/143).
+OSv needs at least 11 M of memory to run a _hello world_ app. Even though it is a third of what it was 4 years ago, it is still quite a lot comparing to other unikernels. The applications spawning many threads may take advantage of building the kernel with the option `conf_lazy_stack=1` to further reduce memory utilization (please see the comments of this [patch](https://github.com/cloudius-systems/osv/commit/f5684d9c3f4f8d20a64605cfe66fd51771754256) to better understand this feature). 
+
+We are planning to further lower this number by adding [self-tuning logic to L1/L2 memory pools](https://github.com/cloudius-systems/osv/issues/1013).
 
 ## Testing
 
@@ -303,8 +299,8 @@ on Fedora, Ubuntu and CentOS 7 and relevant aarch64 gcc and libraries' binaries 
 the `./scripts/download_aarch64_packages.py` script. OSv can also be built natively on Ubuntu on ARM hardware
 like Raspberry PI 4, Odroid N2+ or RockPro64. 
 
-Please note that as of the latest [0.56.0 release](https://github.com/cloudius-systems/osv/releases/tag/v0.56.0), the ARM part of OSv has been greately improved and tested and is quite close in functionality to the x86_64 port.
-In addition, most unit tests and many more advanced apps like nginx, python, iperf3, etc can successfully run
+Please note that as of the latest [0.57.0 release](https://github.com/cloudius-systems/osv/releases/tag/v0.57.0), the ARM part of OSv has been greately improved and tested and is pretty much on par with the x86_64 port in terms of the functionality.
+In addition, all unit tests and many  advanced apps like Java, golang, nginx, python, iperf3, etc can successfully run
 on QEMU and Firecraker on Raspberry PI 4 and Odroid N2+ with KVM acceleration enabled.
 
 For more information about the aarch64 port please read [this Wiki page](https://github.com/cloudius-systems/osv/wiki/AArch64).
@@ -322,6 +318,8 @@ At the end of the boot process, OSv dynamic linker loads an application ELF and 
   by setting parameter `fs` of `./scripts/build` to one of the three values -`zfs`, `rofs` or `ramfs`.
 
 In addition, one can mount NFS filesystem, which had been recently transformed to be a shared library pluggable as a [module](https://github.com/cloudius-systems/osv/tree/master/modules/nfs), and newly implemented and improved [Virtio-FS filesystem](https://stefanha.github.io/virtio/virtio-fs.html#x1-41500011). The Virtio-FS mounts can be setup by adding proper entry `/etc/fstab` or by passing a boot parameter as explained in this [Wiki](https://github.com/cloudius-systems/osv/wiki/virtio-fs). In addition, very recently OSv has been enhanced to be able to boot from Virtio-FS filesystem directly.
+
+Finally, the ZFS support has been also greatly improved as of the 0.57 release and there are many methods and setups to build and run ZFS images with OSv. For details please read the ZFS section of the [Filesystems wiki](https://github.com/cloudius-systems/osv/wiki/Filesystems#zfs).
 
 ## Running OSv
 
@@ -367,6 +365,14 @@ sudo ./scripts/run.py -nv
 The -v is for KVM's vhost that provides better performance
 and its setup requires tap device and thus we use sudo.
 
+Alternatively, one can run OSv as a non-privileged used with a tap device like so:
+```
+./scripts/create_tap_device.sh natted qemu_tap0 172.18.0.1 #You can pick a different address but then update all IPs below
+
+./scripts/run.py -n -t qemu_tap0 \
+  --execute='--ip=eth0,172.18.0.2,255.255.255.252 --defaultgw=172.18.0.1 --nameserver=172.18.0.1 /hello'
+```
+
 By default, OSv spawns a `dhcpd`-like thread that automatically configures virtual NICs.
 A static configuration can be done within OSv by configuring networking like so:
 
@@ -403,6 +409,7 @@ You can also follow us on [Twitter](https://twitter.com/osv_unikernel).
 ## Papers and Articles about OSv
 
 List of somewhat newer articles about OSv found on the Web:
+* [P99 Presentation: OSv Unikernel — Optimizing Guest OS to Run Stateless and Serverless Apps in the Cloud](https://www.p99conf.io/session/osv-unikernel-optimizing-guest-os-to-run-stateless-and-serverless-apps-in-the-cloud/)
 * [Unikernels vs Containers: An In-Depth Benchmarking Study in the context of Microservice Applications](https://biblio.ugent.be/publication/8582433/file/8582438)
 * [Towards a Practical Ecosystem of Specialized OS Kernels](http://cs.iit.edu/~khale/docs/diver-ross19.pdf)
 * [A Performance Evaluation of Unikernels](https://pdfs.semanticscholar.org/d956/f72dbc65301578dc95e0f751f4ae7c09d831.pdf)
