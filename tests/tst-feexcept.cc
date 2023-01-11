@@ -78,8 +78,12 @@ int main(int argc, char **argv)
     // Test that fegetexcept() does not return a negative number
     expect(fegetexcept() >= 0, true);
 
-    // Test that *integer* division by zero generates, ironically, a SIGFPE
-    expect(sig_check([] { printf("%d\n", 1 / zero_i()); }, SIGFPE), true);
+    // Test that *integer* division by zero generates, ironically, a SIGFPE.
+    // Starting with Gcc 12, division by zero in C no longer generates a
+    // SIGFPE and just returns 0. So to check this we need to use assembly
+    // directly.
+    //expect(sig_check([] { printf("%d\n", 1 / zero_i()); }, SIGFPE), true);
+    expect(sig_check([] { asm("movl $1,%eax; movl $0,%ebx; movl $0, %edx; divl %ebx;"); }, SIGFPE), true);
 
     // While, continuing the irony, by default a floating-point division by
     // zero does NOT generate a SIGFPE signal, but rather inf or nan:
