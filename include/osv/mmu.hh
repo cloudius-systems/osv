@@ -54,7 +54,7 @@ struct linear_vma {
     ~linear_vma();
 
     uintptr_t v_start() const { return reinterpret_cast<uintptr_t>(_virt_addr); }
-    uintptr_t v_end() const { return reinterpret_cast<uintptr_t>(_virt_addr + _size); }
+    uintptr_t v_end() const { return reinterpret_cast<uintptr_t>(_virt_addr) + _size; }
 };
 
 class vma {
