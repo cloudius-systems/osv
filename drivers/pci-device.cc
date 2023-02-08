@@ -35,7 +35,7 @@ namespace pci {
         u32 pos = PCI_CFG_BAR_1;
         int idx = 1;
 
-        function::set_bars_enable(true, true);
+        function::enable_bars_decode(true, true);
 
         while (pos <= PCI_CFG_BAR_6) {
             u32 bar_v = pci_readl(pos);

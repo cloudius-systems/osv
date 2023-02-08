@@ -290,7 +290,10 @@ namespace pci {
         bool get_bus_master();
         void set_bus_master(bool m);
 
-        void set_bars_enable(bool mem, bool io);
+        // Enable/disable the device decoding the BAR address when a write is
+        // performed on the BARs
+        void enable_bars_decode(bool mem, bool io);
+        void disable_bars_decode(bool mem, bool io);
 
         // Enable/Disable intx assertions
         bool is_intx_enabled();
