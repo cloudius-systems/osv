@@ -159,6 +159,7 @@ links:
 .PHONY: links
 
 check:
+	$(call quiet, pkill -e -9 qemu-system || true, Kill lingering QEMU process if any)
 	./scripts/build check
 .PHONY: check
 
