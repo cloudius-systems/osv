@@ -680,7 +680,7 @@ namespace pci {
 
     void function::msix_enable()
     {
-        if (!is_msix()) {
+        if (!is_msix() || _msix_enabled) {
             return;
         }
 
@@ -717,7 +717,7 @@ namespace pci {
 
     void function::msi_enable()
     {
-        if (!is_msi()) {
+        if (!is_msi() || _msi_enabled) {
             return;
         }
 
