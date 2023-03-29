@@ -26,6 +26,7 @@
 #include <osv/preempt-lock.hh>
 #include <osv/app.hh>
 #include <osv/symbols.hh>
+#include <osv/stubbing.hh>
 
 MAKE_SYMBOL(sched::thread::current);
 MAKE_SYMBOL(sched::cpu::current);
@@ -290,7 +291,16 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
 #endif
         } else if (!called_from_yield) {
             auto &t = *runqueue.begin();
-            if (p->_runtime.get_local() < t._runtime.get_local()) {
+            if (p->_realtime._priority > 0) {
+                // Only switch to a higher-priority realtime thread
+                if (t._realtime._priority <= p->_realtime._priority) {
+#ifdef __aarch64__
+                    return switch_data;
+#else
+                    return;
+#endif
+                }
+            } else if (t._realtime._priority == 0 && p->_runtime.get_local() < t._runtime.get_local()) {
                 preemption_timer.cancel();
                 auto delta = p->_runtime.time_until(t._runtime.get_local());
                 if (delta > 0) {
@@ -302,6 +312,20 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
                 return;
 #endif
             }
+        } else { /* called_from_yield */
+            if (p->_realtime._priority > 0) {
+                auto &t = *runqueue.begin();
+                // When yielding, only switch if the next thread has a higher
+                // or same priority as p (i.e., don't switch if t it has a
+                // lesser priority than p).
+                if (t._realtime._priority < p->_realtime._priority) {
+#ifdef __aarch64__
+                    return switch_data;
+#else
+                    return;
+#endif
+                }
+            }
         }
         // If we're here, p no longer has the lowest runtime. Before queuing
         // p, return the runtime it borrowed for hysteresis.
@@ -309,7 +333,10 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
         p->_detached_state->st.store(thread::status::queued);
 
         if (!called_from_yield) {
-            enqueue(*p);
+            // POSIX requires that if a real-time thread doesn't yield but
+            // rather is preempted by a higher-priority thread, it be
+            // reinserted into the runqueue first, not last, among its equals.
+            enqueue_first_equal(*p);
         }
 
         trace_sched_preempt();
@@ -350,16 +377,18 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
         n->_runtime.add_context_switch_penalty();
     }
     preemption_timer.cancel();
-    if (!called_from_yield) {
-        if (!runqueue.empty()) {
-            auto& t = *runqueue.begin();
-            auto delta = n->_runtime.time_until(t._runtime.get_local());
-            if (delta > 0) {
-                preemption_timer.set_with_irq_disabled(now + delta);
+    if (n->_realtime._priority == 0) {
+        if (!called_from_yield) {
+            if (!runqueue.empty()) {
+                auto& t = *runqueue.begin();
+                auto delta = n->_runtime.time_until(t._runtime.get_local());
+                if (delta > 0) {
+                    preemption_timer.set_with_irq_disabled(now + delta);
+                }
             }
+        } else {
+            preemption_timer.set_with_irq_disabled(now + preempt_after);
         }
-    } else {
-        preemption_timer.set_with_irq_disabled(now + preempt_after);
     }
 
     if (app_thread.load(std::memory_order_relaxed) != n->_app) { // don't write into a cache line if it can be avoided
@@ -528,6 +557,16 @@ void cpu::enqueue(thread& t)
 {
     trace_sched_queue(&t);
     runqueue.insert_equal(t);
+}
+
+// When the run queue has several threads with equal thread_runtime_compare,
+// enqueue() puts a thread after its equals, while enqueue_first_equal()
+// puts it before its equals. The distinction is mostly interesting for real-
+// time priority threads.
+void cpu::enqueue_first_equal(thread& t)
+{
+    trace_sched_queue(&t);
+    runqueue.insert_before(runqueue.lower_bound(t), t);
 }
 
 void cpu::init_on_cpu()
@@ -864,6 +903,29 @@ void thread::set_priority(float priority)
 float thread::priority() const
 {
     return _runtime.priority();
+}
+
+void thread::set_realtime_priority(unsigned priority)
+{
+    _realtime._priority = priority;
+}
+
+unsigned thread::realtime_priority() const
+{
+    return _realtime._priority;
+}
+
+void thread::set_realtime_time_slice(thread_realtime::duration time_slice)
+{
+    if (time_slice > 0) {
+        WARN_ONCE("set_realtime_time_slice() used but real-time time slices"
+                " not yet supported");
+    }
+    _realtime._time_slice = time_slice;
+}
+
+thread_realtime::duration thread::realtime_time_slice() const {
+    return _realtime._time_slice;
 }
 
 sched::thread::status thread::get_status() const
