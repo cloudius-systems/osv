@@ -1508,9 +1508,8 @@ class osv_trace_file(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv trace2file', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
-        fout = file("trace.txt", "wt")
-        dump_trace(fout.write)
-        fout.close()
+        with open("trace.txt", 'wt') as fout:
+            dump_trace(fout.write)
 
 class osv_leak(gdb.Command):
     def __init__(self):
