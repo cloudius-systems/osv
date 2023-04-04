@@ -99,6 +99,42 @@ class SymbolResolver(object):
         self.addr2line.stdin.close()
         self.addr2line.wait()
 
+class SymbolsFileResolver(object):
+    def __init__(self, symbols_file, fallback_resolver=DummyResolver()):
+        if not os.path.exists(symbols_file):
+            raise Exception('File not found: ' + object_path)
+        self.fallback_resolver = fallback_resolver
+        self.cache = dict()
+
+        try:
+            symbol_lines = open(symbols_file).read().split('\n')
+        except IOError:
+            symbol_lines = []
+
+        for symbol_line in symbol_lines:
+            tokens = symbol_line.split(maxsplit=3)
+            if len(tokens) > 0:
+                addr = int(tokens[0], 16)
+                filename = tokens[1]
+                if tokens[2] == '<?>':
+                    line = None
+                else:
+                    line = int(tokens[2])
+                name = tokens[3]
+                self.cache[addr] = [SourceAddress(addr, name=name, filename=filename, line=line)]
+
+    def __call__(self, addr):
+        """
+        Returns an iterable of SourceAddress objects for given addr.
+
+        """
+
+        result = self.cache.get(addr, None)
+        if result:
+            return result
+        else:
+            return self.fallback_resolver(addr)
+
 def resolve_all(resolver, raw_addresses):
     """
     Returns iterable of SourceAddress objects for given list of raw addresses

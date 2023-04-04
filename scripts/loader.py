@@ -101,6 +101,15 @@ class syminfo_resolver(object):
     def clear_cache(clazz):
         clazz.cache.clear()
 
+    @classmethod
+    def output_cache(clazz, output_func):
+        for source_addr in clazz.cache.values():
+            addr = source_addr[0]
+            if addr.line:
+                output_func("0x%x %s %d %s\n" % (addr.addr, addr.filename, addr.line, addr.name))
+            else:
+                output_func("0x%x %s <?> %s\n" % (addr.addr, addr.filename, addr.name))
+
 symbol_resolver = syminfo_resolver()
 
 def symbol_formatter(src_addr):
@@ -1304,6 +1313,17 @@ def all_traces():
 def save_traces_to_file(filename):
     trace.write_to_file(filename, list(all_traces()))
 
+def save_backtrace_symbols_to_file(filename):
+    # Iterate over all traces and force resolution of symbols in
+    # included backtrace if any
+    for trace in all_traces():
+        if trace.backtrace:
+            for address in list(x - 1 for x in trace.backtrace if x):
+                symbol_resolver(address)
+    # Save resolved symbol information from cache into a file
+    with open(filename, 'wt') as sout:
+        syminfo_resolver.output_cache(sout.write)
+
 def make_symbolic(addr):
     return str(syminfo(addr))
 
@@ -1503,6 +1523,7 @@ class osv_trace_save(gdb.Command):
 
         gdb.write('Saving traces to %s ...\n' % arg)
         save_traces_to_file(arg)
+        save_backtrace_symbols_to_file("%s.symbols" % arg)
 
 class osv_trace_file(gdb.Command):
     def __init__(self):

@@ -63,6 +63,7 @@ def add_symbol_resolution_options(parser):
     group.add_argument("-L", "--show-line-number", action='store_true', help="show line numbers")
     group.add_argument("-A", "--show-address", action='store_true', help="show raw addresses")
     group.add_argument("-F", "--show-file-name", action='store_true', help="show file names")
+    group.add_argument("-S", "--use-symbols-file", action='store_true', help="use <tracefile>.symbols to resolve symbols")
 
 class BeautifyingResolver(object):
     def __init__(self, delegate):
@@ -81,6 +82,10 @@ class BeautifyingResolver(object):
 def symbol_resolver(args):
     if args.no_resolve:
         return debug.DummyResolver()
+
+    if args.use_symbols_file:
+        symbols_file = "%s.symbols" % args.tracefile
+        return BeautifyingResolver(debug.SymbolsFileResolver(symbols_file))
 
     if args.exe:
         elf_path = args.exe
@@ -281,6 +286,7 @@ def extract(args):
             cmdline.extend(['-ex', 'target remote ' + args.remote])
         else:
             cmdline.extend(['-ex', 'conn'])
+        cmdline.extend(['-ex', 'osv syms'])
         cmdline.extend(['-ex', 'osv trace save ' + args.tracefile])
         proc = subprocess.Popen(cmdline, stdout=subprocess.PIPE,
             stderr=subprocess.STDOUT)
