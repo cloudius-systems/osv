@@ -103,6 +103,8 @@ def strip_garbage(backtrace):
     def is_good(src_addr):
         if not src_addr.name:
             return True
+        if src_addr.filename and src_addr.filename.endswith("trace.hh"):
+            return False
         return not src_addr.name in unimportant_functions
 
     for chain in unimportant_prefixes:
