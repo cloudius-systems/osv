@@ -52,18 +52,21 @@ echo "platform: $platform" >> $index
 
 $build
 
-# Generate QEMU image
-scripts/convert vdi
-scripts/convert vmdk
+build_path=`realpath build/last`
+qemuimage=$build_path/osv.qcow2
+vboximage=$build_path/osv.vdi
+vmwimage=$build_path/osv.vmdk
+gceimage=$build_path/osv.tar.gz
+capstan_local_repository=$HOME/.capstan/repository
 
+# Generate QEMU image
+ln -sf $build_path/usr.img $qemuimage
+# Generate VBOX image
+scripts/convert vdi
+# Generate VMW image
+scripts/convert vmdk
 # Generate GCE image
 scripts/gen-gce-tarball.sh
-
-capstan_local_repository=$HOME/.capstan/repository
-qemuimage=build/`readlink build/last`/osv.qcow2
-vboximage=build/`readlink build/last`/osv.vdi
-gceimage=build/`readlink build/last`/osv.tar.gz
-vmwimage=build/`readlink build/last`/osv.vmdk
 
 read -p "Copy base images into capstan local repository [y/N]? :" -n 1 -t 15 -s
 echo
