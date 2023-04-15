@@ -1,6 +1,7 @@
 SRC = $(shell readlink -f ../..)
 
 LUA_DIR = $(SRC)/modules/lua/upstream/lua5.3
+LD_LIBRARY_PATH = $(LUA_DIR)
 
 CC=gcc
 CFLAGS=-O2 -g -Wall -std=gnu99 -I $(LUA_DIR)/include
