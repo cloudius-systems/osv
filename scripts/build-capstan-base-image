@@ -36,13 +36,8 @@ fi
 now=$(date +"%Y-%m-%dT%R:%S")
 
 out=build/capstan/$name
-qemuimage=build/release/osv.qcow2
-vboximage=build/release/osv.vdi
-gceimage=build/release/osv.tar.gz
-vmwimage=build/release/osv.vmdk
 index=$out/index.yaml
 build="scripts/build image=$image"
-capstan_local_repository=$HOME/.capstan/repository
 
 mkdir -p $out
 
@@ -57,10 +52,19 @@ echo "platform: $platform" >> $index
 
 $build
 
-# Generate QEMU image
-scripts/convert vdi
-scripts/convert vmdk
+build_path=`realpath build/last`
+qemuimage=$build_path/osv.qcow2
+vboximage=$build_path/osv.vdi
+vmwimage=$build_path/osv.vmdk
+gceimage=$build_path/osv.tar.gz
+capstan_local_repository=$HOME/.capstan/repository
 
+# Generate QEMU image
+ln -sf $build_path/usr.img $qemuimage
+# Generate VBOX image
+scripts/convert vdi
+# Generate VMW image
+scripts/convert vmdk
 # Generate GCE image
 scripts/gen-gce-tarball.sh
 
