@@ -154,6 +154,7 @@ erfcl
 erff
 erfl
 __errno_location
+errno
 euidaccess
 eventfd
 eventfd_read

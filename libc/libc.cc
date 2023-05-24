@@ -43,7 +43,6 @@ int libc_error(int err)
 
 #undef errno
 
-OSV_HIDDEN
 int __thread errno;
 
 int* __errno_location()

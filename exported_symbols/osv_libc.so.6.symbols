@@ -111,6 +111,7 @@ epoll_pwait
 epoll_wait
 erand48
 __errno_location
+errno
 error
 euidaccess
 eventfd
