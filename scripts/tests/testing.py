@@ -276,7 +276,7 @@ def wait_for_line_contains(guest, text):
 def _wait_for_line(guest, predicate, text):
     for line in guest.read_lines():
         if predicate(line):
-            return
+            return line
     raise Exception('Text not found in output: ' + text)
 
 def add_tests(tests_to_add):
@@ -285,3 +285,22 @@ def add_tests(tests_to_add):
 def set_verbose_output(verbose_output):
     global _verbose_output
     _verbose_output = verbose_output
+
+def find_qemu_tap(qemu_tap):
+    process = subprocess.run(["ip", "address", "show", qemu_tap], stdout=subprocess.PIPE)
+    return process.returncode == 0
+
+def extract_ip_address(eth0_address_line):
+    ip_address = re.search(r'\d+\.\d+\.\d+\.\d+', eth0_address_line)
+    if ip_address:
+        return ip_address.group(0)
+    else:
+        return None
+
+def run_command_in_guest_on_qemu_with_tap(command, py_args, qemu_tap):
+    print('Found QEMU tap device %s and using it instead of SLIRP' % qemu_tap)
+    py_args += ['-n', '-t', qemu_tap]
+    app = run_command_in_guest(command, hypervisor='qemu', run_py_args=py_args)
+    osv_eth0_line = wait_for_line_contains(app, 'eth0:')
+    os.environ['OSV_HOSTNAME'] = re.search(r'\d+\.\d+\.\d+\.\d+', osv_eth0_line).group(0)
+    return app

@@ -4,7 +4,7 @@ import argparse
 import runpy
 
 def run(command, hypervisor_name, host_port, guest_port, script_path, image_path=None,
-        start_line=None, end_line=None, use_vhost_networking=False, kernel_path=None):
+        start_line=None, end_line=None, use_vhost_networking=False, kernel_path=None, qemu_tap='qemu_tap0'):
 
     py_args = []
     if image_path != None:
@@ -17,8 +17,13 @@ def run(command, hypervisor_name, host_port, guest_port, script_path, image_path
        else:
           py_args += ['-k', '--kernel-path', kernel_path]
 
-    if use_vhost_networking and hypervisor_name != 'firecracker':
-        app = run_command_in_guest(command, hypervisor=hypervisor_name, run_py_args=py_args + ['-nv'])
+    if hypervisor_name == 'qemu':
+        if find_qemu_tap(qemu_tap):
+            app = run_command_in_guest_on_qemu_with_tap(command, py_args, qemu_tap)
+        elif use_vhost_networking:
+            app = run_command_in_guest(command, hypervisor=hypervisor_name, run_py_args=py_args + ['-nv'])
+        else:
+            app = run_command_in_guest(command, hypervisor=hypervisor_name, run_py_args=py_args, forward=[(host_port, guest_port)])
     else:
         app = run_command_in_guest(command, hypervisor=hypervisor_name, run_py_args=py_args, forward=[(host_port, guest_port)])
 
@@ -36,9 +41,9 @@ def run(command, hypervisor_name, host_port, guest_port, script_path, image_path
 
     print("-----------------------------------")
     if script_out['success'] == True:
-        print("  SUCCESS")
+        print('  \033[92mSUCCESS\033[00m')
     else:
-        print("  FAILURE")
+        print("  \033[91mFAILURE\033[00m")
 
     status_file_name = os.getenv('STATUS_FILE')
     if status_file_name:
@@ -66,6 +71,7 @@ if __name__ == "__main__":
                         help="edit command line before execution")
     parser.add_argument("-n", "--vhost", action="store_true", help="setup tap/vhost networking")
     parser.add_argument("--kernel_path", action="store", help="path to kernel.elf.")
+    parser.add_argument("--qemu_tap", action="store", default="qemu_tap0", help="QEMU tap device name")
 
     cmdargs = parser.parse_args()
 
@@ -94,4 +100,4 @@ if __name__ == "__main__":
 
     set_verbose_output(True)
     run(cmdargs.execute, hypervisor_name, cmdargs.host_port, cmdargs.guest_port, cmdargs.script_path,
-        cmdargs.image, cmdargs.start_line, cmdargs.end_line, cmdargs.vhost, kernel_path)
+        cmdargs.image, cmdargs.start_line, cmdargs.end_line, cmdargs.vhost, kernel_path, cmdargs.qemu_tap)
