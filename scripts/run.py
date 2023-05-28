@@ -41,6 +41,10 @@ def format_args(args):
 
     return ' '.join(map(format_arg, args))
 
+def find_qemu_tap_guest_ip_address(qemu_tap_ip_address):
+    fields = re.search(r'(\d+)\.(\d+)\.(\d+)\.(\d+)', qemu_tap_ip_address)
+    return "%s.%s.%s.%d" % (fields.group(1), fields.group(2), fields.group(3), int(fields.group(4)) + 1)
+
 def set_imgargs(options):
     execute = options.execute
     if options.image and not execute:
@@ -76,7 +80,11 @@ def set_imgargs(options):
     if options.mount_fs:
         execute = ' '.join('--mount-fs=%s' % m for m in options.mount_fs) + ' ' + execute
 
-    if options.ip:
+    if options.networking and options.tap and hasattr(options, 'qemu_tap_ip_address'):
+        qemu_tap_guest_ip_address = find_qemu_tap_guest_ip_address(options.qemu_tap_ip_address)
+        execute = '--ip=eth0,%s,255.255.255.252 --defaultgw=%s --nameserver=%s %s' % \
+           (qemu_tap_guest_ip_address, options.qemu_tap_ip_address, options.qemu_tap_ip_address, execute)
+    elif options.ip:
         execute = ' '.join('--ip=%s' % i for i in options.ip) + ' ' + execute
 
     if options.bootchart:
@@ -654,6 +662,23 @@ if __name__ == "__main__":
         cmdargs.virtio_device_suffix = ",disable-legacy=on,disable-modern=off"
     else:
         cmdargs.virtio_device_suffix = ""
+
+    if cmdargs.networking and cmdargs.tap and (cmdargs.execute == None or '--ip=' not in cmdargs.execute):
+        process = subprocess.run(["ip", "address", "show", cmdargs.tap], stdout=subprocess.PIPE)
+        if process.returncode != 0:
+            print("Please create tap device by calling", file=sys.stderr)
+            print(" ./scripts/create_tap_device.sh natted %s <ip_address>\n" % cmdargs.tap, file=sys.stderr)
+            raise Exception("Could not find the tap device %s" % cmdargs.tap)
+        output_lines = process.stdout.decode('utf-8').split('\n')
+        inet_line = next(filter(lambda line: "inet" in line, output_lines), None)
+        if inet_line and cmdargs.tap in inet_line:
+            ip_address = re.search(r'\d+\.\d+\.\d+\.\d+', inet_line)
+            if ip_address:
+                cmdargs.qemu_tap_ip_address = ip_address.group(0)
+            else:
+                raise Exception("Unable to find tap device %s with assigned IP address." % cmdargs.tap)
+        else:
+            raise Exception("Unable to find tap device %s with assigned IP address." % cmdargs.tap)
 
     # Call main
     main(cmdargs)
