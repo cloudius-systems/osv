@@ -22,6 +22,8 @@ usage() {
 	  -R              Compose test app image with RoFS (ZFS is the default)
 	  -l              Use latest OSv kernel from build/last to build test image
 	  -f              Run OSv on firecracker
+	  -v              Verbose: show output from capstan and tested app
+	  -L loader	  Use specific loader from capstan repository
 
 	Test groups:
 	  simple - simple apps like golang-example
@@ -41,20 +43,28 @@ usage() {
 FS=zfs
 COMPOSE_ONLY=false
 RUN_ONLY=false
-LOADER="osv-loader"
 OSV_HYPERVISOR="qemu"
 
-while getopts crRlfh: OPT ; do
+while getopts crRlL:fh: OPT ; do
 	case ${OPT} in
 	c) COMPOSE_ONLY=true;;
 	r) RUN_ONLY=true;;
 	R) FS=rofs;;
-        l) LOADER="osv-latest-loader";;
-        f) OSV_HYPERVISOR="firecracker";;
+	l) LOADER="osv-latest-loader";;
+	f) OSV_HYPERVISOR="firecracker";;
+	L) LOADER="$OPTARG";;
 	h) usage;;
 	?) usage 1;;
 	esac
 done
+
+if [ "$LOADER" == "" ]; then
+	if [ "$FS" == "rofs" ]; then
+		LOADER="osv-loader"
+	else
+		LOADER="osv-loader-with-zfs"
+	fi
+fi
 
 export OSV_HYPERVISOR
 
@@ -72,6 +82,20 @@ determine_platform() {
   else
     PLATFORM="Unknown Linux"
   fi
+}
+
+copy_latest_loader() {
+   mkdir -p "$CAPSTAN_REPO/repository/$LOADER"
+  cp -a $OSV_DIR/build/last/loader.img "$CAPSTAN_REPO/repository/$LOADER/$LOADER.qemu"
+  determine_platform
+  cat << EOF > $CAPSTAN_REPO/repository/$LOADER/index.yaml
+format_version: "1"
+version: "$OSV_VERSION"
+created: $(date +'%Y-%m-%d %H:%M')
+description: "OSv kernel"
+platform: "$PLATFORM"
+EOF
+  echo "Using latest OSv kernel from $OSV_DIR/build/last/loader.img !"
 }
 
 compose_test_app()
@@ -95,32 +119,16 @@ compose_test_app()
     echo " Composing $APP_NAME into $FS image at $IMAGE_PATH ... "
     echo "-------------------------------------------------------"
 
-    #Copy latest OSv kernel if requested by user
-    local LOADER_OPTION=""
-    if [ "$LOADER" != "osv-loader" ]; then
-      mkdir -p "$CAPSTAN_REPO/repository/$LOADER"
-      cp -a $OSV_DIR/build/last/loader.img "$CAPSTAN_REPO/repository/$LOADER/$LOADER.qemu"
-      determine_platform
-      cat << EOF > $CAPSTAN_REPO/repository/$LOADER/index.yaml
-format_version: "1"
-version: "$OSV_VERSION"
-created: $(date +'%Y-%m-%d %H:%M')
-description: "OSv kernel"
-platform: "$PLATFORM"
-EOF
-      LOADER_OPTION="--loader_image $LOADER"
-      echo "Using latest OSv kernel from $OSV_DIR/build/last/loader.img !"
-    fi
-
     if [ "$FS" == "rofs" ]; then
       FSTAB=static/etc/fstab_rofs
     else
       FSTAB=static/etc/fstab
     fi
 
+    echo "capstan package compose $DEPENDENCIES --fs $FS --loader_image $LOADER test-$APP_NAME-$FS"
     TEMPDIR=$(mktemp -d) && pushd $TEMPDIR > /dev/null && \
       mkdir -p etc && cp $OSV_DIR/$FSTAB etc/fstab && \
-      $HOME/projects/go/src/github.com/cloudius-systems/capstan/capstan package compose $DEPENDENCIES --fs $FS $LOADER_OPTION "test-$APP_NAME-$FS" && \
+      capstan package compose $DEPENDENCIES --fs $FS --loader_image $LOADER "test-$APP_NAME-$FS" && \
       rm -rf $TEMPDIR && popd > /dev/null
   else
     echo "Reusing the test image: $IMAGE_PATH that must have been composed before!"
@@ -143,10 +151,15 @@ run_test_app()
     echo "-------------------------------------------------------"  | tee -a $STATUS_FILE
     echo " Testing $OSV_APP_NAME ... "  | tee -a $STATUS_FILE
 
+    local LOG_FILE=$LOG_DIR/${OSV_APP_NAME}.log
+    if [ "$TEST_PARAMETER" != "" ]; then
+      LOG_FILE=$LOG_DIR/${OSV_APP_NAME}_${TEST_PARAMETER}.log
+    fi
+    rm -f $LOG_FILE
     if [ -f $OSV_DIR/apps/$OSV_APP_NAME/test.sh ]; then
-      $OSV_DIR/apps/$OSV_APP_NAME/test.sh $TEST_PARAMETER
+      $OSV_DIR/apps/$OSV_APP_NAME/test.sh $TEST_PARAMETER > >(tee -a $LOG_FILE) 2> >(tee -a $LOG_FILE >&2)
     elif [ -f $OSV_DIR/modules/$OSV_APP_NAME/test.sh ]; then
-      $OSV_DIR/modules/$OSV_APP_NAME/test.sh $TEST_PARAMETER
+      $OSV_DIR/modules/$OSV_APP_NAME/test.sh $TEST_PARAMETER > >(tee -a $LOG_FILE) 2> >(tee -a $LOG_FILE >&2)
     fi
 
     echo "-------------------------------------------------------"  | tee -a $STATUS_FILE
@@ -170,8 +183,8 @@ test_simple_apps() #stateless
   compose_and_run_test_app "lua-hello-from-host"
   compose_and_run_test_app "rust-example"
   compose_and_run_test_app "stream"
-  compose_test_app "python2-from-host" && run_test_app "python-from-host"
-  compose_test_app "python3-from-host" && run_test_app "python-from-host"
+  compose_test_app "python2-from-host" && run_test_app "python-from-host" 2
+  compose_test_app "python3-from-host" && run_test_app "python-from-host" 3
 }
 
 test_java_app()
@@ -209,9 +222,7 @@ test_http_apps() #stateless
   compose_and_run_test_app "golang-pie-httpserver"
   compose_and_run_test_app "graalvm-httpserver"
   compose_and_run_test_app "lighttpd"
-  if [ "$FS" == "zfs" ]; then #TODO: Fix configuration to make it work with ROFS
-    compose_and_run_test_app "nginx" #Not ROFS
-  fi
+  compose_test_app "nginx" && run_test_app "nginx-from-host"
   compose_and_run_test_app "rust-httpserver"
   test_http_java_apps
   test_http_node_apps
@@ -220,7 +231,7 @@ test_http_apps() #stateless
 test_ffmpeg()
 {
   if [ "$OSV_HYPERVISOR" == "firecracker" ]; then
-    echo "Skipping ffmpeg as at this time it cannot run on Firecracker. Needs to chenge this script to setup bridge parameter"
+    echo "Skipping ffmpeg as at this time it cannot run on Firecracker. Needs to change this script to setup bridge parameter"
   else
     compose_test_app "ffmpeg" && run_test_app "ffmpeg" "video_subclip" && run_test_app "ffmpeg" "video_transcode"
   fi
@@ -256,8 +267,8 @@ run_unit_tests() #regular unit tests are stateful
 {
   # Unit tests are special as the unit tests runner depends on usr.manifest which
   # needs to be placed in the tests module. So let us gegnerate it on the fly from the unit tests mpm
-  capstan package describe osv.common-tests -c | grep "/tests/tst-" | grep -o "/tests/tst-.*" | sed 's/$/: dummy/' > $OSV_DIR/modules/tests/usr.manifest
-  capstan package describe "osv.$FS-tests" -c | grep "/tests/tst-" | grep -o "/tests/tst-.*" | sed 's/$/: dummy/' >> $OSV_DIR/modules/tests/usr.manifest
+  capstan package describe -c osv.common-tests | grep "/tests/tst-" | grep -o "/tests/tst-.*" | sed 's/$/: dummy/' > $OSV_DIR/modules/tests/usr.manifest
+  capstan package describe -c "osv.$FS-tests" | grep "/tests/tst-" | grep -o "/tests/tst-.*" | sed 's/$/: dummy/' >> $OSV_DIR/modules/tests/usr.manifest
   compose_test_app "$FS-tests" "openjdk8-from-host" "common-tests" && run_test_app "tests"
 }
 
@@ -265,18 +276,18 @@ run_httpserver_api_tests()
 {
   if [ "$FS" == "zfs" ]; then #These are stateful apps
     compose_test_app "httpserver-api-tests" && run_test_app "httpserver-api" "http"
-    rm -rf $OSV_DIR/modules/certs/build && mkdir -p $OSV_DIR/modules/certs/build && pushd $OSV_DIR/modules/certs/build
-    tar xf $CAPSTAN_REPO/packages/osv.httpserver-api-tests.mpm /client/client.key && \
-    tar xf $CAPSTAN_REPO/packages/osv.httpserver-api-tests.mpm /etc/pki/CA/cacert.pem && \
-    tar xf $CAPSTAN_REPO/packages/osv.httpserver-api-tests.mpm /client/client.pem && \
-    mv client/* . && mv etc/pki/CA/cacert.pem .
-    popd
-    compose_test_app "httpserver-api-https-tests" "httpserver-api-tests" && run_test_app "httpserver-api" "https"
   fi
 }
 
-export STATUS_FILE="/tmp/$TEST_APP_PACKAGE_NAME"
+export LOG_DIR=/tmp/osv_tests
+mkdir -p $LOG_DIR
+export STATUS_FILE="$LOG_DIR/$TEST_APP_PACKAGE_NAME.status"
 rm -f $STATUS_FILE
+
+#Copy latest OSv kernel if requested by user
+if [ "$LOADER" == "osv-latest-loader" ] && [ $RUN_ONLY == false ]; then
+  copy_latest_loader
+fi
 
 case "$TEST_APP_PACKAGE_NAME" in
   simple)

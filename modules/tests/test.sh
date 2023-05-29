@@ -9,7 +9,9 @@ if [ "$OSV_KERNEL" != "" ]; then
   else
      RUN_OPTIONS="-k --kernel-path $OSV_KERNEL"
   fi
-  $THIS_DIR/../../scripts/test.py -p $OSV_HYPERVISOR --disabled_list tracing_smoke_test --run_options "$RUN_OPTIONS"
+  #The image may have been by capstan which does not handle symlinks correctly (until we fix it)
+  #so for now let us disable tst-fallocate.so which relies on a symlink
+  $THIS_DIR/../../scripts/test.py -p $OSV_HYPERVISOR --disabled_list tracing_smoke_test --disabled_list tst-fallocate.so --run_options "$RUN_OPTIONS"
 else
-  $THIS_DIR/../../scripts/test.py -p $OSV_HYPERVISOR --disabled_list tracing_smoke_test
+  $THIS_DIR/../../scripts/test.py -p $OSV_HYPERVISOR --disabled_list tracing_smoke_test --disabled_list tst-fallocate.so
 fi
