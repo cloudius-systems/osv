@@ -202,7 +202,7 @@ build_package() {
   do
     local mpm_filename=$(basename $mpm)
     mv $mpm $OUTPUT/$mpm_filename.$machine
-    ln -s $mpm_filename.$machine $OUTPUT/$mpm_filename
+    ln -fs $mpm_filename.$machine $OUTPUT/$mpm_filename
   done
 
   echo "-------------------------------------"
@@ -254,10 +254,10 @@ build_osv_image_loader_and_bootstrap_package() {
   #Copy loader.img as $loader_image.qemu
   mkdir -p $CAPSTAN_LOCAL_REPO/repository/$loader_image/
   cp -a $OSV_BUILD/loader.img $CAPSTAN_LOCAL_REPO/repository/$loader_image/$loader_image.qemu.$machine
-  ln -s $loader_image.qemu.$machine $CAPSTAN_LOCAL_REPO/repository/$loader_image/$loader_image.qemu
+  ln -sf $loader_image.qemu.$machine $CAPSTAN_LOCAL_REPO/repository/$loader_image/$loader_image.qemu
   #Copy loader.elf
   cp -a $OSV_BUILD/loader-stripped.elf $CAPSTAN_LOCAL_REPO/repository/$loader_image/$loader_image.elf.$machine
-  ln -s $loader_image.elf.$machine $CAPSTAN_LOCAL_REPO/repository/$loader_image/$loader_image.elf
+  ln -sf $loader_image.elf.$machine $CAPSTAN_LOCAL_REPO/repository/$loader_image/$loader_image.elf
 
   determine_platform
   cat << EOF > $CAPSTAN_LOCAL_REPO/repository/$loader_image/index.yaml
@@ -360,13 +360,18 @@ build_kernel_and_standard_osv_modules() {
   build_run_java_package
   build_and_publish_mpm golang
 
-  build_httpserver_api_package
-  build_httpserver_monitoring_package
   build_http_server_tests_package
   build_http_server_https_tests_package
 
   ASK=0
   build_and_publish_mpm libz
+}
+
+build_httpserver_packages() {
+  build_httpserver_api_package
+  build_httpserver_html5_gui_package
+  build_httpserver_html5_cli_package
+  build_httpserver_monitoring_package
 }
 
 build_java_jdk_packages() {
@@ -436,6 +441,9 @@ case "$1" in
   kernel_and_modules)
     echo "Building kernel and standard modules ..."
     build_kernel_and_standard_osv_modules;;
+  httpserver)
+    echo "Building httpserver modules ..."
+    build_httpserver_packages;;
   monitoring)
     echo "Building httpserver monitoring mpm..."
     build_httpserver_monitoring_package;;
