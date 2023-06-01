@@ -169,6 +169,7 @@ call_signal_handler_thunk:
 syscall_entry:
     .type syscall_entry, @function
     .cfi_startproc simple
+    .cfi_signal_frame
     .cfi_undefined rcx # was overwritten with rip by the syscall instruction
     .cfi_undefined r11 # was overwritten with rflags by the syscall instruction
     .cfi_register rip, rcx # rcx took previous rip value
