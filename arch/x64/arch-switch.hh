@@ -20,13 +20,15 @@
 //
 // The tiny stack has to be large enough to allow for execution of
 // thread::setup_large_syscall_stack() that allocates and sets up
-// large syscall stack. It was measured that as of this writing
-// setup_large_syscall_stack() needs a little over 600 bytes of stack
-// to properly operate. This makes 1024 bytes to be an adequate size
-// of tiny stack.
+// large syscall stack and to save FPU state. It was measured that as
+// of this writing setup_large_syscall_stack() needs a little over 750
+// bytes of stack to properly operate. The FPU state is 850 bytes in size.
+// This makes 2048 bytes to be an adequate size of tiny stack.
+// In case both become larger in future, we add simple canary check
+// to detect potential tiny stack overflow.
 // All application threads pre-allocate tiny syscall stack so there
 // is a tiny penalty with this solution.
-#define TINY_SYSCALL_STACK_SIZE 1024
+#define TINY_SYSCALL_STACK_SIZE 2048
 #define TINY_SYSCALL_STACK_DEPTH (TINY_SYSCALL_STACK_SIZE - SYSCALL_STACK_RESERVED_SPACE_SIZE)
 //
 // The large syscall stack is setup and switched to on first
@@ -35,13 +37,15 @@
 #define LARGE_SYSCALL_STACK_DEPTH (LARGE_SYSCALL_STACK_SIZE - SYSCALL_STACK_RESERVED_SPACE_SIZE)
 
 #define SET_SYSCALL_STACK_TYPE_INDICATOR(value) \
-*((long*)(_tcb->syscall_stack_top)) = value;
+*reinterpret_cast<long*>(_tcb->syscall_stack_top) = value;
 
 #define GET_SYSCALL_STACK_TYPE_INDICATOR() \
-*((long*)(_tcb->syscall_stack_top))
+*reinterpret_cast<long*>(_tcb->syscall_stack_top)
 
 #define TINY_SYSCALL_STACK_INDICATOR 0l
 #define LARGE_SYSCALL_STACK_INDICATOR 1l
+
+#define STACK_CANARY 0xdeadbeafdeadbeaf
 
 extern "C" {
 void thread_main(void);
@@ -254,6 +258,10 @@ void thread::setup_tcb()
         // OSv syscall stack type indicator and extra 8 bytes to make it 16-bytes aligned
         _tcb->syscall_stack_top = tiny_syscall_stack_begin + TINY_SYSCALL_STACK_DEPTH;
         SET_SYSCALL_STACK_TYPE_INDICATOR(TINY_SYSCALL_STACK_INDICATOR);
+        //
+        // Set a canary value at the bottom of the tiny stack to catch potential overflow
+        // caused by setup_large_syscall_stack()
+        *reinterpret_cast<u64*>(tiny_syscall_stack_begin) = STACK_CANARY;
     }
     else {
         _tcb->syscall_stack_top = 0;
@@ -262,6 +270,10 @@ void thread::setup_tcb()
 
 void thread::setup_large_syscall_stack()
 {
+    // Save FPU state and restore it at the end of this function
+    sched::fpu_lock fpu;
+    SCOPE_LOCK(fpu);
+
     assert(is_app());
     assert(GET_SYSCALL_STACK_TYPE_INDICATOR() == TINY_SYSCALL_STACK_INDICATOR);
     //
@@ -279,12 +291,12 @@ void thread::setup_large_syscall_stack()
     memcpy(large_syscall_stack_top - TINY_SYSCALL_STACK_DEPTH,
            tiny_syscall_stack_top - TINY_SYSCALL_STACK_DEPTH, TINY_SYSCALL_STACK_SIZE);
     //
+    // Check if the tiny stack has not been overflowed
+    assert(*reinterpret_cast<u64*>(_tcb->syscall_stack_top - TINY_SYSCALL_STACK_DEPTH) == STACK_CANARY);
+    //
     // Save beginning of tiny stack at the bottom of LARGE stack so
     // that we can deallocate it in free_tiny_syscall_stack
     *((void**)large_syscall_stack_begin) = tiny_syscall_stack_top - TINY_SYSCALL_STACK_DEPTH;
-    //
-    // Set canary value (0xDEADBEAFDEADBEAF) under bottom + 8 of LARGE stack
-    *((long*)(large_syscall_stack_begin + 8)) = 0xdeadbeafdeadbeaf;
     //
     // Switch syscall stack address value in TCB to the top of the LARGE one
     _tcb->syscall_stack_top = large_syscall_stack_top;
@@ -293,6 +305,10 @@ void thread::setup_large_syscall_stack()
 
 void thread::free_tiny_syscall_stack()
 {
+    // Save FPU state and restore it at the end of this function
+    sched::fpu_lock fpu;
+    SCOPE_LOCK(fpu);
+
     assert(is_app());
     assert(GET_SYSCALL_STACK_TYPE_INDICATOR() == LARGE_SYSCALL_STACK_INDICATOR);
 
