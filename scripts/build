@@ -207,7 +207,7 @@ rofs|rofs_with_zfs|virtiofs)
 	manifest=bootfs_empty.manifest.skel
 	usrskel_arg="--usrskel usr_rofs.manifest.skel";;
 ramfs)
-	cp "$SRC"/static/etc/fstab fstab
+	cp "$SRC"/static/etc/fstab "$OUT"/fstab
 	manifest=$OUT/usr.manifest
 	usrskel_arg="--usrskel usr_ramfs.manifest.skel";;
 *)
