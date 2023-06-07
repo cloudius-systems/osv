@@ -16,6 +16,7 @@
 #include <osv/stubbing.hh>
 #include "libc/libc.hh"
 #include <safe-ptr.hh>
+#include <atomic>
 
 #ifndef MAP_UNINITIALIZED
 #define MAP_UNINITIALIZED 0x4000000
@@ -237,20 +238,113 @@ int madvise(void *addr, size_t length, int advice)
     return err.to_libc();
 }
 
+// The brk/sbrk/program break implementation is quite simple
+// and is based on mmap().
+// In essence, on the very 1st call to brk() or sbr(), we call
+// initialize_program_break() to initialize anonymous unpopulated
+// private virtual memory mapping. The mapping size is roughly
+// equal to the amount of free physical memory available at this
+// point rounded down to the nearest huge page. This should be
+// more than enough to satisfy growth of the program break upward.
+// Given the mapping is unpopulated, we do not really use any physical
+// memory until the program break moves up and access to corresponding
+// pages triggers a fault. We also try to give the physical memory back
+// to the system in rare cases when program break move back down.
+//
+// Given the mapping is rounded to the whole huge page, the underlying
+// physical memory will grow in 2M chunks which seems like a good compromise
+// given program break will not be used for large memory allocations.
+// In future we may decide to make the mapping mapped in small 4K pages
+// and grow accordingly to better save physical memory. This would however
+// be more costly at page mapping tables level.
+//
+// Please note that neither the program break nor brk/sbrk are thread-safe
+// by design and the use of it needs to use proper locking around it.
+static void *initial_program_break = NULL;
+// We use atomic to make sure the program break changes are visible consistently
+// across all CPUs regardless of the weak or strong memory model
+static std::atomic<void*> program_break = {NULL};
+static size_t break_area_size = 0;
+
+static bool initialize_program_break()
+{
+    if (!program_break) {
+        break_area_size = align_down(memory::stats::free(), mmu::huge_page_size);
+        program_break = initial_program_break = mmap(NULL, break_area_size, PROT_READ|PROT_WRITE, MAP_ANONYMOUS|MAP_PRIVATE, -1, 0);
+        return initial_program_break != MAP_FAILED;
+    } else {
+        return true;
+    }
+}
+
+void *get_program_break()
+{
+    return program_break.load();
+}
+
+static int internal_brk(void *addr)
+{
+    if (addr) {
+        // Check if new program break falls into a mapped area of memory
+        if (addr >= initial_program_break && addr < initial_program_break + break_area_size) {
+            if (addr < program_break.load()) {
+                // The rare case when the program break goes down. In this case
+                // let us identify potential whole huge pages of the mapping we
+                // can depopulate and return physical memory to the system
+                void *depopulate_start = align_up(addr, mmu::huge_page_size);
+                void *depopulate_end = align_up(program_break.load(), mmu::huge_page_size);
+                if (depopulate_start < depopulate_end) {
+                    size_t depopulate_size = reinterpret_cast<uintptr_t>(depopulate_end) - reinterpret_cast<uintptr_t>(depopulate_start);
+                    mmu::advise(depopulate_start, depopulate_size, mmu::advise_dontneed);
+                }
+            } else {
+                // The program break moves up. In this case let us identify the new memory area
+                // and initialize it to zero per the specification
+                size_t new_memory_area = reinterpret_cast<uintptr_t>(addr) - reinterpret_cast<uintptr_t>(program_break.load());
+                memset(program_break.load(), 0, new_memory_area);
+            }
+            program_break = addr;
+            return 0;
+        } else {
+            // Invalid program break address
+            errno = ENOMEM;
+            return -1;
+        }
+    } else {
+        return 0;
+    }
+}
+
 OSV_LIBC_API
 int brk(void *addr)
 {
-    WARN_STUBBED();
-    errno = ENOMEM;
-    return -1;
+    if (!initialize_program_break()) {
+        errno = ENOMEM;
+        return -1;
+    }
+    return internal_brk(addr);
 }
 
 OSV_LIBC_API
 void *sbrk(intptr_t increment)
 {
-    WARN_STUBBED();
-    errno = ENOMEM;
-    return (void *)-1;
+    if (!initialize_program_break()) {
+        errno = ENOMEM;
+        return (void *)-1;
+    }
+    if (!increment) {
+        // If 0 return current program break
+        return program_break.load();
+    } else {
+        // Otherwise increment or decrement the break by
+        // delegating to internal_brk()
+        auto old_break = program_break.load();
+        if (!internal_brk(old_break + increment)) {
+            return old_break;
+        } else {
+            return (void *)-1;
+        }
+    }
 }
 
 static unsigned posix_madvise_to_advise(int advice)
