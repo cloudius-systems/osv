@@ -80,9 +80,6 @@ struct pollfd {
 #define POLLRDBAND  0x0080      /* OOB/Urgent readable data */
 #define POLLWRBAND  0x0100      /* OOB/Urgent data can be written */
 
-/* General FreeBSD extension (currently only supported for sockets): */
-#define POLLINIGNEOF    0x2000      /* like POLLIN, except ignore EOF */
-
 /*
  * These events are set if they occur regardless of whether they were
  * requested.
@@ -105,8 +102,6 @@ struct pollfd {
 #include <sys/poll.h>
 #define POLLSTANDARD    (POLLIN|POLLPRI|POLLOUT|POLLRDNORM|POLLRDBAND|\
              POLLWRBAND|POLLERR|POLLHUP|POLLNVAL)
-/* General FreeBSD extension (currently only supported for sockets): */
-#define POLLINIGNEOF    0x2000      /* like POLLIN, except ignore EOF */
 
 #endif
 
