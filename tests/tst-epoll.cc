@@ -184,6 +184,60 @@ static void test_socket_epollrdhup()
     client.join();
 }
 
+static void test_af_local_epollrdhup()
+{
+    int s[2], events;
+    struct epoll_event ee;
+
+    int ep = epoll_create(1);
+    report(ep >= 0, "epoll_create");
+
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, s) == -1) {
+        report(0, "socketpair() failed");
+        return;
+    }
+    report(1, "socketpair() succeeded");
+
+    ee.events = EPOLLET|EPOLLIN|EPOLLRDHUP;
+
+    if (epoll_ctl(ep, EPOLL_CTL_ADD, s[0], &ee) == -1) {
+        report(0, "epoll_ctl() failed");
+        goto failed;
+    }
+    report(1, "epoll_crtl() succeeded");
+
+    if (close(s[1]) == -1) {
+        report(0, "close() failed");
+        s[1] = -1;
+        goto failed;
+    }
+
+    s[1] = -1;
+
+    events = epoll_wait(ep, &ee, 1, 5000);
+
+    if (events == -1) {
+        report(0, "epoll_wait() failed");
+        goto failed;
+    }
+
+    if (events) {
+        report(ee.events & EPOLLRDHUP, "EPOLLRDHUP active");
+    } else {
+        report(0, "epoll_wait() timed out\n");
+    }
+
+failed:
+
+    if (s[1] != -1 && close(s[1]) == -1) {
+        report(0, "close() failed");
+    }
+
+    if (close(s[0]) == -1) {
+        report(0, "close() failed");
+    }
+}
+
 int main(int ac, char** av)
 {
     int ep = epoll_create(1);
@@ -338,6 +392,7 @@ int main(int ac, char** av)
     test_epolloneshot();
     test_epoll_file();
     test_socket_epollrdhup();
+    test_af_local_epollrdhup();
 
     std::cout << "SUMMARY: " << tests << ", " << fails << " failures\n";
     return !!fails;
