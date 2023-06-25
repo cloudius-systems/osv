@@ -3182,12 +3182,10 @@ sopoll_generic_locked(struct socket *so, int events)
 		if (so->so_oobmark || (so->so_rcv.sb_state & SBS_RCVATMARK))
 			revents |= events & (POLLPRI | POLLRDBAND);
 
-	if ((events & POLLINIGNEOF) == 0) {
-		if (so->so_rcv.sb_state & SBS_CANTRCVMORE) {
-			revents |= events & (POLLIN | POLLRDNORM);
-			if (so->so_snd.sb_state & SBS_CANTSENDMORE)
-				revents |= POLLHUP;
-		}
+	if (so->so_rcv.sb_state & SBS_CANTRCVMORE) {
+		revents |= events & (POLLIN | POLLRDNORM | POLLRDHUP);
+		if (so->so_snd.sb_state & SBS_CANTSENDMORE)
+			revents |= POLLHUP;
 	}
 
 	if (revents == 0 || events & EPOLLET) {
