@@ -3190,17 +3190,17 @@ sopoll_generic_locked(struct socket *so, int events)
 		}
 	}
 
-    if (revents == 0 || events & EPOLLET) {
-        if (events & (POLLIN | POLLPRI | POLLRDNORM | POLLRDBAND)) {
-            so->so_rcv.sb_flags |= SB_SEL;
-        }
+	if (revents == 0 || events & EPOLLET) {
+		if (events & (POLLIN | POLLPRI | POLLRDNORM | POLLRDBAND)) {
+			so->so_rcv.sb_flags |= SB_SEL;
+		}
 
-        if (events & (POLLOUT | POLLWRNORM)) {
-            so->so_snd.sb_flags |= SB_SEL;
-        }
-    }
+		if (events & (POLLOUT | POLLWRNORM)) {
+			so->so_snd.sb_flags |= SB_SEL;
+		}
+	}
 
-    return revents;
+	return revents;
 }
 
 /*
