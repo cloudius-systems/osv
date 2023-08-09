@@ -423,21 +423,44 @@ static int sys_ioctl(unsigned int fd, unsigned int command, unsigned long arg)
     }
 }
 
+struct sys_sigset {
+    const sigset_t *ss;     /* Pointer to signal set */
+    size_t          ss_len; /* Size (in bytes) of object pointed to by 'ss' */
+};
+
 static int pselect6(int nfds, fd_set *readfds, fd_set *writefds,
-                   fd_set *exceptfds, const struct timespec *timeout_ts,
-                   void *sig)
+                   fd_set *exceptfds, struct timespec *timeout_ts,
+                   sys_sigset* sigmask)
 {
     // As explained in the pselect(2) manual page, the system call pselect accepts
     // pointer to a structure holding pointer to sigset_t and its size which is different
-    // the glibc version of pselect(). For now we are delaying implementation of this call
-    // scenario and raising an error when such call happens.
-    if(sig) {
-        WARN_ONCE("pselect6(): unimplemented with not-null sigmask\n");
-        errno = ENOSYS;
-        return -1;
+    // from the glibc version of pselect().
+    // On top of this, the Linux pselect6() system call modifies its timeout argument
+    // unlike the glibc pselect() function. Our implementation below is to great extent
+    // similar to that of pselect() in core/select.cc
+    sigset_t origmask;
+    struct timeval timeout;
+
+    if (timeout_ts) {
+        timeout.tv_sec = timeout_ts->tv_sec;
+        timeout.tv_usec = timeout_ts->tv_nsec / 1000;
     }
 
-    return pselect(nfds, readfds, writefds, exceptfds, timeout_ts, NULL);
+    if (sigmask) {
+        sigprocmask(SIG_SETMASK, sigmask->ss, &origmask);
+    }
+
+    auto ret = select(nfds, readfds, writefds, exceptfds,
+                                        timeout_ts == NULL? NULL : &timeout);
+    if (sigmask) {
+        sigprocmask(SIG_SETMASK, &origmask, NULL);
+    }
+
+    if (timeout_ts) {
+        timeout_ts->tv_sec = timeout.tv_sec;
+        timeout_ts->tv_nsec = timeout.tv_usec * 1000;
+    }
+    return ret;
 }
 
 static int tgkill(int tgid, int tid, int sig)
@@ -536,7 +559,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL2(flock, int, int);
     SYSCALL4(pwrite64, int, const void *, size_t, off_t);
     SYSCALL1(fdatasync, int);
-    SYSCALL6(pselect6, int, fd_set *, fd_set *, fd_set *, const struct timespec *, void *);
+    SYSCALL6(pselect6, int, fd_set *, fd_set *, fd_set *, struct timespec *, sys_sigset*);
     SYSCALL3(fcntl, int, int, int);
     SYSCALL4(pread64, int, void *, size_t, off_t);
     SYSCALL2(ftruncate, int, off_t);
