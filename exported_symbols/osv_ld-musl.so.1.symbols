@@ -76,6 +76,7 @@ clock
 clock_getcpuclockid
 clock_getres
 clock_gettime
+clock_nanosleep
 close
 closedir
 closelog

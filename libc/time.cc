@@ -41,6 +41,23 @@ int nanosleep(const struct timespec* req, struct timespec* rem)
 }
 
 OSV_LIBC_API
+int clock_nanosleep(clockid_t clock_id, int flags,
+                    const struct timespec *request,
+                    struct timespec *remain)
+{
+    //We ignore the "remain" argument same way we do it above in nanosleep()
+    //This argument is only relevant if the "sleeping" thread is interrupted
+    //by signals. But OSv signal implementation is limited and would not allow
+    //for such a scenario and both nanosleep() and clock_nanosleep() would
+    //never return EINTR
+    if (flags || clock_id != CLOCK_REALTIME) {
+        return ENOTSUP;
+    }
+    sched::thread::sleep(std::chrono::nanoseconds(convert(*request)));
+    return 0;
+}
+
+OSV_LIBC_API
 int usleep(useconds_t usec)
 {
     sched::thread::sleep(std::chrono::microseconds(usec));
