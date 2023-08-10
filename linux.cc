@@ -533,6 +533,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL3(sys_getdents64, int, void *, size_t);
     SYSCALL4(renameat, int, const char *, int, const char *);
     SYSCALL1(sys_brk, void *);
+    SYSCALL4(clock_nanosleep, clockid_t, int, const struct timespec *, struct timespec *);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
