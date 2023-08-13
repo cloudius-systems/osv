@@ -60,6 +60,10 @@ $(out)/tests/options.o: $(src)/core/options.cc
 $(out)/tests/tst-options.so: $(out)/tests/tst-options.o $(out)/tests/options.o
 	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(out)/tests/options.o $(LIBS), LD tests/tst-options.so)
 
+$(out)/tests/tst-reloc.o: CFLAGS:=$(subst -fPIC,-fpie,$(CFLAGS))
+$(out)/tests/tst-reloc.so: $(src)/tests/tst-reloc.c
+	$(call quiet, $(CC) $(CFLAGS) $(LDFLAGS) -pie -o $@ $< $(LIBS), LD tests/tst-reloc.so)
+
 $(out)/tests/commands.o: $(src)/core/commands.cc
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
@@ -135,7 +139,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so \
 	tst-sigaction.so tst-syscall.so tst-ifaddrs.so tst-getdents.so \
 	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-pthread-create.so \
-	misc-futex-perf.so misc-syscall-perf.so tst-brk.so
+	misc-futex-perf.so misc-syscall-perf.so tst-brk.so tst-reloc.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 
 ifeq ($(arch),x64)

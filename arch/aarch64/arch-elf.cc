@@ -59,6 +59,9 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
     case R_AARCH64_RELATIVE:
         *static_cast<void**>(addr) = _base + addend;
         break;
+    case R_AARCH64_IRELATIVE:
+        *static_cast<void**>(addr) = reinterpret_cast<void *(*)()>(_base + addend)();
+        break;
     case R_AARCH64_TLS_TPREL64:
         if (sym) {
             auto sm = symbol(sym);
