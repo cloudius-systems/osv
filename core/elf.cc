@@ -783,6 +783,14 @@ void object::relocate_pltgot()
 #endif /* AARCH64_PORT_STUB */
         original_plt = static_cast<void*>(_base + (u64)pltgot[1]);
     }
+    // PLTGOT resolution has a special calling convention,
+    // for x64 the symbol index and some word is pushed on the stack,
+    // for AArch64 &pltgot[n] and LR are pushed on the stack,
+    // so we need an assembly stub to convert it back to the
+    // standard calling convention.
+    pltgot[1] = this;
+    pltgot[2] = reinterpret_cast<void*>(__elf_resolve_pltgot);
+
     bool bind_now = dynamic_exists(DT_BIND_NOW) || mlocked() ||
         (dynamic_exists(DT_FLAGS) && (dynamic_val(DT_FLAGS) & DF_BIND_NOW)) ||
         (dynamic_exists(DT_FLAGS_1) && (dynamic_val(DT_FLAGS_1) & DF_1_NOW));
@@ -793,7 +801,7 @@ void object::relocate_pltgot()
         auto info = p->r_info;
         u32 type = info & 0xffffffff;
         void *addr = _base + p->r_offset;
-        assert(type == ARCH_JUMP_SLOT || type == ARCH_TLSDESC);
+        assert(type == ARCH_JUMP_SLOT || type == ARCH_TLSDESC || type == ARCH_IRELATIVE);
         if (type == ARCH_JUMP_SLOT) {
             if (bind_now) {
                 // If on-load binding is requested (instead of the default lazy
@@ -814,20 +822,14 @@ void object::relocate_pltgot()
                 // make sure it is relocated relative to the object base.
                 *static_cast<u64*>(addr) += reinterpret_cast<u64>(_base);
             }
+        } else if (type == ARCH_IRELATIVE) {
+            *static_cast<void**>(addr) = reinterpret_cast<void *(*)()>(_base + p->r_addend)();
         } else {
             u32 sym = info >> 32;
             arch_relocate_tls_desc(sym, addr, p->r_addend);
         }
     }
     elf_debug("Relocated %d PLT symbols\n", nrel);
-
-    // PLTGOT resolution has a special calling convention,
-    // for x64 the symbol index and some word is pushed on the stack,
-    // for AArch64 &pltgot[n] and LR are pushed on the stack,
-    // so we need an assembly stub to convert it back to the
-    // standard calling convention.
-    pltgot[1] = this;
-    pltgot[2] = reinterpret_cast<void*>(__elf_resolve_pltgot);
 }
 
 void* object::resolve_pltgot(unsigned index)
@@ -859,11 +861,11 @@ void* object::resolve_pltgot(unsigned index)
 void object::relocate()
 {
     assert(!dynamic_exists(DT_REL));
-    if (dynamic_exists(DT_RELA)) {
-        relocate_rela();
-    }
     if (dynamic_exists(DT_JMPREL)) {
         relocate_pltgot();
+    }
+    if (dynamic_exists(DT_RELA)) {
+        relocate_rela();
     }
 }
 

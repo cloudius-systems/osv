@@ -38,6 +38,7 @@ enum {
 /* for pltgot relocation */
 #define ARCH_JUMP_SLOT R_X86_64_JUMP_SLOT
 #define ARCH_TLSDESC R_X86_64_TLSDESC
+#define ARCH_IRELATIVE R_X86_64_IRELATIVE
 
 #define ELF_KERNEL_MACHINE_TYPE 62
 
