@@ -20,6 +20,7 @@
 #include <boost/range/algorithm/transform.hpp>
 #include <osv/wait_record.hh>
 #include "libc/pthread.hh"
+#include <sys/random.h>
 
 using namespace boost::range;
 
@@ -333,6 +334,8 @@ void application::main()
     // _entry_point() doesn't return
 }
 
+static u64 random_bytes[2];
+
 void application::prepare_argv(elf::program *program)
 {
     // Prepare program_* variable used by the libc
@@ -360,11 +363,21 @@ void application::prepare_argv(elf::program *program)
     }
 
     // Load vdso library if available
-    int auxv_parameters_count = 2;
+    int auxv_parameters_count = 4;
     _libvdso = program->get_library("libvdso.so");
     if (!_libvdso) {
         auxv_parameters_count--;
         WARN_ONCE("application::prepare_argv(): missing libvdso.so -> may prevent shared libraries specifically Golang ones from functioning\n");
+    }
+
+    // Initialize random bytes array so it can be passed as AT_RANDOM auxv vector
+    if (getrandom(random_bytes, sizeof(random_bytes), 0) != sizeof(random_bytes)) {
+        // Fall back to rand_r()
+        auto d = osv::clock::wall::now().time_since_epoch();
+        unsigned seed = std::chrono::duration_cast<std::chrono::nanoseconds>(d).count() % 1000000000;
+        for (unsigned idx = 0; idx < sizeof(random_bytes)/(sizeof(int)); idx++) {
+            reinterpret_cast<int*>(random_bytes)[idx] = rand_r(&seed);
+        }
     }
 
     // Allocate the continuous buffer for argv[] and envp[]
@@ -388,7 +401,6 @@ void application::prepare_argv(elf::program *program)
     }
     contig_argv[_args.size() + 1 + envcount] = nullptr;
 
-
     // Pass the VDSO library to the application.
     Elf64_auxv_t* _auxv =
         reinterpret_cast<Elf64_auxv_t *>(&contig_argv[_args.size() + 1 + envcount + 1]);
@@ -400,6 +412,12 @@ void application::prepare_argv(elf::program *program)
 
     _auxv[auxv_idx].a_type = AT_PAGESZ;
     _auxv[auxv_idx++].a_un.a_val = sysconf(_SC_PAGESIZE);
+
+    _auxv[auxv_idx].a_type = AT_MINSIGSTKSZ;
+    _auxv[auxv_idx++].a_un.a_val = sysconf(_SC_MINSIGSTKSZ);
+
+    _auxv[auxv_idx].a_type = AT_RANDOM;
+    _auxv[auxv_idx++].a_un.a_val = reinterpret_cast<uint64_t>(random_bytes);
 
     _auxv[auxv_idx].a_type = AT_NULL;
     _auxv[auxv_idx].a_un.a_val = 0;
