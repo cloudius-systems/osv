@@ -33,6 +33,7 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/statx.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/file.h>
@@ -565,6 +566,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL4(renameat, int, const char *, int, const char *);
     SYSCALL1(sys_brk, void *);
     SYSCALL4(clock_nanosleep, clockid_t, int, const struct timespec *, struct timespec *);
+    SYSCALL5(statx, int, const char *, int, unsigned int, struct statx *);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
