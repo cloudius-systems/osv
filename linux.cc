@@ -566,6 +566,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL4(renameat, int, const char *, int, const char *);
     SYSCALL1(sys_brk, void *);
     SYSCALL4(clock_nanosleep, clockid_t, int, const struct timespec *, struct timespec *);
+    SYSCALL4(mknodat, int, const char *, mode_t, dev_t);
     SYSCALL5(statx, int, const char *, int, unsigned int, struct statx *);
     }
 

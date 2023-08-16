@@ -646,6 +646,7 @@ mkdtemp
 mkfifo
 mkfifoat
 mknod
+mknodat
 mkostemp
 mkostemp64
 mkostemps
