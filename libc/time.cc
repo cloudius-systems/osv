@@ -80,6 +80,8 @@ int clock_gettime(clockid_t clk_id, struct timespec* ts)
     switch (clk_id) {
     case CLOCK_BOOTTIME:
     case CLOCK_MONOTONIC:
+    case CLOCK_MONOTONIC_COARSE:
+    case CLOCK_MONOTONIC_RAW:
         fill_ts(osv::clock::uptime::now().time_since_epoch(), ts);
         break;
     case CLOCK_REALTIME:
@@ -112,11 +114,14 @@ OSV_LIBC_API
 int clock_getres(clockid_t clk_id, struct timespec* ts)
 {
     switch (clk_id) {
+    case CLOCK_BOOTTIME:
     case CLOCK_REALTIME:
     case CLOCK_REALTIME_COARSE:
     case CLOCK_PROCESS_CPUTIME_ID:
     case CLOCK_THREAD_CPUTIME_ID:
     case CLOCK_MONOTONIC:
+    case CLOCK_MONOTONIC_COARSE:
+    case CLOCK_MONOTONIC_RAW:
         break;
     default:
         if (clk_id < _OSV_CLOCK_SLOTS) {
