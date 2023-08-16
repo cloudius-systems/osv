@@ -357,7 +357,7 @@ int rt_sigprocmask(int how, sigset_t * nset, sigset_t * oset, size_t sigsetsize)
 
 static int sys_exit(int ret)
 {
-    exit(ret);
+    sched::thread::current()->exit();
     return 0;
 }
 
