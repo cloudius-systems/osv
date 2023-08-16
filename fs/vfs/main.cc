@@ -315,6 +315,13 @@ int mknod(const char *pathname, mode_t mode, dev_t dev)
     return __xmknod(0, pathname, mode, &dev);
 }
 
+OSV_LIBC_API
+int mknodat(int dirfd, const char *pathname, mode_t mode, dev_t dev)
+{
+    return vfs_fun_at2(dirfd, pathname, [mode, dev](const char *path) {
+        return mknod(path, mode, dev);
+    });
+}
 
 TRACEPOINT(trace_vfs_lseek, "%d 0x%x %d", int, off_t, int);
 TRACEPOINT(trace_vfs_lseek_ret, "0x%x", off_t);
