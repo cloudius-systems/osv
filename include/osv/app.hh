@@ -233,7 +233,6 @@ private:
     mutex _termination_mutex;
     std::shared_ptr<elf::object> _lib;
     std::shared_ptr<elf::object> _libenviron;
-    std::shared_ptr<elf::object> _libvdso;
     main_func_t* _main;
     void (*_entry_point)();
     static app_registry apps;
