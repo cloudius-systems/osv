@@ -48,6 +48,7 @@ TRACEPOINT(trace_elf_lookup_addr, "%p", const void *);
 
 extern void* elf_start;
 extern size_t elf_size;
+extern char libvdso_start[];
 
 using namespace boost::range;
 
@@ -791,9 +792,9 @@ void object::relocate_pltgot()
     pltgot[1] = this;
     pltgot[2] = reinterpret_cast<void*>(__elf_resolve_pltgot);
 
-    bool bind_now = dynamic_exists(DT_BIND_NOW) || mlocked() ||
+    bool bind_now = dynamic_exists(DT_BIND_NOW) ||
         (dynamic_exists(DT_FLAGS) && (dynamic_val(DT_FLAGS) & DF_BIND_NOW)) ||
-        (dynamic_exists(DT_FLAGS_1) && (dynamic_val(DT_FLAGS_1) & DF_1_NOW));
+        (dynamic_exists(DT_FLAGS_1) && (dynamic_val(DT_FLAGS_1) & DF_1_NOW)) || mlocked();
 
     auto rel = dynamic_ptr<Elf64_Rela>(DT_JMPREL);
     auto nrel = dynamic_val(DT_PLTRELSZ) / sizeof(*rel);
@@ -1354,6 +1355,18 @@ program::program(void* addr)
         _files[name] = _core;
     }
     _modules_rcu.assign(ml);
+
+    initialize_libvdso();
+}
+
+void program::initialize_libvdso()
+{
+    _libvdso = std::make_shared<memory_image>(*this, &libvdso_start);
+    _libvdso->set_base(&libvdso_start);
+    _libvdso->load_segments();
+    _libvdso->process_headers();
+    _libvdso->relocate();
+    _libvdso->fix_permissions();
 }
 
 void program::set_search_path(std::initializer_list<std::string> path)

@@ -617,6 +617,7 @@ public:
     dladdr_info lookup_addr(const void* addr);
     elf::object *object_containing_addr(const void *addr);
     inline object *tls_object(ulong module);
+    void *get_libvdso_base() { return _libvdso->base(); }
 private:
     void add_debugger_obj(object* obj);
     void del_debugger_obj(object* obj);
@@ -627,10 +628,12 @@ private:
     std::shared_ptr<object> load_object(std::string name,
             std::vector<std::string> extra_path,
             std::vector<std::shared_ptr<object>> &loaded_objects);
+    void initialize_libvdso();
 private:
     mutex _mutex;
     void* _next_alloc;
     std::shared_ptr<object> _core;
+    std::shared_ptr<object> _libvdso;
     std::map<std::string, std::weak_ptr<object>> _files;
     // used to determine object::_module_index, so indexes
     // are stable even when objects are deleted:

@@ -2125,7 +2125,7 @@ def_symbols = --defsym=OSV_KERNEL_BASE=$(kernel_base) \
               --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift)
 endif
 
-$(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(loader_options_dep) $(version_script_file)
+$(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(out)/libvdso-content.o $(loader_options_dep) $(version_script_file)
 	$(call quiet, $(LD) -o $@ $(def_symbols) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
             $(patsubst %version_script,--version-script=%version_script,$(patsubst %.ld,-T %.ld,$^)) \
@@ -2137,7 +2137,7 @@ $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(lo
 	@scripts/libosv.py $(out)/osv.syms $(out)/libosv.ld `scripts/osv-version.sh` | $(CC) -c -o $(out)/osv.o -x assembler -
 	$(call quiet, $(CC) $(out)/osv.o -nostdlib -shared -o $(out)/libosv.so -T $(out)/libosv.ld, LIBOSV.SO)
 
-$(out)/zfs_builder.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/zfs_builder_bootfs.o $(loader_options_dep) $(version_script_file)
+$(out)/zfs_builder.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/zfs_builder_bootfs.o $(out)/libvdso-content.o $(loader_options_dep) $(version_script_file)
 	$(call quiet, $(LD) -o $@ $(def_symbols) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
             $(patsubst %version_script,--version-script=%version_script,$(patsubst %.ld,-T %.ld,$^)) \
@@ -2161,7 +2161,7 @@ $(out)/libenviron.so: $(environ_sources)
 $(out)/libvdso.so: libc/vdso/vdso.c
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -c -fPIC -o $(out)/libvdso.o libc/vdso/vdso.c, CC libvdso.o)
-	$(call quiet, $(LD) -shared -fPIC -o $(out)/libvdso.so $(out)/libvdso.o --version-script=libc/vdso/vdso.version, LINK libvdso.so)
+	$(call quiet, $(LD) -shared -fPIC -z now -o $(out)/libvdso.so $(out)/libvdso.o -T libc/vdso/vdso.lds, LINK libvdso.so)
 
 bootfs_manifest ?= bootfs.manifest.skel
 
@@ -2180,11 +2180,17 @@ libgcc_s_dir := ../../$(aarch64_gccbase)/lib64
 endif
 
 $(out)/bootfs.bin: scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep) $(tools:%=$(out)/%) \
-		$(out)/libenviron.so $(out)/libvdso.so $(out)/libsolaris.so
+		$(out)/libenviron.so $(out)/libsolaris.so
 	$(call quiet, olddir=`pwd`; cd $(out); "$$olddir"/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m "$$olddir"/$(bootfs_manifest), MKBOOTFS $@)
 
 $(out)/bootfs.o: $(out)/bootfs.bin
 $(out)/bootfs.o: ASFLAGS += -I$(out)
+
+$(out)/libvdso-stripped.so: $(out)/libvdso.so
+	$(call quiet, $(STRIP) $(out)/libvdso.so -o $(out)/libvdso-stripped.so, STRIP libvdso.so -> libvdso-stripped.so)
+
+$(out)/libvdso-content.o: $(out)/libvdso-stripped.so
+$(out)/libvdso-content.o: ASFLAGS += -I$(out)
 
 # Standard C++ library
 libstd_dir := $(dir $(shell $(CXX) -print-file-name=libstdc++.so))
@@ -2205,7 +2211,7 @@ ifeq ($(conf_hide_symbols),1)
 $(shell echo "/usr/lib/libstdc++.so.6: $$(readlink -f $(libstd_dir))/libstdc++.so" >> $(out)/zfs_builder_bootfs.manifest)
 endif
 $(out)/zfs_builder_bootfs.bin: scripts/mkbootfs.py $(zfs_builder_bootfs_manifest) $(tools:%=$(out)/%) \
-		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so $(out)/libvdso.so $(out)/libsolaris.so
+		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so $(out)/libsolaris.so
 	$(call quiet, olddir=`pwd`; cd $(out); "$$olddir"/scripts/mkbootfs.py -o zfs_builder_bootfs.bin -d zfs_builder_bootfs.bin.d -m zfs_builder_bootfs.manifest \
 		-D libgcc_s_dir=$(libgcc_s_dir), MKBOOTFS $@)
 
