@@ -20,7 +20,6 @@
 #include <boost/range/algorithm/transform.hpp>
 #include <osv/wait_record.hh>
 #include "libc/pthread.hh"
-#include <sys/random.h>
 
 using namespace boost::range;
 
@@ -363,13 +362,14 @@ void application::prepare_argv(elf::program *program)
     }
 
     // Initialize random bytes array so it can be passed as AT_RANDOM auxv vector
-    if (getrandom(random_bytes, sizeof(random_bytes), 0) != sizeof(random_bytes)) {
-        // Fall back to rand_r()
-        auto d = osv::clock::wall::now().time_since_epoch();
-        unsigned seed = std::chrono::duration_cast<std::chrono::nanoseconds>(d).count() % 1000000000;
-        for (unsigned idx = 0; idx < sizeof(random_bytes)/(sizeof(int)); idx++) {
-            reinterpret_cast<int*>(random_bytes)[idx] = rand_r(&seed);
-        }
+    //TODO: Ideally we would love to use something better than the pseudo-random scheme below
+    //based on the time since epoch and rand_r(). But the getrandom() at this points does
+    //no always work and is also very slow. Once we figure out how to fix or improve it
+    //we may refine it with a better solution. For now it will do.
+    auto d = osv::clock::wall::now().time_since_epoch();
+    unsigned seed = std::chrono::duration_cast<std::chrono::nanoseconds>(d).count() % 1000000000;
+    for (unsigned idx = 0; idx < sizeof(random_bytes)/(sizeof(int)); idx++) {
+        reinterpret_cast<int*>(random_bytes)[idx] = rand_r(&seed);
     }
 
     int auxv_parameters_count = 4;
