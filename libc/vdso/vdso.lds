@@ -25,16 +25,3 @@ PHDRS
     /*note PT_NOTE FLAGS(4);*/
     eh_frame_hdr PT_GNU_EH_FRAME FLAGS(4);
 }
-
-/* Pretend like we are Linux 2.6 */
-VERSION
-{
-    LINUX_2.6 {
-        global:
-            __vdso_clock_gettime;
-            __vdso_gettimeofday;
-            __vdso_time;
-        local:
-            *;
-    };
-}

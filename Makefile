@@ -2161,7 +2161,7 @@ $(out)/libenviron.so: $(environ_sources)
 $(out)/libvdso.so: libc/vdso/vdso.c
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -c -fPIC -o $(out)/libvdso.o libc/vdso/vdso.c, CC libvdso.o)
-	$(call quiet, $(LD) -shared -fPIC -z now -o $(out)/libvdso.so $(out)/libvdso.o -T libc/vdso/vdso.lds, LINK libvdso.so)
+	$(call quiet, $(LD) -shared -fPIC -z now -o $(out)/libvdso.so $(out)/libvdso.o -T libc/vdso/vdso.lds --version-script=libc/vdso/$(arch)/vdso.version, LINK libvdso.so)
 
 bootfs_manifest ?= bootfs.manifest.skel
 
