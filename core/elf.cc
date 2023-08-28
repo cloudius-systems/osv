@@ -1361,12 +1361,16 @@ program::program(void* addr)
 
 void program::initialize_libvdso()
 {
-    _libvdso = std::make_shared<memory_image>(*this, &libvdso_start);
-    _libvdso->set_base(&libvdso_start);
-    _libvdso->load_segments();
-    _libvdso->process_headers();
-    _libvdso->relocate();
-    _libvdso->fix_permissions();
+    if (!s_program) {
+        _libvdso = std::make_shared<memory_image>(*this, &libvdso_start);
+        _libvdso->set_base(&libvdso_start);
+        _libvdso->load_segments();
+        _libvdso->process_headers();
+        _libvdso->relocate();
+        _libvdso->fix_permissions();
+    } else {
+        _libvdso = s_program->_libvdso;
+    }
 }
 
 void program::set_search_path(std::initializer_list<std::string> path)
