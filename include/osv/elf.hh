@@ -380,7 +380,7 @@ public:
     void* get_tls_segment() { return _tls_segment; }
     bool is_non_pie_executable() { return _ehdr.e_type == ET_EXEC; }
     std::vector<ptrdiff_t>& initial_tls_offsets() { return _initial_tls_offsets; }
-    bool is_executable() { return _is_executable; }
+    bool is_dynamically_linked_executable() { return _is_dynamically_linked_executable; }
     ulong get_tls_size();
     ulong get_aligned_tls_size();
     void copy_local_tls(void* to_addr);
@@ -435,7 +435,7 @@ protected:
     Elf64_Dyn* _dynamic_table;
     ulong _module_index;
     std::unique_ptr<char[]> _section_names_cache;
-    bool _is_executable;
+    bool _is_dynamically_linked_executable;
     bool is_core();
     bool _init_called;
     void* _eh_frame;
@@ -462,7 +462,7 @@ protected:
     bool arch_relocate_jump_slot(symbol_module& sym, void *addr, Elf64_Sxword addend);
     void arch_relocate_tls_desc(u32 sym, void *addr, Elf64_Sxword addend);
     size_t static_tls_end() {
-        if (is_core() || is_executable()) {
+        if (is_core() || _is_dynamically_linked_executable) {
             return 0;
         }
         return _static_tls_offset + get_tls_size();

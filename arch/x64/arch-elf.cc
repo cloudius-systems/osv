@@ -138,7 +138,7 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
         if (sym) {
             auto sm = symbol(sym);
             ulong tls_offset;
-            if (sm.obj->is_executable()) {
+            if (sm.obj->is_dynamically_linked_executable()) {
                 // If this is an executable (pie or position-dependant one)
                 // then the variable is located in the reserved slot of the TLS
                 // right where the kernel TLS lives
@@ -202,7 +202,7 @@ void object::prepare_initial_tls(void* buffer, size_t size,
 
 void object::prepare_local_tls(std::vector<ptrdiff_t>& offsets)
 {
-    if (!_static_tls && !is_executable()) {
+    if (!_static_tls && !is_dynamically_linked_executable()) {
         return;
     }
 

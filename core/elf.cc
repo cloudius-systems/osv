@@ -123,7 +123,7 @@ object::object(program& prog, std::string pathname)
     , _initial_tls_size(0)
     , _dynamic_table(nullptr)
     , _module_index(_prog.register_dtv(this))
-    , _is_executable(false)
+    , _is_dynamically_linked_executable(false)
     , _init_called(false)
     , _eh_frame(0)
     , _visibility_thread(nullptr)
@@ -249,7 +249,7 @@ const char * object::symbol_name(const Elf64_Sym * sym) {
 }
 
 void* object::entry_point() const {
-    if (!_is_executable) {
+    if (!_is_dynamically_linked_executable) {
         return nullptr;
     }
     return _base + _ehdr.e_entry;
@@ -484,7 +484,7 @@ void object::process_headers()
             _dynamic_table = reinterpret_cast<Elf64_Dyn*>(_base + phdr.p_vaddr);
             break;
         case PT_INTERP:
-            _is_executable = true;
+            _is_dynamically_linked_executable = true;
             break;
         case PT_NOTE: {
             if (phdr.p_memsz < 16) {
@@ -536,10 +536,10 @@ void object::process_headers()
             abort("Unknown p_type in executable %s: %d\n", pathname(), phdr.p_type);
         }
     }
-    if (!is_core() && _ehdr.e_type == ET_EXEC && !_is_executable) {
+    if (!is_core() && _ehdr.e_type == ET_EXEC && !_is_dynamically_linked_executable) {
         abort("Statically linked executables are not supported!\n");
     }
-    if (_is_executable && _tls_segment) {
+    if (_is_dynamically_linked_executable && _tls_segment) {
         auto app_tls_size = get_aligned_tls_size();
         ulong pie_static_tls_maximum_size = &_pie_static_tls_end - &_pie_static_tls_start;
         if (app_tls_size > pie_static_tls_maximum_size) {
@@ -1263,7 +1263,7 @@ void object::init_static_tls()
         if (obj->is_core()) {
             continue;
         }
-        if (obj->is_executable()) {
+        if (obj->is_dynamically_linked_executable()) {
             obj->prepare_local_tls(_initial_tls_offsets);
             elf_debug("Initialized local-exec static TLS for %s\n", obj->pathname().c_str());
         }
