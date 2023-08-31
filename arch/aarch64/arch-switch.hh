@@ -120,7 +120,7 @@ void thread::setup_tcb()
         assert(obj);
         user_tls_size = obj->initial_tls_size();
         user_tls_data = obj->initial_tls();
-        if (obj->is_executable()) {
+        if (obj->is_dynamically_linked_executable()) {
            executable_tls_size = obj->get_tls_size();
         }
     }
