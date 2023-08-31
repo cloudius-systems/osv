@@ -378,7 +378,7 @@ public:
     size_t initial_tls_size() { return _initial_tls_size; }
     void* initial_tls() { return _initial_tls.get(); }
     void* get_tls_segment() { return _tls_segment; }
-    bool is_non_pie_executable() { return _ehdr.e_type == ET_EXEC; }
+    bool is_pic() { return _ehdr.e_type != ET_EXEC; }
     std::vector<ptrdiff_t>& initial_tls_offsets() { return _initial_tls_offsets; }
     bool is_dynamically_linked_executable() { return _is_dynamically_linked_executable; }
     ulong get_tls_size();
@@ -415,6 +415,7 @@ private:
     void prepare_local_tls(std::vector<ptrdiff_t>& offsets);
     void alloc_static_tls();
     void make_text_writable(bool flag);
+    bool is_statically_linked() { return !_is_dynamically_linked_executable && _ehdr.e_entry; }
 protected:
     program& _prog;
     std::string _pathname;

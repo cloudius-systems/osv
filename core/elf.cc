@@ -249,9 +249,6 @@ const char * object::symbol_name(const Elf64_Sym * sym) {
 }
 
 void* object::entry_point() const {
-    if (!_is_dynamically_linked_executable) {
-        return nullptr;
-    }
     return _base + _ehdr.e_entry;
 }
 
@@ -366,13 +363,13 @@ void object::set_base(void* base)
                               [](const Elf64_Phdr* a, const Elf64_Phdr* b)
                                   { return a->p_vaddr < b->p_vaddr; });
 
-    if (!is_core() && is_non_pie_executable()) {
-        // Verify non-PIE executable does not collide with the kernel
+    if (!is_core() && !is_pic()) {
+        // Verify non-PIC executable ((aka position dependent)) does not collide with the kernel
         if (intersects_with_kernel(p->p_vaddr) || intersects_with_kernel(q->p_vaddr + q->p_memsz)) {
-            abort("Non-PIE executable [%s] collides with kernel: [%p-%p] !\n",
+            abort("Non-PIC executable [%s] collides with kernel: [%p-%p] !\n",
                     pathname().c_str(), p->p_vaddr, q->p_vaddr + q->p_memsz);
         }
-        // Override the passed in value as the base for non-PIEs (Position Dependant Executables)
+        // Override the passed in value as the base for non-PICs (Position Dependant Executables)
         // needs to be set to 0 because all the addresses in it are absolute
         _base = 0x0;
     } else {
@@ -536,8 +533,8 @@ void object::process_headers()
             abort("Unknown p_type in executable %s: %d\n", pathname(), phdr.p_type);
         }
     }
-    if (!is_core() && _ehdr.e_type == ET_EXEC && !_is_dynamically_linked_executable) {
-        abort("Statically linked executables are not supported!\n");
+    if (!is_core() && is_statically_linked()) {
+        abort("Statically linked executables are not supported yet!\n");
     }
     if (_is_dynamically_linked_executable && _tls_segment) {
         auto app_tls_size = get_aligned_tls_size();
@@ -600,6 +597,12 @@ void object::fix_permissions()
         make_text_writable(false);
     }
 
+    //Full RELRO applies to dynamically linked executables only
+    if (is_statically_linked()) {
+        return;
+    }
+
+    //Process GNU_RELRO segments only to make GOT and others read-only
     for (auto&& phdr : _phdrs) {
         if (phdr.p_type != PT_GNU_RELRO)
             continue;
@@ -888,6 +891,9 @@ constexpr Elf64_Versym old_version_symbol_mask = Elf64_Versym(1) << 15;
 
 Elf64_Sym* object::lookup_symbol_old(const char* name)
 {
+    if (!dynamic_exists(DT_SYMTAB)) {
+        return nullptr;
+    }
     auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
     auto strtab = dynamic_ptr<char>(DT_STRTAB);
     auto hashtab = dynamic_ptr<Elf64_Word>(DT_HASH);
@@ -917,6 +923,9 @@ dl_new_hash(const char *s)
 
 Elf64_Sym* object::lookup_symbol_gnu(const char* name, bool self_lookup)
 {
+    if (!dynamic_exists(DT_SYMTAB)) {
+        return nullptr;
+    }
     auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
     auto strtab = dynamic_ptr<char>(DT_STRTAB);
     auto hashtab = dynamic_ptr<Elf64_Word>(DT_GNU_HASH);
@@ -1019,6 +1028,9 @@ dladdr_info object::lookup_addr(const void* addr)
     if (addr < _base || addr >= _end) {
         return ret;
     }
+    if (!dynamic_exists(DT_STRTAB)) {
+        return ret;
+    }
     ret.fname = _pathname.c_str();
     ret.base = _base;
     auto strtab = dynamic_ptr<char>(DT_STRTAB);
@@ -1068,6 +1080,9 @@ static std::string dirname(std::string path)
 
 void object::load_needed(std::vector<std::shared_ptr<object>>& loaded_objects)
 {
+    if (!dynamic_exists(DT_NEEDED)) {
+        return;
+    }
     std::vector<std::string> rpath;
 
     std::string rpath_str;
@@ -1462,7 +1477,7 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         osv::rcu_dispose(old_modules);
         ef->load_segments();
         ef->process_headers();
-        if (!ef->is_non_pie_executable())
+        if (ef->is_pic())
            _next_alloc = ef->end();
         add_debugger_obj(ef.get());
         loaded_objects.push_back(ef);
