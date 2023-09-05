@@ -372,9 +372,11 @@ void object::set_base(void* base)
         // Override the passed in value as the base for non-PICs (Position Dependant Executables)
         // needs to be set to 0 because all the addresses in it are absolute
         _base = 0x0;
+        _headers_start = reinterpret_cast<void*>(p->p_vaddr) + _ehdr.e_phoff;
     } else {
         // Otherwise for kernel, PIEs and shared libraries set the base as requested by caller
         _base = align(base, p->p_align, p->p_vaddr & (p->p_align - 1)) - p->p_vaddr;
+        _headers_start = _base + _ehdr.e_phoff;
     }
 
     _end = _base + q->p_vaddr + q->p_memsz;
@@ -533,7 +535,7 @@ void object::process_headers()
             abort("Unknown p_type in executable %s: %d\n", pathname(), phdr.p_type);
         }
     }
-    if (!is_core() && is_statically_linked()) {
+    if (!is_core() && is_statically_linked_executable()) {
         abort("Statically linked executables are not supported yet!\n");
     }
     if (_is_dynamically_linked_executable && _tls_segment) {
@@ -595,11 +597,6 @@ void object::fix_permissions()
 {
     if(has_non_writable_text_relocations()) {
         make_text_writable(false);
-    }
-
-    //Full RELRO applies to dynamically linked executables only
-    if (is_statically_linked()) {
-        return;
     }
 
     //Process GNU_RELRO segments only to make GOT and others read-only
@@ -891,9 +888,6 @@ constexpr Elf64_Versym old_version_symbol_mask = Elf64_Versym(1) << 15;
 
 Elf64_Sym* object::lookup_symbol_old(const char* name)
 {
-    if (!dynamic_exists(DT_SYMTAB)) {
-        return nullptr;
-    }
     auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
     auto strtab = dynamic_ptr<char>(DT_STRTAB);
     auto hashtab = dynamic_ptr<Elf64_Word>(DT_HASH);
@@ -923,9 +917,6 @@ dl_new_hash(const char *s)
 
 Elf64_Sym* object::lookup_symbol_gnu(const char* name, bool self_lookup)
 {
-    if (!dynamic_exists(DT_SYMTAB)) {
-        return nullptr;
-    }
     auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
     auto strtab = dynamic_ptr<char>(DT_STRTAB);
     auto hashtab = dynamic_ptr<Elf64_Word>(DT_GNU_HASH);
@@ -1080,9 +1071,6 @@ static std::string dirname(std::string path)
 
 void object::load_needed(std::vector<std::shared_ptr<object>>& loaded_objects)
 {
-    if (!dynamic_exists(DT_NEEDED)) {
-        return;
-    }
     std::vector<std::string> rpath;
 
     std::string rpath_str;
@@ -1181,6 +1169,9 @@ std::string object::pathname()
 // Run the object's static constructors or similar initialization
 void object::run_init_funcs(int argc, char** argv)
 {
+    if (is_statically_linked_executable()) {
+        return;
+    }
     // Invoke any init functions if present and pass in argc and argv
     // The reason why we pass argv and argc is explained in issue #795
     if (dynamic_exists(DT_INIT)) {
@@ -1206,6 +1197,9 @@ void object::run_init_funcs(int argc, char** argv)
 // Run the object's static destructors or similar finalization
 void object::run_fini_funcs()
 {
+    if (is_statically_linked_executable()) {
+        return;
+    }
     if(!_init_called){
         return;
     }
@@ -1478,12 +1472,17 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         ef->load_segments();
         ef->process_headers();
         if (ef->is_pic())
-           _next_alloc = ef->end();
+            _next_alloc = ef->end();
         add_debugger_obj(ef.get());
         loaded_objects.push_back(ef);
-        ef->load_needed(loaded_objects);
-        ef->relocate();
-        ef->fix_permissions();
+        //Do not relocate static executables as they are linked with its own
+        //dynamic linker. Also do not try to load any dependant libraries
+        //as they do not apply to statically linked executables.
+        if (!ef->is_statically_linked_executable()) {
+            ef->load_needed(loaded_objects);
+            ef->relocate();
+            ef->fix_permissions();
+        }
         _files[name] = ef;
         _files[ef->soname()] = ef;
         return ef;

@@ -217,12 +217,19 @@ application::application(const std::string& command,
         throw launch_error("Failed to load object: " + command);
     }
 
-    _main = _lib->lookup<int (int, char**)>(main_function_name.c_str());
-    if (!_main) {
-        _entry_point = reinterpret_cast<void(*)()>(_lib->entry_point());
-    }
-    if (!_entry_point && !_main) {
-        throw launch_error("Failed looking up main");
+    if (_lib->is_statically_linked_executable()) {
+        //Augment auxiliary vector with extra entries like AT_PHDR, AT_ENTRY, etc
+        //that are necessary by a static executable to bootstrap itself
+        augment_auxv();
+    } else {
+        _main = _lib->lookup<int (int, char**)>(main_function_name.c_str());
+
+        if (!_main) {
+            _entry_point = reinterpret_cast<void(*)()>(_lib->entry_point());
+        }
+        if (!_entry_point && !_main) {
+            throw launch_error("Failed looking up main");
+        }
     }
 }
 
@@ -319,22 +326,27 @@ void application::main()
     elf::get_program()->init_library(_args.size(), _argv.get());
     sched::thread::current()->set_name(_command);
 
-    if (_main) {
-        run_main();
+    if (_lib->is_statically_linked_executable()) {
+        run_entry_point(_lib->entry_point(), _args.size(), _argv.get(), _argv_size);
     } else {
-        // The application is expected not to initialize the environment in
-        // which it runs on its owns but to call __libc_start_main(). If that's
-        // not the case bad things may happen: constructors of global objects
-        // may be called twice, TLS may be overriden and the program may not
-        // received correct arguments, environment variables and auxiliary
-        // vector.
-        _entry_point();
+        if (_main) {
+            run_main();
+        } else {
+            // The application is expected not to initialize the environment in
+            // which it runs on its owns but to call __libc_start_main(). If that's
+            // not the case bad things may happen: constructors of global objects
+            // may be called twice, TLS may be overriden and the program may not
+            // received correct arguments, environment variables and auxiliary
+            // vector.
+            _entry_point();
+        }
     }
     // _entry_point() doesn't return
 }
 
 static u64 random_bytes[2];
 
+static constexpr int max_auxv_parameters_count = 8;
 void application::prepare_argv(elf::program *program)
 {
     // Prepare program_* variable used by the libc
@@ -372,9 +384,9 @@ void application::prepare_argv(elf::program *program)
         reinterpret_cast<int*>(random_bytes)[idx] = rand_r(&seed);
     }
 
-    int auxv_parameters_count = 4;
     // Allocate the continuous buffer for argv[] and envp[]
-    _argv.reset(new char*[_args.size() + 1 + envcount + 1 + sizeof(Elf64_auxv_t) * (auxv_parameters_count + 1)]);
+    _argv_size = _args.size() + 1 + envcount + 1 + sizeof(Elf64_auxv_t) * (max_auxv_parameters_count + 1);
+    _argv.reset(new char*[_argv_size]);
 
     // Fill the argv part of these buffers
     char *ab = _argv_buf.get();
@@ -394,25 +406,49 @@ void application::prepare_argv(elf::program *program)
     }
     contig_argv[_args.size() + 1 + envcount] = nullptr;
 
-    Elf64_auxv_t* _auxv =
-        reinterpret_cast<Elf64_auxv_t *>(&contig_argv[_args.size() + 1 + envcount + 1]);
-    int auxv_idx = 0;
+    _auxv = reinterpret_cast<Elf64_auxv_t *>(&contig_argv[_args.size() + 1 + envcount + 1]);
+    _auxv_idx = 0;
 
     // Pass the VDSO library to the application.
-    _auxv[auxv_idx].a_type = AT_SYSINFO_EHDR;
-    _auxv[auxv_idx++].a_un.a_val = reinterpret_cast<uint64_t>(program->get_libvdso_base());
+    _auxv[_auxv_idx].a_type = AT_SYSINFO_EHDR;
+    _auxv[_auxv_idx++].a_un.a_val = reinterpret_cast<uint64_t>(program->get_libvdso_base());
 
-    _auxv[auxv_idx].a_type = AT_PAGESZ;
-    _auxv[auxv_idx++].a_un.a_val = sysconf(_SC_PAGESIZE);
+    _auxv[_auxv_idx].a_type = AT_PAGESZ;
+    _auxv[_auxv_idx++].a_un.a_val = sysconf(_SC_PAGESIZE);
 
-    _auxv[auxv_idx].a_type = AT_MINSIGSTKSZ;
-    _auxv[auxv_idx++].a_un.a_val = sysconf(_SC_MINSIGSTKSZ);
+    _auxv[_auxv_idx].a_type = AT_MINSIGSTKSZ;
+    _auxv[_auxv_idx++].a_un.a_val = sysconf(_SC_MINSIGSTKSZ);
 
-    _auxv[auxv_idx].a_type = AT_RANDOM;
-    _auxv[auxv_idx++].a_un.a_val = reinterpret_cast<uint64_t>(random_bytes);
+    _auxv[_auxv_idx].a_type = AT_RANDOM;
+    _auxv[_auxv_idx++].a_un.a_val = reinterpret_cast<uint64_t>(random_bytes);
 
-    _auxv[auxv_idx].a_type = AT_NULL;
-    _auxv[auxv_idx].a_un.a_val = 0;
+    _auxv[_auxv_idx].a_type = AT_NULL;
+    _auxv[_auxv_idx].a_un.a_val = 0;
+}
+
+// Augments auxiliary vector with extra entries like AT_PHDR, AT_ENTRY, etc
+// that are necessary by a static executable to bootstrap itself.
+// Please note these entries are _lib/ELF specific unlike the entries
+// set by prepare_argv()
+void application::augment_auxv()
+{
+    //Let us verify there is space for 4 extra entries needed
+    assert(_auxv_idx + 4 == max_auxv_parameters_count);
+
+    _auxv[_auxv_idx].a_type = AT_PHDR;
+    _auxv[_auxv_idx++].a_un.a_val = reinterpret_cast<uint64_t>(_lib->headers_start());
+
+    _auxv[_auxv_idx].a_type = AT_PHENT;
+    _auxv[_auxv_idx++].a_un.a_val = _lib->headers_size();
+
+    _auxv[_auxv_idx].a_type = AT_PHNUM;
+    _auxv[_auxv_idx++].a_un.a_val = _lib->headers_count();
+
+    _auxv[_auxv_idx].a_type = AT_ENTRY;
+    _auxv[_auxv_idx++].a_un.a_val = reinterpret_cast<uint64_t>(_lib->entry_point());
+
+    _auxv[_auxv_idx].a_type = AT_NULL;
+    _auxv[_auxv_idx].a_un.a_val = 0;
 }
 
 void application::run_main()
