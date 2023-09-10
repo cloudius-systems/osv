@@ -22,11 +22,17 @@ double atof (const char *);
 float strtof (const char *__restrict, char **__restrict);
 double strtod (const char *__restrict, char **__restrict);
 long double strtold (const char *__restrict, char **__restrict);
+__float128 strtof128 (const char *__restrict, char **__restrict);
 
 long strtol (const char *__restrict, char **__restrict, int);
 unsigned long strtoul (const char *__restrict, char **__restrict, int);
 long long strtoll (const char *__restrict, char **__restrict, int);
 unsigned long long strtoull (const char *__restrict, char **__restrict, int);
+
+int strfromd (char *__restrict, size_t, const char *__restrict, double);
+int strfromf (char *__restrict, size_t, const char *__restrict, float);
+int strfromld (char *__restrict, size_t, const char *__restrict, long double);
+int strfromf128 (char *__restrict, size_t, const char *__restrict, __float128);
 
 int rand (void);
 void srand (unsigned);

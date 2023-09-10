@@ -141,6 +141,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-pthread-create.so \
 	misc-futex-perf.so misc-syscall-perf.so tst-brk.so tst-reloc.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
+#	tst-f128.so \
 
 ifeq ($(arch),x64)
 tests += tst-mmx-fpu.so
