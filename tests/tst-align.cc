@@ -20,6 +20,7 @@
 
 #include <stdlib.h>
 #include <malloc.h>
+#include <stdint.h>
 
 static int tests = 0, fails = 0;
 
