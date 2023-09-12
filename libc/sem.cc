@@ -132,7 +132,8 @@ sem_t *sem_open(const char *name, int oflag, mode_t mode, unsigned int value)
             return SEM_FAILED;
         }
         
-        named_semaphores.emplace(std::string(name), std::make_unique<posix_semaphore>(value, 1, true)); 
+        named_semaphores.emplace(std::string(name),
+            std::unique_ptr<posix_semaphore>(new posix_semaphore(value, 1, true)));
         return reinterpret_cast<sem_t *>(&named_semaphores[std::string(name)]);
     }
     
