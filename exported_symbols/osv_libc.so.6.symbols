@@ -837,6 +837,7 @@ strerror_l
 strerror_r
 strfmon
 strfmon_l
+strfromf128
 strftime
 __strftime_l
 strftime_l
@@ -865,6 +866,7 @@ strtod_l
 strtof
 __strtof_l
 strtof_l
+strtof128
 strtoimax
 strtok
 __strtok_r

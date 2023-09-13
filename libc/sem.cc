@@ -55,7 +55,7 @@ OSV_LIBC_API
 int sem_init(sem_t* s, int pshared, unsigned val)
 {
     static_assert(sizeof(indirect_semaphore) <= sizeof(*s), "sem_t overflow");
-    posix_semaphore *sem = new posix_semaphore(val, 1, false); 
+    posix_semaphore *sem = new posix_semaphore(val, 1, false);
     new (s) indirect_semaphore(sem);
     return 0;
 }
@@ -114,7 +114,7 @@ sem_t *sem_open(const char *name, int oflag, ...)
 {
     SCOPE_LOCK(named_semaphores_mutex);
     auto iter = named_semaphores.find(std::string(name));
-    
+
     if (iter != named_semaphores.end()) {
         //opening already named semaphore
         if (oflag & O_EXCL && oflag & O_CREAT) {
@@ -136,13 +136,13 @@ sem_t *sem_open(const char *name, int oflag, ...)
             errno = EINVAL;
             return SEM_FAILED;
         }
-        
+
         indirect_semaphore *indp = new std::unique_ptr<posix_semaphore>(
             new posix_semaphore(value, 1, true));
         named_semaphores.emplace(std::string(name), indp);
         return reinterpret_cast<sem_t *>(indp);
     }
-    
+
     errno = ENOENT;
     return SEM_FAILED;
 }
@@ -160,7 +160,7 @@ int sem_unlink(const char *name)
         named_semaphores.erase(iter);
         return 0;
     }
-    
+
     errno = ENOENT;
     return -1;
 }

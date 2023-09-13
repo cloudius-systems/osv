@@ -66,7 +66,7 @@ int main(void) {
 
     //Can't create a new named semaphore without O_CREAT
     assert(sem_open("other", 0, 0777, 1) == SEM_FAILED);
-    assert(sem_open("other", O_EXCL | O_SYNC, 0777, 1) == SEM_FAILED); 
+    assert(sem_open("other", O_EXCL | O_SYNC, 0777, 1) == SEM_FAILED);
 
     //Any other flags should have no effect if the named semaphore does not exist
     sem_t *named_sem3 = sem_open("other", O_EXCL | O_CREAT | O_SYNC, 0777, 1);
