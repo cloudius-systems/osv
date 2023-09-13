@@ -106,7 +106,7 @@ int sem_trywait(sem_t* s)
     return 0;
 }
 
-static std::unordered_map<std::string, indirect_semaphore> named_semaphores;
+static std::unordered_map<std::string, indirect_semaphore*> named_semaphores;
 static mutex named_semaphores_mutex;
 
 OSV_LIBC_API
@@ -122,8 +122,8 @@ sem_t *sem_open(const char *name, int oflag, ...)
             return SEM_FAILED;
         }
 
-        iter->second->add_reference();
-        return reinterpret_cast<sem_t*>(&(iter->second));
+        (*iter->second)->add_reference();
+        return reinterpret_cast<sem_t*>(iter->second);
     }
     else if (oflag & O_CREAT) {
         //creating new semaphore
@@ -137,9 +137,10 @@ sem_t *sem_open(const char *name, int oflag, ...)
             return SEM_FAILED;
         }
         
-        named_semaphores.emplace(std::string(name),
-            std::unique_ptr<posix_semaphore>(new posix_semaphore(value, 1, true)));
-        return reinterpret_cast<sem_t *>(&named_semaphores[std::string(name)]);
+        indirect_semaphore *indp = new std::unique_ptr<posix_semaphore>(
+            new posix_semaphore(value, 1, true));
+        named_semaphores.emplace(std::string(name), indp);
+        return reinterpret_cast<sem_t *>(indp);
     }
     
     errno = ENOENT;
@@ -152,9 +153,9 @@ int sem_unlink(const char *name)
     SCOPE_LOCK(named_semaphores_mutex);
     auto iter = named_semaphores.find(std::string(name));
     if (iter != named_semaphores.end()) {
-        iter->second->unlink();
-        if (iter->second->not_referenced()) {
-            sem_destroy(reinterpret_cast<sem_t *>(&iter->second));
+        (*iter->second)->unlink();
+        if ((*iter->second)->not_referenced()) {
+            sem_destroy(reinterpret_cast<sem_t *>(iter->second));
         }
         named_semaphores.erase(iter);
         return 0;
