@@ -110,7 +110,7 @@ static std::unordered_map<std::string, indirect_semaphore> named_semaphores;
 static mutex named_semaphores_mutex;
 
 OSV_LIBC_API
-sem_t *sem_open(const char *name, int oflag, mode_t mode, unsigned int value)
+sem_t *sem_open(const char *name, int oflag, ...)
 {
     SCOPE_LOCK(named_semaphores_mutex);
     auto iter = named_semaphores.find(std::string(name));
@@ -127,6 +127,11 @@ sem_t *sem_open(const char *name, int oflag, mode_t mode, unsigned int value)
     }
     else if (oflag & O_CREAT) {
         //creating new semaphore
+        va_list ap;
+        va_start(ap, oflag);
+        va_arg(ap, mode_t);
+        unsigned value = va_arg(ap, unsigned);
+        va_end(ap);
         if (value > SEM_VALUE_MAX) {
             errno = EINVAL;
             return SEM_FAILED;
