@@ -41,6 +41,7 @@
 #include <sys/random.h>
 #include <sys/vfs.h>
 #include <termios.h>
+#include "tls-switch.hh"
 
 #include <unordered_map>
 
@@ -482,6 +483,8 @@ static int tgkill(int tgid, int tid, int sig)
 #define __NR_sys_getdents64 __NR_getdents64
 extern "C" ssize_t sys_getdents64(int fd, void *dirp, size_t count);
 
+extern long arch_prctl(int code, unsigned long addr);
+
 #define __NR_sys_brk __NR_brk
 void *get_program_break();
 static long sys_brk(void *addr)
@@ -499,6 +502,11 @@ static long sys_brk(void *addr)
 
 OSV_LIBC_API long syscall(long number, ...)
 {
+#ifdef __x86_64__
+    // Switch TLS register if necessary
+    arch::tls_switch_on_syscall_stack tls_switch;
+#endif
+
     // Save FPU state and restore it at the end of this function
     sched::fpu_lock fpu;
     SCOPE_LOCK(fpu);
@@ -591,6 +599,9 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL4(clock_nanosleep, clockid_t, int, const struct timespec *, struct timespec *);
     SYSCALL4(mknodat, int, const char *, mode_t, dev_t);
     SYSCALL5(statx, int, const char *, int, unsigned int, struct statx *);
+#ifdef __x86_64__
+    SYSCALL2(arch_prctl, int, unsigned long);
+#endif
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);

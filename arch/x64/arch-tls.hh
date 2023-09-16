@@ -13,6 +13,8 @@
 struct thread_control_block {
     thread_control_block* self;
     void* tls_base;
+    unsigned long app_tcb;
+    long kernel_tcb_counter; //If >=1 indicates that FS points to kernel TCB
 };
 
 #endif /* ARCH_TLS_HH */

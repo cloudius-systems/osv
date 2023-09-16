@@ -49,6 +49,7 @@ struct arch_cpu {
     u32 acpi_id;
     u64 gdt[nr_gdt];
     syscall_stack _current_syscall_stack;
+    u64 kernel_tcb;
     void init_on_cpu();
     void set_ist_entry(unsigned ist, char* base, size_t size);
     char* get_ist_entry(unsigned ist);

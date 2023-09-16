@@ -15,9 +15,11 @@
 #include <osv/prio.hh>
 #include <osv/elf.hh>
 #include "exceptions.hh"
+#include "tls-switch.hh"
 
 void page_fault(exception_frame *ef)
 {
+    arch::tls_switch_on_exception_stack tls_switch;
     sched::fpu_lock fpu;
     SCOPE_LOCK(fpu);
     sched::exception_guard g;

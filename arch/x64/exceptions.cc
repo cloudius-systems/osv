@@ -21,6 +21,7 @@
 #include <osv/intr_random.hh>
 
 #include "fault-fixup.hh"
+#include "tls-switch.hh"
 
 typedef boost::format fmt;
 
@@ -252,6 +253,7 @@ extern "C" { void interrupt(exception_frame* frame); }
 
 void interrupt(exception_frame* frame)
 {
+    arch::tls_switch_on_exception_stack tls_switch;
     sched::fpu_lock fpu;
     SCOPE_LOCK(fpu);
     // Rather that force the exception frame down the call stack,
@@ -284,6 +286,7 @@ bool fixup_fault(exception_frame* ef)
 extern "C" void divide_error(exception_frame *ef);
 void divide_error(exception_frame *ef)
 {
+    arch::tls_switch_on_exception_stack tls_switch;
     sched::exception_guard g;
     siginfo_t si;
     si.si_signo = SIGFPE;
@@ -293,6 +296,7 @@ void divide_error(exception_frame *ef)
 
 extern "C" void simd_exception(exception_frame *ef)
 {
+    arch::tls_switch_on_exception_stack tls_switch;
     sched::exception_guard g;
     siginfo_t si;
     si.si_signo = SIGFPE;
@@ -305,6 +309,7 @@ extern "C" void simd_exception(exception_frame *ef)
 
 extern "C" void nmi(exception_frame* ef)
 {
+    arch::tls_switch_on_exception_stack tls_switch;
     while (true) {
         processor::cli_hlt();
     }
@@ -313,6 +318,7 @@ extern "C" void nmi(exception_frame* ef)
 extern "C"
 void general_protection(exception_frame* ef)
 {
+    arch::tls_switch_on_exception_stack tls_switch;
     sched::exception_guard g;
     sched::fpu_lock fpu;
     SCOPE_LOCK(fpu);
@@ -326,7 +332,7 @@ void general_protection(exception_frame* ef)
 }
 
 #define DUMMY_HANDLER(x) \
-     extern "C" void x(exception_frame* ef); void x(exception_frame *ef) { dump_registers(ef); abort("DUMMY_HANDLER for " #x " aborting.\n"); }
+     extern "C" void x(exception_frame* ef); void x(exception_frame *ef) { arch::tls_switch_on_exception_stack tls_switch; dump_registers(ef); abort("DUMMY_HANDLER for " #x " aborting.\n"); }
 
 DUMMY_HANDLER(debug_exception)
 DUMMY_HANDLER(breakpoint)
