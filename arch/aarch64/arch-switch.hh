@@ -164,6 +164,10 @@ void thread::free_tcb()
     free(_tcb);
 }
 
+void thread::free_syscall_stack()
+{
+}
+
 void thread_main_c(thread* t)
 {
     arch::irq_enable();

@@ -8,11 +8,14 @@
 #ifndef ARCH_THREAD_STATE_HH_
 #define ARCH_THREAD_STATE_HH_
 
+#include "syscall.hh"
+
 struct thread_state {
     char *exception_stack;
     void* rsp;
     void* rbp;
     void* rip;
+    syscall_stack _syscall_stack;
 };
 
 #endif /* ARCH_THREAD_STATE_HH_ */

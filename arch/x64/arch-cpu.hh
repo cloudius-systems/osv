@@ -13,6 +13,8 @@
 #include "cpuid.hh"
 #include "osv/pagealloc.hh"
 #include <xmmintrin.h>
+#include "syscall.hh"
+#include "msr.hh"
 
 struct init_stack {
     char stack[4096] __attribute__((aligned(16)));
@@ -46,6 +48,7 @@ struct arch_cpu {
     u32 apic_id;
     u32 acpi_id;
     u64 gdt[nr_gdt];
+    syscall_stack _current_syscall_stack;
     void init_on_cpu();
     void set_ist_entry(unsigned ist, char* base, size_t size);
     char* get_ist_entry(unsigned ist);
@@ -181,6 +184,8 @@ inline void arch_cpu::init_on_cpu()
     processor::init_fpu();
 
     processor::init_syscall();
+
+    processor::wrmsr(msr::IA32_GS_BASE, reinterpret_cast<u64>(&_current_syscall_stack.stack_top));
 }
 
 struct exception_guard {

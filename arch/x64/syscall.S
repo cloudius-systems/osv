@@ -20,13 +20,14 @@ syscall_entry:
     # There is no ring transition and rflags are left unchanged.
     #
     # Unfortunately the mov instruction cannot be used to dereference an address
-    # on syscall stack pointed by address in TCB (%fs:16) - double memory dereference.
-    # Therefore we are forced to save caller stack address in a field in TCB.
-    movq %rsp, %fs:24 # syscall_caller_stack_pointer
+    # on syscall stack pointed by address in TCB (%gs:0) - double memory dereference.
+    # Therefore we are forced to save caller stack address in a field in a per-cpu
+    # structure referenced by GS.
+    movq %rsp, %gs:8 # syscall_caller_stack_pointer
     #
     # Switch stack to "tiny" syscall stack that should be large
     # enough to setup "large" syscall stack (only when first SYSCALL on this thread)
-    movq %fs:16, %rsp
+    movq %gs:0, %rsp
 
     # Skip large syscall stack setup if it has been already setup
     cmpq $0, (%rsp)  // Check if we are on tiny or large stack
@@ -56,7 +57,7 @@ syscall_entry:
     # This function does not take any arguments nor returns anything.
     # It ends up allocating large stack and storing its address in tcb
     callq setup_large_syscall_stack
-    movq %fs:16, %rsp  // Switch stack to large stack
+    movq %gs:0, %rsp  // Switch stack to large stack
     subq $128, %rsp    // Skip 128 bytes of large stack so that we can restore all registers saved above (16 pushes).
                        // Please note that these 128 bytes have been copied by setup_large_syscall_stack function
                        // so that we do not have to pop and then push same registers again.
@@ -95,7 +96,7 @@ syscall_entry:
     # We do this just so we can refer to it with CFI and help gdb's DWARF
     # stack unwinding. This saving not otherwise needed for correct operation
     # (we anyway restore it below by undoing all our modifications).
-    pushq %fs:24
+    pushq %gs:8
 
     .cfi_adjust_cfa_offset 8
     .cfi_rel_offset %rsp, 0
@@ -172,7 +173,7 @@ syscall_entry:
     popfq
 
     # Restore caller stack pointer
-    movq %fs:24, %rsp
+    movq %gs:8, %rsp
 
     # jump to rcx where the syscall instruction put rip
     # (sysret would leave rxc cloberred so we have nothing to do to restore it)
