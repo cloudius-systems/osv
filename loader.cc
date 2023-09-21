@@ -31,6 +31,7 @@
 #include "arch.hh"
 #include "arch-setup.hh"
 #include "osv/trace.hh"
+#include "osv/strace.hh"
 #include <osv/power.hh>
 #include <osv/rcu.hh>
 #include <osv/mempool.hh>
@@ -150,6 +151,8 @@ static bool opt_leak = false;
 static bool opt_noshutdown = false;
 bool opt_power_off_on_abort = false;
 static bool opt_log_backtrace = false;
+static bool opt_list_tracepoints = false;
+static bool opt_strace = false;
 static bool opt_mount = true;
 static bool opt_pivot = true;
 static std::string opt_rootfs;
@@ -179,6 +182,8 @@ static void usage()
     std::cout << "  --sampler=arg         start stack sampling profiler\n";
     std::cout << "  --trace=arg           tracepoints to enable\n";
     std::cout << "  --trace-backtrace     log backtraces in the tracepoint log\n";
+    std::cout << "  --trace-list          list available tracepoints\n";
+    std::cout << "  --strace              start a thread to print tracepoints to the console on the fly\n";
     std::cout << "  --leak                start leak detector after boot\n";
     std::cout << "  --nomount             don't mount the root file system\n";
     std::cout << "  --nopivot             do not pivot the root from bootfs to the root fs\n";
@@ -260,6 +265,10 @@ static void parse_options(int loader_argc, char** loader_argv)
         opt_log_backtrace = true;
     }
 
+    if (extract_option_flag(options_values, "trace-list")) {
+        opt_list_tracepoints = true;
+    }
+
     if (extract_option_flag(options_values, "verbose")) {
         opt_verbose = true;
         enable_verbose();
@@ -282,6 +291,9 @@ static void parse_options(int loader_argc, char** loader_argv)
             for (auto t : tmp) {
                 enable_tracepoint(t);
             }
+        }
+        if (extract_option_flag(options_values, "strace")) {
+            opt_strace = true;
         }
     }
 
@@ -723,11 +735,18 @@ void main_cont(int loader_argc, char** loader_argv)
         poweroff();
     }
 
+    if (opt_list_tracepoints) {
+        list_all_tracepoints();
+    }
+
     enable_trace();
     if (opt_log_backtrace) {
         // can only do this after smp_launch, otherwise the IDT is not initialized,
         // and backtrace_safe() fails as soon as we get an exception
         enable_backtraces();
+    }
+    if (opt_strace) {
+        start_strace();
     }
     sched::init_detached_threads_reaper();
     elf::setup_missing_symbols_detector();

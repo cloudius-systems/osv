@@ -27,6 +27,7 @@
 #include <osv/semaphore.hh>
 #include <osv/elf.hh>
 #include <cxxabi.h>
+#include "drivers/console.hh"
 
 using namespace std;
 
@@ -183,6 +184,14 @@ void enable_backtraces(bool backtrace) {
     global_backtrace_enabled = backtrace;
     for (auto& tp : tracepoint_base::tp_list) {
         tp.backtrace(backtrace);
+    }
+}
+
+void list_all_tracepoints() {
+    char buf[128];
+    for (auto& tp : tracepoint_base::tp_list) {
+        auto len = snprintf(buf, 128, "Tracepoint %s @ %p\n", tp.name, &tp);
+        console::write(buf, len);
     }
 }
 

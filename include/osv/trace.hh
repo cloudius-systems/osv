@@ -23,10 +23,13 @@
 #include <arch.hh>
 #include <osv/rcu.hh>
 #include <safe-ptr.hh>
+#include <stdint.h>
+#include <atomic>
 
 void enable_trace();
 void enable_tracepoint(std::string wildcard);
 void enable_backtraces(bool = true);
+void list_all_tracepoints();
 
 class tracepoint_base;
 
@@ -47,6 +50,40 @@ struct trace_record {
         long align[0];
     };
 };
+
+//Simple lock-less multiple-producer single-consumer structure
+//designed to act as a data gateway between threads generating trace
+//records and the strace thread printing them to the console
+//
+//In essence it is an array of pointers to the trace records
+//indexed by write_offset which stores next entry offset to write and
+//is atomic to guarantee no two producers step on each other and
+//read_offset that stores offset of next entry to read
+//
+//The trace_log is designed as a circular buffer where
+//both read and write offsets would wrap around from 0xffff to 0
+//so it is possible that with huge number of trace record written
+//and slow consumer some data may get overwritten
+constexpr const size_t trace_log_size = 0x10000;
+struct trace_log {
+    trace_record *traces[trace_log_size];
+    std::atomic<uint16_t> write_offset = {0};
+    uint16_t read_offset = {0};
+
+    void write(trace_record* tr) {
+        traces[write_offset.fetch_add(1)] = tr;
+    }
+
+    trace_record* read() {
+        if (read_offset == write_offset.load()) {
+            return nullptr;
+        } else {
+            return traces[read_offset++];
+        }
+    }
+};
+
+extern trace_log* _trace_log;
 
 template <size_t idx, size_t N, typename... args>
 struct tuple_formatter
@@ -369,6 +406,9 @@ public:
         serialize(buffer, as);
         barrier();
         tr->tp = this; // do this last to indicate the record is complete
+        if (_trace_log) {
+            _trace_log->write(tr);
+        }
     }
     void serialize(void* buffer, std::tuple<s_args...> as) {
         serializer<0, sizeof...(s_args), s_args...>::write(buffer, 0, as);

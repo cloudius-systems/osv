@@ -1045,6 +1045,7 @@ objects += core/mmio.o
 objects += core/kprintf.o
 objects += core/trace.o
 objects += core/trace-count.o
+objects += core/strace.o
 objects += core/callstack.o
 objects += core/poll.o
 objects += core/select.o
