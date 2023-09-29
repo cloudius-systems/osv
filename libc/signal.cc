@@ -69,6 +69,8 @@ inline bool is_sig_ign(const struct sigaction &sa) {
     return (!(sa.sa_flags & SA_SIGINFO) && sa.sa_handler == SIG_IGN);
 }
 
+//Similar to signal actions and mask, list of "waiters" for a given signal
+//with number "signo" is stored at the index "signo - 1"
 typedef std::list<sched::thread *> thread_list;
 static std::array<thread_list, nsignals> waiters;
 mutex waiters_mutex;
@@ -78,7 +80,8 @@ int wake_up_signal_waiters(int signo)
     SCOPE_LOCK(waiters_mutex);
     int woken = 0;
 
-    for (auto& t: waiters[signo]) {
+    unsigned sigidx = signo - 1;
+    for (auto& t: waiters[sigidx]) {
         woken++;
         t->remote_thread_local_var<int>(thread_pending_signal) = signo;
         t->wake();
@@ -86,21 +89,21 @@ int wake_up_signal_waiters(int signo)
     return woken;
 }
 
-void wait_for_signal(int signo)
+void wait_for_signal(unsigned int sigidx)
 {
     SCOPE_LOCK(waiters_mutex);
-    waiters[signo].push_front(sched::thread::current());
+    waiters[sigidx].push_front(sched::thread::current());
 }
 
-void unwait_for_signal(sched::thread *t, int signo)
+void unwait_for_signal(sched::thread *t, unsigned int sigidx)
 {
     SCOPE_LOCK(waiters_mutex);
-    waiters[signo].remove(t);
+    waiters[sigidx].remove(t);
 }
 
-void unwait_for_signal(int signo)
+void unwait_for_signal(unsigned int sigidx)
 {
-    unwait_for_signal(sched::thread::current(), signo);
+    unwait_for_signal(sched::thread::current(), sigidx);
 }
 
 void __attribute__((constructor)) signals_register_thread_notifier()
@@ -120,7 +123,8 @@ void __attribute__((constructor)) signals_register_thread_notifier()
 
 void generate_signal(siginfo_t &siginfo, exception_frame* ef)
 {
-    if (pthread_self() && thread_signals()->mask[siginfo.si_signo]) {
+    unsigned sigidx = siginfo.si_signo - 1;
+    if (pthread_self() && thread_signals()->mask[sigidx]) {
         // FIXME: need to find some other thread to deliver
         // FIXME: the signal to.
         //
@@ -129,11 +133,11 @@ void generate_signal(siginfo_t &siginfo, exception_frame* ef)
         // needs to be running to generate them. So definitely not waiting.
         abort();
     }
-    if (is_sig_dfl(signal_actions[siginfo.si_signo])) {
+    if (is_sig_dfl(signal_actions[sigidx])) {
         // Our default is to abort the process
         abort();
-    } else if(!is_sig_ign(signal_actions[siginfo.si_signo])) {
-        arch::build_signal_frame(ef, siginfo, signal_actions[siginfo.si_signo]);
+    } else if(!is_sig_ign(signal_actions[sigidx])) {
+        arch::build_signal_frame(ef, siginfo, signal_actions[sigidx]);
     }
 }
 
@@ -166,21 +170,36 @@ int sigfillset(sigset_t *sigset)
 OSV_LIBC_API
 int sigaddset(sigset_t *sigset, int signum)
 {
-    from_libc(sigset)->mask.set(signum);
+    if (signum < 1 || signum > (int)nsignals) {
+        errno = EINVAL;
+        return -1;
+    }
+    unsigned sigidx = signum - 1;
+    from_libc(sigset)->mask.set(sigidx);
     return 0;
 }
 
 OSV_LIBC_API
 int sigdelset(sigset_t *sigset, int signum)
 {
-    from_libc(sigset)->mask.reset(signum);
+    if (signum < 1 || signum > (int)nsignals) {
+        errno = EINVAL;
+        return -1;
+    }
+    unsigned sigidx = signum - 1;
+    from_libc(sigset)->mask.reset(sigidx);
     return 0;
 }
 
 OSV_LIBC_API
 int sigismember(const sigset_t *sigset, int signum)
 {
-    return from_libc(sigset)->mask.test(signum);
+    if (signum < 1 || signum > (int)nsignals) {
+        errno = EINVAL;
+        return -1;
+    }
+    unsigned sigidx = signum - 1;
+    return from_libc(sigset)->mask.test(sigidx);
 }
 
 OSV_LIBC_API
@@ -231,15 +250,16 @@ OSV_LIBC_API
 int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
 {
     // FIXME: We do not support any sa_flags besides SA_SIGINFO.
-    if (signum < 0 || signum >= (int)nsignals) {
+    if (signum < 1 || signum > (int)nsignals) {
         errno = EINVAL;
         return -1;
     }
+    unsigned sigidx = signum - 1;
     if (oldact) {
-        *oldact = signal_actions[signum];
+        *oldact = signal_actions[sigidx];
     }
     if (act) {
-        signal_actions[signum] = *act;
+        signal_actions[sigidx] = *act;
     }
     return 0;
 }
@@ -282,6 +302,10 @@ sighandler_t __sysv_signal(int signum, sighandler_t handler)
 OSV_LIBC_API
 int sigignore(int signum)
 {
+    if (signum < 1 || signum > (int)nsignals) {
+        errno = EINVAL;
+        return -1;
+    }
     struct sigaction act;
     act.sa_flags = 0;
     sigemptyset(&act.sa_mask);
@@ -333,16 +357,17 @@ int kill(pid_t pid, int sig)
         // testing the pid.
         return 0;
     }
-    if (sig < 0 || sig >= (int)nsignals) {
+    if (sig < 0 || sig > (int)nsignals) {
         errno = EINVAL;
         return -1;
     }
-    if (is_sig_dfl(signal_actions[sig])) {
+    unsigned sigidx = sig - 1;
+    if (is_sig_dfl(signal_actions[sigidx])) {
         // Our default is to power off.
         debug("Uncaught signal %d (\"%s\"). Powering off.\n",
                 sig, strsignal(sig));
         osv::poweroff();
-    } else if(!is_sig_ign(signal_actions[sig])) {
+    } else if(!is_sig_ign(signal_actions[sigidx])) {
         if ((pid == OSV_PID) || (pid == 0) || (pid == -1)) {
             // This semantically means signalling everybody. So we will signal
             // every thread that is waiting for this.
@@ -362,11 +387,11 @@ int kill(pid_t pid, int sig)
         // The newly created thread is tagged as an application one
         // to make sure that user provided signal handler code has access to all
         // the features like syscall stack which matters for Golang apps
-        const auto sa = signal_actions[sig];
+        const auto sa = signal_actions[sigidx];
         auto t = sched::thread::make([=] {
             if (sa.sa_flags & SA_RESETHAND) {
-                signal_actions[sig].sa_flags = 0;
-                signal_actions[sig].sa_handler = SIG_DFL;
+                signal_actions[sigidx].sa_flags = 0;
+                signal_actions[sigidx].sa_handler = SIG_DFL;
             }
             if (sa.sa_flags & SA_SIGINFO) {
                 // FIXME: proper second (siginfo) and third (context) arguments (See example in call_signal_handler)
@@ -498,7 +523,7 @@ void itimer::work()
                         _due = _no_alarm;
                     }
                     kill(getpid(), _signum);
-                    if(!is_sig_ign(signal_actions[_signum])) {
+                    if(!is_sig_ign(signal_actions[_signum - 1])) {
                         _owner_thread->interrupted(true);
                     }
                 } else {
