@@ -40,6 +40,7 @@
 #include <sys/unistd.h>
 #include <sys/random.h>
 #include <sys/vfs.h>
+#include <sys/resource.h>
 #include <termios.h>
 
 #include <unordered_map>
@@ -396,6 +397,22 @@ static long sys_getcpu(unsigned int *cpu, unsigned int *node, void *tcache)
     return 0;
 }
 
+#define __NR_sys_prlimit __NR_prlimit64
+static int sys_prlimit(pid_t pid, int resource, const struct rlimit *new_limit,
+    struct rlimit *old_limit)
+{
+    if (new_limit) {
+        return 0;
+    }
+
+    if (old_limit) {
+        return getrlimit(resource, old_limit);
+    }
+
+    errno = EINVAL;
+    return -1;
+}
+
 #define __NR_sys_ioctl __NR_ioctl
 //
 // We need to define explicit sys_ioctl that takes these 3 parameters to conform
@@ -606,6 +623,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL4(mknodat, int, const char *, mode_t, dev_t);
     SYSCALL5(statx, int, const char *, int, unsigned int, struct statx *);
     SYSCALL3(sys_getcpu, unsigned int *, unsigned int *, void *);
+    SYSCALL4(sys_prlimit, pid_t, int, const struct rlimit*, struct rlimit *);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
