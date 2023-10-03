@@ -40,7 +40,15 @@
 #include <sys/unistd.h>
 #include <sys/random.h>
 #include <sys/vfs.h>
+#include <sys/uio.h>
+#include <sys/epoll.h>
+#include <sys/sysinfo.h>
+#include <sys/sendfile.h>
+#include <sys/prctl.h>
+#include <sys/timerfd.h>
+#include <sys/resource.h>
 #include <termios.h>
+#include <poll.h>
 
 #include <unordered_map>
 
@@ -606,6 +614,46 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL4(mknodat, int, const char *, mode_t, dev_t);
     SYSCALL5(statx, int, const char *, int, unsigned int, struct statx *);
     SYSCALL3(sys_getcpu, unsigned int *, unsigned int *, void *);
+    SYSCALL1(dup, int);
+    SYSCALL2(dup2, unsigned int , unsigned int);
+    SYSCALL3(mprotect, void *, size_t, int);
+    SYSCALL2(access, const char *, int);
+    SYSCALL3(writev, int, const struct iovec *, int);
+    SYSCALL3(readlink, const char *, char *, size_t);
+    SYSCALL0(geteuid);
+    SYSCALL0(getegid);
+    SYSCALL2(gettimeofday, struct timeval *, struct timezone *);
+    SYSCALL3(poll, struct pollfd *, nfds_t, int);
+    SYSCALL0(getppid);
+    SYSCALL1(epoll_create, int);
+    SYSCALL1(sysinfo, struct sysinfo *);
+    SYSCALL1(time, time_t *);
+    SYSCALL4(sendfile, int, int, off_t *, size_t);
+    SYSCALL4(socketpair, int, int, int, int *);
+    SYSCALL2(shutdown, int, int);
+    SYSCALL1(unlink, const char *);
+    SYSCALL3(readv, unsigned long, const struct iovec *, unsigned long);
+    SYSCALL2(getrusage, int, struct rusage *);
+    SYSCALL3(accept, int, struct sockaddr *, socklen_t *);
+    SYSCALL1(fchdir, unsigned int);
+    SYSCALL1(pipe, int*);
+    SYSCALL2(fstatfs, unsigned int, struct statfs *);
+    SYSCALL1(umask, mode_t);
+    SYSCALL5(prctl, int, unsigned long, unsigned long, unsigned long, unsigned long);
+    SYSCALL1(chdir, const char *);
+    SYSCALL4(faccessat, int, const char *, int, int);
+    SYSCALL2(kill, pid_t, int);
+    SYSCALL1(alarm, unsigned int);
+    SYSCALL4(utimensat, int, const char *, const struct timespec*, int);
+    SYSCALL2(symlink, const char *, const char *);
+    SYSCALL1(rmdir, const char *);
+    SYSCALL2(sethostname, char *, int);
+    SYSCALL2(creat, const char *, mode_t);
+    SYSCALL2(timerfd_create, int, int);
+    SYSCALL4(timerfd_settime, int, int, const struct itimerspec *, struct itimerspec *);
+    SYSCALL2(timerfd_gettime, int, struct itimerspec*);
+    SYSCALL2(chmod, const char *, mode_t);
+    SYSCALL2(fchmod, int, mode_t);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
