@@ -382,6 +382,20 @@ static long sys_getcwd(char *buf, unsigned long size)
     return strlen(ret) + 1;
 }
 
+#define __NR_sys_getcpu __NR_getcpu
+static long sys_getcpu(unsigned int *cpu, unsigned int *node, void *tcache)
+{
+    if (cpu) {
+        *cpu = sched::cpu::current()->id;
+    }
+
+    if (node) {
+       *node = 0;
+    }
+
+    return 0;
+}
+
 #define __NR_sys_ioctl __NR_ioctl
 //
 // We need to define explicit sys_ioctl that takes these 3 parameters to conform
@@ -591,6 +605,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL4(clock_nanosleep, clockid_t, int, const struct timespec *, struct timespec *);
     SYSCALL4(mknodat, int, const char *, mode_t, dev_t);
     SYSCALL5(statx, int, const char *, int, unsigned int, struct statx *);
+    SYSCALL3(sys_getcpu, unsigned int *, unsigned int *, void *);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
