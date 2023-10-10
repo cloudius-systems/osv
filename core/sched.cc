@@ -1221,6 +1221,7 @@ thread::~thread()
         delete[] _tls[i];
     }
     free_tcb();
+    free_syscall_stack();
     rcu_dispose(_detached_state.release());
 }
 
