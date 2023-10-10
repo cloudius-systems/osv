@@ -707,6 +707,7 @@ private:
     void init_stack();
     void setup_tcb();
     void free_tcb();
+    void free_syscall_stack();
     void complete() __attribute__((__noreturn__));
     template <class Action>
     inline void do_wake_with(Action action, unsigned allowed_initial_states_mask);
