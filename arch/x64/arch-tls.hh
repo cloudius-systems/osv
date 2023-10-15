@@ -13,6 +13,7 @@
 struct thread_control_block {
     thread_control_block* self;
     void* tls_base;
+    unsigned long app_tcb;
 };
 
 #endif /* ARCH_TLS_HH */

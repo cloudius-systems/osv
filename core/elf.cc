@@ -536,7 +536,7 @@ void object::process_headers()
         }
     }
     if (!is_core() && is_statically_linked_executable()) {
-        abort("Statically linked executables are not supported yet!\n");
+        std::cout << "WARNING: Statically linked executables are only supported to limited extent!\n";
     }
     if (_is_dynamically_linked_executable && _tls_segment) {
         auto app_tls_size = get_aligned_tls_size();

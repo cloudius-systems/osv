@@ -34,12 +34,57 @@
 	pushq_cfi %r13
 	pushq_cfi %r14
 	pushq_cfi %r15
+
+        mov $0, %r14          #Use callee-saved register to know that we need to switch FS base to app TCB
+        mov %gs:16, %r12      #Fetch this thread kernel TCB address
+        cmpq %fs:0, %r12      #Check if kernel TCB equal to current TCB
+        je 2f
+
+        mov $1, %r14          #Save we need to switch to app TCB
+
+        #Switch fsbase (FS register) from app TCB to kernel TCB
+        mov (%r12), %rax      #Copy kernel TCB to rax
+        mov fsgsbase_avail, %r13
+        cmpq $0x0, %r13       #Should we use wrfsbase or wrmsr instruction?
+        jne 1f
+
+        #Switch fsbase using the wrmsr instruction
+        mov %rax, %rdx
+        mov $0xc0000100, %ecx
+        shr $0x20, %rdx
+        wrmsr
+        jmp 2f
+
+1:      #Switch fsbase using the wrfsbase instruction
+        wrfsbase %rax
+
+2:      #Call handler
 	mov %rsp, %rdi
 	subq $8, %rsp # 16-byte alignment
 	.cfi_adjust_cfa_offset 8
 	call \handler
 	addq $8, %rsp # 16-byte alignment
 	.cfi_adjust_cfa_offset -8
+
+        cmpq $1, %r14         #Check if we need to switch to app_tcb
+        jne 4f
+
+        #Switch fsbase (FS register) from kernel TCB to app TCB
+        mov 16(%r12), %rax    #Copy app TCB to rax
+        cmpq $0x0, %r13       #Should we use wrfsbase or wrmsr instruction?
+        jne 3f
+
+        #Switch fsbase using the wrmsr instruction
+        mov %rax, %rdx
+        mov $0xc0000100, %ecx
+        shr $0x20, %rdx
+        wrmsr
+        jmp 4f
+
+3:      #Switch fsbase using the wrfsbase instruction
+        wrfsbase %rax
+
+4:      #Restore registers
 	popq_cfi %r15
 	popq_cfi %r14
 	popq_cfi %r13

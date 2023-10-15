@@ -55,6 +55,12 @@ struct arch_cpu {
     // in order to make it possible to access it in assembly code through
     // a known offset at %gs:0.
     syscall_stack_descriptor _current_syscall_stack_descriptor;
+    // This field holds the address of a current thread TCB
+    // which is updated on every context switch (see arch-switch.hh).
+    // This makes it possible to fetch address of kernel TCB if we need
+    // to switch to from the app TCB which is different when running
+    // statically linked executables
+    u64 _current_thread_kernel_tcb;
     void init_on_cpu();
     void set_ist_entry(unsigned ist, char* base, size_t size);
     char* get_ist_entry(unsigned ist);
