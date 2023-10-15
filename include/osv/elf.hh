@@ -303,6 +303,13 @@ struct Elf64_Sym {
     Elf64_Xword st_size; /* Size of object (e.g., common) */
 };
 
+#ifdef __x86_64__
+    constexpr const char *linux_dl_soname = "ld-linux-x86-64.so.2";
+#endif
+#ifdef __aarch64__
+    constexpr const char *linux_dl_soname = "ld-linux-aarch64.so.1";
+#endif
+
 class program;
 struct symbol_module;
 
@@ -405,6 +412,7 @@ public:
     // Absence of PT_INTERP is not enough to determine it is a statically linked executable
     // as shared libraries also as missing PT_INTERP.
     bool is_statically_linked_executable() { return !_is_dynamically_linked_executable && !is_shared_library(); }
+    bool is_linux_dl() { return this->soname() == linux_dl_soname; }
     ulong get_tls_size();
     ulong get_aligned_tls_size();
     void copy_local_tls(void* to_addr);
