@@ -217,7 +217,7 @@ application::application(const std::string& command,
         throw launch_error("Failed to load object: " + command);
     }
 
-    if (_lib->is_statically_linked_executable()) {
+    if (_lib->is_statically_linked_executable() || _lib->is_linux_dl()) {
         //Augment auxiliary vector with extra entries like AT_PHDR, AT_ENTRY, etc
         //that are necessary by a static executable to bootstrap itself
         augment_auxv();
@@ -326,7 +326,7 @@ void application::main()
     elf::get_program()->init_library(_args.size(), _argv.get());
     sched::thread::current()->set_name(_command);
 
-    if (_lib->is_statically_linked_executable()) {
+    if (_lib->is_statically_linked_executable() || _lib->is_linux_dl()) {
         run_entry_point(_lib->entry_point(), _args.size(), _argv.get(), _argv_size);
     } else {
         if (_main) {

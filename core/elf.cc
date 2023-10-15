@@ -1169,7 +1169,7 @@ std::string object::pathname()
 // Run the object's static constructors or similar initialization
 void object::run_init_funcs(int argc, char** argv)
 {
-    if (is_statically_linked_executable()) {
+    if (is_statically_linked_executable() || is_linux_dl()) {
         return;
     }
     // Invoke any init functions if present and pass in argc and argv
@@ -1197,7 +1197,7 @@ void object::run_init_funcs(int argc, char** argv)
 // Run the object's static destructors or similar finalization
 void object::run_fini_funcs()
 {
-    if (is_statically_linked_executable()) {
+    if (is_statically_linked_executable() || is_linux_dl()) {
         return;
     }
     if(!_init_called){
@@ -1323,11 +1323,11 @@ program::program(void* addr)
     // Our kernel already supplies the features of a bunch of traditional
     // shared libraries:
     static const auto supplied_modules = {
+          linux_dl_soname,
           "libresolv.so.2",
           "libc.so.6",
           "libm.so.6",
 #ifdef __x86_64__
-          "ld-linux-x86-64.so.2",
           "libc.musl-x86_64.so.1",
           // As noted in issue #1040 Boost version 1.69.0 and above is
           // compiled with hidden visibility, so even if the kernel uses
@@ -1340,7 +1340,6 @@ program::program(void* addr)
 #endif
 #endif /* __x86_64__ */
 #ifdef __aarch64__
-          "ld-linux-aarch64.so.1",
 #if BOOST_VERSION < 106900
 #if HIDE_SYMBOLS < 1
           "libboost_system-mt.so.1.55.0",
@@ -1478,7 +1477,7 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         //Do not relocate static executables as they are linked with its own
         //dynamic linker. Also do not try to load any dependant libraries
         //as they do not apply to statically linked executables.
-        if (!ef->is_statically_linked_executable()) {
+        if (!ef->is_statically_linked_executable() && !ef->is_linux_dl()) {
             ef->load_needed(loaded_objects);
             ef->relocate();
             ef->fix_permissions();
