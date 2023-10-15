@@ -49,6 +49,7 @@
 #include <sys/resource.h>
 #include <termios.h>
 #include <poll.h>
+#include "tls-switch.hh"
 
 #include <unordered_map>
 
@@ -504,6 +505,8 @@ static int tgkill(int tgid, int tid, int sig)
 #define __NR_sys_getdents64 __NR_getdents64
 extern "C" ssize_t sys_getdents64(int fd, void *dirp, size_t count);
 
+extern long arch_prctl(int code, unsigned long addr);
+
 #define __NR_sys_brk __NR_brk
 void *get_program_break();
 static long sys_brk(void *addr)
@@ -654,6 +657,9 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL2(timerfd_gettime, int, struct itimerspec*);
     SYSCALL2(chmod, const char *, mode_t);
     SYSCALL2(fchmod, int, mode_t);
+#ifdef __x86_64__
+    SYSCALL2(arch_prctl, int, unsigned long);
+#endif
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
@@ -679,6 +685,11 @@ extern "C" long syscall_wrapper(long number, long p1, long p2, long p3, long p4,
 extern "C" long syscall_wrapper(long p1, long p2, long p3, long p4, long p5, long p6, long number)
 #endif
 {
+#ifdef __x86_64__
+    // Switch TLS register if necessary
+    arch::tls_switch tls_switch;
+#endif
+
     int errno_backup = errno;
     // syscall and function return value are in rax
     auto ret = syscall(number, p1, p2, p3, p4, p5, p6);

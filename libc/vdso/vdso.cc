@@ -1,23 +1,26 @@
-//#include "libc.h"
 #include <time.h>
 #include <sys/time.h>
 
 #ifdef __x86_64__
-__attribute__((__visibility__("default")))
+#include "tls-switch.hh"
+extern "C" __attribute__((__visibility__("default")))
 time_t __vdso_time(time_t *tloc)
 {
+    arch::tls_switch _tls_switch;
     return time(tloc);
 }
 
-__attribute__((__visibility__("default")))
+extern "C" __attribute__((__visibility__("default")))
 int __vdso_gettimeofday(struct timeval *tv, struct timezone *tz)
 {
+    arch::tls_switch _tls_switch;
     return gettimeofday(tv, tz);
 }
 
-__attribute__((__visibility__("default")))
+extern "C" __attribute__((__visibility__("default")))
 int __vdso_clock_gettime(clockid_t clk_id, struct timespec *tp)
 {
+    arch::tls_switch _tls_switch;
     return clock_gettime(clk_id, tp);
 }
 #endif
