@@ -740,6 +740,8 @@ pread64
 preadv
 preadv64
 printf
+prlimit
+prlimit64
 __progname
 __progname_full
 program_invocation_name

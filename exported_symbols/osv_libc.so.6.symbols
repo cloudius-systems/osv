@@ -610,6 +610,8 @@ __pread64_chk
 preadv
 preadv64
 printf
+prlimit
+prlimit64
 __printf_chk
 __progname
 __progname_full
