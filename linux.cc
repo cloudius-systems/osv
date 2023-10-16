@@ -72,14 +72,6 @@ extern "C" OSV_LIBC_API long gettid()
 // was missing. So the performance of this implementation is not critical.
 static std::unordered_map<void*, waitqueue> queues;
 static mutex queues_mutex;
-enum {
-    FUTEX_WAIT           = 0,
-    FUTEX_WAKE           = 1,
-    FUTEX_WAIT_BITSET    = 9,
-    FUTEX_PRIVATE_FLAG   = 128,
-    FUTEX_CLOCK_REALTIME = 256,
-    FUTEX_CMD_MASK       = ~(FUTEX_PRIVATE_FLAG|FUTEX_CLOCK_REALTIME),
-};
 
 #define FUTEX_BITSET_MATCH_ANY  0xffffffff
 
@@ -405,6 +397,47 @@ static long sys_getcpu(unsigned int *cpu, unsigned int *node, void *tcache)
     return 0;
 }
 
+#define __NR_sys_set_robust_list __NR_set_robust_list
+static long sys_set_robust_list(struct robust_list_head *head, size_t len)
+{
+    sched::thread::current()->set_robust_list(head);
+    return 0;
+}
+
+#define __NR_sys_set_tid_address __NR_set_tid_address
+static long sys_set_tid_address(int *tidptr)
+{
+    sched::thread::current()->set_clear_id(tidptr);
+    return sched::thread::current()->id();
+}
+
+#ifdef __x86_64__
+#define __NR_sys_clone __NR_clone
+extern int sys_clone(unsigned long flags, void *child_stack, int *ptid, int *ctid, unsigned long newtls);
+
+struct clone_args {
+     u64 flags;
+     u64 pidfd;
+     u64 child_tid;
+     u64 parent_tid;
+     u64 exit_signal;
+     u64 stack;
+     u64 stack_size;
+     u64 tls;
+};
+
+#define __NR_sys_clone3 435
+static int sys_clone3(struct clone_args *args, size_t size)
+{
+    return sys_clone(
+       args->flags,
+       reinterpret_cast<void*>(args->stack) + args->stack_size,
+       reinterpret_cast<int*>(args->parent_tid),
+       reinterpret_cast<int*>(args->child_tid),
+       args->tls);
+}
+#endif
+
 #define __NR_sys_ioctl __NR_ioctl
 //
 // We need to define explicit sys_ioctl that takes these 3 parameters to conform
@@ -659,6 +692,12 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL2(fchmod, int, mode_t);
 #ifdef __x86_64__
     SYSCALL2(arch_prctl, int, unsigned long);
+#endif
+    SYSCALL2(sys_set_robust_list, struct robust_list_head *, size_t);
+    SYSCALL1(sys_set_tid_address, int *);
+#ifdef __x86_64__
+    SYSCALL5(sys_clone, unsigned long, void *, int *, int *, unsigned long);
+    SYSCALL2(sys_clone3, struct clone_args *, size_t);
 #endif
     }
 
