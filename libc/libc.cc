@@ -102,8 +102,28 @@ int setrlimit(int resource, const struct rlimit *rlim)
     // osv - no limits
     return 0;
 }
+
+int prlimit(pid_t pid, int resource, const struct rlimit *new_limit, struct rlimit *old_limit)
+{
+    if (pid != getpid() && pid != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (old_limit && getrlimit(resource, old_limit)) {
+        return -1;
+    }
+
+    if (new_limit && setrlimit(resource, new_limit)) {
+        return -1;
+    }
+
+    return 0;
+}
 LFS64(getrlimit);
 LFS64(setrlimit);
+#undef prlimit64
+LFS64(prlimit);
 
 uid_t geteuid()
 {
