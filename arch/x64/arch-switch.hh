@@ -360,6 +360,11 @@ void thread::free_syscall_stack()
     }
 }
 
+void* thread::get_syscall_stack_top()
+{
+    return _state._syscall_stack_descriptor.stack_top;
+}
+
 void thread_main_c(thread* t)
 {
     arch::irq_enable();
