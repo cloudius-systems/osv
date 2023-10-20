@@ -1550,7 +1550,7 @@ char *getcwd(char *path, size_t size)
 }
 
 TRACEPOINT(trace_vfs_dup, "%d", int);
-TRACEPOINT(trace_vfs_dup_ret, "\"%s\"", int);
+TRACEPOINT(trace_vfs_dup_ret, "%d", int);
 TRACEPOINT(trace_vfs_dup_err, "%d", int);
 /*
  * Duplicate a file descriptor
@@ -1645,7 +1645,7 @@ int dup2(int oldfd, int newfd)
 #define SETFL (O_APPEND | O_ASYNC | O_DIRECT | O_NOATIME | O_NONBLOCK)
 
 TRACEPOINT(trace_vfs_fcntl, "%d %d 0x%x", int, int, int);
-TRACEPOINT(trace_vfs_fcntl_ret, "\"%s\"", int);
+TRACEPOINT(trace_vfs_fcntl_ret, "%d", int);
 TRACEPOINT(trace_vfs_fcntl_err, "%d", int);
 
 extern "C" OSV_LIBC_API

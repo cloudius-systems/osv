@@ -14,6 +14,7 @@
 #include <osv/waitqueue.hh>
 #include <osv/stubbing.hh>
 #include <osv/export.h>
+#include <osv/trace.hh>
 #include <memory>
 
 #include <syscall.h>
@@ -203,8 +204,8 @@ static long set_mempolicy(int policy, unsigned long *nmask,
 // As explained in the sched_getaffinity(2) manual page, the interface of the
 // sched_getaffinity() function is slightly different than that of the actual
 // system call we need to implement here.
-#define __NR_sched_getaffinity_syscall __NR_sched_getaffinity
-static int sched_getaffinity_syscall(
+#define __NR_sys_sched_getaffinity __NR_sched_getaffinity
+static int sys_sched_getaffinity(
         pid_t pid, unsigned len, unsigned long *mask)
 {
         int ret = sched_getaffinity(
@@ -223,8 +224,8 @@ static int sched_getaffinity_syscall(
         return ret;
 }
 
-#define __NR_sched_setaffinity_syscall __NR_sched_setaffinity
-static int sched_setaffinity_syscall(
+#define __NR_sys_sched_setaffinity __NR_sched_setaffinity
+static int sys_sched_setaffinity(
         pid_t pid, unsigned len, unsigned long *mask)
 {
     return sched_setaffinity(
@@ -238,16 +239,18 @@ long long_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t off
 #define __NR_long_mmap __NR_mmap
 
 
-#define SYSCALL0(fn) case (__NR_##fn): return fn()
+#define SYSCALL0(fn) case (__NR_##fn): do { long ret = fn(); trace_syscall_##fn(ret); return ret; } while (0)
 
-#define SYSCALL1(fn, __t1)                  \
-        case (__NR_##fn): do {              \
-        va_list args;                       \
-        __t1 arg1;                          \
-        va_start(args, number);             \
-        arg1 = va_arg(args, __t1);          \
-        va_end(args);                       \
-        return fn(arg1);                    \
+#define SYSCALL1(fn, __t1)             \
+        case (__NR_##fn): do {         \
+        va_list args;                  \
+        __t1 arg1;                     \
+        va_start(args, number);        \
+        arg1 = va_arg(args, __t1);     \
+        va_end(args);                  \
+        auto ret = fn(arg1);           \
+        trace_syscall_##fn(ret, arg1); \
+        return ret;                    \
         } while (0)
 
 #define SYSCALL2(fn, __t1, __t2)            \
@@ -259,75 +262,85 @@ long long_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t off
         arg1 = va_arg(args, __t1);          \
         arg2 = va_arg(args, __t2);          \
         va_end(args);                       \
-        return fn(arg1, arg2);              \
+        auto ret = fn(arg1, arg2);          \
+        trace_syscall_##fn(ret, arg1, arg2);\
+        return ret;                         \
         } while (0)
 
-#define SYSCALL3(fn, __t1, __t2, __t3)          \
-        case (__NR_##fn): do {                  \
-        va_list args;                           \
-        __t1 arg1;                              \
-        __t2 arg2;                              \
-        __t3 arg3;                              \
-        va_start(args, number);                 \
-        arg1 = va_arg(args, __t1);              \
-        arg2 = va_arg(args, __t2);              \
-        arg3 = va_arg(args, __t3);              \
-        va_end(args);                           \
-        return fn(arg1, arg2, arg3);            \
+#define SYSCALL3(fn, __t1, __t2, __t3)             \
+        case (__NR_##fn): do {                     \
+        va_list args;                              \
+        __t1 arg1;                                 \
+        __t2 arg2;                                 \
+        __t3 arg3;                                 \
+        va_start(args, number);                    \
+        arg1 = va_arg(args, __t1);                 \
+        arg2 = va_arg(args, __t2);                 \
+        arg3 = va_arg(args, __t3);                 \
+        va_end(args);                              \
+        auto ret = fn(arg1, arg2, arg3);           \
+        trace_syscall_##fn(ret, arg1, arg2, arg3); \
+        return ret;                                \
         } while (0)
 
-#define SYSCALL4(fn, __t1, __t2, __t3, __t4)    \
-        case (__NR_##fn): do {                  \
-        va_list args;                           \
-        __t1 arg1;                              \
-        __t2 arg2;                              \
-        __t3 arg3;                              \
-        __t4 arg4;                              \
-        va_start(args, number);                 \
-        arg1 = va_arg(args, __t1);              \
-        arg2 = va_arg(args, __t2);              \
-        arg3 = va_arg(args, __t3);              \
-        arg4 = va_arg(args, __t4);              \
-        va_end(args);                           \
-        return fn(arg1, arg2, arg3, arg4);      \
+#define SYSCALL4(fn, __t1, __t2, __t3, __t4)             \
+        case (__NR_##fn): do {                           \
+        va_list args;                                    \
+        __t1 arg1;                                       \
+        __t2 arg2;                                       \
+        __t3 arg3;                                       \
+        __t4 arg4;                                       \
+        va_start(args, number);                          \
+        arg1 = va_arg(args, __t1);                       \
+        arg2 = va_arg(args, __t2);                       \
+        arg3 = va_arg(args, __t3);                       \
+        arg4 = va_arg(args, __t4);                       \
+        va_end(args);                                    \
+        auto ret = fn(arg1, arg2, arg3, arg4);           \
+        trace_syscall_##fn(ret, arg1, arg2, arg3, arg4); \
+        return ret;                                      \
         } while (0)
 
-#define SYSCALL5(fn, __t1, __t2, __t3, __t4, __t5)    \
-        case (__NR_##fn): do {                  \
-        va_list args;                           \
-        __t1 arg1;                              \
-        __t2 arg2;                              \
-        __t3 arg3;                              \
-        __t4 arg4;                              \
-        __t5 arg5;                              \
-        va_start(args, number);                 \
-        arg1 = va_arg(args, __t1);              \
-        arg2 = va_arg(args, __t2);              \
-        arg3 = va_arg(args, __t3);              \
-        arg4 = va_arg(args, __t4);              \
-        arg5 = va_arg(args, __t5);              \
-        va_end(args);                           \
-        return fn(arg1, arg2, arg3, arg4, arg5);\
+#define SYSCALL5(fn, __t1, __t2, __t3, __t4, __t5)             \
+        case (__NR_##fn): do {                                 \
+        va_list args;                                          \
+        __t1 arg1;                                             \
+        __t2 arg2;                                             \
+        __t3 arg3;                                             \
+        __t4 arg4;                                             \
+        __t5 arg5;                                             \
+        va_start(args, number);                                \
+        arg1 = va_arg(args, __t1);                             \
+        arg2 = va_arg(args, __t2);                             \
+        arg3 = va_arg(args, __t3);                             \
+        arg4 = va_arg(args, __t4);                             \
+        arg5 = va_arg(args, __t5);                             \
+        va_end(args);                                          \
+        auto ret = fn(arg1, arg2, arg3, arg4, arg5);           \
+        trace_syscall_##fn(ret, arg1, arg2, arg3, arg4, arg5); \
+        return ret;                                            \
         } while (0)
 
-#define SYSCALL6(fn, __t1, __t2, __t3, __t4, __t5, __t6)        \
-        case (__NR_##fn): do {                                  \
-        va_list args;                                           \
-        __t1 arg1;                                              \
-        __t2 arg2;                                              \
-        __t3 arg3;                                              \
-        __t4 arg4;                                              \
-        __t5 arg5;                                              \
-        __t6 arg6;                                              \
-        va_start(args, number);                                 \
-        arg1 = va_arg(args, __t1);                              \
-        arg2 = va_arg(args, __t2);                              \
-        arg3 = va_arg(args, __t3);                              \
-        arg4 = va_arg(args, __t4);                              \
-        arg5 = va_arg(args, __t5);                              \
-        arg6 = va_arg(args, __t6);                              \
-        va_end(args);                                           \
-        return fn(arg1, arg2, arg3, arg4, arg5, arg6);          \
+#define SYSCALL6(fn, __t1, __t2, __t3, __t4, __t5, __t6)             \
+        case (__NR_##fn): do {                                       \
+        va_list args;                                                \
+        __t1 arg1;                                                   \
+        __t2 arg2;                                                   \
+        __t3 arg3;                                                   \
+        __t4 arg4;                                                   \
+        __t5 arg5;                                                   \
+        __t6 arg6;                                                   \
+        va_start(args, number);                                      \
+        arg1 = va_arg(args, __t1);                                   \
+        arg2 = va_arg(args, __t2);                                   \
+        arg3 = va_arg(args, __t3);                                   \
+        arg4 = va_arg(args, __t4);                                   \
+        arg5 = va_arg(args, __t5);                                   \
+        arg6 = va_arg(args, __t6);                                   \
+        va_end(args);                                                \
+        auto ret = fn(arg1, arg2, arg3, arg4, arg5, arg6);           \
+        trace_syscall_##fn(ret, arg1, arg2, arg3, arg4, arg5, arg6); \
+        return ret;                                                  \
         } while (0)
 
 int rt_sigaction(int sig, const struct k_sigaction * act, struct k_sigaction * oact, size_t sigsetsize)
@@ -519,6 +532,135 @@ static long sys_brk(void *addr)
     }
 }
 
+#ifdef SYS_open
+TRACEPOINT(trace_syscall_open, "%d <= \"%s\" 0x%x", int, const char *, int);
+#endif
+TRACEPOINT(trace_syscall_read, "0x%x <= %d %p 0x%x", ssize_t, int, char *, size_t);
+TRACEPOINT(trace_syscall_uname, "%d <= ", int, struct utsname *);
+TRACEPOINT(trace_syscall_write, "0x%x <= %d %p 0x%x", ssize_t, int, const void *, size_t);
+TRACEPOINT(trace_syscall_gettid, "%d <=", pid_t);
+TRACEPOINT(trace_syscall_clock_gettime, "%d <= %d %p", int, clockid_t, struct timespec *);
+TRACEPOINT(trace_syscall_clock_getres, "%d <= %d %p", int, clockid_t, struct timespec *);
+TRACEPOINT(trace_syscall_futex, "%d <= %p %d %d %p %p %d", int, int *, int, int, const struct timespec *, int *, uint32_t);
+TRACEPOINT(trace_syscall_close, "%d <= %d", int, int);
+TRACEPOINT(trace_syscall_pipe2, "%d <= %p 0%0o", int, int *, int);
+TRACEPOINT(trace_syscall_epoll_create1, "%d <= 0%0o", int, int);
+TRACEPOINT(trace_syscall_eventfd2, "%d <= %u 0%0o", int, unsigned int, int);
+TRACEPOINT(trace_syscall_epoll_ctl, "%d <= %d %d %d 0x%x", int, int, int, int, struct epoll_event *);
+#ifdef SYS_epoll_wait
+TRACEPOINT(trace_syscall_epoll_wait, "%d <= %d 0x%x %d %d", int, int, struct epoll_event *, int, int);
+#endif
+TRACEPOINT(trace_syscall_accept4, "%d <= %d 0x%x %p 0%0o", int, int, struct sockaddr *, socklen_t *, int);
+TRACEPOINT(trace_syscall_connect, "%d <= %d 0x%x %d", int, int, struct sockaddr *, socklen_t);
+TRACEPOINT(trace_syscall_get_mempolicy, "%lu <= %p %p %lu %p %d", long, int *, unsigned long *, unsigned long, void *, int);
+TRACEPOINT(trace_syscall_sys_sched_getaffinity, "%d <= %d %u %p", int, pid_t, unsigned, unsigned long *);
+TRACEPOINT(trace_syscall_long_mmap, "0x%x <= 0x%x %lu %d %d %d %lu", long, void *, size_t, int, int, int, off_t);
+TRACEPOINT(trace_syscall_munmap, "%d <= 0x%x %lu", int, void *, size_t);
+TRACEPOINT(trace_syscall_rt_sigaction, "%d <= %d %p %p %lu", int, int, const struct k_sigaction *, struct k_sigaction *, size_t);
+TRACEPOINT(trace_syscall_rt_sigprocmask, "%d <= %d %p %p %lu", int, int, sigset_t *, sigset_t *, size_t);
+TRACEPOINT(trace_syscall_sys_exit, "%d <= %d", int, int);
+TRACEPOINT(trace_syscall_sigaltstack, "%d <= %p %p", int, const stack_t *, stack_t *);
+#ifdef SYS_select
+TRACEPOINT(trace_syscall_select, "%d <= %d %p %p %p %p", int, int, fd_set *, fd_set *, fd_set *, struct timeval *);
+#endif
+TRACEPOINT(trace_syscall_madvise, "%d <= 0x%x %lu %d", int, void *, size_t, int);
+TRACEPOINT(trace_syscall_sched_yield, "%d <=", int);
+TRACEPOINT(trace_syscall_mincore, "%d <= 0x%x %lu %p", int, void *, size_t, unsigned char *);
+TRACEPOINT(trace_syscall_openat, "%d <= %d \"%s\" 0%0o %d", int, int, const char *, int, mode_t);
+TRACEPOINT(trace_syscall_socket, "%d <= %d %d %d", int, int, int, int);
+TRACEPOINT(trace_syscall_setsockopt, "%d <= %d %d %d %p %d", int, int, int, int, char *, int);
+TRACEPOINT(trace_syscall_getsockopt, "%d <= %d %d %d %p %p", int, int, int, int, char *, unsigned int *);
+TRACEPOINT(trace_syscall_getpeername, "%d <= %d %p %p", int, int, struct sockaddr *, unsigned int *);
+TRACEPOINT(trace_syscall_bind, "%d <= %d %p %d", int, int, struct sockaddr *, int);
+TRACEPOINT(trace_syscall_listen, "%d <= %d %d", int, int, int);
+TRACEPOINT(trace_syscall_sys_ioctl, "%d <= %u %u %lu", int, unsigned int, unsigned int, unsigned long);
+#ifdef SYS_stat
+TRACEPOINT(trace_syscall_stat, "%d <= \"%s\" %p", int, const char *, struct stat *);
+#endif
+TRACEPOINT(trace_syscall_fstat, "%d <= %d %p", int, int, struct stat *);
+TRACEPOINT(trace_syscall_getsockname, "%d <= %d %p %p", int, int, struct sockaddr *, socklen_t *);
+TRACEPOINT(trace_syscall_sendto, "%lu <= %d 0x%x %lu %d %p %u", ssize_t, int, const void *, size_t, int, const struct sockaddr *, socklen_t);
+TRACEPOINT(trace_syscall_sendmsg, "%lu <= %d %p %d", ssize_t, int, const struct msghdr *, int);
+TRACEPOINT(trace_syscall_recvfrom, "%lu <= %d 0x%x %lu %d %p %p", ssize_t, int, void *, size_t, int, struct sockaddr *, socklen_t *);
+TRACEPOINT(trace_syscall_recvmsg, "%lu <= %d %p %d", ssize_t, int, struct msghdr *, int);
+TRACEPOINT(trace_syscall_dup3, "%d <= %d %d %d", int, int, int, int);
+TRACEPOINT(trace_syscall_flock, "%d <= %d %d", int, int, int);
+TRACEPOINT(trace_syscall_pwrite64, "%lu <= %d 0x%x %lu %ld", ssize_t, int, const void *, size_t, off_t);
+TRACEPOINT(trace_syscall_fdatasync, "%d <= %d", int, int);
+TRACEPOINT(trace_syscall_pselect6, "%d <= %d %p %p %p %p %p", int, int, fd_set *, fd_set *, fd_set *, struct timespec *, sys_sigset*);
+TRACEPOINT(trace_syscall_fcntl, "%d <= %d %d %d", int, int, int, int);
+TRACEPOINT(trace_syscall_pread64, "%lu <= %d 0x%x %lu %ld", ssize_t, int, void *, size_t, off_t);
+TRACEPOINT(trace_syscall_ftruncate, "%d <= %d %ld", int, int, off_t);
+TRACEPOINT(trace_syscall_fsync, "%d <= %d", int, int);
+TRACEPOINT(trace_syscall_epoll_pwait, "%d <= %d %p %d %d %p", int, int, struct epoll_event *, int, int, const sigset_t*);
+TRACEPOINT(trace_syscall_getrandom, "%lu <= 0x%x %lu %u", ssize_t, char *, size_t, unsigned int);
+TRACEPOINT(trace_syscall_nanosleep, "%d <= %p %p", int, const struct timespec*, struct timespec *);
+TRACEPOINT(trace_syscall_fstatat, "%d <= %d \"%s\" %p 0%0o", int, int, const char *, struct stat *, int);
+TRACEPOINT(trace_syscall_sys_exit_group, "%d <= %d", int, int);
+TRACEPOINT(trace_syscall_sys_getcwd, "%ld <= 0%0o %lu", long, char *, unsigned long);
+TRACEPOINT(trace_syscall_readlinkat, "%lu <= %d 0%0o 0x%x %lu", ssize_t, int, const char *, char *, size_t);
+TRACEPOINT(trace_syscall_getpid, "%d <=", pid_t);
+TRACEPOINT(trace_syscall_set_mempolicy, "%ld <= %d %p %lu", long, int, unsigned long *, unsigned long);
+TRACEPOINT(trace_syscall_sys_sched_setaffinity, "%d <= %d %u %p", int, pid_t, unsigned, unsigned long *);
+#ifdef SYS_mkdir
+TRACEPOINT(trace_syscall_mkdir, "%d <= \"%s\" %d", int, const char*, mode_t);
+#endif
+TRACEPOINT(trace_syscall_mkdirat, "%d <= %d \"%s\" %d", int, int, const char*, mode_t);
+TRACEPOINT(trace_syscall_tgkill, "%d <= %d %d %d", int, int, int, int);
+TRACEPOINT(trace_syscall_getgid, "%d <=", gid_t);
+TRACEPOINT(trace_syscall_getuid, "%d <=", uid_t);
+TRACEPOINT(trace_syscall_lseek, "%ld <= %d %ld %d", off_t, int, off_t, int);
+TRACEPOINT(trace_syscall_statfs, "%d <= \"%s\" %p", int, const char *, struct statfs *);
+TRACEPOINT(trace_syscall_unlinkat, "%d <= %d \"%s\" %d", int, int, const char *, int);
+TRACEPOINT(trace_syscall_symlinkat, "%d <= \"%s\" %d \"%s\"", int, const char *, int, const char *);
+TRACEPOINT(trace_syscall_sys_getdents64, "%lu <= %d 0x%x %lu", ssize_t, int, void *, size_t);
+TRACEPOINT(trace_syscall_renameat, "%d <= %d \"%s\" %d \"%s\"", int, int, const char *, int, const char *);
+TRACEPOINT(trace_syscall_sys_brk,"0x%x <= 0x%x",  long, void *);
+TRACEPOINT(trace_syscall_clock_nanosleep, "%d <= %d %d %p %p", int, clockid_t, int, const struct timespec *, struct timespec *);
+TRACEPOINT(trace_syscall_mknodat, "%d <= %d \"%s\" %d %d", int, int, const char *, mode_t, dev_t);
+TRACEPOINT(trace_syscall_statx, "%d <= %d \"%s\" %d %u %p", int, int, const char *, int, unsigned int, struct statx *);
+TRACEPOINT(trace_syscall_sys_getcpu, "%ld <= %p %p 0x%x", long, unsigned int *, unsigned int *, void *);
+TRACEPOINT(trace_syscall_dup, "%d <= %d", int, int);
+TRACEPOINT(trace_syscall_dup2, "%d <= %d %d", int, int, int);
+TRACEPOINT(trace_syscall_mprotect, "%d <= 0x%x %lu %d", int, void *, size_t, int);
+TRACEPOINT(trace_syscall_access, "%d <= \"%s\" %d", int, const char *, int);
+TRACEPOINT(trace_syscall_writev, "%lu <= %d %p %d", ssize_t, int, const struct iovec *, int);
+TRACEPOINT(trace_syscall_readlink, "%lu <= \"%s\" 0x%x %lu", ssize_t, const char *, char *, size_t);
+TRACEPOINT(trace_syscall_geteuid, "%d <=", uid_t);
+TRACEPOINT(trace_syscall_getegid, "%d <=", gid_t);
+TRACEPOINT(trace_syscall_gettimeofday, "%d <= %p %p", int, struct timeval *, struct timezone *);
+TRACEPOINT(trace_syscall_poll, "%d <= %p %ld %d", int, struct pollfd *, nfds_t, int);
+TRACEPOINT(trace_syscall_getppid, "%d <=", pid_t);
+TRACEPOINT(trace_syscall_epoll_create, "%d <= %d", int, int);
+TRACEPOINT(trace_syscall_sysinfo, "%d <= %p", int, struct sysinfo *);
+TRACEPOINT(trace_syscall_time, "%ld <= %p", time_t, time_t *);
+TRACEPOINT(trace_syscall_sendfile, "%lu <= %d %d %p %lu", ssize_t, int, int, off_t *, size_t);
+TRACEPOINT(trace_syscall_socketpair, "%d <= %d %d %d %p", int, int, int, int, int *);
+TRACEPOINT(trace_syscall_shutdown, "%d <= %d %d", int, int, int);
+TRACEPOINT(trace_syscall_unlink, "%d <= \"%s\"", int, const char *);
+TRACEPOINT(trace_syscall_readv, "%lu <= %lu %p %lu", ssize_t, unsigned long, const struct iovec *, unsigned long);
+TRACEPOINT(trace_syscall_getrusage, "%d <= %d %p", int, int, struct rusage *);
+TRACEPOINT(trace_syscall_accept, "%d <= %d %p %p", int, int, struct sockaddr *, socklen_t *);
+TRACEPOINT(trace_syscall_fchdir, "%d <= %u", int, unsigned int);
+TRACEPOINT(trace_syscall_pipe, "%d <= %p", int, int*);
+TRACEPOINT(trace_syscall_fstatfs, "%d <= %u %p", int, unsigned int, struct statfs *);
+TRACEPOINT(trace_syscall_umask, "%d <= %d", mode_t, mode_t);
+TRACEPOINT(trace_syscall_prctl, "%d <= %d %lu %lu %lu %lu", int, int, unsigned long, unsigned long, unsigned long, unsigned long);
+TRACEPOINT(trace_syscall_chdir, "%d <= \"%s\"", int, const char *);
+TRACEPOINT(trace_syscall_faccessat, "%d <= %d \"%s\" %d %d", int, int, const char *, int, int);
+TRACEPOINT(trace_syscall_kill, "%d <= %d %d", int, pid_t, int);
+TRACEPOINT(trace_syscall_alarm, "%d <= %u", int, unsigned int);
+TRACEPOINT(trace_syscall_utimensat, "%d <= %d \"%s\" %p %d", int, int, const char *, const struct timespec*, int);
+TRACEPOINT(trace_syscall_symlink, "%d <= \"%s\" \"%s\"", int, const char *, const char *);
+TRACEPOINT(trace_syscall_rmdir, "%d <= \"%s\"", int, const char *);
+TRACEPOINT(trace_syscall_sethostname, "%d <= \"%s\" %d", int, const char *, int);
+TRACEPOINT(trace_syscall_creat, "%d <= \"%s\" %d", int, const char *, mode_t);
+TRACEPOINT(trace_syscall_timerfd_create, "%d <= %d %d", int, int, int);
+TRACEPOINT(trace_syscall_timerfd_settime, "%d <= %d %d %p %p", int, int, int, const struct itimerspec *, struct itimerspec *);
+TRACEPOINT(trace_syscall_timerfd_gettime, "%d <= %d %p", int, int, struct itimerspec*);
+TRACEPOINT(trace_syscall_chmod, "%d <= \"%s\" %d", int, const char *, mode_t);
+TRACEPOINT(trace_syscall_fchmod, "%d <= %d %d", int, int, mode_t);
+
 OSV_LIBC_API long syscall(long number, ...)
 {
     // Save FPU state and restore it at the end of this function
@@ -547,7 +689,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL4(accept4, int, struct sockaddr *, socklen_t *, int);
     SYSCALL3(connect, int, struct sockaddr *, socklen_t);
     SYSCALL5(get_mempolicy, int *, unsigned long *, unsigned long, void *, int);
-    SYSCALL3(sched_getaffinity_syscall, pid_t, unsigned, unsigned long *);
+    SYSCALL3(sys_sched_getaffinity, pid_t, unsigned, unsigned long *);
     SYSCALL6(long_mmap, void *, size_t, int, int, int, off_t);
     SYSCALL2(munmap, void *, size_t);
     SYSCALL4(rt_sigaction, int, const struct k_sigaction *, struct k_sigaction *, size_t);
@@ -595,11 +737,11 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL4(readlinkat, int, const char *, char *, size_t);
     SYSCALL0(getpid);
     SYSCALL3(set_mempolicy, int, unsigned long *, unsigned long);
-    SYSCALL3(sched_setaffinity_syscall, pid_t, unsigned, unsigned long *);
+    SYSCALL3(sys_sched_setaffinity, pid_t, unsigned, unsigned long *);
 #ifdef SYS_mkdir
-    SYSCALL2(mkdir, char*, mode_t);
+    SYSCALL2(mkdir, const char*, mode_t);
 #endif
-    SYSCALL3(mkdirat, int, char*, mode_t);
+    SYSCALL3(mkdirat, int, const char*, mode_t);
     SYSCALL3(tgkill, int, int, int);
     SYSCALL0(getgid);
     SYSCALL0(getuid);
@@ -615,7 +757,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL5(statx, int, const char *, int, unsigned int, struct statx *);
     SYSCALL3(sys_getcpu, unsigned int *, unsigned int *, void *);
     SYSCALL1(dup, int);
-    SYSCALL2(dup2, unsigned int , unsigned int);
+    SYSCALL2(dup2, int, int);
     SYSCALL3(mprotect, void *, size_t, int);
     SYSCALL2(access, const char *, int);
     SYSCALL3(writev, int, const struct iovec *, int);
@@ -647,7 +789,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL4(utimensat, int, const char *, const struct timespec*, int);
     SYSCALL2(symlink, const char *, const char *);
     SYSCALL1(rmdir, const char *);
-    SYSCALL2(sethostname, char *, int);
+    SYSCALL2(sethostname, const char *, int);
     SYSCALL2(creat, const char *, mode_t);
     SYSCALL2(timerfd_create, int, int);
     SYSCALL4(timerfd_settime, int, int, const struct itimerspec *, struct itimerspec *);
