@@ -58,7 +58,7 @@ route. For introduction please read this
 [crash course](https://github.com/cloudius-systems/osv/wiki/Build-and-run-apps-on-OSv-using-Capstan).
 For more details about *capstan* please read 
 this more detailed [documentation](https://github.com/cloudius-systems/capstan#documentation). Pre-built OSv kernel files
-(`ovs-loader.qemu`) can be automatically downloaded by *capstan* from 
+(`osv-loader.qemu`) can be automatically downloaded by *capstan* from 
 the [OSv regular releases page](https://github.com/cloudius-systems/osv/releases) or manually from 
 the [nightly releases repo](https://github.com/osvunikernel/osv-nightly-releases/releases/tag/ci-master-latest).
 
