@@ -696,6 +696,14 @@ TRACEPOINT(trace_syscall_timerfd_settime, "%d <= %d %d %p %p", int, int, int, co
 TRACEPOINT(trace_syscall_timerfd_gettime, "%d <= %d %p", int, int, struct itimerspec*);
 TRACEPOINT(trace_syscall_chmod, "%d <= \"%s\" %d", int, const char *, mode_t);
 TRACEPOINT(trace_syscall_fchmod, "%d <= %d %d", int, int, mode_t);
+TRACEPOINT(trace_syscall_arch_prctl, "0x%x <= %d 0x%x", long, int, unsigned long);
+TRACEPOINT(trace_syscall_sys_set_robust_list, "%d <= %p %lu", long, struct robust_list_head *, size_t);
+TRACEPOINT(trace_syscall_sys_set_tid_address, "%d <= %p", long, int *);
+#ifdef __x86_64__
+TRACEPOINT(trace_syscall_sys_clone, "%d <= 0x%x 0x%x %p %p %lu", int, unsigned long, void *, int *, int *, unsigned long);
+TRACEPOINT(trace_syscall_sys_clone3, "%d <= %p %lu", int, struct clone_args *, size_t);
+#endif
+TRACEPOINT(trace_syscall_prlimit64, "%d <= %u %d %p %p", int, pid_t, int, const struct rlimit *, struct rlimit *);
 
 OSV_LIBC_API long syscall(long number, ...)
 {
