@@ -1,0 +1,11 @@
+Copied "as is" from https://github.com/amzn/amzn-drivers
+- release TAG - ena_linux_2.10.0
+- commit - e715298d09c6a4c378d5178c71515c43c1a75a8e
+
+In reality the FreeBSD part of the source tree has not changed
+since July 4th, 2023 and the commit 50e1bc8ea0149083f2a4a284d97357fc6d63b75f
+when the FreeBSD driver was updated to the version v2.6.3 which
+is the latest as of November 28th, 2023.
+
+Please note the C files were copied as *.cc to help track follow-up changes
+to this code.
