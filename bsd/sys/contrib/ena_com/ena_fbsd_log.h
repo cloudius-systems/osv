@@ -43,10 +43,15 @@ enum ena_log_t {
 
 extern int ena_log_level;
 
+#define ena_log_unused(dev, level, fmt, args...)		\
+	do {							\
+	} while (0)
+
+#ifdef ENA_LOG_ENABLE
 #define ena_log(dev, level, fmt, args...)			\
 	do {							\
 		if (ENA_ ## level <= ena_log_level)		\
-			device_printf((dev), fmt, ##args);	\
+			tprintf("ena", logger_debug, fmt, ##args);\
 	} while (0)
 
 #define ena_log_raw(level, fmt, args...)			\
@@ -54,11 +59,13 @@ extern int ena_log_level;
 		if (ENA_ ## level <= ena_log_level)		\
 			printf(fmt, ##args);			\
 	} while (0)
+#else
+#define ena_log(dev, level, fmt, args...)			\
+	ena_log_unused((dev), level, fmt, ##args)
 
-#define ena_log_unused(dev, level, fmt, args...)		\
-	do {							\
-		(void)(dev);					\
-	} while (0)
+#define ena_log_raw(level, fmt, args...)			\
+	ena_log_unused((dev), level, fmt, ##args)
+#endif
 
 #ifdef ENA_LOG_IO_ENABLE
 #define ena_log_io(dev, level, fmt, args...)			\
