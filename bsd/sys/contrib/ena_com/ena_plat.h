@@ -41,11 +41,6 @@ __FBSDID("$FreeBSD$");
 #include <sys/systm.h>
 
 #include <sys/bus.h>
-#include <sys/condvar.h>
-#if __FreeBSD_version > 1200055
-#include <sys/domainset.h>
-#endif
-#include <sys/endian.h>
 #include <sys/kernel.h>
 #include <sys/kthread.h>
 #include <sys/malloc.h>
@@ -54,13 +49,11 @@ __FBSDID("$FreeBSD$");
 #include <sys/rman.h>
 #include <sys/proc.h>
 #include <sys/smp.h>
-#include <sys/socket.h>
-#include <sys/sockio.h>
+#include <bsd/sys/sys/socket.h>
 #include <sys/sysctl.h>
 #include <sys/taskqueue.h>
 #include <sys/eventhandler.h>
 #include <sys/types.h>
-#include <sys/timetc.h>
 #include <sys/cdefs.h>
 
 #include <machine/atomic.h>
@@ -70,29 +63,25 @@ __FBSDID("$FreeBSD$");
 #include <machine/resource.h>
 #include <machine/_inttypes.h>
 
-#include <net/bpf.h>
-#include <net/ethernet.h>
-#include <net/if.h>
-#include <net/if_var.h>
-#include <net/if_arp.h>
-#include <net/if_dl.h>
-#include <net/if_media.h>
+#include <bsd/sys/net/bpf.h>
+#include <bsd/sys/net/ethernet.h>
+#include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_var.h>
+#include <bsd/sys/net/if_arp.h>
+#include <bsd/sys/net/if_dl.h>
+#include <bsd/sys/net/if_media.h>
 
-#include <net/if_types.h>
-#include <net/if_vlan_var.h>
+#include <bsd/sys/net/if_types.h>
+#include <bsd/sys/net/if_vlan_var.h>
 
-#include <netinet/in_systm.h>
-#include <netinet/in.h>
-#include <netinet/if_ether.h>
-#include <netinet/ip.h>
-#include <netinet/ip6.h>
-#include <netinet/tcp.h>
-#include <netinet/tcp_lro.h>
-#include <netinet/udp.h>
-
-#include <dev/led/led.h>
-#include <dev/pci/pcivar.h>
-#include <dev/pci/pcireg.h>
+#include <bsd/sys/netinet/in_systm.h>
+#include <bsd/sys/netinet/in.h>
+#include <bsd/sys/netinet/if_ether.h>
+#include <bsd/sys/netinet/ip.h>
+//#include <bsd/sys/netinet/ip6.h>
+#include <bsd/sys/netinet/tcp.h>
+#include <bsd/sys/netinet/tcp_lro.h>
+#include <bsd/sys/netinet/udp.h>
 
 #include "ena_fbsd_log.h"
 
@@ -107,9 +96,7 @@ extern struct ena_bus_space ebs;
 		(type *)((uintptr_t)__p - offsetof(type, member));	\
 	})
 
-#define ena_trace(ctx, level, fmt, args...)			\
-	ena_log((ctx)->dmadev, level, "%s() [TID:%d]: "		\
-	    fmt, __func__, curthread->td_tid, ##args)
+#define ena_trace(ctx, level, fmt, args...) do {} while (0)
 
 #define ena_trc_dbg(ctx, format, arg...)	\
 	ena_trace(ctx, DBG, format, ##arg)
@@ -175,12 +162,12 @@ static inline long PTR_ERR(const void *ptr)
 
 #define ENA_NODE_ANY		(-1)
 
-#define ENA_MSLEEP(x) 		pause_sbt("ena", SBT_1MS * (x), SBT_1MS, 0)
-#define ENA_USLEEP(x) 		pause_sbt("ena", SBT_1US * (x), SBT_1US, 0)
-#define ENA_UDELAY(x) 		DELAY(x)
+#define ENA_MSLEEP(x) 		busy_sleep(1000000 * x)
+#define ENA_USLEEP(x) 		busy_sleep(1000 * x)
+#define ENA_UDELAY(x) 		busy_sleep(1000 * x)
 #define ENA_GET_SYSTEM_TIMEOUT(timeout_us) \
-    ((long)cputick2usec(cpu_ticks()) + (timeout_us))
-#define ENA_TIME_EXPIRE(timeout)  ((timeout) < cputick2usec(cpu_ticks()))
+    ((osv::clock::uptime::now().time_since_epoch().count() / 1000) + (timeout_us))
+#define ENA_TIME_EXPIRE(timeout)  ((timeout) < (osv::clock::uptime::now().time_since_epoch().count() / 1000))
 #define ENA_MIGHT_SLEEP()
 
 #define min_t(type, _x, _y) ((type)(_x) < (type)(_y) ? (type)(_x) : (type)(_y))
@@ -194,60 +181,24 @@ static inline long PTR_ERR(const void *ptr)
 #define ENA_MAX16(x,y) 	MAX(x, y)
 #define ENA_MAX8(x,y) 	MAX(x, y)
 
+#include <osv/spinlock.h>
 /* Spinlock related methods */
-#define ena_spinlock_t 	struct mtx
+#define ena_spinlock_t 	irq_spinlock_t
+#define mtx_initialized(spinlock) (1)
 #define ENA_SPINLOCK_INIT(spinlock)				\
-	mtx_init(&(spinlock), "ena_spin", NULL, MTX_SPIN)
+	irq_spinlock_init(&(spinlock))
 #define ENA_SPINLOCK_DESTROY(spinlock)				\
 	do {							\
-		if (mtx_initialized(&(spinlock)))		\
-		    mtx_destroy(&(spinlock));			\
 	} while (0)
 #define ENA_SPINLOCK_LOCK(spinlock, flags)			\
 	do {							\
 		(void)(flags);					\
-		mtx_lock_spin(&(spinlock));			\
+		irq_spin_lock(&(spinlock));			\
 	} while (0)
 #define ENA_SPINLOCK_UNLOCK(spinlock, flags)			\
 	do {							\
 		(void)(flags);					\
-		mtx_unlock_spin(&(spinlock));			\
-	} while (0)
-
-
-/* Wait queue related methods */
-#define ena_wait_event_t struct { struct cv wq; struct mtx mtx; }
-#define ENA_WAIT_EVENT_INIT(waitqueue)					\
-	do {								\
-		cv_init(&((waitqueue).wq), "cv");			\
-		mtx_init(&((waitqueue).mtx), "wq", NULL, MTX_DEF);	\
-	} while (0)
-#define ENA_WAIT_EVENTS_DESTROY(admin_queue)				\
-	do {								\
-		struct ena_comp_ctx *comp_ctx;				\
-		int i;							\
-		for (i = 0; i < admin_queue->q_depth; i++) {		\
-			comp_ctx = get_comp_ctxt(admin_queue, i, false); \
-			if (comp_ctx != NULL) {				\
-				cv_destroy(&((comp_ctx->wait_event).wq)); \
-				mtx_destroy(&((comp_ctx->wait_event).mtx)); \
-			}						\
-		}							\
-	} while (0)
-#define ENA_WAIT_EVENT_CLEAR(waitqueue)					\
-	cv_init(&((waitqueue).wq), (waitqueue).wq.cv_description)
-#define ENA_WAIT_EVENT_WAIT(waitqueue, timeout_us)			\
-	do {								\
-		mtx_lock(&((waitqueue).mtx));				\
-		cv_timedwait(&((waitqueue).wq), &((waitqueue).mtx),	\
-		    timeout_us * hz / 1000 / 1000 );			\
-		mtx_unlock(&((waitqueue).mtx));				\
-	} while (0)
-#define ENA_WAIT_EVENT_SIGNAL(waitqueue)		\
-	do {						\
-		mtx_lock(&((waitqueue).mtx));		\
-		cv_broadcast(&((waitqueue).wq));	\
-		mtx_unlock(&((waitqueue).mtx));		\
+		irq_spin_unlock(&(spinlock));			\
 	} while (0)
 
 #define dma_addr_t 	bus_addr_t
@@ -259,17 +210,12 @@ static inline long PTR_ERR(const void *ptr)
 typedef struct {
 	bus_addr_t              paddr;
 	caddr_t                 vaddr;
-        bus_dma_tag_t           tag;
-	bus_dmamap_t            map;
-        bus_dma_segment_t       seg;
 	int                     nseg;
 } ena_mem_handle_t;
 
+#include "drivers/pci-device.hh"
 struct ena_bus {
-	bus_space_handle_t 	reg_bar_h;
-	bus_space_tag_t 	reg_bar_t;
-	bus_space_handle_t	mem_bar_h;
-	bus_space_tag_t 	mem_bar_t;
+	pci::bar*		reg_bar;
 };
 
 typedef uint32_t ena_atomic32_t;
@@ -279,15 +225,13 @@ typedef uint32_t ena_atomic32_t;
 typedef uint64_t ena_time_t;
 typedef struct ifnet ena_netdev;
 
-void	ena_dmamap_callback(void *arg, bus_dma_segment_t *segs, int nseg,
-    int error);
 int	ena_dma_alloc(device_t dmadev, bus_size_t size, ena_mem_handle_t *dma,
     int mapflags, bus_size_t alignment, int domain);
 
 static inline uint32_t
 ena_reg_read32(struct ena_bus *bus, bus_size_t offset)
 {
-	uint32_t v = bus_space_read_4(bus->reg_bar_t, bus->reg_bar_h, offset);
+	uint32_t v = bus->reg_bar->readl(offset);
 	rmb();
 	return v;
 }
@@ -305,41 +249,19 @@ ena_reg_read32(struct ena_bus *bus, bus_size_t offset)
 
 #define ENA_MEM_ALLOC(dmadev, size) malloc(size, M_DEVBUF, M_NOWAIT | M_ZERO)
 
-#if __FreeBSD_version > 1200055
-#define ENA_MEM_ALLOC_NODE(dmadev, size, virt, node, dev_node)		\
-	do {								\
-		(virt) = malloc_domainset((size), M_DEVBUF,		\
-		    (node) < 0 ? DOMAINSET_RR() : DOMAINSET_PREF(node),	\
-		    M_NOWAIT | M_ZERO);					\
-		(void)(dev_node);					\
-	} while (0)
-#else
 #define ENA_MEM_ALLOC_NODE(dmadev, size, virt, node, dev_node) (virt = NULL)
-#endif
 
 #define ENA_MEM_FREE(dmadev, ptr, size)					\
 	do { 								\
 		(void)(size);						\
 		free(ptr, M_DEVBUF);					\
 	} while (0)
-#if __FreeBSD_version > 1200055
-#define ENA_MEM_ALLOC_COHERENT_NODE_ALIGNED(dmadev, size, virt, phys,	\
-    dma, node, dev_node, alignment) 					\
-	do {								\
-		ena_dma_alloc((dmadev), (size), &(dma), 0, (alignment),	\
-		    (node));						\
-		(virt) = (void *)(dma).vaddr;				\
-		(phys) = (dma).paddr;					\
-		(void)(dev_node);					\
-	} while (0)
-#else
 #define ENA_MEM_ALLOC_COHERENT_NODE_ALIGNED(dmadev, size, virt, phys,	\
     dma, node, dev_node, alignment) 					\
 	do {								\
 		((virt) = NULL);					\
 		(void)(dev_node);					\
 	} while(0)
-#endif
 
 #define ENA_MEM_ALLOC_COHERENT_NODE(dmadev, size, virt, phys, handle,	\
     node, dev_node)							\
@@ -351,7 +273,7 @@ ena_reg_read32(struct ena_bus *bus, bus_size_t offset)
 	do {								\
 		ena_dma_alloc((dmadev), (size), &(dma), 0, (alignment),	\
 		    ENA_NODE_ANY);					\
-		(virt) = (void *)(dma).vaddr;				\
+		(virt) = reinterpret_cast<typeof(virt)>((dma).vaddr);	\
 		(phys) = (dma).paddr;					\
 	} while (0)
 
@@ -362,10 +284,7 @@ ena_reg_read32(struct ena_bus *bus, bus_size_t offset)
 #define ENA_MEM_FREE_COHERENT(dmadev, size, virt, phys, dma)		\
 	do {								\
 		(void)size;						\
-		bus_dmamap_unload((dma).tag, (dma).map);		\
-		bus_dmamem_free((dma).tag, (virt), (dma).map);		\
-		bus_dma_tag_destroy((dma).tag);				\
-		(dma).tag = NULL;					\
+		memory::free_phys_contiguous_aligned(virt);		\
 		(virt) = NULL;						\
 	} while (0)
 
@@ -377,20 +296,14 @@ ena_reg_read32(struct ena_bus *bus, bus_size_t offset)
 	} while (0)
 
 #define ENA_REG_WRITE32_RELAXED(bus, value, offset)			\
-	bus_space_write_4(						\
-			  ((struct ena_bus*)bus)->reg_bar_t,		\
-			  ((struct ena_bus*)bus)->reg_bar_h,		\
-			  (bus_size_t)(offset), (value))
+	((struct ena_bus*)bus)->reg_bar->writel((bus_size_t)(offset), (value))
 
 #define ENA_REG_READ32(bus, offset)					\
 	ena_reg_read32((struct ena_bus*)(bus), (bus_size_t)(offset))
 
-#define ENA_DB_SYNC_WRITE(mem_handle) bus_dmamap_sync(			\
-	(mem_handle)->tag, (mem_handle)->map, BUS_DMASYNC_PREWRITE)
-#define ENA_DB_SYNC_PREREAD(mem_handle) bus_dmamap_sync(		\
-	(mem_handle)->tag, (mem_handle)->map, BUS_DMASYNC_PREREAD)
-#define ENA_DB_SYNC_POSTREAD(mem_handle) bus_dmamap_sync(		\
-	(mem_handle)->tag, (mem_handle)->map, BUS_DMASYNC_POSTREAD)
+#define ENA_DB_SYNC_WRITE(mem_handle) wmb()
+#define ENA_DB_SYNC_PREREAD(mem_handle)
+#define ENA_DB_SYNC_POSTREAD(mem_handle)
 #define ENA_DB_SYNC(mem_handle) ENA_DB_SYNC_WRITE(mem_handle)
 
 #define time_after(a,b)	((long)((unsigned long)(b) - (unsigned long)(a)) < 0)
