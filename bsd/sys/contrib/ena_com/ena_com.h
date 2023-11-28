@@ -977,7 +977,8 @@ int ena_com_config_dev_mode(struct ena_com_dev *ena_dev,
  */
 static inline struct ena_com_dev *ena_com_io_sq_to_ena_dev(struct ena_com_io_sq *io_sq)
 {
-	return container_of(io_sq, struct ena_com_dev, io_sq_queues[io_sq->qid]);
+	ena_com_io_sq *first = io_sq - io_sq->qid;
+	return reinterpret_cast<ena_com_dev *>(((uintptr_t)first - offsetof(ena_com_dev, io_sq_queues)));
 }
 
 /* ena_com_io_cq_to_ena_dev - Extract ena_com_dev using contained field io_cq.
@@ -987,7 +988,8 @@ static inline struct ena_com_dev *ena_com_io_sq_to_ena_dev(struct ena_com_io_sq 
  */
 static inline struct ena_com_dev *ena_com_io_cq_to_ena_dev(struct ena_com_io_cq *io_cq)
 {
-	return container_of(io_cq, struct ena_com_dev, io_cq_queues[io_cq->qid]);
+	ena_com_io_cq *first = io_cq - io_cq->qid;
+	return reinterpret_cast<ena_com_dev *>(((uintptr_t)first - offsetof(ena_com_dev, io_cq_queues)));
 }
 
 static inline bool ena_com_get_adaptive_moderation_enabled(struct ena_com_dev *ena_dev)

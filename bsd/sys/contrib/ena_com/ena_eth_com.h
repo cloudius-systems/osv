@@ -34,10 +34,11 @@
 #ifndef ENA_ETH_COM_H_
 #define ENA_ETH_COM_H_
 
+#include "ena_com.h"
+
 #if defined(__cplusplus)
 extern "C" {
 #endif
-#include "ena_com.h"
 
 /* head update threshold in units of (queue size / ENA_COMP_HEAD_THRESH) */
 #define ENA_COMP_HEAD_THRESH 4
