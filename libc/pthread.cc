@@ -361,8 +361,12 @@ int pthread_spin_lock(pthread_spinlock_t *lock)
     bool* b = from_libc(lock);
     while (__sync_lock_test_and_set(b, 1)) {
         while (*b) {
-            barrier();
-            // FIXME: use "PAUSE" instruction here
+#ifdef __x86_64__
+            __asm __volatile("pause");
+#endif
+#ifdef __aarch64__
+            __asm __volatile("isb sy");
+#endif
         }
     }
     return 0; // We can't really do deadlock detection
