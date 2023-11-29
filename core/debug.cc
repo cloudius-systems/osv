@@ -47,6 +47,7 @@ bool logger::parse_configuration(void)
     add_tag("poll", logger_info);
     add_tag("dhcp", logger_info);
     add_tag("acpi", logger_error);
+    add_tag("ena", logger_debug);
 
     return (true);
 }
