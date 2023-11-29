@@ -676,6 +676,9 @@ endif
 ifeq ($(conf_drivers_hyperv),1)
 bsd += bsd/sys/dev/hyperv/vmbus/hyperv.o
 endif
+ifeq ($(conf_drivers_ena),1)
+bsd += bsd/sys/contrib/ena_com/ena_eth_com.o
+endif
 endif
 
 bsd += bsd/sys/dev/random/hash.o
