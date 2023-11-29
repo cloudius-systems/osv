@@ -116,7 +116,7 @@ static int ena_com_write_bounce_buffer_to_dev(struct ena_com_io_sq *io_sq,
 }
 
 static int ena_com_write_header_to_bounce(struct ena_com_io_sq *io_sq,
-						 u8 *header_src,
+						 void *header_src,
 						 u16 header_len)
 {
 	struct ena_com_llq_pkt_ctrl *pkt_ctrl = &io_sq->llq_buf_ctrl;
@@ -303,7 +303,7 @@ static int ena_com_create_meta(struct ena_com_io_sq *io_sq,
 {
 	struct ena_eth_io_tx_meta_desc *meta_desc = NULL;
 
-	meta_desc = get_sq_desc(io_sq);
+	meta_desc = reinterpret_cast<ena_eth_io_tx_meta_desc *>(get_sq_desc(io_sq));
 	if (unlikely(!meta_desc))
 		return ENA_COM_FAULT;
 
@@ -377,11 +377,11 @@ static void ena_com_rx_set_flags(struct ena_com_io_cq *io_cq,
 				 struct ena_com_rx_ctx *ena_rx_ctx,
 				 struct ena_eth_io_rx_cdesc_base *cdesc)
 {
-	ena_rx_ctx->l3_proto = cdesc->status &
-		ENA_ETH_IO_RX_CDESC_BASE_L3_PROTO_IDX_MASK;
-	ena_rx_ctx->l4_proto =
+	ena_rx_ctx->l3_proto = static_cast<ena_eth_io_l3_proto_index>(cdesc->status &
+		ENA_ETH_IO_RX_CDESC_BASE_L3_PROTO_IDX_MASK);
+	ena_rx_ctx->l4_proto = static_cast<ena_eth_io_l4_proto_index>(
 		(cdesc->status & ENA_ETH_IO_RX_CDESC_BASE_L4_PROTO_IDX_MASK) >>
-		ENA_ETH_IO_RX_CDESC_BASE_L4_PROTO_IDX_SHIFT;
+		ENA_ETH_IO_RX_CDESC_BASE_L4_PROTO_IDX_SHIFT);
 	ena_rx_ctx->l3_csum_err =
 		!!((cdesc->status & ENA_ETH_IO_RX_CDESC_BASE_L3_CSUM_ERR_MASK) >>
 		ENA_ETH_IO_RX_CDESC_BASE_L3_CSUM_ERR_SHIFT);
@@ -470,7 +470,7 @@ int ena_com_prepare_tx(struct ena_com_io_sq *io_sq,
 		return rc;
 	}
 
-	desc = get_sq_desc(io_sq);
+	desc = reinterpret_cast<ena_eth_io_tx_desc *>(get_sq_desc(io_sq));
 	if (unlikely(!desc))
 		return ENA_COM_FAULT;
 	memset(desc, 0x0, sizeof(struct ena_eth_io_tx_desc));
@@ -531,7 +531,7 @@ int ena_com_prepare_tx(struct ena_com_io_sq *io_sq,
 				return rc;
 			}
 
-			desc = get_sq_desc(io_sq);
+			desc = reinterpret_cast<ena_eth_io_tx_desc *>(get_sq_desc(io_sq));
 			if (unlikely(!desc))
 				return ENA_COM_FAULT;
 
@@ -647,7 +647,7 @@ int ena_com_add_single_rx_desc(struct ena_com_io_sq *io_sq,
 	if (unlikely(!ena_com_sq_have_enough_space(io_sq, 1)))
 		return ENA_COM_NO_SPACE;
 
-	desc = get_sq_desc(io_sq);
+	desc = reinterpret_cast<ena_eth_io_rx_desc *>(get_sq_desc(io_sq));
 	if (unlikely(!desc))
 		return ENA_COM_FAULT;
 
