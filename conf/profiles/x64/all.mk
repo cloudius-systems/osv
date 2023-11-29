@@ -6,3 +6,4 @@ include conf/profiles/$(arch)/vmware.mk
 include conf/profiles/$(arch)/xen.mk
 
 conf_drivers_vga?=1
+conf_drivers_ena?=1
