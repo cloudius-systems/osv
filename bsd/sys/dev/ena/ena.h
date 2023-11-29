@@ -38,11 +38,18 @@
 #include "ena_com/ena_com.h"
 #include "ena_com/ena_eth_com.h"
 
+#include <bsd/porting/callout.h>
+#include <osv/msi.hh>
+#include "drivers/pci-device.hh"
+
 #define ENA_DRV_MODULE_VER_MAJOR	2
 #define ENA_DRV_MODULE_VER_MINOR	6
 #define ENA_DRV_MODULE_VER_SUBMINOR	3
 
 #define ENA_DRV_MODULE_NAME		"ena"
+
+#define	__STRING(x)	#x		/* stringify without expanding x */
+#define	__XSTRING(x)	__STRING(x)	/* expand x, then stringify */
 
 #ifndef ENA_DRV_MODULE_VERSION
 #define ENA_DRV_MODULE_VERSION				\
@@ -135,10 +142,12 @@
  * ENA device should send keep alive msg every 1 sec.
  * We wait for 6 sec just to be on the safe side.
  */
-#define ENA_DEFAULT_KEEP_ALIVE_TO	(SBT_1S * 6)
+#define NANOSECONDS_IN_SEC  1000000000l
+#define NANOSECONDS_IN_MSEC 1000000l
+#define ENA_DEFAULT_KEEP_ALIVE_TO	(6 * NANOSECONDS_IN_SEC)
 
 /* Time in jiffies before concluding the transmitter is hung. */
-#define ENA_DEFAULT_TX_CMP_TO		(SBT_1S * 5)
+#define ENA_DEFAULT_TX_CMP_TO		(5 * NANOSECONDS_IN_SEC)
 
 /* Number of queues to check for missing queues per timer tick */
 #define ENA_DEFAULT_TX_MONITORED_QUEUES	(4)
@@ -155,6 +164,45 @@
 #define PCI_DEV_ID_ENA_PF_RSERV0	0x1ec2
 #define PCI_DEV_ID_ENA_VF		0xec20
 #define PCI_DEV_ID_ENA_VF_RSERV0	0xec21
+
+//These macros are taken verbatim from FreeBSD code and implement atomic bitset
+#define	_BITSET_BITS		(sizeof(long) * 8)
+
+#define	__howmany(x, y)	(((x) + ((y) - 1)) / (y))
+
+#define	__bitset_words(_s)	(__howmany(_s, _BITSET_BITS))
+
+#define	__constexpr_cond(expr)	(__builtin_constant_p((expr)) && (expr))
+
+#define	__bitset_mask(_s, n)						\
+	(1UL << (__constexpr_cond(__bitset_words((_s)) == 1) ?		\
+	    (size_t)(n) : ((n) % _BITSET_BITS)))
+
+#define	__bitset_word(_s, n)						\
+	(__constexpr_cond(__bitset_words((_s)) == 1) ?			\
+	 0 : ((n) / _BITSET_BITS))
+
+#define	BITSET_DEFINE(_t, _s)						\
+struct _t {								\
+	long    __bits[__bitset_words((_s))];				\
+}
+
+#define	BIT_ZERO(_s, p) do {						\
+	size_t __i;							\
+	for (__i = 0; __i < __bitset_words((_s)); __i++)		\
+		(p)->__bits[__i] = 0L;					\
+} while (0)
+
+#define	BIT_ISSET(_s, n, p)						\
+	((((p)->__bits[__bitset_word(_s, n)] & __bitset_mask((_s), (n))) != 0))
+
+#define	BIT_SET_ATOMIC(_s, n, p)					\
+	atomic_set_long((volatile u_long*)(&(p)->__bits[__bitset_word(_s, n)]),	\
+	    __bitset_mask((_s), n))
+
+#define	BIT_CLR_ATOMIC(_s, n, p)					\
+	atomic_clear_long((volatile u_long*)(&(p)->__bits[__bitset_word(_s, n)]),\
+	    __bitset_mask((_s), n))
 
 /*
  * Flags indicating current ENA driver state
@@ -174,9 +222,9 @@ enum ena_flags_t {
 BITSET_DEFINE(_ena_state, ENA_FLAGS_NUMBER);
 typedef struct _ena_state ena_state_t;
 
-#define ENA_FLAG_ZERO(adapter)		\
+#define ENA_FLAG_ZERO(adapter)          \
 	BIT_ZERO(ENA_FLAGS_NUMBER, &(adapter)->flags)
-#define ENA_FLAG_ISSET(bit, adapter)	\
+#define ENA_FLAG_ISSET(bit, adapter)    \
 	BIT_ISSET(ENA_FLAGS_NUMBER, (bit), &(adapter)->flags)
 #define ENA_FLAG_SET_ATOMIC(bit, adapter)	\
 	BIT_SET_ATOMIC(ENA_FLAGS_NUMBER, (bit), &(adapter)->flags)
@@ -196,16 +244,9 @@ typedef struct _ena_vendor_info_t {
 
 struct ena_irq {
 	/* Interrupt resources */
-	struct resource *res;
-	driver_filter_t *handler;
 	void *data;
-	void *cookie;
 	unsigned int vector;
-	bool requested;
-#ifdef RSS
-	int cpu;
-#endif
-	char name[ENA_IRQNAME_SIZE];
+	msix_vector *mvector;
 };
 
 struct ena_que {
@@ -213,22 +254,20 @@ struct ena_que {
 	struct ena_ring *tx_ring;
 	struct ena_ring *rx_ring;
 
-	struct task cleanup_task;
-	struct taskqueue *cleanup_tq;
+	sched::thread* cleanup_thread;
+	std::atomic<uint16_t> cleanup_pending = {0};
+	std::atomic<bool> cleanup_stop = {false};
 
 	uint32_t id;
-#ifdef RSS
-	int cpu;
-	cpuset_t cpu_mask;
-#endif
 	int domain;
 	struct sysctl_oid *oid;
+
 };
 
 struct ena_calc_queue_size_ctx {
 	struct ena_com_dev_get_features_ctx *get_feat_ctx;
 	struct ena_com_dev *ena_dev;
-	device_t pdev;
+	pci::device *pdev;
 	uint32_t tx_queue_size;
 	uint32_t rx_queue_size;
 	uint32_t max_tx_queue_size;
@@ -236,14 +275,6 @@ struct ena_calc_queue_size_ctx {
 	uint16_t max_tx_sgl_size;
 	uint16_t max_rx_sgl_size;
 };
-
-#ifdef DEV_NETMAP
-struct ena_netmap_tx_info {
-	uint32_t socket_buf_idx[ENA_PKT_MAX_BUFS];
-	bus_dmamap_t map_seg[ENA_PKT_MAX_BUFS];
-	unsigned int sockets_used;
-};
-#endif
 
 struct ena_tx_buffer {
 	struct mbuf *mbuf;
@@ -253,33 +284,34 @@ struct ena_tx_buffer {
 	/* # of buffers used by this mbuf */
 	unsigned int num_of_bufs;
 
-	bus_dmamap_t dmamap;
-
 	/* Used to detect missing tx packets */
-	struct bintime timestamp;
+	u64 timestamp;
 	bool print_once;
-
-#ifdef DEV_NETMAP
-	struct ena_netmap_tx_info nm_info;
-#endif /* DEV_NETMAP */
 
 	struct ena_com_buf bufs[ENA_PKT_MAX_BUFS];
 } __aligned(CACHE_LINE_SIZE);
 
 struct ena_rx_buffer {
 	struct mbuf *mbuf;
-	bus_dmamap_t map;
 	struct ena_com_buf ena_buf;
-#ifdef DEV_NETMAP
-	uint32_t netmap_buf_idx;
-#endif /* DEV_NETMAP */
 } __aligned(CACHE_LINE_SIZE);
+
+//TODO: See if we need atomics or possibly these get updated/read without a need
+//for locking
+//In FreeBSD they seem to be atomics per CPU - see https://github.com/freebsd/freebsd-src/blob/main/sys/arm64/include/counter.h#L82
+//For now disable all the counter related code -> it seems to be used only to track
+//stats
+typedef u64 counter_u64_t;
+#define counter_u64_zero(cnt) do {} while (0)
+#define counter_u64_add(cnt,inc) do {} while (0)
+#define counter_u64_add_protected(cnt,inc) do {} while (0)
+#define counter_enter() do {} while (0)
+#define counter_exit() do {} while (0)
 
 struct ena_stats_tx {
 	counter_u64_t cnt;
 	counter_u64_t bytes;
 	counter_u64_t prepare_ctx_err;
-	counter_u64_t dma_mapping_err;
 	counter_u64_t doorbells;
 	counter_u64_t missing_tx_comp;
 	counter_u64_t bad_req_id;
@@ -298,7 +330,6 @@ struct ena_stats_rx {
 	counter_u64_t csum_bad;
 	counter_u64_t mjum_alloc_fail;
 	counter_u64_t mbuf_alloc_fail;
-	counter_u64_t dma_mapping_err;
 	counter_u64_t bad_desc_num;
 	counter_u64_t bad_req_id;
 	counter_u64_t empty_rx_ring;
@@ -328,7 +359,7 @@ struct ena_ring {
 
 	};
 
-	uint8_t first_interrupt;
+	std::atomic<uint8_t> first_interrupt;
 	uint16_t no_interrupt_event_cnt;
 
 	struct ena_com_rx_buf_info ena_bufs[ENA_PKT_MAX_BUFS];
@@ -351,10 +382,9 @@ struct ena_ring {
 	struct mtx ring_mtx;
 	char mtx_name[16];
 
-	struct {
-		struct task enqueue_task;
-		struct taskqueue *enqueue_tq;
-	};
+	sched::thread* enqueue_thread;
+	std::atomic<uint16_t> enqueue_pending = {0};
+	std::atomic<bool> enqueue_stop = {false};
 
 	union {
 		struct ena_stats_tx tx_stats;
@@ -374,10 +404,6 @@ struct ena_ring {
 	uint8_t *push_buf_intermediate_buf;
 
 	int tx_last_cleanup_ticks;
-
-#ifdef DEV_NETMAP
-	bool initialized;
-#endif /* DEV_NETMAP */
 } __aligned(CACHE_LINE_SIZE);
 
 struct ena_stats_dev {
@@ -398,29 +424,22 @@ struct ena_hw_stats {
 	counter_u64_t tx_drops;
 };
 
+typedef struct ifnet* if_t;
+
 /* Board specific private data structure */
 struct ena_adapter {
 	struct ena_com_dev *ena_dev;
 
 	/* OS defined structs */
 	if_t ifp;
-	device_t pdev;
+	pci::device *pdev;
 	struct ifmedia	media;
 
 	/* OS resources */
-	struct resource *memory;
-	struct resource *registers;
-	struct resource *msix;
-	int msix_rid;
+	pci::bar *registers;
 
 	/* MSI-X */
-	struct msix_entry *msix_entries;
 	int msix_vecs;
-
-	/* DMA tags used throughout the driver adapter for Tx and Rx */
-	bus_dma_tag_t tx_buf_tag;
-	bus_dma_tag_t rx_buf_tag;
-	int dma_width;
 
 	uint32_t max_mtu;
 
@@ -465,26 +484,20 @@ struct ena_adapter {
 
 	/* Timer service */
 	struct callout timer_service;
-	sbintime_t keep_alive_timestamp;
+	std::atomic<u64> keep_alive_timestamp;
 	uint32_t next_monitored_tx_qid;
 	struct task reset_task;
 	struct taskqueue *reset_tq;
-	struct task metrics_task;
-	struct taskqueue *metrics_tq;
 	int wd_active;
-	sbintime_t keep_alive_timeout;
-	sbintime_t missing_tx_timeout;
+	u64 keep_alive_timeout;
+	u64 missing_tx_timeout;
 	uint32_t missing_tx_max_queues;
 	uint32_t missing_tx_threshold;
 	bool disable_meta_caching;
 
-	uint16_t eni_metrics_sample_interval;
-	uint16_t eni_metrics_sample_interval_cnt;
-
 	/* Statistics */
 	struct ena_stats_dev dev_stats;
 	struct ena_hw_stats hw_stats;
-	struct ena_admin_eni_stats eni_metrics;
 
 	enum ena_regs_reset_reason_types reset_reason;
 };
@@ -499,7 +512,7 @@ struct ena_adapter {
 	sx_init(&ena_global_lock,	"ENA global lock")
 #define ENA_LOCK_DESTROY()		sx_destroy(&ena_global_lock)
 #define ENA_LOCK_LOCK()			sx_xlock(&ena_global_lock)
-#define ENA_LOCK_UNLOCK()		sx_unlock(&ena_global_lock)
+#define ENA_LOCK_UNLOCK()		sx_xunlock(&ena_global_lock)
 #define ENA_LOCK_ASSERT()		sx_assert(&ena_global_lock, SA_XLOCKED)
 
 #define ENA_TIMER_INIT(_adapter)					\
@@ -507,8 +520,8 @@ struct ena_adapter {
 #define ENA_TIMER_DRAIN(_adapter)					\
 	callout_drain(&(_adapter)->timer_service)
 #define ENA_TIMER_RESET(_adapter)					\
-	callout_reset_sbt(&(_adapter)->timer_service, SBT_1S, SBT_1S,	\
-			ena_timer_service, (void*)(_adapter), 0)
+	callout_reset(&(_adapter)->timer_service, ns2ticks(NANOSECONDS_IN_SEC),	\
+			ena_timer_service, (void*)(_adapter))
 
 #define clamp_t(type, _x, min, max)	min_t(type, max_t(type, _x, min), max)
 #define clamp_val(val, lo, hi)		clamp_t(__typeof(val), val, lo, hi)
@@ -531,7 +544,7 @@ ena_mbuf_count(struct mbuf *mbuf)
 {
 	int count = 1;
 
-	while ((mbuf = mbuf->m_next) != NULL)
+	while ((mbuf = mbuf->m_hdr.mh_next) != NULL)
 		++count;
 
 	return count;
