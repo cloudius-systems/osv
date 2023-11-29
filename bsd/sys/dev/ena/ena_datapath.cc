@@ -37,6 +37,7 @@ __FBSDID("$FreeBSD$");
 #include "ena_datapath.h"
 
 #include <osv/sched.hh>
+#include <osv/trace.hh>
 
 static inline void critical_enter()  { sched::preempt_disable(); }
 static inline void critical_exit() { sched::preempt_enable(); }
@@ -61,7 +62,7 @@ static void ena_tx_csum(struct ena_com_tx_ctx *, struct mbuf *, bool);
 static int ena_check_and_collapse_mbuf(struct ena_ring *tx_ring,
     struct mbuf **mbuf);
 static int ena_xmit_mbuf(struct ena_ring *, struct mbuf **);
-static void ena_start_xmit(struct ena_ring *);
+static void ena_start_xmit(struct ena_ring *, bool);
 
 /*********************************************************************
  *  Global functions
@@ -119,7 +120,7 @@ ena_deferred_mq_start(struct ena_ring *tx_ring )
 	while (!buf_ring_empty(tx_ring->br) && tx_ring->running &&
 	    (ifp->if_drv_flags & IFF_DRV_RUNNING) != 0) {
 		ENA_RING_MTX_LOCK(tx_ring);
-		ena_start_xmit(tx_ring);
+		ena_start_xmit(tx_ring, true);
 		ENA_RING_MTX_UNLOCK(tx_ring);
 	}
 }
@@ -158,7 +159,7 @@ ena_mq_start(if_t ifp, struct mbuf *m)
 	}
 
 	if (is_br_empty && (ENA_RING_MTX_TRYLOCK(tx_ring) != 0)) {
-		ena_start_xmit(tx_ring);
+		ena_start_xmit(tx_ring, false);
 		ENA_RING_MTX_UNLOCK(tx_ring);
 	} else {
 		tx_ring->enqueue_thread->wake_with([tx_ring] { tx_ring->enqueue_pending++; });
@@ -219,6 +220,8 @@ err:
 
 	return (EFAULT);
 }
+
+TRACEPOINT(trace_ena_tx_cleanup, "qid=%d pkts=%d", int, int);
 
 /**
  * ena_tx_cleanup - clear sent packets and corresponding descriptors
@@ -293,6 +296,7 @@ ena_tx_cleanup(struct ena_ring *tx_ring)
 
 	ena_log_io(adapter->pdev, DBG, "tx: q %d done. total pkts: %d",
 	    tx_ring->qid, work_done);
+	trace_ena_tx_cleanup(tx_ring->qid, work_done);
 
 	/* If there is still something to commit update ring state */
 	if (likely(commit != ENA_TX_COMMIT)) {
@@ -455,6 +459,11 @@ ena_rx_checksum(struct ena_ring *rx_ring, struct ena_com_rx_ctx *ena_rx_ctx,
 	}
 }
 
+TRACEPOINT(trace_ena_rx_cleanup_packet, "qid=%d", int);
+TRACEPOINT(trace_ena_rx_cleanup_fast_path, "qid=%d", int);
+TRACEPOINT(trace_ena_rx_cleanup_lro, "qid=%d", int);
+TRACEPOINT(trace_ena_rx_cleanup_refill, "qid=%d refill=%u", int, uint32_t);
+
 /**
  * ena_rx_cleanup - handle rx irq
  * @arg: ring for which irq is being handled
@@ -530,6 +539,7 @@ ena_rx_cleanup(struct ena_ring *rx_ring)
 			}
 			break;
 		}
+		trace_ena_rx_cleanup_packet(rx_ring->qid);
 
 		if (((ifp->if_capenable & IFCAP_RXCSUM) != 0) ||
 		    ((ifp->if_capenable & IFCAP_RXCSUM_IPV6) != 0)) {
@@ -557,8 +567,10 @@ ena_rx_cleanup(struct ena_ring *rx_ring)
 			 *  - lro enqueue fails
 			 */
 			if ((rx_ring->lro.lro_cnt != 0) &&
-			    (tcp_lro_rx(&rx_ring->lro, mbuf, 0) == 0))
+			    (tcp_lro_rx(&rx_ring->lro, mbuf, 0) == 0)) {
 				do_if_input = 0;
+				trace_ena_rx_cleanup_lro(rx_ring->qid);
+			}
 		}
 		if (do_if_input != 0) {
 			ena_log_io(adapter->pdev, DBG,
@@ -566,6 +578,8 @@ ena_rx_cleanup(struct ena_ring *rx_ring)
 			bool fast_path = ifp->if_classifier.post_packet(mbuf);
 			if (!fast_path) {
 				(*ifp->if_input)(ifp, mbuf);
+			} else {
+				trace_ena_rx_cleanup_fast_path(rx_ring->qid);
 			}
 		}
 
@@ -584,12 +598,18 @@ ena_rx_cleanup(struct ena_ring *rx_ring)
 
 	if (refill_required > refill_threshold) {
 		ena_com_update_dev_comp_head(rx_ring->ena_com_io_cq);
+		trace_ena_rx_cleanup_refill(rx_ring->qid, refill_required);
 		ena_refill_rx_bufs(rx_ring, refill_required);
 	}
 
         //TODO: Can wait? investigate https://github.com/freebsd/freebsd-src/commit/e936121d3140af047a498559493b9375a6ba6ba3
         //to port it back
 	//tcp_lro_flush_all(&rx_ring->lro);
+	while (!SLIST_EMPTY(&rx_ring->lro.lro_active)) {
+		auto *queued = SLIST_FIRST(&rx_ring->lro.lro_active);
+		SLIST_REMOVE_HEAD(&rx_ring->lro.lro_active, next);
+		tcp_lro_flush(&rx_ring->lro, queued);
+        }
 
 	return (ENA_RX_BUDGET - budget);
 }
@@ -903,8 +923,11 @@ dma_error:
 	return (rc);
 }
 
+TRACEPOINT(trace_ena_start_xmit, "qid=%d pkts=%d", int, int);
+TRACEPOINT(trace_ena_start_xmit_deferred, "qid=%d pkts=%d", int, int);
+
 static void
-ena_start_xmit(struct ena_ring *tx_ring)
+ena_start_xmit(struct ena_ring *tx_ring, bool deferred)
 {
 	struct mbuf *mbuf;
 	struct ena_adapter *adapter = tx_ring->adapter;
@@ -955,6 +978,11 @@ ena_start_xmit(struct ena_ring *tx_ring)
 
 	ena_log_io(adapter->pdev, INFO,
 		"dequeued %d mbufs", mnum);
+	if (deferred) {
+		trace_ena_start_xmit_deferred(tx_ring->qid, mnum);
+	} else {
+		trace_ena_start_xmit(tx_ring->qid, mnum);
+	}
 
 	if (likely(tx_ring->acum_pkts != 0)) {
 		/* Trigger the dma engine */

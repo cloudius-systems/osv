@@ -83,6 +83,7 @@ __FBSDID("$FreeBSD$");
 #include <osv/aligned_new.hh>
 #include <osv/msi.hh>
 #include <osv/sched.hh>
+#include <osv/trace.hh>
 
 int ena_log_level = ENA_INFO;
 
@@ -398,6 +399,8 @@ ena_free_all_io_rings_resources(struct ena_adapter *adapter)
 		ena_free_io_ring_resources(adapter, i);
 }
 
+TRACEPOINT(trace_ena_enqueue_wake, "");
+
 static void
 enqueue_work(ena_ring *ring)
 {
@@ -406,6 +409,7 @@ enqueue_work(ena_ring *ring)
 		ring->enqueue_pending = 0;
 
 		if (!ring->enqueue_stop) {
+			trace_ena_enqueue_wake();
 			ena_deferred_mq_start(ring);
 		}
 	} while (!ring->enqueue_stop);
@@ -941,6 +945,8 @@ ena_destroy_all_io_queues(struct ena_adapter *adapter)
 	ena_destroy_all_rx_queues(adapter);
 }
 
+TRACEPOINT(trace_ena_cleanup_wake, "");
+
 static void
 cleanup_work(ena_que *queue)
 {
@@ -952,6 +958,7 @@ cleanup_work(ena_que *queue)
 		if (!queue->cleanup_stop) {
 			ena_log(dev, INFO, "cleanup_work: cleaning up queue %d", queue->id);
 			ena_cleanup(queue);
+			trace_ena_cleanup_wake();
 		}
 	} while (!queue->cleanup_stop);
 }
@@ -1041,8 +1048,12 @@ ena_create_io_queues(struct ena_adapter *adapter)
 	for (i = 0; i < adapter->num_io_queues; i++) {
 		queue = &adapter->que[i];
 
+		//We pin each cleanup worker thread and corresponding MSIX vector
+		//to one of the cpus (queue modulo #cpus) in order to minimize IPIs
+		int cpu = i % sched::cpus.size();
 		queue->cleanup_thread = sched::thread::make([queue] { cleanup_work(queue); },
-			sched::thread::attr().name("ena_cleanup_queue_" + std::to_string(i)));
+			sched::thread::attr().name("ena_clean_que_" + std::to_string(i)).pin(sched::cpus[cpu]));
+		queue->cleanup_thread->set_priority(sched::thread::priority_infinity);
 		queue->cleanup_stop = false;
 		queue->cleanup_pending = 0;
 		queue->cleanup_thread->start();
@@ -1067,9 +1078,6 @@ err_tx:
  *
  **********************************************************************/
 
-static std::atomic<u64> mgmt_intr_count = {0};
-static std::atomic<u64> io_intr_count = {0};
-
 /**
  * ena_intr_msix_mgmnt - MSIX Interrupt Handler for admin/async queue
  * @arg: interrupt number
@@ -1077,7 +1085,6 @@ static std::atomic<u64> io_intr_count = {0};
 static void
 ena_intr_msix_mgmnt(void *arg)
 {
-	mgmt_intr_count++;
 	struct ena_adapter *adapter = (struct ena_adapter *)arg;
 
 	ena_com_admin_q_comp_intr_handler(adapter->ena_dev);
@@ -1096,7 +1103,6 @@ ena_handle_msix(void *arg)
 	struct ena_adapter *adapter = queue->adapter;
 	if_t ifp = adapter->ifp;
 
-	io_intr_count++;
 	if (unlikely((ifp->if_drv_flags & IFF_DRV_RUNNING) == 0))
 		return 0;
 
@@ -1220,7 +1226,7 @@ ena_request_io_irq(struct ena_adapter *adapter)
 	}
 
 	for (int entry = ENA_IO_IRQ_FIRST_IDX; entry < adapter->msix_vecs; entry++) {
-		auto idx = entry - 1;
+		auto idx = entry - ENA_IO_IRQ_FIRST_IDX;
 		auto vec = assigned[idx];
 		auto queue = &adapter->que[idx];
 		if (!_msi.assign_isr(vec, [queue]() { ena_handle_msix(queue); })) {
@@ -1239,7 +1245,16 @@ ena_request_io_irq(struct ena_adapter *adapter)
 	//Save assigned msix vectors
 	for (int entry = ENA_IO_IRQ_FIRST_IDX; entry < adapter->msix_vecs; entry++) {
 		ena_irq *irq = &adapter->irq_tbl[entry];
-		irq->mvector = assigned[entry - 1];
+		auto idx = entry - ENA_IO_IRQ_FIRST_IDX;
+		auto vec = irq->mvector = assigned[idx];
+		//In our case the worker threads are all pinned so we probably do not need
+		//to re-pin the interrupt vector
+		auto cpu = idx % sched::cpus.size();
+		std::atomic_thread_fence(std::memory_order_seq_cst);
+		vec->set_affinity(sched::cpus[cpu]->arch.apic_id);
+		std::atomic_thread_fence(std::memory_order_seq_cst);
+
+		ena_log(pdev, INFO, "pinned MSIX vector on queue %d - cpu %d\n", idx, cpu);
 	}
 
 	_msi.unmask_interrupts(assigned);
@@ -1462,7 +1477,7 @@ ena_up(struct ena_adapter *adapter)
 	}
 
 	if (ENA_FLAG_ISSET(ENA_FLAG_LINK_UP, adapter))
-		if_link_state_change(adapter->ifp, LINK_STATE_UP);
+		adapter->ifp->if_link_state = LINK_STATE_UP;
 
 	rc = ena_up_complete(adapter);
 	if (unlikely(rc != 0))
@@ -1564,6 +1579,10 @@ ena_get_dev_offloads(struct ena_com_dev_get_features_ctx *feat)
 
 	caps |= IFCAP_LRO | IFCAP_JUMBO_MTU;
 
+	ena_log(nullptr, INFO,
+		"device offloads (caps): TXCSUM=%d, TXCSUM_IPV6=%d, TSO4=%d, TSO6=%d, RXCSUM=%d, RXCSUM_IPV6=%d, LRO=1, JUMBO_MTU=1\n",
+		caps & IFCAP_TXCSUM, caps & IFCAP_TXCSUM_IPV6, caps & IFCAP_TSO4, caps & IFCAP_TSO6, caps & IFCAP_RXCSUM, caps & IFCAP_RXCSUM_IPV6);
+
 	return (caps);
 }
 
@@ -1596,6 +1615,10 @@ ena_update_hwassist(struct ena_adapter *adapter)
 		flags |= CSUM_TSO;
 
 	adapter->ifp->if_hwassist = flags;
+
+	ena_log(nullptr, INFO,
+		"ena_update_hwassist: CSUM_IP=%d, CSUM_UDP=%d, CSUM_TCP=%d, CSUM_UDP_IPV6=%d, CSUM_TCP_IPV6=%d, CSUM_TSO=%d\n",
+		flags & CSUM_IP, flags & CSUM_UDP, flags & CSUM_TCP, flags & CSUM_UDP_IPV6, flags & CSUM_TCP_IPV6, flags & CSUM_TSO);
 }
 
 static int
@@ -1942,8 +1965,7 @@ check_for_rx_interrupt_queue(struct ena_adapter *adapter,
 	if (rx_ring->no_interrupt_event_cnt ==
 	    ENA_MAX_NO_INTERRUPT_ITERATIONS) {
 		ena_log(adapter->pdev, ERR,
-		    "Potential MSIX issue on Rx side Queue = %d, mgmt_intr_count=%lu, io_intr_count=%lu. Reset the device",
-		    rx_ring->qid, mgmt_intr_count.load(), io_intr_count.load());
+		    "Potential MSIX issue on Rx side Queue = %d. Reset the device", rx_ring->qid);
 		ena_trigger_reset(adapter, ENA_REGS_RESET_MISS_INTERRUPT);
 		return (EIO);
 	}
@@ -2186,7 +2208,6 @@ ena_timer_service(void *data)
 void
 ena_destroy_device(struct ena_adapter *adapter, bool graceful)
 {
-	if_t ifp = adapter->ifp;
 	struct ena_com_dev *ena_dev = adapter->ena_dev;
 	bool dev_up;
 
@@ -2194,7 +2215,7 @@ ena_destroy_device(struct ena_adapter *adapter, bool graceful)
 		return;
 
 	if (!graceful)
-		if_link_state_change(ifp, LINK_STATE_DOWN);
+		adapter->ifp->if_link_state = LINK_STATE_DOWN;
 
 	ENA_TIMER_DRAIN(adapter);
 
@@ -2266,7 +2287,6 @@ ena_restore_device(struct ena_adapter *adapter)
 {
 	struct ena_com_dev_get_features_ctx get_feat_ctx;
 	struct ena_com_dev *ena_dev = adapter->ena_dev;
-	if_t ifp = adapter->ifp;
 	pci::device *dev = adapter->pdev;
 	int wd_active;
 	int rc;
@@ -2294,7 +2314,7 @@ ena_restore_device(struct ena_adapter *adapter)
 	ENA_FLAG_CLEAR_ATOMIC(ENA_FLAG_ONGOING_RESET, adapter);
 	/* Make sure we don't have a race with AENQ Links state handler */
 	if (ENA_FLAG_ISSET(ENA_FLAG_LINK_UP, adapter))
-		if_link_state_change(ifp, LINK_STATE_UP);
+		adapter->ifp->if_link_state = LINK_STATE_UP;
 
 	rc = ena_enable_msix_and_set_admin_interrupts(adapter);
 	if (rc != 0) {
@@ -2653,10 +2673,10 @@ ena_update_on_link_change(void *adapter_data,
 		ena_log(adapter->pdev, INFO, "link is UP");
 		ENA_FLAG_SET_ATOMIC(ENA_FLAG_LINK_UP, adapter);
 		if (!ENA_FLAG_ISSET(ENA_FLAG_ONGOING_RESET, adapter))
-			if_link_state_change(ifp, LINK_STATE_UP);
+			ifp->if_link_state = LINK_STATE_UP;
 	} else {
 		ena_log(adapter->pdev, INFO, "link is DOWN");
-		if_link_state_change(ifp, LINK_STATE_DOWN);
+		ifp->if_link_state = LINK_STATE_DOWN;
 		ENA_FLAG_CLEAR_ATOMIC(ENA_FLAG_LINK_UP, adapter);
 	}
 }
