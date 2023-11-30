@@ -1,0 +1,22 @@
+[
+  {
+    "ParameterKey": "pVpcId",
+    "ParameterValue": "vpc-????????"
+  },
+  {
+    "ParameterKey": "pSubnetId",
+    "ParameterValue": "subnet-????????"
+  },
+  {
+    "ParameterKey": "pInstanceName",
+    "ParameterValue": "INSTANCE_NAME"
+  },
+  {
+    "ParameterKey": "pInstanceType",
+    "ParameterValue": "t2.nano"
+  },
+  {
+    "ParameterKey": "pImageId",
+    "ParameterValue": "AMI_ID"
+  }
+]
