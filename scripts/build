@@ -401,7 +401,11 @@ rofs_with_zfs)
 ramfs|virtiofs)
 	# No need to create extra fs like above: ramfs is already created (as the
 	# bootfs) and virtio-fs is specified with virtiofsd at run time
-	qemu-img convert -f raw -O qcow2 loader.img usr.img ;;
+	image_size=$((partition_offset))
+	cp $bare $raw_disk.raw
+	"$SRC"/scripts/imgedit.py setpartition "-f raw ${raw_disk}.raw" 2 $partition_offset 0
+	qemu-img resize ${raw_disk}.raw ${image_size}b >/dev/null 2>&1
+	qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img ;;
 esac
 # Prepend the root fs type option to the command line (preserved by run.py)
 cmdline=$(cat cmdline)
