@@ -69,7 +69,7 @@ def strip_file(filename):
                ff.startswith(osvdir + "/apps")
 
     stripped_filename = filename
-    if filename.endswith(".so") and to_strip(filename):
+    if filename.endswith(".so") and not filename.startswith("->") and to_strip(filename):
         stripped_filename = filename[:-3] + "-stripped.so"
         if not os.path.exists(stripped_filename) \
                 or (os.path.getmtime(stripped_filename) < \
