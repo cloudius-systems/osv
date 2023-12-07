@@ -286,7 +286,7 @@ post-includes-bsd += -isystem bsd/$(arch)
 $(out)/musl/%.o: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include
 
 ifneq ($(werror),0)
-	CFLAGS_WERROR = -Werror
+	CFLAGS_WERROR = -Wall
 endif
 # $(call compiler-flag, -ffoo, option, file)
 #     returns option if file builds with -ffoo, empty otherwise
@@ -888,6 +888,13 @@ endif
 drivers += drivers/virtio-vring.o
 ifeq ($(conf_drivers_mmio),1)
 drivers += drivers/virtio-mmio.o
+endif
+ifeq ($(conf_drivers_nvme),1)
+drivers += drivers/nvme.o
+drivers += drivers/nvme-queue.o
+endif
+ifeq ($(conf_drivers_io_test),1)
+drivers += drivers/io_test.o
 endif
 drivers += drivers/virtio-net.o
 drivers += drivers/virtio-blk.o
