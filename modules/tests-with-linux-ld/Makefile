@@ -65,7 +65,7 @@ zfs-only-tests := tst-readdir tst-fallocate tst-concurrent-read
 specific-fs-tests := $($(fs_type)-only-tests)
 
 tests := tst-pthread misc-ramdisk tst-vblk \
-	misc-console misc-readbench misc-mmap-anon-perf \
+	misc-console misc-readbench misc-mmap-anon-perf misc-loadbalance \
 	tst-mmap-file misc-mmap-big-file tst-mmap tst-elf-permissions \
 	tst-queue-mpsc tst-af-local tst-pipe tst-yield \
 	misc-ctxsw tst-read tst-symlink tst-openat \
@@ -93,7 +93,7 @@ tests := tst-pthread misc-ramdisk tst-vblk \
 	libtls.so libtls_gold.so tst-tls tst-tls-gold \
 	tst-sigaction tst-syscall tst-ifaddrs tst-getdents \
 	tst-netlink tst-pthread-create misc-futex-perf \
-	misc-syscall-perf tst-reloc misc-vdso-perf
+	misc-syscall-perf tst-reloc misc-vdso-perf misc-scheduler
 
 ifeq ($(arch),x64)
 tests += tst-mmx-fpu
