@@ -39,9 +39,9 @@ void assert(bool c) {
 }
 #else
 #include <osv/debug.hh>
+#include <osv/sched.hh> // debugging
 #endif
 
-#include <osv/sched.hh> // debugging
 int main(int argc, char **argv) {
     std::cerr << "Running lockfree multi-producer single-consumer queue tests\n";
 

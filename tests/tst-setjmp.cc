@@ -1,5 +1,7 @@
 #include <fenv.h>
+#ifdef __OSV__
 #include <__fenv.h>
+#endif
 #include <signal.h>
 #include <assert.h>
 #include <setjmp.h>
@@ -25,6 +27,11 @@ bool do_expect(T actual, T expected, const char *actuals, const char *expecteds,
 
 //This is a simple test that verifies that setjmp/longjmp/sigsetjmp/siglongjmp
 //flow control works correctly.
+
+#ifndef __OSV__
+extern "C" int __sigsetjmp(sigjmp_buf env, int savemask);
+#define sigsetjmp(env, savemask) __sigsetjmp (env, savemask)
+#endif
 
 static jmp_buf env;
 bool setjmp_check() {

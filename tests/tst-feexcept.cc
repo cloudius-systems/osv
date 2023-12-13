@@ -9,7 +9,9 @@
 // To compile on Linux, use: c++ -std=c++11 tests/tst-feexcept.cc
 
 #include <fenv.h>
+#ifdef __OSV__
 #include <__fenv.h>
+#endif
 #include <signal.h>
 #include <assert.h>
 #include <setjmp.h>
@@ -36,6 +38,11 @@ bool do_expect(T actual, T expected, const char *actuals, const char *expecteds,
 #define expect_errno(call, experrno) ( \
         do_expect(call, -1, #call, "-1", __FILE__, __LINE__) && \
         do_expect(errno, experrno, #call " errno",  #experrno, __FILE__, __LINE__) )
+
+#ifndef __OSV__
+extern "C" int __sigsetjmp(sigjmp_buf env, int savemask);
+#define sigsetjmp(env, savemask) __sigsetjmp (env, savemask)
+#endif
 
 thread_local sigjmp_buf env;
 template<typename Func>

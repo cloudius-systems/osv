@@ -17,7 +17,7 @@
 
 #include <iostream>
 
-extern "C" long gettid();
+extern "C" pid_t gettid();
 
 static int tests = 0, fails = 0;
 
@@ -45,7 +45,7 @@ int main(int argc, char **argv)
     // results as the syscall() function (with expected differences in how
     // errors are returned).
     unsigned long syscall_nr = __NR_gettid;
-    long tid = 0;
+    pid_t tid = 0;
 
 #ifdef __x86_64__
     asm ("movq %[syscall_no], %%rax\n"
@@ -70,7 +70,7 @@ int main(int argc, char **argv)
     expect(tid, gettid());
 
     // test mmap as it takes 6 parameters
-    int fd = open("/tests/tst-mmap.so", O_RDONLY, 0666);
+    int fd = open("/libenviron.so", O_RDONLY, 0666);
     assert(fd > 0);
 
     void *addr = NULL;

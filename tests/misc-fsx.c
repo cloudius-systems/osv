@@ -20,6 +20,7 @@
  *	Checks for mmap last-page zero fill.
  */
 
+#define _GNU_SOURCE
 #include <limits.h>
 #include <time.h>
 #include <strings.h>

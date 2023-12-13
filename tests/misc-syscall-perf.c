@@ -14,15 +14,13 @@
 #include <sys/types.h>
 #include <sys/time.h>
 
-#ifdef __OSV__
-long gettid();
-#endif
+pid_t gettid();
 
 void call_gettid_syscall()
 {
     // errors are returned).
     unsigned long syscall_nr = __NR_gettid;
-    long tid = 0;
+    pid_t tid = 0;
 
 #ifdef __x86_64__
     asm ("movq %[syscall_no], %%rax\n"

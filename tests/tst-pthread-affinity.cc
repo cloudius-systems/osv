@@ -14,6 +14,13 @@
 #include <sys/sysinfo.h>
 #include <cstring>
 
+#ifndef __OSV__
+#define __CPU_SETSIZE	1024
+#define __NCPUBITS	(8 * sizeof (__cpu_mask))
+
+#define _NCPUWORDS	__CPU_SETSIZE / __NCPUBITS
+#endif
+
 static std::atomic<unsigned> tests_total(0), tests_failed(0);
 
 void report(const char* name, bool passed)

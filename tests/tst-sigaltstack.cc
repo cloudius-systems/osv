@@ -14,6 +14,10 @@
 #include <sys/mman.h>
 
 #include <iostream>
+#ifndef __OSV__
+extern "C" int __sigsetjmp(sigjmp_buf env, int savemask);
+#define sigsetjmp(env, savemask) __sigsetjmp (env, savemask)
+#endif
 
 static int tests = 0, fails = 0;
 
