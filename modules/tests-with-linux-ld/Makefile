@@ -171,7 +171,7 @@ usr.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FOR
 	@cat $@.skel > $@
 	@case "$(CROSS_PREFIX)" in \
 		"aarch64"*) ../tests/add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@ ;; \
-		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests-with-linux-ld/,$(boost-tests)) $(addprefix $(out)/tests-with-linux-ld/,$(boost-program-options-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/lib\/x86_64-linux-gnu\/\1: \2/' | sort | uniq >> $@ ;; \
+		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests-with-linux-ld/,$(boost-tests)) $(addprefix $(out)/tests-with-linux-ld/,$(boost-program-options-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib64\/\1: \2/' | sort | uniq >> $@ ;; \
 	esac
 	@echo $(all_tests) | tr ' ' '\n' | grep -v "tests-with-linux-ld/rofs/tst-.*" | awk '{print "/" $$0 ": ./" $$0}' | sed 's/^\/tests-with-linux-ld/\/tests/' >> $@
 	@echo $(all_tests) | tr ' ' '\n' | grep "tests-with-linux-ld/rofs/tst-.*" | awk 'BEGIN { FS = "/" } ; { print "/tests/" $$3 "-rofs: ./tests-with-linux-ld/" $$2 "/" $$3 ""}' >> $@
@@ -185,7 +185,7 @@ common.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel 
 	@cat usr.manifest.skel > $@
 	@case "$(CROSS_PREFIX)" in \
 		"aarch64"*) ../tests/add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@ ;; \
-		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests-with-linux-ld/,$(boost-tests)) $(addprefix $(out)/tests-with-linux-ld/,$(boost-program-options-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/lib\/x86_64-linux-gnu\/\1: \2/' | sort | uniq >> $@ ;; \
+		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests-with-linux-ld/,$(boost-tests)) $(addprefix $(out)/tests-with-linux-ld/,$(boost-program-options-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr/\/lib64\/\1: \2/' | sort | uniq >> $@ ;; \
 	esac
 	@echo $(common-tests) | tr ' ' '\n' | awk '{print "/tests/" $$0 ": ./tests/" $$0}' >> $@
 

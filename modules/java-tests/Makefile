@@ -70,8 +70,8 @@ java_isolated_cmd := 'java_isolated: /java_isolated.so -cp /tests/java/tests.jar
         -Disolates.jar=/tests/java/isolates.jar org.junit.runner.JUnitCore io.osv.AllTestsThatTestIsolatedApp'
 java_non_isolated_cmd := 'java_non_isolated: /java.so -cp /tests/java/tests.jar:/tests/java/isolates.jar \
         -Disolates.jar=/tests/java/isolates.jar org.junit.runner.JUnitCore io.osv.AllTestsThatTestNonIsolatedApp'
-java_no_wrapper_cmd := 'java_no_wrapper: /usr/bin/java -cp /tests/java/tests.jar org.junit.runner.JUnitCore io.osv.BasicTests !'
-java_perms_cmd := 'java-perms: /usr/bin/java -cp /tests/java/tests.jar io.osv.TestDomainPermissions !'
+java_no_wrapper_cmd := 'java_no_wrapper: /usr/lib/jvm/java/bin/java -cp /tests/java/tests.jar org.junit.runner.JUnitCore io.osv.BasicTests !'
+java_perms_cmd := 'java-perms: /usr/lib/jvm/java/bin/java -cp /tests/java/tests.jar io.osv.TestDomainPermissions !'
 
 .PHONY: test_commands
 
