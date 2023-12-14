@@ -53,6 +53,12 @@ $(out)/tests-with-linux-ld/rofs/tst-readdir.o: COMMON:=-Wno-deprecated-declarati
 $(out)/tests-with-linux-ld/tst-tcp-listen.o: COMMON:=-I $(src)/include $(COMMON)
 
 $(out)/tests-with-linux-ld/misc-fsx.o: COMMON:=-D__OSV__ $(COMMON)
+$(out)/tests-with-linux-ld/tst-console.o: COMMON:=-D__OSV__ $(COMMON)
+$(out)/tests-with-linux-ld/tst-fallocate.o: COMMON:=-D__OSV__ $(COMMON)
+$(out)/tests-with-linux-ld/tst-fread.o: COMMON:=-D__OSV__ $(COMMON)
+$(out)/tests-with-linux-ld/tst-net_if_test.o: COMMON:=-D__OSV__ $(COMMON)
+$(out)/tests-with-linux-ld/tst-pipe.o: COMMON:=-D__OSV__ $(COMMON)
+$(out)/tests-with-linux-ld/tst-uio.o: COMMON:=-D__OSV__ $(COMMON)
 
 #
 # These 4 tests are compiled from the same source files but passed in READ_ONLY_FS
