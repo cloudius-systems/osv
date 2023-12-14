@@ -210,7 +210,9 @@ int main()
     concurrent_loops(looplen, 4, secs, 2.0);
     concurrent_loops(looplen, 3, secs, 1.5);
 
+#ifdef __OSV__
     concurrent_loops_priority(looplen, secs);
+#endif
 
     std::cout << "\nStarting intermittent background thread:\n";
     // Estimate the loop length required for taking 1ms.
