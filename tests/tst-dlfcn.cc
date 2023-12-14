@@ -52,15 +52,27 @@ BOOST_AUTO_TEST_CASE(test_dladdr)
     BOOST_REQUIRE(vfprintf != info.dli_saddr);
 
     BOOST_REQUIRE(dladdr(adj_addr(vfprintf, 0), &info) != 0);
+#ifdef LINUX
+    BOOST_CHECK_EQUAL("_IO_vfprintf", info.dli_sname);
+#else
     BOOST_CHECK_EQUAL("vfprintf", info.dli_sname);
+#endif
     BOOST_CHECK_EQUAL(vfprintf, info.dli_saddr);
 
     BOOST_REQUIRE(dladdr(adj_addr(vfprintf, 2), &info) != 0);
+#ifdef LINUX
+    BOOST_CHECK_EQUAL("_IO_vfprintf", info.dli_sname);
+#else
     BOOST_CHECK_EQUAL("vfprintf", info.dli_sname);
+#endif
     BOOST_CHECK_EQUAL(vfprintf, info.dli_saddr);
 
     BOOST_REQUIRE(dladdr(adj_addr(vfprintf, 4), &info) != 0);
+#ifdef LINUX
+    BOOST_CHECK_EQUAL("_IO_vfprintf", info.dli_sname);
+#else
     BOOST_CHECK_EQUAL("vfprintf", info.dli_sname);
+#endif
     BOOST_CHECK_EQUAL(vfprintf, info.dli_saddr);
 }
 
@@ -201,25 +213,36 @@ BOOST_AUTO_TEST_CASE(dlsym_handle_global_sym)
 {
     // check that we do not look into global group
     // when looking up symbol by handle
+    dlerror();
     void* handle = dlopen("/tests/libtest_empty.so", RTLD_NOW);
     dlopen("libtest_with_dependency.so", RTLD_NOW | RTLD_GLOBAL);
     void* sym = dlsym(handle, "getRandomNumber");
     BOOST_REQUIRE(sym == nullptr);
-    auto err_msg = std::string(dlerror());
+    auto dl_err = dlerror();
+    BOOST_REQUIRE(dl_err != nullptr);
+    auto err_msg = std::string(dl_err);
     BOOST_TEST_CONTEXT(err_msg)
+#ifdef LINUX
+    BOOST_REQUIRE_NE(err_msg.find("undefined symbol: getRandomNumber"),
+            std::string::npos);
+#else
     BOOST_REQUIRE_NE(err_msg.find("dlsym: symbol getRandomNumber not found"),
             std::string::npos);
-    // BOOST_REQUIRE_NE(err_msg.find("undefined symbol: getRandomNumber"),
-    //         std::string::npos);
+#endif
 
+    dlerror();
     sym = dlsym(handle, "DlSymTestFunction");
     BOOST_REQUIRE(sym == nullptr);
-    err_msg = std::string(dlerror());
+    dl_err = dlerror();
+    err_msg = std::string(dl_err);
     BOOST_TEST_CONTEXT(err_msg)
+#ifdef LINUX
+    BOOST_REQUIRE_NE(err_msg.find("undefined symbol: DlSymTestFunction"),
+            std::string::npos);
+#else
     BOOST_REQUIRE_NE(err_msg.find("dlsym: symbol DlSymTestFunction not found"),
             std::string::npos);
-    // BOOST_REQUIRE_NE(err_msg.find("undefined symbol: DlSymTestFunction"),
-    //         std::string::npos);
+#endif
     dlclose(handle);
 }
 
@@ -229,14 +252,20 @@ BOOST_AUTO_TEST_CASE(dlsym_handle_empty_symbol)
     void* handle = dlopen("/tests/libtest_dlsym_from_this.so", RTLD_NOW);
     BOOST_TEST_CONTEXT(dlerror())
     BOOST_REQUIRE(handle != nullptr);
+    dlerror();
     void* sym = dlsym(handle, "");
     BOOST_REQUIRE(sym == nullptr);
-    auto err_msg = std::string(dlerror());
+    auto dl_err = dlerror();
+    BOOST_REQUIRE(dl_err != nullptr);
+    auto err_msg = std::string(dl_err);
     BOOST_TEST_CONTEXT(err_msg)
+#ifdef LINUX
+    BOOST_REQUIRE_NE(err_msg.find("undefined symbol: "),
+            std::string::npos);
+#else
     BOOST_REQUIRE_NE(err_msg.find("dlsym: symbol  not found"),
             std::string::npos);
-    // BOOST_REQUIRE_NE(err_msg.find("undefined symbol: "),
-    //         std::string::npos);
+#endif
     dlclose(handle);
 }
 
