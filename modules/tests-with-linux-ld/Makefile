@@ -58,6 +58,7 @@ $(out)/tests-with-linux-ld/tst-fallocate.o: COMMON:=-D__OSV__ $(COMMON)
 $(out)/tests-with-linux-ld/tst-fread.o: COMMON:=-D__OSV__ $(COMMON)
 $(out)/tests-with-linux-ld/tst-net_if_test.o: COMMON:=-D__OSV__ $(COMMON)
 $(out)/tests-with-linux-ld/tst-pipe.o: COMMON:=-D__OSV__ $(COMMON)
+$(out)/tests-with-linux-ld/tst-semaphore.o: COMMON:=-D__DISABLE_NAMED_SEMAPHORES__ $(COMMON)
 $(out)/tests-with-linux-ld/tst-uio.o: COMMON:=-D__OSV__ $(COMMON)
 
 #

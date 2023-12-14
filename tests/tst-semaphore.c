@@ -56,7 +56,8 @@ int main(void) {
     assert(sem_destroy(&sem_sync) == 0);
     assert(sem_destroy(&sem_done) == 0);
 
-    ///Named sempahore test
+#ifndef __DISABLE_NAMED_SEMAPHORES__
+    ///Named semaphore test
 
     //Create and open two handles to a named semaphore
     sem_t *named_sem1 = sem_open("name", O_CREAT, 0777, 1);
@@ -96,6 +97,7 @@ int main(void) {
     //Close handles
     assert(sem_close(named_sem1) == 0);
     assert(sem_close(named_sem2) == 0);
+#endif
 
     return 0;
 }
