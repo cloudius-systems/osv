@@ -21,7 +21,11 @@ extern "C" __attribute__((__visibility__("default")))
 int __vdso_clock_gettime(clockid_t clk_id, struct timespec *tp)
 {
     arch::tls_switch _tls_switch;
-    return clock_gettime(clk_id, tp);
+    if (clock_gettime(clk_id, tp) < 0) {
+        return -errno;
+    } else {
+        return 0;
+    }
 }
 #endif
 
@@ -35,7 +39,11 @@ int __kernel_gettimeofday(struct timeval *tv, struct timezone *tz)
 __attribute__((__visibility__("default")))
 int __kernel_clock_gettime(clockid_t clk_id, struct timespec *tp)
 {
-    return clock_gettime(clk_id, tp);
+    if (clock_gettime(clk_id, tp) < 0) {
+        return -errno;
+    } else {
+        return 0;
+    }
 }
 
 __attribute__((__visibility__("default")))
