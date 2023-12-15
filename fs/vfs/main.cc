@@ -639,7 +639,12 @@ int __fxstatat(int ver, int dirfd, const char *pathname, struct stat *st,
     }
 
     if (pathname[0] == '/' || dirfd == AT_FDCWD) {
-        return stat(pathname, st);
+        if (flags & AT_SYMLINK_NOFOLLOW) {
+            return lstat(pathname, st);
+        }
+        else {
+            return stat(pathname, st);
+        }
     }
     // If AT_EMPTY_PATH and pathname is an empty string, fstatat() operates on
     // dirfd itself, and in that case it doesn't have to be a directory.
