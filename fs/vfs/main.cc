@@ -2060,7 +2060,22 @@ int utimensat(int dirfd, const char *pathname, const struct timespec times[2], i
 {
     trace_vfs_utimensat(pathname);
 
-    auto error = sys_utimensat(dirfd, pathname, times, flags);
+    auto error = sys_utimensat(dirfd, pathname, times, flags, false);
+    if (error) {
+        trace_vfs_utimensat_err(error);
+        errno = error;
+        return -1;
+    }
+
+    trace_vfs_utimensat_ret();
+    return 0;
+}
+
+int utimensat4(int dirfd, const char *pathname, const struct timespec times[2], int flags)
+{
+    trace_vfs_utimensat(pathname);
+
+    auto error = sys_utimensat(dirfd, pathname, times, flags, true);
     if (error) {
         trace_vfs_utimensat_err(error);
         errno = error;

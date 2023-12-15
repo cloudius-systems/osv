@@ -1317,7 +1317,7 @@ void init_timespec(struct timespec &_times, const struct timespec *times)
 }
 
 int
-sys_utimensat(int dirfd, const char *pathname, const struct timespec times[2], int flags)
+sys_utimensat(int dirfd, const char *pathname, const struct timespec times[2], int flags, bool syscall)
 {
     int error;
     std::string ap;
@@ -1356,7 +1356,7 @@ sys_utimensat(int dirfd, const char *pathname, const struct timespec times[2], i
 	if(!fp->f_dentry)
 	    return EBADF;
 
-	if (!(fp->f_dentry->d_vnode->v_type & VDIR))
+	if (!syscall && !(fp->f_dentry->d_vnode->v_type & VDIR))
 	    return ENOTDIR;
 
 	if (pathname)
@@ -1407,7 +1407,7 @@ sys_futimens(int fd, const struct timespec times[2])
         return EBADF;
 
     std::string pathname = fp->f_dentry->d_path;
-    auto error = sys_utimensat(AT_FDCWD, pathname.c_str(), times, 0);
+    auto error = sys_utimensat(AT_FDCWD, pathname.c_str(), times, 0, false);
     return error;
 }
 

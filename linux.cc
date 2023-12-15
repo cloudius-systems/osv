@@ -574,6 +574,9 @@ static long sys_brk(void *addr)
     }
 }
 
+#define __NR_utimensat4 __NR_utimensat
+extern int utimensat4(int dirfd, const char *pathname, const struct timespec times[2], int flags);
+
 #ifdef SYS_open
 TRACEPOINT(trace_syscall_open, "%d <= \"%s\" 0x%x", int, const char *, int);
 #endif
@@ -692,7 +695,7 @@ TRACEPOINT(trace_syscall_chdir, "%d <= \"%s\"", int, const char *);
 TRACEPOINT(trace_syscall_faccessat, "%d <= %d \"%s\" %d %d", int, int, const char *, int, int);
 TRACEPOINT(trace_syscall_kill, "%d <= %d %d", int, pid_t, int);
 TRACEPOINT(trace_syscall_alarm, "%d <= %u", int, unsigned int);
-TRACEPOINT(trace_syscall_utimensat, "%d <= %d \"%s\" %p %d", int, int, const char *, const struct timespec*, int);
+TRACEPOINT(trace_syscall_utimensat4, "%d <= %d \"%s\" %p %d", int, int, const char *, const struct timespec*, int);
 TRACEPOINT(trace_syscall_symlink, "%d <= \"%s\" \"%s\"", int, const char *, const char *);
 TRACEPOINT(trace_syscall_rmdir, "%d <= \"%s\"", int, const char *);
 TRACEPOINT(trace_syscall_sethostname, "%d <= \"%s\" %d", int, const char *, int);
@@ -843,7 +846,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL4(faccessat, int, const char *, int, int);
     SYSCALL2(kill, pid_t, int);
     SYSCALL1(alarm, unsigned int);
-    SYSCALL4(utimensat, int, const char *, const struct timespec*, int);
+    SYSCALL4(utimensat4, int, const char *, const struct timespec*, int);
     SYSCALL2(symlink, const char *, const char *);
     SYSCALL1(rmdir, const char *);
     SYSCALL2(sethostname, const char *, int);
