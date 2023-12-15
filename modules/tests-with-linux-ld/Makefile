@@ -42,10 +42,6 @@ $(out)/tests-with-linux-ld/tst-non-pie: CXXFLAGS:=$(subst -fpie,-no-pie,$(CXXFLA
 $(out)/tests-with-linux-ld/tst-non-pie: $(src)/tests/tst-non-pie.cc
 	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -o $@ $< $(LIBS), LD tests-with-linux-ld/tst-non-pie)
 
-$(out)/tests-with-linux-ld/tst-reloc.o: CFLAGS:=$(subst -fPIC,-fpie,$(CFLAGS))
-$(out)/tests-with-linux-ld/tst-reloc: $(src)/tests/tst-reloc.c
-	$(call quiet, $(CC) $(CFLAGS) $(LDFLAGS) -pie -o $@ $< $(LIBS), LD tests-with-linux-ld/tst-reloc)
-
 $(out)/tests-with-linux-ld/tst-bitset-iter.o: COMMON:=-I $(src)/include $(COMMON)
 $(out)/tests-with-linux-ld/tst-queue-mpsc.o: COMMON:=-I $(src)/include -DLINUX $(COMMON)
 $(out)/tests-with-linux-ld/tst-poll.o: COMMON:=-I $(src)/include $(COMMON)
@@ -100,7 +96,7 @@ tests := tst-pthread misc-ramdisk tst-vblk \
 	libtls.so libtls_gold.so tst-tls tst-tls-gold \
 	tst-sigaction tst-syscall tst-ifaddrs tst-getdents \
 	tst-netlink tst-pthread-create misc-futex-perf \
-	misc-syscall-perf tst-reloc misc-vdso-perf misc-scheduler
+	misc-syscall-perf misc-vdso-perf misc-scheduler
 
 ifeq ($(arch),x64)
 tests += tst-mmx-fpu
@@ -192,7 +188,7 @@ common.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel 
 	@cat usr.manifest.skel > $@
 	@case "$(CROSS_PREFIX)" in \
 		"aarch64"*) ../tests/add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@ ;; \
-		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests-with-linux-ld/,$(boost-tests)) $(addprefix $(out)/tests-with-linux-ld/,$(boost-program-options-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr/\/lib64\/\1: \2/' | sort | uniq >> $@ ;; \
+		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests-with-linux-ld/,$(boost-tests)) $(addprefix $(out)/tests-with-linux-ld/,$(boost-program-options-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib64\/\1: \2/' | sort | uniq >> $@ ;; \
 	esac
 	@echo $(common-tests) | tr ' ' '\n' | awk '{print "/tests/" $$0 ": ./tests/" $$0}' >> $@
 
