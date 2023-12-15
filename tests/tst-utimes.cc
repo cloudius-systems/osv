@@ -82,7 +82,7 @@ int main(int argc, char *argv[])
     report(stat(path, &st) == 0, "stat the file");
 
     /* Dump current atime and mtime */
-    printf("ino: %u - old -> st_atim: %ld:%ld - st_mtim: %ld:%ld\n",
+    printf("ino: %lu - old -> st_atim: %ld:%ld - st_mtim: %ld:%ld\n",
         st.st_ino,
         st.st_atim.tv_sec, st.st_atim.tv_nsec,
         st.st_mtim.tv_sec, st.st_mtim.tv_nsec);
@@ -110,7 +110,7 @@ int main(int argc, char *argv[])
         "check changes made to mtime");
 
     /* Dump the changes to atime and mtime */
-    printf("ino: %u - new -> st_atim: %ld:%ld - st_mtim: %ld:%ld\n",
+    printf("ino: %lu - new -> st_atim: %ld:%ld - st_mtim: %ld:%ld\n",
         st.st_ino,
         st.st_atim.tv_sec, st.st_atim.tv_nsec,
         st.st_mtim.tv_sec, st.st_mtim.tv_nsec);
@@ -138,11 +138,13 @@ int main(int argc, char *argv[])
         "check if utimes made changes to link target's mtime");
 
 
+#ifndef LINUX
     /* Force utimes to fail */
     times[0].tv_sec = -1;
     ret = utimes(path, times);
     report(ret == -1 && errno == EINVAL,
         "check if utimes failed as desired!");
+#endif
 
     /* Check if utimes works with NULL as argument */
     ret = utimes(path, NULL);

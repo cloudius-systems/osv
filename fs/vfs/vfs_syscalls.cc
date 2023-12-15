@@ -1248,6 +1248,32 @@ static void convert_timeval(struct timespec &to, const struct timeval *from)
     }
 }
 
+static int handle_symlink_nofollow(const char *path, int flags, struct dentry **dpp)
+{
+    int error;
+    char *_path = const_cast<char *>(path);
+    if (flags & AT_SYMLINK_NOFOLLOW) {
+        struct dentry *ddp;
+        error = lookup(_path, &ddp, nullptr);
+        if (error) {
+            return error;
+        }
+
+        error = namei_last_nofollow(_path, ddp, dpp);
+        if (ddp != nullptr) {
+            drele(ddp);
+        }
+        if (error) {
+            return error;
+        }
+    } else {
+        error = namei(_path, dpp);
+        if (error)
+            return error;
+    }
+    return 0;
+}
+
 int
 sys_utimes(char *path, const struct timeval times[2], int flags)
 {
@@ -1264,24 +1290,9 @@ sys_utimes(char *path, const struct timeval times[2], int flags)
     convert_timeval(timespec_times[0], times ? times + 0 : nullptr);
     convert_timeval(timespec_times[1], times ? times + 1 : nullptr);
 
-    if (flags & AT_SYMLINK_NOFOLLOW) {
-        struct dentry *ddp;
-        error = lookup(path, &ddp, nullptr);
-        if (error) {
-            return error;
-        }
-
-        error = namei_last_nofollow(path, ddp, &dp);
-        if (ddp != nullptr) {
-            drele(ddp);
-        }
-        if (error) {
-            return error;
-        }
-    } else {
-        error = namei(path, &dp);
-        if (error)
-            return error;
+    error = handle_symlink_nofollow(path, flags, &dp);
+    if (error) {
+        return error;
     }
 
     if (dp->d_mount->m_flags & MNT_RDONLY) {
@@ -1367,12 +1378,10 @@ sys_utimensat(int dirfd, const char *pathname, const struct timespec times[2], i
 	ap = std::string(fp->f_dentry->d_mount->m_path) + "/" + ap;
     }
 
-    /* FIXME: Add support for AT_SYMLINK_NOFOLLOW */
-
-    error = namei(ap.c_str(), &dp);
-
-    if (error)
+    error = handle_symlink_nofollow(ap.c_str(), flags, &dp);
+    if (error) {
         return error;
+    }
 
     if (dp->d_mount->m_flags & MNT_RDONLY) {
         error = EROFS;
