@@ -21,6 +21,8 @@ from osv.trace import (Trace, Thread, TracePoint, BacktraceFormatter,
                        format_time)
 from osv import trace, debug
 
+from manifest_common import add_var, expand, unsymlink, read_manifest, defines
+
 virtio_driver_type = gdb.lookup_type('virtio::virtio_driver')
 
 class status_enum_class(object):
@@ -131,33 +133,40 @@ class Manifest(object):
         # Load data from usr.manifest in build_dir
         mm_path = os.path.join(build_dir, 'usr.manifest')
         try:
-            self.data = open(mm_path).read().split('\n')
+            _manifest = read_manifest(mm_path)
+            self.guest_to_host_map = list(expand(_manifest))
+            self.guest_to_host_map = [(x, unsymlink(y % defines)) for (x, y) in self.guest_to_host_map]
         except IOError:
-            self.data = []
+            self.guest_to_host_map = []
 
     def find(self, path):
         '''Try to locate file with help of usr.manifest'''
-        files = [ff.split(':', 1)[1].strip() for ff in self.data if ff.split(':', 1)[0].strip() == path]
+        files = [host for (guest, host) in self.guest_to_host_map if guest == path]
         if files:
-            file = files[-1]  # the last line in usr.manifest wins
+            host_file = files[-1]  # the last line in usr.manifest wins
         else:
-            file = ""
-        file = self.resolve_symlink(file)
-        print('manifest.find_file: path=%s, found file=%s' % (path, file))
+            host_file = ""
+        host_file = self.resolve_host_file(host_file)
+        print('manifest.find_file: path=%s, found file=%s' % (path, host_file))
         # usr.manifest contains lines like "%(gccbase)s/lib64/libgcc_s.so.1" too.
         # Filter out such cases.
-        if os.path.exists(file):
-            return file
+        if os.path.exists(host_file):
+            return host_file
         else:
             return ""
 
-    def resolve_symlink(self, file):
-        '''If file is a symlink, try to resolve it with help of usr.manifest'''
+    def resolve_host_file(self, file):
         resolved_file = file
+        #Handle symlink
         if file.startswith('->'):
-            path = file[2:]
-            resolved_file = self.find(path)
-            # print('manifest.resolve_symlink: file=%s, resolved_file=%s' % (file, resolved_file))
+            resolved_file = self.find(file[2:].strip())
+        else:
+            resolved_file = file
+        #Handle path to build directory
+        if resolved_file.startswith('.'):
+            resolved_file = os.path.join(build_dir, resolved_file[2:])
+        if not resolved_file.startswith('/'):
+            resolved_file = os.path.join(build_dir, resolved_file)
         return resolved_file
 
 manifest = Manifest()
@@ -689,6 +698,7 @@ class osv_syms(gdb.Command):
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
         syminfo_resolver.clear_cache()
+        object_paths = set()
         for obj in read_vector(gdb.lookup_global_symbol('elf::program::s_objs').value()):
             base = to_int(obj['_base'])
             obj_path = obj['_pathname']['_M_dataplus']['_M_p'].string()
@@ -697,7 +707,29 @@ class osv_syms(gdb.Command):
                 print('ERROR: Unable to locate object file for:', obj_path, hex(base))
             else:
                 print(path, hex(base))
+                object_paths.add(path)
                 load_elf(path, base)
+
+        for vma in vma_list():
+            start = ulong(vma['_range']['_start'])
+            flags = flagstr(ulong(vma['_flags']))
+            perm = permstr(ulong(vma['_perm']))
+
+            if 'F' in flags:
+                file_vma = vma.cast(gdb.lookup_type('mmu::file_vma').pointer())
+                file_ptr = file_vma['_file']['px'].cast(gdb.lookup_type('file').pointer())
+                dentry_ptr = file_ptr['f_dentry']['px'].cast(gdb.lookup_type('dentry').pointer())
+                file_path = dentry_ptr['d_path'].string()
+                path = translate(file_path)
+                if not path:
+                    print('ERROR: Unable to locate object file for:', file_path, hex(start))
+                elif path not in object_paths:
+                    print(path, hex(start))
+                    try:
+                        load_elf(path, start)
+                        object_paths.add(path)
+                    except gdb.error:
+                        print('ERROR: Not an ELF file', path, hex(start))
 
 class osv_load_elf(gdb.Command):
     def __init__(self):
