@@ -716,6 +716,7 @@ TRACEPOINT(trace_syscall_long_shmat, "0x%x <= %d 0x%x %d", long, int, const void
 TRACEPOINT(trace_syscall_shmctl, "%d <= %d %d %p", int, int, int, struct shmid_ds *);
 TRACEPOINT(trace_syscall_shmdt, "%d <= 0x%x", int, const void *)
 TRACEPOINT(trace_syscall_shmget, "%d <= %d %lu %d", int, key_t, size_t, int);
+TRACEPOINT(trace_syscall_rename, "%d <= %s %s", int, const char *, const char *);
 
 OSV_LIBC_API long syscall(long number, ...)
 {
@@ -868,6 +869,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL3(shmctl, int, int, struct shmid_ds *);
     SYSCALL1(shmdt, const void *);
     SYSCALL3(shmget, key_t, size_t, int);
+    SYSCALL2(rename, const char *, const char *);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
