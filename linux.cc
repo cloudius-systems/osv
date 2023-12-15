@@ -48,6 +48,7 @@
 #include <sys/prctl.h>
 #include <sys/timerfd.h>
 #include <sys/resource.h>
+#include <sys/shm.h>
 #include <termios.h>
 #include <poll.h>
 #include "tls-switch.hh"
@@ -225,12 +226,17 @@ static int sys_sched_setaffinity(
             pid, len, reinterpret_cast<cpu_set_t *>(mask));
 }
 
+#define __NR_long_mmap __NR_mmap
+
+#define __NR_long_shmat __NR_shmat
 // Only void* return value of mmap is type casted, as syscall returns long.
 long long_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
     return (long) mmap(addr, length, prot, flags, fd, offset);
 }
-#define __NR_long_mmap __NR_mmap
 
+long long_shmat(int shmid, const void *shmaddr, int shmflg) {
+    return (long) shmat(shmid, shmaddr, shmflg);
+}
 
 #define SYSCALL0(fn) case (__NR_##fn): do { long ret = fn(); trace_syscall_##fn(ret); return ret; } while (0)
 
@@ -706,6 +712,10 @@ TRACEPOINT(trace_syscall_sys_clone3, "%d <= %p %lu", int, struct clone_args *, s
 TRACEPOINT(trace_syscall_prlimit64, "%d <= %u %d %p %p", int, pid_t, int, const struct rlimit *, struct rlimit *);
 TRACEPOINT(trace_syscall_msync, "%d <= 0x%x %lu %d", int, void *, size_t, int);
 TRACEPOINT(trace_syscall_truncate, "%d <= %s %ld", int, const char *, off_t);
+TRACEPOINT(trace_syscall_long_shmat, "0x%x <= %d 0x%x %d", long, int, const void *, int);
+TRACEPOINT(trace_syscall_shmctl, "%d <= %d %d %p", int, int, int, struct shmid_ds *);
+TRACEPOINT(trace_syscall_shmdt, "%d <= 0x%x", int, const void *)
+TRACEPOINT(trace_syscall_shmget, "%d <= %d %lu %d", int, key_t, size_t, int);
 
 OSV_LIBC_API long syscall(long number, ...)
 {
@@ -854,6 +864,10 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL4(prlimit64, pid_t, int, const struct rlimit *, struct rlimit *);
     SYSCALL3(msync, void *, size_t, int);
     SYSCALL2(truncate, const char *, off_t);
+    SYSCALL3(long_shmat, int, const void *, int);
+    SYSCALL3(shmctl, int, int, struct shmid_ds *);
+    SYSCALL1(shmdt, const void *);
+    SYSCALL3(shmget, key_t, size_t, int);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
