@@ -96,11 +96,20 @@ int clock_gettime(clockid_t clk_id, struct timespec* ts)
         break;
 
     default:
-        if (clk_id < _OSV_CLOCK_SLOTS) {
+        //At this point we should only let the negative numbers
+        //which represent clock_id for specific thread
+        if (clk_id >= 0) {
             return libc_error(EINVAL);
         } else {
-            auto thread = sched::thread::find_by_id(clk_id - _OSV_CLOCK_SLOTS);
-            fill_ts(thread->thread_clock(), ts);
+            //Reverse the formula used in pthread_getcpuclockid()
+            //and calculate thread id given clk_id
+            pid_t tid = (-clk_id - 2) / 8;
+            auto thread = sched::thread::find_by_id(tid);
+            if (thread) {
+                fill_ts(thread->thread_clock(), ts);
+            } else {
+                return libc_error(EINVAL);
+            }
         }
     }
 
@@ -124,7 +133,9 @@ int clock_getres(clockid_t clk_id, struct timespec* ts)
     case CLOCK_MONOTONIC_RAW:
         break;
     default:
-        if (clk_id < _OSV_CLOCK_SLOTS) {
+        //At this point we should only let the negative numbers
+        //which represent clock_id for specific thread
+        if (clk_id >= 0) {
             return libc_error(EINVAL);
         }
     }
