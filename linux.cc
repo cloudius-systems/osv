@@ -373,8 +373,17 @@ int rt_sigprocmask(int how, sigset_t * nset, sigset_t * oset, size_t sigsetsize)
     return sigprocmask(how, nset, oset);
 }
 
-#define __NR_sys_exit __NR_exit
+int rt_sigtimedwait(const sigset_t *set, siginfo_t *info, const struct timespec *timeout, size_t sigsetsize)
+{
+    if (!timeout || (!timeout->tv_sec && !timeout->tv_nsec)) {
+        return sigwaitinfo(set, info);
+    } else {
+        errno = ENOSYS;
+        return -1;
+    }
+}
 
+#define __NR_sys_exit __NR_exit
 static int sys_exit(int ret)
 {
     sched::thread::current()->exit();
@@ -720,6 +729,8 @@ TRACEPOINT(trace_syscall_shmctl, "%d <= %d %d %p", int, int, int, struct shmid_d
 TRACEPOINT(trace_syscall_shmdt, "%d <= 0x%x", int, const void *)
 TRACEPOINT(trace_syscall_shmget, "%d <= %d %lu %d", int, key_t, size_t, int);
 TRACEPOINT(trace_syscall_rename, "%d <= %s %s", int, const char *, const char *);
+TRACEPOINT(trace_syscall_rt_sigtimedwait, "%d <= %p %p %p %lu", int, const sigset_t *, siginfo_t *, const struct timespec *, size_t);
+TRACEPOINT(trace_syscall_getrlimit, "%d <= %d %p", int, int, struct rlimit *);
 
 OSV_LIBC_API long syscall(long number, ...)
 {
@@ -873,6 +884,8 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL1(shmdt, const void *);
     SYSCALL3(shmget, key_t, size_t, int);
     SYSCALL2(rename, const char *, const char *);
+    SYSCALL4(rt_sigtimedwait, const sigset_t *, siginfo_t *, const struct timespec *, size_t);
+    SYSCALL2(getrlimit, int, struct rlimit *);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
