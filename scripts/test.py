@@ -19,7 +19,9 @@ os.environ["LANG"]="C"
 
 disabled_list= [
     "tst-dns-resolver.so",
+    "tst-dns-resolver",
     "tst-feexcept.so", # On AArch64 the tests around floating point exceptions (SIGFPE) fail even on KVM - see issue #1150
+    "tst-feexcept",
 ]
 
 qemu_disabled_list= [
@@ -195,6 +197,7 @@ if __name__ == "__main__":
 
     if running_with_kvm_on(cmdargs.arch, cmdargs.hypervisor) and cmdargs.arch != 'aarch64':
         disabled_list.remove("tst-feexcept.so")
+        disabled_list.remove("tst-feexcept")
 
     test_net.set_arch(cmdargs.arch)
     test_tracing.set_arch(cmdargs.arch)
