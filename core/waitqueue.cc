@@ -38,7 +38,7 @@ void wait_object<waitqueue>::disarm()
     while (*pnext) {
         if (&_wr == *pnext) {
             *pnext = _wr.next;
-            if (!*pnext || !(*pnext)->next) {
+            if (!*pnext) {
                 fifo.newest = newest;
             }
             break;

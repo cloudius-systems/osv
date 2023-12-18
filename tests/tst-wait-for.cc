@@ -123,4 +123,52 @@ BOOST_AUTO_TEST_CASE(test_wait_for_predicate)
     false_waker->join();
 }
 
+BOOST_AUTO_TEST_CASE(test_waitqueue_linked_list_1)
+{
+    waitqueue wq;
+    mutex mtx;
+    sched::wait_object<waitqueue> wo(wq, &mtx);
+    wo.arm();
+    BOOST_REQUIRE(!wq.empty());
+    wo.disarm();
+    BOOST_REQUIRE(wq.empty());
+}
+
+BOOST_AUTO_TEST_CASE(test_waitqueue_linked_list_2)
+{
+    waitqueue wq;
+    mutex mtx;
+    sched::wait_object<waitqueue> wo_older(wq, &mtx);
+    wo_older.arm();
+    BOOST_REQUIRE(!wq.empty());
+    sched::wait_object<waitqueue> wo_newer(wq, &mtx);
+    wo_newer.arm();
+    BOOST_REQUIRE(!wq.empty());
+    wo_older.disarm();
+    BOOST_REQUIRE(!wq.empty());
+    wo_newer.disarm();
+    BOOST_REQUIRE(wq.empty());
+}
+
+BOOST_AUTO_TEST_CASE(test_waitqueue_linked_list_3)
+{
+    waitqueue wq;
+    mutex mtx;
+    sched::wait_object<waitqueue> wo_older(wq, &mtx);
+    wo_older.arm();
+    BOOST_REQUIRE(!wq.empty());
+    sched::wait_object<waitqueue> wo_newer_1(wq, &mtx);
+    wo_newer_1.arm();
+    BOOST_REQUIRE(!wq.empty());
+    wo_older.disarm();
+    BOOST_REQUIRE(!wq.empty());
+    sched::wait_object<waitqueue> wo_newer_2(wq, &mtx);
+    wo_newer_2.arm();
+    BOOST_REQUIRE(!wq.empty());
+    wo_newer_1.disarm();
+    BOOST_REQUIRE(!wq.empty());
+    wo_newer_2.disarm();
+    BOOST_REQUIRE(wq.empty());
+}
+
 OSV_ELF_MLOCK_OBJECT();
