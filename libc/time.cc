@@ -137,6 +137,13 @@ int clock_getres(clockid_t clk_id, struct timespec* ts)
         //which represent clock_id for specific thread
         if (clk_id >= 0) {
             return libc_error(EINVAL);
+        } else {
+            //Reverse the formula used in pthread_getcpuclockid()
+            //and calculate thread id given clk_id
+            pid_t tid = (-clk_id - 2) / 8;
+            if( !sched::thread::find_by_id(tid)) {
+                return libc_error(EINVAL);
+            }
         }
     }
 
