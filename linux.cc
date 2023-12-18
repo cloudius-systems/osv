@@ -731,6 +731,8 @@ TRACEPOINT(trace_syscall_shmget, "%d <= %d %lu %d", int, key_t, size_t, int);
 TRACEPOINT(trace_syscall_rename, "%d <= %s %s", int, const char *, const char *);
 TRACEPOINT(trace_syscall_rt_sigtimedwait, "%d <= %p %p %p %lu", int, const sigset_t *, siginfo_t *, const struct timespec *, size_t);
 TRACEPOINT(trace_syscall_getrlimit, "%d <= %d %p", int, int, struct rlimit *);
+TRACEPOINT(trace_syscall_getpriority, "%d <= %d %d", int, int, int);
+TRACEPOINT(trace_syscall_setpriority, "%d <= %d %d %d", int, int, int, int);
 
 OSV_LIBC_API long syscall(long number, ...)
 {
@@ -886,6 +888,8 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL2(rename, const char *, const char *);
     SYSCALL4(rt_sigtimedwait, const sigset_t *, siginfo_t *, const struct timespec *, size_t);
     SYSCALL2(getrlimit, int, struct rlimit *);
+    SYSCALL2(getpriority, int, int);
+    SYSCALL3(setpriority, int, int, int);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
