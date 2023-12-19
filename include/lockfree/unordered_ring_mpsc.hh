@@ -30,7 +30,13 @@ private:
 public:
     using ring_mpsc_t = unordered_ring_mpsc<T,MaxSizePerCpu>;
 
-    class draining_iterator : public std::iterator<std::input_iterator_tag, T> {
+    class draining_iterator {
+    public:
+        using iterator_category = std::input_iterator_tag;
+        using value_type = T;
+        using difference_type = T;
+        using pointer = T*;
+        using reference = T&;
     private:
         unsigned _idx;
         ring_mpsc_t& _ring;

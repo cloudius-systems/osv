@@ -13,6 +13,7 @@ conf-DEBUG_BUILD=0
 conf-debug_elf=0
 conf_hide_symbols=0
 conf_linker_extra_options=
+conf_cxx_level=gnu++11
 
 conf-lazy_stack=0
 conf-lazy_stack_invariant=0

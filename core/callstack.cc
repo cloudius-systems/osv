@@ -15,7 +15,7 @@ callstack_collector::callstack_collector(size_t nr_traces, unsigned skip_frames,
     , _skip_frames(skip_frames)
     , _nr_frames(nr_frames)
     , _buffer(malloc(nr_traces * trace_object_size()))
-    , _free_traces(_buffer)
+    , _free_traces(reinterpret_cast<uintptr_t>(_buffer))
 {
     for (auto c : sched::cpus) {
         _buckets.push_back(std::vector<table_type::bucket_type>(nr_traces, table_type::bucket_type()));
@@ -81,7 +81,7 @@ void callstack_collector::merge()
     }
 }
 
-bool callstack_collector::histogram_compare::operator()(trace* a, trace* b)
+bool callstack_collector::histogram_compare::operator()(trace* a, trace* b) const
 {
     if (a->hits > b->hits) {
         return true;
@@ -126,7 +126,7 @@ size_t hash_value(const callstack_collector::trace& a)
 callstack_collector::trace* callstack_collector::alloc_trace(void** pc, unsigned len)
 {
     auto t = _free_traces.fetch_add(trace_object_size(), std::memory_order_relaxed);
-    return new (t) trace(pc, len);
+    return new (reinterpret_cast<void*>(t)) trace(pc, len);
 }
 
 callstack_collector::trace::trace(void** pc, unsigned len)

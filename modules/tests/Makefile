@@ -15,7 +15,7 @@ COMMON += -g -O2 -fPIC -DBOOST_TEST_DYN_LINK \
 
 LIBS = $(libgcc_s_dir)/libgcc_s.so.1
 
-CXXFLAGS = -std=gnu++11 $(COMMON)
+CXXFLAGS = -std=$(conf_cxx_level) $(COMMON)
 CFLAGS = -std=gnu99 $(COMMON)
 
 # The following are rules for making a .so from .c or .cc. We could have
