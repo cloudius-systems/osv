@@ -7,7 +7,7 @@ INCLUDES += -I. -I $(src)/libc/internal
 # compiler flags:
 #  -g    adds debugging information to the executable file
 #  -Wall turns on most, but not all, compiler warnings
-CXXFLAGS  = -g -Wall -std=c++11 -fPIC $(COMMON) -O2
+CXXFLAGS  = -g -Wall -std=$(conf_cxx_level) -fPIC $(COMMON) -O2
 
 boost-libs := -lboost_system -lboost_filesystem
 

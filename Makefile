@@ -292,7 +292,7 @@ endif
 #     returns option if file builds with -ffoo, empty otherwise
 compiler-flag = $(shell $(CXX) $(CFLAGS_WERROR) $1 -o /dev/null -c $3  > /dev/null 2>&1 && echo $2)
 
-compiler-specific := $(call compiler-flag, -std=gnu++11, -DHAVE_ATTR_COLD_LABEL, compiler/attr/cold-label.cc)
+compiler-specific := $(call compiler-flag, -std=$(conf_cxx_level), -DHAVE_ATTR_COLD_LABEL, compiler/attr/cold-label.cc)
 
 source-dialects = -D_GNU_SOURCE
 
@@ -356,7 +356,7 @@ gc-flags = $(gc-flags-$(conf_hide_symbols))
 
 gcc-opt-Og := $(call compiler-flag, -Og, -Og, compiler/empty.cc)
 
-CXXFLAGS = -std=gnu++11 $(COMMON) $(cxx-hide-flags)
+CXXFLAGS = -std=$(conf_cxx_level) $(COMMON) $(cxx-hide-flags)
 CFLAGS = -std=gnu99 $(COMMON)
 
 # should be limited to files under libc/ eventually

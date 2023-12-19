@@ -2,7 +2,7 @@ include ../common.gmk
 
 module_out := $(out)/modules/golang
 
-CXXFLAGS  = -g -rdynamic -Wall -std=c++11 -fPIC $(COMMON)
+CXXFLAGS  = -g -rdynamic -Wall -std=$(conf_cxx_level) -fPIC $(COMMON)
 
 # the build target executable:
 TARGET = go

@@ -60,7 +60,7 @@ public:
 private:
     // Compares two traces for the histogram (most hits first)
     struct histogram_compare {
-        bool operator()(trace* a, trace* b);
+        bool operator()(trace* a, trace* b) const;
     };
 private:
     // Callback from tracepoint_base::probe
@@ -87,7 +87,7 @@ private:
     // per-cpu hash table
     dynamic_percpu<std::unique_ptr<table_type>> _table;
     // global pool of free trace objects
-    std::atomic<void*> _free_traces;
+    std::atomic<uintptr_t> _free_traces;
     // attached tracepoints
     std::vector<tracepoint_base*> _attached;
     friend bool operator==(const trace& a, const trace& b);
