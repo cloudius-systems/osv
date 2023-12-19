@@ -64,8 +64,14 @@ static inline size_t get_last_set(const std::bitset<N>& bitset)
 }
 
 template<size_t N>
-class set_iterator : public std::iterator<std::input_iterator_tag, int>
+class set_iterator
 {
+public:
+    using iterator_category = std::input_iterator_tag;
+    using value_type = int;
+    using difference_type = int;
+    using pointer = int*;
+    using reference = int&;
 private:
     void advance()
     {

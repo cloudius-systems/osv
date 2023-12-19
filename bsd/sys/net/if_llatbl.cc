@@ -208,7 +208,7 @@ struct lltable *
 lltable_init(struct ifnet *ifp, int af)
 {
 	struct lltable *llt;
-	register int i;
+	int i;
 
 	llt = (struct lltable *)malloc(sizeof(struct lltable));
 
