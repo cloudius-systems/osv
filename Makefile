@@ -1724,7 +1724,9 @@ $(out)/libc/stdlib/qsort_r.o: COMMON += -Wno-dangling-pointer
 libc += stdlib/strtol.o
 libc += stdlib/strtod.o
 libc += stdlib/wcstol.o
+ifeq ($(arch),x64)
 libc += stdlib/unimplemented.o
+endif
 
 libc += string/__memcpy_chk.o
 libc += string/explicit_bzero.o

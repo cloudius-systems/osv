@@ -1,5 +1,6 @@
 #include <time.h>
 #include <sys/time.h>
+#include <cerrno>
 
 #ifdef __x86_64__
 #include "tls-switch.hh"
