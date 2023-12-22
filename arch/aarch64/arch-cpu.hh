@@ -33,7 +33,7 @@ struct arch_cpu {
 };
 
 struct arch_thread {
-    char exception_stack[4096*4] __attribute__((aligned(16)));
+    char exception_stack[4096*16] __attribute__((aligned(16)));
 };
 
 struct arch_fpu {
