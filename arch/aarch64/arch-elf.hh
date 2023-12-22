@@ -52,6 +52,7 @@ inline void run_entry_point(void* ep, int argc, char** argv, int argv_size)
     //Set stack pointer and jump to the ELF entry point
     asm volatile (
         "mov sp, %1\n\t" //set stack
+        "mov x0, #0\n\t" //set atexit pointer
         "blr %0\n\t"
         :
         : "r"(ep), "r"(stack));
