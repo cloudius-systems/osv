@@ -39,11 +39,14 @@ linux_ld_disabled_list= [
     "tcp_close_without_reading_on_qemu"
 ]
 
-linux_ld = '/lib64/ld-linux-x86-64.so.2 '
+if host_arch == 'aarch64':
+    linux_ld = '/lib/ld-linux-aarch64.so.1'
+else:
+    linux_ld = '/lib64/ld-linux-x86-64.so.2'
 
 class TestRunnerTest(SingleCommandTest):
     def __init__(self, name):
-        super(TestRunnerTest, self).__init__(name, '%s/tests/%s' % (linux_ld if cmdargs.linux_ld else '', name))
+        super(TestRunnerTest, self).__init__(name, '%s /tests/%s' % (linux_ld if cmdargs.linux_ld else '', name))
 
 # Not all files in build/release/tests/tst-*.so may be on the test image
 # (e.g., some may have actually remain there from old builds) - so lets take
@@ -81,7 +84,7 @@ def collect_java_tests():
             components = line.split(": ", 2);
             test_name = components[0].strip();
             test_command = components[1].strip()
-            add_tests([SingleCommandTest(test_name, linux_ld + test_command if cmdargs.linux_ld else test_command)])
+            add_tests([SingleCommandTest(test_name, linux_ld + ' ' + test_command if cmdargs.linux_ld else test_command)])
 
 def run_test(test):
     sys.stdout.write("  TEST %-35s" % test.name)
