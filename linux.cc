@@ -441,9 +441,71 @@ static long sys_set_tid_address(int *tidptr)
     return sched::thread::current()->id();
 }
 
-#ifdef __x86_64__
+#define CLONE_THREAD           0x00010000
+#define CLONE_CHILD_SETTID     0x01000000
+#define CLONE_PARENT_SETTID    0x00100000
+#define CLONE_CHILD_CLEARTID   0x00200000
+
+extern sched::thread *clone_thread(unsigned long flags, void *child_stack, unsigned long newtls);
+
 #define __NR_sys_clone __NR_clone
-extern int sys_clone(unsigned long flags, void *child_stack, int *ptid, int *ctid, unsigned long newtls);
+#ifdef __x86_64__
+int sys_clone(unsigned long flags, void *child_stack, int *ptid, int *ctid, unsigned long newtls)
+#endif
+#ifdef __aarch64__
+int sys_clone(unsigned long flags, void *child_stack, int *ptid, unsigned long newtls, int *ctid)
+#endif
+{   //
+    //We only support "cloning" of threads so fork() would fail but pthread_create() should
+    //succeed
+    if (!(flags & CLONE_THREAD)) {
+       errno = ENOSYS;
+       return -1;
+    }
+    //
+    //Validate we have non-empty stack
+    if (!child_stack) {
+       errno = EINVAL;
+       return -1;
+    }
+    //
+    //Validate ptid and ctid which we would be setting down if requested by these flags
+    if (((flags & CLONE_PARENT_SETTID) && !ptid) ||
+        ((flags & CLONE_CHILD_SETTID) && !ctid) ||
+        ((flags & CLONE_SETTLS) && !newtls)) {
+       errno = EFAULT;
+       return -1;
+    }
+
+    sched::thread *t = clone_thread(flags, child_stack, newtls);
+
+    //
+    //Store the child thread ID at the location pointed to by ptid
+    if ((flags & CLONE_PARENT_SETTID)) {
+       *ptid = t->id();
+    }
+    //
+    //Store the child thread ID at the location pointed to by ctid
+    if ((flags & CLONE_CHILD_SETTID)) {
+       *ctid = t->id();
+    }
+    //
+    //Clear (zero) the child thread ID at the location pointed to by child_tid
+    //in child memory when the child exits, and do a wakeup on the futex at that address
+    //See thread::complete()
+    if ((flags & CLONE_CHILD_CLEARTID)) {
+       t->set_clear_id(ctid);
+    }
+    t->start();
+
+    //
+    //The manual of sigprocmask has this to say about clone:
+    //"Each of the threads in a process has its own signal mask.
+    // A child created via fork(2) inherits a copy of its parent's
+    // signal mask; the signal mask is preserved across execve(2)."
+    //TODO: Does it mean new thread should inherit signal mask of the parent?
+    return t->id();
+}
 
 struct clone_args {
      u64 flags;
@@ -463,10 +525,15 @@ static int sys_clone3(struct clone_args *args, size_t size)
        args->flags,
        reinterpret_cast<void*>(args->stack) + args->stack_size,
        reinterpret_cast<int*>(args->parent_tid),
+#ifdef __x86_64__
        reinterpret_cast<int*>(args->child_tid),
        args->tls);
-}
 #endif
+#ifdef __aarch64__
+       args->tls,
+       reinterpret_cast<int*>(args->child_tid));
+#endif
+}
 
 #define __NR_sys_ioctl __NR_ioctl
 //
@@ -592,7 +659,7 @@ extern int utimensat4(int dirfd, const char *pathname, const struct timespec tim
 TRACEPOINT(trace_syscall_open, "%d <= \"%s\" 0x%x", int, const char *, int);
 #endif
 TRACEPOINT(trace_syscall_read, "0x%x <= %d %p 0x%x", ssize_t, int, char *, size_t);
-TRACEPOINT(trace_syscall_uname, "%d <= ", int, struct utsname *);
+TRACEPOINT(trace_syscall_uname, "%d <= %p", int, struct utsname *);
 TRACEPOINT(trace_syscall_write, "0x%x <= %d %p 0x%x", ssize_t, int, const void *, size_t);
 TRACEPOINT(trace_syscall_gettid, "%d <=", pid_t);
 TRACEPOINT(trace_syscall_clock_gettime, "%d <= %d %p", int, clockid_t, struct timespec *);
@@ -654,7 +721,7 @@ TRACEPOINT(trace_syscall_nanosleep, "%d <= %p %p", int, const struct timespec*, 
 TRACEPOINT(trace_syscall_fstatat, "%d <= %d \"%s\" %p 0%0o", int, int, const char *, struct stat *, int);
 TRACEPOINT(trace_syscall_sys_exit_group, "%d <= %d", int, int);
 TRACEPOINT(trace_syscall_sys_getcwd, "%ld <= 0%0o %lu", long, char *, unsigned long);
-TRACEPOINT(trace_syscall_readlinkat, "%lu <= %d 0%0o 0x%x %lu", ssize_t, int, const char *, char *, size_t);
+TRACEPOINT(trace_syscall_readlinkat, "%lu <= %d %s 0x%x %lu", ssize_t, int, const char *, char *, size_t);
 TRACEPOINT(trace_syscall_getpid, "%d <=", pid_t);
 TRACEPOINT(trace_syscall_set_mempolicy, "%ld <= %d %p %lu", long, int, unsigned long *, unsigned long);
 TRACEPOINT(trace_syscall_sys_sched_setaffinity, "%d <= %d %u %p", int, pid_t, unsigned, unsigned long *);
@@ -726,8 +793,11 @@ TRACEPOINT(trace_syscall_sys_set_robust_list, "%d <= %p %lu", long, struct robus
 TRACEPOINT(trace_syscall_sys_set_tid_address, "%d <= %p", long, int *);
 #ifdef __x86_64__
 TRACEPOINT(trace_syscall_sys_clone, "%d <= 0x%x 0x%x %p %p %lu", int, unsigned long, void *, int *, int *, unsigned long);
-TRACEPOINT(trace_syscall_sys_clone3, "%d <= %p %lu", int, struct clone_args *, size_t);
 #endif
+#ifdef __aarch64__
+TRACEPOINT(trace_syscall_sys_clone, "%d <= 0x%x 0x%x %p %p %lu", int, unsigned long, void *, int *, unsigned long, int *);
+#endif
+TRACEPOINT(trace_syscall_sys_clone3, "%d <= %p %lu", int, struct clone_args *, size_t);
 TRACEPOINT(trace_syscall_prlimit64, "%d <= %u %d %p %p", int, pid_t, int, const struct rlimit *, struct rlimit *);
 TRACEPOINT(trace_syscall_msync, "%d <= 0x%x %lu %d", int, void *, size_t, int);
 TRACEPOINT(trace_syscall_truncate, "%d <= %s %ld", int, const char *, off_t);
@@ -739,6 +809,7 @@ TRACEPOINT(trace_syscall_rt_sigtimedwait, "%d <= %p %p %p %lu", int, const sigse
 TRACEPOINT(trace_syscall_getrlimit, "%d <= %d %p", int, int, struct rlimit *);
 TRACEPOINT(trace_syscall_getpriority, "%d <= %d %d", int, int, int);
 TRACEPOINT(trace_syscall_setpriority, "%d <= %d %d %d", int, int, int, int);
+TRACEPOINT(trace_syscall_ppoll, "%d <= %p %ld %p %p", int, struct pollfd *, nfds_t, const struct timespec *, const sigset_t *);
 
 OSV_LIBC_API long syscall(long number, ...)
 {
@@ -885,8 +956,11 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL1(sys_set_tid_address, int *);
 #ifdef __x86_64__
     SYSCALL5(sys_clone, unsigned long, void *, int *, int *, unsigned long);
-    SYSCALL2(sys_clone3, struct clone_args *, size_t);
 #endif
+#ifdef __aarch64__
+    SYSCALL5(sys_clone, unsigned long, void *, int *, unsigned long, int *);
+#endif
+    SYSCALL2(sys_clone3, struct clone_args *, size_t);
     SYSCALL4(prlimit64, pid_t, int, const struct rlimit *, struct rlimit *);
     SYSCALL3(msync, void *, size_t, int);
     SYSCALL2(truncate, const char *, off_t);
@@ -898,6 +972,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL2(getrlimit, int, struct rlimit *);
     SYSCALL2(getpriority, int, int);
     SYSCALL3(setpriority, int, int, int);
+    SYSCALL4(ppoll, struct pollfd *, nfds_t, const struct timespec *, const sigset_t *);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);

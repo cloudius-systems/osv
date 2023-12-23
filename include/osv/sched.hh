@@ -711,7 +711,10 @@ public:
     bool unsafe_stop();
     void setup_large_syscall_stack();
     void free_tiny_syscall_stack();
+#ifdef __x86_64__
     void* get_syscall_stack_top();
+#endif
+    void* get_exception_stack_top() { return _arch.exception_stack + sizeof(_arch.exception_stack); }
 private:
     static void wake_impl(detached_state* st,
             unsigned allowed_initial_states_mask = 1 << unsigned(status::waiting));

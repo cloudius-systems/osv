@@ -977,6 +977,7 @@ objects += arch/$(arch)/cpuid.o
 objects += arch/$(arch)/firmware.o
 objects += arch/$(arch)/hypervisor.o
 objects += arch/$(arch)/interrupt.o
+objects += arch/$(arch)/clone.o
 ifeq ($(conf_drivers_pci),1)
 objects += arch/$(arch)/pci.o
 objects += arch/$(arch)/msi.o
@@ -1013,7 +1014,6 @@ objects += arch/x64/apic.o
 objects += arch/x64/apic-clock.o
 objects += arch/x64/entry-xen.o
 objects += arch/x64/prctl.o
-objects += arch/x64/clone.o
 objects += arch/x64/vmlinux.o
 objects += arch/x64/vmlinux-boot64.o
 objects += arch/x64/pvh-boot.o

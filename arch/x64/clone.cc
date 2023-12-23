@@ -10,11 +10,7 @@
 #include <osv/sched.hh>
 #include "tls-switch.hh"
 
-#define CLONE_THREAD           0x00010000
 #define CLONE_SETTLS           0x00080000
-#define CLONE_CHILD_SETTID     0x01000000
-#define CLONE_PARENT_SETTID    0x00100000
-#define CLONE_CHILD_CLEARTID   0x00200000
 
 static constexpr size_t CHILD_FRAME_OFFSET = 136;
 static constexpr size_t PARENT_FRAME_OFFSET = 120;
@@ -22,28 +18,8 @@ static constexpr size_t FRAME_SIZE = 120;
 static constexpr size_t RSP_OFFSET = 8;
 static constexpr size_t RAX_OFFSET = 16;
 
-int sys_clone(unsigned long flags, void *child_stack, int *ptid, int *ctid, unsigned long newtls)
+sched::thread *clone_thread(unsigned long flags, void *child_stack, unsigned long newtls)
 {   //
-    //We only support "cloning" of threads so fork() would fail but pthread_create() should
-    //succeed
-    if (!(flags & CLONE_THREAD)) {
-       errno = ENOSYS;
-       return -1;
-    }
-    //
-    //Validate we have non-empty stack
-    if (!child_stack) {
-       errno = EINVAL;
-       return -1;
-    }
-    //
-    //Validate ptid and ctid which we would be setting down if requested by these flags
-    if (((flags & CLONE_PARENT_SETTID) && !ptid) ||
-        ((flags & CLONE_CHILD_SETTID) && !ctid) ||
-        ((flags & CLONE_SETTLS) && !newtls)) {
-       errno = EFAULT;
-       return -1;
-    }
     //
     //If the parent thread is pinned we should make new thread inherit this
     auto parent_pinned_cpu = sched::thread::current()->pinned() ? sched::cpu::current() : nullptr;
@@ -92,23 +68,6 @@ int sys_clone(unsigned long flags, void *child_stack, int *ptid, int *ctid, unsi
         true);
 
     //
-    //Store the child thread ID at the location pointed to by ptid
-    if ((flags & CLONE_PARENT_SETTID)) {
-       *ptid = t->id();
-    }
-    //
-    //Store the child thread ID at the location pointed to by ctid
-    if ((flags & CLONE_CHILD_SETTID)) {
-       *ctid = t->id();
-    }
-    //
-    //Clear (zero) the child thread ID at the location pointed to by child_tid
-    //in child memory when the child exits, and do a wakeup on the futex at that address
-    //See thread::complete()
-    if ((flags & CLONE_CHILD_CLEARTID)) {
-       t->set_clear_id(ctid);
-    }
-    //
     //Copy all saved registers from parent syscall stack to the child syscall stack
     //so that they can be restored in the child thread in the inlined assembly above
     auto frame_start_on_child_syscall_stack = t->get_syscall_stack_top() - CHILD_FRAME_OFFSET;
@@ -123,12 +82,6 @@ int sys_clone(unsigned long flags, void *child_stack, int *ptid, int *ctid, unsi
     if ((flags & CLONE_SETTLS)) {
        t->set_app_tcb(newtls);
     }
-    t->start();
-    //
-    //The manual of sigprocmask has this to say about clone:
-    //"Each of the threads in a process has its own signal mask.
-    // A child created via fork(2) inherits a copy of its parent's
-    // signal mask; the signal mask is preserved across execve(2)."
-    //TODO: Does it mean new thread should inherit signal mask of the parent?
-    return t->id();
+
+    return t;
 }
