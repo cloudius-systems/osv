@@ -23,7 +23,7 @@ namespace sched {
 
 void thread::switch_to_first()
 {
-    asm volatile ("msr tpidr_el0, %0; isb; " :: "r"(_tcb) : "memory");
+    asm volatile ("msr tpidr_el0, %0; msr tpidr_el1, %0; isb; " :: "r"(_tcb) : "memory");
 
     /* check that the tls variable preempt_counter is correct */
     assert(sched::get_preempt_counter() == 1);

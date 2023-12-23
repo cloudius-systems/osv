@@ -162,7 +162,7 @@ void arch_setup_tls(void *tls, const elf::tls_data& info)
     tcb[0].tls_base = &tcb[1];
 
     memcpy(&tcb[1], info.start, info.filesize);
-    asm volatile ("msr tpidr_el0, %0; isb; " :: "r"(tcb) : "memory");
+    asm volatile ("msr tpidr_el0, %0; msr tpidr_el1, %0; isb; " :: "r"(tcb) : "memory");
 
     /* check that the tls variable preempt_counter is correct */
     assert(sched::get_preempt_counter() == 1);
