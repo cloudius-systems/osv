@@ -151,7 +151,7 @@ def start_osv_qemu(options):
 
     if options.arch == 'aarch64':
         if options.hypervisor == 'qemu':
-            args += ["-machine", "gic-version=2", "-cpu", "cortex-a57"]
+            args += ["-machine", "gic-version=max", "-cpu", "cortex-a57"]
         args += [
         "-machine", "virt",
         "-device", "virtio-blk-pci,id=blk0,drive=hd0,scsi=off%s%s" % (boot_index, options.virtio_device_suffix),
@@ -253,7 +253,7 @@ def start_osv_qemu(options):
 
     if options.hypervisor == "kvm" or options.hypervisor == 'qemu_microvm':
         if options.arch == 'aarch64':
-            args += ["-enable-kvm", "-cpu", "host"]
+            args += ["-enable-kvm", "-cpu", "host", "-machine", "gic-version=max"]
         else:
             args += ["-enable-kvm", "-cpu", "host,+x2apic"]
     elif options.hypervisor == "none" or options.hypervisor == "qemu":

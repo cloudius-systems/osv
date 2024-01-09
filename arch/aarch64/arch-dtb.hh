@@ -93,6 +93,8 @@ int dtb_get_timer_irq();
  */
 bool dtb_get_gic_v2(u64 *dist, size_t *dist_len, u64 *cpu, size_t *cpu_len);
 
+bool dtb_get_gic_v3(u64 *dist, size_t *dist_len, u64 *redist, size_t *redist_len);
+
 /* int dtb_get_cpus_count();
  *
  * gets the number of available cpus.
