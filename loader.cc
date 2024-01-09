@@ -31,7 +31,7 @@
 #include "arch.hh"
 #include "arch-setup.hh"
 #include "osv/trace.hh"
-#include "osv/strace.hh"
+#include <osv/strace.hh>
 #include <osv/power.hh>
 #include <osv/rcu.hh>
 #include <osv/mempool.hh>

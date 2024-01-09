@@ -11,5 +11,6 @@
 #include <osv/trace.hh>
 
 void start_strace();
+void wait_strace_complete();
 
 #endif

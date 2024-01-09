@@ -129,17 +129,32 @@ static void print_trace(trace_record* tr) {
 }
 
 static sched::thread *strace = nullptr;
+static std::atomic<bool> strace_done = {false};
+
+static void print_traces() {
+    while (auto tr = _trace_log->read()) {
+        print_trace(tr);
+    }
+}
 
 void start_strace() {
     _trace_log = new trace_log();
     strace = sched::thread::make([] {
-        while (true) {
-            while (auto tr = _trace_log->read()) {
-                print_trace(tr);
-            }
+        print_traces();
+        do {
             sched::thread::sleep(std::chrono::microseconds(100));
-        }
+            print_traces();
+        } while (!strace_done);
     }, sched::thread::attr().name("strace"));
 
     strace->start();
+}
+
+void wait_strace_complete() {
+    if (!_trace_log) {
+        return;
+    }
+    strace_done = true;
+    strace->join();
+    delete strace;
 }

@@ -3,6 +3,7 @@
 #include <osv/debug.hh>
 #include <osv/sched.hh>
 #include <osv/dhcp.hh>
+#include <osv/strace.hh>
 
 extern void vfs_exit(void);
 
@@ -10,6 +11,7 @@ namespace osv {
 
 void shutdown()
 {
+    wait_strace_complete();
     dhcp_release();
 
     // The vfs_exit() call below will forcibly unmount the filesystem. If any
