@@ -53,7 +53,7 @@ public:
 inline void arch_cpu::init_on_cpu()
 {
     if (this->smp_idx != 0) {
-        gic::gic->init_cpu(this->smp_idx);
+        gic::gic->init_on_secondary_cpu(this->smp_idx);
     }
 }
 
