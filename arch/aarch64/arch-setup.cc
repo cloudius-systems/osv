@@ -24,6 +24,7 @@
 #include "arch-mmu.hh"
 #include "arch-dtb.hh"
 #include "gic-v2.hh"
+#include "gic-v3.hh"
 
 #include "drivers/console.hh"
 #include "drivers/pl011.hh"
@@ -123,17 +124,22 @@ void arch_setup_free_memory()
     }
 #endif
 
-    //Locate GICv2 information in DTB and construct corresponding GIC driver
+    //Locate GICv2 or GICv3 information in DTB and construct corresponding GIC driver
     //and map relevant physical memory
-    u64 dist, cpuif;
-    size_t dist_len, cpuif_len;
-    if (dtb_get_gic_v2(&dist, &dist_len, &cpuif, &cpuif_len)) {
+    u64 dist, redist, cpuif;
+    size_t dist_len, redist_len, cpuif_len;
+    if (dtb_get_gic_v3(&dist, &dist_len, &redist, &redist_len)) {
+        gic::gic = new gic::gic_v3_driver(dist, redist);
+        /* linear_map [TTBR0 - GIC REDIST] */
+        mmu::linear_map((void *)redist, (mmu::phys)redist, redist_len, "gic_redist", mmu::page_size,
+                        mmu::mattr::dev);
+    } else if (dtb_get_gic_v2(&dist, &dist_len, &cpuif, &cpuif_len)) {
         gic::gic = new gic::gic_v2_driver(dist, cpuif);
         /* linear_map [TTBR0 - GIC CPUIF] */
         mmu::linear_map((void *)cpuif, (mmu::phys)cpuif, cpuif_len, "gic_cpuif", mmu::page_size,
                         mmu::mattr::dev);
     } else {
-        abort("arch-setup: failed to get GiCv2 information from dtb.\n");
+        abort("arch-setup: failed to get GICv3 nor GiCv2 information from dtb.\n");
     }
     /* linear_map [TTBR0 - GIC DIST] */
     mmu::linear_map((void *)dist, (mmu::phys)dist, dist_len, "gic_dist", mmu::page_size,
