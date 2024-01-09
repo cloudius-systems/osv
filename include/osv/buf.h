@@ -43,7 +43,7 @@
 struct buf: boost::intrusive::list_base_hook<> {
 	int		b_flags;	/* see defines below */
 	struct device	*b_dev;		/* device */
-	int		b_blkno;	/* block # on device */
+	off_t		b_blkno;	/* block # on device */
 	mutex_t		b_lock;		/* lock for access */
 	void		*b_data;	/* pointer to data buffer */
 };

@@ -83,12 +83,14 @@ blk_write(struct device *dev, struct uio *uio, int ioflags)
     return bdev_write(dev, uio, ioflags);
 }
 
+#include "drivers/blk_ioctl.hh"
+
 static struct devops blk_devops {
     no_open,
     no_close,
     blk_read,
     blk_write,
-    no_ioctl,
+    blk_ioctl,
     no_devctl,
     multiplex_strategy,
 };

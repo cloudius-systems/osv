@@ -126,6 +126,8 @@ void		biodone(struct bio *bio, bool ok);
 struct devstat;
 void    biofinish(struct bio *bp, struct devstat *stat, int error);
 
+void multiplex_bio_done(struct bio *b);
+
 __END_DECLS
 
 #endif /* !_SYS_BIO_H_ */

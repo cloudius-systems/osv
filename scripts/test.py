@@ -171,6 +171,7 @@ if __name__ == "__main__":
     parser.add_argument("--run_options", action="store", help="pass extra options to run.py")
     parser.add_argument("-m", "--manifest", action="store", default="modules/tests/usr.manifest", help="test manifest")
     parser.add_argument("-d", "--disabled_list", action="append", help="test to be disabled", default=[])
+    parser.add_argument("--nvme", action="store_true", default=False, help="run tests with nvme")
     parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default=host_arch,
                         help="specify QEMU architecture: x86_64, aarch64")
     parser.add_argument("--linux_ld", action="store_true", help="launch tests with Linux dynamic linker")
@@ -189,6 +190,10 @@ if __name__ == "__main__":
         disabled_list.extend(firecracker_disabled_list)
     else:
         disabled_list.extend(qemu_disabled_list)
+    
+    if cmdargs.nvme : 
+        print("TEST NVME\n")
+        run_py_args = run_py_args + ['--nvme']
 
     if cmdargs.linux_ld:
         disabled_list.extend(linux_ld_disabled_list)

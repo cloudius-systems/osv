@@ -72,7 +72,7 @@ biofinish(struct bio *bp, struct devstat *stat, int error)
 	biodone(bp, error);
 }
 
-static void multiplex_bio_done(struct bio *b)
+void multiplex_bio_done(struct bio *b)
 {
 	struct bio *bio = static_cast<struct bio*>(b->bio_caller1);
 	bool error = b->bio_flags & BIO_ERROR;
@@ -80,13 +80,8 @@ static void multiplex_bio_done(struct bio *b)
 
 
 	// If there is an error, we store it in the original bio flags.
-	// This path gets slower because then we need to end up taking the
-	// bio_mutex twice. But that should be fine.
-	if (error) {
-		WITH_LOCK(bio->bio_mutex) {
-			bio->bio_flags |= BIO_ERROR;
-		}
-	}
+	if (error)
+		atomic_set_char(reinterpret_cast<volatile u_char*>(&bio->bio_flags), BIO_ERROR);
 
 	// Last one releases it. We set the biodone to always be "ok", because
 	// if an error exists, we have already set that in the previous operation
