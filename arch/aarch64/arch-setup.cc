@@ -23,6 +23,7 @@
 
 #include "arch-mmu.hh"
 #include "arch-dtb.hh"
+#include "gic-v2.hh"
 
 #include "drivers/console.hh"
 #include "drivers/pl011.hh"
@@ -122,16 +123,20 @@ void arch_setup_free_memory()
     }
 #endif
 
-    /* linear_map [TTBR0 - GIC DIST and GIC CPU] */
-    u64 dist, cpu;
-    size_t dist_len, cpu_len;
-    if (!dtb_get_gic_v2(&dist, &dist_len, &cpu, &cpu_len)) {
-        abort("arch-setup: failed to get GICv2 information from dtb.\n");
+    //Locate GICv2 information in DTB and construct corresponding GIC driver
+    //and map relevant physical memory
+    u64 dist, cpuif;
+    size_t dist_len, cpuif_len;
+    if (dtb_get_gic_v2(&dist, &dist_len, &cpuif, &cpuif_len)) {
+        gic::gic = new gic::gic_v2_driver(dist, cpuif);
+        /* linear_map [TTBR0 - GIC CPUIF] */
+        mmu::linear_map((void *)cpuif, (mmu::phys)cpuif, cpuif_len, "gic_cpuif", mmu::page_size,
+                        mmu::mattr::dev);
+    } else {
+        abort("arch-setup: failed to get GiCv2 information from dtb.\n");
     }
-    gic::gic = new gic::gic_driver(dist, cpu);
+    /* linear_map [TTBR0 - GIC DIST] */
     mmu::linear_map((void *)dist, (mmu::phys)dist, dist_len, "gic_dist", mmu::page_size,
-                    mmu::mattr::dev);
-    mmu::linear_map((void *)cpu, (mmu::phys)cpu, cpu_len, "gic_cpu", mmu::page_size,
                     mmu::mattr::dev);
 
 #if CONF_drivers_pci
