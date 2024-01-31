@@ -501,8 +501,10 @@ int pthread_rwlock_destroy(pthread_rwlock_t *rw)
 
 int pthread_rwlock_trywrlock(pthread_rwlock_t *rw)
 {
-    from_libc(rw)->try_wlock();
-    return 0;
+    if (from_libc(rw)->try_wlock()) {
+        return 0;
+    }
+    return EBUSY;
 }
 
 int pthread_rwlock_wrlock(pthread_rwlock_t *rw)
@@ -519,7 +521,10 @@ int pthread_rwlock_rdlock(pthread_rwlock_t *rw)
 
 int pthread_rwlock_tryrdlock(pthread_rwlock_t *rw)
 {
-    return from_libc(rw)->try_rlock();
+    if (from_libc(rw)->try_rlock()) {
+        return 0;
+    }
+    return EBUSY;
 }
 
 int pthread_rwlockattr_destroy(pthread_rwlockattr_t *attr)
