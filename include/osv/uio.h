@@ -61,7 +61,7 @@ int	uiomove(void *cp, size_t n, struct uio *uio);
 
 __END_DECLS
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(USE_C_INTERFACE)
 
 template <typename F>
 static inline void linearize_uio_write(struct uio *uio, int ioflag, F f)
