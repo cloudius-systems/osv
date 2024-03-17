@@ -76,3 +76,12 @@ _Exit = exit;
 
 __dn_expand = dn_expand;
 __sysconf = sysconf;
+
+/* glibc uses these functions as C23 versions of the existing functions,
+   which are supposed to also allow binary constants (0b...). So they
+   should be slightly different than the classic functions, but until
+   we implement that, lets at least support them as an alias - see
+   issue #1299.
+*/
+__isoc23_strtoul = strtoul;
+__isoc23_sscanf = sscanf;
