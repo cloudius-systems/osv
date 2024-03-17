@@ -1096,7 +1096,7 @@ int renameat(int olddirfd, const char *oldpath,
     } else {
         char absolute_newpath[PATH_MAX];
         auto error = vfs_fun_at(newdirfd, newpath, [&absolute_newpath](const char *absolute_path) {
-            strcpy(absolute_newpath, absolute_path);
+            strlcpy(absolute_newpath, absolute_path, PATH_MAX);
             return 0;
         });
 
@@ -1245,6 +1245,40 @@ int link(const char *oldpath, const char *newpath)
     return -1;
 }
 
+OSV_LIBC_API
+int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags)
+{
+    if (flags & AT_SYMLINK_FOLLOW) {
+        WARN_ONCE("linkat() does not support AT_SYMLINK_FOLLOW\n");
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!oldpath || !newpath) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (newpath[0] == '/' || newdirfd == AT_FDCWD) {
+        return vfs_fun_at2(olddirfd, oldpath, [newpath](const char *path) {
+            return link(path, newpath);
+        });
+    } else {
+        char absolute_newpath[PATH_MAX];
+        auto error = vfs_fun_at(newdirfd, newpath, [&absolute_newpath](const char *absolute_path) {
+            strlcpy(absolute_newpath, absolute_path, PATH_MAX);
+            return 0;
+        });
+
+        if (error) {
+            return error;
+        } else {
+            return vfs_fun_at2(olddirfd, oldpath, [absolute_newpath](const char *path) {
+                return link(path, absolute_newpath);
+            });
+        }
+    }
+}
 
 TRACEPOINT(trace_vfs_symlink, "oldpath=%s, newpath=%s", const char*, const char*);
 TRACEPOINT(trace_vfs_symlink_ret, "");
