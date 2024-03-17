@@ -2750,6 +2750,10 @@ void vfs_exit(void)
 {
     /* Free up main_task (stores cwd data) resources */
     replace_cwd(main_task, nullptr, []() { return 0; });
+    /* Unmount file systems mounted with '--mount-fs=...' boot option */
+    for (auto m: opt_mount_fs) {
+        sys_umount(m.mnt_dir);
+    }
     /* Unmount all file systems */
     unmount_rootfs();
     /* Finish with the bio layer */
