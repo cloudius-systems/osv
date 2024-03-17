@@ -1415,7 +1415,7 @@ sys_futimens(int fd, const struct timespec times[2])
     if (!fp->f_dentry)
         return EBADF;
 
-    std::string pathname = fp->f_dentry->d_path;
+    std::string pathname = std::string(fp->f_dentry->d_mount->m_path) + fp->f_dentry->d_path;
     auto error = sys_utimensat(AT_FDCWD, pathname.c_str(), times, 0, false);
     return error;
 }
