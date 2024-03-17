@@ -42,7 +42,7 @@
 #include <bsd/sys/sys/queue.h>
 #include <osv/dentry.h>
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(USE_C_INTERFACE)
 
 #include <memory>
 #include <vector>
@@ -71,7 +71,7 @@ struct pollreq;
 
 #define FDMAX       (0x4000)
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(USE_C_INTERFACE)
 
 namespace mmu {
 class file_vma;

@@ -26,7 +26,7 @@ struct dentry {
 	LIST_ENTRY(dentry) d_children_link;
 };
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(USE_C_INTERFACE)
 
 #include <boost/intrusive_ptr.hpp>
 

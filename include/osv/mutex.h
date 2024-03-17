@@ -19,7 +19,7 @@
 
 #define LOCKFREE_MUTEX_ALIGN void*
 #define LOCKFREE_MUTEX_SIZE 40
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(USE_C_INTERFACE)
 /** C++ **/
 #include <lockfree/mutex.hh>
 typedef lockfree::mutex mutex;
@@ -61,7 +61,7 @@ static inline void mutex_unlock(mutex_t *m) { lockfree_mutex_unlock(m); }
 static inline bool mutex_trylock(mutex_t *m) { return lockfree_mutex_try_lock(m); }
 static inline bool mutex_owned(mutex_t *m) { return lockfree_mutex_owned(m); }
 #endif
-#ifndef __cplusplus
+#if !defined(__cplusplus) || defined(USE_C_INTERFACE)
 static inline void mutex_init(mutex_t* m) { memset(m, 0, sizeof(mutex_t)); }
 static inline void mutex_destroy(mutex_t* m) { }
 #else
@@ -80,7 +80,7 @@ static inline void mutex_destroy(mutex_t* m) { }
 #endif
 #define MUTEX_INITIALIZER   {}
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(USE_C_INTERFACE)
 #include <mutex>
 #include <cstdlib>
 

@@ -11,7 +11,7 @@
 // A waitqueue is similar to a condition variable, but relies on the
 // user supplied mutex for internal locking.
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(USE_C_INTERFACE)
 
 
 #include <sys/cdefs.h>
