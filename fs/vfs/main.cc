@@ -2345,6 +2345,27 @@ ssize_t sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
 #undef sendfile64
 LFS64(sendfile);
 
+extern "C" OSV_LIBC_API
+ssize_t copy_file_range(int fd_in, off_t *off_in,
+                        int fd_out, off_t *off_out,
+                        size_t len, unsigned int flags)
+{
+    //Non-zero flags are rejected according to the manual
+    if (flags != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    //We do not support writing to a file at specified offset because
+    //we delegate to sendfile() which assumes current position of the output
+    //file
+    if (off_out) {
+        WARN("copy_file_range() does not support non-zero off_out\n");
+        errno = EINVAL;
+        return -1;
+    }
+    return sendfile(fd_out, fd_in, off_in, len);
+}
+
 NO_SYS(OSV_LIBC_API int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags));
 
 OSV_LIBC_API
