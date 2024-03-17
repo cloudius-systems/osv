@@ -249,6 +249,26 @@ int __open64_2(const char *file, int flags)
     return open64(file, flags);
 }
 
+// Same missing-mode protection for openat(). Note that this is NOT the
+// same as openat2()!
+extern "C" OSV_LIBC_API
+int __openat_2(int dirfd, const char *pathname, int flags)
+{
+    if (flags & O_CREAT) {
+        abort("__openat_2 called for open mode 0%o with O_CREAT", flags);
+    }
+    return openat(dirfd, pathname, flags, 0);
+}
+
+extern "C" OSV_LIBC_API
+int __openat64_2(int dirfd, const char *pathname, int flags)
+{
+    if (flags & O_CREAT) {
+        abort("__openat64_2 called for open mode 0%o with O_CREAT", flags);
+    }
+    return openat64(dirfd, pathname, flags, 0);
+}
+
 OSV_LIBC_API
 int creat(const char *pathname, mode_t mode)
 {
