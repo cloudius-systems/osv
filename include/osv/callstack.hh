@@ -8,13 +8,16 @@
 #ifndef CALLSTACK_HH_
 #define CALLSTACK_HH_
 
-#include <boost/intrusive/unordered_set.hpp>
 #include <osv/trace.hh>
 #include <osv/percpu.hh>
 #include <memory>
 #include <atomic>
 #include <stdlib.h>
 #include <set>
+// recent Boost gets confused by the "hidden" macro we add in some Musl
+// header files, so need to undefine it
+#undef hidden
+#include <boost/intrusive/unordered_set.hpp>
 
 // An object that instruments tracepoints to collect backtraces.
 //

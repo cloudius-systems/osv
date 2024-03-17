@@ -31,11 +31,15 @@
 #include <osv/shrinker.h>
 #include <osv/defer.hh>
 #include <osv/dbg-alloc.hh>
+#include <osv/migration-lock.hh>
+#include <osv/export.h>
+
+// recent Boost gets confused by the "hidden" macro we add in some Musl
+// header files, so need to undefine it
+#undef hidden
 #include <boost/dynamic_bitset.hpp>
 #include <boost/lockfree/stack.hpp>
 #include <boost/lockfree/policies.hpp>
-#include <osv/migration-lock.hh>
-#include <osv/export.h>
 
 TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d, align=%d", void *, size_t,
            size_t);
