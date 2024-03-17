@@ -2116,3 +2116,8 @@ std::string procfs_maps()
 }
 
 }
+
+extern "C" bool is_linear_mapped(const void *addr)
+{
+    return addr >= mmu::phys_mem;
+}
