@@ -1110,6 +1110,17 @@ int renameat(int olddirfd, const char *oldpath,
     }
 }
 
+extern "C" OSV_LIBC_API
+int renameat2(int olddirfd, const char *oldpath,
+              int newdirfd, const char *newpath, unsigned int flags)
+{
+    if (flags) {
+        errno = EINVAL;
+        return -1;
+    }
+    return renameat(olddirfd, oldpath, newdirfd, newpath);
+}
+
 TRACEPOINT(trace_vfs_chdir, "\"%s\"", const char*);
 TRACEPOINT(trace_vfs_chdir_ret, "");
 TRACEPOINT(trace_vfs_chdir_err, "%d", int);
