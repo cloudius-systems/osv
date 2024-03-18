@@ -56,6 +56,7 @@ extern struct vfsops zfs_vfsops;
 #if CONF_drivers_virtio_fs
 extern struct vfsops virtiofs_vfsops;
 #endif
+extern struct vfsops ext_vfsops;
 
 extern int ramfs_init(void);
 extern int rofs_init(void);
@@ -67,6 +68,7 @@ extern int nfs_init(void);
 extern int procfs_init(void);
 extern int sysfs_init(void);
 extern "C" int zfs_init(void);
+extern "C" int ext_init(void);
 
 /*
  * VFS switch table
@@ -82,5 +84,6 @@ const struct vfssw vfssw[] = {
 #if CONF_drivers_virtio_fs
 	{"virtiofs", 	virtiofs_init, 	&virtiofs_vfsops},
 #endif
+	{"ext",		ext_init,	&ext_vfsops},
 	{nullptr,	fs_noop,	nullptr},
 };
