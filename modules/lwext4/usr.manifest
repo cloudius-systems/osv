@@ -1,0 +1,9 @@
+#
+# Copyright (C) 2024 Waldemar Kozaczuk
+#
+# This work is open source software, licensed under the terms of the
+# BSD license as described in the LICENSE file in the top-level directory.
+#
+
+[manifest]
+/usr/lib/liblwext4.so: ${MODULE_DIR}/upstream/lwext4/build_lib_only/src/liblwext4.so
