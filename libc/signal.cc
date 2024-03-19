@@ -21,6 +21,10 @@
 #include <osv/pid.h>
 #include <osv/export.h>
 
+#ifdef __x86_64__
+#include "tls-switch.hh"
+#endif
+
 using namespace osv::clock::literals;
 
 namespace osv {
@@ -393,6 +397,11 @@ int kill(pid_t pid, int sig)
                 signal_actions[sigidx].sa_flags = 0;
                 signal_actions[sigidx].sa_handler = SIG_DFL;
             }
+#ifdef __x86_64__
+            //In case this signal handler thread has specified app thread local storage
+            //let us switch to it before invoking the user handler routine
+            arch::user_tls_switch tls_switch;
+#endif
             if (sa.sa_flags & SA_SIGINFO) {
                 // FIXME: proper second (siginfo) and third (context) arguments (See example in call_signal_handler)
                 sa.sa_sigaction(sig, nullptr, nullptr);
@@ -401,6 +410,26 @@ int kill(pid_t pid, int sig)
             }
         }, sched::thread::attr().detached().stack(65536).name("signal_handler"),
                 false, true);
+        //If we are running statically linked executable or a dynamic one with Linux
+        //dynamic linker, its threads very likely use app thread local storage and signal
+        //routine may rely on it presence. For that reason we use app TLS of the current
+        //thread if it has one. Otherwise we find 1st app thread with non-null app TLS
+        //and assign the signal handler thread app TLS to it so it is switched to (see above).
+        //TODO: Ideally we should only run the logic below if the current app is statically
+        //linked executable or a dynamic one ran with Linux dynamic linker
+        //(what if we are handling "Ctrl-C"?)
+        u64 app_tcb = sched::thread::current()->get_app_tcb();
+        if (!app_tcb) {
+            auto first_app_thread = sched::find_first_app_thread([&](sched::thread &t) {
+                return t.get_app_tcb();
+            });
+            if (first_app_thread) {
+                app_tcb = first_app_thread->get_app_tcb();
+            }
+        }
+        if (app_tcb) {
+            t->set_app_tcb(app_tcb);
+        }
         t->start();
     }
     return 0;
