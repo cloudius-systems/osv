@@ -7,6 +7,7 @@
 
 #include <sstream>
 #include <drivers/xenfront.hh>
+#include "drivers/blk-common.hh"
 #include <osv/device.h>
 #include <bsd/sys/geom/geom_disk.h>
 #include <osv/bio.h>
@@ -36,7 +37,7 @@ static struct devops xenfront_blk_devops {
     no_close,
     xenfront_blk_read,
     xenfront_blk_write,
-    no_ioctl,
+    blk_ioctl,
     no_devctl,
     multiplex_strategy,
 };

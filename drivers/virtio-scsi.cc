@@ -15,6 +15,7 @@
 #include "drivers/virtio.hh"
 #include "drivers/virtio-scsi.hh"
 #include "drivers/scsi-common.hh"
+#include "drivers/blk-common.hh"
 
 #include <string>
 #include <vector>
@@ -61,7 +62,7 @@ static struct devops scsi_devops {
     no_close,
     scsi_read,
     scsi_write,
-    no_ioctl,
+    blk_ioctl,
     no_devctl,
     multiplex_strategy,
 };

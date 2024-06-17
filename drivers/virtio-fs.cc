@@ -19,6 +19,7 @@
 #include "drivers/virtio.hh"
 #include "drivers/virtio-fs.hh"
 #include "drivers/virtio-vring.hh"
+#include "drivers/blk-common.hh"
 #include "fs/virtiofs/fuse_kernel.h"
 
 using fuse_request = virtio::fs::fuse_request;
@@ -54,7 +55,7 @@ static struct devops fs_devops {
     no_close,
     no_read,
     no_write,
-    no_ioctl,
+    blk_ioctl,
     no_devctl,
     no_strategy,
 };

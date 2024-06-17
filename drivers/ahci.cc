@@ -6,6 +6,7 @@
  */
 
 #include "drivers/ahci.hh"
+#include "drivers/blk-common.hh"
 #include <string.h>
 #include <osv/debug.h>
 #include <osv/mmu.hh>
@@ -44,7 +45,7 @@ static struct devops hba_devops {
     no_close,
     hba_read,
     hba_write,
-    no_ioctl,
+    blk_ioctl,
     no_devctl,
     multiplex_strategy,
 };
