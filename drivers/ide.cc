@@ -10,6 +10,7 @@
 
 #include "drivers/ide.hh"
 #include "drivers/pci-device.hh"
+#include "drivers/blk-common.hh"
 #include <osv/interrupt.hh>
 
 #include <osv/mempool.hh>
@@ -64,7 +65,7 @@ static struct devops ide_devops {
     no_close,
     ide_read,
     ide_write,
-    no_ioctl,
+    blk_ioctl,
     no_devctl,
     ide_strategy,
 };

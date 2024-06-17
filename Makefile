@@ -858,6 +858,7 @@ libtsm += drivers/libtsm/tsm_vte_charsets.o
 drivers := $(bsd)
 drivers += core/mmu.o
 drivers += arch/$(arch)/early-console.o
+drivers += drivers/blk-common.o
 drivers += drivers/console.o
 drivers += drivers/console-multiplexer.o
 drivers += drivers/console-driver.o

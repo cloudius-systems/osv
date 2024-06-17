@@ -16,6 +16,7 @@
 #include "drivers/pci-device.hh"
 #include "drivers/scsi-common.hh"
 #include "drivers/vmw-pvscsi.hh"
+#include "drivers/blk-common.hh"
 
 #include <string>
 #include <vector>
@@ -57,7 +58,7 @@ static struct devops pvscsi_devops {
     no_close,
     pvscsi_read,
     pvscsi_write,
-    no_ioctl,
+    blk_ioctl,
     no_devctl,
     multiplex_strategy,
 };
