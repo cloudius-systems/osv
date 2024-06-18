@@ -5,5 +5,6 @@ include conf/profiles/$(arch)/virtio-pci.mk
 include conf/profiles/$(arch)/vmware.mk
 include conf/profiles/$(arch)/xen.mk
 include conf/profiles/$(arch)/aws.mk
+include conf/profiles/$(arch)/nvme.mk
 
 conf_drivers_vga?=1

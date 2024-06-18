@@ -898,6 +898,10 @@ drivers += drivers/virtio-vring.o
 ifeq ($(conf_drivers_mmio),1)
 drivers += drivers/virtio-mmio.o
 endif
+ifeq ($(conf_drivers_nvme),1)
+drivers += drivers/nvme.o
+drivers += drivers/nvme-queue.o
+endif
 drivers += drivers/virtio-net.o
 drivers += drivers/virtio-blk.o
 drivers += drivers/virtio-scsi.o

@@ -313,6 +313,9 @@ void arch_init_premain()
 #if CONF_drivers_ena
 #include "drivers/ena.hh"
 #endif
+#if CONF_drivers_nvme
+#include "drivers/nvme.hh"
+#endif
 
 extern bool opt_pci_disabled;
 void arch_init_drivers()
@@ -370,6 +373,9 @@ void arch_init_drivers()
 #endif
 #if CONF_drivers_ena
     drvman->register_driver(aws::ena::probe);
+#endif
+#if CONF_drivers_nvme
+    drvman->register_driver(nvme::driver::probe);
 #endif
     boot_time.event("drivers probe");
     drvman->load_all();
