@@ -172,6 +172,10 @@ def start_osv_qemu(options):
         "-device", "virtio-scsi-pci,id=scsi0%s" % options.virtio_device_suffix,
         "-drive", "file=%s,if=none,id=hd0,media=disk,%s" % (options.image_file, aio),
         "-device", "scsi-hd,bus=scsi0.0,drive=hd0,scsi-id=1,lun=0%s" % boot_index]
+    elif options.nvme:
+        args += [
+        "-device", "nvme,serial=deadbeef,drive=nvm%s" % (boot_index),
+        "-drive", "file=%s,if=none,id=nvm,%s" % (options.image_file, aio)]
     elif options.ide:
         args += [
         "-hda", options.image_file]
@@ -197,6 +201,15 @@ def start_osv_qemu(options):
         "-device", "vhost-user-fs-pci,queue-size=1024,chardev=char0,tag=%s%s" % (options.virtio_fs_tag, dax),
         "-object", "memory-backend-file,id=mem,size=%s,mem-path=/dev/shm,share=on" % options.memsize,
         "-numa", "node,memdev=mem"]
+
+    if options.second_nvme_image:
+        args += [
+        "-drive", "file=%s,if=none,id=nvm1" % (options.second_nvme_image),
+        "-device", "nvme,serial=deadbeef,drive=nvm1,"]
+
+    if options.pass_pci:
+        args += [
+        "-device", "vfio-pci,host=%s" % (options.pass_pci)]
 
     if options.no_shutdown:
         args += ["-no-reboot", "-no-shutdown"]
@@ -532,6 +545,8 @@ if __name__ == "__main__":
                         help="don't start OSv till otherwise specified, e.g. through the QEMU monitor or a remote gdb")
     parser.add_argument("-i", "--image", action="store", default=None, metavar="IMAGE",
                         help="path to disk image file. defaults to build/$mode/usr.img")
+    parser.add_argument("-N", "--nvme",action="store_true", default=False,
+                        help="use NVMe instead of virtio-blk")
     parser.add_argument("-S", "--scsi", action="store_true", default=False,
                         help="use virtio-scsi instead of virtio-blk")
     parser.add_argument("-A", "--sata", action="store_true", default=False,
@@ -626,6 +641,10 @@ if __name__ == "__main__":
                         help="static ip addresses (forwarded to respective kernel command line option)")
     parser.add_argument("--bootchart", action="store_true",
                         help="bootchart mode (forwarded to respective kernel command line option")
+    parser.add_argument("--second-nvme-image", action="store",
+                        help="Path to an optional disk image that should be attached to the instance as NVMe device")
+    parser.add_argument("--pass-pci", action="store",
+                        help="passthrough a pci device in given slot if bound to vfio driver")
     cmdargs = parser.parse_args()
 
     cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
