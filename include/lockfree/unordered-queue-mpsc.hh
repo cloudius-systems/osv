@@ -27,7 +27,7 @@ private:
     std::atomic<LT*> _head CACHELINE_ALIGNED;
     LT* _poll_list CACHELINE_ALIGNED;
 public:
-    constexpr unordered_queue_mpsc<LT>()
+    constexpr unordered_queue_mpsc()
         : _head(nullptr)
         , _poll_list(nullptr)
     {

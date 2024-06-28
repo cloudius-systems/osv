@@ -36,8 +36,8 @@ class linked_item {
 public:
     T value;
     linked_item<T> *next;
-    linked_item<T>() : value(), next(nullptr) { }
-    explicit linked_item<T>(T val) : value(val), next(nullptr) { }
+    linked_item() : value(), next(nullptr) { }
+    explicit linked_item(T val) : value(val), next(nullptr) { }
  };
 
 // LT can be any type that has an "LT *next" field, which we used to hold a
@@ -48,7 +48,7 @@ private:
     std::atomic<LT*> pushlist;
     std::atomic<LT*> poplist;
 public:
-    constexpr queue_mpsc<LT>() : pushlist(nullptr), poplist(nullptr) { }
+    constexpr queue_mpsc() : pushlist(nullptr), poplist(nullptr) { }
 
     class iterator;
 
