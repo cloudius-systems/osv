@@ -15,6 +15,7 @@
 #include <osv/mempool.hh>
 #include <osv/interrupt.hh>
 #include <osv/msi.hh>
+#include <osv/aligned_new.hh>
 #include "drivers/nvme-queue.hh"
 #include <vector>
 #include <memory>
@@ -96,9 +97,9 @@ private:
 
     std::vector<std::unique_ptr<msix_vector>> _msix_vectors;
 
-    std::unique_ptr<admin_queue_pair> _admin_queue;
+    std::unique_ptr<admin_queue_pair, aligned_new_deleter<admin_queue_pair>> _admin_queue;
 
-    std::vector<std::unique_ptr<io_queue_pair>> _io_queues;
+    std::vector<std::unique_ptr<io_queue_pair, aligned_new_deleter<io_queue_pair>>> _io_queues;
     u32 _doorbell_stride;
 
     std::unique_ptr<nvme_identify_ctlr_t> _identify_controller;

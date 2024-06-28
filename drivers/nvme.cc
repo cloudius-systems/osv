@@ -306,7 +306,7 @@ void driver::create_admin_queue()
     u32* cq_doorbell = (u32*) ((u64)sq_doorbell + _doorbell_stride);
 
     int qsize = NVME_ADMIN_QUEUE_SIZE;
-    _admin_queue = std::unique_ptr<admin_queue_pair>(
+    _admin_queue = std::unique_ptr<admin_queue_pair, aligned_new_deleter<admin_queue_pair>>(
         aligned_new<admin_queue_pair>(_id, 0, qsize, _dev, sq_doorbell, cq_doorbell, _ns_data));
 
     register_admin_interrupt();
@@ -341,7 +341,7 @@ int driver::create_io_queue(int qid, int qsize, sched::cpu* cpu, int qprio)
     u32* cq_doorbell = (u32*) ((u64) sq_doorbell + _doorbell_stride);
 
     // create queue pair with allocated SQ and CQ ring buffers
-    auto queue = std::unique_ptr<io_queue_pair>(
+    auto queue = std::unique_ptr<io_queue_pair, aligned_new_deleter<io_queue_pair>>(
         aligned_new<io_queue_pair>(_id, iv, qsize, _dev, sq_doorbell, cq_doorbell, _ns_data));
 
     // create completion queue command
