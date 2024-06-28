@@ -59,7 +59,7 @@ char *strerror (int);
 char *strtok_r (char *__restrict, const char *__restrict, char **__restrict);
 #ifndef _GNU_SOURCE
 int __xpg_strerror_r (int, char *, size_t);
-static inline strerror_r(int __errnum, char* __buf, size_t __bufsize)
+static inline int strerror_r(int __errnum, char* __buf, size_t __bufsize)
 {
 	return __xpg_strerror_r(__errnum, __buf, __bufsize);
 }
