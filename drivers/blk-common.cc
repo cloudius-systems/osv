@@ -18,11 +18,6 @@
 
 TRACEPOINT(trace_blk_ioctl, "dev=%s type=%#x nr=%d size=%d, dir=%d", char*, int, int, int, int);
 
-static void no_bio_done(bio* b)
-{
-   delete b;
-}
-
 int
 blk_ioctl(struct device* dev, u_long io_cmd, void* buf)
 {
@@ -41,7 +36,7 @@ blk_ioctl(struct device* dev, u_long io_cmd, void* buf)
             {
                 auto* bio = alloc_bio();
                 bio->bio_dev = dev;
-                bio->bio_done = no_bio_done;
+                bio->bio_done = destroy_bio;
                 bio->bio_cmd = BIO_FLUSH;
 
                 dev->driver->devops->strategy(bio);
