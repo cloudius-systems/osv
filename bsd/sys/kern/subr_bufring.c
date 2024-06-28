@@ -32,6 +32,12 @@
 #include <sys/kernel.h>
 #include <sys/malloc.h>
 //#include <sys/ktr.h>
+
+// needed for buf_ring.h, but not used in this file :-(
+#include <machine/atomic.h>
+static inline void critical_enter()  { abort(); }
+static inline void critical_exit() { abort(); }
+
 #include <sys/buf_ring.h>
 
 struct buf_ring *
