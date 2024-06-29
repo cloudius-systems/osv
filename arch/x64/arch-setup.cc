@@ -137,7 +137,9 @@ void arch_setup_free_memory()
         c = processor::cpuid(0x80000008);
         mmu::phys_bits = c.a & 0xff;
         mmu::virt_bits = (c.a >> 8) & 0xff;
-        assert(mmu::phys_bits <= mmu::max_phys_bits);
+        if(mmu::phys_bits > mmu::max_phys_bits){
+            mmu::phys_bits = mmu::max_phys_bits;
+        }
     }
 
     setup_temporary_phys_map();

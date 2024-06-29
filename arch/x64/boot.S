@@ -7,7 +7,8 @@
 
 #define BOOT_CR0 ( X86_CR0_PE \
                  | X86_CR0_WP \
-                 | X86_CR0_PG )
+                 | X86_CR0_PG \
+                 | X86_CR0_MP )
 
 #define BOOT_CR4 ( X86_CR4_DE         \
                  | X86_CR4_PSE        \
