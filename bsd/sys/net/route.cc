@@ -644,7 +644,7 @@ struct bsd_ifaddr *
 ifa_ifwithroute_fib(int flags, struct bsd_sockaddr *dst, struct bsd_sockaddr *gateway,
 				u_int fibnum)
 {
-	register struct bsd_ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	int not_found = 0;
 
 	if ((flags & RTF_GATEWAY) == 0) {
@@ -909,7 +909,7 @@ rn_mpath_update(int req, struct rt_addrinfo *info,
 	 * a matching RTAX_GATEWAY.
 	 */
 	struct rtentry *rt, *rto = NULL;
-	register struct radix_node *rn;
+	struct radix_node *rn;
 	int error = 0;
 
 	rn = rnh->rnh_matchaddr(dst, rnh);
@@ -1010,9 +1010,9 @@ rtrequest1_fib(int req, struct rt_addrinfo *info, struct rtentry **ret_nrt,
 				u_int fibnum)
 {
 	int error = 0, needlock = 0;
-	register struct rtentry *rt;
-	register struct radix_node *rn;
-	register struct radix_node_head *rnh;
+	struct rtentry *rt;
+	struct radix_node *rn;
+	struct radix_node_head *rnh;
 	struct bsd_ifaddr *ifa;
 	struct bsd_sockaddr *ndst;
 	struct bsd_sockaddr_storage mdst;
@@ -1262,9 +1262,9 @@ rt_setgate(struct rtentry *rt, struct bsd_sockaddr *dst, struct bsd_sockaddr *ga
 void
 rt_maskedcopy(struct bsd_sockaddr *src, struct bsd_sockaddr *dst, struct bsd_sockaddr *netmask)
 {
-	register u_char *cp1 = (u_char *)src;
-	register u_char *cp2 = (u_char *)dst;
-	register u_char *cp3 = (u_char *)netmask;
+	u_char *cp1 = (u_char *)src;
+	u_char *cp2 = (u_char *)dst;
+	u_char *cp3 = (u_char *)netmask;
 	u_char *cplim = cp2 + *cp3;
 	u_char *cplim2 = cp2 + *cp1;
 

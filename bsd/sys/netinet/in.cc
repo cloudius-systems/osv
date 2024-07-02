@@ -97,8 +97,8 @@ VNET_DECLARE(struct arpstat, arpstat);  /* ARP statistics, see if_arp.h */
 int
 in_localaddr(struct in_addr in)
 {
-	register u_long i = ntohl(in.s_addr);
-	register struct in_ifaddr *ia;
+	u_long i = ntohl(in.s_addr);
+	struct in_ifaddr *ia;
 
 	IN_IFADDR_RLOCK();
 	TAILQ_FOREACH(ia, &V_in_ifaddrhead, ia_link) {
@@ -139,8 +139,8 @@ in_localip(struct in_addr in)
 int
 in_canforward(struct in_addr in)
 {
-	register u_long i = ntohl(in.s_addr);
-	register u_long net;
+	u_long i = ntohl(in.s_addr);
+	u_long net;
 
 	if (IN_EXPERIMENTAL(i) || IN_MULTICAST(i) || IN_LINKLOCAL(i))
 		return (0);
@@ -158,8 +158,8 @@ in_canforward(struct in_addr in)
 static void
 in_socktrim(struct bsd_sockaddr_in *ap)
 {
-    register char *cplim = (char *) &ap->sin_addr;
-    register char *cp = (char *) (&ap->sin_addr + 1);
+    char *cplim = (char *) &ap->sin_addr;
+    char *cp = (char *) (&ap->sin_addr + 1);
 
     ap->sin_len = 0;
     while (--cp >= cplim)
@@ -214,9 +214,9 @@ int
 in_control(struct socket *so, u_long cmd, caddr_t data, struct ifnet *ifp,
     struct thread *td)
 {
-	register struct bsd_ifreq *ifr = (struct bsd_ifreq *)data;
-	register struct in_ifaddr *ia, *iap;
-	register struct bsd_ifaddr *ifa;
+	struct bsd_ifreq *ifr = (struct bsd_ifreq *)data;
+	struct in_ifaddr *ia, *iap;
+	struct bsd_ifaddr *ifa;
 	struct in_addr allhosts_addr;
 	struct in_addr dst;
 	struct in_ifinfo *ii;
@@ -836,7 +836,7 @@ static int
 in_ifinit(struct ifnet *ifp, struct in_ifaddr *ia, struct bsd_sockaddr_in *sin,
     int scrub)
 {
-	register u_long i = ntohl(sin->sin_addr.s_addr);
+	u_long i = ntohl(sin->sin_addr.s_addr);
 	struct bsd_sockaddr_in oldaddr;
 	int s = splimp(), flags = RTF_UP, error = 0;
 
@@ -1224,7 +1224,7 @@ in_scrubprefix(struct in_ifaddr *target, u_int flags)
 int
 in_broadcast(struct in_addr in, struct ifnet *ifp)
 {
-	register struct bsd_ifaddr *ifa;
+	struct bsd_ifaddr *ifa;
 	u_long t;
 
 	if (in.s_addr == INADDR_BROADCAST ||
