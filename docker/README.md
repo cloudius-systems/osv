@@ -22,7 +22,7 @@ Run container
 docker run -it --privileged osv/builder
 ```
 
-After starting you will end up in /git-repos directory
+After starting you will end up in /git-repos/osv directory
 where you can build OSv kernel and example app like so:
 ```bash
 ./scripts/build image=native-example
