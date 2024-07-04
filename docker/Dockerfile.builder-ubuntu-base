@@ -7,7 +7,7 @@
 # This Docker file defines an image based on Ubuntu distribution and provides
 # all packages necessary to build and run kernel and applications.
 #
-ARG DIST_VERSION=20.04
+ARG DIST_VERSION=22.04
 FROM ubuntu:${DIST_VERSION}
 
 ENV DEBIAN_FRONTEND noninteractive
@@ -23,18 +23,21 @@ RUN apt-get update -y && apt-get install -y git python3
 #
 
 # - prepare directories
-RUN mkdir -p /git-repos/osv/scripts
+RUN mkdir -p /git-repos
 
-# - get setup.py
+# - clone OSv
 ARG GIT_ORG_OR_USER=cloudius-systems
 ARG GIT_BRANCH=master
-ADD https://raw.githubusercontent.com/${GIT_ORG_OR_USER}/osv/${GIT_BRANCH}/scripts/linux_distro.py /git-repos/osv/scripts/
-ADD https://raw.githubusercontent.com/${GIT_ORG_OR_USER}/osv/${GIT_BRANCH}/scripts/setup.py /git-repos/osv/scripts/
 
-# - install all required packages and remove scripts
-RUN python3 /git-repos/osv/scripts/setup.py && rm -rf /git-repos/osv/scripts
+WORKDIR /git-repos
+RUN git clone https://github.com/${GIT_ORG_OR_USER}/osv.git
 
-RUN update-alternatives --set java /usr/lib/jvm/java-8-openjdk-amd64/jre/bin/java
+WORKDIR /git-repos/osv
+RUN git checkout ${GIT_BRANCH}
+RUN git submodule update --init --recursive
+
+# - update all required packages in case they have changed
+RUN scripts/setup.py
 
 # - install Capstan
 ADD https://github.com/cloudius-systems/capstan/releases/latest/download/capstan /usr/local/bin/
