@@ -51,6 +51,13 @@ void free_contiguous_aligned(void* p);
 
 #include <algorithm>
 
+//#define CONF_debug_ext 1
+#if CONF_debug_ext
+#define ext_debug(format,...) kprintf("[ext4] " format, ##__VA_ARGS__)
+#else
+#define ext_debug(...)
+#endif
+
 //Simple RAII struct to automate release of i-node reference
 //when it goes out of scope.
 struct auto_inode_ref {
@@ -102,14 +109,14 @@ typedef	struct vattr vattr_t;
 static int
 ext_open(struct file *fp)
 {
-    kprintf("[ext4] Opening file\n");
+    ext_debug("Opening file\n");
     return (EOK);
 }
 
 static int
 ext_close(vnode_t *vp, file_t *fp)
 {
-    kprintf("[ext4] Closing file\n");
+    ext_debug("Closing file\n");
     return (EOK);
 }
 
@@ -192,7 +199,7 @@ ext_internal_read(struct ext4_fs *fs, struct ext4_inode_ref *ref, uint64_t offse
             fblock_count++;
         }
 
-        kprintf("[ext4] ext4_blocks_get_direct: block_start:%ld, block_count:%d\n", fblock_start, fblock_count);
+        ext_debug("ext4_blocks_get_direct: block_start:%ld, block_count:%d\n", fblock_start, fblock_count);
         r = ext4_blocks_get_direct(fs->bdev, u8_buf, fblock_start,
                        fblock_count);
         if (r != EOK)
@@ -215,7 +222,7 @@ ext_internal_read(struct ext4_fs *fs, struct ext4_inode_ref *ref, uint64_t offse
             goto Finish;
 
         uint64_t off = fblock * block_size;
-        kprintf("[ext4] ext4_block_readbytes: off:%ld, size:%ld\n", off, size);
+        ext_debug("ext4_block_readbytes: off:%ld, size:%ld\n", off, size);
         r = ext4_block_readbytes(fs->bdev, off, u8_buf, size);
         if (r != EOK)
             goto Finish;
@@ -233,7 +240,7 @@ Finish:
 static int
 ext_read(vnode_t *vp, struct file *fp, uio_t *uio, int ioflag)
 {
-    kprintf("[ext4] Reading %ld bytes at offset:%ld from file i-node:%ld\n", uio->uio_resid, uio->uio_offset, vp->v_ino);
+    ext_debug("Reading %ld bytes at offset:%ld from file i-node:%ld\n", uio->uio_resid, uio->uio_offset, vp->v_ino);
 
     /* Cant read directories */
     if (vp->v_type == VDIR)
@@ -279,12 +286,12 @@ ext_read(vnode_t *vp, struct file *fp, uio_t *uio, int ioflag)
 static int
 ext_internal_write(struct ext4_fs *fs, struct ext4_inode_ref *ref, uint64_t offset, void *buf, size_t size, size_t *wcnt)
 {
-    kprintf("[ext4_interna_write] Writing %ld bytes at offset:%ld\n", size, offset);
+    ext_debug("[ext4_internal_write] Writing %ld bytes at offset:%ld\n", size, offset);
     ext4_fsblk_t fblock;
     ext4_fsblk_t fblock_start = 0;
 
     uint8_t *u8_buf = (uint8_t *)buf;
-    int r;
+    int r, rr = EOK;
 
     if (!size)
         return EOK;
@@ -305,19 +312,27 @@ ext_internal_write(struct ext4_fs *fs, struct ext4_inode_ref *ref, uint64_t offs
     uint32_t unalg = (offset) % block_size;
 
     uint32_t fblock_count = 0;
+
     if (unalg) {
         size_t len = size;
         uint64_t off;
         if (size > (block_size - unalg))
             len = block_size - unalg;
 
-        r = ext4_fs_init_inode_dblk_idx(ref, iblk_idx, &fblock);
+        if (iblk_idx < ifile_blocks) {
+            r = ext4_fs_init_inode_dblk_idx(ref, iblk_idx, &fblock);
+        }
+        else {
+            r = ext4_fs_append_inode_dblk(ref, &fblock, &iblk_idx);
+            ext_debug("[ext_internal_write] Appended block=%d, phys:%ld\n", iblk_idx, fblock);
+            ifile_blocks++;
+        }
         if (r != EOK)
             goto Finish;
 
         off = fblock * block_size + unalg;
         r = ext4_block_writebytes(fs->bdev, off, u8_buf, len);
-        kprintf("[ext_internal_write] Wrote unaligned %ld bytes at %ld\n", len, off);
+        ext_debug("[ext_internal_write] Wrote unaligned %ld bytes at %ld\n", len, off);
         if (r != EOK)
             goto Finish;
 
@@ -336,7 +351,23 @@ ext_internal_write(struct ext4_fs *fs, struct ext4_inode_ref *ref, uint64_t offs
     if (r != EOK)
         goto Finish;
 
-    int rr;
+    //Sometimes file size is less than caller what to start writing at
+    //For example, it is valid to lseek() with SEEK_END with offset to position
+    //file for writing beyond its size.
+    //On Linux, the ext4 supports it as a sparse file but our lwext4-based
+    //implementation does not support sparse files really. So in such case,
+    //we simply append as many missing blocks as needed to close the gap
+    while (ifile_blocks < iblk_idx) {
+        uint32_t iblk_idx2;
+        auto res = ext4_fs_append_inode_dblk(ref, nullptr, &iblk_idx2);
+        if (res != EOK) {
+            offset = ifile_blocks * block_size;
+            goto out_fsize;
+        }
+        ext_debug("[ext_internal_write] Appended (2) block=%d\n", iblk_idx2);
+        ifile_blocks++;
+    }
+
     while (size >= block_size) {
 
         while (iblk_idx < iblock_last) {
@@ -348,6 +379,7 @@ ext_internal_write(struct ext4_fs *fs, struct ext4_inode_ref *ref, uint64_t offs
             } else {
                 rr = ext4_fs_append_inode_dblk(ref, &fblock,
                                    &iblk_idx);
+                ext_debug("[ext_internal_write] Appended (3) block=%d, phys:%ld\n", iblk_idx, fblock);
                 if (rr != EOK) {
                     /* Unable to append more blocks. But
                      * some block might be allocated already
@@ -370,7 +402,7 @@ ext_internal_write(struct ext4_fs *fs, struct ext4_inode_ref *ref, uint64_t offs
 
         r = ext4_blocks_set_direct(fs->bdev, u8_buf, fblock_start,
                        fblock_count);
-        kprintf("[ext_internal_write] Wrote direct %d blocks at block %ld\n", fblock_count, fblock_start);
+        ext_debug("[ext_internal_write] Wrote direct %d blocks at block %ld\n", fblock_count, fblock_start);
         if (r != EOK)
             break;
 
@@ -407,6 +439,7 @@ ext_internal_write(struct ext4_fs *fs, struct ext4_inode_ref *ref, uint64_t offs
                 goto Finish;
         } else {
             r = ext4_fs_append_inode_dblk(ref, &fblock, &iblk_idx);
+            ext_debug("[ext_internal_write] Appended (4) block=%d, phys:%ld\n", iblk_idx, fblock);
             if (r != EOK)
                 /*Node size sholud be updated.*/
                 goto out_fsize;
@@ -414,7 +447,7 @@ ext_internal_write(struct ext4_fs *fs, struct ext4_inode_ref *ref, uint64_t offs
 
         off = fblock * block_size;
         r = ext4_block_writebytes(fs->bdev, off, u8_buf, size);
-        kprintf("[ext_internal_write] Wrote remaining %ld bytes at %ld\n", size, off);
+        ext_debug("[ext_internal_write] Wrote remaining %ld bytes at %ld\n", size, off);
         if (r != EOK)
             goto Finish;
 
@@ -443,7 +476,7 @@ Finish:
 static int
 ext_write(vnode_t *vp, uio_t *uio, int ioflag)
 {
-    kprintf("[ext4] Writing %ld bytes at offset:%ld to file i-node:%ld\n", uio->uio_resid, uio->uio_offset, vp->v_ino);
+    ext_debug("Writing %ld bytes at offset:%ld to file i-node:%ld\n", uio->uio_resid, uio->uio_offset, vp->v_ino);
 
     /* Cant write directories */
     if (vp->v_type == VDIR)
@@ -492,14 +525,14 @@ ext_write(vnode_t *vp, uio_t *uio, int ioflag)
 static int
 ext_ioctl(vnode_t *vp, file_t *fp, u_long com, void *data)
 {
-    kprintf("[ext4] ioctl\n");
+    ext_debug("ioctl\n");
     return (EINVAL);
 }
 
 static int
 ext_fsync(vnode_t *vp, file_t *fp)
 {
-    kprintf("[ext4] fsync\n");
+    ext_debug("fsync\n");
     return (EINVAL);
 }
 
@@ -525,7 +558,7 @@ ext_readdir(struct vnode *dvp, struct file *fp, struct dirent *dir)
         return ENOTDIR;
     }
 
-    kprintf("[ext4] Reading directory with i-node:%ld at offset:%ld\n", dvp->v_ino, file_offset(fp));
+    ext_debug("Reading directory with i-node:%ld at offset:%ld\n", dvp->v_ino, file_offset(fp));
     struct ext4_dir_iter it;
     int rc = ext4_dir_iterator_init(&it, &inode_ref, file_offset(fp));
     if (rc != EOK) {
@@ -540,7 +573,7 @@ ext_readdir(struct vnode *dvp, struct file *fp, struct dirent *dir)
             memset(dir->d_name, 0, sizeof(dir->d_name));
             uint16_t name_length = ext4_dir_en_get_name_len(&fs->sb, it.curr);
             memcpy(dir->d_name, it.curr->name, name_length);
-            kprintf("[ext4] Reading directory with i-node:%ld at offset:%ld => entry name:%s\n", dvp->v_ino, file_offset(fp), dir->d_name);
+            ext_debug("Reading directory with i-node:%ld at offset:%ld => entry name:%s\n", dvp->v_ino, file_offset(fp), dir->d_name);
 
             dir->d_ino = ext4_dir_en_get_inode(it.curr);
 
@@ -560,12 +593,12 @@ ext_readdir(struct vnode *dvp, struct file *fp, struct dirent *dir)
             dir->d_off = f_offset + 1;
             file_setoffset(fp, it.curr ? it.curr_off : EXT4_DIR_ENTRY_OFFSET_TERM);
         } else {
-            kprintf("[ext4] Reading directory with i-node:%ld at offset:%ld -> cos ni tak\n", dvp->v_ino, file_offset(fp));
+            ext_debug("Reading directory with i-node:%ld at offset:%ld -> cos ni tak\n", dvp->v_ino, file_offset(fp));
         }
     } else {
         ext4_dir_iterator_fini(&it);
         ext4_fs_put_inode_ref(&inode_ref);
-        kprintf("[ext4] Reading directory with i-node:%ld at offset:%ld -> ENOENT\n", dvp->v_ino, file_offset(fp));
+        ext_debug("Reading directory with i-node:%ld at offset:%ld -> ENOENT\n", dvp->v_ino, file_offset(fp));
         return ENOENT;
     }
 
@@ -580,7 +613,7 @@ ext_readdir(struct vnode *dvp, struct file *fp, struct dirent *dir)
 static int
 ext_lookup(struct vnode *dvp, char *nm, struct vnode **vpp)
 {
-    kprintf("[ext4] Looking up %s in directory with i-node:%ld\n", nm, dvp->v_ino);
+    ext_debug("Looking up %s in directory with i-node:%ld\n", nm, dvp->v_ino);
     struct ext4_fs *fs = (struct ext4_fs *)dvp->v_mount->m_data;
 
     auto_inode_ref inode_ref(fs, dvp->v_ino);
@@ -615,7 +648,7 @@ ext_lookup(struct vnode *dvp, char *nm, struct vnode **vpp)
 
         (*vpp)->v_mode = ext4_inode_get_mode(&fs->sb, inode_ref2._ref.inode);
 
-        kprintf("[ext4] Looked up %s %s in directory with i-node:%ld as i-node:%d\n",
+        ext_debug("Looked up %s %s in directory with i-node:%ld as i-node:%d\n",
             (*vpp)->v_type == VDIR ? "DIR" : ((*vpp)->v_type == VREG ? "FILE" : "SYMLINK"),
             nm, dvp->v_ino, inode_no);
     } else {
@@ -634,7 +667,7 @@ ext_dir_initialize(ext4_inode_ref *parent, ext4_inode_ref *child, bool dir_index
 #if CONFIG_DIR_INDEX_ENABLE
     /* Initialize directory index if supported */
     if (dir_index_on) {
-        kprintf("[ext4] DIR_INDEX on initializing directory with inode no:%d\n", child->index);
+        ext_debug("DIR_INDEX on initializing directory with inode no:%d\n", child->index);
         r = ext4_dir_dx_init(child, parent);
         if (r != EOK)
             return r;
@@ -683,7 +716,7 @@ ext_dir_link(struct vnode *dvp, char *name, int file_type, uint32_t *inode_no, u
     int r = ext4_dir_find_entry(&result, &inode_ref._ref, name, strlen(name));
     ext4_dir_destroy_result(&inode_ref._ref, &result);
     if (r == EOK) {
-        kprintf("[ext4] %s already exists under i-node %li\n", name, dvp->v_ino);
+        ext_debug("%s already exists under i-node %li\n", name, dvp->v_ino);
         return EEXIST;
     }
 
@@ -712,7 +745,7 @@ ext_dir_link(struct vnode *dvp, char *name, int file_type, uint32_t *inode_no, u
 #else
             bool dir_index_on = false;
 #endif
-            kprintf("[ext4] initializing directory %s with i-node:%d\n", name, child_ref.index);
+            ext_debug("initializing directory %s with i-node:%d\n", name, child_ref.index);
             r = ext_dir_initialize(&inode_ref._ref, &child_ref, dir_index_on);
             if (r != EOK) {
                 ext4_dir_remove_entry(&inode_ref._ref, name, strlen(name));
@@ -739,7 +772,7 @@ ext_dir_link(struct vnode *dvp, char *name, int file_type, uint32_t *inode_no, u
         if (inode_no_created) {
             *inode_no_created = child_ref.index;
         }
-        kprintf("[ext4] created %s under i-node %li\n", name, dvp->v_ino);
+        ext_debug("created %s under i-node %li\n", name, dvp->v_ino);
     } else {
         if (!inode_no) {
             ext4_fs_free_inode(&child_ref);
@@ -757,7 +790,7 @@ ext_dir_link(struct vnode *dvp, char *name, int file_type, uint32_t *inode_no, u
 static int
 ext_create(struct vnode *dvp, char *name, mode_t mode)
 {
-    kprintf("[ext4] create %s under i-node %li\n", name, dvp->v_ino);
+    ext_debug("create %s under i-node %li\n", name, dvp->v_ino);
 
     uint32_t len = strlen(name);
     if (len > NAME_MAX || len > EXT4_DIRECTORY_FILENAME_LEN) {
@@ -932,7 +965,7 @@ ext_dir_remove_entry(struct vnode *dvp, struct vnode *vp, char *name)
 static int
 ext_remove(struct vnode *dvp, struct vnode *vp, char *name)
 {
-    kprintf("[ext4] remove\n");
+    ext_debug("remove\n");
     return ext_dir_remove_entry(dvp, vp, name);
 }
 
@@ -940,14 +973,14 @@ static int
 ext_rename(struct vnode *sdvp, struct vnode *svp, char *snm,
            struct vnode *tdvp, struct vnode *tvp, char *tnm)
 {
-    kprintf("[ext4] rename\n");
+    ext_debug("rename\n");
     struct ext4_fs *fs = (struct ext4_fs *)sdvp->v_mount->m_data;
     auto_write_back wb(fs);
 
     int r = EOK;
     if (tvp) {
         // Remove destination file, first ... if exists
-        kprintf("[ext4] rename removing %s from the target directory\n", tnm);
+        ext_debug("rename removing %s from the target directory\n", tnm);
         auto_inode_ref target_dir(fs, tdvp->v_ino);
         if (target_dir._r != EOK) {
             return target_dir._r;
@@ -1035,7 +1068,7 @@ ext_rename(struct vnode *sdvp, struct vnode *svp, char *snm,
 static int
 ext_mkdir(struct vnode *dvp, char *dirname, mode_t mode)
 {
-    kprintf("[ext4] mkdir %s under i-node %li\n", dirname, dvp->v_ino);
+    ext_debug("mkdir %s under i-node %li\n", dirname, dvp->v_ino);
 
     uint32_t len = strlen(dirname);
     if (len > NAME_MAX || len > EXT4_DIRECTORY_FILENAME_LEN) {
@@ -1051,14 +1084,14 @@ ext_mkdir(struct vnode *dvp, char *dirname, mode_t mode)
 static int
 ext_rmdir(vnode_t *dvp, vnode_t *vp, char *name)
 {
-    kprintf("[ext4] rmdir\n");
+    ext_debug("rmdir\n");
     return ext_dir_remove_entry(dvp, vp, name);
 }
 
 static int
 ext_getattr(vnode_t *vp, vattr_t *vap)
 {
-    kprintf("[ext4] Getting attributes at i-node:%ld\n", vp->v_ino);
+    ext_debug("Getting attributes at i-node:%ld\n", vp->v_ino);
     struct ext4_fs *fs = (struct ext4_fs *)vp->v_mount->m_data;
 
     auto_inode_ref inode_ref(fs, vp->v_ino);
@@ -1079,7 +1112,7 @@ ext_getattr(vnode_t *vp, vattr_t *vap)
 
     vap->va_nodeid = vp->v_ino;
     vap->va_size = ext4_inode_get_size(&fs->sb, inode_ref._ref.inode);
-    kprintf("[ext4] getattr: va_size:%ld\n", vap->va_size);
+    ext_debug("getattr: va_size:%ld\n", vap->va_size);
 
     vap->va_atime.tv_sec = ext4_inode_get_access_time(inode_ref._ref.inode);
     vap->va_mtime.tv_sec = ext4_inode_get_modif_time(inode_ref._ref.inode);
@@ -1094,7 +1127,7 @@ ext_getattr(vnode_t *vp, vattr_t *vap)
 static int
 ext_setattr(vnode_t *vp, vattr_t *vap)
 {
-    kprintf("[ext4] setattr\n");
+    ext_debug("setattr\n");
     struct ext4_fs *fs = (struct ext4_fs *)vp->v_mount->m_data;
 
     auto_write_back wb(fs);
@@ -1129,7 +1162,7 @@ ext_setattr(vnode_t *vp, vattr_t *vap)
 static int
 ext_truncate(struct vnode *vp, off_t new_size)
 {
-    kprintf("[ext4] truncate\n");
+    ext_debug("truncate\n");
     struct ext4_fs *fs = (struct ext4_fs *)vp->v_mount->m_data;
     auto_write_back wb(fs);
     return ext_trunc_inode(fs, vp->v_ino, new_size);
@@ -1138,7 +1171,7 @@ ext_truncate(struct vnode *vp, off_t new_size)
 static int
 ext_link(vnode_t *tdvp, vnode_t *svp, char *name)
 {
-    kprintf("[ext4] link\n");
+    ext_debug("link\n");
     uint32_t len = strlen(name);
     if (len > NAME_MAX || len > EXT4_DIRECTORY_FILENAME_LEN) {
         return ENAMETOOLONG;
@@ -1165,7 +1198,7 @@ ext_fallocate(vnode_t *vp, int mode, loff_t offset, loff_t len)
 static int
 ext_readlink(vnode_t *vp, uio_t *uio)
 {
-    kprintf("[ext4] readlink\n");
+    ext_debug("readlink\n");
     if (vp->v_type != VLNK) {
         return EINVAL;
     }
@@ -1248,7 +1281,7 @@ ext_fsymlink_set(struct ext4_fs *fs, uint32_t inode_no, const void *buf, uint32_
 static int
 ext_symlink(vnode_t *dvp, char *name, char *link)
 {
-    kprintf("[ext4] symlink\n");
+    ext_debug("symlink\n");
     struct ext4_fs *fs = (struct ext4_fs *)dvp->v_mount->m_data;
     auto_write_back wb(fs);
     uint32_t inode_no_created;

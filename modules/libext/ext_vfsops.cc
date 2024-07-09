@@ -27,6 +27,13 @@ void free_contiguous_aligned(void* p);
 #include <cstddef>
 #include <cstdio>
 
+//#define CONF_debug_ext 1
+#if CONF_debug_ext
+#define ext_debug(format,...) kprintf("[ext4] " format, ##__VA_ARGS__)
+#else
+#define ext_debug(...)
+#endif
+
 extern "C" bool is_linear_mapped(const void *addr);
 
 int ext_init(void) { return 0;}
@@ -59,7 +66,7 @@ static int blockdev_bread_or_write(struct ext4_blockdev *bdev, void *buf, uint64
     bio->bio_dev->driver->devops->strategy(bio);
     int error = bio_wait(bio);
 
-    kprintf("[ext4] %s %ld bytes at offset %ld to %p with error:%d\n", read ? "Read" : "Wrote",
+    ext_debug("%s %ld bytes at offset %ld to %p with error:%d\n", read ? "Read" : "Wrote",
         bio->bio_bcount, bio->bio_offset, bio->bio_data, error);
 
     if (!is_linear_mapped(buf)) {
@@ -96,19 +103,63 @@ static struct ext4_fs ext_fs;
 static struct ext4_bcache ext_block_cache;
 extern struct vnops ext_vnops;
 
+static mutex_t ext_inode_alloc_mutex;
+static void ext_inode_alloc_lock()
+{
+    mutex_lock(&ext_inode_alloc_mutex);
+}
+
+static void ext_inode_alloc_unlock()
+{
+    mutex_unlock(&ext_inode_alloc_mutex);
+}
+
+static mutex_t ext_block_alloc_mutex;
+static void ext_block_alloc_lock()
+{
+    mutex_lock(&ext_block_alloc_mutex);
+}
+static void ext_block_alloc_unlock()
+{
+    mutex_unlock(&ext_block_alloc_mutex);
+}
+
+static mutex_t ext_bcache_mutex;
+static void ext_bcache_lock()
+{
+    mutex_lock(&ext_bcache_mutex);
+}
+
+static void ext_bcache_unlock()
+{
+    mutex_unlock(&ext_bcache_mutex);
+}
+
 static int
 ext_mount(struct mount *mp, const char *dev, int flags, const void *data)
 {
     struct device *device;
 
     const char *dev_name = dev + 5;
-    kprintf("[ext4] Trying to open device: [%s]\n", dev_name);
+    ext_debug("Trying to open device: [%s]\n", dev_name);
     int error = device_open(dev_name, DO_RDWR, &device);
 
     if (error) {
         kprintf("[ext4] Error opening device!\n");
         return error;
     }
+
+    mutex_init(&ext_inode_alloc_mutex);
+    ext_fs.inode_alloc_lock = ext_inode_alloc_lock;
+    ext_fs.inode_alloc_unlock = ext_inode_alloc_unlock;
+
+    mutex_init(&ext_block_alloc_mutex);
+    ext_fs.block_alloc_lock = ext_block_alloc_lock;
+    ext_fs.block_alloc_unlock = ext_block_alloc_unlock;
+
+    mutex_init(&ext_bcache_mutex);
+    ext_fs.bcache_lock = ext_bcache_lock;
+    ext_fs.bcache_unlock = ext_bcache_unlock;
 
     ext4_dmask_set(DEBUG_ALL);
     //
@@ -119,7 +170,7 @@ ext_mount(struct mount *mp, const char *dev, int flags, const void *data)
     ext_blockdev.part_size = device->size;
     ext_blockdev.bdif->ph_bcnt = ext_blockdev.part_size / ext_blockdev.bdif->ph_bsize;
 
-    kprintf("[ext4] Trying to mount ext4 on device: [%s] with size:%ld\n", dev_name, device->size);
+    ext_debug("Trying to mount ext4 on device: [%s] with size:%ld\n", dev_name, device->size);
     int r = ext4_block_init(&ext_blockdev);
     if (r != EOK)
         return r;
@@ -156,7 +207,6 @@ ext_mount(struct mount *mp, const char *dev, int flags, const void *data)
     mp->m_root->d_vnode->v_ino = EXT4_INODE_ROOT_INDEX;
 
     kprintf("[ext4] Mounted ext4 on device: [%s] with code:%d\n", dev_name, r);
-    printf("WARNING: The ext4 filesystem driver is considered alpha and is NOT thread-safe\n");
     return r;
 }
 
@@ -169,9 +219,10 @@ ext_unmount(struct mount *mp, int flags)
         ext4_bcache_fini_dynamic(&ext_block_cache);
     }
 
-    r = ext4_block_fini(&ext_blockdev);
-    kprintf("[ext4] Trying to unmount ext4 (after %d)!\n", r);
-    return device_close((struct device*)ext_blockdev.bdif->p_user);
+    ext4_block_fini(&ext_blockdev);
+    r = device_close((struct device*)ext_blockdev.bdif->p_user);
+    kprintf("[ext4] Unmounted filesystem with: %d!\n", r);
+    return r;
 }
 
 static int
@@ -183,7 +234,7 @@ ext_sync(struct mount *mp)
 static int
 ext_statfs(struct mount *mp, struct statfs *statp)
 {
-    kprintf("[ext4] statfs\n");
+    ext_debug("statfs\n");
     struct ext4_fs *fs = (struct ext4_fs *)mp->m_data;
     statp->f_bsize = ext4_sb_get_block_size(&fs->sb);
 

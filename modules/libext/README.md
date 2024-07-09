@@ -48,3 +48,10 @@ or use the `test.sh`:
 ```bash
 sudo fsck -n /dev/loop0
 ```
+
+## Ext2/3/4 file system documentation
+- https://blogs.oracle.com/linux/post/understanding-ext4-disk-layout-part-1
+- https://blogs.oracle.com/linux/post/understanding-ext4-disk-layout-part-2
+- https://adil.medium.com/ext4-filesystem-data-blocks-super-blocks-inode-structure-1afb95c8e4ab
+- https://adil.medium.com/ext4-filesystem-extent-flex-bg-sparse-super-83f172d694c6
+- https://adil.medium.com/ext4-file-system-delayed-allocation-dirty-data-blocks-35945a49fac5
