@@ -1013,3 +1013,8 @@ extern "C" long syscall_wrapper(long p1, long p2, long p3, long p4, long p5, lon
     }
     return ret;
 }
+
+extern "C" int is_selinux_enabled()
+{
+    return 0;
+}
