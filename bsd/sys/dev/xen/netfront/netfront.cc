@@ -33,6 +33,7 @@ __FBSDID("$FreeBSD$");
 #include <bsd/porting/synch.h>
 #include <bsd/porting/kthread.h>
 #include <bsd/porting/callout.h>
+#include <osv/contiguous_alloc.hh>
 
 #include <sys/param.h>
 #include <sys/systm.h>
@@ -628,24 +629,26 @@ setup_device(device_t dev, struct netfront_info *info)
     info->tx.sring = NULL;
     info->irq = 0;
 
-    txs = (netif_tx_sring_t *)malloc(PAGE_SIZE, M_DEVBUF, M_NOWAIT|M_ZERO);
+    txs = (netif_tx_sring_t *)memory::alloc_phys_contiguous_aligned(PAGE_SIZE, PAGE_SIZE);
     if (!txs) {
         error = ENOMEM;
         xenbus_dev_fatal(dev, error, "allocating tx ring page");
         goto fail;
     }
+    memset(txs, 0, PAGE_SIZE);
     SHARED_RING_INIT(txs);
     FRONT_RING_INIT(&info->tx, txs, PAGE_SIZE);
     error = xenbus_grant_ring(dev, virt_to_mfn(txs), &info->tx_ring_ref);
     if (error)
         goto fail;
 
-    rxs = (netif_rx_sring_t *)malloc(PAGE_SIZE, M_DEVBUF, M_NOWAIT|M_ZERO);
+    rxs = (netif_rx_sring_t *)memory::alloc_phys_contiguous_aligned(PAGE_SIZE, PAGE_SIZE);
     if (!rxs) {
         error = ENOMEM;
         xenbus_dev_fatal(dev, error, "allocating rx ring page");
         goto fail;
     }
+    memset(rxs, 0, PAGE_SIZE);
     SHARED_RING_INIT(rxs);
     FRONT_RING_INIT(&info->rx, rxs, PAGE_SIZE);
 
