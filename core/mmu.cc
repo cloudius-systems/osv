@@ -59,7 +59,7 @@ namespace mmu {
 #endif
 
 struct vma_range_compare {
-    bool operator()(const vma_range& a, const vma_range& b) {
+    bool operator()(const vma_range& a, const vma_range& b) const {
         return a.start() < b.start();
     }
 };
@@ -70,7 +70,7 @@ std::set<vma_range, vma_range_compare> vma_range_set;
 rwlock_t vma_range_set_mutex;
 
 struct linear_vma_compare {
-    bool operator()(const linear_vma* a, const linear_vma* b) {
+    bool operator()(const linear_vma* a, const linear_vma* b) const {
         return a->_virt_addr < b->_virt_addr;
     }
 };
