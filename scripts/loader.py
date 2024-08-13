@@ -131,13 +131,17 @@ class Manifest(object):
 
     def __init__(self):
         # Load data from usr.manifest in build_dir
-        mm_path = os.path.join(build_dir, 'usr.manifest')
+        self.guest_to_host_map = self.load_manifest('usr.manifest')
+        self.guest_to_host_map += self.load_manifest('bootfs.manifest')
+
+    def load_manifest(self, manifest_name):
+        mm_path = os.path.join(build_dir, manifest_name)
         try:
             _manifest = read_manifest(mm_path)
-            self.guest_to_host_map = list(expand(_manifest))
-            self.guest_to_host_map = [(x, unsymlink(y % defines)) for (x, y) in self.guest_to_host_map]
+            _guest_to_host_map = list(expand(_manifest))
+            return [(x, unsymlink(y % defines)) for (x, y) in _guest_to_host_map]
         except IOError:
-            self.guest_to_host_map = []
+            return []
 
     def find(self, path):
         '''Try to locate file with help of usr.manifest'''
@@ -1149,7 +1153,7 @@ class osv_info_callouts(gdb.Command):
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, for_tty):
         c = str(gdb.lookup_global_symbol('callouts::_callouts').value())
-        callouts = re.findall('\[([0-9]+)\] = (0x[0-9a-zA-Z]+)', c)
+        callouts = re.findall('\\[([0-9]+)\\] = (0x[0-9a-zA-Z]+)', c)
 
         gdb.write("%-5s%-40s%-40s%-30s%-10s\n" % ("id", "addr", "function", "abs time (ns)", "flags"))
 
@@ -1695,7 +1699,7 @@ class osv_linear_mmap(gdb.Command):
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, for_tty):
         l = str(gdb.lookup_global_symbol('mmu::linear_vma_set').value())
-        linear_vmas = re.findall('\[([0-9]+)\] = (0x[0-9a-zA-Z]+)', l)
+        linear_vmas = re.findall('\\[([0-9]+)\\] = (0x[0-9a-zA-Z]+)', l)
 
         gdb.write("%16s %16s %8s %4s %7s %s\n" % ("vaddr", "paddr", "size", "perm", "memattr", "name"))
 
