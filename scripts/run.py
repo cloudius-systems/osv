@@ -370,6 +370,13 @@ def start_osv_xen(options):
             print("Unrecognized memory size", file=sys.stderr)
             return
 
+    disk_type = "qcow2" if options.image_file.endswith(".img") else "raw"
+    disk_value = "'%s,%s,hda,rw'" % (options.image_file, disk_type)
+
+    if cmdargs.second_disk_image:
+        second_disk_type = "qcow2" if options.second_disk_image.endswith(".img") else "raw"
+        disk_value = disk_value + ",'%s,%s,hda,rw'" % (options.second_disk_image, second_disk_type)
+
     if not options.novnc:
         vncoptions = re.match("^(?P<vncaddr>[^:]*):?(?P<vncdisplay>[0-9]*$)", options.vnc)
 
@@ -387,7 +394,7 @@ def start_osv_xen(options):
         "vcpus=%s" % (options.vcpus),
         "maxcpus=%s" % (options.vcpus),
         "name='osv-%d'" % (os.getpid()),
-        "disk=['/dev/loop%s,raw,hda,rw']" % os.getpid(),
+        "disk=[%s]" % (disk_value),
         "serial='pty'",
         "paused=0",
         "on_crash='preserve'"
@@ -411,8 +418,6 @@ def start_osv_xen(options):
         # Save the current settings of the stty
         stty_save()
 
-        #create a loop device backed by image file
-        subprocess.call(["losetup", "/dev/loop%s" % os.getpid(), options.image_file])
         # Launch qemu
         cmdline = ["xl", "create"]
         if not options.detach:
@@ -420,14 +425,15 @@ def start_osv_xen(options):
         cmdline += [xenfile.name]
         if options.dry_run:
             print(format_args(cmdline))
+            print("\nContent of %s\n---------------------------" % xenfile.name)
+            for item in args:
+                print("%s" % item)
         else:
             subprocess.call(cmdline)
     except:
         pass
     finally:
         xenfile.close()
-        #delete loop device
-        subprocess.call(["losetup", "-d", "/dev/loop%s" % os.getpid()])
         cleanups()
 
 def start_osv_vmware(options):
