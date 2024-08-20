@@ -1,11 +1,11 @@
 [
   {
     "ParameterKey": "pVpcId",
-    "ParameterValue": "vpc-????????"
+    "ParameterValue": "VPC_ID"
   },
   {
     "ParameterKey": "pSubnetId",
-    "ParameterValue": "subnet-????????"
+    "ParameterValue": "SUBNET_ID"
   },
   {
     "ParameterKey": "pInstanceName",
@@ -13,7 +13,7 @@
   },
   {
     "ParameterKey": "pInstanceType",
-    "ParameterValue": "t2.nano"
+    "ParameterValue": "INSTANCE_TYPE"
   },
   {
     "ParameterKey": "pImageId",
