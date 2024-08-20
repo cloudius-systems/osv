@@ -339,6 +339,7 @@ create_rofs_disk() {
 	qemu-img resize ${raw_disk}.raw ${image_size}b >/dev/null 2>&1
 	dd if=rofs.img of=${raw_disk}.raw obs=$partition_offset seek=1 >/dev/null 2>&1
 	qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
+	qemu-img resize $qcow2_disk.img ${image_size}b >/dev/null 2>&1
 }
 
 create_zfs_filesystem() {
@@ -380,7 +381,7 @@ rofs)
 	fi
 	"$SRC"/scripts/gen-rofs-img.py -o rofs.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
 	partition_size=`stat --printf %s rofs.img`
-	image_size=$((partition_offset + partition_size))
+	image_size=$fs_size
 	create_rofs_disk ;;
 rofs_with_zfs)
 	# Create disk with rofs image on it 1st partition
