@@ -79,7 +79,11 @@ public:
         return !(*this == other);
     }
 
+#if (__cplusplus >= 201703L)
     friend constexpr size_t std::distance<mbuf_iterator>(mbuf_iterator, mbuf_iterator);
+#else
+    friend size_t std::distance<mbuf_iterator>(mbuf_iterator, mbuf_iterator);
+#endif
 };
 
 namespace std {
