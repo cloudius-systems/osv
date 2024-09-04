@@ -1,8 +1,8 @@
 ***OSv was originally designed and implemented by Cloudius Systems (now ScyllaDB) however
- currently it is being maintained and enhanced by a small community of volunteers.
+ currently, it is being maintained and enhanced by a small community of volunteers.
  If you are into systems programming or want to learn and help us improve OSv, then please
  contact us on [OSv Google Group forum](https://groups.google.com/forum/#!forum/osv-dev)
- or feel free to pickup any [good issues for newcomers](https://github.com/cloudius-systems/osv/labels/good-for-newcomers).
+ or feel free to pick up any [good issues for newcomers](https://github.com/cloudius-systems/osv/labels/good-for-newcomers).
  For details on how to format and send patches, please read
  [this wiki](https://github.com/cloudius-systems/osv/wiki/Formatting-and-sending-patches)
  (__we do accept pull requests as well__).***
@@ -355,9 +355,34 @@ usermod -aG kvm <user name>
 ```
 
 For more information about building and running JVM, Node.JS, Python, and other managed runtimes as well as Rust, Golang, or C/C++ apps
- on OSv, please read this [wiki page](https://github.com/cloudius-systems/osv/wiki#running-your-application-on-osv). 
- For more information about various example apps you can build and run on OSv, please read 
- [the osv-apps repo README](https://github.com/cloudius-systems/osv-apps#osv-applications).
+on OSv, please read this [wiki page](https://github.com/cloudius-systems/osv/wiki#running-your-application-on-osv). 
+For more information about various example apps you can build and run on OSv, please read 
+[the osv-apps repo README](https://github.com/cloudius-systems/osv-apps#osv-applications).
+
+### Application Types and Launch Modes
+Regarding how applications are launched on OSv, they all fall into two categories - **dynamically linked** and **statically linked** executables. The dynamically linked executables can be launched by the OSv built-into-kernel dynamic linker or the Linux dynamic linker `ld*.so`. The statically linked executables are bootstrapped but OSv dynamic linker but then interact via system calls with OSv kernel. For more details please watch the 1st half of [this presentation](https://fosdem.org/2024/schedule/event/fosdem-2024-3483-support-dynamically-linked-executables-via-linux-ld-so-and-implement-ena-driver-to-expand-application-of-osv/) or read [slides 2-7](https://fosdem.org/2024/events/attachments/fosdem-2024-3483-support-dynamically-linked-executables-via-linux-ld-so-and-implement-ena-driver-to-expand-application-of-osv/slides/22482/OSv_FOSDEM_24_5NmcHjr.pdf).
+#### Dynamically Linked Executables
+The dynamically linked executables require the dynamic linker (built-in or Linux one) to bootstrap the main application ELF file, load the libraries it depends on, resolve symbols and eventually call the `main` function.
+##### Via Built-in Dynamic Linker and `libc`
+The built-in dynamic linker plays the role of the program interpreter that performs similar steps as on Linux, but instead of loading the libraries it depends on from filesystem, it resolves the undefined symbols by pointing them to the implementations of those in OSv built-in `libc`. The OSv linker supports both Shared Libraries and Dynamically Linked Executables that are either position dependent or non-position dependent.
+
+```bash
+./scripts/build image=native-example
+./scripts/run.py -e '/hello'
+```
+The benefit is that programs interact with the OSv kernel using the **fast local function calls** without the overhead of SYSCALL/SVC instruction. On the negative side, the Linux-compatibility is a moving target because GLIBc keeps adding new functions, and OSv needs to keep implementing them.
+##### Via Linux Dynamic Linker `ld*.so` and `glibc`
+Similarly to the built-in dynamic linker, OSv can also launch dynamically linked executables via the Linux dynamic linker `ld*.so`. The Linux dynamic linker `ld*.so` is bootstrapped the exact same way as a statically linked executable (see below) and then it orchestrates loading and execution of the specified dynamically linked executables. Just like with statically linked executable, the application interacts with OSv kernel via system calls.
+```bash
+dl=linux ./scripts/manifest_from_host.sh /bin/ls && ./scripts/build image=empty --append-manifest
+./scripts/run.py -e '/lib64/ld-linux-x86-64.so.2 /hello'
+```
+#### Statically Linked Executables
+The statically linked executables interact with OSv kernel by directly making system calls and reading from pseudo filesystems like procfs and sysfs like in Linux. 
+
+In this mode, the Linux-compatibility is should be improved. But compared to the dynamically linked executables that call *local functions*, the statically linked ones suffer from the ~110 ns system call overhead mainly paid to save and restore the state of regular registers and FPU. Having said that, most Linux applications have been written with the understanding that system calls are expensive and avoid them if possible so neither statically linked executables are affected negatively nor the dynamically linked ones launched via built-in dynamic linker benefit in any significant way.
+
+For more information about OSv implementet syscalls please read this [wiki](https://github.com/cloudius-systems/osv/wiki/Syscalls).
 
 ### Networking
 
@@ -424,5 +449,10 @@ List of somewhat newer articles about OSv found on the Web:
 * [Performance Evaluation of OSv for Server Applications](http://www.cs.utah.edu/~peterm/prelim-osv-performance.pdf)
 * [Time provisioning Evaluation of KVM, Docker and Unikernels in a Cloud Platform](https://tiagoferreto.github.io/pubs/2016ccgrid_xavier.pdf)
 * [Unikernels - Beyond Containers to the Next Generation of the Cloud](https://theswissbay.ch/pdf/_to_sort/O'Reilly/unikernels.pdf)
+
+### FOSDEM Presentations
+* [2024 - Support Dynamically Linked Executables via Linux ld.so and Implement ENA Driver to Expand Application of OSv](https://fosdem.org/2024/schedule/event/fosdem-2024-3483-support-dynamically-linked-executables-via-linux-ld-so-and-implement-ena-driver-to-expand-application-of-osv/)
+* [2023 - Evolution of OSv: Towards Greater Modularity and Composability](https://archive.fosdem.org/2023/schedule/event/osvevolution/)
+* [2014 - OSv, a New Operating System Designed for the Cloud](https://archive.fosdem.org/2014/schedule/event/virtiaas99/)
 
 You can find some older articles and presentations at http://osv.io/resources and http://blog.osv.io/.
