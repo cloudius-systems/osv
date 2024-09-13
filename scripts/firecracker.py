@@ -246,7 +246,7 @@ def start_firecracker_with_no_api(firecracker_path, firecracker_config_json):
 def get_memory_size_in_mb(options):
     memory_in_mb = 128
     if options.memsize:
-        regex = re.search('(\d+[MG])', options.memsize)
+        regex = re.search('(\\d+[MG])', options.memsize)
         if len(regex.groups()) > 0:
             mem_size = regex.group(1)
             memory_in_mb = int(mem_size[:-1])
