@@ -72,6 +72,7 @@ class Fedora(object):
                 'java-1.8.0-openjdk',
                 'lua',
                 'lua-devel',
+                'glibc-static',
                  ]
     if arch == 'x86_64':
         packages = packages + [ 'gcc-c++-aarch64-linux-gnu' ]
