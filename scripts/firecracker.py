@@ -136,7 +136,7 @@ class ApiClient(object):
         machine_config = {
             'vcpu_count': vcpu_count,
             'mem_size_mib': mem_size_in_mb,
-            'ht_enabled' : False
+            'smt' : False
         }
         if self.socket_less:
             self.firecracker_config['machine-config'] = machine_config
