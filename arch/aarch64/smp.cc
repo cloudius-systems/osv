@@ -47,7 +47,7 @@ void smp_init()
     if (nr_cpus < 1) {
         abort("smp_init: could not get cpus from device tree.\n");
     }
-    debug(fmt("%d CPUs detected\n") % nr_cpus);
+    debug("%d CPUs detected\n", nr_cpus);
     u64 *mpids = (u64 *)alloca(sizeof(u64) * nr_cpus);
     if (!dtb_get_cpus_mpid(mpids, nr_cpus)) {
         abort("smp_init: failed to get cpus mpids from device tree.\n");

@@ -21,9 +21,6 @@ std::ostream& fprintf(std::ostream& os, boost::format& fmt, args... as);
 template <typename... args>
 std::string sprintf(const char* fmt, args... as);
 
-template <typename... args>
-std::string sprintf(boost::format& fmt, args... as);
-
 // implementation
 
 template <>
@@ -49,14 +46,6 @@ std::string sprintf(const char* fmt, args... as)
     boost::format f(fmt);
     std::ostringstream os;
     fprintf(os, f, as...);
-    return os.str();
-}
-
-template <typename... args>
-std::string sprintf(boost::format& fmt, args... as)
-{
-    std::ostringstream os;
-    fprintf(os, fmt, as...);
     return os.str();
 }
 

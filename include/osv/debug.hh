@@ -15,7 +15,6 @@
 #include <osv/debug.h>
 #include <osv/mutex.h>
 #include <osv/printf.hh>
-#include "boost/format.hpp"
 
 #define DEBUG_BUFFER_SIZE 1024*50 // 50kb buffer
 
@@ -45,8 +44,6 @@ do {                                                         \
 #define DEBUG_ASSERT(cond, msg, ...) (void)0
 #endif /* NDEBUG */
 
-typedef boost::format fmt;
-
 class isa_serial_console;
 
 class logger {
@@ -66,7 +63,6 @@ public:
     // Interface for logging, these functions checks the filters and
     // calls the underlying debug functions.
     //
-    void wrt(const char* tag, logger_severity severity, const boost::format& _fmt);
     void wrt(const char* tag, logger_severity severity, const char* _fmt, ...);
     void wrt(const char* tag, logger_severity severity, const char* _fmt, va_list ap);
 
@@ -95,9 +91,6 @@ extern "C" {
 }
 void flush_debug_buffer();
 void enable_verbose();
-void debug(const boost::format& fmt);
-template <typename... args>
-void debug(boost::format& fmt, args... as);
 void debug(std::string str);
 template <typename... args>
 void debug(const char* fmt, args... as);
@@ -106,12 +99,6 @@ extern "C" {void readln(char *msg, size_t size); }
 
 template <typename... args>
 void debug(const char* fmt, args... as)
-{
-    debug(osv::sprintf(fmt, as...));
-}
-
-template <typename... args>
-void debug(boost::format& fmt, args... as)
 {
     debug(osv::sprintf(fmt, as...));
 }

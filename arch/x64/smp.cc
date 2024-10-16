@@ -92,7 +92,7 @@ void parse_madt()
     if (!nr_cpus) { // No MP table was found or no cpu was found in there -> assume uni-processor
         register_cpu(nr_cpus++, 0);
     }
-    debug(fmt("%d CPUs detected\n") % nr_cpus);
+    debug("%u CPUs detected\n", nr_cpus);
 }
 #endif
 
@@ -197,7 +197,7 @@ void parse_mp_table()
         register_cpu(nr_cpus++, 0);
     }
 
-    debug(fmt("%d CPUs detected\n") % nr_cpus);
+    debug("%u CPUs detected\n", nr_cpus);
 }
 
 void smp_init()

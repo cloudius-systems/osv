@@ -8,7 +8,6 @@
 // linux syscalls
 
 #include <osv/debug.hh>
-#include <boost/format.hpp>
 #include <osv/sched.hh>
 #include <osv/mutex.h>
 #include <osv/waitqueue.hh>
