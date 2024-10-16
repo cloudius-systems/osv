@@ -11,7 +11,6 @@
 #include <iostream>
 #include <iterator>
 #include <tuple>
-#include <boost/format.hpp>
 #include <osv/types.h>
 #include <osv/align.hh>
 #include <osv/sched.hh>
@@ -84,38 +83,6 @@ struct trace_log {
 };
 
 extern trace_log* _trace_log;
-
-template <size_t idx, size_t N, typename... args>
-struct tuple_formatter
-{
-    static boost::format& format(boost::format& fmt, std::tuple<args...> as) {
-        typedef tuple_formatter<idx + 1, N, args...> recurse;
-        return recurse::format(fmt % std::get<idx>(as), as);
-    }
-};
-
-template <size_t N, typename... args>
-struct tuple_formatter<N, N, args...>
-{
-    static boost::format& format(boost::format& fmt, std::tuple<args...> as) {
-        return fmt;
-    }
-};
-
-template <typename... args>
-inline
-boost::format& format_tuple(boost::format& fmt, std::tuple<args...> as)
-{
-    return tuple_formatter<size_t(0), sizeof...(args), args...>::format(fmt, as);
-}
-
-template <typename... args>
-inline
-boost::format format_tuple(const char* fmt, std::tuple<args...> as)
-{
-    boost::format format(fmt);
-    return format_tuple(format, as);
-}
 
 template <typename T, typename = void>
 struct signature_char;
