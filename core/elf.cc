@@ -8,7 +8,6 @@
 #include <osv/elf.hh>
 #include <osv/app.hh>
 #include <osv/mmu.hh>
-#include <boost/format.hpp>
 #include <exception>
 #include <memory>
 #include <string.h>
@@ -51,10 +50,6 @@ extern size_t elf_size;
 extern char libvdso_start[];
 
 using namespace boost::range;
-
-namespace {
-    typedef boost::format fmt;
-}
 
 namespace elf {
 

@@ -10,7 +10,6 @@
 #include "processor.hh"
 #include <osv/debug.hh>
 #include "exceptions.hh"
-#include <boost/format.hpp>
 #include <string.h>
 #include <iterator>
 #include "libc/signal.hh"
@@ -36,12 +35,6 @@
 
 extern void* elf_start;
 extern size_t elf_size;
-
-namespace {
-
-typedef boost::format fmt;
-
-}
 
 extern const char text_start[], text_end[];
 

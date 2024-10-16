@@ -9,7 +9,6 @@
 #include "fs/fs.hh"
 #include <bsd/init.hh>
 #include <bsd/net.hh>
-#include <boost/format.hpp>
 #include <boost/algorithm/string.hpp>
 #include <cctype>
 #include <osv/elf.hh>

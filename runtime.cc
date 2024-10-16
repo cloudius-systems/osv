@@ -32,7 +32,6 @@
 #include <sys/sysinfo.h>
 #include "processor.hh"
 #include <osv/debug.hh>
-#include <boost/format.hpp>
 #include <osv/mempool.hh>
 #include <osv/export.h>
 #include <pwd.h>
@@ -385,7 +384,7 @@ long sysconf(int name)
     case _SC_MINSIGSTKSZ: return MINSIGSTKSZ;
     case _SC_SIGSTKSZ: return SIGSTKSZ;
     default:
-        debug(fmt("sysconf(): stubbed for parameter %1%\n") % name);
+        debug("sysconf(): stubbed for parameter %ld\n", name);
         errno = EINVAL;
         return -1;
     }
@@ -442,7 +441,7 @@ int pclose(FILE *stream)
 
 void exit(int status)
 {
-    debug(fmt("program exited with status %d\n") % status);
+    debug("program exited with status %ld\n", status);
     osv::shutdown();
 }
 
