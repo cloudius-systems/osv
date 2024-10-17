@@ -199,8 +199,6 @@ string meminfo(const char* format)
     struct sysinfo info;
     sysinfo(&info);
 
-    std::ostringstream os;
-    osv::fprintf(os, format, info.totalram >> 10, info.freeram >> 10);
-    return os.str();
+    return osv::sprintf(format, info.totalram >> 10, info.freeram >> 10);
 }
 }
