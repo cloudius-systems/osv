@@ -9,7 +9,6 @@
 #define PCI_FUNCTION_H
 
 #include <map>
-#include <ostream>
 
 #include <osv/mmio.hh>
 #include <osv/types.h>
@@ -352,7 +351,6 @@ namespace pci {
         // Useful function to print device
         virtual void dump_config();
 
-        friend std::ostream& operator << (std::ostream& out, const function &d);
         struct equal {
             bool operator()(const function* d1, const function* d2) const
             {

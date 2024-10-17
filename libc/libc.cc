@@ -10,7 +10,6 @@
 #include <stdio.h>
 #include <limits.h>
 #include <stdlib.h>
-#include <boost/algorithm/string/split.hpp>
 #include <type_traits>
 #include <limits>
 #include <sys/resource.h>
