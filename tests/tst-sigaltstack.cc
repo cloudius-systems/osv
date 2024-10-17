@@ -65,6 +65,7 @@ bool sig_check(Func f, int sig) {
 // does, a SIGSEGV handler will not be able to run on the normal thread stack
 // (which ran out), and only if sigaltstack() is properly supported, will the
 // signal handler be able to run.
+#pragma GCC diagnostic ignored "-Winfinite-recursion"
 int endless_recursive() {
     return endless_recursive() + endless_recursive();
 }
