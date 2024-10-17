@@ -11,7 +11,6 @@
 #include <vector>
 #include <atomic>
 #include <osv/debug.hh>
-#include <boost/format.hpp>
 #include <cmath>
 #include <fenv.h>
 
@@ -33,7 +32,7 @@ bool test()
             }
         }
     }
-    debug(boost::format("3 -> %f\n") % sins[3]);
+    debug("3 -> %f\n", sins[3]);
     return !bad;
 }
 
@@ -64,8 +63,6 @@ int callee_saved_nearest(bool yield)
 {
     return callee_saved_loop(FE_TONEAREST, yield);
 }
-
-typedef boost::format fmt;
 
 int main(int ac, char **av)
 {

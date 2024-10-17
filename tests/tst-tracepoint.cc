@@ -35,7 +35,7 @@ int main(int ac, char** av)
 {
     test_object obj;
     trace_1(10, 20);
-    debug(boost::format("trace_1 signature: %s") % signature_string(trace_1.signature()));
+    debug("trace_1 signature: %s", signature_string(trace_1.signature()).c_str());
     assert(signature_string(trace_1.signature()) == "Iq");
     struct {
         u32 a0;
