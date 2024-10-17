@@ -11,8 +11,9 @@
 #include "arch.hh"
 #include "arch-tls.hh"
 #include <osv/barrier.hh>
+#include <osv/export.h>
 
-extern "C" bool fsgsbase_avail;
+extern "C" OSV_MODULE_API bool fsgsbase_avail;
 
 namespace arch {
 
