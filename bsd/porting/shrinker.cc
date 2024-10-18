@@ -85,10 +85,10 @@ void bsd_shrinker_init(void)
     struct eventhandler_list *list = eventhandler_find_list("vm_lowmem");
     struct eventhandler_entry *ep;
 
-    debug("BSD shrinker: event handler list found: %p\n", list);
+    debugf("BSD shrinker: event handler list found: %p\n", list);
 
     TAILQ_FOREACH(ep, &list->el_entries, ee_link) {
-        debug("\tBSD shrinker found: %p\n",
+        debugf("\tBSD shrinker found: %p\n",
                 ((struct eventhandler_entry_generic *)ep)->func);
 
         auto *_ee = (struct eventhandler_entry_generic *)ep;

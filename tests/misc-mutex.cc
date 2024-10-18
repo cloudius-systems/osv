@@ -10,6 +10,7 @@
 #include <osv/spinlock.h>
 #include <osv/clock.hh>
 #include <osv/rwlock.h>
+#include <iostream>
 
 #include <string.h>
 

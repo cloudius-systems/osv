@@ -9,7 +9,6 @@
 #include <osv/debug.h>
 #include <osv/sched.hh>
 #include <osv/prio.hh>
-#include <osv/printf.hh>
 #include <osv/aligned_new.hh>
 #include <osv/export.h>
 #include "processor.hh"
@@ -47,7 +46,7 @@ void smp_init()
     if (nr_cpus < 1) {
         abort("smp_init: could not get cpus from device tree.\n");
     }
-    debug("%d CPUs detected\n", nr_cpus);
+    debugf("%d CPUs detected\n", nr_cpus);
     u64 *mpids = (u64 *)alloca(sizeof(u64) * nr_cpus);
     if (!dtb_get_cpus_mpid(mpids, nr_cpus)) {
         abort("smp_init: failed to get cpus mpids from device tree.\n");
@@ -74,7 +73,7 @@ void smp_launch()
     debug_early_entry("smp_launch");
 #endif
     for (auto c : sched::cpus) {
-        auto name = osv::sprintf("balancer%d", c->id);
+        auto name = std::string("balancer") + std::to_string(c->id);
         if (c->arch.smp_idx == 0) {
             sched::thread::current()->_detached_state->_cpu = c;
             // c->init_on_cpu() already done in main().

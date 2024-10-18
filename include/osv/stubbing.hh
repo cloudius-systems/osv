@@ -18,12 +18,14 @@ static inline void debug_always(std::string str)
     fill_debug_buffer(str.c_str(), str.length());
     console::write(str.c_str(), str.length());
 }
-template <typename... args>
-static inline void debug_always(const char* fmt, args... as)
-{
-    debug_always(osv::sprintf(fmt, as...));
-}
 
+static inline void debug_always(const char* fmt...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    debug_always(osv::vsprintf(fmt, ap));
+    va_end(ap);
+}
 
 #define DO_ONCE(thing) do {				\
 	static bool _x;					\

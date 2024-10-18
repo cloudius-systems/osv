@@ -1986,15 +1986,15 @@ linear_vma::~linear_vma() {
 }
 
 std::string sysfs_linear_maps() {
-    std::ostringstream os;
+    std::string output;
     WITH_LOCK(linear_vma_set_mutex.for_read()) {
         for(auto *vma : linear_vma_set) {
             char mattr = vma->_mem_attr == mmu::mattr::normal ? 'n' : 'd';
-            osv::fprintf(os, "%18x %18x %12x rwxp %c %s\n",
+            output += osv::sprintf("%18p %18p %12x rwxp %c %s\n",
                 vma->_virt_addr, (void*)vma->_phys_addr, vma->_size, mattr, vma->_name.c_str());
         }
     }
-    return os.str();
+    return output;
 }
 
 void linear_map(void* _virt, phys addr, size_t size, const char* name,
@@ -2087,25 +2087,25 @@ error mincore(const void *addr, size_t length, unsigned char *vec)
 
 std::string procfs_maps()
 {
-    std::ostringstream os;
+    std::string output;
     WITH_LOCK(vma_list_mutex.for_read()) {
         for (auto& vma : vma_list) {
             char read    = vma.perm() & perm_read  ? 'r' : '-';
             char write   = vma.perm() & perm_write ? 'w' : '-';
             char execute = vma.perm() & perm_exec  ? 'x' : '-';
             char priv    = 'p';
-            osv::fprintf(os, "%x-%x %c%c%c%c ", vma.start(), vma.end(), read, write, execute, priv);
+            output += osv::sprintf("%012x-%012x %c%c%c%c ", vma.start(), vma.end(), read, write, execute, priv);
             if (vma.flags() & mmap_file) {
                 const file_vma &f_vma = static_cast<file_vma&>(vma);
                 unsigned dev_id_major = major(f_vma.file_dev_id());
                 unsigned dev_id_minor = minor(f_vma.file_dev_id());
-                osv::fprintf(os, "%08x %02x:%02x %ld %s\n", f_vma.offset(), dev_id_major, dev_id_minor, f_vma.file_inode(), f_vma.file()->f_dentry->d_path);
+                output += osv::sprintf("%08x %02x:%02x %ld %s\n", f_vma.offset(), dev_id_major, dev_id_minor, f_vma.file_inode(), f_vma.file()->f_dentry->d_path);
             } else {
-                osv::fprintf(os, "00000000 00:00 0\n");
+                output += osv::sprintf("00000000 00:00 0\n");
             }
         }
     }
-    return os.str();
+    return output;
 }
 
 }

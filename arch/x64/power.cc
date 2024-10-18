@@ -36,12 +36,12 @@ void poweroff(void)
     if (acpi::is_enabled()) {
         ACPI_STATUS status = AcpiEnterSleepStatePrep(ACPI_STATE_S5);
         if (ACPI_FAILURE(status)) {
-            debug("AcpiEnterSleepStatePrep failed: %s\n", AcpiFormatException(status));
+            debugf("AcpiEnterSleepStatePrep failed: %s\n", AcpiFormatException(status));
             halt();
         }
         status = AcpiEnterSleepState(ACPI_STATE_S5);
         if (ACPI_FAILURE(status)) {
-            debug("AcpiEnterSleepState failed: %s\n", AcpiFormatException(status));
+            debugf("AcpiEnterSleepState failed: %s\n", AcpiFormatException(status));
             halt();
         }
     } else {

@@ -218,7 +218,7 @@ tracepoint_base::tracepoint_base(unsigned _id, const std::type_info& tp_type,
 {
     auto inserted = known_ids().insert(id).second;
     if (!inserted) {
-        debug("duplicate tracepoint id %d (%s)\n", std::get<0>(id), name);
+        debugf("duplicate tracepoint id %d (%s)\n", std::get<0>(id), name);
         abort();
     }
     probes_ptr.assign(new std::vector<probe*>);

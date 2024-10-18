@@ -259,7 +259,7 @@ void mount_module::handle(const YAML::Node& doc)
 void hostname_module::handle(const YAML::Node& doc)
 {
     auto hostname = doc.as<string>();
-    debug("cloudinit hostname: %s\n", hostname.c_str());
+    debugf("cloudinit hostname: %s\n", hostname.c_str());
     set_hostname_renew_dhcp(hostname);
 }
 
@@ -306,7 +306,7 @@ void osvinit::load_from_cloud(bool ignore_missing_source)
         throw osvinit_exception("Failed getting cloud-init information "+std::string(e.what()));
     }
     if (user_data.empty()) {
-        debug("User data is empty\n");
+        debugf("User data is empty\n");
         return;
     }
 

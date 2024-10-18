@@ -306,7 +306,7 @@ static void parse_options(int loader_argc, char** loader_argv)
             printf("Ignoring '--console' options after the first.");
         }
         opt_console = v.front();
-        debug("console=%s\n", opt_console);
+        debugf("console=%s\n", opt_console.c_str());
     }
 
     if (options::option_value_exists(options_values, "rootfs")) {
@@ -338,7 +338,7 @@ static void parse_options(int loader_argc, char** loader_argv)
 
     if (options::option_value_exists(options_values, "env")) {
         for (auto t : options::extract_option_values(options_values, "env")) {
-            debug("Setting in environment: %s\n", t);
+            debugf("Setting in environment: %s\n", t.c_str());
             putenv(strdup(t.c_str()));
         }
     }
@@ -457,7 +457,7 @@ static void load_zfs_library(std::function<void()> on_load_fun = nullptr)
            on_load_fun();
         }
     } else {
-        debug("Could not load and/or initialize %s.\n", libsolaris_path);
+        debugf("Could not load and/or initialize %s.\n", libsolaris_path);
     }
 }
 
@@ -598,7 +598,7 @@ void* do_main_thread(void *_main_args)
     }
 
     if (!opt_chdir.empty()) {
-        debug("Chdir to: '%s'\n", opt_chdir.c_str());
+        debugf("Chdir to: '%s'\n", opt_chdir.c_str());
 
         if (chdir(opt_chdir.c_str()) != 0) {
             perror("chdir");
@@ -659,7 +659,7 @@ void* do_main_thread(void *_main_args)
             std::string fn("/init/");
             fn += namelist[i]->d_name;
             auto cmdline = read_file(fn);
-            debug("Running from %s: %s\n", fn.c_str(), cmdline.c_str());
+            debugf("Running from %s: %s\n", fn.c_str(), cmdline.c_str());
             bool ok;
             auto new_commands = osv::parse_command_line(cmdline, ok);
             free(namelist[i]);
@@ -712,7 +712,7 @@ void* do_main_thread(void *_main_args)
 
     for (auto app : detached) {
         app->request_termination();
-        debug("Requested termination of %s, waiting...\n", app->get_command());
+        debugf("Requested termination of %s, waiting...\n", app->get_command().c_str());
     }
 
     application::join_all();
@@ -723,7 +723,7 @@ void main_cont(int loader_argc, char** loader_argv)
 {
     osv::firmware_probe();
 
-    debug("Firmware vendor: %s\n", osv::firmware_vendor().c_str());
+    debugf("Firmware vendor: %s\n", osv::firmware_vendor().c_str());
 
     elf::create_main_program();
 

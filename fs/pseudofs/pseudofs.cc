@@ -186,12 +186,11 @@ string cpumap()
     uint32_t first_set = 0xffffffff >> (32 - cpu_count % 32);
     int remaining_cpus_sets = cpu_count / 32;
 
-    std::ostringstream os;
-    osv::fprintf(os, "%08x", first_set);
+    auto output = osv::sprintf("%08x", first_set);
     for (; remaining_cpus_sets > 0; remaining_cpus_sets--) {
-        osv::fprintf(os, ",%08x", 0xffffffff);
+        output += osv::sprintf(",%08x", 0xffffffff);
     }
-    return os.str();
+    return output;
 }
 
 string meminfo(const char* format)

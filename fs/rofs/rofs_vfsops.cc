@@ -28,8 +28,6 @@
 #include <osv/debug.h>
 #include <osv/contiguous_alloc.hh>
 #include <fs/vfs/vfs_id.h>
-#include <iomanip>
-#include <iostream>
 
 static int rofs_mount(struct mount *mp, const char *dev, int flags, const void *data);
 static int rofs_sync(struct mount *mp);
@@ -219,12 +217,12 @@ rofs_unmount(struct mount *mp, int flags)
     delete rofs;
 
 #if defined(ROFS_DIAGNOSTICS_ENABLED)
-    debugf("ROFS: spent %.2f ms reading from disk\n", ((double) rofs_block_read_ms.load()) / 1000);
-    debugf("ROFS: read %d 512-byte blocks from disk\n", rofs_block_read_count.load());
-    debugf("ROFS: allocated %d 512-byte blocks of cache memory\n", rofs_block_allocated.load());
+    debugff("ROFS: spent %.2f ms reading from disk\n", ((double) rofs_block_read_ms.load()) / 1000);
+    debugff("ROFS: read %d 512-byte blocks from disk\n", rofs_block_read_count.load());
+    debugff("ROFS: allocated %d 512-byte blocks of cache memory\n", rofs_block_allocated.load());
     long total_cache_reads = rofs_cache_reads.load();
     double hit_ratio = total_cache_reads > 0 ? (rofs_cache_reads.load() - rofs_cache_misses.load()) / ((double)total_cache_reads) : 0;
-    debugf("ROFS: hit ratio is %.2f%%\n", hit_ratio * 100);
+    debugff("ROFS: hit ratio is %.2f%%\n", hit_ratio * 100);
 #endif
     return error;
 }

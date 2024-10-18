@@ -64,7 +64,7 @@ sched::cpu::notifier cpu_notifier([] {
 });
 
 cpu_quiescent_state_thread::cpu_quiescent_state_thread(sched::cpu* cpu)
-    : _t(sched::thread::make([=] { work(); }, sched::thread::attr().pin(cpu).name(osv::sprintf("rcu%d", cpu->id))))
+    : _t(sched::thread::make([=] { work(); }, sched::thread::attr().pin(cpu).name(std::string("rcu") + std::to_string(cpu->id))))
 {
     (*percpu_quiescent_state_thread).reset(*_t);
     _t->start();

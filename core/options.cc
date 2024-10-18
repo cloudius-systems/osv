@@ -5,9 +5,9 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <iostream>
 #include <functional>
 #include <cassert>
+#include <stdexcept>
 #include <osv/options.hh>
 
 namespace options {

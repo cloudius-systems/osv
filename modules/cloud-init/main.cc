@@ -59,19 +59,19 @@ static bool config_disk(const char* outfile) {
         std::vector<std::string> cmd = {"/usr/bin/iso-read.so", "-e", srcfile, "-o", outfile, disk};
         osv::run(cmd[0], cmd, &app_ret);
         if (app_ret != 0) {
-            debug("cloud-init: warning, %s exited with code %d (%s is not ISO image?)\n", cmd[0], app_ret, disk);
+            debugf("cloud-init: warning, %s exited with code %d (%s is not ISO image?)\n", cmd[0].c_str(), app_ret, disk);
             continue;
         }
         ret = stat(outfile, &sb);
         if (ret != 0) {
-            debug("cloud-init: disk %s, stat(%s) failed, errno=%d\n", disk, outfile, errno);
+            debugf("cloud-init: disk %s, stat(%s) failed, errno=%d\n", disk, outfile, errno);
             continue;
         }
         if ((sb.st_mode & S_IFMT) != S_IFREG) {
-            debug("cloud-init: disk %s, %s is not a file\n", disk, outfile);
+            debugf("cloud-init: disk %s, %s is not a file\n", disk, outfile);
             return false;
         }
-        debug("cloud-init: copied file %s -> %s from ISO image %s\n", srcfile, outfile, disk);
+        debugf("cloud-init: copied file %s -> %s from ISO image %s\n", srcfile, outfile, disk);
         return true;
     }
     return false;

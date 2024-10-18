@@ -40,8 +40,8 @@ void probe_and_setup()
     }
 
     if (ACPI_FAILURE(status)) {
-        debug("pvpanic:AcpiEvaluateObject() failed: %s\n",
-              AcpiFormatException(status));
+        debugf("pvpanic:AcpiEvaluateObject() failed: %s\n",
+               AcpiFormatException(status));
         return;
     }
 

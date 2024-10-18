@@ -702,7 +702,7 @@ symbol_module object::symbol(unsigned idx, bool ignore_missing)
     }
     if (!ret.symbol) {
         if (ignore_missing) {
-            debug("%s: ignoring missing symbol %s\n", pathname().c_str(), demangle(name).c_str());
+            debugf("%s: ignoring missing symbol %s\n", pathname().c_str(), demangle(name).c_str());
         } else {
             abort("%s: failed looking up symbol %s\n", pathname().c_str(), demangle(name).c_str());
         }
@@ -1088,7 +1088,7 @@ void object::load_needed(std::vector<std::shared_ptr<object>>& loaded_objects)
             // unloaded until this object is unloaded.
             _needed.push_back(std::move(obj));
         } else {
-            debug("could not load %s\n", lib);
+            debugf("could not load %s\n", lib);
         }
     }
 }

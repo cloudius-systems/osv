@@ -28,6 +28,8 @@
 #include <osv/clock.hh>
 #include <libc/network/__dns.hh>
 
+#include <algorithm>
+
 using namespace boost::asio;
 
 dhcp::dhcp_worker net_dhcp_worker;

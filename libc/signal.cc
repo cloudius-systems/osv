@@ -364,7 +364,7 @@ int kill(pid_t pid, int sig)
     unsigned sigidx = sig - 1;
     if (is_sig_dfl(signal_actions[sigidx])) {
         // Our default is to power off.
-        debug("Uncaught signal %d (\"%s\"). Powering off.\n",
+        debugf("Uncaught signal %d (\"%s\"). Powering off.\n",
                 sig, strsignal(sig));
         osv::poweroff();
     } else if(!is_sig_ign(signal_actions[sigidx])) {
