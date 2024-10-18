@@ -9,7 +9,6 @@
 #include "fs/fs.hh"
 #include <bsd/init.hh>
 #include <bsd/net.hh>
-#include <boost/algorithm/string.hpp>
 #include <cctype>
 #include <osv/elf.hh>
 #include "arch-tls.hh"
@@ -51,8 +50,6 @@
 #endif
 #include <osv/options.hh>
 #include <dirent.h>
-#include <iostream>
-#include <fstream>
 #include <mntent.h>
 
 #include "drivers/zfs.hh"
@@ -63,6 +60,7 @@
 #include "libc/network/__dns.hh"
 #include <processor.hh>
 #include <dlfcn.h>
+#include <osv/string_utils.hh>
 
 using namespace osv;
 using namespace osv::clock::literals;
@@ -176,44 +174,45 @@ static bool opt_enable_sampler = false;
 
 static void usage()
 {
-    std::cout << "OSv options:\n";
-    std::cout << "  --help                show help text\n";
-    std::cout << "  --sampler=arg         start stack sampling profiler\n";
-    std::cout << "  --trace=arg           tracepoints to enable\n";
-    std::cout << "  --trace-backtrace     log backtraces in the tracepoint log\n";
-    std::cout << "  --trace-list          list available tracepoints\n";
-    std::cout << "  --strace              start a thread to print tracepoints to the console on the fly\n";
-    std::cout << "  --leak                start leak detector after boot\n";
-    std::cout << "  --nomount             don't mount the root file system\n";
-    std::cout << "  --nopivot             do not pivot the root from bootfs to the root fs\n";
-    std::cout << "  --rootfs=arg          root filesystem to use (zfs, rofs, ramfs or virtiofs)\n";
-    std::cout << "  --assign-net          assign virtio network to the application\n";
-    std::cout << "  --maxnic=arg          maximum NIC number\n";
-    std::cout << "  --norandom            don't initialize any random device\n";
-    std::cout << "  --noshutdown          continue running after main() returns\n";
-    std::cout << "  --power-off-on-abort  use poweroff instead of halt if it's aborted\n";
-    std::cout << "  --noinit              don't run commands from /init\n";
-    std::cout << "  --verbose             be verbose, print debug messages\n";
-    std::cout << "  --console=arg         select console driver\n";
-    std::cout << "  --env=arg             set Unix-like environment variable (putenv())\n";
-    std::cout << "  --cwd=arg             set current working directory\n";
-    std::cout << "  --bootchart           perform a test boot measuring a time distribution of\n";
-    std::cout << "                        the various operations\n\n";
-    std::cout << "  --ip=arg              set static IP on NIC\n";
-    std::cout << "  --defaultgw=arg       set default gateway address\n";
-    std::cout << "  --nameserver=arg      set nameserver address\n";
-    std::cout << "  --delay=arg (=0)      delay in seconds before boot\n";
-    std::cout << "  --redirect=arg        redirect stdout and stderr to file\n";
-    std::cout << "  --disable_rofs_cache  disable ROFS memory cache\n";
-    std::cout << "  --nopci               disable PCI enumeration\n";
-    std::cout << "  --extra-zfs-pools     import extra ZFS pools\n";
-    std::cout << "  --mount-fs=arg        mount extra filesystem, format:<fs_type,url,path>\n";
-    std::cout << "  --preload-zfs-library preload ZFS library from /usr/lib/fs\n\n";
+    printf(
+        "OSv options:\n"
+        "  --help                show help text\n"
+        "  --sampler=arg         start stack sampling profiler\n"
+        "  --trace=arg           tracepoints to enable\n"
+        "  --trace-backtrace     log backtraces in the tracepoint log\n"
+        "  --trace-list          list available tracepoints\n"
+        "  --strace              start a thread to print tracepoints to the console on the fly\n"
+        "  --leak                start leak detector after boot\n"
+        "  --nomount             don't mount the root file system\n"
+        "  --nopivot             do not pivot the root from bootfs to the root fs\n"
+        "  --rootfs=arg          root filesystem to use (zfs, rofs, ramfs or virtiofs)\n"
+        "  --assign-net          assign virtio network to the application\n"
+        "  --maxnic=arg          maximum NIC number\n"
+        "  --norandom            don't initialize any random device\n"
+        "  --noshutdown          continue running after main() returns\n"
+        "  --power-off-on-abort  use poweroff instead of halt if it's aborted\n"
+        "  --noinit              don't run commands from /init\n"
+        "  --verbose             be verbose, print debug messages\n"
+        "  --console=arg         select console driver\n"
+        "  --env=arg             set Unix-like environment variable (putenv())\n"
+        "  --cwd=arg             set current working directory\n"
+        "  --bootchart           perform a test boot measuring a time distribution of\n"
+        "                        the various operations\n\n"
+        "  --ip=arg              set static IP on NIC\n"
+        "  --defaultgw=arg       set default gateway address\n"
+        "  --nameserver=arg      set nameserver address\n"
+        "  --delay=arg (=0)      delay in seconds before boot\n"
+        "  --redirect=arg        redirect stdout and stderr to file\n"
+        "  --disable_rofs_cache  disable ROFS memory cache\n"
+        "  --nopci               disable PCI enumeration\n"
+        "  --extra-zfs-pools     import extra ZFS pools\n"
+        "  --mount-fs=arg        mount extra filesystem, format:<fs_type,url,path>\n"
+        "  --preload-zfs-library preload ZFS library from /usr/lib/fs\n\n");
 }
 
 static void handle_parse_error(const std::string &message)
 {
-    std::cout << message << std::endl;
+    printf("%s\n", message.c_str());
     usage();
     osv::poweroff();
 }
@@ -286,7 +285,7 @@ static void parse_options(int loader_argc, char** loader_argv)
         auto tv = options::extract_option_values(options_values, "trace");
         for (auto t : tv) {
             std::vector<std::string> tmp;
-            boost::split(tmp, t, boost::is_any_of(" ,"), boost::token_compress_on);
+            osv::split(tmp, t, " ,", true);
             for (auto t : tmp) {
                 enable_tracepoint(t);
             }
@@ -322,7 +321,7 @@ static void parse_options(int loader_argc, char** loader_argv)
         auto mounts = options::extract_option_values(options_values, "mount-fs");
         for (auto m : mounts) {
             std::vector<std::string> tmp;
-            boost::split(tmp, m, boost::is_any_of(","), boost::token_compress_on);
+            osv::split(tmp, m, ",", true);
             if (tmp.size() != 3 || tmp[0].empty() || tmp[1].empty() || tmp[2].empty()) {
                 printf("Ignoring value: '%s' for option mount-fs, expected in format: <fs_type,url,path>\n", m.c_str());
                 continue;
@@ -380,7 +379,7 @@ static void parse_options(int loader_argc, char** loader_argv)
 
     if (!options_values.empty()) {
         for (auto other_option : options_values) {
-            std::cout << "unrecognized option: " << other_option.first << std::endl;
+            printf("unrecognized option: %s\n", other_option.first.c_str());
         }
 
         usage();
@@ -389,12 +388,25 @@ static void parse_options(int loader_argc, char** loader_argv)
 }
 
 // return the std::string and the commands_args poiting to them as a move
+#if HIDE_SYMBOLS < 1
+#include <iostream>
+#endif
 std::vector<std::vector<std::string> > prepare_commands(char* app_cmdline)
 {
     std::vector<std::vector<std::string> > commands;
     bool ok;
 
+//When the kernel is linked in with full standard C++ library
+//and all symbols exposed, the std::cout needs to be initialized
+//early before any C++ application is executed. This is not necessary
+//when the kernel is built with all symbols but glibc and standard C++
+//library hidden.
+//For details please read comments of this commit a5e83688f1aa30498c5e270a6cdc04222ede8cb6
+#if HIDE_SYMBOLS < 1
+    std::cout << "Cmdline: " << app_cmdline << "\n";
+#else
     printf("Cmdline: %s\n", app_cmdline);
+#endif
     commands = osv::parse_command_line(app_cmdline, ok);
 
     if (!ok) {
@@ -411,9 +423,22 @@ std::vector<std::vector<std::string> > prepare_commands(char* app_cmdline)
 
 static std::string read_file(std::string fn)
 {
-  std::ifstream in(fn, std::ios::in | std::ios::binary);
-  return std::string((std::istreambuf_iterator<char>(in)),
-          std::istreambuf_iterator<char>());
+    FILE *fp = fopen(fn.c_str(), "r");
+    if (!fp) {
+        return "";
+    }
+
+    size_t line_length = 0;
+    char *line_buffer = nullptr;
+    ssize_t read;
+    std::string content;
+    while ((read = getline(&line_buffer, &line_length, fp)) != -1) {
+        content += line_buffer;
+    }
+    free(line_buffer);
+    fclose(fp);
+
+    return content;
 }
 
 static void stop_all_remaining_app_threads()
@@ -538,7 +563,7 @@ void* do_main_thread(void *_main_args)
         } else {
             for (auto t : opt_ip) {
                 std::vector<std::string> tmp;
-                boost::split(tmp, t, boost::is_any_of(" ,"), boost::token_compress_on);
+                osv::split(tmp, t, " ,", true);
                 if (tmp.size() != 3)
                     abort("incorrect parameter on --ip");
 
@@ -610,8 +635,7 @@ void* do_main_thread(void *_main_args)
         if (fd < 0) {
             perror("output redirection failed");
         } else {
-            std::cout << (append ? "Appending" : "Writing") <<
-                    " stdout and stderr to " << fn << "\n";
+            printf("%s stdout and stderr to %s\n", (append ? "Appending" : "Writing"), fn.c_str());
             close(1);
             close(2);
             dup(fd);
@@ -677,7 +701,7 @@ void* do_main_thread(void *_main_args)
                 bg.push_back(app);
             }
         } catch (const launch_error& e) {
-            std::cerr << e.what() << ". Powering off.\n";
+            fprintf(stderr, "%s. Powering off.\n", e.what());
             osv::poweroff();
         }
     }

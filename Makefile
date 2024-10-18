@@ -2083,6 +2083,8 @@ boost-libs := $(boost-lib-dir)/libboost_system$(boost-mt).a
 objects += fs/nfs/nfs_null_vfsops.o
 objects += fs/ext/ext_null_vfsops.o
 
+$(out)/loader.o: CXXFLAGS += -DHIDE_SYMBOLS=$(conf_hide_symbols)
+
 # The OSv kernel is linked into an ordinary, non-PIE, executable, so there is no point in compiling
 # with -fPIC or -fpie and objects that can be linked into a PIE. On the contrary, PIE-compatible objects
 # have overheads and can cause problems (see issue #1112). Recently, on some systems gcc's

@@ -15,7 +15,6 @@
 #include <osv/debug.hh>
 #include <stdlib.h>
 #include <unistd.h>
-#include <boost/algorithm/string.hpp>
 #include <boost/range/algorithm/find.hpp>
 #include <functional>
 #include <iterator>
@@ -28,6 +27,7 @@
 #include <osv/export.h>
 #include <boost/version.hpp>
 #include <deque>
+#include <osv/string_utils.hh>
 
 #include "arch.hh"
 #include "arch-elf.hh"
@@ -541,10 +541,11 @@ void object::process_headers()
             auto kernel_tls_used_size = kernel_tls_size - pie_static_tls_maximum_size;
             auto kernel_tls_needed_size = align_up(kernel_tls_used_size + app_tls_size, 64UL);
             auto app_tls_needed_size = kernel_tls_needed_size - kernel_tls_used_size;
-            std::cout << "WARNING: " << pathname() << " is a PIE using TLS of size " << app_tls_size
-                  << " which is greater than the " << pie_static_tls_maximum_size << " bytes limit. "
-                  << "Either re-link the kernel by adding 'app_local_exec_tls_size=" << app_tls_needed_size
-                  << "' to ./scripts/build or re-link the app with '-shared' instead of '-pie'.\n";
+            printf("WARNING: %s is a PIE using TLS of size %lu "
+                   "which is greater than the %lu bytes limit. "
+                   "Either re-link the kernel by adding 'app_local_exec_tls_size=%lu' "
+                   "to ./scripts/build or re-link the app with '-shared' instead of '-pie'.\n",
+                    pathname().c_str(), app_tls_size, pie_static_tls_maximum_size, app_tls_needed_size);
         }
     }
 }
@@ -1075,8 +1076,8 @@ void object::load_needed(std::vector<std::shared_ptr<object>>& loaded_objects)
     }
 
     if (!rpath_str.empty()) {
-        boost::replace_all(rpath_str, "$ORIGIN", dirname(_pathname));
-        boost::split(rpath, rpath_str, boost::is_any_of(":"));
+        osv::replace_all(rpath_str, "$ORIGIN", dirname(_pathname));
+        osv::split(rpath, rpath_str, ":");
     }
     auto needed = dynamic_str_array(DT_NEEDED);
     for (auto lib : needed) {

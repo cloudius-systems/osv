@@ -17,7 +17,7 @@
 #include <osv/bio.h>
 #include "sys/xen/gnttab.h"
 #include "sys/dev/xen/blkfront/block.h"
-#include <boost/algorithm/string.hpp>
+#include <osv/string_utils.hh>
 
 extern driver_t netfront_driver;
 extern driver_t blkfront_driver;
@@ -66,7 +66,7 @@ void xenfront_driver::set_ivars(struct xenbus_device_ivars *ivars)
         _driver_name = "vif";
 
         std::vector<std::string> node_info;
-        boost::split(node_info, _node_path, boost::is_any_of("/"));
+        osv::split(node_info, _node_path, "/");
         assert(node_info.size() == 3);
 
         // Very unfrequent, so don't care about how expensive and full of barriers this is
