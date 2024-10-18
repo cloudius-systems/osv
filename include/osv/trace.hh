@@ -8,7 +8,6 @@
 #ifndef TRACE_HH_
 #define TRACE_HH_
 
-#include <iostream>
 #include <iterator>
 #include <tuple>
 #include <osv/types.h>
