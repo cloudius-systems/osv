@@ -6,6 +6,7 @@
  */
 
 #include "drivers/virtio-pci-device.hh"
+#include <algorithm>
 
 namespace virtio {
 

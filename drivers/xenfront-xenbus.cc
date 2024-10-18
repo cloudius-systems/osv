@@ -59,7 +59,7 @@ xenbus::xenbus()
     xs_attach(&_xenstore_device);
 
     xs_scanf(XST_NIL, "domid", "", NULL, "%d", &_domid);
-    _node_path = osv::sprintf("/local/domain/%d", _domid); 
+    _node_path = std::string("/local/domain/") + std::to_string(_domid);
 
     xenbusb_softc *xenbusb_scp = new xenbusb_softc;
     _bsd_dev.softc = xenbusb_scp;
@@ -82,7 +82,7 @@ void xenbus::wait_for_devices()
             _pending_devices.wait(&_children_mutex, 1000_ms);
         }
         for (auto device : _pending_children) {
-            debug("Device %s bringup failed\n", device->get_name());
+            debugf("Device %s bringup failed\n", device->get_name());
         }
     }
 }
@@ -163,7 +163,7 @@ void XENBUSB_ENUMERATE_TYPE(device_t _bus, const char *type)
         u_int dev_count;
         const char **devices;
 
-        std::string node = osv::sprintf("device/%d", type);
+        auto node = std::string("device/") + type;
 
         if (xs_directory(XST_NIL, bus->get_node_path().c_str(), node.c_str(), &dev_count, &devices)) {
             return;

@@ -102,7 +102,6 @@ void expand_environ_vars(std::string& word)
         std::string new_word = word.substr(0, pos);
         std::string key = word.substr(pos+1);
         auto tmp = getenv(key.c_str());
-        //debug("    new_word=%s, key=%s, tmp=%s\n", new_word.c_str(), key.c_str(), tmp);
         if (tmp) {
             new_word += tmp;
         }
@@ -184,7 +183,7 @@ static void runscript_process_options(std::vector<std::vector<std::string> >& re
             if (key.length() > 0) {
                 // we have something to set
                 expand_environ_vars(value);
-                debug("Setting in environment: %s=%s\n", key, value);
+                debugff("Setting in environment: %s=%s\n", key.c_str(), value.c_str());
                 setenv(key.c_str(), value.c_str(), 1);
             }
         }

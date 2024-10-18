@@ -129,7 +129,7 @@ static void before_main(void) __attribute__((constructor));
 static void before_main(void)
 {
     report(v7 == 987UL, "v7 in init function", true);
-    report(v9 == 0, "v8 in init function", true);
+    report(v9 == 0, "v9 in init function", true);
 }
 #endif
 

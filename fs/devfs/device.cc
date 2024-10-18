@@ -109,7 +109,7 @@ void read_partition_table(struct device *dev)
 	int index;
 
 	if (bread(dev, 0, &bp) != 0) {
-		debugf("read_partition_table failed for %s\n", dev->name);
+		debugff("read_partition_table failed for %s\n", dev->name);
 		return;
 	}
 

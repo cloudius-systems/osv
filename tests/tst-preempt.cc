@@ -17,7 +17,7 @@ namespace sched {
 
 int main(int argc, char **argv)
 {
-    debug("Running preemption tests\n");
+    debugf("Running preemption tests\n");
 
     // Test 1: check that new threads start preemptable, i.e., with
     // preempt_counter==0. We had a bug where we didn't zero the .tbss
@@ -30,6 +30,6 @@ int main(int argc, char **argv)
     t1->start();
     delete t1;
 
-    debug("Preemption tests succeeded\n");
+    debugf("Preemption tests succeeded\n");
 
 }

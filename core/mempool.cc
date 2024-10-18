@@ -1189,7 +1189,7 @@ static std::vector<stats::pool_stats> l1_pool_stats;
 struct l1 {
     l1(sched::cpu* cpu)
         : _fill_thread(sched::thread::make([] { fill_thread(); },
-            sched::thread::attr().pin(cpu).name(osv::sprintf("page_pool_l1_%d", cpu->id))))
+            sched::thread::attr().pin(cpu).name(std::string("page_pool_l1_") + std::to_string(cpu->id))))
     {
         cpu_id = cpu->id;
         _fill_thread->start();

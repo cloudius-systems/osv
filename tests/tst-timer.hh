@@ -32,20 +32,20 @@ public:
     {
         auto t1 = clock::get()->time();
         auto t2 = clock::get()->time();
-        debug("Timer test: clock@t1 %1%\n", t1);
-        debug("Timer test: clock@t2 %1%\n", t2);
+        debugf("Timer test: clock@t1 %ld\n", t1);
+        debugf("Timer test: clock@t2 %ld\n", t2);
 
         timespec ts = {};
         ts.tv_nsec = 100;
         t1 = clock::get()->time();
         nanosleep(&ts, nullptr);
         t2 = clock::get()->time();
-        debug("Timer test: nanosleep(100) -> %d\n", t2 - t1);
+        debugf("Timer test: nanosleep(100) -> %d\n", t2 - t1);
         ts.tv_nsec = 100000;
         t1 = clock::get()->time();
         nanosleep(&ts, nullptr);
         t2 = clock::get()->time();
-        debug("Timer test: nanosleep(100000) -> %d\n", t2 - t1);
+        debugf("Timer test: nanosleep(100000) -> %d\n", t2 - t1);
     }
 
     static const int max_testers = 5000;
@@ -68,7 +68,7 @@ public:
     // stress test the timer class
     void test2(void)
     {
-        debug("Starting stress test\n");
+        debugf("Starting stress test\n");
         for (int i=0; i<max_testers; i++) {
             _testers[i] = sched::thread::make([&] { this->stress_thread(); });
             _testers[i]->start();
@@ -79,7 +79,7 @@ public:
             _testers[i]->join();
             delete _testers[i];
         }
-        debug("End stress test\n");
+        debugf("End stress test\n");
     }
 
     sched::thread *_testers[max_testers];

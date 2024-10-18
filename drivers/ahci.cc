@@ -535,7 +535,7 @@ void hba::scan()
         add_port(pnr, p);
         read_partition_table(dev);
 
-        debug("AHCI: Add sata device port %d as %s, devsize=%lld\n", pnr, dev_name.c_str(), dev->size);
+        debugf("AHCI: Add sata device port %d as %s, devsize=%lld\n", pnr, dev_name.c_str(), dev->size);
     }
 }
 

@@ -15,6 +15,7 @@
 #include <osv/prio.hh>
 #include <osv/elf.hh>
 #include "exceptions.hh"
+#include <algorithm>
 
 void page_fault(exception_frame *ef)
 {

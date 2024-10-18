@@ -32,7 +32,7 @@ bool test()
             }
         }
     }
-    debug("3 -> %f\n", sins[3]);
+    debugf("3 -> %f\n", sins[3]);
     return !bad;
 }
 
@@ -69,7 +69,7 @@ int main(int ac, char **av)
     constexpr unsigned nr_threads = 16;
     std::vector<sched::thread*> threads;
 
-    debug("starting fpu test\n");
+    debugf("starting fpu test\n");
     std::atomic<int> tests{}, fails{};
     for (unsigned i = 0; i < nr_threads; ++i) {
         auto t = sched::thread::make([&] {

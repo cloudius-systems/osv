@@ -27,11 +27,11 @@ int child(std::string command, int argc, char const *argv[])
         latch termination_requested;
 
         app->on_termination_request([&] {
-            debug("Termination requested.\n");
+            debugf("Termination requested.\n");
             termination_requested.count_down();
         });
 
-        debug("Waiting for termination request...\n");
+        debugf("Waiting for termination request...\n");
         termination_requested.await();
         return 0;
     }
@@ -46,7 +46,7 @@ int child(std::string command, int argc, char const *argv[])
 
 void test_termination_request_before_callback_is_registerred()
 {
-    debug("%s\n", __FUNCTION__);
+    debugf("%s\n", __FUNCTION__);
 
     auto app = application::run({prog, WAIT_UNTIL_TERMINATION});
     app->request_termination();
@@ -56,7 +56,7 @@ void test_termination_request_before_callback_is_registerred()
 
 void test_termination_request_after_callback_is_registerred()
 {
-    debug("%s\n", __FUNCTION__);
+    debugf("%s\n", __FUNCTION__);
 
     auto app = application::run({prog, WAIT_UNTIL_TERMINATION});
     std::this_thread::sleep_for(std::chrono::milliseconds(50));
@@ -67,7 +67,7 @@ void test_termination_request_after_callback_is_registerred()
 
 void test_return_code_is_propagated()
 {
-    debug("%s\n", __FUNCTION__);
+    debugf("%s\n", __FUNCTION__);
 
     const int code = 123;
     auto app = application::run({prog, RETURN, std::to_string(code)});

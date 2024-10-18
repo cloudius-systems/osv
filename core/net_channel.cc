@@ -16,6 +16,7 @@
 #include <bsd/sys/net/netisr.h>
 
 #include <osv/net_trace.hh>
+#include <algorithm>
 
 void net_channel::process_queue()
 {

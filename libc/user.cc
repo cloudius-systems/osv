@@ -20,6 +20,7 @@
 
 #include <osv/debug.hh>
 #include "libc.hh"
+#include <cassert>
 
 uid_t getuid()
 {

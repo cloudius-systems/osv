@@ -9,6 +9,7 @@
 #define PCI_FUNCTION_H
 
 #include <map>
+#include <vector>
 
 #include <osv/mmio.hh>
 #include <osv/types.h>

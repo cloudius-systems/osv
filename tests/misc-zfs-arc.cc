@@ -6,6 +6,7 @@
  */
 
 #include <osv/debug.hh>
+#define BOOST_LEXICAL_CAST_ASSUME_C_LOCALE 1
 
 #include "stat.hh"
 #include <assert.h>
