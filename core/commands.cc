@@ -6,12 +6,27 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <cassert>
+#include <cstdio>
 #include <iterator>
-#include <fstream>
+#include <unistd.h>
 #include <osv/debug.hh>
 
 #include <boost/config/warning_disable.hpp>
-#include <boost/spirit/include/qi.hpp>
+//#include <boost/spirit/include/qi.hpp>
+//Include only select QI spirit headers to avoid implicitly
+//pulling std::locale
+#include <boost/spirit/include/qi_parse.hpp>
+#include <boost/spirit/include/qi_what.hpp>
+#include <boost/spirit/include/qi_action.hpp>
+#include <boost/spirit/include/qi_char.hpp>
+#include <boost/spirit/include/qi_directive.hpp>
+#include <boost/spirit/include/qi_rule.hpp>
+#include <boost/spirit/include/qi_grammar.hpp>
+#include <boost/spirit/include/qi_eoi.hpp>
+#include <boost/spirit/include/qi_operator.hpp>
+#include <boost/spirit/include/qi_string.hpp>
+
 #include <osv/power.hh>
 #include <osv/commands.hh>
 #include <osv/align.hh>
@@ -134,9 +149,9 @@ apply options for each script at script execution (second script would modify
 environment setup by the first script, causing a race).
 */
 static void runscript_process_options_usage(std::string &message) {
-    std::cout << message << "\n";
-    std::cout << "OSv runscript options:\n";
-    std::cout << "  --env=arg             set Unix-like environment variable (putenv())\n";
+    printf("%s\n", message.c_str());
+    printf("OSv runscript options:\n"
+           "  --env=arg             set Unix-like environment variable (putenv())\n");
     osv::poweroff();
 }
 
@@ -217,23 +232,28 @@ runscript_expand(const std::vector<std::string>& cmd, bool &ok, bool &is_runscri
         }
         auto fn = cmd[1];
 
-        std::ifstream in(fn);
-        if (!in.good()) {
+        FILE *fp = fopen(fn.c_str(), "r");
+        if (!fp) {
             printf("Failed to open runscript file '%s'.\n", fn.c_str());
             ok = false;
             return result2;
         }
-        std::string line;
-        size_t line_num = 0;
-        while (!in.eof()) {
-            getline(in, line);
+        size_t line_num = 0, line_length = 0;
+        char *line_buffer = nullptr;
+        ssize_t read;
+        while ((read = getline(&line_buffer, &line_length, fp)) != -1) {
+            if (read && line_buffer[read - 1] == '\n') {
+                line_buffer[read - 1] = 0; //Remove new line character
+            }
             bool ok2;
-            result3 = parse_command_line_min(line, ok2);
-            printf("runscript expand fn='%s' line=%d '%s'\n", fn.c_str(), line_num, line.c_str());
+            result3 = parse_command_line_min(line_buffer, ok2);
+            printf("runscript expand fn='%s' line=%d '%s'\n", fn.c_str(), line_num, line_buffer);
             if (ok2 == false) {
-                printf("Failed expanding runscript file='%s' line=%d '%s'.\n", fn.c_str(), line_num, line.c_str());
+                printf("Failed expanding runscript file='%s' line=%d '%s'.\n", fn.c_str(), line_num, strlen(line_buffer));
                 result2.clear();
                 ok = false;
+                free(line_buffer);
+                fclose(fp);
                 return result2;
             }
             // Replace env vars found inside script.
@@ -247,6 +267,8 @@ runscript_expand(const std::vector<std::string>& cmd, bool &ok, bool &is_runscri
             result2.insert(result2.end(), result3.begin(), result3.end());
             line_num++;
         }
+        free(line_buffer);
+        fclose(fp);
     }
     else {
         is_runscript = false;
@@ -266,6 +288,7 @@ parse_command_line(const std::string line,  bool &ok)
     If command starts with runscript, we need to read actual command to
     execute from the given file.
     */
+    //TODO: This should be #ifdef optional
     std::vector<std::vector<std::string>>::iterator cmd_iter;
     for (cmd_iter=result.begin(); ok && cmd_iter!=result.end(); ) {
         bool is_runscript;
