@@ -74,7 +74,7 @@ SECTIONS
         HIDDEN(__tracepoint_patch_sites_end = .);
     KEEP(*(.tracepoint_patch_sites)) } : text
     .data.rel.ro : AT(ADDR(.data.rel.ro) - OSV_KERNEL_VM_SHIFT) { *(.data.rel.ro.local* .gnu.linkonce.d.rel.ro.local.*) *(.data.rel.ro .data.rel.ro.* .gnu.linkonce.d.rel.ro.*) } : text
-    .data : AT(ADDR(.data) - OSV_KERNEL_VM_SHIFT) { *(.data) } :text
+    .data : AT(ADDR(.data) - OSV_KERNEL_VM_SHIFT) { *(.data) *(.data.*) } :text
     HIDDEN(_init_array_start = .);
     .init_array : AT(ADDR(.init_array) - OSV_KERNEL_VM_SHIFT) {
         *(SORT_BY_INIT_PRIORITY(.init_array.*) SORT_BY_INIT_PRIORITY(.ctors.*))
