@@ -17,3 +17,6 @@ conf_cxx_level=gnu++11
 
 conf-lazy_stack=0
 conf-lazy_stack_invariant=0
+
+### Enabled by defaults
+conf-tracepoints=1

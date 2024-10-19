@@ -373,7 +373,7 @@ $(out)/bsd/%.o: INCLUDES += -isystem bsd/
 $(out)/bsd/%.o: INCLUDES += -isystem bsd/$(arch)
 
 configuration-defines = conf-preempt conf-debug_memory conf-logger_debug conf-debug_elf \
-			conf-lazy_stack conf-lazy_stack_invariant
+			conf-lazy_stack conf-lazy_stack_invariant conf-tracepoints
 
 configuration = $(foreach cf,$(configuration-defines), \
                       -D$(cf:conf-%=CONF_%)=$($(cf)))
@@ -977,7 +977,9 @@ drivers += drivers/virtio-fs.o
 endif
 endif # aarch64
 
+ifeq ($(conf-tracepoints),1)
 objects += arch/$(arch)/arch-trace.o
+endif
 objects += arch/$(arch)/arch-setup.o
 objects += arch/$(arch)/signal.o
 objects += arch/$(arch)/arch-cpu.o
@@ -1026,7 +1028,6 @@ ifeq ($(arch),x64)
 objects += arch/x64/dmi.o
 objects += arch/x64/string.o
 objects += arch/x64/string-ssse3.o
-objects += arch/x64/arch-trace.o
 objects += arch/x64/ioapic.o
 objects += arch/x64/apic.o
 objects += arch/x64/apic-clock.o
@@ -1056,17 +1057,21 @@ objects += core/pagecache.o
 objects += core/mempool.o
 objects += core/alloctracker.o
 objects += core/printf.o
+ifeq ($(conf-tracepoints),1)
 objects += core/sampler.o
+endif
 
 objects += linux.o
 objects += core/commands.o
 objects += core/sched.o
 objects += core/mmio.o
 objects += core/kprintf.o
+ifeq ($(conf-tracepoints),1)
 objects += core/trace.o
 objects += core/trace-count.o
 objects += core/strace.o
 objects += core/callstack.o
+endif
 objects += core/poll.o
 objects += core/select.o
 objects += core/epoll.o

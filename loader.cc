@@ -147,9 +147,11 @@ static bool opt_disable_rofs_cache = false;
 static bool opt_leak = false;
 static bool opt_noshutdown = false;
 bool opt_power_off_on_abort = false;
+#if CONF_tracepoints
 static bool opt_log_backtrace = false;
 static bool opt_list_tracepoints = false;
 static bool opt_strace = false;
+#endif
 static bool opt_mount = true;
 static bool opt_pivot = true;
 static std::string opt_rootfs;
@@ -177,11 +179,13 @@ static void usage()
     printf(
         "OSv options:\n"
         "  --help                show help text\n"
+#if CONF_tracepoints
         "  --sampler=arg         start stack sampling profiler\n"
         "  --trace=arg           tracepoints to enable\n"
         "  --trace-backtrace     log backtraces in the tracepoint log\n"
         "  --trace-list          list available tracepoints\n"
         "  --strace              start a thread to print tracepoints to the console on the fly\n"
+#endif
         "  --leak                start leak detector after boot\n"
         "  --nomount             don't mount the root file system\n"
         "  --nopivot             do not pivot the root from bootfs to the root fs\n"
@@ -259,6 +263,7 @@ static void parse_options(int loader_argc, char** loader_argv)
         maxnic = options::extract_option_int_value(options_values, "maxnic", handle_parse_error);
     }
 
+#if CONF_tracepoints
     if (extract_option_flag(options_values, "trace-backtrace")) {
         opt_log_backtrace = true;
     }
@@ -266,12 +271,14 @@ static void parse_options(int loader_argc, char** loader_argv)
     if (extract_option_flag(options_values, "trace-list")) {
         opt_list_tracepoints = true;
     }
+#endif
 
     if (extract_option_flag(options_values, "verbose")) {
         opt_verbose = true;
         enable_verbose();
     }
 
+#if CONF_tracepoints
     if (options::option_value_exists(options_values, "sampler")) {
         sampler_frequency = options::extract_option_int_value(options_values, "sampler", handle_parse_error);
         opt_enable_sampler = true;
@@ -294,6 +301,7 @@ static void parse_options(int loader_argc, char** loader_argv)
             opt_strace = true;
         }
     }
+#endif
 
     opt_mount = !extract_option_flag(options_values, "nomount");
     opt_pivot = !extract_option_flag(options_values, "nopivot");
@@ -758,6 +766,7 @@ void main_cont(int loader_argc, char** loader_argv)
         poweroff();
     }
 
+#if CONF_tracepoints
     if (opt_list_tracepoints) {
         list_all_tracepoints();
     }
@@ -771,6 +780,7 @@ void main_cont(int loader_argc, char** loader_argv)
     if (opt_strace) {
         start_strace();
     }
+#endif
     sched::init_detached_threads_reaper();
     elf::setup_missing_symbols_detector();
 

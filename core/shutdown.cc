@@ -11,7 +11,9 @@ namespace osv {
 
 void shutdown()
 {
+#if CONF_tracepoints
     wait_strace_complete();
+#endif
     dhcp_release();
 
     // The vfs_exit() call below will forcibly unmount the filesystem. If any

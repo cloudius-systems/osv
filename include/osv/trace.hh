@@ -409,11 +409,16 @@ static inline const char *trace_strip_prefix(const char *name)
 {
     return (strncmp(name, "trace_", 6) == 0) ? (name+6) : name;
 }
+
+#if CONF_tracepoints
 #define TRACEPOINT(name, fmt, ...) \
     tracepoint<__COUNTER__, ##__VA_ARGS__> name(trace_strip_prefix(#name), fmt);
 #define TRACEPOINTV(name, fmt, assign) \
     tracepointv<__COUNTER__, decltype(assign), assign> name(trace_strip_prefix(#name), fmt);
-
+#else
+#define TRACEPOINT(name, fmt, ...) \
+    inline void name(__VA_ARGS__) {}
+#endif
 
 #include <arch-trace.hh>
 
