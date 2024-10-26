@@ -78,7 +78,7 @@ java_perms_cmd := 'java-perms: /usr/lib/jvm/java/bin/java -cp /tests/java/tests.
 ifeq ($(arch),$(host_arch))
 test_commands:
 	$(call very-quiet, rm -f test_commands)
-	$(call very-quiet, if [ "$(javac_version)" = "javac 1.8" ]; then \
+	$(call very-quiet, if [[ "$(javac_version)" == "javac 1.8" && "$(conf_hide_symbols)" != "1" ]]; then \
 		echo $(java_isolated_cmd) >> test_commands && \
 		echo $(java_non_isolated_cmd) >> test_commands; fi )
 	$(call very-quiet, echo $(java_no_wrapper_cmd) >> test_commands)

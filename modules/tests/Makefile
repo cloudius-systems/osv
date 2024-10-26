@@ -60,6 +60,12 @@ $(out)/tests/options.o: $(src)/core/options.cc
 $(out)/tests/tst-options.so: $(out)/tests/tst-options.o $(out)/tests/options.o
 	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(out)/tests/options.o $(LIBS), LD tests/tst-options.so)
 
+$(out)/tests/string_utils.o: $(src)/core/string_utils.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+$(out)/tests/tst-string-utils.so: $(out)/tests/tst-string-utils.o $(out)/tests/string_utils.o
+	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(out)/tests/string_utils.o $(LIBS), LD tests/tst-string-utils.so)
+
 $(out)/tests/tst-reloc.o: CFLAGS:=$(subst -fPIC,-fpie,$(CFLAGS))
 $(out)/tests/tst-reloc.so: $(src)/tests/tst-reloc.c
 	$(call quiet, $(CC) $(CFLAGS) $(LDFLAGS) -pie -o $@ $< $(LIBS), LD tests/tst-reloc.so)
@@ -143,6 +149,20 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	misc-vdso-perf.so tst-string-utils.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 #	tst-f128.so \
+
+
+#This is a list of the tests that interact with the internal C++ or C
+#api which is unavailable when kernel is built with all but glibc symbols
+#hidden.
+internal-api-tests := tst-app.so tst-async.so tst-bsd-evh.so \
+	tst-bsd-kthread.so tst-bsd-taskqueue.so tst-bsd-tcp1-zrcv.so \
+	tst-bsd-tcp1-zsnd.so tst-bsd-tcp1-zsndrcv.so tst-clock.so \
+	tst-condvar.so tst-dax.so tst-fpu.so tst-fs-link.so tst-hub.so \
+	tst-huge.so tst-mmap.so tst-namespace.so tst-pin.so tst-preempt.so \
+	tst-rcu-hashtable.so tst-rcu-list.so tst-run.so tst-sampler.so \
+	tst-sem-timed-wait.so tst-small-malloc.so tst-solaris-taskq.so \
+	tst-threadcomplete.so tst-tracepoint.so tst-unordered-ring-mpsc.so \
+	tst-vfs.so tst-wait-for.so tst-without-namespace.so
 
 ifeq ($(arch),x64)
 tests += tst-mmx-fpu.so
@@ -247,8 +267,20 @@ $(solaris-tests:%=$(out)/tests/%): COMMON+= \
         -I$(src)/bsd/sys/cddl/compat/opensolaris \
 	-I $(src)/bsd/sys -I $(src)/bsd -I $(src)/bsd/$(ARCH)
 
+#We need to filter out the tests that use internal API if
+#kernel is built with all but glibc symbols hidden.
+#In addition, we also add standard C++ library file to the image
+#because the libstdc++.so.6 is not exposed neither in this case.
+ifeq ($(conf_hide_symbols),1)
+the-tests := $(filter-out $(internal-api-tests),$(tests))
+the-tests += $(filter-out $(internal-api-tests),$(specific-fs-tests))
+all_tests := $(the-tests:%=tests/%)
+manifest-lib-pattern := 'boost\|libstdc++'
+else
 all_tests := $(tests:%=tests/%)
 all_tests += $(specific-fs-tests:%=tests/%)
+manifest-lib-pattern := 'boost'
+endif
 
 build_all_tests: $(all_tests:%=$(out)/%)
 .PHONY: build_all_tests clean
@@ -259,7 +291,7 @@ usr.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FOR
 	@cat $@.skel > $@
 	@case "$(CROSS_PREFIX)" in \
 		"aarch64"*) ./add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@ ;; \
-		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests/,$(boost-tests)) $(addprefix $(out)/tests/,$(boost-program-options-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@ ;; \
+		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests/,$(boost-tests)) $(addprefix $(out)/tests/,$(boost-program-options-tests)) | grep $(manifest-lib-pattern) | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@ ;; \
 	esac
 	@echo $(all_tests) | tr ' ' '\n' | grep -v "tests/rofs/tst-.*.so" | awk '{print "/" $$0 ": ./" $$0}' >> $@
 	@echo $(all_tests) | tr ' ' '\n' | grep "tests/rofs/tst-.*.so" | sed 's/\.so//' | awk 'BEGIN { FS = "/" } ; { print "/tests/" $$3 "-rofs.so: ./tests/" $$2 "/" $$3 ".so"}' >> $@
@@ -272,7 +304,7 @@ common.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel 
 	@cat usr.manifest.skel > $@
 	@case "$(CROSS_PREFIX)" in \
 		"aarch64"*) ./add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@ ;; \
-		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests/,$(boost-tests)) $(addprefix $(out)/tests/,$(boost-program-options-tests)) | grep libboost | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@ ;; \
+		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests/,$(boost-tests)) $(addprefix $(out)/tests/,$(boost-program-options-tests)) | grep $(manifest-lib-pattern) | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@ ;; \
 	esac
 	@echo $(common-tests) | tr ' ' '\n' | awk '{print "/tests/" $$0 ": ./tests/" $$0}' >> $@
 
