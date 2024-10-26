@@ -19,6 +19,7 @@
 #include "jvm/jni_helpers.hh"
 #include <osv/defer.hh>
 #include <osv/app.hh>
+#include <iostream>
 
 extern size_t jvm_heap_size;
 

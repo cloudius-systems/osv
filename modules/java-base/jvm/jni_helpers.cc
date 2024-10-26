@@ -9,6 +9,7 @@
 
 #include <osv/mutex.h>
 #include "jni_helpers.hh"
+#include <algorithm>
 
 using namespace std;
 
