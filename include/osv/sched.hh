@@ -350,6 +350,25 @@ public:
     using duration = thread_runtime::duration;
     unsigned _priority = 0;
     duration _time_slice = duration::zero();
+
+    // Total time this thread ran since starting this slice.
+    duration _run_time = duration::zero();
+
+    void reset_slice() {
+        _run_time = duration::zero();
+    }
+
+    bool has_slice() const {
+        return _time_slice != duration::zero();
+    }
+
+    bool has_remaining() const {
+        return _time_slice > _run_time;
+    }
+
+    duration remaining() const {
+        return _time_slice - _run_time;
+    }
 };
 
 // "tau" controls the length of the history we consider for scheduling,

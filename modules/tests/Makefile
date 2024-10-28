@@ -158,7 +158,8 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-pthread-create.so \
 	misc-futex-perf.so misc-syscall-perf.so tst-brk.so tst-reloc.so \
 	misc-vdso-perf.so tst-string-utils.so tst-elf-circular-reloc.so \
-	lib-circular-reloc1.so lib-circular-reloc2.so tst-rwlock.so
+	lib-circular-reloc1.so lib-circular-reloc2.so tst-rwlock.so \
+	tst-thread-realtime.so
 #	tst-f128.so \
 
 
