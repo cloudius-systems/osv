@@ -2094,7 +2094,7 @@ std::string procfs_maps()
             char write   = vma.perm() & perm_write ? 'w' : '-';
             char execute = vma.perm() & perm_exec  ? 'x' : '-';
             char priv    = 'p';
-            output += osv::sprintf("%012x-%012x %c%c%c%c ", vma.start(), vma.end(), read, write, execute, priv);
+            output += osv::sprintf("%lx-%lx %c%c%c%c ", vma.start(), vma.end(), read, write, execute, priv);
             if (vma.flags() & mmap_file) {
                 const file_vma &f_vma = static_cast<file_vma&>(vma);
                 unsigned dev_id_major = major(f_vma.file_dev_id());
