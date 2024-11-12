@@ -18,3 +18,6 @@
 [submodule "musl_1.1.24"]
 	path = musl_1.1.24
 	url = https://github.com/osvunikernel/musl
+[submodule "kbuild"]
+	path = kbuild
+	url = https://github.com/osvunikernel/kbuild-standalone.git
