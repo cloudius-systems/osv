@@ -6,4 +6,4 @@
 # Also, mixed TLS models resulted in different var addresses seen by
 # different objects depending on the TLS model used.
 # Force all __thread variables encountered to local exec.
-arch-cflags = -mstrict-align -mtls-dialect=desc -ftls-model=local-exec -DAARCH64_PORT_STUB
+conf_compiler_cflags = -mstrict-align -mtls-dialect=desc -ftls-model=local-exec -DAARCH64_PORT_STUB

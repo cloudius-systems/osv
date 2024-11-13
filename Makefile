@@ -334,13 +334,13 @@ COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -
 	$(kernel-defines) \
 	-fno-omit-frame-pointer $(compiler-specific) \
 	-include compiler/include/intrinsics.hh \
-	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) $(gcc-sysroot) \
+	$(conf_compiler_cflags) $(conf_compiler_opt) $(acpi-defines) $(tracing-flags) $(gcc-sysroot) \
 	$(configuration) -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207" -DARCH_STRING=$(ARCH_STR) $(EXTRA_FLAGS)
 COMMON += $(standard-includes-flag)
 
 tracing-flags-0 =
 tracing-flags-1 = -finstrument-functions -finstrument-functions-exclude-file-list=c++,trace.cc,trace.hh,align.hh,mmintrin.h
-tracing-flags = $(tracing-flags-$(conf-tracing))
+tracing-flags = $(tracing-flags-$(conf_tracing))
 
 cc-hide-flags-0 =
 cc-hide-flags-1 = -fvisibility=hidden
@@ -372,11 +372,11 @@ $(out)/bsd/%.o: INCLUDES += -isystem bsd/
 # for machine/
 $(out)/bsd/%.o: INCLUDES += -isystem bsd/$(arch)
 
-configuration-defines = conf-preempt conf-debug_memory conf-logger_debug conf-debug_elf \
-			conf-lazy_stack conf-lazy_stack_invariant conf-tracepoints
+configuration-defines = conf_preempt conf_debug_memory conf_logger_debug conf_debug_elf \
+			conf_lazy_stack conf_lazy_stack_invariant conf_tracepoints
 
 configuration = $(foreach cf,$(configuration-defines), \
-                      -D$(cf:conf-%=CONF_%)=$($(cf)))
+                      -D$(cf:conf_%=CONF_%)=$($(cf)))
 
 
 
@@ -979,7 +979,7 @@ drivers += drivers/virtio-fs.o
 endif
 endif # aarch64
 
-ifeq ($(conf-tracepoints),1)
+ifeq ($(conf_tracepoints),1)
 objects += arch/$(arch)/arch-trace.o
 endif
 objects += arch/$(arch)/arch-setup.o
@@ -1059,7 +1059,7 @@ objects += core/pagecache.o
 objects += core/mempool.o
 objects += core/alloctracker.o
 objects += core/printf.o
-ifeq ($(conf-tracepoints),1)
+ifeq ($(conf_tracepoints),1)
 objects += core/sampler.o
 endif
 
@@ -1068,7 +1068,7 @@ objects += core/commands.o
 objects += core/sched.o
 objects += core/mmio.o
 objects += core/kprintf.o
-ifeq ($(conf-tracepoints),1)
+ifeq ($(conf_tracepoints),1)
 objects += core/trace.o
 objects += core/trace-count.o
 objects += core/strace.o
@@ -1453,12 +1453,12 @@ musl += math/truncl.o
 # None of the specific "-fno-*" options disable this buggy optimization,
 # unfortunately. The simplest workaround is to just disable optimization
 # for the affected files.
-$(out)/musl/src/math/lround.o: conf-opt := $(conf-opt) -O0
-$(out)/musl/src/math/lroundf.o: conf-opt := $(conf-opt) -O0
-$(out)/musl/src/math/lroundl.o: conf-opt := $(conf-opt) -O0
-$(out)/musl/src/math/llround.o: conf-opt := $(conf-opt) -O0
-$(out)/musl/src/math/llroundf.o: conf-opt := $(conf-opt) -O0
-$(out)/musl/src/math/llroundl.o: conf-opt := $(conf-opt) -O0
+$(out)/musl/src/math/lround.o: conf_compiler_opt := $(conf_compiler_opt) -O0
+$(out)/musl/src/math/lroundf.o: conf_compiler_opt := $(conf_compiler_opt) -O0
+$(out)/musl/src/math/lroundl.o: conf_compiler_opt := $(conf_compiler_opt) -O0
+$(out)/musl/src/math/llround.o: conf_compiler_opt := $(conf_compiler_opt) -O0
+$(out)/musl/src/math/llroundf.o: conf_compiler_opt := $(conf_compiler_opt) -O0
+$(out)/musl/src/math/llroundl.o: conf_compiler_opt := $(conf_compiler_opt) -O0
 
 musl += misc/a64l.o
 musl += misc/basename.o

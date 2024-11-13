@@ -14,10 +14,10 @@ javac_exe_path = $(shell realpath $$(which javac))
 javac_bin_path = $(shell dirname $(javac_exe_path))
 java_jdk_path = $(shell dirname $(javac_bin_path))
 
-configuration-defines = conf-preempt conf-debug_memory conf-logger_debug
+configuration-defines = conf_preempt conf_debug_memory conf_logger_debug
 
 configuration = $(foreach cf,$(configuration-defines), \
-                      -D$(cf:conf-%=CONF_%)=$($(cf)))
+                      -D$(cf:conf_%=CONF_%)=$($(cf)))
 
 $(module_out)/%.o: %.cc | init
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -MMD  -o $@ $<, CXX $@)
