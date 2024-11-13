@@ -73,7 +73,11 @@ struct arch_cpu {
 };
 
 struct arch_thread {
+#ifndef NDEBUG
+    char interrupt_stack[4096*2] __attribute__((aligned(16)));
+#else
     char interrupt_stack[4096] __attribute__((aligned(16)));
+#endif
     char exception_stack[4096*4] __attribute__((aligned(16)));
 };
 

@@ -29,7 +29,11 @@
 // to detect potential tiny stack overflow.
 // All application threads pre-allocate tiny syscall stack so there
 // is a tiny penalty with this solution.
+#ifndef NDEBUG
+#define TINY_SYSCALL_STACK_SIZE 2*4096
+#else
 #define TINY_SYSCALL_STACK_SIZE 2048
+#endif
 #define TINY_SYSCALL_STACK_DEPTH (TINY_SYSCALL_STACK_SIZE - SYSCALL_STACK_RESERVED_SPACE_SIZE)
 //
 // The large syscall stack is setup and switched to on first
