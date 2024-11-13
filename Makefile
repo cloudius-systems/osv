@@ -661,6 +661,7 @@ bsd += bsd/sys/netinet/cc/cc_newreno.o
 bsd += bsd/sys/netinet/arpcache.o
 ifeq ($(conf_drivers_xen),1)
 bsd += bsd/sys/xen/evtchn.o
+$(out)/bsd/sys/xen/evtchn.o: COMMON += -Wno-array-bounds -Wno-stringop-overread -Wno-stringop-overflow
 endif
 
 ifeq ($(arch),x64)
@@ -717,6 +718,7 @@ solaris += bsd/sys/cddl/contrib/opensolaris/common/acl/acl_common.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/avl/avl.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/fnvpair.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair.o
+$(out)/bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair.o: CFLAGS += -Wno-stringop-overread
 solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair_alloc_fixed.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/unicode/u8_textprep.o
 solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/callb.o
