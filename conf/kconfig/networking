@@ -1,0 +1,11 @@
+config networking_stack
+  prompt "Include networking stack"
+  bool
+  default y
+
+config networking_dhcp
+  prompt "Include DHCP support"
+  depends on networking_stack
+  bool
+  default y
+

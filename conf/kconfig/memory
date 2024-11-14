@@ -1,0 +1,28 @@
+config memory_optimize
+  prompt "Optimized memcpy, memmove"
+  bool
+  default y
+
+config memory_debug
+  prompt "Enable memory debugging"
+  def_bool $(shell,grep -q ^conf_debug_memory=1 conf/base.mk && echo y || echo n)
+
+config memory_tracker
+  prompt "Include memory allocation tracker"
+  bool
+  default n
+
+config memory_jvm_balloon
+  prompt "Include JVM balloon"
+  bool
+  default n
+
+config memory_l1_pool_size
+  prompt "L1 pool size in pages"
+  int
+  default 512
+
+config memory_page_batch_size
+  prompt "Page batch size in pages"
+  int
+  default 32

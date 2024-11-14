@@ -1,0 +1,60 @@
+config tracing
+  prompt "Enable function tracing"
+  def_bool $(shell,grep -q ^conf_tracing=1 conf/base.mk && echo y || echo n)
+
+config logger_debug
+  prompt "Enable debug logger"
+  def_bool $(shell,(grep -q ^conf_logger_debug=1 conf/$mode.mk || grep -q ^conf_logger_debug=1 conf/base.mk) && echo y || echo n)
+
+config hide_symbols
+  prompt "Hide non-libc symbols"
+  def_bool $(shell,grep -q ^conf_hide_symbols=1 conf/base.mk && echo y || echo n)
+
+config elf_debug
+  prompt "Enable debug statements in ELF"
+  def_bool $(shell,grep -q ^conf_debug_elf=1 conf/base.mk && echo y || echo n)
+
+config core_c_wrappers
+  prompt "Include C wrapper functions"
+  bool
+  default y
+
+config core_commands_runscript
+  prompt "Include commands runscript"
+  bool
+  default y
+
+config core_namespaces
+  prompt "Include ELF namespaces"
+  bool
+  default y
+
+config core_dynamic_percpu_size
+  prompt "Dynamic per-CPU size"
+  int
+  default 65536
+
+config core_rcu_defer_queue_size
+  prompt "RCU defer queue size"
+  int
+  default 2000
+
+config core_debug_buffer_size
+  prompt "Debug buffer size"
+  hex
+  default 0xc800
+
+config core_syscall
+  prompt "Include syscall support"
+  bool
+  default y
+
+config core_epoll
+  prompt "Include epoll"
+  bool
+  default y
+
+config core_newpoll
+  prompt "Include newpoll"
+  bool
+  default n
