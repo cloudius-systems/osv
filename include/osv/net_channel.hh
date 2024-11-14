@@ -10,6 +10,8 @@
 
 #include <osv/mutex.h>
 #include <osv/sched.hh>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 #include <lockfree/ring.hh>
 #include <functional>
 #include <unordered_map>

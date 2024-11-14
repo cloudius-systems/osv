@@ -7,6 +7,7 @@
 
 #include "pl031.hh"
 #include <osv/mmu.hh>
+#include <osv/kernel_config_logger_debug.h>
 
 /* spec: see PrimeCell Real Time Clock (PL031) Technical Reference Manual.
  * implemented according to Revision: r1p3.

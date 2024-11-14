@@ -18,6 +18,8 @@
 #include <boost/intrusive/parent_from_member.hpp>
 #include <osv/timer-set.hh>
 #include <osv/aligned_new.hh>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 namespace async {
 

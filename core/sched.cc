@@ -28,6 +28,8 @@
 #include <osv/symbols.hh>
 #include <osv/stubbing.hh>
 #include <algorithm>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 MAKE_SYMBOL(sched::thread::current);
 MAKE_SYMBOL(sched::cpu::current);

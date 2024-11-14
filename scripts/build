@@ -96,6 +96,7 @@ if [[ "${arch-}" == "aarch64" && -d "build/downloaded_packages/aarch64/toolchain
 	export CROSS_PREFIX=aarch64-none-linux-gnu-
 fi
 
+make "${args[@]}" -f conf/Makefile -j1 config | tee build.out
 make "${args[@]}" ${stage1_args} | tee build.out
 # check exit status of make
 status=${PIPESTATUS[0]}

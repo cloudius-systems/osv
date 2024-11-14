@@ -21,6 +21,9 @@
 #include <boost/optional.hpp>
 #include <functional>
 
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
+
 struct llentry;
 
 namespace std {

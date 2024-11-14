@@ -29,6 +29,10 @@
 #include <numeric>
 #include <set>
 
+#include <osv/kernel_config_memory_debug.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
+
 // FIXME: Without this pragma, we get a lot of warnings that I don't know
 // how to explain or fix. For now, let's just ignore them :-(
 #pragma GCC diagnostic ignored "-Wstringop-overflow"
@@ -166,7 +170,7 @@ phys virt_to_phys(void *virt)
 #endif
     }
 
-#if CONF_debug_memory
+#if CONF_memory_debug
     if (virt > debug_base) {
         return virt_to_phys_pt(virt);
     }

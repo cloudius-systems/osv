@@ -18,6 +18,9 @@
 #include <osv/net_trace.hh>
 #include <algorithm>
 
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
+
 void net_channel::process_queue()
 {
     mbuf* m;

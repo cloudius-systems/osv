@@ -11,6 +11,8 @@
 #define ARCH_HH_
 
 #include "processor.hh"
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 // architecture independent interface for architecture dependent operations
 

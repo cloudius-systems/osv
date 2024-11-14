@@ -8,6 +8,7 @@
 
 #include <osv/mmio.hh>
 #include <osv/irqlock.hh>
+#include <osv/kernel_config_logger_debug.h>
 
 #include "processor.hh"
 #include "gic-v2.hh"

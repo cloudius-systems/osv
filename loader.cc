@@ -6,6 +6,7 @@
  */
 
 #include <osv/drivers_config.h>
+#include <osv/kernel_config.h>
 #include "fs/fs.hh"
 #include <bsd/init.hh>
 #include <bsd/net.hh>

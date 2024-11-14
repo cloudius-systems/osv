@@ -4,6 +4,7 @@
 #include <osv/sched.hh>
 #include <osv/dhcp.hh>
 #include <osv/strace.hh>
+#include <osv/kernel_config_tracepoints.h>
 
 extern void vfs_exit(void);
 

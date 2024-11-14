@@ -11,6 +11,7 @@
 #define ARCH_SWITCH_HH_
 
 #include <osv/barrier.hh>
+#include <osv/kernel_config_preempt.h>
 #include <string.h>
 #include "arch-setup.hh"
 
@@ -172,7 +173,7 @@ void thread_main_c(thread* t)
 {
     arch::irq_enable();
 
-#ifdef CONF_preempt
+#if CONF_preempt
     preempt_enable();
 #endif
 

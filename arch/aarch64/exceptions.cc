@@ -9,6 +9,9 @@
 #include <osv/prio.hh>
 #include <osv/sched.hh>
 #include <osv/interrupt.hh>
+#include <osv/kernel_config_logger_debug.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 #include "exceptions.hh"
 #include "fault-fixup.hh"

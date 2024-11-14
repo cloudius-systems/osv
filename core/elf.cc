@@ -8,6 +8,9 @@
 #include <osv/elf.hh>
 #include <osv/app.hh>
 #include <osv/mmu.hh>
+#include <osv/kernel_config_elf_debug.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 #include <exception>
 #include <memory>
 #include <string.h>
@@ -33,7 +36,7 @@
 #include "arch-elf.hh"
 #include "cpuid.hh"
 
-#if CONF_debug_elf
+#if CONF_elf_debug
 #define elf_debug(format,...) kprintf("ELF [tid:%d, mod:%d, %s]: " format, sched::thread::current()->id(), _module_index, _pathname.c_str(), ##__VA_ARGS__)
 #else
 #define elf_debug(...)

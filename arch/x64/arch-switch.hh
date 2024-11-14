@@ -10,6 +10,7 @@
 
 #include "msr.hh"
 #include <osv/barrier.hh>
+#include <osv/kernel_config_preempt.h>
 #include <string.h>
 #include "tls-switch.hh"
 
@@ -372,7 +373,7 @@ void* thread::get_syscall_stack_top()
 void thread_main_c(thread* t)
 {
     arch::irq_enable();
-#ifdef CONF_preempt
+#if CONF_preempt
     preempt_enable();
 #endif
     // make sure thread starts with clean fpu state instead of

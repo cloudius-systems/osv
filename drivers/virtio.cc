@@ -11,6 +11,7 @@
 #include "virtio-vring.hh"
 #include <osv/debug.h>
 #include "osv/trace.hh"
+#include <osv/kernel_config_logger_debug.h>
 
 TRACEPOINT(trace_virtio_wait_for_queue, "queue(%p) have_elements=%d", void*, int);
 

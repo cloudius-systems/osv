@@ -63,6 +63,8 @@
 #include <sys/wait.h>
 #include <pty.h>
 #include <osv/pid.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 // cxxabi.h from gcc 10 and earlier used to say that __cxa_finalize returns
 // an int, while it should return void (and does so on gcc 11). To allow us

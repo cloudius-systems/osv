@@ -34,6 +34,10 @@
 #include <osv/migration-lock.hh>
 #include <osv/export.h>
 
+#include <osv/kernel_config_memory_debug.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
+
 // recent Boost gets confused by the "hidden" macro we add in some Musl
 // header files, so need to undefine it
 #undef hidden
@@ -2060,7 +2064,7 @@ void* malloc(size_t size)
     if (alignment > size) {
         alignment = 1ul << ilog2_roundup(size);
     }
-#if CONF_debug_memory == 0
+#if CONF_memory_debug == 0
     void* buf = std_malloc(size, alignment);
 #else
     void* buf = dbg::malloc(size, alignment);
@@ -2110,7 +2114,7 @@ int posix_memalign(void **memptr, size_t alignment, size_t size)
     if (!is_power_of_two(alignment)) {
         return EINVAL;
     }
-#if CONF_debug_memory == 0
+#if CONF_memory_debug == 0
     void* ret = std_malloc(size, alignment);
 #else
     void* ret = dbg::malloc(size, alignment);

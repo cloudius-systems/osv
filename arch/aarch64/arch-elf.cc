@@ -7,8 +7,9 @@
 
 #include <osv/elf.hh>
 #include <osv/sched.hh>
+#include <osv/kernel_config_elf_debug.h>
 
-#if CONF_debug_elf
+#if CONF_elf_debug
 #define elf_debug(format,...) kprintf("ELF [tid:%d, mod:%d, %s]: " format, sched::thread::current()->id(), _module_index, _pathname.c_str(), ##__VA_ARGS__)
 #else
 #define elf_debug(...)

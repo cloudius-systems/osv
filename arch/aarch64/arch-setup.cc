@@ -8,6 +8,7 @@
  */
 
 #include <osv/drivers_config.h>
+#include <osv/kernel_config_logger_debug.h>
 #include "arch-setup.hh"
 #include <osv/sched.hh>
 #include <osv/mempool.hh>

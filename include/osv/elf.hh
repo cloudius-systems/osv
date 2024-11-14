@@ -17,6 +17,8 @@
 #include <unordered_map>
 #include <osv/types.h>
 #include <osv/sched.hh>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 #include <atomic>
 
 #include "arch-elf.hh"

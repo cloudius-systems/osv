@@ -13,6 +13,8 @@
 #include <osv/poll.h>
 #include <osv/mutex.h>
 #include <osv/condvar.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 #include <sys/timerfd.h>
 

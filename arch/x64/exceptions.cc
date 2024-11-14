@@ -18,6 +18,8 @@
 #include <osv/rcu.hh>
 #include <osv/mutex.h>
 #include <osv/intr_random.hh>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 #include "fault-fixup.hh"
 

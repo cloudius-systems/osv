@@ -20,6 +20,7 @@
 #include <osv/mmu-defs.hh>
 #include <osv/align.hh>
 #include <osv/trace.hh>
+#include <osv/kernel_config_memory_debug.h>
 
 struct exception_frame;
 class balloon;
@@ -305,7 +306,7 @@ template <typename OutputFunc>
 inline
 void virt_to_phys(void* vaddr, size_t len, OutputFunc out)
 {
-    if (CONF_debug_memory && vaddr >= debug_base) {
+    if (CONF_memory_debug && vaddr >= debug_base) {
         while (len) {
             auto next = std::min(align_down(vaddr + page_size, page_size), vaddr + len);
             size_t delta = static_cast<char*>(next) - static_cast<char*>(vaddr);

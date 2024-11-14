@@ -13,6 +13,9 @@
 #include <osv/types.h>
 #include <osv/align.hh>
 #include <osv/sched.hh>
+#include <osv/kernel_config_tracepoints.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 #include <boost/intrusive/list.hpp>
 #include <string>
 #include <unordered_set>

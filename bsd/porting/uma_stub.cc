@@ -12,10 +12,13 @@
 #include <bsd/porting/uma_stub.h>
 #include <osv/preempt-lock.hh>
 #include <osv/export.h>
+#include <osv/kernel_config_memory_debug.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 void* uma_zone::cache::alloc()
 {
-    if (len && !CONF_debug_memory) {
+    if (len && !CONF_memory_debug) {
         return a[--len];
     }
     return nullptr;
@@ -23,7 +26,7 @@ void* uma_zone::cache::alloc()
 
 bool uma_zone::cache::free(void* obj)
 {
-    if (len < max_size && !CONF_debug_memory) {
+    if (len < max_size && !CONF_memory_debug) {
         a[len++] = obj;
         return true;
     }

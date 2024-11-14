@@ -20,6 +20,8 @@
 #include <osv/stubbing.hh>
 #include <osv/pid.h>
 #include <osv/export.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 using namespace osv::clock::literals;
 

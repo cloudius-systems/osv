@@ -11,6 +11,7 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <stdarg.h>
+#include <osv/kernel_config_logger_debug.h>
 
 typedef enum logger_severity_e {
      logger_debug = 0,

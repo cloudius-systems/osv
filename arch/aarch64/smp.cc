@@ -11,6 +11,7 @@
 #include <osv/prio.hh>
 #include <osv/aligned_new.hh>
 #include <osv/export.h>
+#include <osv/kernel_config_logger_debug.h>
 #include "processor.hh"
 #include "psci.hh"
 #include "arch-dtb.hh"

@@ -19,6 +19,9 @@
 
 #include <bsd/sys/sys/queue.h>
 
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
+
 using namespace osv;
 
 /*

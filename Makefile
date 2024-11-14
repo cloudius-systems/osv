@@ -82,25 +82,6 @@ ifeq (,$(wildcard conf/$(arch).mk))
 endif
 include conf/$(arch).mk
 
-# This parameter can be passed in to the build command to specify name of
-# a drivers profile. The drivers profile allows to build custom kernel with
-# a specific set of drivers enabled in the corresponding makefile include
-# file - conf/profiles/$(arch)/$(drivers_profile).mk). The default profile is
-# 'all' which incorporates all drivers into kernel.
-# In general the profiles set variables named conf_drivers_*, which then in turn
-# are used in the rules below to decide which object files are linked into
-# kernel.
-drivers_profile?=all
-ifeq (,$(wildcard conf/profiles/$(arch)/$(drivers_profile).mk))
-    $(error unsupported drivers profile $(drivers_profile))
-endif
-include conf/profiles/$(arch)/$(drivers_profile).mk
-# The base profile disables all drivers unless they are explicitly enabled
-# by the profile file included in the line above. The base profile also enforces
-# certain dependencies between drivers, for example the ide driver needs pci support, etc.
-# For more details please read comments in the profile file.
-include conf/profiles/$(arch)/base.mk
-
 CROSS_PREFIX ?= $(if $(filter-out $(arch),$(host_arch)),$(arch)-linux-gnu-)
 CXX=$(CROSS_PREFIX)g++
 CC=$(CROSS_PREFIX)gcc
@@ -117,6 +98,29 @@ OBJCOPY=$(CROSS_PREFIX)objcopy
 out = build/$(mode).$(arch)
 outlink = build/$(mode)
 outlink2 = build/last
+
+ifneq ($(MAKECMDGOALS),menuconfig)
+include $(out)/gen/config/kernel_conf.mk
+endif
+#
+# This parameter can be passed in to the build command to specify name of
+# a drivers profile. The drivers profile allows to build custom kernel with
+# a specific set of drivers enabled in the corresponding makefile include
+# file - conf/profiles/$(arch)/$(conf_drivers_profile).mk). The default profile is
+# 'all' which incorporates all drivers into kernel.
+# In general the profiles set variables named conf_drivers_*, which then in turn
+# are used in the rules below to decide which object files are linked into
+# kernel.
+conf_drivers_profile?=all
+ifeq (,$(wildcard conf/profiles/$(arch)/$(conf_drivers_profile).mk))
+    $(error unsupported drivers profile $(conf_drivers_profile))
+endif
+include conf/profiles/$(arch)/$(conf_drivers_profile).mk
+# The base profile disables all drivers unless they are explicitly enabled
+# by the profile file included in the line above. The base profile also enforces
+# certain dependencies between drivers, for example the ide driver needs pci support, etc.
+# For more details please read comments in the profile file.
+include conf/profiles/$(arch)/base.mk
 
 ifneq ($(MAKECMDGOALS),clean)
 $(info Building into $(out))
@@ -152,6 +156,10 @@ ifeq ($(arch),aarch64)
 all: $(out)/zfs_builder.img
 endif
 .PHONY: all
+
+menuconfig:
+	$(call quiet, make -s -f conf/Makefile default_config -j1, GEN default $(out)/.config)
+	make -s -f conf/Makefile menuconfig -j1
 
 links:
 	$(call very-quiet, ln -nsf $(notdir $(out)) $(outlink))
@@ -335,7 +343,7 @@ COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -
 	-fno-omit-frame-pointer $(compiler-specific) \
 	-include compiler/include/intrinsics.hh \
 	$(conf_compiler_cflags) $(conf_compiler_opt) $(acpi-defines) $(tracing-flags) $(gcc-sysroot) \
-	$(configuration) -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207" -DARCH_STRING=$(ARCH_STR) $(EXTRA_FLAGS)
+	-D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207" -DARCH_STRING=$(ARCH_STR) $(EXTRA_FLAGS)
 COMMON += $(standard-includes-flag)
 
 tracing-flags-0 =
@@ -372,32 +380,24 @@ $(out)/bsd/%.o: INCLUDES += -isystem bsd/
 # for machine/
 $(out)/bsd/%.o: INCLUDES += -isystem bsd/$(arch)
 
-configuration-defines = conf_preempt conf_debug_memory conf_logger_debug conf_debug_elf \
-			conf_lazy_stack conf_lazy_stack_invariant conf_tracepoints
-
-configuration = $(foreach cf,$(configuration-defines), \
-                      -D$(cf:conf_%=CONF_%)=$($(cf)))
-
-
-
 makedir = $(call very-quiet, mkdir -p $(dir $@))
 build-so = $(CC) $(CFLAGS) -o $@ $^ $(EXTRA_LIBS)
 q-build-so = $(call quiet, $(build-so), LINK $@)
 
 
-$(out)/%.o: %.cc | generated-headers
+$(out)/%.o: %.cc $(out)/gen/include/osv/kernel_config_hide_symbols.h | generated-headers
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
 
-$(out)/%.o: %.c | generated-headers
+$(out)/%.o: %.c $(out)/gen/include/osv/kernel_config_hide_symbols.h | generated-headers
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $<, CC $*.c)
 
-$(out)/%.o: %.S
+$(out)/%.o: %.S $(out)/gen/include/osv/kernel_config_hide_symbols.h
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) $(ASFLAGS) -c -o $@ $<, AS $*.S)
 
-$(out)/%.o: %.s
+$(out)/%.o: %.s $(out)/gen/include/osv/kernel_config_hide_symbols.h
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) $(ASFLAGS) -c -o $@ $<, AS $*.s)
 
