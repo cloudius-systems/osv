@@ -10,6 +10,7 @@ alarm
 aligned_alloc
 alphasort
 alphasort64
+arc4random
 asctime
 asctime_r
 asprintf
@@ -260,6 +261,7 @@ __getdelim
 getdelim
 getdtablesize
 getegid
+getentropy
 getenv
 geteuid
 getgid

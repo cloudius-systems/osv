@@ -157,7 +157,7 @@ arc4rand(void *ptr, u_int len, int reseed)
 	mtx_unlock(&arc4_mtx);
 }
 
-uint32_t
+OSV_LIBSOLARIS_API uint32_t
 arc4random(void)
 {
 	uint32_t ret;
