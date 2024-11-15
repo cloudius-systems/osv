@@ -61,14 +61,14 @@ fi
 
 MANIFEST_FILES=$BUILD_DIR/usr.manifest.files
 echo "Extracting list of files on host from $USR_MANIFEST"
-scripts/list_manifest_files.py > $MANIFEST_FILES
+scripts/list_manifest_files.py -m $USR_MANIFEST > $MANIFEST_FILES
 
 extract_symbols_from_elf()
 {
   local ELF_PATH=$1
   echo "/*------- $ELF_PATH */"
   objdump -wT ${ELF_PATH} | grep UND | cut -c 62- | \
-  sort -d | uniq | comm - ${ALL_SYMBOLS_FILE} -12 | \
+  sort -d | uniq | tr -d " " | comm - ${ALL_SYMBOLS_FILE} -12 | \
   awk '// { printf("    %s;\n", $0) }' | tee /tmp/generate_app_version_script_symbols
   if [[ $(grep dlsym /tmp/generate_app_version_script_symbols) != "" ]]; then
      echo "WARNING: the $ELF_PATH may use dlsym() to dynamically reference symbols!" 1>&2
