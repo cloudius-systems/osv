@@ -40,6 +40,7 @@
 #include <osv/buf.h>
 #include <osv/bio.h>
 #include <osv/device.h>
+#include <osv/kernel_config_fs_buffer_cache_size.h>
 
 #include <errno.h>
 #include <limits.h>
@@ -52,7 +53,7 @@
 #include <boost/intrusive/list.hpp>
 
 /* number of buffer cache */
-#define NBUFS		256
+#define NBUFS		CONF_fs_buffer_cache_size
 
 /* macros to clear/set/test flags. */
 #define	SET(t, f)	(t) |= (f)
