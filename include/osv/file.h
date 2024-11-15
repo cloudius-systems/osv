@@ -50,6 +50,7 @@
 #include <osv/rcu.hh>
 #include <osv/error.h>
 #include <osv/clock.hh>
+#include <osv/kernel_config_fs_max_file_descriptors.h>
 #include <boost/optional/optional.hpp>
 #include <osv/mmu-defs.hh>
 #include <boost/intrusive/list.hpp>
@@ -69,7 +70,7 @@ struct vnode;
 struct file;
 struct pollreq;
 
-#define FDMAX       (0x4000)
+#define FDMAX       (CONF_fs_max_file_descriptors)
 
 #if defined(__cplusplus) && !defined(USE_C_INTERFACE)
 
