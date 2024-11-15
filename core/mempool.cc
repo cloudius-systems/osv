@@ -17,7 +17,10 @@
 #include "libc/libc.hh"
 #include <osv/align.hh>
 #include <osv/debug.hh>
+#include <osv/kernel_config_memory_tracker.h>
+#if CONF_memory_tracker
 #include <osv/alloctracker.hh>
+#endif
 #include <atomic>
 #include <osv/mmu.hh>
 #include <osv/trace.hh>
@@ -77,6 +80,7 @@ namespace memory {
 
 size_t phys_mem_size;
 
+#if CONF_memory_tracker
 // Optionally track living allocations, and the call chain which led to each
 // allocation. Don't set tracker_enabled before tracker is fully constructed.
 alloc_tracker tracker;
@@ -95,6 +99,7 @@ static inline void tracker_forget(void *addr)
         tracker.forget(addr);
     }
 }
+#endif
 
 //
 // Before smp_allocator=true, threads are not yet available. malloc and free
@@ -1758,7 +1763,9 @@ static void* untracked_alloc_page()
 void* alloc_page()
 {
     void *p = untracked_alloc_page();
+#if CONF_memory_tracker
     tracker_remember(p, page_size);
+#endif
     return p;
 }
 
@@ -1774,7 +1781,9 @@ static inline void untracked_free_page(void *v)
 void free_page(void* v)
 {
     untracked_free_page(v);
+#if CONF_memory_tracker
     tracker_forget(v);
+#endif
 }
 
 /* Allocate a huge page of a given size N (which must be a power of two)
@@ -1875,7 +1884,9 @@ static inline void* std_malloc(size_t size, size_t alignment)
     } else {
         ret = memory::malloc_large(size, alignment, true, false);
     }
+#if CONF_memory_tracker
     memory::tracker_remember(ret, size);
+#endif
     return ret;
 }
 
@@ -1949,7 +1960,9 @@ void free(void* object)
     if (!object) {
         return;
     }
+#if CONF_memory_tracker
     memory::tracker_forget(object);
+#endif
 
     if (!mmu::is_linear_mapped(object, 0)) {
         return memory::mapped_free_large(object);

@@ -145,7 +145,9 @@ int main(int loader_argc, char **loader_argv)
 static bool opt_preload_zfs_library = false;
 static bool opt_extra_zfs_pools = false;
 static bool opt_disable_rofs_cache = false;
+#if CONF_memory_tracker
 static bool opt_leak = false;
+#endif
 static bool opt_noshutdown = false;
 bool opt_power_off_on_abort = false;
 #if CONF_tracepoints
@@ -187,7 +189,9 @@ static void usage()
         "  --trace-list          list available tracepoints\n"
         "  --strace              start a thread to print tracepoints to the console on the fly\n"
 #endif
+#if CONF_memory_tracker
         "  --leak                start leak detector after boot\n"
+#endif
         "  --nomount             don't mount the root file system\n"
         "  --nopivot             do not pivot the root from bootfs to the root fs\n"
         "  --rootfs=arg          root filesystem to use (zfs, rofs, ramfs or virtiofs)\n"
@@ -235,9 +239,11 @@ static void parse_options(int loader_argc, char** loader_argv)
         usage();
     }
 
+#if CONF_memory_tracker
     if (extract_option_flag(options_values, "leak")) {
         opt_leak = true;
     }
+#endif
 
     if (extract_option_flag(options_values, "disable_rofs_cache")) {
         opt_disable_rofs_cache = true;
@@ -619,10 +625,12 @@ void* do_main_thread(void *_main_args)
         debug("chdir done\n");
     }
 
+#if CONF_memory_tracker
     if (opt_leak) {
         debug("Enabling leak detector.\n");
         memory::tracker_enabled = true;
     }
+#endif
 
     boot_time.event("Total time");
 #ifdef __x86_64__
@@ -831,12 +839,16 @@ void main_cont(int loader_argc, char** loader_argv)
         sched::thread::wait_until([] { return false; });
     }
 
+#if CONF_memory_tracker
     if (memory::tracker_enabled) {
         debug("Leak testing done. Please use 'osv leak show' in gdb to analyze results.\n");
         osv::halt();
     } else {
+#endif
         osv::shutdown();
+#if CONF_memory_tracker
     }
+#endif
 }
 
 int __loader_argc = 0;

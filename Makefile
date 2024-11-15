@@ -1057,7 +1057,9 @@ objects += core/debug.o
 objects += core/rcu.o
 objects += core/pagecache.o
 objects += core/mempool.o
+ifeq ($(conf_memory_tracker),1)
 objects += core/alloctracker.o
+endif
 objects += core/printf.o
 ifeq ($(conf_tracepoints),1)
 objects += core/sampler.o
