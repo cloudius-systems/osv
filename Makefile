@@ -1082,7 +1082,9 @@ objects += core/power.o
 objects += core/percpu.o
 objects += core/per-cpu-counter.o
 objects += core/percpu-worker.o
+ifeq ($(conf_networking_dhcp),1)
 objects += core/dhcp.o
+endif
 objects += core/run.o
 objects += core/shutdown.o
 objects += core/version.o

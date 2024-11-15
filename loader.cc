@@ -567,9 +567,11 @@ void* do_main_thread(void *_main_args)
             debug("Could not initialize network interface.\n");
     });
     if (has_if) {
+#if CONF_networking_dhcp
         if (opt_ip.size() == 0) {
             dhcp_start(true);
         } else {
+#endif
             for (auto t : opt_ip) {
                 std::vector<std::string> tmp;
                 osv::split(tmp, t, " ,", true);
@@ -590,7 +592,9 @@ void* do_main_thread(void *_main_args)
                 auto addr = boost::asio::ip::address_v4::from_string(opt_nameserver);
                 osv::set_dns_config({addr}, std::vector<std::string>());
             }
+#if CONF_networking_dhcp
         }
+#endif
     }
 
     std::string if_ip;

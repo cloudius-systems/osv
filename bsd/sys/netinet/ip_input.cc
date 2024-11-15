@@ -62,6 +62,7 @@
 #ifdef IPSEC
 #include <netinet/ip_ipsec.h>
 #endif /* IPSEC */
+#include <osv/kernel_config_networking_dhcp.h>
 
 
 
@@ -481,12 +482,14 @@ tooshort:
 		goto passin;
 #endif /* IPSEC */
 
+#if CONF_networking_dhcp
 	/*
 	 * DHCP
 	 */
 	if (dhcp_hook_rx(m)) {
 		return nullptr;
 	}
+#endif
 
 	/*
 	 * Run through list of hooks for input packets.
