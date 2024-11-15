@@ -568,7 +568,9 @@ $(out)/bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/metaslab.o: COMMON+=-W
 $(out)/bsd/%.o: CXXFLAGS += -Wno-class-memaccess
 
 bsd  = bsd/init.o
+ifeq ($(conf_networking_stack),1)
 bsd += bsd/net.o
+endif
 bsd += bsd/$(arch)/machine/in_cksum.o
 bsd += bsd/sys/crypto/rijndael/rijndael-alg-fst.o
 bsd += bsd/sys/crypto/rijndael/rijndael-api.o
@@ -576,9 +578,12 @@ bsd += bsd/sys/crypto/rijndael/rijndael-api-fst.o
 bsd += bsd/sys/crypto/sha2/sha2.o
 bsd += bsd/sys/libkern/arc4random.o
 bsd += bsd/sys/libkern/random.o
+ifeq ($(conf_networking_stack),1)
 bsd += bsd/sys/libkern/inet_ntoa.o
 bsd += bsd/sys/libkern/inet_aton.o
+endif
 bsd += bsd/sys/kern/md5c.o
+ifeq ($(conf_networking_stack),1)
 bsd += bsd/sys/kern/kern_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf2.o
@@ -587,16 +592,21 @@ bsd += bsd/sys/kern/uipc_sockbuf.o
 bsd += bsd/sys/kern/uipc_socket.o
 bsd += bsd/sys/kern/uipc_syscalls.o
 bsd += bsd/sys/kern/uipc_syscalls_wrap.o
+endif
 bsd += bsd/sys/kern/subr_bufring.o
 bsd += bsd/sys/kern/subr_sbuf.o
 bsd += bsd/sys/kern/subr_eventhandler.o
 bsd += bsd/sys/kern/subr_hash.o
 bsd += bsd/sys/kern/subr_taskqueue.o
 $(out)/bsd/sys/kern/subr_taskqueue.o: COMMON += -Wno-dangling-pointer
+ifeq ($(conf_networking_stack),1)
 bsd += bsd/sys/kern/sys_socket.o
+endif
 bsd += bsd/sys/kern/subr_disk.o
+ifeq ($(conf_networking_stack),1)
 bsd += bsd/porting/route.o
 bsd += bsd/porting/networking.o
+endif
 bsd += bsd/porting/netport.o
 bsd += bsd/porting/netport1.o
 bsd += bsd/porting/shrinker.o
@@ -609,6 +619,7 @@ bsd += bsd/porting/kthread.o
 bsd += bsd/porting/mmu.o
 bsd += bsd/porting/pcpu.o
 bsd += bsd/porting/bus_dma.o
+ifeq ($(conf_networking_stack),1)
 bsd += bsd/sys/netinet/if_ether.o
 bsd += bsd/sys/compat/linux/linux_socket.o
 bsd += bsd/sys/compat/linux/linux_ioctl.o
@@ -659,6 +670,7 @@ bsd += bsd/sys/netinet/cc/cc_cubic.o
 bsd += bsd/sys/netinet/cc/cc_htcp.o
 bsd += bsd/sys/netinet/cc/cc_newreno.o
 bsd += bsd/sys/netinet/arpcache.o
+endif
 ifeq ($(conf_drivers_xen),1)
 bsd += bsd/sys/xen/evtchn.o
 $(out)/bsd/sys/xen/evtchn.o: COMMON += -Wno-array-bounds -Wno-stringop-overread -Wno-stringop-overflow
@@ -672,18 +684,22 @@ bsd += bsd/sys/xen/xenstore/xenstore.o
 bsd += bsd/sys/xen/xenbus/xenbus.o
 bsd += bsd/sys/xen/xenbus/xenbusb.o
 bsd += bsd/sys/xen/xenbus/xenbusb_front.o
+ifeq ($(conf_networking_stack),1)
 bsd += bsd/sys/dev/xen/netfront/netfront.o
+endif
 bsd += bsd/sys/dev/xen/blkfront/blkfront.o
 endif
 ifeq ($(conf_drivers_hyperv),1)
 bsd += bsd/sys/dev/hyperv/vmbus/hyperv.o
 endif
+ifeq ($(conf_networking_stack),1)
 ifeq ($(conf_drivers_ena),1)
 bsd += bsd/sys/contrib/ena_com/ena_eth_com.o
 bsd += bsd/sys/contrib/ena_com/ena_com.o
 bsd += bsd/sys/dev/ena/ena_datapath.o
 bsd += bsd/sys/dev/ena/ena.o
 $(out)/bsd/sys/dev/ena/%.o: CXXFLAGS += -Ibsd/sys/contrib
+endif
 endif
 endif
 
@@ -904,16 +920,20 @@ ifeq ($(conf_drivers_nvme),1)
 drivers += drivers/nvme.o
 drivers += drivers/nvme-queue.o
 endif
+ifeq ($(conf_networking_stack),1)
 drivers += drivers/virtio-net.o
+endif
 drivers += drivers/virtio-blk.o
 drivers += drivers/virtio-scsi.o
 drivers += drivers/virtio-rng.o
 drivers += drivers/virtio-fs.o
 endif
 
+ifeq ($(conf_networking_stack),1)
 ifeq ($(conf_drivers_vmxnet3),1)
 drivers += drivers/vmxnet3.o
 drivers += drivers/vmxnet3-queues.o
+endif
 endif
 drivers += drivers/kvmclock.o
 ifeq ($(conf_drivers_hyperv),1)
@@ -947,8 +967,10 @@ drivers += drivers/xenclock.o
 drivers += drivers/xenfront.o drivers/xenfront-xenbus.o drivers/xenfront-blk.o
 drivers += drivers/xenplatform-pci.o
 endif
+ifeq ($(conf_networking_stack),1)
 ifeq ($(conf_drivers_ena),1)
 drivers += drivers/ena.o
+endif
 endif
 endif # x64
 
@@ -1094,7 +1116,9 @@ objects += core/shutdown.o
 objects += core/version.o
 objects += core/waitqueue.o
 objects += core/chart.o
+ifeq ($(conf_networking_stack),1)
 objects += core/net_channel.o
+endif
 objects += core/demangle.o
 objects += core/async.o
 objects += core/net_trace.o
@@ -1476,7 +1500,9 @@ musl += misc/ffs.o
 musl += misc/ffsl.o
 musl += misc/ffsll.o
 musl += misc/get_current_dir_name.o
+ifeq ($(conf_networking_stack),1)
 libc += misc/gethostid.o
+endif
 libc += misc/getopt.o
 libc_to_hide += misc/getopt.o
 libc += misc/getopt_long.o
@@ -1522,6 +1548,7 @@ musl += network/htonl.o
 musl += network/htons.o
 musl += network/ntohl.o
 musl += network/ntohs.o
+ifeq ($(conf_networking_stack),1)
 libc += network/gethostbyname_r.o
 musl += network/gethostbyname2_r.o
 musl += network/gethostbyaddr_r.o
@@ -1566,6 +1593,7 @@ musl += network/if_freenameindex.o
 musl += network/res_init.o
 musl += network/netlink.o
 $(out)/musl/src/network/netlink.o: CFLAGS += --include libc/syscall_to_function.h --include libc/network/__netlink.h
+endif
 
 musl += prng/rand.o
 musl += prng/rand_r.o

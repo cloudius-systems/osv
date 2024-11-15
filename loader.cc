@@ -207,9 +207,11 @@ static void usage()
         "  --cwd=arg             set current working directory\n"
         "  --bootchart           perform a test boot measuring a time distribution of\n"
         "                        the various operations\n\n"
+#if CONF_networking_stack
         "  --ip=arg              set static IP on NIC\n"
         "  --defaultgw=arg       set default gateway address\n"
         "  --nameserver=arg      set nameserver address\n"
+#endif
         "  --delay=arg (=0)      delay in seconds before boot\n"
         "  --redirect=arg        redirect stdout and stderr to file\n"
         "  --disable_rofs_cache  disable ROFS memory cache\n"
@@ -561,6 +563,7 @@ void* do_main_thread(void *_main_args)
         load_zfs_library();
     }
 
+#if CONF_networking_stack
     bool has_if = false;
     osv::for_each_if([&has_if] (std::string if_name) {
         if (if_name == "lo0")
@@ -615,6 +618,7 @@ void* do_main_thread(void *_main_args)
     if (nr_ips == 1) {
        setenv("OSV_IP", if_ip.c_str(), 1);
     }
+#endif
 
     if (!opt_chdir.empty()) {
         debugf("Chdir to: '%s'\n", opt_chdir.c_str());
@@ -803,8 +807,10 @@ void main_cont(int loader_argc, char** loader_argv)
     boot_time.event("VFS initialized");
     //ramdisk_init();
 
+#if CONF_networking_stack
     net_init();
     boot_time.event("Network initialized");
+#endif
 
     arch::irq_enable();
 

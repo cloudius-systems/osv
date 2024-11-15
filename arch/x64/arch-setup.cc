@@ -27,6 +27,7 @@
 #if CONF_drivers_acpi
 #include "drivers/acpi.hh"
 #endif
+#include <osv/kernel_config_networking_stack.h>
 
 osv_multiboot_info_type* osv_multiboot_info;
 
@@ -288,8 +289,10 @@ void arch_init_premain()
 #if CONF_drivers_virtio_scsi
 #include "drivers/virtio-scsi.hh"
 #endif
+#if CONF_networking_stack
 #if CONF_drivers_virtio_net
 #include "drivers/virtio-net.hh"
+#endif
 #endif
 #if CONF_drivers_virtio_rng
 #include "drivers/virtio-rng.hh"
@@ -306,14 +309,18 @@ void arch_init_premain()
 #if CONF_drivers_pvscsi
 #include "drivers/vmw-pvscsi.hh"
 #endif
+#if CONF_networking_stack
 #if CONF_drivers_vmxnet3
 #include "drivers/vmxnet3.hh"
+#endif
 #endif
 #if CONF_drivers_ide
 #include "drivers/ide.hh"
 #endif
+#if CONF_networking_stack
 #if CONF_drivers_ena
 #include "drivers/ena.hh"
+#endif
 #endif
 #if CONF_drivers_nvme
 #include "drivers/nvme.hh"
@@ -349,8 +356,10 @@ void arch_init_drivers()
 #if CONF_drivers_virtio_scsi
     drvman->register_driver(virtio::scsi::probe);
 #endif
+#if CONF_networking_stack
 #if CONF_drivers_virtio_net
     drvman->register_driver(virtio::net::probe);
+#endif
 #endif
 #if CONF_drivers_virtio_rng
     drvman->register_driver(virtio::rng::probe);
@@ -367,14 +376,18 @@ void arch_init_drivers()
 #if CONF_drivers_pvscsi
     drvman->register_driver(vmw::pvscsi::probe);
 #endif
+#if CONF_networking_stack
 #if CONF_drivers_vmxnet3
     drvman->register_driver(vmw::vmxnet3::probe);
+#endif
 #endif
 #if CONF_drivers_ide
     drvman->register_driver(ide::ide_drive::probe);
 #endif
+#if CONF_networking_stack
 #if CONF_drivers_ena
     drvman->register_driver(aws::ena::probe);
+#endif
 #endif
 #if CONF_drivers_nvme
     drvman->register_driver(nvme::driver::probe);

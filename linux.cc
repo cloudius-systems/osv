@@ -59,6 +59,7 @@
 #include <musl/src/internal/ksigaction.h>
 
 #include <osv/kernel_config_core_epoll.h>
+#include <osv/kernel_config_networking_stack.h>
 #include <osv/kernel_config_core_syscall.h>
 
 extern "C" int eventfd2(unsigned int, int);
@@ -684,8 +685,10 @@ TRACEPOINT(trace_syscall_epoll_ctl, "%d <= %d %d %d 0x%x", int, int, int, int, s
 TRACEPOINT(trace_syscall_epoll_wait, "%d <= %d 0x%x %d %d", int, int, struct epoll_event *, int, int);
 #endif
 #endif
+#if CONF_networking_stack
 TRACEPOINT(trace_syscall_accept4, "%d <= %d 0x%x %p 0%0o", int, int, struct sockaddr *, socklen_t *, int);
 TRACEPOINT(trace_syscall_connect, "%d <= %d 0x%x %d", int, int, struct sockaddr *, socklen_t);
+#endif
 TRACEPOINT(trace_syscall_get_mempolicy, "%lu <= %p %p %lu %p %d", long, int *, unsigned long *, unsigned long, void *, int);
 TRACEPOINT(trace_syscall_sys_sched_getaffinity, "%d <= %d %u %p", int, pid_t, unsigned, unsigned long *);
 TRACEPOINT(trace_syscall_long_mmap, "0x%x <= 0x%x %lu %d %d %d %lu", long, void *, size_t, int, int, int, off_t);
@@ -701,22 +704,26 @@ TRACEPOINT(trace_syscall_madvise, "%d <= 0x%x %lu %d", int, void *, size_t, int)
 TRACEPOINT(trace_syscall_sched_yield, "%d <=", int);
 TRACEPOINT(trace_syscall_mincore, "%d <= 0x%x %lu %p", int, void *, size_t, unsigned char *);
 TRACEPOINT(trace_syscall_openat, "%d <= %d \"%s\" 0%0o %d", int, int, const char *, int, mode_t);
+#if CONF_networking_stack
 TRACEPOINT(trace_syscall_socket, "%d <= %d %d %d", int, int, int, int);
 TRACEPOINT(trace_syscall_setsockopt, "%d <= %d %d %d %p %d", int, int, int, int, char *, int);
 TRACEPOINT(trace_syscall_getsockopt, "%d <= %d %d %d %p %p", int, int, int, int, char *, unsigned int *);
 TRACEPOINT(trace_syscall_getpeername, "%d <= %d %p %p", int, int, struct sockaddr *, unsigned int *);
 TRACEPOINT(trace_syscall_bind, "%d <= %d %p %d", int, int, struct sockaddr *, int);
 TRACEPOINT(trace_syscall_listen, "%d <= %d %d", int, int, int);
+#endif
 TRACEPOINT(trace_syscall_sys_ioctl, "%d <= %u %u %lu", int, unsigned int, unsigned int, unsigned long);
 #ifdef SYS_stat
 TRACEPOINT(trace_syscall_stat, "%d <= \"%s\" %p", int, const char *, struct stat *);
 #endif
 TRACEPOINT(trace_syscall_fstat, "%d <= %d %p", int, int, struct stat *);
+#if CONF_networking_stack
 TRACEPOINT(trace_syscall_getsockname, "%d <= %d %p %p", int, int, struct sockaddr *, socklen_t *);
 TRACEPOINT(trace_syscall_sendto, "%lu <= %d 0x%x %lu %d %p %u", ssize_t, int, const void *, size_t, int, const struct sockaddr *, socklen_t);
 TRACEPOINT(trace_syscall_sendmsg, "%lu <= %d %p %d", ssize_t, int, const struct msghdr *, int);
 TRACEPOINT(trace_syscall_recvfrom, "%lu <= %d 0x%x %lu %d %p %p", ssize_t, int, void *, size_t, int, struct sockaddr *, socklen_t *);
 TRACEPOINT(trace_syscall_recvmsg, "%lu <= %d %p %d", ssize_t, int, struct msghdr *, int);
+#endif
 TRACEPOINT(trace_syscall_dup3, "%d <= %d %d %d", int, int, int, int);
 TRACEPOINT(trace_syscall_flock, "%d <= %d %d", int, int, int);
 TRACEPOINT(trace_syscall_pwrite64, "%lu <= %d 0x%x %lu %ld", ssize_t, int, const void *, size_t, off_t);
@@ -783,11 +790,15 @@ TRACEPOINT(trace_syscall_gettimeofday, "%d <= %p %p", int, struct timeval *, str
 TRACEPOINT(trace_syscall_getppid, "%d <=", pid_t);
 TRACEPOINT(trace_syscall_sysinfo, "%d <= %p", int, struct sysinfo *);
 TRACEPOINT(trace_syscall_sendfile, "%lu <= %d %d %p %lu", ssize_t, int, int, off_t *, size_t);
+#if CONF_networking_stack
 TRACEPOINT(trace_syscall_socketpair, "%d <= %d %d %d %p", int, int, int, int, int *);
 TRACEPOINT(trace_syscall_shutdown, "%d <= %d %d", int, int, int);
+#endif
 TRACEPOINT(trace_syscall_readv, "%lu <= %lu %p %lu", ssize_t, unsigned long, const struct iovec *, unsigned long);
 TRACEPOINT(trace_syscall_getrusage, "%d <= %d %p", int, int, struct rusage *);
+#if CONF_networking_stack
 TRACEPOINT(trace_syscall_accept, "%d <= %d %p %p", int, int, struct sockaddr *, socklen_t *);
+#endif
 TRACEPOINT(trace_syscall_fchdir, "%d <= %u", int, unsigned int);
 TRACEPOINT(trace_syscall_fstatfs, "%d <= %u %p", int, unsigned int, struct statfs *);
 TRACEPOINT(trace_syscall_umask, "%d <= %d", mode_t, mode_t);
@@ -859,8 +870,10 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL4(epoll_wait, int, struct epoll_event *, int, int);
 #endif
 #endif
+#if CONF_networking_stack
     SYSCALL4(accept4, int, struct sockaddr *, socklen_t *, int);
     SYSCALL3(connect, int, struct sockaddr *, socklen_t);
+#endif
     SYSCALL5(get_mempolicy, int *, unsigned long *, unsigned long, void *, int);
     SYSCALL3(sys_sched_getaffinity, pid_t, unsigned, unsigned long *);
     SYSCALL6(long_mmap, void *, size_t, int, int, int, off_t);
@@ -876,6 +889,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL0(sched_yield);
     SYSCALL3(mincore, void *, size_t, unsigned char *);
     SYSCALL4(openat, int, const char *, int, mode_t);
+#if CONF_networking_stack
     SYSCALL3(socket, int, int, int);
     SYSCALL5(setsockopt, int, int, int, char *, int);
     SYSCALL5(getsockopt, int, int, int, char *, unsigned int *);
@@ -888,11 +902,13 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL2(stat, const char *, struct stat *);
 #endif
     SYSCALL2(fstat, int, struct stat *);
+#if CONF_networking_stack
     SYSCALL3(getsockname, int, struct sockaddr *, socklen_t *);
     SYSCALL6(sendto, int, const void *, size_t, int, const struct sockaddr *, socklen_t);
     SYSCALL3(sendmsg, int, const struct msghdr *, int);
     SYSCALL6(recvfrom, int, void *, size_t, int, struct sockaddr *, socklen_t *);
     SYSCALL3(recvmsg, int, struct msghdr *, int);
+#endif
     SYSCALL3(dup3, int, int, int);
     SYSCALL2(flock, int, int);
     SYSCALL4(pwrite64, int, const void *, size_t, off_t);
@@ -959,11 +975,15 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL0(getppid);
     SYSCALL1(sysinfo, struct sysinfo *);
     SYSCALL4(sendfile, int, int, off_t *, size_t);
+#if CONF_networking_stack
     SYSCALL4(socketpair, int, int, int, int *);
     SYSCALL2(shutdown, int, int);
+#endif
     SYSCALL3(readv, unsigned long, const struct iovec *, unsigned long);
     SYSCALL2(getrusage, int, struct rusage *);
+#if CONF_networking_stack
     SYSCALL3(accept, int, struct sockaddr *, socklen_t *);
+#endif
     SYSCALL1(fchdir, unsigned int);
     SYSCALL2(fstatfs, unsigned int, struct statfs *);
     SYSCALL1(umask, mode_t);
