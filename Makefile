@@ -1570,7 +1570,6 @@ $(out)/libc/multibyte/mbsrtowcs.o: CFLAGS += -Imusl/src/multibyte
 musl += network/lookup_ipliteral.o
 libc += network/getaddrinfo.o
 libc += network/freeaddrinfo.o
-musl += network/dn_expand.o
 musl += network/res_mkquery.o
 musl += network/dns_parse.o
 musl += network/in6addr_any.o
@@ -1600,10 +1599,11 @@ musl += network/getservbyport.o
 musl += network/getifaddrs.o
 musl += network/if_nameindex.o
 musl += network/if_freenameindex.o
-musl += network/res_init.o
 musl += network/netlink.o
 $(out)/musl/src/network/netlink.o: CFLAGS += --include libc/syscall_to_function.h --include libc/network/__netlink.h
 endif
+musl += network/dn_expand.o
+musl += network/res_init.o
 
 musl += prng/rand.o
 musl += prng/rand_r.o
