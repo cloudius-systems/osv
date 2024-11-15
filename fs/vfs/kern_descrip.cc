@@ -21,6 +21,7 @@
 
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_core_epoll.h>
 
 using namespace osv;
 
@@ -179,6 +180,7 @@ file::file(unsigned flags, filetype_t type, void *opaque)
 
 void file::wake_epoll(int events)
 {
+#if CONF_core_epoll
     WITH_LOCK(f_lock) {
         if (!f_epolls) {
             return;
@@ -187,6 +189,7 @@ void file::wake_epoll(int events)
             epoll_wake(ep);
         }
     }
+#endif
 }
 
 void fhold(struct file* fp)
@@ -233,15 +236,18 @@ void file::stop_polls()
     auto fp = this;
 
     poll_drain(fp);
+#if CONF_core_epoll
     if (f_epolls) {
         for (auto ep : *f_epolls) {
             epoll_file_closed(ep);
         }
     }
+#endif
 }
 
 void file::epoll_add(epoll_ptr ep)
 {
+#if CONF_core_epoll
     WITH_LOCK(f_lock) {
         if (!f_epolls) {
             f_epolls.reset(new std::vector<epoll_ptr>);
@@ -250,10 +256,12 @@ void file::epoll_add(epoll_ptr ep)
             f_epolls->push_back(ep);
         }
     }
+#endif
 }
 
 void file::epoll_del(epoll_ptr ep)
 {
+#if CONF_core_epoll
     WITH_LOCK(f_lock) {
         assert(f_epolls);
         auto i = boost::range::find(*f_epolls, ep);
@@ -261,6 +269,7 @@ void file::epoll_del(epoll_ptr ep)
             f_epolls->erase(i);
         }
     }
+#endif
 }
 
 OSV_LIBSOLARIS_API

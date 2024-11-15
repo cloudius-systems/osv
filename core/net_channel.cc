@@ -20,6 +20,7 @@
 
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_core_epoll.h>
 
 void net_channel::process_queue()
 {
@@ -43,12 +44,14 @@ void net_channel::wake_pollers()
                 pr->_poll_thread.wake_from_kernel_or_with_irq_disabled();
             }
         }
+#if CONF_core_epoll
         // can't call epoll_wake from rcu, so copy the data
         if (!_epollers.empty()) {
             _epollers.reader_for_each([&] (const epoll_ptr& ep) {
                 epoll_wake_in_rcu(ep);
             });
         }
+#endif
     }
 }
 
@@ -82,21 +85,25 @@ void net_channel::del_poller(pollreq& pr)
 
 void net_channel::add_epoll(const epoll_ptr& ep)
 {
+#if CONF_core_epoll
     WITH_LOCK(_pollers_mutex) {
         if (!_epollers.owner_find(ep)) {
             _epollers.insert(ep);
         }
     }
+#endif
 }
 
 void net_channel::del_epoll(const epoll_ptr& ep)
 {
+#if CONF_core_epoll
     WITH_LOCK(_pollers_mutex) {
         auto i = _epollers.owner_find(ep);
         if (i) {
             _epollers.erase(i);
         }
     }
+#endif
 }
 
 classifier::classifier()

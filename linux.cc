@@ -58,6 +58,8 @@
 
 #include <musl/src/internal/ksigaction.h>
 
+#include <osv/kernel_config_core_epoll.h>
+
 extern "C" int eventfd2(unsigned int, int);
 
 extern "C" OSV_LIBC_API long gettid()
@@ -666,11 +668,15 @@ TRACEPOINT(trace_syscall_clock_getres, "%d <= %d %p", int, clockid_t, struct tim
 TRACEPOINT(trace_syscall_futex, "%d <= %p %d %d %p %p %d", int, int *, int, int, const struct timespec *, int *, uint32_t);
 TRACEPOINT(trace_syscall_close, "%d <= %d", int, int);
 TRACEPOINT(trace_syscall_pipe2, "%d <= %p 0%0o", int, int *, int);
+#if CONF_core_epoll
 TRACEPOINT(trace_syscall_epoll_create1, "%d <= 0%0o", int, int);
+#endif
 TRACEPOINT(trace_syscall_eventfd2, "%d <= %u 0%0o", int, unsigned int, int);
+#if CONF_core_epoll
 TRACEPOINT(trace_syscall_epoll_ctl, "%d <= %d %d %d 0x%x", int, int, int, int, struct epoll_event *);
 #ifdef SYS_epoll_wait
 TRACEPOINT(trace_syscall_epoll_wait, "%d <= %d 0x%x %d %d", int, int, struct epoll_event *, int, int);
+#endif
 #endif
 TRACEPOINT(trace_syscall_accept4, "%d <= %d 0x%x %p 0%0o", int, int, struct sockaddr *, socklen_t *, int);
 TRACEPOINT(trace_syscall_connect, "%d <= %d 0x%x %d", int, int, struct sockaddr *, socklen_t);
@@ -714,7 +720,9 @@ TRACEPOINT(trace_syscall_fcntl, "%d <= %d %d %d", int, int, int, int);
 TRACEPOINT(trace_syscall_pread64, "%lu <= %d 0x%x %lu %ld", ssize_t, int, void *, size_t, off_t);
 TRACEPOINT(trace_syscall_ftruncate, "%d <= %d %ld", int, int, off_t);
 TRACEPOINT(trace_syscall_fsync, "%d <= %d", int, int);
+#if CONF_core_epoll
 TRACEPOINT(trace_syscall_epoll_pwait, "%d <= %d %p %d %d %p", int, int, struct epoll_event *, int, int, const sigset_t*);
+#endif
 TRACEPOINT(trace_syscall_getrandom, "%lu <= 0x%x %lu %u", ssize_t, char *, size_t, unsigned int);
 TRACEPOINT(trace_syscall_nanosleep, "%d <= %p %p", int, const struct timespec*, struct timespec *);
 TRACEPOINT(trace_syscall_fstatat, "%d <= %d \"%s\" %p 0%0o", int, int, const char *, struct stat *, int);
@@ -748,7 +756,9 @@ TRACEPOINT(trace_syscall_dup2, "%d <= %d %d", int, int, int);
 TRACEPOINT(trace_syscall_access, "%d <= \"%s\" %d", int, const char *, int);
 TRACEPOINT(trace_syscall_readlink, "%lu <= \"%s\" 0x%x %lu", ssize_t, const char *, char *, size_t);
 TRACEPOINT(trace_syscall_poll, "%d <= %p %ld %d", int, struct pollfd *, nfds_t, int);
+#if CONF_core_epoll
 TRACEPOINT(trace_syscall_epoll_create, "%d <= %d", int, int);
+#endif
 TRACEPOINT(trace_syscall_time, "%ld <= %p", time_t, time_t *);
 TRACEPOINT(trace_syscall_unlink, "%d <= \"%s\"", int, const char *);
 TRACEPOINT(trace_syscall_pipe, "%d <= %p", int, int*);
@@ -829,11 +839,15 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL6(futex, int *, int, int, const struct timespec *, int *, uint32_t);
     SYSCALL1(close, int);
     SYSCALL2(pipe2, int *, int);
+#if CONF_core_epoll
     SYSCALL1(epoll_create1, int);
+#endif
     SYSCALL2(eventfd2, unsigned int, int);
+#if CONF_core_epoll
     SYSCALL4(epoll_ctl, int, int, int, struct epoll_event *);
 #ifdef SYS_epoll_wait
     SYSCALL4(epoll_wait, int, struct epoll_event *, int, int);
+#endif
 #endif
     SYSCALL4(accept4, int, struct sockaddr *, socklen_t *, int);
     SYSCALL3(connect, int, struct sockaddr *, socklen_t);
@@ -858,6 +872,7 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL3(getpeername, int, struct sockaddr *, unsigned int *);
     SYSCALL3(bind, int, struct sockaddr *, int);
     SYSCALL2(listen, int, int);
+#endif
     SYSCALL3(sys_ioctl, unsigned int, unsigned int, unsigned long);
 #ifdef SYS_stat
     SYSCALL2(stat, const char *, struct stat *);
@@ -877,7 +892,9 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL4(pread64, int, void *, size_t, off_t);
     SYSCALL2(ftruncate, int, off_t);
     SYSCALL1(fsync, int);
+#if CONF_core_epoll
     SYSCALL5(epoll_pwait, int, struct epoll_event *, int, int, const sigset_t*);
+#endif
     SYSCALL3(getrandom, char *, size_t, unsigned int);
     SYSCALL2(nanosleep, const struct timespec*, struct timespec *);
     SYSCALL4(fstatat, int, const char *, struct stat *, int);
@@ -911,7 +928,9 @@ OSV_LIBC_API long syscall(long number, ...)
     SYSCALL2(access, const char *, int);
     SYSCALL3(readlink, const char *, char *, size_t);
     SYSCALL3(poll, struct pollfd *, nfds_t, int);
+#if CONF_core_epoll
     SYSCALL1(epoll_create, int);
+#endif
     SYSCALL1(time, time_t *);
     SYSCALL1(unlink, const char *);
     SYSCALL1(pipe, int*);
