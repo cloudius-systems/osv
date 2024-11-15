@@ -1030,7 +1030,9 @@ ifeq ($(conf_drivers_xen),1)
 objects += arch/$(arch)/xen.o
 endif
 
+ifeq ($(conf_memory_optimize),1)
 $(out)/arch/x64/string-ssse3.o: CXXFLAGS += -mssse3
+endif
 
 ifeq ($(arch),aarch64)
 objects += arch/$(arch)/psci.o
@@ -1042,7 +1044,9 @@ objects += arch/$(arch)/arch-dtb.o
 objects += arch/$(arch)/hypercall.o
 objects += arch/$(arch)/memset.o
 objects += arch/$(arch)/memcpy.o
+ifeq ($(conf_memory_optimize),1)
 objects += arch/$(arch)/memmove.o
+endif
 objects += arch/$(arch)/tlsdesc.o
 objects += arch/$(arch)/sched.o
 objects += $(libfdt)
@@ -1050,8 +1054,10 @@ endif
 
 ifeq ($(arch),x64)
 objects += arch/x64/dmi.o
+ifeq ($(conf_memory_optimize),1)
 objects += arch/x64/string.o
 objects += arch/x64/string-ssse3.o
+endif
 objects += arch/x64/ioapic.o
 objects += arch/x64/apic.o
 objects += arch/x64/apic-clock.o
@@ -1103,7 +1109,9 @@ objects += core/select.o
 ifeq ($(conf_core_epoll),1)
 objects += core/epoll.o
 endif
+ifeq ($(conf_core_newpoll),1)
 objects += core/newpoll.o
+endif
 objects += core/power.o
 objects += core/percpu.o
 objects += core/per-cpu-counter.o
@@ -1127,7 +1135,9 @@ objects += core/libaio.o
 ifeq ($(conf_core_namespaces),1)
 objects += core/osv_execve.o
 endif
+ifeq ($(conf_core_c_wrappers),1)
 objects += core/osv_c_wrappers.o
+endif
 objects += core/options.o
 objects += core/string_utils.o
 
@@ -1627,7 +1637,9 @@ libc += arch/$(arch)/ucontext/setcontext.o
 libc += arch/$(arch)/ucontext/start_context.o
 libc_to_hide += arch/$(arch)/ucontext/start_context.o
 libc += arch/$(arch)/ucontext/ucontext.o
+ifeq ($(conf_memory_optimize),1)
 libc += string/memmove.o
+endif
 endif
 
 musl += search/tfind.o
@@ -1800,8 +1812,14 @@ musl += string/index.o
 musl += string/memccpy.o
 musl += string/memchr.o
 musl += string/memcmp.o
+ifeq ($(conf_memory_optimize),1)
 libc += string/memcpy.o
 libc_to_hide += string/memcpy.o
+else
+musl += string/memcpy.o
+musl += string/memset.o
+musl += string/memmove.o
+endif
 musl += string/memmem.o
 musl += string/mempcpy.o
 musl += string/memrchr.o
