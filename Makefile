@@ -2007,8 +2007,12 @@ fs_objs += virtiofs/virtiofs_vfsops.o \
 endif
 
 fs_objs += pseudofs/pseudofs.o
+ifeq ($(conf_fs_procfs),1)
 fs_objs += procfs/procfs_vnops.o
+endif
+ifeq ($(conf_fs_sysfs),1)
 fs_objs += sysfs/sysfs_vnops.o
+endif
 fs_objs += zfs/zfs_null_vfsops.o
 
 objects += $(addprefix fs/, $(fs_objs))

@@ -39,6 +39,8 @@
  */
 
 #include <osv/drivers_config.h>
+#include <osv/kernel_config_fs_procfs.h>
+#include <osv/kernel_config_fs_sysfs.h>
 #include <limits.h>
 #include <unistd.h>
 #include <string.h>
@@ -50,8 +52,12 @@ extern struct vfsops ramfs_vfsops;
 extern struct vfsops rofs_vfsops;
 extern struct vfsops devfs_vfsops;
 extern struct vfsops nfs_vfsops;
+#if CONF_fs_procfs
 extern struct vfsops procfs_vfsops;
+#endif
+#if CONF_fs_sysfs
 extern struct vfsops sysfs_vfsops;
+#endif
 extern struct vfsops zfs_vfsops;
 #if CONF_drivers_virtio_fs
 extern struct vfsops virtiofs_vfsops;
@@ -77,8 +83,12 @@ const struct vfssw vfssw[] = {
 	{"ramfs",	ramfs_init,	&ramfs_vfsops},
 	{"devfs",	devfs_init,	&devfs_vfsops},
 	{"nfs",		nfs_init,	&nfs_vfsops},
+#if CONF_fs_procfs
 	{"procfs",	procfs_init,	&procfs_vfsops},
+#endif
+#if CONF_fs_sysfs
 	{"sysfs",	sysfs_init,	&sysfs_vfsops},
+#endif
 	{"zfs",		zfs_init,	&zfs_vfsops},
 	{"rofs", 	rofs_init, 	&rofs_vfsops},
 #if CONF_drivers_virtio_fs
