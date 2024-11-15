@@ -20,6 +20,7 @@
 #include <boost/range/algorithm/transform.hpp>
 #include <osv/wait_record.hh>
 #include "libc/pthread.hh"
+#include <osv/kernel_config_core_namespaces.h>
 
 using namespace boost::range;
 
@@ -172,9 +173,13 @@ application::application(const std::string& command,
         elf::program *current_program;
 
         if (new_program) {
+#if CONF_core_namespaces
             this->new_program();
             clone_osv_environ();
             current_program = _program.get();
+#else
+            throw launch_error("Creating new program in a new namespace not supported: " + _command);
+#endif
         } else {
             // Do it in a separate branch because elf::get_program() would not
             // have found us yet in the previous branch.
@@ -535,6 +540,7 @@ pid_t application::get_main_thread_id() {
     return pthread_gettid_np(_thread);
 }
 
+#if CONF_core_namespaces
 // For simplicity, we will not reuse bits in the bitmap, since no destructor is
 // assigned to the program. In that case, a simple counter would do. But coding
 // this way is easy, and make this future extension simple.
@@ -559,6 +565,7 @@ void application::new_program()
     }
     abort("application::new_program() out of namespaces.\n");
 }
+#endif
 
 elf::program *application::program() {
     return _program.get();
@@ -592,11 +599,13 @@ void application::set_environ(const std::string &key, const std::string &value,
     // create a pointer to OSv's libc setenv()
     auto my_setenv = setenv;
 
+#if CONF_core_namespaces
     if (new_program) {
         // If we are starting a new program use the libenviron.so's setenv()
         my_setenv =
             _libenviron->lookup<int (const char *, const char *, int)>("setenv");
     }
+#endif
 
     // We do not need to strdup() since the libc will malloc() for us
     // Note that we merge in the existing environment variables by

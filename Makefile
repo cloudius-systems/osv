@@ -1094,7 +1094,9 @@ objects += core/async.o
 objects += core/net_trace.o
 objects += core/app.o
 objects += core/libaio.o
+ifeq ($(conf_core_namespaces),1)
 objects += core/osv_execve.o
+endif
 objects += core/osv_c_wrappers.o
 objects += core/options.o
 objects += core/string_utils.o
