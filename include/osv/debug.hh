@@ -14,8 +14,9 @@
 #include <osv/debug.h>
 #include <osv/mutex.h>
 #include <osv/printf.hh>
+#include <osv/kernel_config_core_debug_buffer_size.h>
 
-#define DEBUG_BUFFER_SIZE 1024*50 // 50kb buffer
+#define DEBUG_BUFFER_SIZE CONF_core_debug_buffer_size
 
 #ifndef NDEBUG
 /**
