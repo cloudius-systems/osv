@@ -34,9 +34,10 @@
 #include <osv/migration-lock.hh>
 #include <osv/export.h>
 
-#include <osv/kernel_config_memory_debug.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_memory_debug.h>
+#include <osv/kernel_config_memory_jvm_balloon.h>
 
 // recent Boost gets confused by the "hidden" macro we add in some Musl
 // header files, so need to undefine it
@@ -442,7 +443,9 @@ mutex free_page_ranges_lock;
 static std::atomic<size_t> total_memory(0);
 static std::atomic<size_t> free_memory(0);
 static size_t watermark_lo(0);
+#if CONF_memory_jvm_balloon
 static std::atomic<size_t> current_jvm_heap_memory(0);
+#endif
 
 // At least two (x86) huge pages worth of size;
 static size_t constexpr min_emergency_pool_size = 4 << 20;
@@ -472,10 +475,16 @@ static void on_free(size_t mem)
 static void on_alloc(size_t mem)
 {
     free_memory.fetch_sub(mem);
+#if CONF_memory_jvm_balloon
     if (balloon_api) {
         balloon_api->adjust_memory(min_emergency_pool_size);
     }
-    if ((stats::free() + stats::jvm_heap()) < watermark_lo) {
+#endif
+    if ((stats::free()
+#if CONF_memory_jvm_balloon
++ stats::jvm_heap()
+#endif
+) < watermark_lo) {
         reclaimer_thread.wake();
     }
 }
@@ -495,7 +504,7 @@ namespace stats {
         auto total = total_memory.load(std::memory_order_relaxed);
         return total - watermark_lo;
     }
-
+#if CONF_memory_jvm_balloon
     void on_jvm_heap_alloc(size_t mem)
     {
         current_jvm_heap_memory.fetch_add(mem);
@@ -506,6 +515,7 @@ namespace stats {
         current_jvm_heap_memory.fetch_sub(mem);
     }
     size_t jvm_heap() { return current_jvm_heap_memory.load(); }
+#endif
 }
 
 void reclaimer::wake()
@@ -1103,6 +1113,7 @@ void reclaimer::_do_reclaim()
             target = bytes_until_normal();
         }
 
+#if CONF_memory_jvm_balloon
         // This means that we are currently ballooning, we should
         // try to serve the waiters from temporary memory without
         // going on hard mode. A big batch of more memory is likely
@@ -1115,6 +1126,7 @@ void reclaimer::_do_reclaim()
                 }
             }
         }
+#endif
 
         _shrinker_loop(target, [this] { return _oom_blocked.has_waiters(); });
 
@@ -1127,9 +1139,11 @@ void reclaimer::_do_reclaim()
                 }
             }
 
+#if CONF_memory_jvm_balloon
             if (balloon_api) {
                 balloon_api->voluntary_return();
             }
+#endif
         }
     }
 }
@@ -2176,14 +2190,20 @@ void free_phys_contiguous_aligned(void* p)
 
 bool throttling_needed()
 {
+#if CONF_memory_jvm_balloon
     if (!balloon_api) {
         return false;
     }
 
     return balloon_api->ballooning();
+#else
+    return false;
+#endif
 }
 
+#if CONF_memory_jvm_balloon
 jvm_balloon_api *balloon_api = nullptr;
+#endif
 }
 
 extern "C" void* alloc_contiguous_aligned(size_t size, size_t align)

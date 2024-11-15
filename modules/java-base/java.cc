@@ -12,7 +12,10 @@
 #include <unistd.h>
 #include <regex>
 #include <osv/debug.hh>
+#include <osv/kernel_config_memory_jvm_balloon.h>
+#if CONF_memory_jvm_balloon
 #include "balloon/jvm_balloon.hh"
+#endif
 #include <osv/mempool.hh>
 #include "jvm/java_api.hh"
 #include "osv/version.hh"
@@ -21,7 +24,9 @@
 #include <osv/app.hh>
 #include <iostream>
 
+#if CONF_memory_jvm_balloon
 extern size_t jvm_heap_size;
+#endif
 
 // java.so is similar to the standard "java" command line launcher in Linux.
 //
@@ -176,8 +181,8 @@ static int java_main(int argc, char **argv)
         }
     }
 
-    size_t auto_heap = 0;
 #if 0
+    size_t auto_heap = 0;
     // Do not use total(), since that won't reflect the whole memory for the
     // machine. It then becomes counter intuitive to tell the user what is the
     // minimum he has to set to balloon
@@ -216,7 +221,9 @@ static int java_main(int argc, char **argv)
         jvm->DestroyJavaVM();
     });
 
+#if CONF_memory_jvm_balloon
     jvm_heap_size = 0;
+#endif
 
     java_api::set(jvm);
     attached_env::set_jvm(jvm);
@@ -254,11 +261,13 @@ static int java_main(int argc, char **argv)
         env->SetObjectArrayElement(args, index++, env->NewStringUTF(argv[i]));
     }
 
+#if CONF_memory_jvm_balloon
     // Manually setting the heap size is viewed as a declaration of intent. In
     // that case, we'll leave the user alone. This may be revisited in the
     // future, but it is certainly the safest option.
     std::unique_ptr<memory::jvm_balloon_api_impl>
         balloon(auto_heap == 0 ? nullptr : new memory::jvm_balloon_api_impl(jvm));
+#endif
 
     env->CallStaticVoidMethod(mainclass, mainmethod, args);
 

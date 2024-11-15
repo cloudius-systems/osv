@@ -21,10 +21,13 @@
 #include <osv/align.hh>
 #include <osv/trace.hh>
 #include <osv/kernel_config_memory_debug.h>
+#include <osv/kernel_config_memory_jvm_balloon.h>
 
 struct exception_frame;
+#if CONF_memory_jvm_balloon
 class balloon;
 typedef std::shared_ptr<balloon> balloon_ptr;
+#endif
 
 /**
  * MMU namespace
@@ -149,6 +152,7 @@ private:
     dev_t _file_dev_id;
 };
 
+#if CONF_memory_jvm_balloon
 ulong map_jvm(unsigned char* addr, size_t size, size_t align, balloon_ptr b);
 
 class jvm_balloon_vma : public vma {
@@ -180,6 +184,7 @@ private:
     unsigned _real_flags;
     uintptr_t _real_size;
 };
+#endif
 
 class shm_file final : public special_file {
     size_t _size;

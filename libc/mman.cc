@@ -17,6 +17,7 @@
 #include "libc/libc.hh"
 #include <safe-ptr.hh>
 #include <atomic>
+#include <osv/kernel_config_memory_jvm_balloon.h>
 
 #ifndef MAP_UNINITIALIZED
 #define MAP_UNINITIALIZED 0x4000000
@@ -29,10 +30,12 @@ TRACEPOINT(trace_memory_munmap, "addr=%p, length=%d", void *, size_t);
 TRACEPOINT(trace_memory_munmap_err, "%d", int);
 TRACEPOINT(trace_memory_munmap_ret, "");
 
+#if CONF_memory_jvm_balloon
 // Needs to be here, because java.so won't end up composing the kernel
 size_t jvm_heap_size = 0;
 void *jvm_heap_region = nullptr;
 void *jvm_heap_region_end = nullptr;
+#endif
 
 unsigned libc_flags_to_mmap(int flags)
 {
@@ -143,6 +146,7 @@ void *mmap(void *addr, size_t length, int prot, int flags,
     }
 #endif
     if (flags & MAP_ANONYMOUS) {
+#if CONF_memory_jvm_balloon
         // We have already determined (see below) the region where the heap must be located. Now the JVM will request
         // fixed mappings inside that region
         if (jvm_heap_size && (addr >= jvm_heap_region) && (addr + length <= jvm_heap_region_end) && (mmap_flags & mmu::mmap_fixed)) {
@@ -158,6 +162,7 @@ void *mmap(void *addr, size_t length, int prot, int flags,
                 memory::balloon_api->return_heap(length);
             }
         }
+#endif
         try {
             ret = mmu::map_anon(addr, length, mmap_flags, mmap_perm);
         } catch (error& err) {
@@ -165,11 +170,13 @@ void *mmap(void *addr, size_t length, int prot, int flags,
             trace_memory_mmap_err(errno);
             return MAP_FAILED;
         }
+#if CONF_memory_jvm_balloon
         // has a hint, is bigger than the heap size, and we don't request a fixed address. The heap will later on be here.
         if (addr && jvm_heap_size && (length >= jvm_heap_size) && !(mmap_flags & mmu::mmap_fixed)) {
             jvm_heap_region = ret;
             jvm_heap_region_end = ret + length;
         }
+#endif
     } else {
         fileref f(fileref_from_fd(fd));
         if (!f) {

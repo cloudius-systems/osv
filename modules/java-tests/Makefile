@@ -4,6 +4,7 @@ module_out := $(out)/modules/java-tests
 export module_out
 
 include ../java-base/common.gmk
+include $(out)/gen/config/kernel_conf.mk
 
 javac_version := $(shell javac -version 2>&1 | grep -oP "javac \d+\.\d+")
 
@@ -21,7 +22,11 @@ tests-jre-extension-target := tests-jre-extension/target/tests-jre-extension.jar
 $(module_out)/java_isolated.o: $(src)/modules/java-base/java.cc | init
 	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ -c $(src)/modules/java-base/java.cc -MMD, CXX $@)
 
-$(module_out)/java_isolated.so: $(module_out)/java_isolated.o $(out)/modules/java-base/jvm/java_api.o $(out)/modules/java-base/jvm/jni_helpers.o $(out)/modules/java-base/balloon/jvm_balloon.o
+java-objects := $(module_out)/java_isolated.o $(out)/modules/java-base/jvm/java_api.o $(out)/modules/java-base/jvm/jni_helpers.o
+ifeq ($(conf_memory_jvm_balloon),1)
+java-objects += $(out)/modules/java-base/balloon/jvm_balloon.o
+endif
+$(module_out)/java_isolated.so: $(java-objects)
 	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $^, LINK $@)
 
 comma := ,
