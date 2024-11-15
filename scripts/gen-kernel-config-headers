@@ -68,7 +68,7 @@ the_conf_file=$(mktemp)
 #Write the '#define CONF...' lines from the current config to the temp file
 grep "^#define CONF" $conf_file > $the_conf_file
 #Append the '#define CONF...' lines from the 'yes' config file NOT in the main one and replace '1' with '0'
-comm -13 $sorted_conf_file $sorted_yes_conf_file | grep "^#define CONF" | sed 's/1$/0/' >> $the_conf_file
+comm -13 $sorted_conf_file $sorted_yes_conf_file | grep "^#define CONF.* 1$" | sed 's/1$/0/' >> $the_conf_file
 #For each '#define CONF...' call write_or_update_conf_file() function to create or update individual header file
 while read line
   do write_or_update_conf_file "$line"
