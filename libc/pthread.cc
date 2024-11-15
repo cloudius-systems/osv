@@ -32,6 +32,7 @@
 #include <osv/export.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_threads_default_pthread_stack_size.h>
 
 #include "pthread.hh"
 
@@ -107,7 +108,7 @@ namespace pthread_private {
         bool detached;
         cpu_set_t *cpuset;
         sched::cpu *cpu;
-        thread_attr() : stack_begin{}, stack_size{1<<20}, guard_size{4096}, detached{false}, cpuset{nullptr}, cpu{nullptr} {}
+        thread_attr() : stack_begin{}, stack_size{CONF_threads_default_pthread_stack_size}, guard_size{4096}, detached{false}, cpuset{nullptr}, cpu{nullptr} {}
     };
 
     pthread::pthread(void *(*start)(void *arg), void *arg, sigset_t sigset,

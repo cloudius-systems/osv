@@ -12,6 +12,7 @@
 
 #include <osv/barrier.hh>
 #include <osv/kernel_config_preempt.h>
+#include <osv/kernel_config_threads_default_kernel_stack_size.h>
 #include <string.h>
 #include "arch-setup.hh"
 
@@ -51,7 +52,7 @@ void thread::init_stack()
 {
     auto& stack = _attr._stack;
     if (!stack.size) {
-        stack.size = 65536;
+        stack.size = CONF_threads_default_kernel_stack_size;
     }
     if (!stack.begin) {
         stack.begin = malloc(stack.size);
