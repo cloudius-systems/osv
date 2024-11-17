@@ -2331,7 +2331,7 @@ $(out)/tools/cpiod/cpiod.so: $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.
 # re-created on every compilation. "generated-headers" is used as an order-
 # only dependency on C compilation rules above, so we don't try to compile
 # C code before generating these headers.
-generated-headers: $(out)/gen/include/bits/alltypes.h perhaps-modify-version-h perhaps-modify-drivers-config-h
+generated-headers: $(out)/gen/include/bits/alltypes.h perhaps-modify-version-h perhaps-modify-drivers-config-h perhaps-modify-syscalls-h
 .PHONY: generated-headers
 
 # While other generated headers only need to be generated once, version.h
@@ -2341,6 +2341,16 @@ generated-headers: $(out)/gen/include/bits/alltypes.h perhaps-modify-version-h p
 perhaps-modify-version-h:
 	$(call quiet, sh scripts/gen-version-header $(out)/gen/include/osv/version.h, GEN gen/include/osv/version.h)
 .PHONY: perhaps-modify-version-h
+#
+# This generates 3 files included by linux.cc - syscalls_config.h, syscalls.cc and syscall_tracepoints.cc.
+# By default gen-syscalls copies the syscalls/syscalls.cc.in and syscalls/syscall_tracepoints.cc as is.
+# If conf_syscalls_list_file parameter is specified, it will filter in only parts of these 2 files based on
+# the list of names of the syscalls in the file conf_syscalls_list_file
+# In either case, syscalls_config.h will contain list of '#define CONF_syscall_*' statements for each selected
+# syscall
+perhaps-modify-syscalls-h:
+	$(call quiet, sh scripts/gen-syscalls $(out)/gen/include/osv/ $(conf_syscalls_list_file), GEN gen/include/osv/syscall_*)
+.PHONY: perhaps-modify-syscalls-h
 
 # Using 'if ($(conf_drivers_*),1)' in the rules below is enough to include whole object
 # files. Sometimes though we need to enable or disable portions of the code specific

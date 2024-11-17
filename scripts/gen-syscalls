@@ -1,0 +1,134 @@
+#!/bin/bash
+#
+# This script generates 3 files included by linux.cc - syscalls_config.h, syscalls.cc
+# and syscall_tracepoints.cc.
+#
+# If the 2nd optional argument - file with a list of selected syscall names - is specified,
+# then the script filters in only corresponding parts of syscalls/syscalls.cc.in
+# and syscalls/syscall_tracepoints.cc.in and creates syscalls_config.h with a list
+# of '#define CONF_syscall_*'.
+#
+# If the 2nd argument is omitted (all syscalls should be included), then it
+# copies the syscalls/syscalls.cc.in and syscalls/syscall_tracepoints.cc as is.
+#
+# In either case, the generated files will be copied over to the target directory
+# (typically $(out)/gen/include/osv/), only if their content is different from what
+# is there now. This prevents needless re-compilation of linux.cc.
+
+if [ "$#" -lt 1 ]; then
+  echo "usage: $(basename $0) target_dir <syscalls_list_file>" >&2
+  exit 1
+fi
+
+target_dir=$1
+syscall_list=$2
+
+#Sanitize list of selected syscalls if provided
+if [ "$syscall_list" != "" ]; then
+  syscalls_list_file=$(mktemp)
+  grep -o '[a-zA-Z0-9_]\+' $syscall_list > $syscalls_list_file
+fi
+
+#
+# Header
+# ---------
+syscalls_header=$(mktemp)
+cat >$syscalls_header <<EOL
+/* This file is generated automatically. */
+#ifndef OSV_SYSCALLS_CONFIG_H
+#define OSV_SYSCALLS_CONFIG_H
+
+EOL
+
+if [ "$syscalls_list_file" == "" ]; then
+  grep -o "SYSCALL[0-6](\w\+" syscalls/syscalls.cc.in | cut -d '(' -f 2 | sort | uniq | awk '{ printf("#define CONF_syscall_%s 1\n", $0) }' >> $syscalls_header
+else
+  cat $syscalls_list_file | sort | uniq | tr -d ' ' | awk '{ printf("#define CONF_syscall_%s 1\n", $0) }' >> $syscalls_header
+fi
+
+cat >>$syscalls_header <<EOL
+
+#endif
+EOL
+
+#Copy only if different than target
+if cmp -s $syscalls_header $target_dir/syscalls_config.h
+then
+  rm $syscalls_header
+  rm -f "$syscalls_list_file"
+  exit 0
+else
+  mv $syscalls_header $target_dir/syscalls_config.h
+fi
+
+# Filter syscalls implementation
+#-------------------------------
+append_syscall() {
+  syscall_line="$1"
+  [[ "$syscall_line" =~ SYSCALL[0-6].*\(([a-zA-Z0-9_]+) ]]
+  syscall_name=${BASH_REMATCH[1]}
+
+  count=$(grep -c "^$syscall_name$" $syscalls_list_file)
+  if [ $count != 0 ]; then
+    printf "%s\n" "$syscall_line" >> $syscalls_impl_file
+  fi
+}
+
+syscalls_impl_file=$(mktemp)
+if [ "$syscalls_list_file" == "" ]; then
+  cp syscalls/syscalls.cc.in $syscalls_impl_file
+else
+  while read -r line
+  do
+    if [[ "$line" =~ SYSCALL[0-6].*\( ]]; then
+      append_syscall "$line"
+    else
+      echo $line >> $syscalls_impl_file
+    fi
+  done < syscalls/syscalls.cc.in
+fi
+
+if cmp -s $syscalls_impl_file $target_dir/syscalls.cc
+then
+  rm $syscalls_impl_file
+else
+  mv $syscalls_impl_file $target_dir/syscalls.cc
+fi
+
+# Filter tracepoints
+#--------------------
+append_tracepoint() {
+  tracepoint_line="$1"
+  [[ "$tracepoint_line" =~ trace_syscall_([a-zA-Z0-9_]+) ]]
+  syscall_name=${BASH_REMATCH[1]}
+
+  count=$(grep -c "^$syscall_name$" $syscalls_list_file)
+  if [ $count != 0 ]; then
+    printf "%s\n" "$tracepoint_line" >> $syscall_tracepoints_file
+  fi
+}
+
+syscall_tracepoints_file=$(mktemp)
+if [ "$syscalls_list_file" == "" ]; then
+  cp syscalls/syscall_tracepoints.cc.in $syscall_tracepoints_file
+else
+  while read -r line
+  do
+    if [[ "$line" =~ TRACEPOINT.*\( ]]; then
+      append_tracepoint "$line"
+    else
+      echo $line >> $syscall_tracepoints_file
+    fi
+  done < syscalls/syscall_tracepoints.cc.in
+fi
+
+if cmp -s $syscall_tracepoints_file $target_dir/syscall_tracepoints.cc
+then
+  rm $syscall_tracepoints_file
+else
+  mv $syscall_tracepoints_file $target_dir/syscall_tracepoints.cc
+fi
+
+if [ "$syscall_list_file" != "" ]; then
+  rm "$syscall_list_file"
+fi
