@@ -25,6 +25,10 @@ syscall_list=$2
 
 #Sanitize list of selected syscalls if provided
 if [ "$syscall_list" != "" ]; then
+  if [ ! -f "$syscall_list" ]; then
+    echo "The $syscall_list does not exist!"
+    exit 1
+  fi
   syscalls_list_file=$(mktemp)
   grep -o '[a-zA-Z0-9_]\+' $syscall_list > $syscalls_list_file
 fi
