@@ -20,10 +20,14 @@
 #include <osv/mmu-defs.hh>
 #include <osv/align.hh>
 #include <osv/trace.hh>
+#include <osv/kernel_config_memory_debug.h>
+#include <osv/kernel_config_memory_jvm_balloon.h>
 
 struct exception_frame;
+#if CONF_memory_jvm_balloon
 class balloon;
 typedef std::shared_ptr<balloon> balloon_ptr;
+#endif
 
 /**
  * MMU namespace
@@ -148,6 +152,7 @@ private:
     dev_t _file_dev_id;
 };
 
+#if CONF_memory_jvm_balloon
 ulong map_jvm(unsigned char* addr, size_t size, size_t align, balloon_ptr b);
 
 class jvm_balloon_vma : public vma {
@@ -179,6 +184,7 @@ private:
     unsigned _real_flags;
     uintptr_t _real_size;
 };
+#endif
 
 class shm_file final : public special_file {
     size_t _size;
@@ -305,7 +311,7 @@ template <typename OutputFunc>
 inline
 void virt_to_phys(void* vaddr, size_t len, OutputFunc out)
 {
-    if (CONF_debug_memory && vaddr >= debug_base) {
+    if (CONF_memory_debug && vaddr >= debug_base) {
         while (len) {
             auto next = std::min(align_down(vaddr + page_size, page_size), vaddr + len);
             size_t delta = static_cast<char*>(next) - static_cast<char*>(vaddr);

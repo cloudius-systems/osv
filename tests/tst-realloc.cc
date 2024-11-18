@@ -38,6 +38,7 @@ static void test_realloc(size_t original_size, size_t new_size)
     std::cerr << "PASSED realloc() for original_size: " << original_size << ", new_size: " << new_size << std::endl;
 }
 
+#ifdef __OSV__
 static void test_usable_size(size_t size, size_t expected_usable_size)
 {
     void* ptr = malloc(size);
@@ -46,6 +47,7 @@ static void test_usable_size(size_t size, size_t expected_usable_size)
 
     std::cerr << "PASSED malloc_usable_size() for size: " << size << std::endl;
 }
+#endif
 
 int main()
 {
@@ -82,12 +84,14 @@ int main()
     buf = malloc(16);
     assert(!realloc(buf, 0));
 
+#ifdef __OSV__
     test_usable_size(1, 8);
     test_usable_size(8, 8);
     test_usable_size(67, 128);
     test_usable_size(0x4010, 0x4FC0);
     test_usable_size(0x100000, 0x100FC0);
     test_usable_size(0x200000, 0x200FC0);
+#endif
 
     std::cerr << "PASSED\n";
     return 0;

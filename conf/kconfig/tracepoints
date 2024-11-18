@@ -1,0 +1,22 @@
+config tracepoints
+  prompt "Enable tracepoints support"
+  bool
+  default y
+
+config tracepoints_sampler
+  prompt "Include sampler support"
+  depends on tracepoints
+  bool
+  default y
+
+config tracepoints_strace
+  prompt "Include strace support"
+  depends on tracepoints
+  bool
+  default y
+
+config tracepoints_callstack
+  prompt "Include callstack support"
+  depends on tracepoints
+  bool
+  default n

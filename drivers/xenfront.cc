@@ -17,7 +17,8 @@
 #include <osv/bio.h>
 #include "sys/xen/gnttab.h"
 #include "sys/dev/xen/blkfront/block.h"
-#include <boost/algorithm/string.hpp>
+#include <osv/string_utils.hh>
+#include <osv/kernel_config_networking_stack.h>
 
 extern driver_t netfront_driver;
 extern driver_t blkfront_driver;
@@ -54,20 +55,20 @@ int xenfront_driver::attach()
 void xenfront_driver::set_ivars(struct xenbus_device_ivars *ivars)
 {
     driver_t *table;
-    std::stringstream ss;
 
     _otherend_path = std::string(ivars->xd_otherend_path);
     _otherend_id = ivars->xd_otherend_id;
     _node_path = std::string(ivars->xd_node);
     _type = std::string(ivars->xd_type);
 
+#if CONF_networking_stack
     if (!strcmp(ivars->xd_type, "vif")) {
         table = &netfront_driver;
-        _irq_type = INTR_TYPE_NET,
-        ss << "vif";
+        _irq_type = INTR_TYPE_NET;
+        _driver_name = "vif";
 
         std::vector<std::string> node_info;
-        boost::split(node_info, _node_path, boost::is_any_of("/"));
+        osv::split(node_info, _node_path, "/");
         assert(node_info.size() == 3);
 
         // Very unfrequent, so don't care about how expensive and full of barriers this is
@@ -77,15 +78,16 @@ void xenfront_driver::set_ivars(struct xenbus_device_ivars *ivars)
         // Simpler and we don't expect driver loading to fail anyway
         assert(_bsd_dev.softc);
         memset(_bsd_dev.softc, 0, table->size);
-    } else if (!strcmp(ivars->xd_type, "vbd")) {
+    } else
+#endif
+    if (!strcmp(ivars->xd_type, "vbd")) {
         table = &blkfront_driver;
         _irq_type = INTR_TYPE_BIO;
-        ss << "vblk";
+        _driver_name = "vblk";
         _bsd_dev.softc = reinterpret_cast<void *>(new bf_softc);
     } else
         return;
 
-    _driver_name = ss.str();
     device_method_t *dm = table->methods;
     for (auto i = 0; dm[i].id; i++) {
         if (dm[i].id == bus_device_probe)

@@ -20,8 +20,9 @@
 
 #include <boost/optional.hpp>
 #include <functional>
-#include <iostream>
-#include <iomanip>
+
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 struct llentry;
 
@@ -43,17 +44,6 @@ struct arp_cache {
                     return false;
             }
             return true;
-        }
-
-        void print(void) const
-        {
-            using namespace std;
-            cout << showbase << hex;
-            cout << "[ ";
-            for (auto a : addr) {
-                cout << static_cast<unsigned>(a) << " ";
-            }
-            cout << "]" << endl;
         }
     };
 

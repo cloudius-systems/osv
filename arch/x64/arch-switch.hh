@@ -10,7 +10,10 @@
 
 #include "msr.hh"
 #include <osv/barrier.hh>
+#include <osv/kernel_config_preempt.h>
+#include <osv/kernel_config_threads_default_kernel_stack_size.h>
 #include <string.h>
+#include "tls-switch.hh"
 
 //
 // The last 16 bytes of the syscall stack are reserved for -
@@ -20,13 +23,19 @@
 //
 // The tiny stack has to be large enough to allow for execution of
 // thread::setup_large_syscall_stack() that allocates and sets up
-// large syscall stack. It was measured that as of this writing
-// setup_large_syscall_stack() needs a little over 600 bytes of stack
-// to properly operate. This makes 1024 bytes to be an adequate size
-// of tiny stack.
+// large syscall stack and to save FPU state. It was measured that as
+// of this writing setup_large_syscall_stack() needs a little over 750
+// bytes of stack to properly operate. The FPU state is 850 bytes in size.
+// This makes 2048 bytes to be an adequate size of tiny stack.
+// In case both become larger in future, we add simple canary check
+// to detect potential tiny stack overflow.
 // All application threads pre-allocate tiny syscall stack so there
 // is a tiny penalty with this solution.
-#define TINY_SYSCALL_STACK_SIZE 1024
+#ifndef NDEBUG
+#define TINY_SYSCALL_STACK_SIZE 2*4096
+#else
+#define TINY_SYSCALL_STACK_SIZE 2048
+#endif
 #define TINY_SYSCALL_STACK_DEPTH (TINY_SYSCALL_STACK_SIZE - SYSCALL_STACK_RESERVED_SPACE_SIZE)
 //
 // The large syscall stack is setup and switched to on first
@@ -35,17 +44,21 @@
 #define LARGE_SYSCALL_STACK_DEPTH (LARGE_SYSCALL_STACK_SIZE - SYSCALL_STACK_RESERVED_SPACE_SIZE)
 
 #define SET_SYSCALL_STACK_TYPE_INDICATOR(value) \
-*((long*)(_tcb->syscall_stack_top)) = value;
+*reinterpret_cast<long*>(_state._syscall_stack_descriptor.stack_top) = value;
 
 #define GET_SYSCALL_STACK_TYPE_INDICATOR() \
-*((long*)(_tcb->syscall_stack_top))
+*reinterpret_cast<long*>(_state._syscall_stack_descriptor.stack_top)
 
 #define TINY_SYSCALL_STACK_INDICATOR 0l
 #define LARGE_SYSCALL_STACK_INDICATOR 1l
 
+#define STACK_CANARY 0xdeadbeafdeadbeaf
+
 extern "C" {
 void thread_main(void);
 void thread_main_c(sched::thread* t);
+
+bool fsgsbase_avail = false;
 }
 
 namespace sched {
@@ -66,6 +79,7 @@ void (*resolve_set_fsbase(void))(u64 v)
     // can't use processor::features, because it is not initialized
     // early enough.
     if (processor::features().fsgsbase) {
+        fsgsbase_avail = true;
         return set_fsbase_fsgsbase;
     } else {
         return set_fsbase_msr;
@@ -84,8 +98,17 @@ void thread::switch_to()
     barrier();
     auto c = _detached_state->_cpu;
     old->_state.exception_stack = c->arch.get_exception_stack();
+    // save the old thread SYSCALL caller stack pointer in the syscall stack descriptor
+    old->_state._syscall_stack_descriptor.caller_stack_pointer = c->arch._current_syscall_stack_descriptor.caller_stack_pointer;
     c->arch.set_interrupt_stack(&_arch);
     c->arch.set_exception_stack(_state.exception_stack);
+    // set this cpu current thread syscall stack descriptor to the values copied from the new thread syscall stack descriptor
+    // so that the syscall handler can reference the current thread syscall stack top using the GS register
+    c->arch._current_syscall_stack_descriptor.caller_stack_pointer = _state._syscall_stack_descriptor.caller_stack_pointer;
+    c->arch._current_syscall_stack_descriptor.stack_top = _state._syscall_stack_descriptor.stack_top;
+    // set this cpu current thread kernel TCB address to TCB address of the new thread
+    // we are switching to
+    c->arch._current_thread_kernel_tcb = reinterpret_cast<u64>(_tcb);
     auto fpucw = processor::fnstcw();
     auto mxcsr = processor::stmxcsr();
     asm volatile
@@ -120,6 +143,7 @@ void thread::switch_to_first()
     remote_thread_local_var(percpu_base) = _detached_state->_cpu->percpu_base;
     _detached_state->_cpu->arch.set_interrupt_stack(&_arch);
     _detached_state->_cpu->arch.set_exception_stack(&_arch);
+    _detached_state->_cpu->arch._current_thread_kernel_tcb = reinterpret_cast<u64>(_tcb);
     asm volatile
         ("mov %c[rsp](%0), %%rsp \n\t"
          "mov %c[rbp](%0), %%rbp \n\t"
@@ -137,7 +161,7 @@ void thread::init_stack()
 {
     auto& stack = _attr._stack;
     if (!stack.size) {
-        stack.size = 65536;
+        stack.size = CONF_threads_default_kernel_stack_size;
     }
     if (!stack.begin) {
         stack.begin = malloc(stack.size);
@@ -157,6 +181,25 @@ void thread::init_stack()
     _state.rip = reinterpret_cast<void*>(thread_main);
     _state.rsp = stacktop;
     _state.exception_stack = _arch.exception_stack + sizeof(_arch.exception_stack);
+
+    if (is_app()) {
+        //
+        // Allocate TINY syscall call stack
+        void* tiny_syscall_stack_begin = malloc(TINY_SYSCALL_STACK_SIZE);
+        assert(tiny_syscall_stack_begin);
+        //
+        // The top of the stack needs to be 16 bytes lower to make space for
+        // OSv syscall stack type indicator and extra 8 bytes to make it 16-bytes aligned
+        _state._syscall_stack_descriptor.stack_top = tiny_syscall_stack_begin + TINY_SYSCALL_STACK_DEPTH;
+        SET_SYSCALL_STACK_TYPE_INDICATOR(TINY_SYSCALL_STACK_INDICATOR);
+        //
+        // Set a canary value at the bottom of the tiny stack to catch potential overflow
+        // caused by setup_large_syscall_stack()
+        *reinterpret_cast<u64*>(tiny_syscall_stack_begin) = STACK_CANARY;
+    }
+    else {
+        _state._syscall_stack_descriptor.stack_top = 0;
+    }
 }
 
 void thread::setup_tcb()
@@ -206,7 +249,7 @@ void thread::setup_tcb()
         assert(obj);
         user_tls_size = obj->initial_tls_size();
         user_tls_data = obj->initial_tls();
-        if (obj->is_executable()) {
+        if (obj->is_dynamically_linked_executable()) {
            executable_tls_size = obj->get_tls_size();
            aligned_executable_tls_size = obj->get_aligned_tls_size();
         }
@@ -244,24 +287,15 @@ void thread::setup_tcb()
     _tcb->self = _tcb;
     _tcb->tls_base = p + user_tls_size;
 
-    if (is_app()) {
-        //
-        // Allocate TINY syscall call stack
-        void* tiny_syscall_stack_begin = malloc(TINY_SYSCALL_STACK_SIZE);
-        assert(tiny_syscall_stack_begin);
-        //
-        // The top of the stack needs to be 16 bytes lower to make space for
-        // OSv syscall stack type indicator and extra 8 bytes to make it 16-bytes aligned
-        _tcb->syscall_stack_top = tiny_syscall_stack_begin + TINY_SYSCALL_STACK_DEPTH;
-        SET_SYSCALL_STACK_TYPE_INDICATOR(TINY_SYSCALL_STACK_INDICATOR);
-    }
-    else {
-        _tcb->syscall_stack_top = 0;
-    }
+    _tcb->app_tcb = 0;
 }
 
 void thread::setup_large_syscall_stack()
 {
+    // Save FPU state and restore it at the end of this function
+    sched::fpu_lock fpu;
+    SCOPE_LOCK(fpu);
+
     assert(is_app());
     assert(GET_SYSCALL_STACK_TYPE_INDICATOR() == TINY_SYSCALL_STACK_INDICATOR);
     //
@@ -275,28 +309,35 @@ void thread::setup_large_syscall_stack()
     // We could have copied only last 128 (registers) + 16 bytes (2 fields) instead
     // of all of the stack but copying 1024 is simpler and happens
     // only once per thread.
-    void* tiny_syscall_stack_top = _tcb->syscall_stack_top;
+    void* tiny_syscall_stack_top = _state._syscall_stack_descriptor.stack_top;
     memcpy(large_syscall_stack_top - TINY_SYSCALL_STACK_DEPTH,
            tiny_syscall_stack_top - TINY_SYSCALL_STACK_DEPTH, TINY_SYSCALL_STACK_SIZE);
+    //
+    // Check if the tiny stack has not been overflowed
+    assert(*reinterpret_cast<u64*>(_state._syscall_stack_descriptor.stack_top - TINY_SYSCALL_STACK_DEPTH) == STACK_CANARY);
     //
     // Save beginning of tiny stack at the bottom of LARGE stack so
     // that we can deallocate it in free_tiny_syscall_stack
     *((void**)large_syscall_stack_begin) = tiny_syscall_stack_top - TINY_SYSCALL_STACK_DEPTH;
     //
-    // Set canary value (0xDEADBEAFDEADBEAF) under bottom + 8 of LARGE stack
-    *((long*)(large_syscall_stack_begin + 8)) = 0xdeadbeafdeadbeaf;
-    //
     // Switch syscall stack address value in TCB to the top of the LARGE one
-    _tcb->syscall_stack_top = large_syscall_stack_top;
+    _state._syscall_stack_descriptor.stack_top = large_syscall_stack_top;
     SET_SYSCALL_STACK_TYPE_INDICATOR(LARGE_SYSCALL_STACK_INDICATOR);
+    //
+    // Switch what GS points to
+     _detached_state->_cpu->arch._current_syscall_stack_descriptor.stack_top = large_syscall_stack_top;
 }
 
 void thread::free_tiny_syscall_stack()
 {
+    // Save FPU state and restore it at the end of this function
+    sched::fpu_lock fpu;
+    SCOPE_LOCK(fpu);
+
     assert(is_app());
     assert(GET_SYSCALL_STACK_TYPE_INDICATOR() == LARGE_SYSCALL_STACK_INDICATOR);
 
-    void* large_syscall_stack_top = _tcb->syscall_stack_top;
+    void* large_syscall_stack_top = _state._syscall_stack_descriptor.stack_top;
     void* large_syscall_stack_begin = large_syscall_stack_top - LARGE_SYSCALL_STACK_DEPTH;
     //
     // Lookup address of tiny stack saved by setup_large_syscall_stack()
@@ -313,19 +354,27 @@ void thread::free_tcb()
     } else {
         free(_tcb->tls_base);
     }
+}
 
-    if (_tcb->syscall_stack_top) {
+void thread::free_syscall_stack()
+{
+    if (_state._syscall_stack_descriptor.stack_top) {
         void* syscall_stack_begin = GET_SYSCALL_STACK_TYPE_INDICATOR() == TINY_SYSCALL_STACK_INDICATOR ?
-            _tcb->syscall_stack_top - TINY_SYSCALL_STACK_DEPTH :
-            _tcb->syscall_stack_top - LARGE_SYSCALL_STACK_DEPTH;
+            _state._syscall_stack_descriptor.stack_top - TINY_SYSCALL_STACK_DEPTH :
+            _state._syscall_stack_descriptor.stack_top - LARGE_SYSCALL_STACK_DEPTH;
         free(syscall_stack_begin);
     }
+}
+
+void* thread::get_syscall_stack_top()
+{
+    return _state._syscall_stack_descriptor.stack_top;
 }
 
 void thread_main_c(thread* t)
 {
     arch::irq_enable();
-#ifdef CONF_preempt
+#if CONF_preempt
     preempt_enable();
 #endif
     // make sure thread starts with clean fpu state instead of
@@ -337,11 +386,15 @@ void thread_main_c(thread* t)
 
 extern "C" void setup_large_syscall_stack()
 {
+    // Switch TLS register from the app to the kernel TCB and back if necessary
+    arch::tls_switch tls_switch;
     sched::thread::current()->setup_large_syscall_stack();
 }
 
 extern "C" void free_tiny_syscall_stack()
 {
+    // Switch TLS register from the app to the kernel TCB and back if necessary
+    arch::tls_switch tls_switch;
     sched::thread::current()->free_tiny_syscall_stack();
 }
 

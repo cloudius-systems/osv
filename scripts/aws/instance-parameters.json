@@ -1,0 +1,22 @@
+[
+  {
+    "ParameterKey": "pVpcId",
+    "ParameterValue": "VPC_ID"
+  },
+  {
+    "ParameterKey": "pSubnetId",
+    "ParameterValue": "SUBNET_ID"
+  },
+  {
+    "ParameterKey": "pInstanceName",
+    "ParameterValue": "INSTANCE_NAME"
+  },
+  {
+    "ParameterKey": "pInstanceType",
+    "ParameterValue": "INSTANCE_TYPE"
+  },
+  {
+    "ParameterKey": "pImageId",
+    "ParameterValue": "AMI_ID"
+  }
+]

@@ -41,6 +41,10 @@ def format_args(args):
 
     return ' '.join(map(format_arg, args))
 
+def find_qemu_tap_guest_ip_address(qemu_tap_ip_address):
+    fields = re.search(r'(\d+)\.(\d+)\.(\d+)\.(\d+)', qemu_tap_ip_address)
+    return "%s.%s.%s.%d" % (fields.group(1), fields.group(2), fields.group(3), int(fields.group(4)) + 1)
+
 def set_imgargs(options):
     execute = options.execute
     if options.image and not execute:
@@ -76,7 +80,11 @@ def set_imgargs(options):
     if options.mount_fs:
         execute = ' '.join('--mount-fs=%s' % m for m in options.mount_fs) + ' ' + execute
 
-    if options.ip:
+    if options.networking and options.tap and hasattr(options, 'qemu_tap_ip_address'):
+        qemu_tap_guest_ip_address = find_qemu_tap_guest_ip_address(options.qemu_tap_ip_address)
+        execute = '--ip=eth0,%s,255.255.255.252 --defaultgw=%s --nameserver=%s %s' % \
+           (qemu_tap_guest_ip_address, options.qemu_tap_ip_address, options.qemu_tap_ip_address, execute)
+    elif options.ip:
         execute = ' '.join('--ip=%s' % i for i in options.ip) + ' ' + execute
 
     if options.bootchart:
@@ -143,7 +151,7 @@ def start_osv_qemu(options):
 
     if options.arch == 'aarch64':
         if options.hypervisor == 'qemu':
-            args += ["-machine", "gic-version=2", "-cpu", "cortex-a57"]
+            args += ["-machine", "gic-version=max", "-cpu", "cortex-a57"]
         args += [
         "-machine", "virt",
         "-device", "virtio-blk-pci,id=blk0,drive=hd0,scsi=off%s%s" % (boot_index, options.virtio_device_suffix),
@@ -164,6 +172,10 @@ def start_osv_qemu(options):
         "-device", "virtio-scsi-pci,id=scsi0%s" % options.virtio_device_suffix,
         "-drive", "file=%s,if=none,id=hd0,media=disk,%s" % (options.image_file, aio),
         "-device", "scsi-hd,bus=scsi0.0,drive=hd0,scsi-id=1,lun=0%s" % boot_index]
+    elif options.nvme:
+        args += [
+        "-device", "nvme,serial=deadbeef,drive=nvm%s" % (boot_index),
+        "-drive", "file=%s,if=none,id=nvm,%s" % (options.image_file, aio)]
     elif options.ide:
         args += [
         "-hda", options.image_file]
@@ -189,6 +201,15 @@ def start_osv_qemu(options):
         "-device", "vhost-user-fs-pci,queue-size=1024,chardev=char0,tag=%s%s" % (options.virtio_fs_tag, dax),
         "-object", "memory-backend-file,id=mem,size=%s,mem-path=/dev/shm,share=on" % options.memsize,
         "-numa", "node,memdev=mem"]
+
+    if options.second_nvme_image:
+        args += [
+        "-drive", "file=%s,if=none,id=nvm1" % (options.second_nvme_image),
+        "-device", "nvme,serial=deadbeef,drive=nvm1,"]
+
+    if options.pass_pci:
+        args += [
+        "-device", "vfio-pci,host=%s" % (options.pass_pci)]
 
     if options.no_shutdown:
         args += ["-no-reboot", "-no-shutdown"]
@@ -245,7 +266,7 @@ def start_osv_qemu(options):
 
     if options.hypervisor == "kvm" or options.hypervisor == 'qemu_microvm':
         if options.arch == 'aarch64':
-            args += ["-enable-kvm", "-cpu", "host"]
+            args += ["-enable-kvm", "-cpu", "host", "-machine", "gic-version=max"]
         else:
             args += ["-enable-kvm", "-cpu", "host,+x2apic"]
     elif options.hypervisor == "none" or options.hypervisor == "qemu":
@@ -349,6 +370,13 @@ def start_osv_xen(options):
             print("Unrecognized memory size", file=sys.stderr)
             return
 
+    disk_type = "qcow2" if options.image_file.endswith(".img") else "raw"
+    disk_value = "'%s,%s,hda,rw'" % (options.image_file, disk_type)
+
+    if cmdargs.second_disk_image:
+        second_disk_type = "qcow2" if options.second_disk_image.endswith(".img") else "raw"
+        disk_value = disk_value + ",'%s,%s,hda,rw'" % (options.second_disk_image, second_disk_type)
+
     if not options.novnc:
         vncoptions = re.match("^(?P<vncaddr>[^:]*):?(?P<vncdisplay>[0-9]*$)", options.vnc)
 
@@ -366,7 +394,7 @@ def start_osv_xen(options):
         "vcpus=%s" % (options.vcpus),
         "maxcpus=%s" % (options.vcpus),
         "name='osv-%d'" % (os.getpid()),
-        "disk=['/dev/loop%s,raw,hda,rw']" % os.getpid(),
+        "disk=[%s]" % (disk_value),
         "serial='pty'",
         "paused=0",
         "on_crash='preserve'"
@@ -390,8 +418,6 @@ def start_osv_xen(options):
         # Save the current settings of the stty
         stty_save()
 
-        #create a loop device backed by image file
-        subprocess.call(["losetup", "/dev/loop%s" % os.getpid(), options.image_file])
         # Launch qemu
         cmdline = ["xl", "create"]
         if not options.detach:
@@ -399,14 +425,15 @@ def start_osv_xen(options):
         cmdline += [xenfile.name]
         if options.dry_run:
             print(format_args(cmdline))
+            print("\nContent of %s\n---------------------------" % xenfile.name)
+            for item in args:
+                print("%s" % item)
         else:
             subprocess.call(cmdline)
     except:
         pass
     finally:
         xenfile.close()
-        #delete loop device
-        subprocess.call(["losetup", "-d", "/dev/loop%s" % os.getpid()])
         cleanups()
 
 def start_osv_vmware(options):
@@ -524,6 +551,8 @@ if __name__ == "__main__":
                         help="don't start OSv till otherwise specified, e.g. through the QEMU monitor or a remote gdb")
     parser.add_argument("-i", "--image", action="store", default=None, metavar="IMAGE",
                         help="path to disk image file. defaults to build/$mode/usr.img")
+    parser.add_argument("-N", "--nvme",action="store_true", default=False,
+                        help="use NVMe instead of virtio-blk")
     parser.add_argument("-S", "--scsi", action="store_true", default=False,
                         help="use virtio-scsi instead of virtio-blk")
     parser.add_argument("-A", "--sata", action="store_true", default=False,
@@ -618,6 +647,10 @@ if __name__ == "__main__":
                         help="static ip addresses (forwarded to respective kernel command line option)")
     parser.add_argument("--bootchart", action="store_true",
                         help="bootchart mode (forwarded to respective kernel command line option")
+    parser.add_argument("--second-nvme-image", action="store",
+                        help="Path to an optional disk image that should be attached to the instance as NVMe device")
+    parser.add_argument("--pass-pci", action="store",
+                        help="passthrough a pci device in given slot if bound to vfio driver")
     cmdargs = parser.parse_args()
 
     cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
@@ -654,6 +687,23 @@ if __name__ == "__main__":
         cmdargs.virtio_device_suffix = ",disable-legacy=on,disable-modern=off"
     else:
         cmdargs.virtio_device_suffix = ""
+
+    if cmdargs.networking and cmdargs.tap and (cmdargs.execute == None or '--ip=' not in cmdargs.execute):
+        process = subprocess.run(["ip", "address", "show", cmdargs.tap], stdout=subprocess.PIPE)
+        if process.returncode != 0:
+            print("Please create tap device by calling", file=sys.stderr)
+            print(" ./scripts/create_tap_device.sh natted %s <ip_address>\n" % cmdargs.tap, file=sys.stderr)
+            raise Exception("Could not find the tap device %s" % cmdargs.tap)
+        output_lines = process.stdout.decode('utf-8').split('\n')
+        inet_line = next(filter(lambda line: "inet" in line, output_lines), None)
+        if inet_line and cmdargs.tap in inet_line:
+            ip_address = re.search(r'\d+\.\d+\.\d+\.\d+', inet_line)
+            if ip_address:
+                cmdargs.qemu_tap_ip_address = ip_address.group(0)
+            else:
+                raise Exception("Unable to find tap device %s with assigned IP address." % cmdargs.tap)
+        else:
+            raise Exception("Unable to find tap device %s with assigned IP address." % cmdargs.tap)
 
     # Call main
     main(cmdargs)

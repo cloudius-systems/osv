@@ -55,6 +55,8 @@
 #include <unordered_map>
 #include <functional>
 
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 // rtentry contains a mutex which cannot be copied. nonlockable_rtentry
 // is layout-compatible with rtentry, but does not support locking so

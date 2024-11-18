@@ -4,6 +4,7 @@ module_out := $(out)/modules/java-isolated
 export module_out
 
 include ../java-base/common.gmk
+include $(out)/gen/config/kernel_conf.mk
 
 java-targets := $(module_out)/java.so
 
@@ -12,7 +13,12 @@ jar-targets := $(java-base-path)/runjava-isolated/target/runjava-isolated.jar
 $(module_out)/java.o: $(java-base-path)/java.cc | init
 	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ -c $(java-base-path)/java.cc -MMD, CXX $@)
 
-$(module_out)/java.so: $(module_out)/java.o $(out)/modules/java-base/jvm/java_api.o $(out)/modules/java-base/jvm/jni_helpers.o $(out)/modules/java-base/balloon/jvm_balloon.o
+java-objects := $(module_out)/java.o $(out)/modules/java-base/jvm/java_api.o $(out)/modules/java-base/jvm/jni_helpers.o
+ifeq ($(conf_memory_jvm_balloon),1)
+java-objects += $(out)/modules/java-base/balloon/jvm_balloon.o
+endif
+
+$(module_out)/java.so: $(java-objects)
 	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $^, LINK $@)
 
 init:

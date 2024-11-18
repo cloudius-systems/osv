@@ -23,6 +23,7 @@
 #include <osv/contiguous_alloc.hh>
 #include <boost/lockfree/stack.hpp>
 #include <boost/lockfree/policies.hpp>
+#include <osv/kernel_config_memory_jvm_balloon.h>
 
 extern "C" void thread_mark_emergency();
 
@@ -194,9 +195,11 @@ namespace stats {
     size_t free();
     size_t total();
     size_t max_no_reclaim();
+#if CONF_memory_jvm_balloon
     size_t jvm_heap();
     void on_jvm_heap_alloc(size_t mem);
     void on_jvm_heap_free(size_t mem);
+#endif
 
     struct page_ranges_stats {
         struct {
@@ -304,6 +307,7 @@ public:
 /// Hold to mark self as a memory reclaimer
 extern reclaimer_lock_type reclaimer_lock;
 
+#if CONF_memory_jvm_balloon
 // We will divide the balloon in units of 128Mb. That should increase the likelyhood
 // of having hugepages mapped in and out of it.
 //
@@ -329,6 +333,7 @@ public:
 };
 
 extern jvm_balloon_api *balloon_api;
+#endif
 }
 
 #endif

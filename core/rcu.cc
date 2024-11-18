@@ -16,6 +16,9 @@
 #include <osv/migration-lock.hh>
 #include <osv/wait_record.hh>
 #include <osv/mempool.hh>
+#include <osv/kernel_config_core_rcu_defer_queue_size.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 namespace osv {
 
@@ -29,7 +32,7 @@ mutex mtx;
 
 struct rcu_defer_queue {
     int buf; // double-buffer: 0 or 1
-    std::array<std::function<void ()>, 2000> callbacks[2];
+    std::array<std::function<void ()>, CONF_core_rcu_defer_queue_size> callbacks[2];
     unsigned int ncallbacks[2];
 };
 static PERCPU(rcu_defer_queue, percpu_callbacks);
@@ -64,7 +67,7 @@ sched::cpu::notifier cpu_notifier([] {
 });
 
 cpu_quiescent_state_thread::cpu_quiescent_state_thread(sched::cpu* cpu)
-    : _t(sched::thread::make([=] { work(); }, sched::thread::attr().pin(cpu).name(osv::sprintf("rcu%d", cpu->id))))
+    : _t(sched::thread::make([=] { work(); }, sched::thread::attr().pin(cpu).name(std::string("rcu") + std::to_string(cpu->id))))
 {
     (*percpu_quiescent_state_thread).reset(*_t);
     _t->start();

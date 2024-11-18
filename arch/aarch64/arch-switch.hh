@@ -11,6 +11,8 @@
 #define ARCH_SWITCH_HH_
 
 #include <osv/barrier.hh>
+#include <osv/kernel_config_preempt.h>
+#include <osv/kernel_config_threads_default_kernel_stack_size.h>
 #include <string.h>
 #include "arch-setup.hh"
 
@@ -23,7 +25,7 @@ namespace sched {
 
 void thread::switch_to_first()
 {
-    asm volatile ("msr tpidr_el0, %0; isb; " :: "r"(_tcb) : "memory");
+    asm volatile ("msr tpidr_el0, %0; msr tpidr_el1, %0; isb; " :: "r"(_tcb) : "memory");
 
     /* check that the tls variable preempt_counter is correct */
     assert(sched::get_preempt_counter() == 1);
@@ -50,7 +52,7 @@ void thread::init_stack()
 {
     auto& stack = _attr._stack;
     if (!stack.size) {
-        stack.size = 65536;
+        stack.size = CONF_threads_default_kernel_stack_size;
     }
     if (!stack.begin) {
         stack.begin = malloc(stack.size);
@@ -120,7 +122,7 @@ void thread::setup_tcb()
         assert(obj);
         user_tls_size = obj->initial_tls_size();
         user_tls_data = obj->initial_tls();
-        if (obj->is_executable()) {
+        if (obj->is_dynamically_linked_executable()) {
            executable_tls_size = obj->get_tls_size();
         }
     }
@@ -164,11 +166,15 @@ void thread::free_tcb()
     free(_tcb);
 }
 
+void thread::free_syscall_stack()
+{
+}
+
 void thread_main_c(thread* t)
 {
     arch::irq_enable();
 
-#ifdef CONF_preempt
+#if CONF_preempt
     preempt_enable();
 #endif
 

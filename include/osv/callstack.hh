@@ -8,13 +8,16 @@
 #ifndef CALLSTACK_HH_
 #define CALLSTACK_HH_
 
-#include <boost/intrusive/unordered_set.hpp>
 #include <osv/trace.hh>
 #include <osv/percpu.hh>
 #include <memory>
 #include <atomic>
 #include <stdlib.h>
 #include <set>
+// recent Boost gets confused by the "hidden" macro we add in some Musl
+// header files, so need to undefine it
+#undef hidden
+#include <boost/intrusive/unordered_set.hpp>
 
 // An object that instruments tracepoints to collect backtraces.
 //
@@ -57,7 +60,7 @@ public:
 private:
     // Compares two traces for the histogram (most hits first)
     struct histogram_compare {
-        bool operator()(trace* a, trace* b);
+        bool operator()(trace* a, trace* b) const;
     };
 private:
     // Callback from tracepoint_base::probe
@@ -84,7 +87,7 @@ private:
     // per-cpu hash table
     dynamic_percpu<std::unique_ptr<table_type>> _table;
     // global pool of free trace objects
-    std::atomic<void*> _free_traces;
+    std::atomic<uintptr_t> _free_traces;
     // attached tracepoints
     std::vector<tracepoint_base*> _attached;
     friend bool operator==(const trace& a, const trace& b);

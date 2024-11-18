@@ -29,7 +29,7 @@ void pipe_buffer::detach_receiver()
     if (receiver) {
         receiver = nullptr;
         if (sender)
-            poll_wake(sender, POLLERR|POLLOUT);
+            poll_wake(sender, no_receiver_event);
         may_write.wake_all();
     }
 }
@@ -57,7 +57,7 @@ int pipe_buffer::read_events_unlocked()
 int pipe_buffer::write_events_unlocked()
 {
     if (!receiver) {
-        return POLLERR|POLLOUT;
+        return no_receiver_event;
     }
     int ret = 0;
     ret |= q.size() < max_buf ? POLLOUT : 0;

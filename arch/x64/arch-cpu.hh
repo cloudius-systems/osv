@@ -13,6 +13,8 @@
 #include "cpuid.hh"
 #include "osv/pagealloc.hh"
 #include <xmmintrin.h>
+#include "syscall.hh"
+#include "msr.hh"
 
 struct init_stack {
     char stack[4096] __attribute__((aligned(16)));
@@ -46,6 +48,19 @@ struct arch_cpu {
     u32 apic_id;
     u32 acpi_id;
     u64 gdt[nr_gdt];
+    // This field holds a syscall stack descriptor of a current thread
+    // which is updated on every context switch (see arch-switch.hh).
+    // We keep this field in this per-cpu structure and initialize GS register
+    // of the corresponding cpu to point to it (see init_on_cpu() down below),
+    // in order to make it possible to access it in assembly code through
+    // a known offset at %gs:0.
+    syscall_stack_descriptor _current_syscall_stack_descriptor;
+    // This field holds the address of a current thread TCB
+    // which is updated on every context switch (see arch-switch.hh).
+    // This makes it possible to fetch address of kernel TCB if we need
+    // to switch to from the app TCB which is different when running
+    // statically linked executables
+    u64 _current_thread_kernel_tcb;
     void init_on_cpu();
     void set_ist_entry(unsigned ist, char* base, size_t size);
     char* get_ist_entry(unsigned ist);
@@ -58,7 +73,11 @@ struct arch_cpu {
 };
 
 struct arch_thread {
+#ifndef NDEBUG
+    char interrupt_stack[4096*2] __attribute__((aligned(16)));
+#else
     char interrupt_stack[4096] __attribute__((aligned(16)));
+#endif
     char exception_stack[4096*4] __attribute__((aligned(16)));
 };
 
@@ -181,6 +200,8 @@ inline void arch_cpu::init_on_cpu()
     processor::init_fpu();
 
     processor::init_syscall();
+
+    processor::wrmsr(msr::IA32_GS_BASE, reinterpret_cast<u64>(&_current_syscall_stack_descriptor.stack_top));
 }
 
 struct exception_guard {

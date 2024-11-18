@@ -30,6 +30,9 @@ public:
     void detach_receiver();
     void attach_sender(struct file *f);
     void attach_receiver(struct file *f);
+    void set_no_receiver_event(int event) {
+        this->no_receiver_event = event;
+    }
 private:
     int read_events_unlocked();
     int write_events_unlocked();
@@ -41,6 +44,7 @@ private:
     std::atomic<unsigned> refs = {};
     condvar may_read;
     condvar may_write;
+    int no_receiver_event = POLLERR|POLLOUT;
     friend void intrusive_ptr_add_ref(pipe_buffer* p) {
         p->refs.fetch_add(1, std::memory_order_relaxed);
     }

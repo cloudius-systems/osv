@@ -6,18 +6,35 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <cassert>
+#include <cstdio>
 #include <iterator>
-#include <fstream>
+#include <unistd.h>
 #include <osv/debug.hh>
 
 #include <boost/config/warning_disable.hpp>
-#include <boost/spirit/include/qi.hpp>
+//#include <boost/spirit/include/qi.hpp>
+//Include only select QI spirit headers to avoid implicitly
+//pulling std::locale
+#include <boost/spirit/include/qi_parse.hpp>
+#include <boost/spirit/include/qi_what.hpp>
+#include <boost/spirit/include/qi_action.hpp>
+#include <boost/spirit/include/qi_char.hpp>
+#include <boost/spirit/include/qi_directive.hpp>
+#include <boost/spirit/include/qi_rule.hpp>
+#include <boost/spirit/include/qi_grammar.hpp>
+#include <boost/spirit/include/qi_eoi.hpp>
+#include <boost/spirit/include/qi_operator.hpp>
+#include <boost/spirit/include/qi_string.hpp>
+
 #include <osv/power.hh>
 #include <osv/commands.hh>
 #include <osv/align.hh>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <fcntl.h>
+
+#include <osv/kernel_config_core_commands_runscript.h>
 
 namespace qi = boost::spirit::qi;
 namespace ascii = boost::spirit::ascii;
@@ -102,7 +119,6 @@ void expand_environ_vars(std::string& word)
         std::string new_word = word.substr(0, pos);
         std::string key = word.substr(pos+1);
         auto tmp = getenv(key.c_str());
-        //debug("    new_word=%s, key=%s, tmp=%s\n", new_word.c_str(), key.c_str(), tmp);
         if (tmp) {
             new_word += tmp;
         }
@@ -124,6 +140,7 @@ void expand_environ_vars(std::vector<std::vector<std::string>>& result)
     }
 }
 
+#if CONF_core_commands_runscript
 /*
 In each runscript line, first N args starting with - are options.
 Parse options and remove them from result.
@@ -135,9 +152,9 @@ apply options for each script at script execution (second script would modify
 environment setup by the first script, causing a race).
 */
 static void runscript_process_options_usage(std::string &message) {
-    std::cout << message << "\n";
-    std::cout << "OSv runscript options:\n";
-    std::cout << "  --env=arg             set Unix-like environment variable (putenv())\n";
+    printf("%s\n", message.c_str());
+    printf("OSv runscript options:\n"
+           "  --env=arg             set Unix-like environment variable (putenv())\n");
     osv::poweroff();
 }
 
@@ -184,7 +201,7 @@ static void runscript_process_options(std::vector<std::vector<std::string> >& re
             if (key.length() > 0) {
                 // we have something to set
                 expand_environ_vars(value);
-                debug("Setting in environment: %s=%s\n", key, value);
+                debugff("Setting in environment: %s=%s\n", key.c_str(), value.c_str());
                 setenv(key.c_str(), value.c_str(), 1);
             }
         }
@@ -218,23 +235,28 @@ runscript_expand(const std::vector<std::string>& cmd, bool &ok, bool &is_runscri
         }
         auto fn = cmd[1];
 
-        std::ifstream in(fn);
-        if (!in.good()) {
+        FILE *fp = fopen(fn.c_str(), "r");
+        if (!fp) {
             printf("Failed to open runscript file '%s'.\n", fn.c_str());
             ok = false;
             return result2;
         }
-        std::string line;
-        size_t line_num = 0;
-        while (!in.eof()) {
-            getline(in, line);
+        size_t line_num = 0, line_length = 0;
+        char *line_buffer = nullptr;
+        ssize_t read;
+        while ((read = getline(&line_buffer, &line_length, fp)) != -1) {
+            if (read && line_buffer[read - 1] == '\n') {
+                line_buffer[read - 1] = 0; //Remove new line character
+            }
             bool ok2;
-            result3 = parse_command_line_min(line, ok2);
-            printf("runscript expand fn='%s' line=%d '%s'\n", fn.c_str(), line_num, line.c_str());
+            result3 = parse_command_line_min(line_buffer, ok2);
+            printf("runscript expand fn='%s' line=%d '%s'\n", fn.c_str(), line_num, line_buffer);
             if (ok2 == false) {
-                printf("Failed expanding runscript file='%s' line=%d '%s'.\n", fn.c_str(), line_num, line.c_str());
+                printf("Failed expanding runscript file='%s' line=%d '%s'.\n", fn.c_str(), line_num, strlen(line_buffer));
                 result2.clear();
                 ok = false;
+                free(line_buffer);
+                fclose(fp);
                 return result2;
             }
             // Replace env vars found inside script.
@@ -248,12 +270,15 @@ runscript_expand(const std::vector<std::string>& cmd, bool &ok, bool &is_runscri
             result2.insert(result2.end(), result3.begin(), result3.end());
             line_num++;
         }
+        free(line_buffer);
+        fclose(fp);
     }
     else {
         is_runscript = false;
     }
     return result2;
 }
+#endif
 
 std::vector<std::vector<std::string>>
 parse_command_line(const std::string line,  bool &ok)
@@ -263,6 +288,7 @@ parse_command_line(const std::string line,  bool &ok)
     // First replace environ variables in input command line.
     expand_environ_vars(result);
 
+#if CONF_core_commands_runscript
     /*
     If command starts with runscript, we need to read actual command to
     execute from the given file.
@@ -284,6 +310,7 @@ parse_command_line(const std::string line,  bool &ok)
             cmd_iter++;
         }
     }
+#endif
 
     return result;
 }

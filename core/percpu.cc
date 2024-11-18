@@ -11,8 +11,9 @@
 #include <osv/align.hh>
 #include <osv/debug.hh>
 #include <osv/ilog2.hh>
+#include <osv/kernel_config_core_dynamic_percpu_size.h>
 
-static constexpr size_t dynamic_percpu_max = 65536;
+static constexpr size_t dynamic_percpu_max = CONF_core_dynamic_percpu_size;
 
 struct dynamic_percpu_buffer {
     char buf[dynamic_percpu_max];

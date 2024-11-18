@@ -76,6 +76,7 @@ clock
 clock_getcpuclockid
 clock_getres
 clock_gettime
+clock_nanosleep
 close
 closedir
 closelog
@@ -154,6 +155,7 @@ erfcl
 erff
 erfl
 __errno_location
+errno
 euidaccess
 eventfd
 eventfd_read
@@ -644,6 +646,7 @@ mkdtemp
 mkfifo
 mkfifoat
 mknod
+mknodat
 mkostemp
 mkostemp64
 mkostemps
@@ -737,6 +740,8 @@ pread64
 preadv
 preadv64
 printf
+prlimit
+prlimit64
 __progname
 __progname_full
 program_invocation_name
@@ -904,11 +909,14 @@ secure_getenv
 seed48
 seekdir
 select
+sem_close
 sem_destroy
 sem_init
+sem_open
 sem_post
 sem_timedwait
 sem_trywait
+sem_unlink
 sem_wait
 send
 sendfile

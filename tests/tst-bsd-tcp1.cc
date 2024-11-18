@@ -14,6 +14,7 @@
 #include <arpa/inet.h>
 #include <cstdio>
 #include <thread>
+#include <osv/kernel_config_logger_debug.h>
 
 #include "tst-hub.hh"
 

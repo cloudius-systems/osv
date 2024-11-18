@@ -26,9 +26,8 @@
 #include <sys/types.h>
 #include <osv/device.h>
 #include <osv/debug.h>
+#include <osv/contiguous_alloc.hh>
 #include <fs/vfs/vfs_id.h>
-#include <iomanip>
-#include <iostream>
 
 static int rofs_mount(struct mount *mp, const char *dev, int flags, const void *data);
 static int rofs_sync(struct mount *mp);
@@ -70,21 +69,22 @@ rofs_mount(struct mount *mp, const char *dev, int flags, const void *data)
         return error;
     }
 
-    void *buf = malloc(BSIZE); //Just enough for single block of 512 bytes
-    error = rofs_read_blocks(device, ROFS_SUPERBLOCK_BLOCK, 1, buf);
+    using namespace memory;
+    std::unique_ptr<void, void(*)(void*)> buf(alloc_phys_contiguous_aligned(BSIZE, PAGE_SIZE), [] (void *ptr) {
+       free_phys_contiguous_aligned(ptr);
+    }); //Just enough for single block of 512 bytes
+    error = rofs_read_blocks(device, ROFS_SUPERBLOCK_BLOCK, 1, buf.get());
     if (error) {
         kprintf("[rofs] Error reading rofs superblock\n");
         device_close(device);
-        free(buf);
         return error;
     }
 
     // We see if the file system is ROFS, if not, return error and close everything
-    sb = (struct rofs_super_block *) buf;
+    sb = (struct rofs_super_block *) buf.get();
     if (sb->magic != ROFS_MAGIC) {
         print("[rofs] Error magics do not match!\n");
         print("[rofs] Expecting %016llX but got %016llX\n", ROFS_MAGIC, sb->magic);
-        free(buf);
         device_close(device);
         return -1; // TODO: Proper error code
     }
@@ -92,7 +92,6 @@ rofs_mount(struct mount *mp, const char *dev, int flags, const void *data)
     if (sb->version != ROFS_VERSION) {
         kprintf("[rofs] Found rofs volume but incompatible version!\n");
         kprintf("[rofs] Expecting %llu but found %llu\n", ROFS_VERSION, sb->version);
-        free(buf);
         device_close(device);
         return -1;
     }
@@ -108,16 +107,14 @@ rofs_mount(struct mount *mp, const char *dev, int flags, const void *data)
     //
     // Since we have found ROFS, we can copy the superblock now
     sb = new rofs_super_block;
-    memcpy(sb, buf, ROFS_SUPERBLOCK_SIZE);
-    free(buf);
+    memcpy(sb, buf.get(), ROFS_SUPERBLOCK_SIZE);
     //
     // Read structure_info_blocks_count to construct array of directory enries, symlinks and i-nodes
-    buf = malloc(BSIZE * sb->structure_info_blocks_count);
-    error = rofs_read_blocks(device, sb->structure_info_first_block, sb->structure_info_blocks_count, buf);
+    buf.reset(alloc_phys_contiguous_aligned(BSIZE * sb->structure_info_blocks_count, PAGE_SIZE));
+    error = rofs_read_blocks(device, sb->structure_info_first_block, sb->structure_info_blocks_count, buf.get());
     if (error) {
         kprintf("[rofs] Error reading rofs structure info blocks\n");
         device_close(device);
-        free(buf);
         return error;
     }
 
@@ -125,7 +122,7 @@ rofs_mount(struct mount *mp, const char *dev, int flags, const void *data)
     rofs->sb = sb;
     rofs->dir_entries = (struct rofs_dir_entry *) malloc(sizeof(struct rofs_dir_entry) * sb->directory_entries_count);
 
-    void *data_ptr = buf;
+    void *data_ptr = buf.get();
     //
     // Read directory entries
     for (unsigned int idx = 0; idx < sb->directory_entries_count; idx++) {
@@ -164,8 +161,6 @@ rofs_mount(struct mount *mp, const char *dev, int flags, const void *data)
     for (unsigned int idx = 0; idx < sb->inodes_count; idx++) {
         print("[rofs] inode: %d, size: %d\n", rofs->inodes[idx].inode_no, rofs->inodes[idx].file_size);
     }
-
-    free(buf);
 
     // Save a reference to our superblock
     mp->m_data = rofs;
@@ -222,12 +217,12 @@ rofs_unmount(struct mount *mp, int flags)
     delete rofs;
 
 #if defined(ROFS_DIAGNOSTICS_ENABLED)
-    debugf("ROFS: spent %.2f ms reading from disk\n", ((double) rofs_block_read_ms.load()) / 1000);
-    debugf("ROFS: read %d 512-byte blocks from disk\n", rofs_block_read_count.load());
-    debugf("ROFS: allocated %d 512-byte blocks of cache memory\n", rofs_block_allocated.load());
+    debugff("ROFS: spent %.2f ms reading from disk\n", ((double) rofs_block_read_ms.load()) / 1000);
+    debugff("ROFS: read %d 512-byte blocks from disk\n", rofs_block_read_count.load());
+    debugff("ROFS: allocated %d 512-byte blocks of cache memory\n", rofs_block_allocated.load());
     long total_cache_reads = rofs_cache_reads.load();
     double hit_ratio = total_cache_reads > 0 ? (rofs_cache_reads.load() - rofs_cache_misses.load()) / ((double)total_cache_reads) : 0;
-    debugf("ROFS: hit ratio is %.2f%%\n", hit_ratio * 100);
+    debugff("ROFS: hit ratio is %.2f%%\n", hit_ratio * 100);
 #endif
     return error;
 }

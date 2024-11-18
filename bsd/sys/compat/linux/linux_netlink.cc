@@ -71,7 +71,7 @@ std::atomic<pid_t> _nl_next_gen_pid(2);
 
 MALLOC_DEFINE(M_NETLINK, "netlink", "netlink socket");
 
-static struct	bsd_sockaddr netlink_src = { 2, PF_NETLINK, };
+static struct  bsd_sockaddr_nl netlink_src = { sizeof(bsd_sockaddr_nl), PF_NETLINK, 0, 0, 0};
 
 
 
@@ -293,7 +293,7 @@ netlink_input(struct mbuf *m)
 
 	netlink_proto.sp_family = PF_NETLINK;
 
-	raw_input_ext(m, &netlink_proto, &netlink_src, raw_input_netlink_cb);
+	raw_input_ext(m, &netlink_proto, (bsd_sockaddr*)&netlink_src, raw_input_netlink_cb);
 }
 
 void

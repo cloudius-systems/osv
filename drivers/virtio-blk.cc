@@ -9,6 +9,7 @@
 #include <osv/drivers_config.h>
 #include <sys/cdefs.h>
 
+#include "drivers/blk-common.hh"
 #include "drivers/virtio.hh"
 #include "drivers/virtio-blk.hh"
 #include <osv/interrupt.hh>
@@ -88,7 +89,7 @@ static struct devops blk_devops {
     no_close,
     blk_read,
     blk_write,
-    no_ioctl,
+    blk_ioctl,
     no_devctl,
     multiplex_strategy,
 };

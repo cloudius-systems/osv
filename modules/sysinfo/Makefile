@@ -1,6 +1,6 @@
 INCLUDES = -I../../include
 COMMON_FLAGS = -g -Wall -fPIC $(INCLUDES) -O2
-CXXFLAGS = -std=c++11 $(COMMON_FLAGS)
+CXXFLAGS = -std=$(conf_cxx_level) $(COMMON_FLAGS)
 
 .PHONY: module
 module: sysinfo.so

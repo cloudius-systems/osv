@@ -53,6 +53,10 @@ namespace pci {
 
     u64 bar::read_bar_size()
     {
+        // The device must not decode the following BAR values since they aren't
+        // addresses
+        _dev->disable_bars_decode(true, true);
+
         u32 lo_orig = _dev->pci_readl(_pos);
 
         // Size test
@@ -76,6 +80,8 @@ namespace pci {
             // Restore
             _dev->pci_writel(_pos+4, hi_orig);
         }
+
+        _dev->enable_bars_decode(true, true);
 
         u64 bits = (u64)hi << 32 | lo;
         return ~bits + 1;
@@ -404,7 +410,7 @@ namespace pci {
         set_command(command);
     }
 
-    void function::set_bars_enable(bool mem, bool io)
+    void function::enable_bars_decode(bool mem, bool io)
     {
         u16 command = get_command();
         if (mem) {
@@ -412,6 +418,18 @@ namespace pci {
         }
         if (io) {
             command |= PCI_COMMAND_BAR_IO_ENABLE;
+        }
+        set_command(command);
+    }
+
+    void function::disable_bars_decode(bool mem, bool io)
+    {
+        u16 command = get_command();
+        if (mem) {
+            command &= ~(u16)PCI_COMMAND_BAR_MEM_ENABLE;
+        }
+        if (io) {
+            command &= ~(u16)PCI_COMMAND_BAR_IO_ENABLE;
         }
         set_command(command);
     }
@@ -662,7 +680,7 @@ namespace pci {
 
     void function::msix_enable()
     {
-        if (!is_msix()) {
+        if (!is_msix() || _msix_enabled) {
             return;
         }
 
@@ -699,7 +717,7 @@ namespace pci {
 
     void function::msi_enable()
     {
-        if (!is_msi()) {
+        if (!is_msi() || _msi_enabled) {
             return;
         }
 

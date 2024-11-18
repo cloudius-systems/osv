@@ -97,6 +97,10 @@ int test_netlink(struct nlmsghdr* req, pid_t pid, void (*handle_response)(struct
         msg.msg_iov = iov;            //Check if we can improve things downstream with some asserts or even error handling
         msg.msg_iovlen = 1;
 
+        memset(&dst_addr, 0, sizeof(dst_addr));
+        msg.msg_name = &dst_addr; //Set msg_name to make kernel return source address
+        msg.msg_namelen = sizeof(dst_addr);
+
         memset(buf, 0, BUFSIZE);
         msg.msg_iov[0].iov_base = buf;
         msg.msg_iov[0].iov_len = BUFSIZE;
@@ -105,6 +109,9 @@ int test_netlink(struct nlmsghdr* req, pid_t pid, void (*handle_response)(struct
         {
             die("recvmsg FAILED");
         }
+
+        assert(dst_addr.nl_family == AF_NETLINK);
+        assert(dst_addr.nl_pid == 0); //nl_pid = 0 indicates it came from kernel
 
         for (struct nlmsghdr *rsp = (struct nlmsghdr *)buf;
              NLMSG_OK(rsp, len); rsp = NLMSG_NEXT(rsp, len))

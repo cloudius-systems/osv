@@ -46,12 +46,12 @@ public:
         delete thread2;
 
         bool success = true;
-        debug("Results:\n");
+        debugf("Results:\n");
         for (int i=0; i < max_random; i++) {
             unsigned pushed = _stats[0][i];
             unsigned popped = _stats[1][i];
 
-            debug("    value=%-08d pushed=%-08d popped=%-08d\n", i,
+            debugf("    value=%-08d pushed=%-08d popped=%-08d\n", i,
                 pushed, popped);
 
             if (pushed != popped) {
@@ -139,12 +139,12 @@ public:
         delete thread4;
 
         bool success = true;
-        debug("Results:\n");
+        debugf("Results:\n");
         for (int i=0; i < max_random; i++) {
             unsigned pushed = _stats[0][i] + _stats[1][i] + _stats[2][i];
             unsigned popped = _stats[3][i];
 
-            debug("    value=%-08d pushed=%-08d popped=%-08d\n", i,
+            debugf("    value=%-08d pushed=%-08d popped=%-08d\n", i,
                 pushed, popped);
 
             if (pushed != popped) {
@@ -193,7 +193,7 @@ s64 nanotime() {
 int main(int argc, char **argv)
 {
     // Test
-    debug("[~] Testing mpsc-queue:\n");
+    debugf("[~] Testing mpsc-queue:\n");
     test_mpsc_queue *t3 = new test_mpsc_queue();
     t3->init();
     s64 beg = nanotime();
@@ -202,30 +202,30 @@ int main(int argc, char **argv)
     delete t3;
     if (rc) {
         double dT = (double)(end-beg)/1000000000.0;
-        debug("[+] mpsc-queue test passed:\n");
-        debug("[+] duration: %.6fs\n", dT);
-        debug("[+] throughput: %.0f ops/s\n", (double)(test_mpsc_queue::elements_to_process*6)/dT);
+        debugf("[+] mpsc-queue test passed:\n");
+        debugf("[+] duration: %.6fs\n", dT);
+        debugf("[+] throughput: %.0f ops/s\n", (double)(test_mpsc_queue::elements_to_process*6)/dT);
     } else {
-        debug("[-] mpsc-queue failed\n");
+        debugf("[-] mpsc-queue failed\n");
         return 1;
     }
 
 
-    debug("[~] Testing spsc ringbuffer:\n");
+    debugf("[~] Testing spsc ringbuffer:\n");
     test_spsc_ring t1;
     beg = nanotime();
     rc = t1.run();
     end = nanotime();
     if (rc) {
         double dT = (double)(end-beg)/1000000000.0;
-        debug("[+] spsc test passed:\n");
-        debug("[+] duration: %.6fs\n", dT);
-        debug("[+] throughput: %.0f ops/s\n", (double)(test_spsc_ring::elements_to_process*2)/dT);
+        debugf("[+] spsc test passed:\n");
+        debugf("[+] duration: %.6fs\n", dT);
+        debugf("[+] throughput: %.0f ops/s\n", (double)(test_spsc_ring::elements_to_process*2)/dT);
     } else {
-        debug("[-] spsc test failed\n");
+        debugf("[-] spsc test failed\n");
         return 1;
     }
 
-    debug("[+] finished.\n");
+    debugf("[+] finished.\n");
     return 0;
 }

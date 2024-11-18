@@ -8,13 +8,14 @@
 #ifndef TRACE_HH_
 #define TRACE_HH_
 
-#include <iostream>
 #include <iterator>
 #include <tuple>
-#include <boost/format.hpp>
 #include <osv/types.h>
 #include <osv/align.hh>
 #include <osv/sched.hh>
+#include <osv/kernel_config_tracepoints.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 #include <boost/intrusive/list.hpp>
 #include <string>
 #include <unordered_set>
@@ -23,10 +24,13 @@
 #include <arch.hh>
 #include <osv/rcu.hh>
 #include <safe-ptr.hh>
+#include <stdint.h>
+#include <atomic>
 
 void enable_trace();
 void enable_tracepoint(std::string wildcard);
 void enable_backtraces(bool = true);
+void list_all_tracepoints();
 
 class tracepoint_base;
 
@@ -48,37 +52,39 @@ struct trace_record {
     };
 };
 
-template <size_t idx, size_t N, typename... args>
-struct tuple_formatter
-{
-    static boost::format& format(boost::format& fmt, std::tuple<args...> as) {
-        typedef tuple_formatter<idx + 1, N, args...> recurse;
-        return recurse::format(fmt % std::get<idx>(as), as);
+//Simple lock-less multiple-producer single-consumer structure
+//designed to act as a data gateway between threads generating trace
+//records and the strace thread printing them to the console
+//
+//In essence it is an array of pointers to the trace records
+//indexed by write_offset which stores next entry offset to write and
+//is atomic to guarantee no two producers step on each other and
+//read_offset that stores offset of next entry to read
+//
+//The trace_log is designed as a circular buffer where
+//both read and write offsets would wrap around from 0xffff to 0
+//so it is possible that with huge number of trace record written
+//and slow consumer some data may get overwritten
+constexpr const size_t trace_log_size = 0x10000;
+struct trace_log {
+    trace_record *traces[trace_log_size];
+    std::atomic<uint16_t> write_offset = {0};
+    uint16_t read_offset = {0};
+
+    void write(trace_record* tr) {
+        traces[write_offset.fetch_add(1)] = tr;
+    }
+
+    trace_record* read() {
+        if (read_offset == write_offset.load()) {
+            return nullptr;
+        } else {
+            return traces[read_offset++];
+        }
     }
 };
 
-template <size_t N, typename... args>
-struct tuple_formatter<N, N, args...>
-{
-    static boost::format& format(boost::format& fmt, std::tuple<args...> as) {
-        return fmt;
-    }
-};
-
-template <typename... args>
-inline
-boost::format& format_tuple(boost::format& fmt, std::tuple<args...> as)
-{
-    return tuple_formatter<size_t(0), sizeof...(args), args...>::format(fmt, as);
-}
-
-template <typename... args>
-inline
-boost::format format_tuple(const char* fmt, std::tuple<args...> as)
-{
-    boost::format format(fmt);
-    return format_tuple(format, as);
-}
+extern trace_log* _trace_log;
 
 template <typename T, typename = void>
 struct signature_char;
@@ -369,6 +375,9 @@ public:
         serialize(buffer, as);
         barrier();
         tr->tp = this; // do this last to indicate the record is complete
+        if (_trace_log) {
+            _trace_log->write(tr);
+        }
     }
     void serialize(void* buffer, std::tuple<s_args...> as) {
         serializer<0, sizeof...(s_args), s_args...>::write(buffer, 0, as);
@@ -403,11 +412,16 @@ static inline const char *trace_strip_prefix(const char *name)
 {
     return (strncmp(name, "trace_", 6) == 0) ? (name+6) : name;
 }
+
+#if CONF_tracepoints
 #define TRACEPOINT(name, fmt, ...) \
     tracepoint<__COUNTER__, ##__VA_ARGS__> name(trace_strip_prefix(#name), fmt);
 #define TRACEPOINTV(name, fmt, assign) \
     tracepointv<__COUNTER__, decltype(assign), assign> name(trace_strip_prefix(#name), fmt);
-
+#else
+#define TRACEPOINT(name, fmt, ...) \
+    inline void name(__VA_ARGS__) {}
+#endif
 
 #include <arch-trace.hh>
 

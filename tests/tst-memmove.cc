@@ -202,6 +202,10 @@ int main()
         memmove_test(destOffset, srcOffset, n);
     }
 
+    char buf10[128] = "/usr/lib/jvm/java/bin/java";
+    memmove(buf10, buf10 + 1, 27);
+    pass_if(buf10, "usr/lib/jvm/java/bin/java", 25);
+
     std::cerr << "PASSED\n";
     return 0;
 }

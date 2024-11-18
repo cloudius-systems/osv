@@ -94,11 +94,14 @@ read
 recv
 recvfrom
 recvmsg
+sem_close
 sem_destroy
 sem_init
+sem_open
 sem_post
 sem_timedwait
 sem_trywait
+sem_unlink
 sem_wait
 send
 sendmsg

@@ -70,31 +70,28 @@ static std::string procfs_stats()
     int wchan = 0, rt_priority = 0, policy = 0; // SCHED_OTHER = 0
     int zero = 0;
 
-    std::ostringstream os;
-    osv::fprintf(os, "%d (%s) %c "
-                     "%d %d %d %d %d "
-                     "%lu %lu %lu %lu %lu "
-                     "%lu %lu %ld %ld "
-                     "%ld %ld %ld %ld "
-                     "%lu %lu "
-                     "%lu %lu "
-                     "%p %p %p %p %p "
-                     "%lu %lx %lu %lu "
-                     "%d %d %d "
-                     "%lu %d %d %d",
-                     pid, program_invocation_short_name, state,
-                     ppid, pgrp, session, tty, tpgid,
-                     flags, min_flt, cmin_flt, maj_flt, cmaj_flt,
-                     utime, stime, cutime, cstime,
-                     priority, nice, nlwp, nextalarm,
-                     start_time, vsize,
-                     rss, rss_rlim,
-                     start_code, end_code, start_stack, kstk_esp, kstk_eip,
-                     pending, blocked, sigign, sigcatch,
-                     wchan, zero, zero,
-                     exit_signal, cpu, rt_priority, policy
-                );
-    return os.str();
+    return osv::sprintf("%d (%s) %c "
+                        "%d %d %d %d %d "
+                        "%lu %lu %lu %lu %lu "
+                        "%lu %lu %ld %ld "
+                        "%ld %ld %ld %ld "
+                        "%lu %lu "
+                        "%lu %lu "
+                        "%p %p %p %p %p "
+                        "%lu %lx %lu %lu "
+                        "%d %d %d "
+                        "%lu %d %d %d",
+                        pid, program_invocation_short_name, state,
+                        ppid, pgrp, session, tty, tpgid,
+                        flags, min_flt, cmin_flt, maj_flt, cmaj_flt,
+                        utime, stime, cutime, cstime,
+                        priority, nice, nlwp, nextalarm,
+                        start_time, vsize,
+                        rss, rss_rlim,
+                        start_code, end_code, start_stack, kstk_esp, kstk_eip,
+                        pending, blocked, sigign, sigcatch,
+                        wchan, zero, zero,
+                        exit_signal, cpu, rt_priority, policy);
 }
 
 static std::string procfs_status()
@@ -105,13 +102,10 @@ static std::string procfs_status()
     // information about cpus and memory intended for numa library
     // For details about the format read here: http://man7.org/linux/man-pages/man5/proc.5.html
     // and here: http://man7.org/linux/man-pages/man7/cpuset.7.html (mask and list format)
-    std::ostringstream os;
-    osv::fprintf(os, "Cpus_allowed:\t%s\n"
-                     "Cpus_allowed_list:\t0-%d\n"
-                     "Mems_allowed:\t00000001\n"
-                     "Mems_allowed_list:\t0\n",
-                     pseudofs::cpumap().c_str(), sched::cpus.size() - 1);
-    return os.str();
+    return std::string("Cpus_allowed:\t") + pseudofs::cpumap() + "\n"
+                       "Cpus_allowed_list:\t0-" + std::to_string(sched::cpus.size() - 1) + "\n"
+                       "Mems_allowed:\t00000001\n"
+                       "Mems_allowed_list:\t0\n";
 }
 
 static std::string procfs_mounts()

@@ -8,7 +8,9 @@
 #include <osv/elf.hh>
 #include <osv/app.hh>
 #include <osv/mmu.hh>
-#include <boost/format.hpp>
+#include <osv/kernel_config_elf_debug.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 #include <exception>
 #include <memory>
 #include <string.h>
@@ -16,7 +18,6 @@
 #include <osv/debug.hh>
 #include <stdlib.h>
 #include <unistd.h>
-#include <boost/algorithm/string.hpp>
 #include <boost/range/algorithm/find.hpp>
 #include <functional>
 #include <iterator>
@@ -29,12 +30,13 @@
 #include <osv/export.h>
 #include <boost/version.hpp>
 #include <deque>
+#include <osv/string_utils.hh>
 
 #include "arch.hh"
 #include "arch-elf.hh"
 #include "cpuid.hh"
 
-#if CONF_debug_elf
+#if CONF_elf_debug
 #define elf_debug(format,...) kprintf("ELF [tid:%d, mod:%d, %s]: " format, sched::thread::current()->id(), _module_index, _pathname.c_str(), ##__VA_ARGS__)
 #else
 #define elf_debug(...)
@@ -48,12 +50,9 @@ TRACEPOINT(trace_elf_lookup_addr, "%p", const void *);
 
 extern void* elf_start;
 extern size_t elf_size;
+extern char libvdso_start[];
 
 using namespace boost::range;
-
-namespace {
-    typedef boost::format fmt;
-}
 
 namespace elf {
 
@@ -122,7 +121,7 @@ object::object(program& prog, std::string pathname)
     , _initial_tls_size(0)
     , _dynamic_table(nullptr)
     , _module_index(_prog.register_dtv(this))
-    , _is_executable(false)
+    , _is_dynamically_linked_executable(false)
     , _init_called(false)
     , _eh_frame(0)
     , _visibility_thread(nullptr)
@@ -248,9 +247,6 @@ const char * object::symbol_name(const Elf64_Sym * sym) {
 }
 
 void* object::entry_point() const {
-    if (!_is_executable) {
-        return nullptr;
-    }
     return _base + _ehdr.e_entry;
 }
 
@@ -365,18 +361,20 @@ void object::set_base(void* base)
                               [](const Elf64_Phdr* a, const Elf64_Phdr* b)
                                   { return a->p_vaddr < b->p_vaddr; });
 
-    if (!is_core() && is_non_pie_executable()) {
-        // Verify non-PIE executable does not collide with the kernel
+    if (!is_core() && !is_pic()) {
+        // Verify non-PIC executable ((aka position dependent)) does not collide with the kernel
         if (intersects_with_kernel(p->p_vaddr) || intersects_with_kernel(q->p_vaddr + q->p_memsz)) {
-            abort("Non-PIE executable [%s] collides with kernel: [%p-%p] !\n",
+            abort("Non-PIC executable [%s] collides with kernel: [%p-%p] !\n",
                     pathname().c_str(), p->p_vaddr, q->p_vaddr + q->p_memsz);
         }
-        // Override the passed in value as the base for non-PIEs (Position Dependant Executables)
+        // Override the passed in value as the base for non-PICs (Position Dependant Executables)
         // needs to be set to 0 because all the addresses in it are absolute
         _base = 0x0;
+        _headers_start = reinterpret_cast<void*>(p->p_vaddr) + _ehdr.e_phoff;
     } else {
         // Otherwise for kernel, PIEs and shared libraries set the base as requested by caller
         _base = align(base, p->p_align, p->p_vaddr & (p->p_align - 1)) - p->p_vaddr;
+        _headers_start = _base + _ehdr.e_phoff;
     }
 
     _end = _base + q->p_vaddr + q->p_memsz;
@@ -483,7 +481,7 @@ void object::process_headers()
             _dynamic_table = reinterpret_cast<Elf64_Dyn*>(_base + phdr.p_vaddr);
             break;
         case PT_INTERP:
-            _is_executable = true;
+            _is_dynamically_linked_executable = true;
             break;
         case PT_NOTE: {
             if (phdr.p_memsz < 16) {
@@ -535,10 +533,7 @@ void object::process_headers()
             abort("Unknown p_type in executable %s: %d\n", pathname(), phdr.p_type);
         }
     }
-    if (!is_core() && _ehdr.e_type == ET_EXEC && !_is_executable) {
-        abort("Statically linked executables are not supported!\n");
-    }
-    if (_is_executable && _tls_segment) {
+    if (_is_dynamically_linked_executable && _tls_segment) {
         auto app_tls_size = get_aligned_tls_size();
         ulong pie_static_tls_maximum_size = &_pie_static_tls_end - &_pie_static_tls_start;
         if (app_tls_size > pie_static_tls_maximum_size) {
@@ -549,10 +544,11 @@ void object::process_headers()
             auto kernel_tls_used_size = kernel_tls_size - pie_static_tls_maximum_size;
             auto kernel_tls_needed_size = align_up(kernel_tls_used_size + app_tls_size, 64UL);
             auto app_tls_needed_size = kernel_tls_needed_size - kernel_tls_used_size;
-            std::cout << "WARNING: " << pathname() << " is a PIE using TLS of size " << app_tls_size
-                  << " which is greater than the " << pie_static_tls_maximum_size << " bytes limit. "
-                  << "Either re-link the kernel by adding 'app_local_exec_tls_size=" << app_tls_needed_size
-                  << "' to ./scripts/build or re-link the app with '-shared' instead of '-pie'.\n";
+            printf("WARNING: %s is a PIE using TLS of size %lu "
+                   "which is greater than the %lu bytes limit. "
+                   "Either re-link the kernel by adding 'app_local_exec_tls_size=%lu' "
+                   "to ./scripts/build or re-link the app with '-shared' instead of '-pie'.\n",
+                    pathname().c_str(), app_tls_size, pie_static_tls_maximum_size, app_tls_needed_size);
         }
     }
 }
@@ -599,6 +595,7 @@ void object::fix_permissions()
         make_text_writable(false);
     }
 
+    //Process GNU_RELRO segments only to make GOT and others read-only
     for (auto&& phdr : _phdrs) {
         if (phdr.p_type != PT_GNU_RELRO)
             continue;
@@ -708,7 +705,7 @@ symbol_module object::symbol(unsigned idx, bool ignore_missing)
     }
     if (!ret.symbol) {
         if (ignore_missing) {
-            debug("%s: ignoring missing symbol %s\n", pathname().c_str(), demangle(name).c_str());
+            debugf("%s: ignoring missing symbol %s\n", pathname().c_str(), demangle(name).c_str());
         } else {
             abort("%s: failed looking up symbol %s\n", pathname().c_str(), demangle(name).c_str());
         }
@@ -783,9 +780,17 @@ void object::relocate_pltgot()
 #endif /* AARCH64_PORT_STUB */
         original_plt = static_cast<void*>(_base + (u64)pltgot[1]);
     }
-    bool bind_now = dynamic_exists(DT_BIND_NOW) || mlocked() ||
+    // PLTGOT resolution has a special calling convention,
+    // for x64 the symbol index and some word is pushed on the stack,
+    // for AArch64 &pltgot[n] and LR are pushed on the stack,
+    // so we need an assembly stub to convert it back to the
+    // standard calling convention.
+    pltgot[1] = this;
+    pltgot[2] = reinterpret_cast<void*>(__elf_resolve_pltgot);
+
+    bool bind_now = dynamic_exists(DT_BIND_NOW) ||
         (dynamic_exists(DT_FLAGS) && (dynamic_val(DT_FLAGS) & DF_BIND_NOW)) ||
-        (dynamic_exists(DT_FLAGS_1) && (dynamic_val(DT_FLAGS_1) & DF_1_NOW));
+        (dynamic_exists(DT_FLAGS_1) && (dynamic_val(DT_FLAGS_1) & DF_1_NOW)) || mlocked();
 
     auto rel = dynamic_ptr<Elf64_Rela>(DT_JMPREL);
     auto nrel = dynamic_val(DT_PLTRELSZ) / sizeof(*rel);
@@ -793,7 +798,7 @@ void object::relocate_pltgot()
         auto info = p->r_info;
         u32 type = info & 0xffffffff;
         void *addr = _base + p->r_offset;
-        assert(type == ARCH_JUMP_SLOT || type == ARCH_TLSDESC);
+        assert(type == ARCH_JUMP_SLOT || type == ARCH_TLSDESC || type == ARCH_IRELATIVE);
         if (type == ARCH_JUMP_SLOT) {
             if (bind_now) {
                 // If on-load binding is requested (instead of the default lazy
@@ -814,20 +819,14 @@ void object::relocate_pltgot()
                 // make sure it is relocated relative to the object base.
                 *static_cast<u64*>(addr) += reinterpret_cast<u64>(_base);
             }
+        } else if (type == ARCH_IRELATIVE) {
+            *static_cast<void**>(addr) = reinterpret_cast<void *(*)()>(_base + p->r_addend)();
         } else {
             u32 sym = info >> 32;
             arch_relocate_tls_desc(sym, addr, p->r_addend);
         }
     }
     elf_debug("Relocated %d PLT symbols\n", nrel);
-
-    // PLTGOT resolution has a special calling convention,
-    // for x64 the symbol index and some word is pushed on the stack,
-    // for AArch64 &pltgot[n] and LR are pushed on the stack,
-    // so we need an assembly stub to convert it back to the
-    // standard calling convention.
-    pltgot[1] = this;
-    pltgot[2] = reinterpret_cast<void*>(__elf_resolve_pltgot);
 }
 
 void* object::resolve_pltgot(unsigned index)
@@ -859,11 +858,11 @@ void* object::resolve_pltgot(unsigned index)
 void object::relocate()
 {
     assert(!dynamic_exists(DT_REL));
-    if (dynamic_exists(DT_RELA)) {
-        relocate_rela();
-    }
     if (dynamic_exists(DT_JMPREL)) {
         relocate_pltgot();
+    }
+    if (dynamic_exists(DT_RELA)) {
+        relocate_rela();
     }
 }
 
@@ -1016,6 +1015,9 @@ dladdr_info object::lookup_addr(const void* addr)
     if (addr < _base || addr >= _end) {
         return ret;
     }
+    if (!dynamic_exists(DT_STRTAB)) {
+        return ret;
+    }
     ret.fname = _pathname.c_str();
     ret.base = _base;
     auto strtab = dynamic_ptr<char>(DT_STRTAB);
@@ -1077,8 +1079,8 @@ void object::load_needed(std::vector<std::shared_ptr<object>>& loaded_objects)
     }
 
     if (!rpath_str.empty()) {
-        boost::replace_all(rpath_str, "$ORIGIN", dirname(_pathname));
-        boost::split(rpath, rpath_str, boost::is_any_of(":"));
+        osv::replace_all(rpath_str, "$ORIGIN", dirname(_pathname));
+        osv::split(rpath, rpath_str, ":");
     }
     auto needed = dynamic_str_array(DT_NEEDED);
     for (auto lib : needed) {
@@ -1089,7 +1091,7 @@ void object::load_needed(std::vector<std::shared_ptr<object>>& loaded_objects)
             // unloaded until this object is unloaded.
             _needed.push_back(std::move(obj));
         } else {
-            debug("could not load %s\n", lib);
+            debugf("could not load %s\n", lib);
         }
     }
 }
@@ -1163,6 +1165,9 @@ std::string object::pathname()
 // Run the object's static constructors or similar initialization
 void object::run_init_funcs(int argc, char** argv)
 {
+    if (is_statically_linked_executable() || is_linux_dl()) {
+        return;
+    }
     // Invoke any init functions if present and pass in argc and argv
     // The reason why we pass argv and argc is explained in issue #795
     if (dynamic_exists(DT_INIT)) {
@@ -1188,6 +1193,9 @@ void object::run_init_funcs(int argc, char** argv)
 // Run the object's static destructors or similar finalization
 void object::run_fini_funcs()
 {
+    if (is_statically_linked_executable() || is_linux_dl()) {
+        return;
+    }
     if(!_init_called){
         return;
     }
@@ -1260,7 +1268,7 @@ void object::init_static_tls()
         if (obj->is_core()) {
             continue;
         }
-        if (obj->is_executable()) {
+        if (obj->is_dynamically_linked_executable()) {
             obj->prepare_local_tls(_initial_tls_offsets);
             elf_debug("Initialized local-exec static TLS for %s\n", obj->pathname().c_str());
         }
@@ -1311,11 +1319,11 @@ program::program(void* addr)
     // Our kernel already supplies the features of a bunch of traditional
     // shared libraries:
     static const auto supplied_modules = {
+          linux_dl_soname,
           "libresolv.so.2",
           "libc.so.6",
           "libm.so.6",
 #ifdef __x86_64__
-          "ld-linux-x86-64.so.2",
           "libc.musl-x86_64.so.1",
           // As noted in issue #1040 Boost version 1.69.0 and above is
           // compiled with hidden visibility, so even if the kernel uses
@@ -1328,7 +1336,6 @@ program::program(void* addr)
 #endif
 #endif /* __x86_64__ */
 #ifdef __aarch64__
-          "ld-linux-aarch64.so.1",
 #if BOOST_VERSION < 106900
 #if HIDE_SYMBOLS < 1
           "libboost_system-mt.so.1.55.0",
@@ -1352,6 +1359,22 @@ program::program(void* addr)
         _files[name] = _core;
     }
     _modules_rcu.assign(ml);
+
+    initialize_libvdso();
+}
+
+void program::initialize_libvdso()
+{
+    if (!s_program) {
+        _libvdso = std::make_shared<memory_image>(*this, &libvdso_start);
+        _libvdso->set_base(&libvdso_start);
+        _libvdso->load_segments();
+        _libvdso->process_headers();
+        _libvdso->relocate();
+        _libvdso->fix_permissions();
+    } else {
+        _libvdso = s_program->_libvdso;
+    }
 }
 
 void program::set_search_path(std::initializer_list<std::string> path)
@@ -1443,13 +1466,18 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         osv::rcu_dispose(old_modules);
         ef->load_segments();
         ef->process_headers();
-        if (!ef->is_non_pie_executable())
-           _next_alloc = ef->end();
+        if (ef->is_pic())
+            _next_alloc = ef->end();
         add_debugger_obj(ef.get());
         loaded_objects.push_back(ef);
-        ef->load_needed(loaded_objects);
-        ef->relocate();
-        ef->fix_permissions();
+        //Do not relocate static executables as they are linked with its own
+        //dynamic linker. Also do not try to load any dependant libraries
+        //as they do not apply to statically linked executables.
+        if (!ef->is_statically_linked_executable() && !ef->is_linux_dl()) {
+            ef->load_needed(loaded_objects);
+            ef->relocate();
+            ef->fix_permissions();
+        }
         _files[name] = ef;
         _files[ef->soname()] = ef;
         return ef;

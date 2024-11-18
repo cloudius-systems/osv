@@ -9,8 +9,9 @@
 
 #include <osv/elf.hh>
 #include <osv/sched.hh>
+#include <osv/kernel_config_elf_debug.h>
 
-#if CONF_debug_elf
+#if CONF_elf_debug
 #define elf_debug(format,...) kprintf("ELF [tid:%d, mod:%d, %s]: " format, sched::thread::current()->id(), _module_index, _pathname.c_str(), ##__VA_ARGS__)
 #else
 #define elf_debug(...)
@@ -88,6 +89,9 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
     case R_X86_64_RELATIVE:
         *static_cast<void**>(addr) = _base + addend;
         break;
+    case R_X86_64_IRELATIVE:
+        *static_cast<void**>(addr) = reinterpret_cast<void *(*)()>(_base + addend)();
+        break;
     case R_X86_64_JUMP_SLOT:
     case R_X86_64_GLOB_DAT: {
         auto _sym = symbol(sym, true);
@@ -135,7 +139,7 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
         if (sym) {
             auto sm = symbol(sym);
             ulong tls_offset;
-            if (sm.obj->is_executable()) {
+            if (sm.obj->is_dynamically_linked_executable()) {
                 // If this is an executable (pie or position-dependant one)
                 // then the variable is located in the reserved slot of the TLS
                 // right where the kernel TLS lives
@@ -199,7 +203,7 @@ void object::prepare_initial_tls(void* buffer, size_t size,
 
 void object::prepare_local_tls(std::vector<ptrdiff_t>& offsets)
 {
-    if (!_static_tls && !is_executable()) {
+    if (!_static_tls && !is_dynamically_linked_executable()) {
         return;
     }
 

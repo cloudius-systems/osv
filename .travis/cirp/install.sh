@@ -74,4 +74,7 @@ python3 -m pip install --user setuptools
 # OSX keeps re-installing it tough, as it uses a temp per-script virtualenv.
 if ! python3 -m pip list --format=columns | grep '^ci-release-publisher '; then
   python3 -m pip install --user https://files.pythonhosted.org/packages/49/20/2631e993daa85b35c8390e8124570b0321825e6a77e566492b4637566983/ci_release_publisher-0.3.0.tar.gz
+  # Downgrade to specific version of urllib3 to avoid the 'AttributeError: type object 'Retry' has no attribute 'DEFAULT_METHOD_WHITELIST'
+  python3 -m pip uninstall -y urllib3
+  python3 -m pip install urllib3==1.26.15
 fi

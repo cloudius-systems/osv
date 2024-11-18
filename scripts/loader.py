@@ -21,6 +21,8 @@ from osv.trace import (Trace, Thread, TracePoint, BacktraceFormatter,
                        format_time)
 from osv import trace, debug
 
+from manifest_common import add_var, expand, unsymlink, read_manifest, defines
+
 virtio_driver_type = gdb.lookup_type('virtio::virtio_driver')
 
 class status_enum_class(object):
@@ -101,6 +103,15 @@ class syminfo_resolver(object):
     def clear_cache(clazz):
         clazz.cache.clear()
 
+    @classmethod
+    def output_cache(clazz, output_func):
+        for source_addr in clazz.cache.values():
+            addr = source_addr[0]
+            if addr.line:
+                output_func("0x%x %s %d %s\n" % (addr.addr, addr.filename, addr.line, addr.name))
+            else:
+                output_func("0x%x %s <?> %s\n" % (addr.addr, addr.filename, addr.name))
+
 symbol_resolver = syminfo_resolver()
 
 def symbol_formatter(src_addr):
@@ -120,35 +131,46 @@ class Manifest(object):
 
     def __init__(self):
         # Load data from usr.manifest in build_dir
-        mm_path = os.path.join(build_dir, 'usr.manifest')
+        self.guest_to_host_map = self.load_manifest('usr.manifest')
+        self.guest_to_host_map += self.load_manifest('bootfs.manifest')
+
+    def load_manifest(self, manifest_name):
+        mm_path = os.path.join(build_dir, manifest_name)
         try:
-            self.data = open(mm_path).read().split('\n')
+            _manifest = read_manifest(mm_path)
+            _guest_to_host_map = list(expand(_manifest))
+            return [(x, unsymlink(y % defines)) for (x, y) in _guest_to_host_map]
         except IOError:
-            self.data = []
+            return []
 
     def find(self, path):
         '''Try to locate file with help of usr.manifest'''
-        files = [ff.split(':', 1)[1].strip() for ff in self.data if ff.split(':', 1)[0].strip() == path]
+        files = [host for (guest, host) in self.guest_to_host_map if guest == path]
         if files:
-            file = files[-1]  # the last line in usr.manifest wins
+            host_file = files[-1]  # the last line in usr.manifest wins
         else:
-            file = ""
-        file = self.resolve_symlink(file)
-        print('manifest.find_file: path=%s, found file=%s' % (path, file))
+            host_file = ""
+        host_file = self.resolve_host_file(host_file)
+        print('manifest.find_file: path=%s, found file=%s' % (path, host_file))
         # usr.manifest contains lines like "%(gccbase)s/lib64/libgcc_s.so.1" too.
         # Filter out such cases.
-        if os.path.exists(file):
-            return file
+        if os.path.exists(host_file):
+            return host_file
         else:
             return ""
 
-    def resolve_symlink(self, file):
-        '''If file is a symlink, try to resolve it with help of usr.manifest'''
+    def resolve_host_file(self, file):
         resolved_file = file
+        #Handle symlink
         if file.startswith('->'):
-            path = file[2:]
-            resolved_file = self.find(path)
-            # print('manifest.resolve_symlink: file=%s, resolved_file=%s' % (file, resolved_file))
+            resolved_file = self.find(file[2:].strip())
+        else:
+            resolved_file = file
+        #Handle path to build directory
+        if resolved_file.startswith('.'):
+            resolved_file = os.path.join(build_dir, resolved_file[2:])
+        if not resolved_file.startswith('/'):
+            resolved_file = os.path.join(build_dir, resolved_file)
         return resolved_file
 
 manifest = Manifest()
@@ -680,6 +702,7 @@ class osv_syms(gdb.Command):
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
         syminfo_resolver.clear_cache()
+        object_paths = set()
         for obj in read_vector(gdb.lookup_global_symbol('elf::program::s_objs').value()):
             base = to_int(obj['_base'])
             obj_path = obj['_pathname']['_M_dataplus']['_M_p'].string()
@@ -688,7 +711,29 @@ class osv_syms(gdb.Command):
                 print('ERROR: Unable to locate object file for:', obj_path, hex(base))
             else:
                 print(path, hex(base))
+                object_paths.add(path)
                 load_elf(path, base)
+
+        for vma in vma_list():
+            start = ulong(vma['_range']['_start'])
+            flags = flagstr(ulong(vma['_flags']))
+            perm = permstr(ulong(vma['_perm']))
+
+            if 'F' in flags:
+                file_vma = vma.cast(gdb.lookup_type('mmu::file_vma').pointer())
+                file_ptr = file_vma['_file']['px'].cast(gdb.lookup_type('file').pointer())
+                dentry_ptr = file_ptr['f_dentry']['px'].cast(gdb.lookup_type('dentry').pointer())
+                file_path = dentry_ptr['d_path'].string()
+                path = translate(file_path)
+                if not path:
+                    print('ERROR: Unable to locate object file for:', file_path, hex(start))
+                elif path not in object_paths:
+                    print(path, hex(start))
+                    try:
+                        load_elf(path, start)
+                        object_paths.add(path)
+                    except gdb.error:
+                        print('ERROR: Not an ELF file', path, hex(start))
 
 class osv_load_elf(gdb.Command):
     def __init__(self):
@@ -1108,7 +1153,7 @@ class osv_info_callouts(gdb.Command):
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, for_tty):
         c = str(gdb.lookup_global_symbol('callouts::_callouts').value())
-        callouts = re.findall('\[([0-9]+)\] = (0x[0-9a-zA-Z]+)', c)
+        callouts = re.findall('\\[([0-9]+)\\] = (0x[0-9a-zA-Z]+)', c)
 
         gdb.write("%-5s%-40s%-40s%-30s%-10s\n" % ("id", "addr", "function", "abs time (ns)", "flags"))
 
@@ -1303,6 +1348,17 @@ def all_traces():
 
 def save_traces_to_file(filename):
     trace.write_to_file(filename, list(all_traces()))
+
+def save_backtrace_symbols_to_file(filename):
+    # Iterate over all traces and force resolution of symbols in
+    # included backtrace if any
+    for trace in all_traces():
+        if trace.backtrace:
+            for address in list(x - 1 for x in trace.backtrace if x):
+                symbol_resolver(address)
+    # Save resolved symbol information from cache into a file
+    with open(filename, 'wt') as sout:
+        syminfo_resolver.output_cache(sout.write)
 
 def make_symbolic(addr):
     return str(syminfo(addr))
@@ -1503,14 +1559,14 @@ class osv_trace_save(gdb.Command):
 
         gdb.write('Saving traces to %s ...\n' % arg)
         save_traces_to_file(arg)
+        save_backtrace_symbols_to_file("%s.symbols" % arg)
 
 class osv_trace_file(gdb.Command):
     def __init__(self):
         gdb.Command.__init__(self, 'osv trace2file', gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, from_tty):
-        fout = file("trace.txt", "wt")
-        dump_trace(fout.write)
-        fout.close()
+        with open("trace.txt", 'wt') as fout:
+            dump_trace(fout.write)
 
 class osv_leak(gdb.Command):
     def __init__(self):
@@ -1643,7 +1699,7 @@ class osv_linear_mmap(gdb.Command):
                              gdb.COMMAND_USER, gdb.COMPLETE_NONE)
     def invoke(self, arg, for_tty):
         l = str(gdb.lookup_global_symbol('mmu::linear_vma_set').value())
-        linear_vmas = re.findall('\[([0-9]+)\] = (0x[0-9a-zA-Z]+)', l)
+        linear_vmas = re.findall('\\[([0-9]+)\\] = (0x[0-9a-zA-Z]+)', l)
 
         gdb.write("%16s %16s %8s %4s %7s %s\n" % ("vaddr", "paddr", "size", "perm", "memattr", "name"))
 

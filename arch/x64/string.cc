@@ -102,15 +102,32 @@ repmovsb(void *__restrict &dest, const void *__restrict &src, size_t &n)
             : "+D"(dest), "+S"(src), "+c"(n) : : "memory");
 }
 
+// Note that although we called this function "memcpy", we can actually
+// call it also for overlapping dest and src, but only when dest<src.
+// The implementation below must work in this case as well, and not only
+// in the non-overlapping cases guaranteed by memcpy() implementations.
 template <size_t N>
 __attribute__((optimize("omit-frame-pointer")))
 __attribute__((optimize("unroll-loops")))
 void* do_small_memcpy(void *dest, const void *src)
 {
+#if __GNUC__ < 12
+    // Until Gcc 12, the following assignment-based implementation worked also
+    // for overlapping dest and src (as long as dest < src). It no longer
+    // does, as noted in https://gcc.gnu.org/bugzilla/show_bug.cgi?id=108296
+    // and in #1212. So this implementation cannot be used for Gcc 12.
     struct [[gnu::packed]] data {
         char x[N];
     };
     *static_cast<data*>(dest) = *static_cast<const data*>(src);
+#else
+    // This appears a naive and inefficient implementation of a byte-by-byte
+    // copy, but turns out that for a fixed N the compiler generates
+    // optimized code.
+    for (unsigned int i = 0; i < N; i++) {
+        ((char*)dest)[i] = ((const char*)src)[i];
+    }
+#endif
     return dest;
 }
 
@@ -215,6 +232,7 @@ static inline void* sse_memcpy(void* dest, const void* src, size_t n)
     small_memcpy(dest + (n & ~15), src + (n & ~15), n & 15);
     return dest;
 }
+
 
 extern "C"
 [[gnu::optimize("omit-frame-pointer")]]

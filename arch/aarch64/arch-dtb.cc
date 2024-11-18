@@ -381,6 +381,30 @@ bool dtb_get_gic_v2(u64 *dist, size_t *dist_len, u64 *cpu, size_t *cpu_len)
     return true;
 }
 
+bool dtb_get_gic_v3(u64 *dist, size_t *dist_len, u64 *redist, size_t *redist_len)
+{
+    u64 addr[2], len[2];
+    int node;
+
+    if (!dtb)
+        return false;
+
+    node = fdt_node_offset_by_compatible(dtb, -1, "arm,gic-v3");
+    if (node < 0) {
+        return false;
+    }
+
+    if (!dtb_get_reg_n(node, addr, len, 2))
+        return false;
+
+    *dist = addr[0];
+    *dist_len = len[0];
+    *redist = addr[1];
+    *redist_len = len[1];
+
+    return true;
+}
+
 /* this parses the cpus node and mpidr values and returns the number of cpu in it. */
 #define DTB_MAX_CPU_COUNT 32
 static int dtb_cpu_count = -1;

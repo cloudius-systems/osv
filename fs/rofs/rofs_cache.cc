@@ -41,6 +41,29 @@ struct file_cache {
 };
 
 //
+// Structure used as a key in the global file cache.
+// The entries must be indexed using both inode_no and sb pointer, because
+// different ROFS mounts can contain files with same inode_no
+struct rofs_cache_key {
+    uint64_t inode_no;
+    struct rofs_super_block *sb;
+
+    bool operator==(const rofs_cache_key& o) const {
+        return (sb == o.sb && inode_no == o.inode_no);
+    }
+};
+
+//
+// Hash function implementation for rofs_cache_key, used in the global
+// file cache hashmap.
+struct rofs_cache_key_hasher {
+    std::size_t operator()(const rofs_cache_key& k) const
+    {
+        return std::hash<uint64_t>()((uint64_t)k.sb) ^ (std::hash<uint64_t>()(k.inode_no) << 1);
+    }
+};
+
+//
 // This structure holds block_count (typically CACHE_SEGMENT_SIZE_IN_BLOCKS) of 512 blocks
 // of file data starting at starting_block * 512 byte offset relative to the beginning
 // of the file.
@@ -126,18 +149,23 @@ public:
     }
 };
 
-static std::unordered_map<uint64_t, struct file_cache *> file_cache_by_node_id;
+static std::unordered_map<rofs_cache_key, struct file_cache *, rofs_cache_key_hasher> global_file_cache;
 static mutex file_cache_lock;
 
 static struct file_cache *get_or_create_file_cache(struct rofs_inode *inode, struct rofs_super_block *sb) {
+    struct rofs_cache_key key = {
+        .inode_no = inode->inode_no,
+        .sb = sb
+    };
+
     // This is the only global mutex
     WITH_LOCK(file_cache_lock) {
-        auto cache_entry = file_cache_by_node_id.find(inode->inode_no);
-        if (cache_entry == file_cache_by_node_id.end()) {
+        auto cache_entry = global_file_cache.find(key);
+        if (cache_entry == global_file_cache.end()) {
             struct file_cache *new_cache = new file_cache();
             new_cache->inode = inode;
             new_cache->sb = sb;
-            file_cache_by_node_id.emplace(inode->inode_no, new_cache);
+            global_file_cache.emplace(key, new_cache);
             return new_cache;
         } else {
             return cache_entry->second;

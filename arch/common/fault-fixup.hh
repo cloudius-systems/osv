@@ -1,3 +1,5 @@
+#include <algorithm>
+
 struct fault_fixup {
     ulong pc;
     ulong divert;

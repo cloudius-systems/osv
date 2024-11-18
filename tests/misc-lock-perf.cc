@@ -9,6 +9,8 @@
 #include <osv/migration-lock.hh>
 #include <future>
 #include <chrono>
+#include <osv/elf.hh>
+OSV_ELF_MLOCK_OBJECT();
 
 using _clock = std::chrono::high_resolution_clock;
 

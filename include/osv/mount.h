@@ -148,7 +148,7 @@ void	 release_mp_dentries(struct mount *mp);
 
 __END_DECLS
 
-#ifdef __cplusplus
+#if defined(__cplusplus) && !defined(USE_C_INTERFACE)
 
 #include <vector>
 #include <string>

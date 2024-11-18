@@ -1,0 +1,9 @@
+/* Pretend like we are Linux 2.6 */
+LINUX_2.6 {
+    global:
+        __vdso_clock_gettime;
+        __vdso_gettimeofday;
+        __vdso_time;
+    local:
+        *;
+};

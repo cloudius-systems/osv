@@ -11,6 +11,8 @@
 #include <osv/trace.hh>
 #include <osv/wait_record.hh>
 #include <osv/export.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 TRACEPOINT(trace_condvar_wait, "%p", condvar *);
 TRACEPOINT(trace_condvar_wake_one, "%p", condvar *);

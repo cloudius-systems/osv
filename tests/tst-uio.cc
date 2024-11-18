@@ -73,9 +73,9 @@ int main()
     // keeps track of how much it copied. Unbelievably, we had such a bug
     // in OSv and didn't notice it for over a year.
 #ifdef __OSV__
-    const char* fn = "/tests/tst-regex.so";   // A file roughly 200KB in size.
+    const char* fn = "/tests/libdlext_test.so";   // A file roughly 200KB in size.
 #else
-    const char* fn = "build/release/tests/tst-regex.so";
+    const char* fn = "build/release/tests/libdlext_test.so";
 #endif
     int fd;
     expect_success(fd, open(fn, O_RDONLY));

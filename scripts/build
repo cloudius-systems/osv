@@ -96,6 +96,7 @@ if [[ "${arch-}" == "aarch64" && -d "build/downloaded_packages/aarch64/toolchain
 	export CROSS_PREFIX=aarch64-none-linux-gnu-
 fi
 
+make "${args[@]}" -f conf/Makefile -j1 config | tee build.out
 make "${args[@]}" ${stage1_args} | tee build.out
 # check exit status of make
 status=${PIPESTATUS[0]}
@@ -207,7 +208,7 @@ rofs|rofs_with_zfs|virtiofs)
 	manifest=bootfs_empty.manifest.skel
 	usrskel_arg="--usrskel usr_rofs.manifest.skel";;
 ramfs)
-	cp "$SRC"/static/etc/fstab fstab
+	cp "$SRC"/static/etc/fstab "$OUT"/fstab
 	manifest=$OUT/usr.manifest
 	usrskel_arg="--usrskel usr_ramfs.manifest.skel";;
 *)
@@ -339,6 +340,7 @@ create_rofs_disk() {
 	qemu-img resize ${raw_disk}.raw ${image_size}b >/dev/null 2>&1
 	dd if=rofs.img of=${raw_disk}.raw obs=$partition_offset seek=1 >/dev/null 2>&1
 	qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
+	qemu-img resize $qcow2_disk.img ${image_size}b >/dev/null 2>&1
 }
 
 create_zfs_filesystem() {
@@ -380,7 +382,7 @@ rofs)
 	fi
 	"$SRC"/scripts/gen-rofs-img.py -o rofs.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
 	partition_size=`stat --printf %s rofs.img`
-	image_size=$((partition_offset + partition_size))
+	image_size=$fs_size
 	create_rofs_disk ;;
 rofs_with_zfs)
 	# Create disk with rofs image on it 1st partition
@@ -401,7 +403,11 @@ rofs_with_zfs)
 ramfs|virtiofs)
 	# No need to create extra fs like above: ramfs is already created (as the
 	# bootfs) and virtio-fs is specified with virtiofsd at run time
-	qemu-img convert -f raw -O qcow2 loader.img usr.img ;;
+	image_size=$((partition_offset))
+	cp $bare $raw_disk.raw
+	"$SRC"/scripts/imgedit.py setpartition "-f raw ${raw_disk}.raw" 2 $partition_offset 0
+	qemu-img resize ${raw_disk}.raw ${image_size}b >/dev/null 2>&1
+	qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img ;;
 esac
 # Prepend the root fs type option to the command line (preserved by run.py)
 cmdline=$(cat cmdline)

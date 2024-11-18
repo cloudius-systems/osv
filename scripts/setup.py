@@ -72,6 +72,7 @@ class Fedora(object):
                 'java-1.8.0-openjdk',
                 'lua',
                 'lua-devel',
+                'glibc-static',
                  ]
     if arch == 'x86_64':
         packages = packages + [ 'gcc-c++-aarch64-linux-gnu' ]
@@ -143,7 +144,31 @@ class Fedora(object):
         ec2_post_install = None
         version = '35'
 
-    versions = [Fedora_27, Fedora_28, Fedora_29, Fedora_30, Fedora_31, Fedora_32, Fedora_33, Fedora_34, Fedora_35]
+    class Fedora_37(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '37'
+
+    class Fedora_38(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '38'
+
+    class Fedora_39(object):
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '39'
+
+    versions = [
+        Fedora_27, Fedora_28, Fedora_29, Fedora_30, Fedora_31, Fedora_32, Fedora_33, Fedora_34, Fedora_35, Fedora_37, Fedora_38, Fedora_39
+    ]
+
 
 class RHELbased(Fedora):
     name = ['Scientific Linux', 'NauLinux', 'Red Hat Enterprise Linux', 'Oracle Linux']

@@ -1,0 +1,31 @@
+mainmenu "OSv Configuration"
+
+menu "Compiler"
+  source "conf/kconfig/compiler"
+endmenu
+
+menu "Core Components"
+  source "conf/kconfig/core"
+endmenu
+
+menu "Threading"
+  source "conf/kconfig/threads"
+endmenu
+
+menu "Virtual File System"
+  source "conf/kconfig/fs"
+endmenu
+
+menu "Memory Management"
+  source "conf/kconfig/memory"
+endmenu
+
+menu "Networking Stack"
+  source "conf/kconfig/networking"
+endmenu
+
+menu "Tracepoints"
+  source "conf/kconfig/tracepoints"
+endmenu
+
+source "conf/profiles/$(arch)/kconfig"

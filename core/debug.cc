@@ -7,9 +7,6 @@
 
 #include <cstring>
 #include <cstdarg>
-#include <iostream>
-#include <iomanip>
-#include "boost/format.hpp"
 #include "drivers/console.hh"
 #include <osv/sched.hh>
 #include <osv/debug.hh>
@@ -47,6 +44,8 @@ bool logger::parse_configuration(void)
     add_tag("poll", logger_info);
     add_tag("dhcp", logger_info);
     add_tag("acpi", logger_error);
+    add_tag("ena", logger_debug);
+    add_tag("nvme", logger_debug);
 
     return (true);
 }
@@ -106,20 +105,6 @@ const char* logger::loggable_severity(logger_severity severity)
     }
 
     return (ret);
-}
-
-void logger::wrt(const char* tag, logger_severity severity, const boost::format& _fmt)
-{
-    if (this->is_filtered(tag, severity)) {
-        return;
-    }
-
-    unsigned long tid = sched::thread::current()->id();
-    _lock.lock();
-    debug(fmt("[%s/%d %s]: ") % loggable_severity(severity) % tid % tag);
-    debug(_fmt);
-    debug("\n");
-    _lock.unlock();
 }
 
 void logger::wrt(const char* tag, logger_severity severity, const char* _fmt, ...)
@@ -184,9 +169,12 @@ void debug(std::string str)
     }
 }
 
-void debug(const boost::format& fmt)
+void debugf(const char* fmt...)
 {
-    debug(fmt.str());
+    va_list ap;
+    va_start(ap, fmt);
+    debug(osv::vsprintf(fmt, ap));
+    va_end(ap);
 }
 
 void enable_verbose()
@@ -206,7 +194,7 @@ void flush_debug_buffer()
 
 extern "C" {
 
-    void debugf(const char *fmt, ...)
+    void debugff(const char *fmt, ...)
     {
         char msg[512];
 

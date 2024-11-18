@@ -20,6 +20,7 @@
 #include <boost/range/algorithm/transform.hpp>
 #include <osv/wait_record.hh>
 #include "libc/pthread.hh"
+#include <osv/kernel_config_core_namespaces.h>
 
 using namespace boost::range;
 
@@ -172,9 +173,13 @@ application::application(const std::string& command,
         elf::program *current_program;
 
         if (new_program) {
+#if CONF_core_namespaces
             this->new_program();
             clone_osv_environ();
             current_program = _program.get();
+#else
+            throw launch_error("Creating new program in a new namespace not supported: " + _command);
+#endif
         } else {
             // Do it in a separate branch because elf::get_program() would not
             // have found us yet in the previous branch.
@@ -217,12 +222,19 @@ application::application(const std::string& command,
         throw launch_error("Failed to load object: " + command);
     }
 
-    _main = _lib->lookup<int (int, char**)>(main_function_name.c_str());
-    if (!_main) {
-        _entry_point = reinterpret_cast<void(*)()>(_lib->entry_point());
-    }
-    if (!_entry_point && !_main) {
-        throw launch_error("Failed looking up main");
+    if (_lib->is_statically_linked_executable() || _lib->is_linux_dl()) {
+        //Augment auxiliary vector with extra entries like AT_PHDR, AT_ENTRY, etc
+        //that are necessary by a static executable to bootstrap itself
+        augment_auxv();
+    } else {
+        _main = _lib->lookup<int (int, char**)>(main_function_name.c_str());
+
+        if (!_main) {
+            _entry_point = reinterpret_cast<void(*)()>(_lib->entry_point());
+        }
+        if (!_entry_point && !_main) {
+            throw launch_error("Failed looking up main");
+        }
     }
 }
 
@@ -319,20 +331,27 @@ void application::main()
     elf::get_program()->init_library(_args.size(), _argv.get());
     sched::thread::current()->set_name(_command);
 
-    if (_main) {
-        run_main();
+    if (_lib->is_statically_linked_executable() || _lib->is_linux_dl()) {
+        run_entry_point(_lib->entry_point(), _args.size(), _argv.get(), _argv_size);
     } else {
-        // The application is expected not to initialize the environment in
-        // which it runs on its owns but to call __libc_start_main(). If that's
-        // not the case bad things may happen: constructors of global objects
-        // may be called twice, TLS may be overriden and the program may not
-        // received correct arguments, environment variables and auxiliary
-        // vector.
-        _entry_point();
+        if (_main) {
+            run_main();
+        } else {
+            // The application is expected not to initialize the environment in
+            // which it runs on its owns but to call __libc_start_main(). If that's
+            // not the case bad things may happen: constructors of global objects
+            // may be called twice, TLS may be overriden and the program may not
+            // received correct arguments, environment variables and auxiliary
+            // vector.
+            _entry_point();
+        }
     }
     // _entry_point() doesn't return
 }
 
+static u64 random_bytes[2];
+
+static constexpr int max_auxv_parameters_count = 8;
 void application::prepare_argv(elf::program *program)
 {
     // Prepare program_* variable used by the libc
@@ -359,16 +378,20 @@ void application::prepare_argv(elf::program *program)
         envcount++;
     }
 
-    // Load vdso library if available
-    int auxv_parameters_count = 2;
-    _libvdso = program->get_library("libvdso.so");
-    if (!_libvdso) {
-        auxv_parameters_count--;
-        WARN_ONCE("application::prepare_argv(): missing libvdso.so -> may prevent shared libraries specifically Golang ones from functioning\n");
+    // Initialize random bytes array so it can be passed as AT_RANDOM auxv vector
+    //TODO: Ideally we would love to use something better than the pseudo-random scheme below
+    //based on the time since epoch and rand_r(). But the getrandom() at this points does
+    //no always work and is also very slow. Once we figure out how to fix or improve it
+    //we may refine it with a better solution. For now it will do.
+    auto d = osv::clock::wall::now().time_since_epoch();
+    unsigned seed = std::chrono::duration_cast<std::chrono::nanoseconds>(d).count() % 1000000000;
+    for (unsigned idx = 0; idx < sizeof(random_bytes)/(sizeof(int)); idx++) {
+        reinterpret_cast<int*>(random_bytes)[idx] = rand_r(&seed);
     }
 
     // Allocate the continuous buffer for argv[] and envp[]
-    _argv.reset(new char*[_args.size() + 1 + envcount + 1 + sizeof(Elf64_auxv_t) * (auxv_parameters_count + 1)]);
+    _argv_size = _args.size() + 1 + envcount + 1 + sizeof(Elf64_auxv_t) * (max_auxv_parameters_count + 1);
+    _argv.reset(new char*[_argv_size]);
 
     // Fill the argv part of these buffers
     char *ab = _argv_buf.get();
@@ -388,21 +411,49 @@ void application::prepare_argv(elf::program *program)
     }
     contig_argv[_args.size() + 1 + envcount] = nullptr;
 
+    _auxv = reinterpret_cast<Elf64_auxv_t *>(&contig_argv[_args.size() + 1 + envcount + 1]);
+    _auxv_idx = 0;
 
     // Pass the VDSO library to the application.
-    Elf64_auxv_t* _auxv =
-        reinterpret_cast<Elf64_auxv_t *>(&contig_argv[_args.size() + 1 + envcount + 1]);
-    int auxv_idx = 0;
-    if (_libvdso) {
-        _auxv[auxv_idx].a_type = AT_SYSINFO_EHDR;
-        _auxv[auxv_idx++].a_un.a_val = reinterpret_cast<uint64_t>(_libvdso->base());
-    }
+    _auxv[_auxv_idx].a_type = AT_SYSINFO_EHDR;
+    _auxv[_auxv_idx++].a_un.a_val = reinterpret_cast<uint64_t>(program->get_libvdso_base());
 
-    _auxv[auxv_idx].a_type = AT_PAGESZ;
-    _auxv[auxv_idx++].a_un.a_val = sysconf(_SC_PAGESIZE);
+    _auxv[_auxv_idx].a_type = AT_PAGESZ;
+    _auxv[_auxv_idx++].a_un.a_val = sysconf(_SC_PAGESIZE);
 
-    _auxv[auxv_idx].a_type = AT_NULL;
-    _auxv[auxv_idx].a_un.a_val = 0;
+    _auxv[_auxv_idx].a_type = AT_MINSIGSTKSZ;
+    _auxv[_auxv_idx++].a_un.a_val = sysconf(_SC_MINSIGSTKSZ);
+
+    _auxv[_auxv_idx].a_type = AT_RANDOM;
+    _auxv[_auxv_idx++].a_un.a_val = reinterpret_cast<uint64_t>(random_bytes);
+
+    _auxv[_auxv_idx].a_type = AT_NULL;
+    _auxv[_auxv_idx].a_un.a_val = 0;
+}
+
+// Augments auxiliary vector with extra entries like AT_PHDR, AT_ENTRY, etc
+// that are necessary by a static executable to bootstrap itself.
+// Please note these entries are _lib/ELF specific unlike the entries
+// set by prepare_argv()
+void application::augment_auxv()
+{
+    //Let us verify there is space for 4 extra entries needed
+    assert(_auxv_idx + 4 == max_auxv_parameters_count);
+
+    _auxv[_auxv_idx].a_type = AT_PHDR;
+    _auxv[_auxv_idx++].a_un.a_val = reinterpret_cast<uint64_t>(_lib->headers_start());
+
+    _auxv[_auxv_idx].a_type = AT_PHENT;
+    _auxv[_auxv_idx++].a_un.a_val = _lib->headers_size();
+
+    _auxv[_auxv_idx].a_type = AT_PHNUM;
+    _auxv[_auxv_idx++].a_un.a_val = _lib->headers_count();
+
+    _auxv[_auxv_idx].a_type = AT_ENTRY;
+    _auxv[_auxv_idx++].a_un.a_val = reinterpret_cast<uint64_t>(_lib->entry_point());
+
+    _auxv[_auxv_idx].a_type = AT_NULL;
+    _auxv[_auxv_idx].a_un.a_val = 0;
 }
 
 void application::run_main()
@@ -417,7 +468,7 @@ void application::run_main()
     optind = old_optind;
 
     if (_return_code) {
-        debug("program %s returned %d\n", _command.c_str(), _return_code);
+        debugf("program %s returned %d\n", _command.c_str(), _return_code);
     }
 
     if(_post_main) {
@@ -489,6 +540,7 @@ pid_t application::get_main_thread_id() {
     return pthread_gettid_np(_thread);
 }
 
+#if CONF_core_namespaces
 // For simplicity, we will not reuse bits in the bitmap, since no destructor is
 // assigned to the program. In that case, a simple counter would do. But coding
 // this way is easy, and make this future extension simple.
@@ -513,6 +565,7 @@ void application::new_program()
     }
     abort("application::new_program() out of namespaces.\n");
 }
+#endif
 
 elf::program *application::program() {
     return _program.get();
@@ -546,11 +599,13 @@ void application::set_environ(const std::string &key, const std::string &value,
     // create a pointer to OSv's libc setenv()
     auto my_setenv = setenv;
 
+#if CONF_core_namespaces
     if (new_program) {
         // If we are starting a new program use the libenviron.so's setenv()
         my_setenv =
             _libenviron->lookup<int (const char *, const char *, int)>("setenv");
     }
+#endif
 
     // We do not need to strdup() since the libc will malloc() for us
     // Note that we merge in the existing environment variables by

@@ -67,12 +67,22 @@ int main(void)
     printf("Sizeof pthread_barrier_t    : %ld\n", sizeof(barrier));
     report("sizeof pthread_barrier_t is 32 bytes\n", sizeof(barrier) == 32);
     printf("Sizeof pthread_barrierattr_t: %ld\n", sizeof(attr));
+#ifdef __x86_64__
     report("sizeof pthread_barrierattr_t is 4 bytes\n", sizeof(attr) == 4);
+#else
+#ifdef __OSV__
+    report("sizeof pthread_barrierattr_t is 4 bytes\n", sizeof(attr) == 4);
+#else
+    report("sizeof pthread_barrierattr_t is 8 bytes\n", sizeof(attr) == 8);
+#endif
+#endif
 
+#ifdef __OSV__
     // Try an invalid initialization (-1 or 0 or a null pthread_barrier_t*)
     retval = pthread_barrier_init(NULL, NULL, 4);
     report("pthread_barrier_init (pthread_barrier_t* == NULL)",
            retval == EINVAL);
+#endif
     retval = pthread_barrier_init(&barrier, NULL, -1);
     report("pthread_barrier_init (count == -1)", retval == EINVAL);
     retval = pthread_barrier_init(&barrier, NULL, 0);

@@ -5,8 +5,8 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <sstream>
 #include <drivers/xenfront.hh>
+#include "drivers/blk-common.hh"
 #include <osv/device.h>
 #include <bsd/sys/geom/geom_disk.h>
 #include <osv/bio.h>
@@ -36,7 +36,7 @@ static struct devops xenfront_blk_devops {
     no_close,
     xenfront_blk_read,
     xenfront_blk_write,
-    no_ioctl,
+    blk_ioctl,
     no_devctl,
     multiplex_strategy,
 };
@@ -53,12 +53,10 @@ void disk_create(struct disk *dp, int version)
     struct device *dev = blkfront_from_softc(sc);
     xenfront::xenfront_driver *blkfront = xenfront::xenfront_driver::from_device(dev);
 
-    std::stringstream name; 
-    name << blkfront->get_name();
-    name << dp->d_unit;
-
     dev->driver = &xenfront_blk_driver;
-    device_register(dev, name.str().c_str(), D_BLK);
+
+    auto name = blkfront->get_name() + std::to_string(dp->d_unit);
+    device_register(dev, name.c_str(), D_BLK);
 
     struct xenfront_blk_priv *prv;
     prv = static_cast<struct xenfront_blk_priv*>(dev->private_data);

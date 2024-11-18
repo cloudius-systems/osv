@@ -16,8 +16,10 @@
 // this crashing or hanging.
 
 #include <sys/types.h>
+#include <sys/sysinfo.h>
 #include <thread>
 #include <iostream>
+#include <atomic>
 #ifdef __OSV__
 #include <osv/elf.hh>
 #include <osv/sched.hh>
@@ -129,7 +131,7 @@ int main(int ac, char** av)
     do_test(true);
     std::cerr << "Starting join tests...\n";
     do_test(false);
-    if (sched::cpus.size() >= 2) {
+    if (get_nprocs() >= 2) {
         std::cerr << "Starting thread-on-heap tests... (no load)\n";
         do_heap_test(false);
         std::cerr << "Starting thread-on-heap tests... (loaded)\n";

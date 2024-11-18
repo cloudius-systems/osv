@@ -19,6 +19,8 @@
 #include <osv/sampler.hh>
 #include <osv/trace-count.hh>
 
+#include <regex.h>
+
 using namespace httpserver::json;
 using namespace httpserver::json::trace_json;
 
@@ -35,9 +37,11 @@ extern "C" void __attribute__((visibility("default"))) httpserver_plugin_registe
  */
 void httpserver::api::trace::init(routes & routes)
 {
-    static auto matcher = [](const http::server::request & req) -> std::regex {
+    static auto matcher = [](const http::server::request & req) -> regex_t {
         const auto match = req.get_query_param("match");
-        return match.empty() ? std::regex(".*") : std::regex(match);
+        regex_t re;
+        regcomp(&re, match.empty() ? ".*" : match.c_str(), REG_NOSUB);
+        return re;
     };
 
     struct jstrace_event_info : public TraceEventInfo {
@@ -54,7 +58,8 @@ void httpserver::api::trace::init(routes & routes)
 
     trace_json::getTraceEventStatus.set_handler([](const_req req) {
         std::vector<jstrace_event_info> res;
-        for (auto & e : ::trace::get_event_info(matcher(req))) {
+        const auto re = matcher(req);
+        for (auto & e : ::trace::get_event_info(&re)) {
             res.emplace_back(e);
         }
         return res;
@@ -63,7 +68,8 @@ void httpserver::api::trace::init(routes & routes)
         std::vector<jstrace_event_info> res;
         const auto enabled = str2bool(req.get_query_param("enabled"));
         const auto backtrace = str2bool(req.get_query_param("backtrace"));
-        for (auto & e : ::trace::set_event_state(matcher(req), enabled, backtrace)) {
+        const auto re = matcher(req);
+        for (auto & e : ::trace::set_event_state(&re, enabled, backtrace)) {
             res.emplace_back(e);
         }
         return res;

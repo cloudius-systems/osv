@@ -8,7 +8,6 @@
 #ifndef DRIVERS_CONSOLE_HH
 #define DRIVERS_CONSOLE_HH
 
-#include <boost/format.hpp>
 #include "console-driver.hh"
 
 namespace console {

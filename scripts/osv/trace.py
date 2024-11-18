@@ -33,7 +33,7 @@ class BacktraceFormatter:
 
         frames = list(debug.resolve_all(self.resolver, (x - 1 for x in backtrace if x)))
 
-        while frames[0].name and (frames[0].name.startswith("tracepoint") or frames[0].filename.endswith("trace.hh")):
+        while frames[0].name and (frames[0].name.startswith("tracepoint") or (frames[0].filename and frames[0].filename.endswith("trace.hh"))):
             frames.pop(0)
 
         if self.multiline:

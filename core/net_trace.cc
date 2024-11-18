@@ -10,7 +10,13 @@
 #include <vector>
 #include <iterator>
 
-class mbuf_iterator : public std::iterator<std::input_iterator_tag, char, size_t> {
+class mbuf_iterator {
+public:
+    using iterator_category = std::input_iterator_tag;
+    using value_type = char;
+    using difference_type = size_t;
+    using pointer = char*;
+    using reference = char&;
 private:
     struct mbuf* _m;
     size_t _pos;
@@ -73,7 +79,11 @@ public:
         return !(*this == other);
     }
 
+#if (__cplusplus >= 201703L)
+    friend constexpr size_t std::distance<mbuf_iterator>(mbuf_iterator, mbuf_iterator);
+#else
     friend size_t std::distance<mbuf_iterator>(mbuf_iterator, mbuf_iterator);
+#endif
 };
 
 namespace std {

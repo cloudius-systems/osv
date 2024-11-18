@@ -37,6 +37,7 @@
 #include <sys/param.h>
 #include <sys/statvfs.h>
 #include <sys/stat.h>
+#include <sys/statx.h>
 #include <sys/time.h>
 #include <sys/sendfile.h>
 
@@ -248,6 +249,26 @@ int __open64_2(const char *file, int flags)
     return open64(file, flags);
 }
 
+// Same missing-mode protection for openat(). Note that this is NOT the
+// same as openat2()!
+extern "C" OSV_LIBC_API
+int __openat_2(int dirfd, const char *pathname, int flags)
+{
+    if (flags & O_CREAT) {
+        abort("__openat_2 called for open mode 0%o with O_CREAT", flags);
+    }
+    return openat(dirfd, pathname, flags, 0);
+}
+
+extern "C" OSV_LIBC_API
+int __openat64_2(int dirfd, const char *pathname, int flags)
+{
+    if (flags & O_CREAT) {
+        abort("__openat64_2 called for open mode 0%o with O_CREAT", flags);
+    }
+    return openat64(dirfd, pathname, flags, 0);
+}
+
 OSV_LIBC_API
 int creat(const char *pathname, mode_t mode)
 {
@@ -314,6 +335,13 @@ int mknod(const char *pathname, mode_t mode, dev_t dev)
     return __xmknod(0, pathname, mode, &dev);
 }
 
+OSV_LIBC_API
+int mknodat(int dirfd, const char *pathname, mode_t mode, dev_t dev)
+{
+    return vfs_fun_at2(dirfd, pathname, [mode, dev](const char *path) {
+        return mknod(path, mode, dev);
+    });
+}
 
 TRACEPOINT(trace_vfs_lseek, "%d 0x%x %d", int, off_t, int);
 TRACEPOINT(trace_vfs_lseek_ret, "0x%x", off_t);
@@ -631,7 +659,12 @@ int __fxstatat(int ver, int dirfd, const char *pathname, struct stat *st,
     }
 
     if (pathname[0] == '/' || dirfd == AT_FDCWD) {
-        return stat(pathname, st);
+        if (flags & AT_SYMLINK_NOFOLLOW) {
+            return lstat(pathname, st);
+        }
+        else {
+            return stat(pathname, st);
+        }
     }
     // If AT_EMPTY_PATH and pathname is an empty string, fstatat() operates on
     // dirfd itself, and in that case it doesn't have to be a directory.
@@ -1063,7 +1096,7 @@ int renameat(int olddirfd, const char *oldpath,
     } else {
         char absolute_newpath[PATH_MAX];
         auto error = vfs_fun_at(newdirfd, newpath, [&absolute_newpath](const char *absolute_path) {
-            strcpy(absolute_newpath, absolute_path);
+            strlcpy(absolute_newpath, absolute_path, PATH_MAX);
             return 0;
         });
 
@@ -1075,6 +1108,17 @@ int renameat(int olddirfd, const char *oldpath,
             });
         }
     }
+}
+
+extern "C" OSV_LIBC_API
+int renameat2(int olddirfd, const char *oldpath,
+              int newdirfd, const char *newpath, unsigned int flags)
+{
+    if (flags) {
+        errno = EINVAL;
+        return -1;
+    }
+    return renameat(olddirfd, oldpath, newdirfd, newpath);
 }
 
 TRACEPOINT(trace_vfs_chdir, "\"%s\"", const char*);
@@ -1201,6 +1245,40 @@ int link(const char *oldpath, const char *newpath)
     return -1;
 }
 
+OSV_LIBC_API
+int linkat(int olddirfd, const char *oldpath, int newdirfd, const char *newpath, int flags)
+{
+    if (flags & AT_SYMLINK_FOLLOW) {
+        WARN_ONCE("linkat() does not support AT_SYMLINK_FOLLOW\n");
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (!oldpath || !newpath) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (newpath[0] == '/' || newdirfd == AT_FDCWD) {
+        return vfs_fun_at2(olddirfd, oldpath, [newpath](const char *path) {
+            return link(path, newpath);
+        });
+    } else {
+        char absolute_newpath[PATH_MAX];
+        auto error = vfs_fun_at(newdirfd, newpath, [&absolute_newpath](const char *absolute_path) {
+            strlcpy(absolute_newpath, absolute_path, PATH_MAX);
+            return 0;
+        });
+
+        if (error) {
+            return error;
+        } else {
+            return vfs_fun_at2(olddirfd, oldpath, [absolute_newpath](const char *path) {
+                return link(path, absolute_newpath);
+            });
+        }
+    }
+}
 
 TRACEPOINT(trace_vfs_symlink, "oldpath=%s, newpath=%s", const char*, const char*);
 TRACEPOINT(trace_vfs_symlink_ret, "");
@@ -1321,42 +1399,6 @@ int stat(const char *pathname, struct stat *st)
 {
     return __xstat(1, pathname, st);
 }
-
-// Our <sys/stat.h> (from Musl) doesn't yet declare statx(), struct statx,
-// or the various STATX_* constants. So we need to do it here for now.
-// Eventually, when we update Musl or modify it manually to include these
-// definitions, they should be removed from here:
-struct statx_timestamp
-{
-    int64_t tv_sec;
-    uint32_t tv_nsec;
-    int32_t statx_timestamp_pad1[1];
-};
-struct statx {
-    uint32_t stx_mask;
-    uint32_t stx_blksize;
-    uint64_t stx_attributes;
-    uint32_t stx_nlink;
-    uint32_t stx_uid;
-    uint32_t stx_gid;
-    uint16_t stx_mode;
-    uint16_t __statx_pad1[1];
-    uint64_t stx_ino;
-    uint64_t stx_size;
-    uint64_t stx_blocks;
-    uint64_t stx_attributes_mask;
-    struct statx_timestamp stx_atime;
-    struct statx_timestamp stx_btime;
-    struct statx_timestamp stx_ctime;
-    struct statx_timestamp stx_mtime;
-    uint32_t stx_rdev_major;
-    uint32_t stx_rdev_minor;
-    uint32_t stx_dev_major;
-    uint32_t stx_dev_minor;
-    uint64_t __statx_pad2[14];
-};
-extern "C" int statx(int dirfd, const char* pathname, int flags, unsigned int mask, struct statx *buf);
-#define STATX_BASIC_STATS 0x000007ffU
 
 OSV_LIBC_API
 int statx(int dirfd, const char* pathname, int flags, unsigned int mask,
@@ -1578,7 +1620,7 @@ char *getcwd(char *path, size_t size)
 }
 
 TRACEPOINT(trace_vfs_dup, "%d", int);
-TRACEPOINT(trace_vfs_dup_ret, "\"%s\"", int);
+TRACEPOINT(trace_vfs_dup_ret, "%d", int);
 TRACEPOINT(trace_vfs_dup_err, "%d", int);
 /*
  * Duplicate a file descriptor
@@ -1673,7 +1715,7 @@ int dup2(int oldfd, int newfd)
 #define SETFL (O_APPEND | O_ASYNC | O_DIRECT | O_NOATIME | O_NONBLOCK)
 
 TRACEPOINT(trace_vfs_fcntl, "%d %d 0x%x", int, int, int);
-TRACEPOINT(trace_vfs_fcntl_ret, "\"%s\"", int);
+TRACEPOINT(trace_vfs_fcntl_ret, "%d", int);
 TRACEPOINT(trace_vfs_fcntl_err, "%d", int);
 
 extern "C" OSV_LIBC_API
@@ -2083,7 +2125,22 @@ int utimensat(int dirfd, const char *pathname, const struct timespec times[2], i
 {
     trace_vfs_utimensat(pathname);
 
-    auto error = sys_utimensat(dirfd, pathname, times, flags);
+    auto error = sys_utimensat(dirfd, pathname, times, flags, false);
+    if (error) {
+        trace_vfs_utimensat_err(error);
+        errno = error;
+        return -1;
+    }
+
+    trace_vfs_utimensat_ret();
+    return 0;
+}
+
+int utimensat4(int dirfd, const char *pathname, const struct timespec times[2], int flags)
+{
+    trace_vfs_utimensat(pathname);
+
+    auto error = sys_utimensat(dirfd, pathname, times, flags, true);
     if (error) {
         trace_vfs_utimensat_err(error);
         errno = error;
@@ -2321,6 +2378,27 @@ ssize_t sendfile(int out_fd, int in_fd, off_t *_offset, size_t count)
 
 #undef sendfile64
 LFS64(sendfile);
+
+extern "C" OSV_LIBC_API
+ssize_t copy_file_range(int fd_in, off_t *off_in,
+                        int fd_out, off_t *off_out,
+                        size_t len, unsigned int flags)
+{
+    //Non-zero flags are rejected according to the manual
+    if (flags != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    //We do not support writing to a file at specified offset because
+    //we delegate to sendfile() which assumes current position of the output
+    //file
+    if (off_out) {
+        WARN("copy_file_range() does not support non-zero off_out\n");
+        errno = EINVAL;
+        return -1;
+    }
+    return sendfile(fd_out, fd_in, off_in, len);
+}
 
 NO_SYS(OSV_LIBC_API int fchmodat(int dirfd, const char *pathname, mode_t mode, int flags));
 
@@ -2738,6 +2816,10 @@ void vfs_exit(void)
 {
     /* Free up main_task (stores cwd data) resources */
     replace_cwd(main_task, nullptr, []() { return 0; });
+    /* Unmount file systems mounted with '--mount-fs=...' boot option */
+    for (auto m: opt_mount_fs) {
+        sys_umount(m.mnt_dir);
+    }
     /* Unmount all file systems */
     unmount_rootfs();
     /* Finish with the bio layer */

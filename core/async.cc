@@ -9,7 +9,6 @@
 #include <osv/percpu.hh>
 #include <osv/sched.hh>
 #include <osv/trace.hh>
-#include <osv/printf.hh>
 
 #include <osv/irqlock.hh>
 #include <osv/preempt-lock.hh>
@@ -19,6 +18,8 @@
 #include <boost/intrusive/parent_from_member.hpp>
 #include <osv/timer-set.hh>
 #include <osv/aligned_new.hh>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 namespace async {
 
@@ -95,7 +96,7 @@ class async_worker {
 public:
     async_worker(sched::cpu* cpu)
         : _thread(sched::thread::make(std::bind(&async_worker::run, this),
-            sched::thread::attr().pin(cpu).name(osv::sprintf("async_worker%d", cpu->id))))
+            sched::thread::attr().pin(cpu).name(std::string("async_worker") + std::to_string(cpu->id))))
         , _timer(*_thread)
         , _cpu(cpu)
     {

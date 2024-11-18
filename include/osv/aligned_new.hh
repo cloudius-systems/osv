@@ -32,6 +32,21 @@ T* aligned_new(Args&&... args) {
     return new(p) T(std::forward<Args>(args)...);
 }
 
+// Memory allocated in aligned_new with aligned_alloc() should be freed with
+// free(), not with delete. Although in our actual implemention those are
+// really the same thing, gcc is sometimes able to warn about std::unique_ptr<>
+// being given a pointer created by aligned_new() but the default deleter is
+// "delete".  In this case, use the following alternative deleter.
+// For example:
+//    auto x = std::unique_ptr<T, aligned_new_deleter<T>(aligned_new<T>(...))
+template<typename T>
+struct aligned_new_deleter {
+    void operator()(T* p) const {
+	p->~T();
+	free(p);
+    }
+};
+
 // Similar function for allocating an array of objects. But here we have
 // a problem: While an object created with aligned_new<>() can be deleted by
 // an ordinary "delete" (as explained above), here, an array allocated by an

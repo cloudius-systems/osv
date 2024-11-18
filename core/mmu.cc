@@ -10,7 +10,6 @@
 #include "processor.hh"
 #include <osv/debug.hh>
 #include "exceptions.hh"
-#include <boost/format.hpp>
 #include <string.h>
 #include <iterator>
 #include "libc/signal.hh"
@@ -30,18 +29,17 @@
 #include <numeric>
 #include <set>
 
+#include <osv/kernel_config_memory_debug.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_memory_jvm_balloon.h>
+
 // FIXME: Without this pragma, we get a lot of warnings that I don't know
 // how to explain or fix. For now, let's just ignore them :-(
 #pragma GCC diagnostic ignored "-Wstringop-overflow"
 
 extern void* elf_start;
 extern size_t elf_size;
-
-namespace {
-
-typedef boost::format fmt;
-
-}
 
 extern const char text_start[], text_end[];
 
@@ -59,7 +57,7 @@ namespace mmu {
 #endif
 
 struct vma_range_compare {
-    bool operator()(const vma_range& a, const vma_range& b) {
+    bool operator()(const vma_range& a, const vma_range& b) const {
         return a.start() < b.start();
     }
 };
@@ -70,7 +68,7 @@ std::set<vma_range, vma_range_compare> vma_range_set;
 rwlock_t vma_range_set_mutex;
 
 struct linear_vma_compare {
-    bool operator()(const linear_vma* a, const linear_vma* b) {
+    bool operator()(const linear_vma* a, const linear_vma* b) const {
         return a->_virt_addr < b->_virt_addr;
     }
 };
@@ -173,7 +171,7 @@ phys virt_to_phys(void *virt)
 #endif
     }
 
-#if CONF_debug_memory
+#if CONF_memory_debug
     if (virt > debug_base) {
         return virt_to_phys_pt(virt);
     }
@@ -1066,9 +1064,11 @@ ulong evacuate(uintptr_t start, uintptr_t end)
             auto& dead = *i--;
             auto size = dead.operate_range(unpopulate<account_opt::yes>(dead.page_ops()));
             ret += size;
+#if CONF_memory_jvm_balloon
             if (dead.has_flags(mmap_jvm_heap)) {
                 memory::stats::on_jvm_heap_free(size);
             }
+#endif
             vma_list.erase(dead);
             WITH_LOCK(vma_range_set_mutex.for_write()) {
                 vma_range_set.erase(vma_range(&dead));
@@ -1547,19 +1547,28 @@ void vma::fault(uintptr_t addr, exception_frame *ef)
     auto hp_start = align_up(_range.start(), huge_page_size);
     auto hp_end = align_down(_range.end(), huge_page_size);
     size_t size;
-    if (!has_flags(mmap_jvm_balloon|mmap_small) && (hp_start <= addr && addr < hp_end)) {
+    if (!has_flags(
+#if CONF_memory_jvm_balloon
+mmap_jvm_balloon|
+#endif
+mmap_small) && (hp_start <= addr && addr < hp_end)) {
         addr = align_down(addr, huge_page_size);
         size = huge_page_size;
     } else {
         size = page_size;
     }
 
-    auto total = populate_vma<account_opt::yes>(this, (void*)addr, size,
+#if CONF_memory_jvm_balloon
+    auto total =
+#endif
+    populate_vma<account_opt::yes>(this, (void*)addr, size,
         mmu::is_page_fault_write(ef->get_error()));
 
+#if CONF_memory_jvm_balloon
     if (_flags & mmap_jvm_heap) {
         memory::stats::on_jvm_heap_alloc(total);
     }
+#endif
 }
 
 page_allocator* vma::page_ops()
@@ -1594,6 +1603,7 @@ error anon_vma::sync(uintptr_t start, uintptr_t end)
     return no_error();
 }
 
+#if CONF_memory_jvm_balloon
 // Balloon is backed by no pages, but in the case of partial copy, we may have
 // to back some of the pages. For that and for that only, we initialize a page
 // allocator. It is fine in this case to use the noinit allocator. Since this
@@ -1806,6 +1816,7 @@ ulong map_jvm(unsigned char* jvm_addr, size_t size, size_t align, balloon_ptr b)
     }
     return 0;
 }
+#endif
 
 file_vma::file_vma(addr_range range, unsigned perm, unsigned flags, fileref file, f_offset offset, page_allocator* page_ops)
     : vma(range, perm, flags | mmap_small, !(flags & mmap_shared), page_ops)
@@ -1993,15 +2004,15 @@ linear_vma::~linear_vma() {
 }
 
 std::string sysfs_linear_maps() {
-    std::ostringstream os;
+    std::string output;
     WITH_LOCK(linear_vma_set_mutex.for_read()) {
         for(auto *vma : linear_vma_set) {
             char mattr = vma->_mem_attr == mmu::mattr::normal ? 'n' : 'd';
-            osv::fprintf(os, "%18x %18x %12x rwxp %c %s\n",
+            output += osv::sprintf("%18p %18p %12x rwxp %c %s\n",
                 vma->_virt_addr, (void*)vma->_phys_addr, vma->_size, mattr, vma->_name.c_str());
         }
     }
-    return os.str();
+    return output;
 }
 
 void linear_map(void* _virt, phys addr, size_t size, const char* name,
@@ -2094,25 +2105,30 @@ error mincore(const void *addr, size_t length, unsigned char *vec)
 
 std::string procfs_maps()
 {
-    std::ostringstream os;
+    std::string output;
     WITH_LOCK(vma_list_mutex.for_read()) {
         for (auto& vma : vma_list) {
             char read    = vma.perm() & perm_read  ? 'r' : '-';
             char write   = vma.perm() & perm_write ? 'w' : '-';
             char execute = vma.perm() & perm_exec  ? 'x' : '-';
             char priv    = 'p';
-            osv::fprintf(os, "%x-%x %c%c%c%c ", vma.start(), vma.end(), read, write, execute, priv);
+            output += osv::sprintf("%lx-%lx %c%c%c%c ", vma.start(), vma.end(), read, write, execute, priv);
             if (vma.flags() & mmap_file) {
                 const file_vma &f_vma = static_cast<file_vma&>(vma);
                 unsigned dev_id_major = major(f_vma.file_dev_id());
                 unsigned dev_id_minor = minor(f_vma.file_dev_id());
-                osv::fprintf(os, "%08x %02x:%02x %ld %s\n", f_vma.offset(), dev_id_major, dev_id_minor, f_vma.file_inode(), f_vma.file()->f_dentry->d_path);
+                output += osv::sprintf("%08x %02x:%02x %ld %s\n", f_vma.offset(), dev_id_major, dev_id_minor, f_vma.file_inode(), f_vma.file()->f_dentry->d_path);
             } else {
-                osv::fprintf(os, "00000000 00:00 0\n");
+                output += osv::sprintf("00000000 00:00 0\n");
             }
         }
     }
-    return os.str();
+    return output;
 }
 
+}
+
+extern "C" bool is_linear_mapped(const void *addr)
+{
+    return addr >= mmu::phys_mem;
 }

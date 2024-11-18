@@ -75,19 +75,33 @@ TEST(STRING_TEST, strsignal) {
   //ASSERT_STREQ("Real-time signal 14", strsignal(SIGRTMIN + 14));
 
   // Errors.
+#ifdef __OSV__
   ASSERT_STREQ("Unknown signal", strsignal(-1)); // Too small.
   ASSERT_STREQ("Unknown signal", strsignal(0)); // Still too small.
   ASSERT_STREQ("Unknown signal", strsignal(1234)); // Too large.
+#else
+  ASSERT_STREQ("Unknown signal -1", strsignal(-1)); // Too small.
+  ASSERT_STREQ("Unknown signal 0", strsignal(0)); // Still too small.
+  ASSERT_STREQ("Unknown signal 1234", strsignal(1234)); // Too large.
+#endif
 }
 
 static void* ConcurrentStrSignalFn(void*) {
+#ifdef __OSV__
   bool equal = (strcmp("Unknown signal", strsignal(2002)) == 0);
+#else
+  bool equal = (strcmp("Unknown signal 2002", strsignal(2002)) == 0);
+#endif
   return reinterpret_cast<void*>(equal);
 }
 
 TEST(STRING_TEST, strsignal_concurrent) {
   const char* strsignal1001 = strsignal(1001);
+#ifdef __OSV__
   ASSERT_STREQ("Unknown signal", strsignal1001);
+#else
+  ASSERT_STREQ("Unknown signal 1001", strsignal1001);
+#endif
 
   pthread_t t;
   ASSERT_EQ(0, pthread_create(&t, nullptr, ConcurrentStrSignalFn, nullptr));
@@ -95,5 +109,9 @@ TEST(STRING_TEST, strsignal_concurrent) {
   ASSERT_EQ(0, pthread_join(t, &result));
   ASSERT_TRUE(static_cast<bool>(result));
 
+#ifdef __OSV__
   ASSERT_STREQ("Unknown signal", strsignal1001);
+#else
+  ASSERT_STREQ("Unknown signal 1001", strsignal1001);
+#endif
 }

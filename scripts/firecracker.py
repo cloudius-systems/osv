@@ -135,8 +135,7 @@ class ApiClient(object):
     def configure_machine(self, vcpu_count, mem_size_in_mb):
         machine_config = {
             'vcpu_count': vcpu_count,
-            'mem_size_mib': mem_size_in_mb,
-            'ht_enabled' : False
+            'mem_size_mib': mem_size_in_mb
         }
         if self.socket_less:
             self.firecracker_config['machine-config'] = machine_config
@@ -246,7 +245,7 @@ def start_firecracker_with_no_api(firecracker_path, firecracker_config_json):
 def get_memory_size_in_mb(options):
     memory_in_mb = 128
     if options.memsize:
-        regex = re.search('(\d+[MG])', options.memsize)
+        regex = re.search('(\\d+[MG])', options.memsize)
         if len(regex.groups()) > 0:
             mem_size = regex.group(1)
             memory_in_mb = int(mem_size[:-1])

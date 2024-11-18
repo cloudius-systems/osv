@@ -20,7 +20,12 @@
 # at $HOME/.capstan/packages.
 #
 # The script accepts two types of the arguments - name of an OSv app or module found under OSv
-# apps or modules subdirectory or name of predefined set of standard packages.
+# apps or modules subdirectory OR name of predefined set of standard packages. This argument
+# must be passed as the very first one.
+#
+# In addition the script also accepts various kernel build configuration parameters
+# like 'conf_*=*', 'fs=*' and 'drivers_profile=*' as well as name of the capstan OSv loader
+# image 'loader_image=*' which defaults to 'osv-loader'.
 #
 # If an app or module name passed in, the script does following:
 # 1. Calls ./script/build with appropriate arguments to build and export corresponding
@@ -41,6 +46,21 @@ then
   echo "Usage: build-capstan-mpm-packages <OSv_app_or_module>|<package_group>"
   exit 1
 fi
+
+machine=$(uname -m)
+loader_image="osv-loader"
+
+# Let us collect the kernel configuration parameters like conf_*=*, drivers_profile=*, fs=* and loader_image=*
+declare -a kernel_conf_args
+for arg in $*
+do
+  if [[ "$arg" =~ ^conf_.* ]] || [[ "$arg" =~ ^drivers_profile=.* ]] || [[ "$arg" =~ ^fs=.* ]]; then
+    kernel_conf_args+=("$arg")
+  elif [[ "$arg" =~ ^loader_image=.* ]]; then
+    loader_image=${arg:13}
+  fi
+done
+echo "Loader_image=[$loader_image]"
 
 OSV_ROOT=$(realpath "$(dirname $0)/..")
 OSV_BUILD=$OSV_ROOT/build/release
@@ -72,10 +92,10 @@ build_osv_image() {
 
   echo "-------------------------------------"
   echo "- Building OSv image: "
-  echo "  ./scripts/build -j4 image=$image export=$export_mode usrskel=$usrskel"
+  echo "  ./scripts/build -j$(nproc) image=$image export=$export_mode usrskel=$usrskel ${kernel_conf_args[@]}"
   echo "-------------------------------------"
 
-  cd "$OSV_ROOT" && ./scripts/build -j4 image="$image" export="$export_mode" usrskel="$usrskel"
+  cd "$OSV_ROOT" && ./scripts/build -j$(nproc) image="$image" export="$export_mode" usrskel="$usrskel" "${kernel_conf_args[@]}"
 
   RET_VAL=$?
   if [[ "$RET_VAL" -ne 0 ]]; then
@@ -178,7 +198,12 @@ build_package() {
   cp -a $OSV_ROOT/build/export/. $package_dir
 
   cd $package_dir && $CAPSTAN package build
-  mv $package_dir/*.mpm $OUTPUT
+  for mpm in $package_dir/*.mpm
+  do
+    local mpm_filename=$(basename $mpm)
+    mv $mpm $OUTPUT/$mpm_filename.$machine
+    ln -fs $mpm_filename.$machine $OUTPUT/$mpm_filename
+  done
 
   echo "-------------------------------------"
   echo "- Built package $app_or_module_name"
@@ -226,25 +251,30 @@ build_osv_image_loader_and_bootstrap_package() {
   # Build osv.loader and files that will make up bootstrap package
   build_osv_image empty all default
 
-  #Copy loader.img as osv-loader.qemu
-  mkdir -p $CAPSTAN_LOCAL_REPO/repository/osv-loader/
-  cp -a $OSV_BUILD/loader.img $CAPSTAN_LOCAL_REPO/repository/osv-loader/osv-loader.qemu
+  #Copy loader.img as $loader_image.qemu
+  mkdir -p $CAPSTAN_LOCAL_REPO/repository/$loader_image/
+  cp -a $OSV_BUILD/loader.img $CAPSTAN_LOCAL_REPO/repository/$loader_image/$loader_image.qemu.$machine
+  ln -sf $loader_image.qemu.$machine $CAPSTAN_LOCAL_REPO/repository/$loader_image/$loader_image.qemu
+  #Copy loader.elf
+  cp -a $OSV_BUILD/loader-stripped.elf $CAPSTAN_LOCAL_REPO/repository/$loader_image/$loader_image.elf.$machine
+  ln -sf $loader_image.elf.$machine $CAPSTAN_LOCAL_REPO/repository/$loader_image/$loader_image.elf
+
   determine_platform
-  cat << EOF > $CAPSTAN_LOCAL_REPO/repository/osv-loader/index.yaml
+  cat << EOF > $CAPSTAN_LOCAL_REPO/repository/$loader_image/index.yaml
 format_version: "1"
 version: "$OSV_VERSION"
 created: $(date +'%Y-%m-%d %H:%M')
-description: "OSv kernel"
+description: "OSv kernel - $loader_image"
 platform: "$PLATFORM"
 EOF
-  #Copy loader.elf
-  mkdir -p $CAPSTAN_LOCAL_REPO/repository/osv-kernel/
-  cp -a $OSV_BUILD/loader-stripped.elf $CAPSTAN_LOCAL_REPO/repository/osv-kernel/osv-kernel.elf
-  cp $CAPSTAN_LOCAL_REPO/repository/osv-loader/index.yaml $CAPSTAN_LOCAL_REPO/repository/osv-kernel/index.yaml
-
   # Create bootstrap package
   prepare_package empty
   build_package empty
+
+  # Create ZFS library package
+  build_osv_image zfs selected none
+  prepare_package zfs
+  build_package zfs
 }
 
 build_httpserver_api_package() {
@@ -276,16 +306,16 @@ build_unit_tests_package() {
   #First build common tests
   build_osv_image "java-base,java-non-isolated,java-cmd,java-tests,tests,dl_tests,libz" selected none fs=zfs
   cp "$OSV_ROOT/modules/tests/common.manifest" "$OSV_ROOT/build/release/append.manifest"
-  cd "$OSV_ROOT" && ./scripts/build -j4 image="java-base,java-non-isolated,java-cmd,java-tests,dl_tests,libz" export=selected usrskel=none --append-manifest
+  cd "$OSV_ROOT" && ./scripts/build -j$(nproc) image="java-base,java-non-isolated,java-cmd,java-tests,dl_tests,libz" export=selected usrskel=none --append-manifest
   build_mpm "common-tests"
   #Build ZFS tests
   cp "$OSV_ROOT/modules/tests/fs.manifest" "$OSV_ROOT/build/release/append.manifest"
-  cd "$OSV_ROOT" && ./scripts/build -j4 image="empty" export=selected usrskel=none --append-manifest
+  cd "$OSV_ROOT" && ./scripts/build -j$(nproc) image="empty" export=selected usrskel=none --append-manifest
   build_mpm "zfs-tests"
   #Build ROFS tests
-  cd "$OSV_ROOT" && ./scripts/build -j4 image="tests" export=selected usrskel=none fs=rofs
+  cd "$OSV_ROOT" && ./scripts/build -j$(nproc) image="tests" export=selected usrskel=none fs=rofs
   cp "$OSV_ROOT/modules/tests/fs.manifest" "$OSV_ROOT/build/release/append.manifest"
-  cd "$OSV_ROOT" && ./scripts/build -j4 image="empty" export=selected usrskel=none --append-manifest
+  cd "$OSV_ROOT" && ./scripts/build -j$(nproc) image="empty" export=selected usrskel=none --append-manifest
   build_mpm "rofs-tests"
 }
 
@@ -330,13 +360,18 @@ build_kernel_and_standard_osv_modules() {
   build_run_java_package
   build_and_publish_mpm golang
 
-  build_httpserver_api_package
-  build_httpserver_monitoring_package
   build_http_server_tests_package
   build_http_server_https_tests_package
 
   ASK=0
   build_and_publish_mpm libz
+}
+
+build_httpserver_packages() {
+  build_httpserver_api_package
+  build_httpserver_html5_gui_package
+  build_httpserver_html5_cli_package
+  build_httpserver_monitoring_package
 }
 
 build_java_jdk_packages() {
@@ -406,6 +441,9 @@ case "$1" in
   kernel_and_modules)
     echo "Building kernel and standard modules ..."
     build_kernel_and_standard_osv_modules;;
+  httpserver)
+    echo "Building httpserver modules ..."
+    build_httpserver_packages;;
   monitoring)
     echo "Building httpserver monitoring mpm..."
     build_httpserver_monitoring_package;;

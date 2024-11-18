@@ -2,14 +2,19 @@
 Docker files intended to help setup OSv build environment.
 There are two versions of it - one based on Ubuntu and another on Fedora.
 
-Build container image (default, based on Fedora)
+Build container image (default, based on Ubuntu)
 ```
-docker build -t osv/builder -f Dockerfile.builder .
+docker build -t osv/builder -f Dockerfile.builder-ubuntu-base .
 ```
 
-Build container image for specific version of linux distribution and git repo owner (if forker)
+Build container image for specific Ubuntu/Fedora version
 ```
-docker build -t osv/builder-ubuntu-20.04 -f Dockerfile.builder --build-arg DIST="ubuntu-20.04" --build-arg GIT_ORG_OR_USER=a_user .
+docker build -t osv/builder-fedora-38 -f Dockerfile.builder-fedora-base --build-arg DIST_VERSION="38" .
+```
+
+Build container image for different branch or GitHub repository (if forked)
+```
+docker build -t osv/builder-fork -f Dockerfile.builder-fedora-base --build-arg GIT_ORG_OR_USER=gh_user . --build-arg GIT_BRANCH=branchname
 ```
 
 Run container

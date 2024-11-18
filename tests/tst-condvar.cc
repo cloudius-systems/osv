@@ -21,10 +21,10 @@ void assert_idle(condvar *c)
 
 int main(int argc, char **argv)
 {
-    debug("Running condition variable tests\n");
+    debugf("Running condition variable tests\n");
 
     // Test trivial single-thread tests
-    debug("test1\n");
+    debugf("test1\n");
     condvar cond = CONDVAR_INITIALIZER;
     assert_idle(&cond);
     // See that wake for condition variable nobody wait on do not cause havoc
@@ -33,7 +33,7 @@ int main(int argc, char **argv)
     assert_idle(&cond);
 
     // A basic two-thread test - one thread waits for the other
-    debug("test2\n");
+    debugf("test2\n");
     mutex m;
     int res=0;
     sched::thread *t1 = sched::thread::make([&cond,&m,&res] {
@@ -64,7 +64,7 @@ int main(int argc, char **argv)
     // and a second condition variable) another thread wakes them all
     // with wake_all or wake_one.
     constexpr int N = 50;
-    debug("test3, with %d threads\n", N);
+    debugf("test3, with %d threads\n", N);
     int ready = 0;
     condvar done = CONDVAR_INITIALIZER;
     sched::thread *threads[N];
@@ -103,7 +103,7 @@ int main(int argc, char **argv)
             done.wait(&m);
         }
         m.unlock();
-        debug("waking all\n");
+        debugf("waking all\n");
         m.lock();
         assert (ready >= N);
         cond.wake_all();
@@ -113,7 +113,7 @@ int main(int argc, char **argv)
             done.wait(&m);
         }
         m.unlock();
-        debug("waking one by one\n");
+        debugf("waking one by one\n");
         m.lock();
         assert (ready >= 2*N);
         m.unlock();
@@ -141,7 +141,7 @@ int main(int argc, char **argv)
     }
     assert_idle(&cond);
 
-    debug("Measuring unwaited wake_all (one thread): ");
+    debugf("Measuring unwaited wake_all (one thread): ");
     int iterations = 100000000;
     condvar cv;
     auto start = std::chrono::high_resolution_clock::now();
@@ -149,13 +149,13 @@ int main(int argc, char **argv)
         cv.wake_all();
     }
     auto end = std::chrono::high_resolution_clock::now();
-    debug ("%d ns\n", std::chrono::duration_cast<std::chrono::nanoseconds>
+    debugf("%d ns\n", std::chrono::duration_cast<std::chrono::nanoseconds>
         (end-start).count()/iterations);
 
 
     unsigned int nthreads = 2;
     if (sched::cpus.size() >= nthreads) {
-        debug("Measuring unwaited wake_all (two threads): ");
+        debugf("Measuring unwaited wake_all (two threads): ");
         iterations = 100000000;
         sched::thread *threads2[nthreads];
         std::atomic<u64> time(0);
@@ -175,10 +175,10 @@ int main(int argc, char **argv)
             threads2[i]->join();
             delete threads2[i];
         }
-        debug ("%d ns\n", time/iterations/nthreads);
+        debugf("%d ns\n", time/iterations/nthreads);
     }
 
 
-    debug("condvar tests succeeded\n");
+    debugf("condvar tests succeeded\n");
     return 0;
 }

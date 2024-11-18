@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013-2014 Cloudius Systems, Ltd.
+ * Copyright (C) 2018-2024 Waldemar Kozaczuk
  *
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
@@ -8,12 +9,12 @@
 // linux syscalls
 
 #include <osv/debug.hh>
-#include <boost/format.hpp>
 #include <osv/sched.hh>
 #include <osv/mutex.h>
 #include <osv/waitqueue.hh>
 #include <osv/stubbing.hh>
 #include <osv/export.h>
+#include <osv/trace.hh>
 #include <memory>
 
 #include <syscall.h>
@@ -33,16 +34,36 @@
 #include <sys/types.h>
 #include <sys/socket.h>
 #include <sys/stat.h>
+#include <sys/statx.h>
 #include <fcntl.h>
 #include <sys/ioctl.h>
 #include <sys/file.h>
 #include <sys/unistd.h>
 #include <sys/random.h>
 #include <sys/vfs.h>
+#include <sys/uio.h>
+#include <sys/epoll.h>
+#include <sys/sysinfo.h>
+#include <sys/sendfile.h>
+#include <sys/prctl.h>
+#include <sys/timerfd.h>
+#include <sys/resource.h>
+#include <sys/shm.h>
+#include <termios.h>
+#include <poll.h>
+#ifdef __x86_64__
+#include "tls-switch.hh"
+#endif
 
 #include <unordered_map>
 
 #include <musl/src/internal/ksigaction.h>
+
+#include <osv/kernel_config_core_epoll.h>
+#include <osv/kernel_config_networking_stack.h>
+#include <osv/kernel_config_core_syscall.h>
+
+#include <osv/syscalls_config.h>
 
 extern "C" int eventfd2(unsigned int, int);
 
@@ -61,14 +82,6 @@ extern "C" OSV_LIBC_API long gettid()
 // was missing. So the performance of this implementation is not critical.
 static std::unordered_map<void*, waitqueue> queues;
 static mutex queues_mutex;
-enum {
-    FUTEX_WAIT           = 0,
-    FUTEX_WAKE           = 1,
-    FUTEX_WAIT_BITSET    = 9,
-    FUTEX_PRIVATE_FLAG   = 128,
-    FUTEX_CLOCK_REALTIME = 256,
-    FUTEX_CMD_MASK       = ~(FUTEX_PRIVATE_FLAG|FUTEX_CLOCK_REALTIME),
-};
 
 #define FUTEX_BITSET_MATCH_ANY  0xffffffff
 
@@ -146,6 +159,7 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
     }
 }
 
+#if CONF_core_syscall
 // We're not supposed to export the get_mempolicy() function, as this
 // function is not part of glibc (which OSv emulates), but part of a
 // separate library libnuma, which the user can simply load. libnuma's
@@ -157,6 +171,7 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
 #define MPOL_F_ADDR         (1<<1)
 #define MPOL_F_MEMS_ALLOWED (1<<2)
 
+#if CONF_syscall_get_mempolicy
 static long get_mempolicy(int *policy, unsigned long *nmask,
         unsigned long maxnode, void *addr, int flags)
 {
@@ -180,7 +195,9 @@ static long get_mempolicy(int *policy, unsigned long *nmask,
     }
     return 0;
 }
+#endif
 
+#if CONF_syscall_set_mempolicy
 static long set_mempolicy(int policy, unsigned long *nmask,
         unsigned long maxnode)
 {
@@ -189,12 +206,14 @@ static long set_mempolicy(int policy, unsigned long *nmask,
     // Therefore we implement this as noop, ignore all arguments and return success
     return 0;
 }
+#endif
 
+#if CONF_syscall_sys_sched_getaffinity
 // As explained in the sched_getaffinity(2) manual page, the interface of the
 // sched_getaffinity() function is slightly different than that of the actual
 // system call we need to implement here.
-#define __NR_sched_getaffinity_syscall __NR_sched_getaffinity
-static int sched_getaffinity_syscall(
+#define __NR_sys_sched_getaffinity __NR_sched_getaffinity
+static int sys_sched_getaffinity(
         pid_t pid, unsigned len, unsigned long *mask)
 {
         int ret = sched_getaffinity(
@@ -212,32 +231,43 @@ static int sched_getaffinity_syscall(
         }
         return ret;
 }
+#endif
 
-#define __NR_sched_setaffinity_syscall __NR_sched_setaffinity
-static int sched_setaffinity_syscall(
+#if CONF_syscall_sys_sched_setaffinity
+#define __NR_sys_sched_setaffinity __NR_sched_setaffinity
+static int sys_sched_setaffinity(
         pid_t pid, unsigned len, unsigned long *mask)
 {
     return sched_setaffinity(
             pid, len, reinterpret_cast<cpu_set_t *>(mask));
 }
+#endif
 
+#define __NR_long_mmap __NR_mmap
+
+#define __NR_long_shmat __NR_shmat
 // Only void* return value of mmap is type casted, as syscall returns long.
 long long_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
     return (long) mmap(addr, length, prot, flags, fd, offset);
 }
-#define __NR_long_mmap __NR_mmap
 
+long long_shmat(int shmid, const void *shmaddr, int shmflg) {
+    return (long) shmat(shmid, shmaddr, shmflg);
+}
+#endif
 
-#define SYSCALL0(fn) case (__NR_##fn): return fn()
+#define SYSCALL0(fn) case (__NR_##fn): do { long ret = fn(); trace_syscall_##fn(ret); return ret; } while (0)
 
-#define SYSCALL1(fn, __t1)                  \
-        case (__NR_##fn): do {              \
-        va_list args;                       \
-        __t1 arg1;                          \
-        va_start(args, number);             \
-        arg1 = va_arg(args, __t1);          \
-        va_end(args);                       \
-        return fn(arg1);                    \
+#define SYSCALL1(fn, __t1)             \
+        case (__NR_##fn): do {         \
+        va_list args;                  \
+        __t1 arg1;                     \
+        va_start(args, number);        \
+        arg1 = va_arg(args, __t1);     \
+        va_end(args);                  \
+        auto ret = fn(arg1);           \
+        trace_syscall_##fn(ret, arg1); \
+        return ret;                    \
         } while (0)
 
 #define SYSCALL2(fn, __t1, __t2)            \
@@ -249,77 +279,88 @@ long long_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t off
         arg1 = va_arg(args, __t1);          \
         arg2 = va_arg(args, __t2);          \
         va_end(args);                       \
-        return fn(arg1, arg2);              \
+        auto ret = fn(arg1, arg2);          \
+        trace_syscall_##fn(ret, arg1, arg2);\
+        return ret;                         \
         } while (0)
 
-#define SYSCALL3(fn, __t1, __t2, __t3)          \
-        case (__NR_##fn): do {                  \
-        va_list args;                           \
-        __t1 arg1;                              \
-        __t2 arg2;                              \
-        __t3 arg3;                              \
-        va_start(args, number);                 \
-        arg1 = va_arg(args, __t1);              \
-        arg2 = va_arg(args, __t2);              \
-        arg3 = va_arg(args, __t3);              \
-        va_end(args);                           \
-        return fn(arg1, arg2, arg3);            \
+#define SYSCALL3(fn, __t1, __t2, __t3)             \
+        case (__NR_##fn): do {                     \
+        va_list args;                              \
+        __t1 arg1;                                 \
+        __t2 arg2;                                 \
+        __t3 arg3;                                 \
+        va_start(args, number);                    \
+        arg1 = va_arg(args, __t1);                 \
+        arg2 = va_arg(args, __t2);                 \
+        arg3 = va_arg(args, __t3);                 \
+        va_end(args);                              \
+        auto ret = fn(arg1, arg2, arg3);           \
+        trace_syscall_##fn(ret, arg1, arg2, arg3); \
+        return ret;                                \
         } while (0)
 
-#define SYSCALL4(fn, __t1, __t2, __t3, __t4)    \
-        case (__NR_##fn): do {                  \
-        va_list args;                           \
-        __t1 arg1;                              \
-        __t2 arg2;                              \
-        __t3 arg3;                              \
-        __t4 arg4;                              \
-        va_start(args, number);                 \
-        arg1 = va_arg(args, __t1);              \
-        arg2 = va_arg(args, __t2);              \
-        arg3 = va_arg(args, __t3);              \
-        arg4 = va_arg(args, __t4);              \
-        va_end(args);                           \
-        return fn(arg1, arg2, arg3, arg4);      \
+#define SYSCALL4(fn, __t1, __t2, __t3, __t4)             \
+        case (__NR_##fn): do {                           \
+        va_list args;                                    \
+        __t1 arg1;                                       \
+        __t2 arg2;                                       \
+        __t3 arg3;                                       \
+        __t4 arg4;                                       \
+        va_start(args, number);                          \
+        arg1 = va_arg(args, __t1);                       \
+        arg2 = va_arg(args, __t2);                       \
+        arg3 = va_arg(args, __t3);                       \
+        arg4 = va_arg(args, __t4);                       \
+        va_end(args);                                    \
+        auto ret = fn(arg1, arg2, arg3, arg4);           \
+        trace_syscall_##fn(ret, arg1, arg2, arg3, arg4); \
+        return ret;                                      \
         } while (0)
 
-#define SYSCALL5(fn, __t1, __t2, __t3, __t4, __t5)    \
-        case (__NR_##fn): do {                  \
-        va_list args;                           \
-        __t1 arg1;                              \
-        __t2 arg2;                              \
-        __t3 arg3;                              \
-        __t4 arg4;                              \
-        __t5 arg5;                              \
-        va_start(args, number);                 \
-        arg1 = va_arg(args, __t1);              \
-        arg2 = va_arg(args, __t2);              \
-        arg3 = va_arg(args, __t3);              \
-        arg4 = va_arg(args, __t4);              \
-        arg5 = va_arg(args, __t5);              \
-        va_end(args);                           \
-        return fn(arg1, arg2, arg3, arg4, arg5);\
+#define SYSCALL5(fn, __t1, __t2, __t3, __t4, __t5)             \
+        case (__NR_##fn): do {                                 \
+        va_list args;                                          \
+        __t1 arg1;                                             \
+        __t2 arg2;                                             \
+        __t3 arg3;                                             \
+        __t4 arg4;                                             \
+        __t5 arg5;                                             \
+        va_start(args, number);                                \
+        arg1 = va_arg(args, __t1);                             \
+        arg2 = va_arg(args, __t2);                             \
+        arg3 = va_arg(args, __t3);                             \
+        arg4 = va_arg(args, __t4);                             \
+        arg5 = va_arg(args, __t5);                             \
+        va_end(args);                                          \
+        auto ret = fn(arg1, arg2, arg3, arg4, arg5);           \
+        trace_syscall_##fn(ret, arg1, arg2, arg3, arg4, arg5); \
+        return ret;                                            \
         } while (0)
 
-#define SYSCALL6(fn, __t1, __t2, __t3, __t4, __t5, __t6)        \
-        case (__NR_##fn): do {                                  \
-        va_list args;                                           \
-        __t1 arg1;                                              \
-        __t2 arg2;                                              \
-        __t3 arg3;                                              \
-        __t4 arg4;                                              \
-        __t5 arg5;                                              \
-        __t6 arg6;                                              \
-        va_start(args, number);                                 \
-        arg1 = va_arg(args, __t1);                              \
-        arg2 = va_arg(args, __t2);                              \
-        arg3 = va_arg(args, __t3);                              \
-        arg4 = va_arg(args, __t4);                              \
-        arg5 = va_arg(args, __t5);                              \
-        arg6 = va_arg(args, __t6);                              \
-        va_end(args);                                           \
-        return fn(arg1, arg2, arg3, arg4, arg5, arg6);          \
+#define SYSCALL6(fn, __t1, __t2, __t3, __t4, __t5, __t6)             \
+        case (__NR_##fn): do {                                       \
+        va_list args;                                                \
+        __t1 arg1;                                                   \
+        __t2 arg2;                                                   \
+        __t3 arg3;                                                   \
+        __t4 arg4;                                                   \
+        __t5 arg5;                                                   \
+        __t6 arg6;                                                   \
+        va_start(args, number);                                      \
+        arg1 = va_arg(args, __t1);                                   \
+        arg2 = va_arg(args, __t2);                                   \
+        arg3 = va_arg(args, __t3);                                   \
+        arg4 = va_arg(args, __t4);                                   \
+        arg5 = va_arg(args, __t5);                                   \
+        arg6 = va_arg(args, __t6);                                   \
+        va_end(args);                                                \
+        auto ret = fn(arg1, arg2, arg3, arg4, arg5, arg6);           \
+        trace_syscall_##fn(ret, arg1, arg2, arg3, arg4, arg5, arg6); \
+        return ret;                                                  \
         } while (0)
 
+#if CONF_core_syscall
 int rt_sigaction(int sig, const struct k_sigaction * act, struct k_sigaction * oact, size_t sigsetsize)
 {
     struct sigaction libc_act, libc_oact, *libc_act_p = nullptr;
@@ -351,21 +392,35 @@ int rt_sigprocmask(int how, sigset_t * nset, sigset_t * oset, size_t sigsetsize)
     return sigprocmask(how, nset, oset);
 }
 
-#define __NR_sys_exit __NR_exit
-
-static int sys_exit(int ret)
+int rt_sigtimedwait(const sigset_t *set, siginfo_t *info, const struct timespec *timeout, size_t sigsetsize)
 {
-    exit(ret);
-    return 0;
+    if (!timeout || (!timeout->tv_sec && !timeout->tv_nsec)) {
+        return sigwaitinfo(set, info);
+    } else {
+        errno = ENOSYS;
+        return -1;
+    }
 }
 
+#if CONF_syscall_sys_exit
+#define __NR_sys_exit __NR_exit
+static int sys_exit(int ret)
+{
+    sched::thread::current()->exit();
+    return 0;
+}
+#endif
+
+#if CONF_syscall_sys_exit_group
 #define __NR_sys_exit_group __NR_exit_group
 static int sys_exit_group(int ret)
 {
     exit(ret);
     return 0;
 }
+#endif
 
+#if CONF_syscall_sys_getcwd
 #define __NR_sys_getcwd __NR_getcwd
 static long sys_getcwd(char *buf, unsigned long size)
 {
@@ -379,6 +434,138 @@ static long sys_getcwd(char *buf, unsigned long size)
     }
     return strlen(ret) + 1;
 }
+#endif
+
+#if CONF_syscall_sys_getcpu
+#define __NR_sys_getcpu __NR_getcpu
+static long sys_getcpu(unsigned int *cpu, unsigned int *node, void *tcache)
+{
+    if (cpu) {
+        *cpu = sched::cpu::current()->id;
+    }
+
+    if (node) {
+       *node = 0;
+    }
+
+    return 0;
+}
+#endif
+
+#if CONF_syscall_sys_set_robust_list
+#define __NR_sys_set_robust_list __NR_set_robust_list
+static long sys_set_robust_list(struct robust_list_head *head, size_t len)
+{
+    sched::thread::current()->set_robust_list(head);
+    return 0;
+}
+#endif
+
+#if CONF_syscall_sys_set_tid_address
+#define __NR_sys_set_tid_address __NR_set_tid_address
+static long sys_set_tid_address(int *tidptr)
+{
+    sched::thread::current()->set_clear_id(tidptr);
+    return sched::thread::current()->id();
+}
+#endif
+
+#define CLONE_THREAD           0x00010000
+#define CLONE_CHILD_SETTID     0x01000000
+#define CLONE_PARENT_SETTID    0x00100000
+#define CLONE_CHILD_CLEARTID   0x00200000
+
+extern sched::thread *clone_thread(unsigned long flags, void *child_stack, unsigned long newtls);
+
+#define __NR_sys_clone __NR_clone
+#ifdef __x86_64__
+int sys_clone(unsigned long flags, void *child_stack, int *ptid, int *ctid, unsigned long newtls)
+#endif
+#ifdef __aarch64__
+int sys_clone(unsigned long flags, void *child_stack, int *ptid, unsigned long newtls, int *ctid)
+#endif
+{   //
+    //We only support "cloning" of threads so fork() would fail but pthread_create() should
+    //succeed
+    if (!(flags & CLONE_THREAD)) {
+       errno = ENOSYS;
+       return -1;
+    }
+    //
+    //Validate we have non-empty stack
+    if (!child_stack) {
+       errno = EINVAL;
+       return -1;
+    }
+    //
+    //Validate ptid and ctid which we would be setting down if requested by these flags
+    if (((flags & CLONE_PARENT_SETTID) && !ptid) ||
+        ((flags & CLONE_CHILD_SETTID) && !ctid) ||
+        ((flags & CLONE_SETTLS) && !newtls)) {
+       errno = EFAULT;
+       return -1;
+    }
+
+    sched::thread *t = clone_thread(flags, child_stack, newtls);
+
+    //
+    //Store the child thread ID at the location pointed to by ptid
+    if ((flags & CLONE_PARENT_SETTID)) {
+       *ptid = t->id();
+    }
+    //
+    //Store the child thread ID at the location pointed to by ctid
+    if ((flags & CLONE_CHILD_SETTID)) {
+       *ctid = t->id();
+    }
+    //
+    //Clear (zero) the child thread ID at the location pointed to by child_tid
+    //in child memory when the child exits, and do a wakeup on the futex at that address
+    //See thread::complete()
+    if ((flags & CLONE_CHILD_CLEARTID)) {
+       t->set_clear_id(ctid);
+    }
+    t->start();
+
+    //
+    //The manual of sigprocmask has this to say about clone:
+    //"Each of the threads in a process has its own signal mask.
+    // A child created via fork(2) inherits a copy of its parent's
+    // signal mask; the signal mask is preserved across execve(2)."
+    //TODO: Does it mean new thread should inherit signal mask of the parent?
+    return t->id();
+}
+
+struct clone_args {
+     u64 flags;
+     u64 pidfd;
+     u64 child_tid;
+     u64 parent_tid;
+     u64 exit_signal;
+     u64 stack;
+     u64 stack_size;
+     u64 tls;
+};
+
+
+#if CONF_syscall_sys_clone3
+#define __NR_sys_clone3 435
+static int sys_clone3(struct clone_args *args, size_t size)
+{
+    return sys_clone(
+       args->flags,
+       reinterpret_cast<void*>(args->stack) + args->stack_size,
+       reinterpret_cast<int*>(args->parent_tid),
+#ifdef __x86_64__
+       reinterpret_cast<int*>(args->child_tid),
+       args->tls);
+#endif
+#ifdef __aarch64__
+       args->tls,
+       reinterpret_cast<int*>(args->child_tid));
+#endif
+}
+#endif
 
 #define __NR_sys_ioctl __NR_ioctl
 //
@@ -386,28 +573,86 @@ static long sys_getcwd(char *buf, unsigned long size)
 // to Linux signature of this system call. The underlying ioctl function which we delegate to
 // is variadic and takes slightly different paremeters and therefore cannot be used directly
 // as other system call implementations can.
+#define KERNEL_NCCS 19
+
+// This structure is exactly what glibc expects to receive when calling ioctl()
+// with TCGET and is defined in sysdeps/unix/sysv/linux/kernel_termios.h.
+struct __kernel_termios {
+    tcflag_t c_iflag;
+    tcflag_t c_oflag;
+    tcflag_t c_cflag;
+    tcflag_t c_lflag;
+    cc_t c_line;
+    cc_t c_cc[KERNEL_NCCS];
+};
+
+#if CONF_syscall_sys_ioctl
 static int sys_ioctl(unsigned int fd, unsigned int command, unsigned long arg)
 {
-    return ioctl(fd, command, arg);
+    if (command == TCGETS) {
+       //The termios structure is slightly different from the version of it used
+       //by the syscall so let us translate it manually
+       termios _termios;
+       auto ret = ioctl(fd, command, &_termios);
+       if (!ret) {
+           __kernel_termios *ktermios = reinterpret_cast<__kernel_termios*>(arg);
+           ktermios->c_iflag = _termios.c_iflag;
+           ktermios->c_oflag = _termios.c_oflag;
+           ktermios->c_cflag = _termios.c_cflag;
+           ktermios->c_lflag = _termios.c_lflag;
+           ktermios->c_line = _termios.c_line;
+           memcpy(&ktermios->c_cc[0], &_termios.c_cc[0], KERNEL_NCCS * sizeof (cc_t));
+       }
+       return ret;
+    } else {
+       return ioctl(fd, command, arg);
+    }
 }
+#endif
 
+struct sys_sigset {
+    const sigset_t *ss;     /* Pointer to signal set */
+    size_t          ss_len; /* Size (in bytes) of object pointed to by 'ss' */
+};
+
+#if CONF_syscall_pselect6
 static int pselect6(int nfds, fd_set *readfds, fd_set *writefds,
-                   fd_set *exceptfds, const struct timespec *timeout_ts,
-                   void *sig)
+                   fd_set *exceptfds, struct timespec *timeout_ts,
+                   sys_sigset* sigmask)
 {
     // As explained in the pselect(2) manual page, the system call pselect accepts
     // pointer to a structure holding pointer to sigset_t and its size which is different
-    // the glibc version of pselect(). For now we are delaying implementation of this call
-    // scenario and raising an error when such call happens.
-    if(sig) {
-        WARN_ONCE("pselect6(): unimplemented with not-null sigmask\n");
-        errno = ENOSYS;
-        return -1;
+    // from the glibc version of pselect().
+    // On top of this, the Linux pselect6() system call modifies its timeout argument
+    // unlike the glibc pselect() function. Our implementation below is to great extent
+    // similar to that of pselect() in core/select.cc
+    sigset_t origmask;
+    struct timeval timeout;
+
+    if (timeout_ts) {
+        timeout.tv_sec = timeout_ts->tv_sec;
+        timeout.tv_usec = timeout_ts->tv_nsec / 1000;
     }
 
-    return pselect(nfds, readfds, writefds, exceptfds, timeout_ts, NULL);
-}
+    if (sigmask) {
+        sigprocmask(SIG_SETMASK, sigmask->ss, &origmask);
+    }
 
+    auto ret = select(nfds, readfds, writefds, exceptfds,
+                                        timeout_ts == NULL? NULL : &timeout);
+    if (sigmask) {
+        sigprocmask(SIG_SETMASK, &origmask, NULL);
+    }
+
+    if (timeout_ts) {
+        timeout_ts->tv_sec = timeout.tv_sec;
+        timeout_ts->tv_nsec = timeout.tv_usec * 1000;
+    }
+    return ret;
+}
+#endif
+
+#if CONF_syscall_tgkill
 static int tgkill(int tgid, int tid, int sig)
 {
     //
@@ -423,9 +668,37 @@ static int tgkill(int tgid, int tid, int sig)
     errno = ENOSYS;
     return -1;
 }
+#endif
 
 #define __NR_sys_getdents64 __NR_getdents64
 extern "C" ssize_t sys_getdents64(int fd, void *dirp, size_t count);
+
+extern long arch_prctl(int code, unsigned long addr);
+
+#if CONF_syscall_sys_brk
+#define __NR_sys_brk __NR_brk
+void *get_program_break();
+static long sys_brk(void *addr)
+{
+    // The brk syscall is almost the same as the brk() function
+    // except it needs to return new program break on success
+    // and old one on failure
+    void *old_break = get_program_break();
+    if (!brk(addr)) {
+        return reinterpret_cast<long>(get_program_break());
+    } else {
+        return reinterpret_cast<long>(old_break);
+    }
+}
+#endif
+
+#define __NR_utimensat4 __NR_utimensat
+extern int utimensat4(int dirfd, const char *pathname, const struct timespec times[2], int flags);
+#endif
+TRACEPOINT(trace_syscall_futex, "%d <= %p %d %d %p %p %d", int, int *, int, int, const struct timespec *, int *, uint32_t);
+#if CONF_core_syscall
+#include <osv/syscall_tracepoints.cc>
+#endif
 
 OSV_LIBC_API long syscall(long number, ...)
 {
@@ -434,89 +707,10 @@ OSV_LIBC_API long syscall(long number, ...)
     SCOPE_LOCK(fpu);
 
     switch (number) {
-#ifdef SYS_open
-    SYSCALL2(open, const char *, int);
-#endif
-    SYSCALL3(read, int, char *, size_t);
-    SYSCALL1(uname, struct utsname *);
-    SYSCALL3(write, int, const void *, size_t);
-    SYSCALL0(gettid);
-    SYSCALL2(clock_gettime, clockid_t, struct timespec *);
-    SYSCALL2(clock_getres, clockid_t, struct timespec *);
     SYSCALL6(futex, int *, int, int, const struct timespec *, int *, uint32_t);
-    SYSCALL1(close, int);
-    SYSCALL2(pipe2, int *, int);
-    SYSCALL1(epoll_create1, int);
-    SYSCALL2(eventfd2, unsigned int, int);
-    SYSCALL4(epoll_ctl, int, int, int, struct epoll_event *);
-#ifdef SYS_epoll_wait
-    SYSCALL4(epoll_wait, int, struct epoll_event *, int, int);
+#if CONF_core_syscall
+#include <osv/syscalls.cc>
 #endif
-    SYSCALL4(accept4, int, struct sockaddr *, socklen_t *, int);
-    SYSCALL3(connect, int, struct sockaddr *, socklen_t);
-    SYSCALL5(get_mempolicy, int *, unsigned long *, unsigned long, void *, int);
-    SYSCALL3(sched_getaffinity_syscall, pid_t, unsigned, unsigned long *);
-    SYSCALL6(long_mmap, void *, size_t, int, int, int, off_t);
-    SYSCALL2(munmap, void *, size_t);
-    SYSCALL4(rt_sigaction, int, const struct k_sigaction *, struct k_sigaction *, size_t);
-    SYSCALL4(rt_sigprocmask, int, sigset_t *, sigset_t *, size_t);
-    SYSCALL1(sys_exit, int);
-    SYSCALL2(sigaltstack, const stack_t *, stack_t *);
-#ifdef SYS_select
-    SYSCALL5(select, int, fd_set *, fd_set *, fd_set *, struct timeval *);
-#endif
-    SYSCALL3(madvise, void *, size_t, int);
-    SYSCALL0(sched_yield);
-    SYSCALL3(mincore, void *, size_t, unsigned char *);
-    SYSCALL4(openat, int, const char *, int, mode_t);
-    SYSCALL3(socket, int, int, int);
-    SYSCALL5(setsockopt, int, int, int, char *, int);
-    SYSCALL5(getsockopt, int, int, int, char *, unsigned int *);
-    SYSCALL3(getpeername, int, struct sockaddr *, unsigned int *);
-    SYSCALL3(bind, int, struct sockaddr *, int);
-    SYSCALL2(listen, int, int);
-    SYSCALL3(sys_ioctl, unsigned int, unsigned int, unsigned long);
-#ifdef SYS_stat
-    SYSCALL2(stat, const char *, struct stat *);
-#endif
-    SYSCALL2(fstat, int, struct stat *);
-    SYSCALL3(getsockname, int, struct sockaddr *, socklen_t *);
-    SYSCALL6(sendto, int, const void *, size_t, int, const struct sockaddr *, socklen_t);
-    SYSCALL3(sendmsg, int, const struct msghdr *, int);
-    SYSCALL6(recvfrom, int, void *, size_t, int, struct sockaddr *, socklen_t *);
-    SYSCALL3(recvmsg, int, struct msghdr *, int);
-    SYSCALL3(dup3, int, int, int);
-    SYSCALL2(flock, int, int);
-    SYSCALL4(pwrite64, int, const void *, size_t, off_t);
-    SYSCALL1(fdatasync, int);
-    SYSCALL6(pselect6, int, fd_set *, fd_set *, fd_set *, const struct timespec *, void *);
-    SYSCALL3(fcntl, int, int, int);
-    SYSCALL4(pread64, int, void *, size_t, off_t);
-    SYSCALL2(ftruncate, int, off_t);
-    SYSCALL1(fsync, int);
-    SYSCALL5(epoll_pwait, int, struct epoll_event *, int, int, const sigset_t*);
-    SYSCALL3(getrandom, char *, size_t, unsigned int);
-    SYSCALL2(nanosleep, const struct timespec*, struct timespec *);
-    SYSCALL4(fstatat, int, const char *, struct stat *, int);
-    SYSCALL1(sys_exit_group, int);
-    SYSCALL2(sys_getcwd, char *, unsigned long);
-    SYSCALL4(readlinkat, int, const char *, char *, size_t);
-    SYSCALL0(getpid);
-    SYSCALL3(set_mempolicy, int, unsigned long *, unsigned long);
-    SYSCALL3(sched_setaffinity_syscall, pid_t, unsigned, unsigned long *);
-#ifdef SYS_mkdir
-    SYSCALL2(mkdir, char*, mode_t);
-#endif
-    SYSCALL3(mkdirat, int, char*, mode_t);
-    SYSCALL3(tgkill, int, int, int);
-    SYSCALL0(getgid);
-    SYSCALL0(getuid);
-    SYSCALL3(lseek, int, off_t, int);
-    SYSCALL2(statfs, const char *, struct statfs *);
-    SYSCALL3(unlinkat, int, const char *, int);
-    SYSCALL3(symlinkat, const char *, int, const char *);
-    SYSCALL3(sys_getdents64, int, void *, size_t);
-    SYSCALL4(renameat, int, const char *, int, const char *);
     }
 
     debug_always("syscall(): unimplemented system call %d\n", number);
@@ -542,6 +736,11 @@ extern "C" long syscall_wrapper(long number, long p1, long p2, long p3, long p4,
 extern "C" long syscall_wrapper(long p1, long p2, long p3, long p4, long p5, long p6, long number)
 #endif
 {
+#ifdef __x86_64__
+    // Switch TLS register if necessary
+    arch::tls_switch tls_switch;
+#endif
+
     int errno_backup = errno;
     // syscall and function return value are in rax
     auto ret = syscall(number, p1, p2, p3, p4, p5, p6);
@@ -551,4 +750,9 @@ extern "C" long syscall_wrapper(long p1, long p2, long p3, long p4, long p5, lon
         return result;
     }
     return ret;
+}
+
+extern "C" int is_selinux_enabled()
+{
+    return 0;
 }

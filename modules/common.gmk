@@ -18,6 +18,10 @@ makedir = $(call very-quiet, mkdir -p $(dir $@))
 
 autodepend = -MD -MT $@ -MP
 
+ifeq ($(conf_cxx_level),)
+conf_cxx_level=gnu++11
+endif
+
 # By default, detect HOST_CXX's architecture - x64 or aarch64.
 # But also allow the user to specify a cross-compiled target architecture
 # by setting either "ARCH" or "arch" in the make command line, or the "ARCH"

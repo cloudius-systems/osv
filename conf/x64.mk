@@ -1,1 +1,1 @@
-arch-cflags = -msse2
+conf_compiler_cflags = -msse2

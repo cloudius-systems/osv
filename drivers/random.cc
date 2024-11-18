@@ -205,7 +205,7 @@ random_device::~random_device()
 void randomdev_init()
 {
     new random_device();
-    debug("random: <%s> initialized\n", random_adaptor->ident);
+    debugf("random: <%s> initialized\n", random_adaptor->ident);
 }
 
 }

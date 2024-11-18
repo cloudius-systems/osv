@@ -4,6 +4,7 @@ module_out := $(out)/modules/java-tests
 export module_out
 
 include ../java-base/common.gmk
+include $(out)/gen/config/kernel_conf.mk
 
 javac_version := $(shell javac -version 2>&1 | grep -oP "javac \d+\.\d+")
 
@@ -21,7 +22,11 @@ tests-jre-extension-target := tests-jre-extension/target/tests-jre-extension.jar
 $(module_out)/java_isolated.o: $(src)/modules/java-base/java.cc | init
 	$(call quiet, $(CXX) $(CXXFLAGS) -o $@ -c $(src)/modules/java-base/java.cc -MMD, CXX $@)
 
-$(module_out)/java_isolated.so: $(module_out)/java_isolated.o $(out)/modules/java-base/jvm/java_api.o $(out)/modules/java-base/jvm/jni_helpers.o $(out)/modules/java-base/balloon/jvm_balloon.o
+java-objects := $(module_out)/java_isolated.o $(out)/modules/java-base/jvm/java_api.o $(out)/modules/java-base/jvm/jni_helpers.o
+ifeq ($(conf_memory_jvm_balloon),1)
+java-objects += $(out)/modules/java-base/balloon/jvm_balloon.o
+endif
+$(module_out)/java_isolated.so: $(java-objects)
 	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $^, LINK $@)
 
 comma := ,
@@ -70,15 +75,15 @@ java_isolated_cmd := 'java_isolated: /java_isolated.so -cp /tests/java/tests.jar
         -Disolates.jar=/tests/java/isolates.jar org.junit.runner.JUnitCore io.osv.AllTestsThatTestIsolatedApp'
 java_non_isolated_cmd := 'java_non_isolated: /java.so -cp /tests/java/tests.jar:/tests/java/isolates.jar \
         -Disolates.jar=/tests/java/isolates.jar org.junit.runner.JUnitCore io.osv.AllTestsThatTestNonIsolatedApp'
-java_no_wrapper_cmd := 'java_no_wrapper: /usr/bin/java -cp /tests/java/tests.jar org.junit.runner.JUnitCore io.osv.BasicTests !'
-java_perms_cmd := 'java-perms: /usr/bin/java -cp /tests/java/tests.jar io.osv.TestDomainPermissions !'
+java_no_wrapper_cmd := 'java_no_wrapper: /usr/lib/jvm/java/bin/java -cp /tests/java/tests.jar org.junit.runner.JUnitCore io.osv.BasicTests !'
+java_perms_cmd := 'java-perms: /usr/lib/jvm/java/bin/java -cp /tests/java/tests.jar io.osv.TestDomainPermissions !'
 
 .PHONY: test_commands
 
 ifeq ($(arch),$(host_arch))
 test_commands:
 	$(call very-quiet, rm -f test_commands)
-	$(call very-quiet, if [ "$(javac_version)" = "javac 1.8" ]; then \
+	$(call very-quiet, if [[ "$(javac_version)" == "javac 1.8" && "$(conf_hide_symbols)" != "1" ]]; then \
 		echo $(java_isolated_cmd) >> test_commands && \
 		echo $(java_non_isolated_cmd) >> test_commands; fi )
 	$(call very-quiet, echo $(java_no_wrapper_cmd) >> test_commands)

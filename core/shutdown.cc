@@ -3,6 +3,9 @@
 #include <osv/debug.hh>
 #include <osv/sched.hh>
 #include <osv/dhcp.hh>
+#include <osv/strace.hh>
+#include <osv/kernel_config_tracepoints.h>
+#include <osv/kernel_config_networking_dhcp.h>
 
 extern void vfs_exit(void);
 
@@ -10,7 +13,12 @@ namespace osv {
 
 void shutdown()
 {
+#if CONF_tracepoints
+    wait_strace_complete();
+#endif
+#if CONF_networking_dhcp
     dhcp_release();
+#endif
 
     // The vfs_exit() call below will forcibly unmount the filesystem. If any
     // thread is executing code mapped from a file, these threads may crash if

@@ -13,6 +13,7 @@
 #include <osv/mempool.hh>
 #include <osv/pagecache.hh>
 #include <osv/export.h>
+#include <osv/kernel_config_memory_jvm_balloon.h>
 
 void *pmap_mapdev(uint64_t paddr, size_t size)
 {
@@ -30,7 +31,11 @@ uint64_t virt_to_phys(void *virt)
 OSV_LIBSOLARIS_API
 uint64_t kmem_used(void)
 {
-    return memory::stats::total() - memory::stats::jvm_heap() - memory::stats::free();
+    return memory::stats::total()
+#if CONF_memory_jvm_balloon
+- memory::stats::jvm_heap()
+#endif
+- memory::stats::free();
 }
 
 OSV_LIBSOLARIS_API

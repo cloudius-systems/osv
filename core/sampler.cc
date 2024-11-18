@@ -15,6 +15,8 @@
 #include <osv/trace.hh>
 #include <osv/percpu.hh>
 #include <osv/sampler.hh>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 namespace prof {
 
@@ -149,7 +151,7 @@ void start_sampler(config new_config) throw()
         assert(!_started);
     }
 
-    debug("Starting sampler, period = %d ns\n", to_nanoseconds(new_config.period));
+    debugf("Starting sampler, period = %d ns\n", to_nanoseconds(new_config.period));
 
     _controller.reset(*sched::thread::current());
 

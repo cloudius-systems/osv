@@ -5,7 +5,8 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <boost/date_time.hpp>
+#include <boost/date_time/gregorian/gregorian_types.hpp>
+#include <boost/date_time/posix_time/posix_time_types.hpp>
 #include "rtc.hh"
 #include "processor.hh"
 

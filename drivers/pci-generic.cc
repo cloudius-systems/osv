@@ -6,8 +6,6 @@
  */
 
 #include <osv/drivers_config.h>
-#include <sstream>
-#include <iomanip>
 
 #include <osv/debug.hh>
 #include <osv/pci.hh>
@@ -34,11 +32,10 @@ void pci_device_print(u8 bus, u8 slot, u8 func)
     for (u8 i = 0; i < 16; i++) {
         std::string row;
         for (u8 j = 0; j < 16; j++) {
+            char buf[4];
             u8 val = read_pci_config_byte(bus, slot, func, i*16+j);
-            std::stringstream ss;
-            ss << std::setfill('0') << std::setw(2) << std::hex << (int)val;
-            row += ss.str();
-            row += " ";
+            snprintf(buf, sizeof(buf), "%02x ", val);
+            row += buf;
         }
 
         pci_d(row.c_str());

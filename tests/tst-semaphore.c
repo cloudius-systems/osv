@@ -11,6 +11,7 @@
 #include <unistd.h>
 #include <semaphore.h>
 #include <assert.h>
+#include <fcntl.h>
 
 #define THREAD_NUMBER 10
 
@@ -54,6 +55,49 @@ int main(void) {
 
     assert(sem_destroy(&sem_sync) == 0);
     assert(sem_destroy(&sem_done) == 0);
+
+#ifndef __DISABLE_NAMED_SEMAPHORES__
+    ///Named semaphore test
+
+    //Create and open two handles to a named semaphore
+    sem_t *named_sem1 = sem_open("name", O_CREAT, 0777, 1);
+    assert(named_sem1 != SEM_FAILED);
+    sem_t *named_sem2 = sem_open("name", O_EXCL, 0, 0);
+    assert(named_sem1 == named_sem2);
+
+    //Can't create a new named semaphore without O_CREAT
+    assert(sem_open("other", 0, 0777, 1) == SEM_FAILED);
+    assert(sem_open("other", O_EXCL | O_SYNC, 0777, 1) == SEM_FAILED);
+
+    //Any other flags should have no effect if the named semaphore does not exist
+    sem_t *named_sem3 = sem_open("other", O_EXCL | O_CREAT | O_SYNC, 0777, 1);
+    assert(named_sem3 != SEM_FAILED);
+    assert(sem_unlink("other") == 0);
+    assert(sem_close(named_sem3) == 0);
+
+    //Close both handles to the semaphore without removing the name
+    assert(sem_close(named_sem1) == 0);
+    assert(sem_close(named_sem2) == 0);
+
+    //Open two more handles to the named sempahore
+    named_sem1 = sem_open("name", 0);
+    assert(named_sem1 != SEM_FAILED);
+    named_sem2 = sem_open("name", 0);
+    assert(named_sem1 == named_sem2);
+
+    //Can't open existing semaphore with O_CREAT and O_EXCL set
+    assert(sem_open("name", O_CREAT | O_EXCL, 0777, 1) == SEM_FAILED);
+    assert(sem_open("name", O_CREAT | O_EXCL | O_SYNC, 0777, 1) == SEM_FAILED);
+
+    //Unlink the named semaphore. Can't open more handles.
+    assert(sem_unlink("name") == 0);
+    assert(sem_unlink("name") == -1);
+    assert(sem_open("name", 0) == SEM_FAILED);
+
+    //Close handles
+    assert(sem_close(named_sem1) == 0);
+    assert(sem_close(named_sem2) == 0);
+#endif
 
     return 0;
 }

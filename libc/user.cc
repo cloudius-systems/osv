@@ -20,6 +20,7 @@
 
 #include <osv/debug.hh>
 #include "libc.hh"
+#include <cassert>
 
 uid_t getuid()
 {
@@ -119,6 +120,22 @@ int setegid(gid_t gid)
     assert(gid == 0);
     return 0;
 }
+
+// the setfsuid() and setfsguid() are considered deprecated in Linux, and we
+// don't even have it in a header file in OSv
+extern "C"
+int setfsuid(uid_t id)
+{
+    assert(id == 0);
+    return 0;
+}
+extern "C"
+int setfsgid(uid_t id)
+{
+    assert(id == 0);
+    return 0;
+}
+
 
 int setresuid(uid_t ruid, uid_t euid, uid_t suid)
 {

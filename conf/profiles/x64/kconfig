@@ -1,0 +1,28 @@
+choice
+  prompt "Devices Profile"
+  default drivers_profile_all
+
+config drivers_profile_base
+  bool "No Device Drivers"
+config drivers_profile_all
+  bool "All Device Drivers"
+config drivers_profile_aws_nitro
+  bool "AWS Nitro Device Drivers"
+config drivers_profile_cloud_hypervisor
+  bool "Cloud Hypervisor Device Drivers"
+config drivers_profile_hyperv
+  bool "Microsoft Hyperv Device Drivers"
+config drivers_profile_microvm
+  bool "MicroVM Device Drivers"
+config drivers_profile_vbox
+  bool "Virtual Box Device Drivers"
+config drivers_profile_virtio-mmio
+  bool "VirtI/O Over MMIO Device Drivers"
+config drivers_profile_virtio-pci
+  bool "VirtI/O Over PCI Device Drivers"
+config drivers_profile_vmware
+  bool "VMware Device Drivers"
+config drivers_profile_xen
+  bool "Xen Device Drivers"
+
+endchoice

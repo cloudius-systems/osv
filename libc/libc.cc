@@ -10,7 +10,6 @@
 #include <stdio.h>
 #include <limits.h>
 #include <stdlib.h>
-#include <boost/algorithm/string/split.hpp>
 #include <type_traits>
 #include <limits>
 #include <sys/resource.h>
@@ -43,7 +42,6 @@ int libc_error(int err)
 
 #undef errno
 
-OSV_HIDDEN
 int __thread errno;
 
 int* __errno_location()
@@ -103,8 +101,28 @@ int setrlimit(int resource, const struct rlimit *rlim)
     // osv - no limits
     return 0;
 }
+
+int prlimit(pid_t pid, int resource, const struct rlimit *new_limit, struct rlimit *old_limit)
+{
+    if (pid != getpid() && pid != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    if (old_limit && getrlimit(resource, old_limit)) {
+        return -1;
+    }
+
+    if (new_limit && setrlimit(resource, new_limit)) {
+        return -1;
+    }
+
+    return 0;
+}
 LFS64(getrlimit);
 LFS64(setrlimit);
+#undef prlimit64
+LFS64(prlimit);
 
 uid_t geteuid()
 {

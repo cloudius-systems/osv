@@ -36,6 +36,7 @@ reschedule_from_interrupt:
         #Switch to new thread
         ldr	x2, [x1, #32]     //Fetch _tcb of the new thread
         msr	tpidr_el0, x2     //Set thread pointer
+        msr	tpidr_el1, x2     //Set thread pointer
         isb
 
         str     x29, [x0, #0]     //Save frame pointer of the old thread

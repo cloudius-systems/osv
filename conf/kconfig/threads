@@ -1,0 +1,21 @@
+config preempt
+  prompt "Enable preemption"
+  def_bool $(shell,grep -q ^conf_preempt=1 conf/base.mk && echo y || echo n)
+
+config lazy_stack
+  prompt "Use lazy stack"
+  def_bool $(shell,grep -q ^conf_lazy_stack=1 conf/base.mk && echo y || echo n)
+
+config lazy_stack_invariant
+  prompt "Check lazy stack invariant"
+  def_bool $(shell,grep -q ^conf_lazy_stack_invariant=1 conf/base.mk && echo y || echo n)
+
+config threads_default_kernel_stack_size
+  prompt "Kernel thread default stack size"
+  int
+  default 65536
+
+config threads_default_pthread_stack_size
+  prompt "Pthread thread default stack size"
+  hex
+  default 0x100000

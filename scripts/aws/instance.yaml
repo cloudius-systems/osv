@@ -1,0 +1,70 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Description: Create EC2 Instance
+Parameters:
+  pVpcId:
+    Description: ID of the VPC
+    Type: AWS::EC2::VPC::Id
+    Default: '-'
+  pSubnetId:
+    Description: Subnet ID
+    Type: AWS::EC2::Subnet::Id
+    Default: '-'
+  pInstanceName:
+    Description: Instance Name
+    Type: String
+    Default: '-'
+  pInstanceType:
+    Description: Size of the Instance
+    Type: String
+    AllowedValues:
+    - t2.nano
+    - t2.micro
+    - t2.small
+    - t3.nano
+    - t3.micro
+    - t3.small
+    Default: t2.nano
+  pImageId:
+    Description: AMI for the instances
+    Type: AWS::EC2::Image::Id
+    Default: '-'
+Resources:
+  InstanceSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Allow external addresses to access to management console
+      SecurityGroupIngress:
+      - IpProtocol: tcp
+        FromPort: '9000'
+        ToPort: '9000'
+        CidrIp: '0.0.0.0/0'
+      - IpProtocol: tcp
+        FromPort: '8000'
+        ToPort: '8000'
+        CidrIp: '0.0.0.0/0'
+      VpcId:
+        Ref: pVpcId
+  Instance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId:
+        Ref: pImageId
+      InstanceType:
+        Ref: pInstanceType
+      SecurityGroupIds:
+        - Ref: InstanceSecurityGroup
+      SubnetId:
+        Ref: pSubnetId
+      Tags:
+        - Key: Name
+          Value:
+            Ref: pInstanceName
+Outputs:
+  PublicDnsName:
+    Value:
+      Fn::GetAtt:
+      - Instance
+      - PublicDnsName
+
+  InstanceID:
+    Value: !Ref Instance

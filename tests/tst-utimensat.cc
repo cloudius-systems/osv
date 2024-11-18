@@ -100,9 +100,9 @@ int main(int argc, char *argv[])
     ret = utimensat(AT_FDCWD, rel_path_bar_to_tmp, times, 0);
     report(ret == 0, "utimensat worked successfully with AT_FDCWD");
 
-     /* Use dirfd and relative path of bar to check utimensat */
-     ret = utimensat(dirfd, rel_path_bar_to_foo, times, 0);
-     report(ret == 0, "utimensat works with dirfd and relative path");
+    /* Use dirfd and relative path of bar to check utimensat */
+    ret = utimensat(dirfd, rel_path_bar_to_foo, times, 0);
+    report(ret == 0, "utimensat works with dirfd and relative path");
 
     /* Force utimensat to fail using invalid dirfd */
     ret = utimensat(100, rel_path_bar_to_foo, times, 0);
@@ -114,15 +114,19 @@ int main(int argc, char *argv[])
 
     /* Force utimensat to fail when dirfd was AT_FDCWD and pathname is NULL */
     ret = utimensat(AT_FDCWD, NULL, times, 0);
+#ifdef LINUX
+    report(ret == -1 && errno == EINVAL, "utimensat fails when dirfd is AT_FDCWD and pathname is NULL");
+#else
     report(ret == -1 && errno == EFAULT, "utimensat fails when dirfd is AT_FDCWD and pathname is NULL");
+#endif
 
     /* Force utimensat to fail with invalid flags */
     ret = utimensat(dirfd, rel_path_bar_to_tmp, times, 23);
     report(ret == -1 && errno == EINVAL, "utimensat fails with invalid flags");
 
     /* Force utimensat to fail with invalid values in times */
-    init_timespec(times[0], -1, 100); /* change atime */
-    ret = utimensat(dirfd, rel_path_bar_to_tmp, times, 0);
+    init_timespec(times[0], -1, -1); /* change atime */
+    ret = utimensat(dirfd, rel_path_bar_to_foo, times, 0);
     report(ret == -1 && errno == EINVAL, "utimensat fails with invalid value in times");
 
     init_timespec(times[0], 1234, 100);
@@ -143,8 +147,8 @@ int main(int argc, char *argv[])
     report(ret == -1 && errno == ENOTDIR, "utimensat fails when dirfd points to file and relative pathname is given");
 
     /* Clean up temporary files */
-     report(unlink(tmp_file_bar) == 0, "remove the file bar");
-     report(rmdir(tmp_folder_foo) == 0, "remove the folder foo");
+    report(unlink(tmp_file_bar) == 0, "remove the file bar");
+    report(rmdir(tmp_folder_foo) == 0, "remove the folder foo");
 
     /* Report results. */
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);

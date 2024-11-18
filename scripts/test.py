@@ -19,7 +19,9 @@ os.environ["LANG"]="C"
 
 disabled_list= [
     "tst-dns-resolver.so",
+    "tst-dns-resolver",
     "tst-feexcept.so", # On AArch64 the tests around floating point exceptions (SIGFPE) fail even on KVM - see issue #1150
+    "tst-feexcept",
 ]
 
 qemu_disabled_list= [
@@ -31,16 +33,27 @@ firecracker_disabled_list= [
     "tcp_close_without_reading_on_qemu"
 ]
 
+linux_ld_disabled_list= [
+    "tracing_smoke_test",
+    "tcp_close_without_reading_on_fc",
+    "tcp_close_without_reading_on_qemu"
+]
+
+if host_arch == 'aarch64':
+    linux_ld = '/lib/ld-linux-aarch64.so.1'
+else:
+    linux_ld = '/lib64/ld-linux-x86-64.so.2'
+
 class TestRunnerTest(SingleCommandTest):
     def __init__(self, name):
-        super(TestRunnerTest, self).__init__(name, '/tests/%s' % name)
+        super(TestRunnerTest, self).__init__(name, '%s /tests/%s' % (linux_ld if cmdargs.linux_ld else '', name))
 
 # Not all files in build/release/tests/tst-*.so may be on the test image
 # (e.g., some may have actually remain there from old builds) - so lets take
 # the list of tests actually in the image form the image's manifest file.
 test_files = []
 is_comment = re.compile("^[ \t]*(|#.*|\[manifest])$")
-is_test = re.compile("^/tests/tst-.*.so")
+is_test = re.compile("^/tests/tst-.*")
 
 def running_with_kvm_on(arch, hypervisor):
     if os.path.exists('/dev/kvm') and arch == host_arch and hypervisor in ['qemu', 'qemu_microvm', 'firecracker']:
@@ -71,7 +84,7 @@ def collect_java_tests():
             components = line.split(": ", 2);
             test_name = components[0].strip();
             test_command = components[1].strip()
-            add_tests([SingleCommandTest(test_name, test_command)])
+            add_tests([SingleCommandTest(test_name, linux_ld + ' ' + test_command if cmdargs.linux_ld else test_command)])
 
 def run_test(test):
     sys.stdout.write("  TEST %-35s" % test.name)
@@ -160,6 +173,7 @@ if __name__ == "__main__":
     parser.add_argument("-d", "--disabled_list", action="append", help="test to be disabled", default=[])
     parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default=host_arch,
                         help="specify QEMU architecture: x86_64, aarch64")
+    parser.add_argument("--linux_ld", action="store_true", help="launch tests with Linux dynamic linker")
     cmdargs = parser.parse_args()
     set_verbose_output(cmdargs.verbose)
 
@@ -176,6 +190,9 @@ if __name__ == "__main__":
     else:
         disabled_list.extend(qemu_disabled_list)
 
+    if cmdargs.linux_ld:
+        disabled_list.extend(linux_ld_disabled_list)
+
     if cmdargs.arch == 'aarch64':
         if host_arch != cmdargs.arch:
             #Until the issue #1143 is resolved, we need to force running with 2 CPUs in TCG mode
@@ -183,6 +200,7 @@ if __name__ == "__main__":
 
     if running_with_kvm_on(cmdargs.arch, cmdargs.hypervisor) and cmdargs.arch != 'aarch64':
         disabled_list.remove("tst-feexcept.so")
+        disabled_list.remove("tst-feexcept")
 
     test_net.set_arch(cmdargs.arch)
     test_tracing.set_arch(cmdargs.arch)

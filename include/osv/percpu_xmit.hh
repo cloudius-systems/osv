@@ -15,6 +15,8 @@
 #include <osv/clock.hh>
 #include <osv/migration-lock.hh>
 #include <osv/aligned_new.hh>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 #include <bsd/sys/sys/mbuf.h>
 

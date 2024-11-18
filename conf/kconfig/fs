@@ -1,0 +1,19 @@
+config fs_procfs
+  prompt "Include procfs filesystem"
+  bool
+  default y
+
+config fs_sysfs
+  prompt "Include sysfs filesystem"
+  bool
+  default y
+
+config fs_max_file_descriptors
+  prompt "Maximum file descriptors"
+  hex
+  default 0x4000
+
+config fs_buffer_cache_size
+  prompt "Buffer cache size"
+  int
+  default 256

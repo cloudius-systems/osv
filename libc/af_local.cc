@@ -65,6 +65,7 @@ int af_local::ioctl(u_long cmd, void *data)
 void af_local::init()
 {
     send->attach_sender(this);
+    send->set_no_receiver_event(POLLRDHUP);
     receive->attach_receiver(this);
 }
 

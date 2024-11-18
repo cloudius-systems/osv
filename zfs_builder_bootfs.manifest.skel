@@ -1,5 +1,4 @@
 [manifest]
-/libvdso.so: libvdso.so
 /libuutil.so: libuutil.so
 /zpool.so: zpool.so
 /usr/lib/fs/libsolaris.so: libsolaris.so

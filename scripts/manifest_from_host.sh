@@ -64,16 +64,21 @@ find_library()
 
 output_manifest()
 {
-	local so_path="$1"
+	local so_files="$1"
+	local so_filter="$2"
 	echo "# --------------------" | tee -a $OUTPUT
-	echo "# Dependencies" | tee -a $OUTPUT
+	echo "# Dependencies        " | tee -a $OUTPUT
 	echo "# --------------------" | tee -a $OUTPUT
-	if [[ $conf_hide_symbols == 1 ]]; then
-		lddtree $so_path | grep -v "not found" | grep -v "$so_path" | grep -v "ld-linux-${MACHINE}" | \
+	if [[ $dl == "linux" ]]; then
+		lddtree $so_files | grep -v "not found" | grep -v "$so_filter" | \
+			sed 's/.*=> //' | awk '// { printf("%s: %s\n", $0, $0); }' | sort | uniq | tee -a $OUTPUT
+		echo "/etc/ld.so.cache: /etc/ld.so.cache" | tee -a $OUTPUT
+	elif [[ $conf_hide_symbols == 1 ]]; then
+		lddtree $so_files | grep -v "not found" | grep -v "$so_filter" | grep -v "ld-linux-${MACHINE}" | \
 			grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
 			sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
 	else
-		lddtree $so_path | grep -v "not found" | grep -v "$so_path" | grep -v "ld-linux-${MACHINE}" | \
+		lddtree $so_files | grep -v "not found" | grep -v "$so_filter" | grep -v "ld-linux-${MACHINE}" | \
 			grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|stdc\+\+|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
 			sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
 	fi
@@ -147,18 +152,7 @@ if [[ -d $NAME_OR_PATH ]]; then
 	echo "$GUEST_PATH_ROOT/$SUBDIRECTORY_PATH**: $(realpath $NAME_OR_PATH)/$SUBDIRECTORY_PATH**" | tee $OUTPUT
 	if [[ $RESOLVE == true ]]; then
 		SO_FILES=$(find $NAME_OR_PATH/$SUBDIRECTORY_PATH -type f -name \*so)
-		echo "# --------------------" | tee -a $OUTPUT
-		echo "# Dependencies" | tee -a $OUTPUT
-		echo "# --------------------" | tee -a $OUTPUT
-		if [[ $conf_hide_symbols == 1 ]]; then
-			lddtree $SO_FILES | grep -v "not found" | grep -v "$NAME_OR_PATH/$SUBDIRECTORY_PATH" | grep -v "ld-linux-${MACHINE}" | \
-				grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
-				sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
-		else
-			lddtree $SO_FILES | grep -v "not found" | grep -v "$NAME_OR_PATH/$SUBDIRECTORY_PATH" | grep -v "ld-linux-${MACHINE}" | \
-				grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|stdc\+\+|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
-				sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
-		fi
+		output_manifest "$SO_FILES" "$NAME_OR_PATH/$SUBDIRECTORY_PATH"
 	fi
 	exit 0
 fi
@@ -181,7 +175,7 @@ if [[ -f $NAME_OR_PATH ]]; then
 			fi
 		fi
 		REAL_PATH=$(realpath $NAME_OR_PATH)
-		output_manifest "$REAL_PATH"
+		output_manifest "$REAL_PATH" "$REAL_PATH"
 	else
 		echo "The $NAME_OR_PATH is not ELF" >&2
 		exit 1
@@ -194,7 +188,7 @@ else
 		        if [[ "$so_path" != "" ]]; then
 			        echo "# Shared library" | tee $OUTPUT
 			        echo "/usr/lib/$so_name: $so_path" | tee -a $OUTPUT
-			        output_manifest $so_path
+			        output_manifest $so_path $so_path
                         else
                                 exit 0
                         fi
@@ -212,7 +206,7 @@ else
 			else
 				echo "# $LONG_NAME" | tee $OUTPUT
 				echo "/$NAME_OR_PATH: $FULL_PATH" | tee -a $OUTPUT
-				output_manifest $FULL_PATH
+				output_manifest $FULL_PATH $FULL_PATH
 				if [[ $WRITE_CMD == true ]]; then
 					printf "/$NAME_OR_PATH --help" | tee "$(dirname $0)/../build/last/append_cmdline"
 				fi

@@ -1,12 +1,13 @@
-#!/usr/bin/python2
+#!/usr/bin/python3
 
 import boto3, argparse, urllib, time, json, subprocess, os.path
 import argparse
+from urllib.request import urlopen
 
 class Metadata(object):
     base = 'http://169.254.169.254/latest/meta-data/'
     def _get(self, what):
-        return urllib.urlopen(Metadata.base + what).read()
+        return urlopen(Metadata.base + what).read()
     def instance_id(self):
         return self._get('instance-id')
     def availability_zone(self):
@@ -71,16 +72,24 @@ def make_snapshot(input):
     print('Snapshot {} created\n'.format(snap))
     return snap.id
 
-def make_ami_from_snapshot(name,snapshot_id):
-    metadata = Metadata()
-    print('Connecting')
-    ec2 = boto3.resource('ec2',region_name=metadata.region())
-    print('STEP 7: Registering image from {}'.format(snapshot_id)) # aws ec2 register-image
+def make_ami_from_snapshot(name,snapshot_id,on_ec2):
+    print('Connecting to make AMI from snapshot')
+    if on_ec2:
+        metadata = Metadata()
+        ec2 = boto3.resource('ec2',region_name=metadata.region())
+    else:
+        ec2 = boto3.resource('ec2')
+    print('STEP 7: Registering image {} from {}'.format(name, snapshot_id)) # aws ec2 register-image
     time_point = time.time()
+
+    snapshot = ec2.Snapshot(snapshot_id)
+    snapshot.wait_until_completed()
+
     ami = ec2.register_image(Name=name,
                              Architecture='x86_64',
                              RootDeviceName='xvda',
                              VirtualizationType='hvm',
+                             EnaSupport=True,
                              BlockDeviceMappings=[
                                  {
                                      'DeviceName' : 'xvda',
@@ -92,6 +101,7 @@ def make_ami_from_snapshot(name,snapshot_id):
                              ])
     print('STEP 7: Took {} seconds to create ami'.format(time.time() - time_point,ami))
     print('ami {} created\n'.format(ami))
+    print('{}\n'.format(ami.id))
     return ami
 
 if __name__ == "__main__":
@@ -101,7 +111,13 @@ if __name__ == "__main__":
                         help="ami name to be created")
     parser.add_argument("-i", "--input", action="store", default="build/release.x64/usr.img",
                         help="path to the image on local filesysten")
+    parser.add_argument("-s", "--snapshot", action="store",
+                        help="snapshot ID")
 
     args = parser.parse_args()
-    snapshot_id = make_snapshot(args.input)
-    make_ami_from_snapshot(args.name,snapshot_id)
+    if args.snapshot == None:
+        snapshot_id = make_snapshot(args.input)
+    else:
+        snapshot_id = args.snapshot
+
+    make_ami_from_snapshot(args.name, snapshot_id, args.snapshot == None)

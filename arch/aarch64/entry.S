@@ -163,12 +163,16 @@ entry_\level\()_\type:
                              // of the exception frame to help gdb link to the
                              // address when interrupt was raised
         push_state_to_exception_frame 1
+        mrs     x19, tpidr_el0 // Save potential app thread pointer
+        mrs     x20, tpidr_el1 // Read copy of kernel thread pointer
+        msr     tpidr_el0, x20 // Set thread pointer to kernel one
         mrs     x1, esr_el1
         str     w1, [sp, #272] // Store Exception Syndrom Register in the frame
         mov     x0, sp         // Save exception_frame to x0
         mov     x1, \level_id
         mov     x2, \type_id
         bl      handle_unexpected_exception
+        msr     tpidr_el0, x19 // Restore thread pointer
         pop_state_from_exception_frame
         bl      abort
         .cfi_endproc
@@ -212,6 +216,9 @@ entry_curr_el_sp\stack\()_sync:
                              // of the exception frame to help gdb link to the
                              // address when interrupt was raised
         push_state_to_exception_frame \switch
+        mrs     x19, tpidr_el0 // Save potential app thread pointer
+        mrs     x20, tpidr_el1 // Read copy of kernel thread pointer
+        msr     tpidr_el0, x20 // Set thread pointer to kernel one
         mrs     x1, esr_el1
         str     w1, [sp, #272] // Store Exception Syndrom Register in the frame
         ubfm    x2, x1, #ESR_EC_BEG, #ESR_EC_END // Exception Class -> X2
@@ -229,6 +236,7 @@ handle_mem_abort_sp\stack:
 
         mov     x0, sp  // save exception_frame to x0
         bl      page_fault
+        msr     tpidr_el0, x19 // Restore thread pointer
         pop_state_from_exception_frame
         eret
         .cfi_endproc
@@ -252,6 +260,7 @@ handle_system_call_sp\stack:
         isb
 
         str     x0, [sp, #0] // copy the result in x0 directly into the frame so that it can be restored
+        msr     tpidr_el0, x19 //Restore thread pointer
         pop_state_from_exception_frame
         eret
         .cfi_endproc
@@ -261,6 +270,7 @@ unexpected_sync_exception_sp\stack:
         mov     x1, #CURR_EL_SPX
         mov     x2, #EX_TYPE_SYNC
         bl      handle_unexpected_exception
+        msr     tpidr_el0, x19 //Restore thread pointer
         pop_state_from_exception_frame
         bl      abort
         .cfi_endproc
@@ -281,8 +291,12 @@ entry_curr_el_sp\stack\()_irq:
                              // of the exception frame to help gdb link to the
                              // address when interrupt was raised
         push_state_to_exception_frame \switch
+        mrs     x19, tpidr_el0 // Save potential app thread pointer
+        mrs     x20, tpidr_el1 // Read copy of kernel thread pointer
+        msr     tpidr_el0, x20 // Set thread pointer to kernel one
         mov     x0, sp
         bl      interrupt // extern "C"
+        msr     tpidr_el0, x19 // Restore thread pointer
         pop_state_from_exception_frame
         eret
         .cfi_endproc

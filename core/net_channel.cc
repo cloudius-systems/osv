@@ -23,37 +23,12 @@
 #include <bsd/sys/net/ethernet.h>
 #include <bsd/sys/net/netisr.h>
 
-#include <osv/debug.hh>
 #include <osv/net_trace.hh>
+#include <algorithm>
 
-std::ostream& operator<<(std::ostream& os, in_addr ia)
-{
-    auto x = ntohl(ia.s_addr);
-    return osv::fprintf(os, "%d.%d.%d.%d",
-            (x >> 24) & 255, (x >> 16) & 255, (x >> 8) & 255, x & 255);
-}
-
-std::ostream& operator<<(std::ostream& os, const ipv4_tcp_conn_id& id)
-{
-    return osv::fprintf(os, "{ ipv4 %s:%d -> %s:%d }", id.src_addr, id.src_port, id.dst_addr, id.dst_port);
-}
-
-#ifdef INET6
-
-std::ostream& operator<<(std::ostream& os, in6_addr ia)
-{
-    char ipstr[INET6_ADDRSTRLEN];
-    if (inet_ntop(LINUX_AF_INET6, ia.s6_addr, ipstr, sizeof(ipstr)) == 0)
-        return os << "????";
-    return  os << ipstr;
-}
-
-std::ostream& operator<<(std::ostream& os, const ipv6_tcp_conn_id& id)
-{
-    return osv::fprintf(os, "{ ipv6 %s:%d -> %s:%d }", id.src_addr, id.src_port, id.dst_addr, id.dst_port);
-}
-
-#endif
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_core_epoll.h>
 
 void net_channel::process_queue()
 {
@@ -77,12 +52,14 @@ void net_channel::wake_pollers()
                 pr->_poll_thread.wake_from_kernel_or_with_irq_disabled();
             }
         }
+#if CONF_core_epoll
         // can't call epoll_wake from rcu, so copy the data
         if (!_epollers.empty()) {
             _epollers.reader_for_each([&] (const epoll_ptr& ep) {
                 epoll_wake_in_rcu(ep);
             });
         }
+#endif
     }
 }
 
@@ -116,21 +93,25 @@ void net_channel::del_poller(pollreq& pr)
 
 void net_channel::add_epoll(const epoll_ptr& ep)
 {
+#if CONF_core_epoll
     WITH_LOCK(_pollers_mutex) {
         if (!_epollers.owner_find(ep)) {
             _epollers.insert(ep);
         }
     }
+#endif
 }
 
 void net_channel::del_epoll(const epoll_ptr& ep)
 {
+#if CONF_core_epoll
     WITH_LOCK(_pollers_mutex) {
         auto i = _epollers.owner_find(ep);
         if (i) {
             _epollers.erase(i);
         }
     }
+#endif
 }
 
 classifier::classifier()

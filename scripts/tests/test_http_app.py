@@ -2,13 +2,14 @@
 from testing import *
 import argparse
 import subprocess
+import re
 from time import sleep
 
 def check_with_curl(url, expected_http_line):
     output = subprocess.check_output(["curl", "-s", url]).decode('utf-8')
     print(output)
     if expected_http_line not in output:
-       print("FAILED curl: wrong output")
+       print("\033[91mFAILED curl: wrong output\033[00m")
     print("------------")
 
 def write_to_status_file(line):
@@ -19,7 +20,7 @@ def write_to_status_file(line):
 
 def run(command, hypervisor_name, host_port, guest_port, http_path, expected_http_line=None,
         image_path=None, line=None, concurrency=50, count=1000, duration=10, threads=4, pre_script=None,
-        no_keep_alive=False, error_line_to_ignore_on_kill = "", kernel_path=None, test_client='ab'):
+        no_keep_alive=False, error_line_to_ignore_on_kill = "", kernel_path=None, test_client='ab', qemu_tap='qemu_tap0'):
 
     py_args = []
 
@@ -33,7 +34,12 @@ def run(command, hypervisor_name, host_port, guest_port, http_path, expected_htt
     if image_path != None:
         py_args = ['--image', image_path]
 
-    app = run_command_in_guest(command, hypervisor=hypervisor_name, run_py_args=py_args, forward=[(host_port, guest_port)])
+    app_url = None
+    if hypervisor_name == 'qemu' and find_qemu_tap(qemu_tap):
+        app = run_command_in_guest_on_qemu_with_tap(command, py_args, qemu_tap)
+        app_url = "http://%s:%s%s" % (os.environ['OSV_HOSTNAME'], guest_port, http_path)
+    else:
+        app = run_command_in_guest(command, hypervisor=hypervisor_name, run_py_args=py_args, forward=[(host_port, guest_port)])
 
     if line != None:
         wait_for_line_contains(app, line)
@@ -44,10 +50,11 @@ def run(command, hypervisor_name, host_port, guest_port, http_path, expected_htt
         print(pre_script)
         subprocess.check_output([pre_script])
 
-    if hypervisor_name == 'firecracker':
-        app_url = "http://172.16.0.2:%s%s" % (guest_port, http_path)
-    else:
-        app_url = "http://127.0.0.1:%s%s" % (host_port, http_path)
+    if app_url == None:
+        if hypervisor_name == 'firecracker':
+            app_url = "http://172.16.0.2:%s%s" % (guest_port, http_path)
+        else:
+            app_url = "http://127.0.0.1:%s%s" % (host_port, http_path)
 
     if expected_http_line != None:
         check_with_curl(app_url, expected_http_line)
@@ -92,24 +99,24 @@ def run(command, hypervisor_name, host_port, guest_port, http_path, expected_htt
         if error_line_to_ignore_on_kill != "" and error_line_to_ignore_on_kill in app.line_with_error():
             print("Ignorring error from guest on kill: %s" % app.line_with_error())
         else:
-            print("  ERROR: Guest failed on kill() or join(): %s" % str(ex))
+            print("  \033[91mERROR: Guest failed on kill() or join(): %s\033[00m" % str(ex))
             write_to_status_file("  ERROR: Guest failed on kill() or join(): %s" % str(ex))
             success = False
 
     if test_client == 'ab':
         if failed_requests > 0:
-            print("  FAILED ab - encountered failed requests: %d" % failed_requests)
+            print("  \033[91mFAILED ab - encountered failed requests: %d\033[00m" % failed_requests)
             write_to_status_file("  FAILED ab - encountered failed requests: %d" % failed_requests)
             success = False
 
         if complete_requests < count:
-            print("  FAILED ab - too few complete requests : %d ? %d" % (complete_requests, count))
+            print("  \033[91mFAILED ab - too few complete requests : %d ? %d\033[00m" % (complete_requests, count))
             write_to_status_file("  FAILED ab - too few complete requests : %d ? %d" % (complete_requests, count))
             success = False
 
     if success:
         print('----------')
-        print('  SUCCESS')
+        print('  \033[92mSUCCESS\033[00m')
         write_to_status_file('  SUCCESS')
 
 if __name__ == "__main__":
@@ -137,6 +144,7 @@ if __name__ == "__main__":
     parser.add_argument("--error_line_to_ignore_on_kill", action="store", default='',
                         help="error line to ignore on kill")
     parser.add_argument("--kernel_path", action="store", help="path to kernel.elf.")
+    parser.add_argument("--qemu_tap", action="store", default="qemu_tap0", help="QEMU tap device name")
 
     cmdargs = parser.parse_args()
 
@@ -182,4 +190,4 @@ if __name__ == "__main__":
        cmdargs.http_path ,cmdargs.http_line, cmdargs.image, cmdargs.line,
        cmdargs.concurrency, cmdargs.count, cmdargs.duration, cmdargs.threads,
        cmdargs.pre_script, cmdargs.no_keep_alive,
-       cmdargs.error_line_to_ignore_on_kill, kernel_path, test_client)
+       cmdargs.error_line_to_ignore_on_kill, kernel_path, test_client, cmdargs.qemu_tap)

@@ -9,7 +9,9 @@
 // To compile on Linux, use: c++ -std=c++11 tests/tst-feexcept.cc
 
 #include <fenv.h>
+#ifdef __OSV__
 #include <__fenv.h>
+#endif
 #include <signal.h>
 #include <assert.h>
 #include <setjmp.h>
@@ -36,6 +38,11 @@ bool do_expect(T actual, T expected, const char *actuals, const char *expecteds,
 #define expect_errno(call, experrno) ( \
         do_expect(call, -1, #call, "-1", __FILE__, __LINE__) && \
         do_expect(errno, experrno, #call " errno",  #experrno, __FILE__, __LINE__) )
+
+#ifndef __OSV__
+extern "C" int __sigsetjmp(sigjmp_buf env, int savemask);
+#define sigsetjmp(env, savemask) __sigsetjmp (env, savemask)
+#endif
 
 thread_local sigjmp_buf env;
 template<typename Func>
@@ -78,8 +85,14 @@ int main(int argc, char **argv)
     // Test that fegetexcept() does not return a negative number
     expect(fegetexcept() >= 0, true);
 
-    // Test that *integer* division by zero generates, ironically, a SIGFPE
-    expect(sig_check([] { printf("%d\n", 1 / zero_i()); }, SIGFPE), true);
+#ifdef __x86_64__
+    // Test that *integer* division by zero generates, ironically, a SIGFPE.
+    // Starting with Gcc 12, division by zero in C no longer generates a
+    // SIGFPE and just returns 0. So to check this we need to use assembly
+    // directly.
+    //expect(sig_check([] { printf("%d\n", 1 / zero_i()); }, SIGFPE), true);
+    expect(sig_check([] { asm("movl $1,%eax; movl $0,%ebx; movl $0, %edx; divl %ebx;"); }, SIGFPE), true);
+#endif
 
     // While, continuing the irony, by default a floating-point division by
     // zero does NOT generate a SIGFPE signal, but rather inf or nan:

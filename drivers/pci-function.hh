@@ -9,7 +9,7 @@
 #define PCI_FUNCTION_H
 
 #include <map>
-#include <ostream>
+#include <vector>
 
 #include <osv/mmio.hh>
 #include <osv/types.h>
@@ -290,7 +290,10 @@ namespace pci {
         bool get_bus_master();
         void set_bus_master(bool m);
 
-        void set_bars_enable(bool mem, bool io);
+        // Enable/disable the device decoding the BAR address when a write is
+        // performed on the BARs
+        void enable_bars_decode(bool mem, bool io);
+        void disable_bars_decode(bool mem, bool io);
 
         // Enable/Disable intx assertions
         bool is_intx_enabled();
@@ -349,7 +352,6 @@ namespace pci {
         // Useful function to print device
         virtual void dump_config();
 
-        friend std::ostream& operator << (std::ostream& out, const function &d);
         struct equal {
             bool operator()(const function* d1, const function* d2) const
             {

@@ -47,6 +47,8 @@ namespace utf = boost::unit_test;
 static constexpr int kMin = -1;
 static constexpr int kMax = 256;
 
+static locale_t c_locale = newlocale(LC_ALL, "C.UTF-8", nullptr);
+
 TEST(ctype, isalnum) {
   for (int i = kMin; i < kMax; ++i) {
     if ((i >= '0' && i <= '9') ||
@@ -64,9 +66,9 @@ TEST(ctype, isalnum_l) {
     if ((i >= '0' && i <= '9') ||
         (i >= 'A' && i <= 'Z') ||
         (i >= 'a' && i <= 'z')) {
-      EXPECT_TRUE(isalnum_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_TRUE(isalnum_l(i, c_locale));
     } else {
-      EXPECT_FALSE(isalnum_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_FALSE(isalnum_l(i, c_locale));
     }
   }
 }
@@ -86,9 +88,9 @@ TEST(ctype, isalpha_l) {
   for (int i = kMin; i < kMax; ++i) {
     if ((i >= 'A' && i <= 'Z') ||
         (i >= 'a' && i <= 'z')) {
-      EXPECT_TRUE(isalpha_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_TRUE(isalpha_l(i, c_locale));
     } else {
-      EXPECT_FALSE(isalpha_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_FALSE(isalpha_l(i, c_locale));
     }
   }
 }
@@ -116,9 +118,9 @@ TEST(ctype, isblank) {
 TEST(ctype, isblank_l) {
   for (int i = kMin; i < kMax; ++i) {
     if (i == '\t' || i == ' ') {
-      EXPECT_TRUE(isblank_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_TRUE(isblank_l(i, c_locale));
     } else {
-      EXPECT_FALSE(isblank_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_FALSE(isblank_l(i, c_locale));
     }
   }
 }
@@ -136,9 +138,9 @@ TEST(ctype, iscntrl) {
 TEST(ctype, iscntrl_l) {
   for (int i = kMin; i < kMax; ++i) {
     if ((i >= 0 && i < ' ') || i == 0x7f) {
-      EXPECT_TRUE(iscntrl_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_TRUE(iscntrl_l(i, c_locale));
     } else {
-      EXPECT_FALSE(iscntrl_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_FALSE(iscntrl_l(i, c_locale));
     }
   }
 }
@@ -156,9 +158,9 @@ TEST(ctype, isdigit) {
 TEST(ctype, isdigit_l) {
   for (int i = kMin; i < kMax; ++i) {
     if (i >= '0' && i <= '9') {
-      EXPECT_TRUE(isdigit_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_TRUE(isdigit_l(i, c_locale));
     } else {
-      EXPECT_FALSE(isdigit_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_FALSE(isdigit_l(i, c_locale));
     }
   }
 }
@@ -176,9 +178,9 @@ TEST(ctype, isgraph) {
 TEST(ctype, isgraph_l) {
   for (int i = kMin; i < kMax; ++i) {
     if (i >= '!' && i <= '~') {
-      EXPECT_TRUE(isgraph_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_TRUE(isgraph_l(i, c_locale));
     } else {
-      EXPECT_FALSE(isgraph_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_FALSE(isgraph_l(i, c_locale));
     }
   }
 }
@@ -196,9 +198,9 @@ TEST(ctype, islower) {
 TEST(ctype, islower_l) {
   for (int i = kMin; i < kMax; ++i) {
     if (i >= 'a' && i <= 'z') {
-      EXPECT_TRUE(islower_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_TRUE(islower_l(i, c_locale));
     } else {
-      EXPECT_FALSE(islower_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_FALSE(islower_l(i, c_locale));
     }
   }
 }
@@ -216,9 +218,9 @@ TEST(ctype, isprint) {
 TEST(ctype, isprint_l) {
   for (int i = kMin; i < kMax; ++i) {
     if (i >= ' ' && i <= '~') {
-      EXPECT_TRUE(isprint_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_TRUE(isprint_l(i, c_locale));
     } else {
-      EXPECT_FALSE(isprint_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_FALSE(isprint_l(i, c_locale));
     }
   }
 }
@@ -242,9 +244,9 @@ TEST(ctype, ispunct_l) {
         (i >= ':' && i <= '@') ||
         (i >= '[' && i <= '`') ||
         (i >= '{' && i <= '~')) {
-      EXPECT_TRUE(ispunct_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_TRUE(ispunct_l(i, c_locale));
     } else {
-      EXPECT_FALSE(ispunct_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_FALSE(ispunct_l(i, c_locale));
     }
   }
 }
@@ -262,9 +264,9 @@ TEST(ctype, isspace) {
 TEST(ctype, isspace_l) {
   for (int i = kMin; i < kMax; ++i) {
     if ((i >= '\t' && i <= '\r') || i == ' ') {
-      EXPECT_TRUE(isspace_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_TRUE(isspace_l(i, c_locale));
     } else {
-      EXPECT_FALSE(isspace_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_FALSE(isspace_l(i, c_locale));
     }
   }
 }
@@ -282,9 +284,9 @@ TEST(ctype, isupper) {
 TEST(ctype, isupper_l) {
   for (int i = kMin; i < kMax; ++i) {
     if (i >= 'A' && i <= 'Z') {
-      EXPECT_TRUE(isupper_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_TRUE(isupper_l(i, c_locale));
     } else {
-      EXPECT_FALSE(isupper_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_FALSE(isupper_l(i, c_locale));
     }
   }
 }
@@ -306,9 +308,9 @@ TEST(ctype, isxdigit_l) {
     if ((i >= '0' && i <= '9') ||
         (i >= 'A' && i <= 'F') ||
         (i >= 'a' && i <= 'f')) {
-      EXPECT_TRUE(isxdigit_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_TRUE(isxdigit_l(i, c_locale));
     } else {
-      EXPECT_FALSE(isxdigit_l(i, LC_GLOBAL_LOCALE));
+      EXPECT_FALSE(isxdigit_l(i, c_locale));
     }
   }
 }
@@ -325,9 +327,9 @@ TEST(ctype, tolower) {
 }
 
 TEST(ctype, tolower_l) {
-  EXPECT_EQ('!', tolower_l('!', LC_GLOBAL_LOCALE));
-  EXPECT_EQ('a', tolower_l('a', LC_GLOBAL_LOCALE));
-  EXPECT_EQ('a', tolower_l('A', LC_GLOBAL_LOCALE));
+  EXPECT_EQ('!', tolower_l('!', c_locale));
+  EXPECT_EQ('a', tolower_l('a', c_locale));
+  EXPECT_EQ('a', tolower_l('A', c_locale));
 }
 
 TEST(ctype, _tolower) {
@@ -342,9 +344,9 @@ TEST(ctype, toupper) {
 }
 
 TEST(ctype, toupper_l) {
-  EXPECT_EQ('!', toupper_l('!', LC_GLOBAL_LOCALE));
-  EXPECT_EQ('A', toupper_l('a', LC_GLOBAL_LOCALE));
-  EXPECT_EQ('A', toupper_l('A', LC_GLOBAL_LOCALE));
+  EXPECT_EQ('!', toupper_l('!', c_locale));
+  EXPECT_EQ('A', toupper_l('a', c_locale));
+  EXPECT_EQ('A', toupper_l('A', c_locale));
 }
 
 TEST(ctype, _toupper) {

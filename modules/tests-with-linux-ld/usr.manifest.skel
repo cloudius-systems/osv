@@ -1,0 +1,6 @@
+/tests-with-linux-ld/: ->/tests
+/usr/share/zoneinfo/America/**: /usr/share/zoneinfo/America/**
+/usr/share/zoneinfo/Europe/**: /usr/share/zoneinfo/Europe/**
+/usr/share/zoneinfo/Pacific/**: /usr/share/zoneinfo/Pacific/**
+/usr/share/zoneinfo/Asia/**: /usr/share/zoneinfo/Asia/**
+/usr/lib/locale/C.utf8/**: /usr/lib/locale/C.utf8/**

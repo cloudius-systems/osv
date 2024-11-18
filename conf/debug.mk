@@ -1,2 +1,2 @@
-conf-opt = -O0 -Wno-maybe-uninitialized
-conf-logger_debug=1
+conf_compiler_opt = -O0 -Wno-maybe-uninitialized
+conf_logger_debug=1

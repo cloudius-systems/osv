@@ -33,6 +33,7 @@
 __FBSDID("$FreeBSD$");
 
 #include <osv/mempool.hh>
+#include <osv/contiguous_alloc.hh>
 #include <bsd/porting/netport.h>
 #include <bsd/porting/synch.h>
 #include <bsd/porting/bus.h>
@@ -234,7 +235,7 @@ xlvbd_add(struct xb_softc *sc, blkif_sector_t sectors,
     sc->xb_unit = unit;
 
     if (strcmp(name, "xbd"))
-        device_printf(sc->xb_dev, "attaching as %s%d\n", name, unit);
+        device_printf(sc->xb_dev, " attaching as %s%d\n", name, unit);
 
     sc->xb_disk = disk_alloc();
     sc->xb_disk->d_unit = sc->xb_unit;
@@ -1125,8 +1126,9 @@ setup_blkring(struct xb_softc *sc)
     int error;
     int i;
 
-    sring = (blkif_sring_t *)malloc(sc->ring_pages * PAGE_SIZE, M_XENBLOCKFRONT,
-               M_NOWAIT|M_ZERO);
+    sring = (blkif_sring_t *)memory::alloc_phys_contiguous_aligned(
+            sc->ring_pages * PAGE_SIZE, PAGE_SIZE);
+    memset(sring, 0, sc->ring_pages * PAGE_SIZE);
     if (sring == NULL) {
         xenbus_dev_fatal(sc->xb_dev, ENOMEM, "allocating shared ring");
         return (ENOMEM);
@@ -1865,7 +1867,7 @@ blkif_free(struct xb_softc *sc)
             }
             sring_page_ptr += PAGE_SIZE;
         }
-        free(sc->ring.sring, M_XENBLOCKFRONT);
+        memory::free_phys_contiguous_aligned(sc->ring.sring);
         sc->ring.sring = NULL;
     }
 

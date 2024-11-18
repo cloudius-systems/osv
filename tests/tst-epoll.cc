@@ -116,6 +116,128 @@ static void test_epoll_file()
     close(fd);
 }
 
+#include <arpa/inet.h>
+#include <sys/types.h>
+#include <sys/socket.h>
+static void test_socket_epollrdhup()
+{
+    constexpr int MAXEVENTS = 1024;
+    struct epoll_event events[MAXEVENTS];
+
+    int ep = epoll_create(1);
+    report(ep >= 0, "epoll_create");
+
+    // Create a TCP server socket
+    int serverfd = socket(AF_INET, SOCK_STREAM, 0);
+    report(serverfd >= 0, "server socket");
+    struct sockaddr_in server = {
+        .sin_family = AF_INET,
+        .sin_port   = htons(65432),
+        .sin_addr   = {
+            .s_addr = htonl(INADDR_LOOPBACK),
+        },
+    };
+    int r = bind(serverfd,
+                 reinterpret_cast<const struct sockaddr *>(&server),
+                 sizeof(server));
+    report(r == 0, "bind serverfd");
+
+    r = listen(serverfd, 1);
+    report(r == 0, "listen on serverfd");
+
+    // Create a thread to connect and disconnect
+    std::thread client([&] {
+        int clientfd = socket(AF_INET, SOCK_STREAM, 0);
+        report (clientfd >= 0, "client socket");
+        struct sockaddr_in server = {
+            .sin_family = AF_INET,
+            .sin_port   = htons(65432),
+            .sin_addr   = {
+                .s_addr = htonl(INADDR_LOOPBACK),
+            }
+        };
+        int r = connect(clientfd,
+                        reinterpret_cast<const struct sockaddr *>(&server),
+                        sizeof(server));
+        report(r == 0, "connect to server");
+        close(clientfd);
+    });
+
+    // Accept the client
+    int c = accept(serverfd, NULL, NULL);
+    report(c >= 0, "accepted client");
+
+    // and wait for socket to close
+    struct epoll_event event = {
+        .events  = EPOLLRDHUP,
+        .data    = {
+            .u32 = 789,
+        }
+    };
+    r = epoll_ctl(ep, EPOLL_CTL_ADD, c, &event);
+    report(r == 0, "epoll_ctl ADD");
+
+    r = epoll_wait(ep, events, MAXEVENTS, 10);
+    report(r == 1 && (event.events & EPOLLRDHUP) &&
+           (event.data.u32 == 789), "epoll_wait for EPOLLRDHUP");
+    close(serverfd);
+    client.join();
+}
+
+static void test_af_local_epollrdhup()
+{
+    int s[2], events;
+    struct epoll_event ee;
+
+    int ep = epoll_create(1);
+    report(ep >= 0, "epoll_create");
+
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, s) == -1) {
+        report(0, "socketpair() failed");
+        return;
+    }
+    report(1, "socketpair() succeeded");
+
+    ee.events = EPOLLET|EPOLLIN|EPOLLRDHUP;
+
+    if (epoll_ctl(ep, EPOLL_CTL_ADD, s[0], &ee) == -1) {
+        report(0, "epoll_ctl() failed");
+        goto failed;
+    }
+    report(1, "epoll_crtl() succeeded");
+
+    if (close(s[1]) == -1) {
+        report(0, "close() failed");
+        s[1] = -1;
+        goto failed;
+    }
+
+    s[1] = -1;
+
+    events = epoll_wait(ep, &ee, 1, 5000);
+
+    if (events == -1) {
+        report(0, "epoll_wait() failed");
+        goto failed;
+    }
+
+    if (events) {
+        report(ee.events & EPOLLRDHUP, "EPOLLRDHUP active");
+    } else {
+        report(0, "epoll_wait() timed out\n");
+    }
+
+failed:
+
+    if (s[1] != -1 && close(s[1]) == -1) {
+        report(0, "close() failed");
+    }
+
+    if (close(s[0]) == -1) {
+        report(0, "close() failed");
+    }
+}
+
 int main(int ac, char** av)
 {
     int ep = epoll_create(1);
@@ -269,6 +391,8 @@ int main(int ac, char** av)
 
     test_epolloneshot();
     test_epoll_file();
+    test_socket_epollrdhup();
+    test_af_local_epollrdhup();
 
     std::cout << "SUMMARY: " << tests << ", " << fails << " failures\n";
     return !!fails;

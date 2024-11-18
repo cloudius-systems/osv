@@ -30,6 +30,9 @@
 #include <api/time.h>
 #include <osv/rwlock.h>
 #include <osv/export.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_threads_default_pthread_stack_size.h>
 
 #include "pthread.hh"
 
@@ -105,7 +108,7 @@ namespace pthread_private {
         bool detached;
         cpu_set_t *cpuset;
         sched::cpu *cpu;
-        thread_attr() : stack_begin{}, stack_size{1<<20}, guard_size{4096}, detached{false}, cpuset{nullptr}, cpu{nullptr} {}
+        thread_attr() : stack_begin{}, stack_size{CONF_threads_default_pthread_stack_size}, guard_size{4096}, detached{false}, cpuset{nullptr}, cpu{nullptr} {}
     };
 
     pthread::pthread(void *(*start)(void *arg), void *arg, sigset_t sigset,
@@ -325,7 +328,10 @@ int pthread_getcpuclockid(pthread_t thread, clockid_t *clock_id)
     if (clock_id) {
         pthread *p = pthread::from_libc(thread);
         auto id = p->_thread->id();
-        *clock_id = id + _OSV_CLOCK_SLOTS;
+        //Follow the same formula glibc and musl use to create
+        //a negative clock_id that is then used by Linux kernel when
+        //handling get_clocktime (see https://git.musl-libc.org/cgit/musl/tree/src/thread/pthread_getcpuclockid.c)
+        *clock_id = (-id - 1) * 8U + 6;
     }
     return 0;
 }
@@ -361,8 +367,12 @@ int pthread_spin_lock(pthread_spinlock_t *lock)
     bool* b = from_libc(lock);
     while (__sync_lock_test_and_set(b, 1)) {
         while (*b) {
-            barrier();
-            // FIXME: use "PAUSE" instruction here
+#ifdef __x86_64__
+            __asm __volatile("pause");
+#endif
+#ifdef __aarch64__
+            __asm __volatile("isb sy");
+#endif
         }
     }
     return 0; // We can't really do deadlock detection
@@ -494,8 +504,10 @@ int pthread_rwlock_destroy(pthread_rwlock_t *rw)
 
 int pthread_rwlock_trywrlock(pthread_rwlock_t *rw)
 {
-    from_libc(rw)->try_wlock();
-    return 0;
+    if (from_libc(rw)->try_wlock()) {
+        return 0;
+    }
+    return EBUSY;
 }
 
 int pthread_rwlock_wrlock(pthread_rwlock_t *rw)
@@ -512,7 +524,10 @@ int pthread_rwlock_rdlock(pthread_rwlock_t *rw)
 
 int pthread_rwlock_tryrdlock(pthread_rwlock_t *rw)
 {
-    return from_libc(rw)->try_rlock();
+    if (from_libc(rw)->try_rlock()) {
+        return 0;
+    }
+    return EBUSY;
 }
 
 int pthread_rwlockattr_destroy(pthread_rwlockattr_t *attr)

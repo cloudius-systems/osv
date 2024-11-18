@@ -15,7 +15,7 @@ static void report(bool ok, const char* msg)
 {
     ++tests;
     fails += !ok;
-    debug("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
+    debugf("%s: %s\n", (ok ? "PASS" : "FAIL"), msg);
 }
 
 extern "C" long gettid();

@@ -44,21 +44,29 @@ jobs:
         - docker exec build ./scripts/osv-version.sh > /tmp/osv-version
         - export ARTIFACTS_DIR="$(mktemp -d)"
         - cp /tmp/osv-version "$ARTIFACTS_DIR"
-        - docker cp build:/root/.capstan/repository/osv-loader/osv-loader.qemu "$ARTIFACTS_DIR"
-        - gzip "$ARTIFACTS_DIR"/osv-loader.qemu
-        - docker cp build:/git-repos/osv/build/release/loader-stripped.elf "$ARTIFACTS_DIR"/loader.elf
-        - gzip "$ARTIFACTS_DIR"/loader.elf
+        - docker cp build:/root/.capstan/repository/osv-loader/osv-loader.qemu.x86_64 "$ARTIFACTS_DIR"/osv-loader-with-zfs.qemu.x86_64
+        - gzip "$ARTIFACTS_DIR"/osv-loader-with-zfs.qemu.x86_64
+        - docker cp build:/git-repos/osv/build/release/loader-stripped.elf "$ARTIFACTS_DIR"/loader-with-zfs.elf.x86_64
+        - gzip "$ARTIFACTS_DIR"/loader-with-zfs.elf.x86_64
         - docker cp build:/root/.capstan/repository/osv-loader/index.yaml "$ARTIFACTS_DIR"
-        - docker cp build:/root/.capstan/packages/osv.bootstrap.mpm "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.zfs.mpm.x86_64 "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.zfs.yaml "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.bootstrap.mpm.x86_64 "$ARTIFACTS_DIR"
         - docker cp build:/root/.capstan/packages/osv.bootstrap.yaml "$ARTIFACTS_DIR"
-        - docker cp build:/root/.capstan/packages/osv.common-tests.mpm "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.common-tests.mpm.x86_64 "$ARTIFACTS_DIR"
         - docker cp build:/root/.capstan/packages/osv.common-tests.yaml "$ARTIFACTS_DIR"
-        - docker cp build:/root/.capstan/packages/osv.zfs-tests.mpm "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.zfs-tests.mpm.x86_64 "$ARTIFACTS_DIR"
         - docker cp build:/root/.capstan/packages/osv.zfs-tests.yaml "$ARTIFACTS_DIR"
-        - docker cp build:/root/.capstan/packages/osv.rofs-tests.mpm "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.rofs-tests.mpm.x86_64 "$ARTIFACTS_DIR"
         - docker cp build:/root/.capstan/packages/osv.rofs-tests.yaml "$ARTIFACTS_DIR"
-        - docker cp build:/root/.capstan/packages/osv.httpserver-monitoring-api.mpm "$ARTIFACTS_DIR"
+        - docker cp build:/root/.capstan/packages/osv.httpserver-monitoring-api.mpm.x86_64 "$ARTIFACTS_DIR"
         - docker cp build:/root/.capstan/packages/osv.httpserver-monitoring-api.yaml "$ARTIFACTS_DIR"
+        - docker exec build rm -rf ./build/release.x64
+        - docker exec build ./scripts/build-capstan-mpm-packages kernel conf_hide_symbols=1 fs=rofs loader_image=osv-loader-hidden
+        - docker cp build:/root/.capstan/repository/osv-loader-hidden/osv-loader-hidden.qemu.x86_64 "$ARTIFACTS_DIR"/osv-loader-hidden.qemu.x86_64
+        - gzip "$ARTIFACTS_DIR"/osv-loader-hidden.qemu.x86_64
+        - docker cp build:/git-repos/osv/build/release/loader-stripped.elf "$ARTIFACTS_DIR"/loader-hidden.elf.x86_64
+        - gzip "$ARTIFACTS_DIR"/loader-hidden.elf.x86_64
         - ./.travis/cirp/cleanup4.sh
         - ./.travis/cirp/publish.sh "$ARTIFACTS_DIR" $(cat /tmp/osv-version)
         - ./.travis/cirp/cleanup5.sh

@@ -11,10 +11,8 @@
 #include <osv/mutex.h>
 #include "arch.hh"
 #include <atomic>
-#include <regex>
-#include <fstream>
+#include <regex.h>
 #include <unordered_map>
-#include <boost/algorithm/string/replace.hpp>
 #include <boost/range/algorithm/remove.hpp>
 #include <sys/types.h>
 #include <sys/stat.h>
@@ -26,7 +24,11 @@
 #include <osv/ilog2.hh>
 #include <osv/semaphore.hh>
 #include <osv/elf.hh>
+#include <osv/string_utils.hh>
 #include <cxxabi.h>
+#include "drivers/console.hh"
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 using namespace std;
 
@@ -135,7 +137,7 @@ typeof(tracepoint_base::tp_list) tracepoint_base::tp_list __attribute__((init_pr
 
 // Note: the definition of this list is: "expressions from command line",
 // and its only use is to deal with late initialization of tp:s
-std::vector<std::regex> enabled_tracepoint_regexs;
+std::vector<regex_t> enabled_tracepoint_regexs;
 
 void enable_trace()
 {
@@ -172,17 +174,30 @@ void ensure_log_initialized()
 
 void enable_tracepoint(std::string wildcard)
 {
-    wildcard = boost::algorithm::replace_all_copy(wildcard, std::string("*"), std::string(".*"));
-    wildcard = boost::algorithm::replace_all_copy(wildcard, std::string("?"), std::string("."));
-    std::regex re(wildcard);
-    trace::set_event_state(re, true);
-    enabled_tracepoint_regexs.push_back(re);
+    std::string pattern(wildcard);
+    osv::replace_all(pattern, std::string("*"), std::string(".*"));
+    osv::replace_all(pattern, std::string("?"), std::string("."));
+    regex_t re;
+    if (regcomp(&re, pattern.c_str(), REG_NOSUB) == 0) {
+        trace::set_event_state(&re, true);
+        enabled_tracepoint_regexs.push_back(re);
+    } else {
+        throw std::runtime_error("Failed to compile regular expression '" + wildcard + "'");
+    }
 }
 
 void enable_backtraces(bool backtrace) {
     global_backtrace_enabled = backtrace;
     for (auto& tp : tracepoint_base::tp_list) {
         tp.backtrace(backtrace);
+    }
+}
+
+void list_all_tracepoints() {
+    char buf[128];
+    for (auto& tp : tracepoint_base::tp_list) {
+        auto len = snprintf(buf, 128, "Tracepoint %s @ %p\n", tp.name, &tp);
+        console::write(buf, len);
     }
 }
 
@@ -205,7 +220,7 @@ tracepoint_base::tracepoint_base(unsigned _id, const std::type_info& tp_type,
 {
     auto inserted = known_ids().insert(id).second;
     if (!inserted) {
-        debug("duplicate tracepoint id %d (%s)\n", std::get<0>(id), name);
+        debugf("duplicate tracepoint id %d (%s)\n", std::get<0>(id), name);
         abort();
     }
     probes_ptr.assign(new std::vector<probe*>);
@@ -301,7 +316,7 @@ void tracepoint_base::run_probes() {
 void tracepoint_base::try_enable()
 {
     for (auto& re : enabled_tracepoint_regexs) {
-        if (std::regex_match(std::string(name), re)) {
+        if (regexec(&re, name, 0, nullptr, 0) == 0) {
             // keep the same semantics for command line enabled
             // tp:s as before individually controlled points.
             backtrace(global_backtrace_enabled);
@@ -439,13 +454,13 @@ trace::get_event_info()
 }
 
 std::vector<trace::event_info>
-trace::get_event_info(const std::regex & ex)
+trace::get_event_info(const regex_t * ex)
 {
     std::vector<event_info> res;
 
     WITH_LOCK(trace_control_lock) {
         for (auto & tp : tracepoint_base::tp_list) {
-            if (std::regex_match(std::string(tp.name), ex)) {
+            if (regexec(ex, tp.name, 0, nullptr, 0) == 0) {
                 res.emplace_back(tp);
             }
         }
@@ -455,14 +470,14 @@ trace::get_event_info(const std::regex & ex)
 }
 
 std::vector<trace::event_info>
-trace::set_event_state(const std::regex & ex, bool enable, bool backtrace) {
+trace::set_event_state(const regex_t * ex, bool enable, bool backtrace) {
     std::vector<event_info> res;
 
     // Note: expressions sent here are only treated as instantaneous requests.
     // unlike command line, which is "persisted" and queried on a late tp init.
     WITH_LOCK(trace_control_lock) {
         for (auto & tp : tracepoint_base::tp_list) {
-            if (std::regex_match(std::string(tp.name), ex)) {
+            if (regexec(ex, tp.name, 0, nullptr, 0) == 0) {
                 res.emplace_back(tp);
                 tp.enable(enable);
                 tp.backtrace(backtrace);
@@ -533,6 +548,11 @@ trace::remove_symbol_callback(generator_id id) {
     }
 }
 
+//The code below will be compiled out with conf_hide_symbols=1 as create_trace_dump() is
+//not in the list of the symbols to be exported and is ONLY used
+//by full API httpserver-api module
+#if HIDE_SYMBOLS < 1
+#include <fstream>
 // Helper type to build trace dump binary files
 class trace_out: public std::ofstream {
 public:
@@ -1016,3 +1036,4 @@ trace::create_trace_dump()
 
     return std::move(out.path);
 }
+#endif

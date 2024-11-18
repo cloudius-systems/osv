@@ -7,11 +7,10 @@
 
 #include <osv/drivers_config.h>
 #include <bsd/porting/netport.h>
+#include <osv/kernel_config.h>
 #include "fs/fs.hh"
 #include <bsd/init.hh>
 #include <bsd/net.hh>
-#include <boost/format.hpp>
-#include <boost/algorithm/string.hpp>
 #include <cctype>
 #include <osv/elf.hh>
 #include "arch-tls.hh"
@@ -32,6 +31,7 @@
 #include "arch.hh"
 #include "arch-setup.hh"
 #include "osv/trace.hh"
+#include <osv/strace.hh>
 #include <osv/power.hh>
 #include <osv/rcu.hh>
 #include <osv/mempool.hh>
@@ -52,8 +52,6 @@
 #endif
 #include <osv/options.hh>
 #include <dirent.h>
-#include <iostream>
-#include <fstream>
 #include <mntent.h>
 
 #include "drivers/zfs.hh"
@@ -64,6 +62,7 @@
 #include "libc/network/__dns.hh"
 #include <processor.hh>
 #include <dlfcn.h>
+#include <osv/string_utils.hh>
 
 using namespace osv;
 using namespace osv::clock::literals;
@@ -147,10 +146,16 @@ int main(int loader_argc, char **loader_argv)
 static bool opt_preload_zfs_library = false;
 static bool opt_extra_zfs_pools = false;
 static bool opt_disable_rofs_cache = false;
+#if CONF_memory_tracker
 static bool opt_leak = false;
+#endif
 static bool opt_noshutdown = false;
 bool opt_power_off_on_abort = false;
+#if CONF_tracepoints
 static bool opt_log_backtrace = false;
+static bool opt_list_tracepoints = false;
+static bool opt_strace = false;
+#endif
 static bool opt_mount = true;
 static bool opt_pivot = true;
 static std::string opt_rootfs;
@@ -175,42 +180,51 @@ static bool opt_enable_sampler = false;
 
 static void usage()
 {
-    std::cout << "OSv options:\n";
-    std::cout << "  --help                show help text\n";
-    std::cout << "  --sampler=arg         start stack sampling profiler\n";
-    std::cout << "  --trace=arg           tracepoints to enable\n";
-    std::cout << "  --trace-backtrace     log backtraces in the tracepoint log\n";
-    std::cout << "  --leak                start leak detector after boot\n";
-    std::cout << "  --nomount             don't mount the root file system\n";
-    std::cout << "  --nopivot             do not pivot the root from bootfs to the root fs\n";
-    std::cout << "  --rootfs=arg          root filesystem to use (zfs, rofs, ramfs or virtiofs)\n";
-    std::cout << "  --assign-net          assign virtio network to the application\n";
-    std::cout << "  --maxnic=arg          maximum NIC number\n";
-    std::cout << "  --norandom            don't initialize any random device\n";
-    std::cout << "  --noshutdown          continue running after main() returns\n";
-    std::cout << "  --power-off-on-abort  use poweroff instead of halt if it's aborted\n";
-    std::cout << "  --noinit              don't run commands from /init\n";
-    std::cout << "  --verbose             be verbose, print debug messages\n";
-    std::cout << "  --console=arg         select console driver\n";
-    std::cout << "  --env=arg             set Unix-like environment variable (putenv())\n";
-    std::cout << "  --cwd=arg             set current working directory\n";
-    std::cout << "  --bootchart           perform a test boot measuring a time distribution of\n";
-    std::cout << "                        the various operations\n\n";
-    std::cout << "  --ip=arg              set static IP on NIC\n";
-    std::cout << "  --defaultgw=arg       set default gateway address\n";
-    std::cout << "  --nameserver=arg      set nameserver address\n";
-    std::cout << "  --delay=arg (=0)      delay in seconds before boot\n";
-    std::cout << "  --redirect=arg        redirect stdout and stderr to file\n";
-    std::cout << "  --disable_rofs_cache  disable ROFS memory cache\n";
-    std::cout << "  --nopci               disable PCI enumeration\n";
-    std::cout << "  --extra-zfs-pools     import extra ZFS pools\n";
-    std::cout << "  --mount-fs=arg        mount extra filesystem, format:<fs_type,url,path>\n";
-    std::cout << "  --preload-zfs-library preload ZFS library from /usr/lib/fs\n\n";
+    printf(
+        "OSv options:\n"
+        "  --help                show help text\n"
+#if CONF_tracepoints
+        "  --sampler=arg         start stack sampling profiler\n"
+        "  --trace=arg           tracepoints to enable\n"
+        "  --trace-backtrace     log backtraces in the tracepoint log\n"
+        "  --trace-list          list available tracepoints\n"
+        "  --strace              start a thread to print tracepoints to the console on the fly\n"
+#endif
+#if CONF_memory_tracker
+        "  --leak                start leak detector after boot\n"
+#endif
+        "  --nomount             don't mount the root file system\n"
+        "  --nopivot             do not pivot the root from bootfs to the root fs\n"
+        "  --rootfs=arg          root filesystem to use (zfs, rofs, ramfs or virtiofs)\n"
+        "  --assign-net          assign virtio network to the application\n"
+        "  --maxnic=arg          maximum NIC number\n"
+        "  --norandom            don't initialize any random device\n"
+        "  --noshutdown          continue running after main() returns\n"
+        "  --power-off-on-abort  use poweroff instead of halt if it's aborted\n"
+        "  --noinit              don't run commands from /init\n"
+        "  --verbose             be verbose, print debug messages\n"
+        "  --console=arg         select console driver\n"
+        "  --env=arg             set Unix-like environment variable (putenv())\n"
+        "  --cwd=arg             set current working directory\n"
+        "  --bootchart           perform a test boot measuring a time distribution of\n"
+        "                        the various operations\n\n"
+#if CONF_networking_stack
+        "  --ip=arg              set static IP on NIC\n"
+        "  --defaultgw=arg       set default gateway address\n"
+        "  --nameserver=arg      set nameserver address\n"
+#endif
+        "  --delay=arg (=0)      delay in seconds before boot\n"
+        "  --redirect=arg        redirect stdout and stderr to file\n"
+        "  --disable_rofs_cache  disable ROFS memory cache\n"
+        "  --nopci               disable PCI enumeration\n"
+        "  --extra-zfs-pools     import extra ZFS pools\n"
+        "  --mount-fs=arg        mount extra filesystem, format:<fs_type,url,path>\n"
+        "  --preload-zfs-library preload ZFS library from /usr/lib/fs\n\n");
 }
 
 static void handle_parse_error(const std::string &message)
 {
-    std::cout << message << std::endl;
+    printf("%s\n", message.c_str());
     usage();
     osv::poweroff();
 }
@@ -228,9 +242,11 @@ static void parse_options(int loader_argc, char** loader_argv)
         usage();
     }
 
+#if CONF_memory_tracker
     if (extract_option_flag(options_values, "leak")) {
         opt_leak = true;
     }
+#endif
 
     if (extract_option_flag(options_values, "disable_rofs_cache")) {
         opt_disable_rofs_cache = true;
@@ -257,15 +273,22 @@ static void parse_options(int loader_argc, char** loader_argv)
         maxnic = options::extract_option_int_value(options_values, "maxnic", handle_parse_error);
     }
 
+#if CONF_tracepoints
     if (extract_option_flag(options_values, "trace-backtrace")) {
         opt_log_backtrace = true;
     }
+
+    if (extract_option_flag(options_values, "trace-list")) {
+        opt_list_tracepoints = true;
+    }
+#endif
 
     if (extract_option_flag(options_values, "verbose")) {
         opt_verbose = true;
         enable_verbose();
     }
 
+#if CONF_tracepoints
     if (options::option_value_exists(options_values, "sampler")) {
         sampler_frequency = options::extract_option_int_value(options_values, "sampler", handle_parse_error);
         opt_enable_sampler = true;
@@ -279,12 +302,16 @@ static void parse_options(int loader_argc, char** loader_argv)
         auto tv = options::extract_option_values(options_values, "trace");
         for (auto t : tv) {
             std::vector<std::string> tmp;
-            boost::split(tmp, t, boost::is_any_of(" ,"), boost::token_compress_on);
+            osv::split(tmp, t, " ,", true);
             for (auto t : tmp) {
                 enable_tracepoint(t);
             }
         }
+        if (extract_option_flag(options_values, "strace")) {
+            opt_strace = true;
+        }
     }
+#endif
 
     opt_mount = !extract_option_flag(options_values, "nomount");
     opt_pivot = !extract_option_flag(options_values, "nopivot");
@@ -297,7 +324,7 @@ static void parse_options(int loader_argc, char** loader_argv)
             printf("Ignoring '--console' options after the first.");
         }
         opt_console = v.front();
-        debug("console=%s\n", opt_console);
+        debugf("console=%s\n", opt_console.c_str());
     }
 
     if (options::option_value_exists(options_values, "rootfs")) {
@@ -312,7 +339,7 @@ static void parse_options(int loader_argc, char** loader_argv)
         auto mounts = options::extract_option_values(options_values, "mount-fs");
         for (auto m : mounts) {
             std::vector<std::string> tmp;
-            boost::split(tmp, m, boost::is_any_of(","), boost::token_compress_on);
+            osv::split(tmp, m, ",", true);
             if (tmp.size() != 3 || tmp[0].empty() || tmp[1].empty() || tmp[2].empty()) {
                 printf("Ignoring value: '%s' for option mount-fs, expected in format: <fs_type,url,path>\n", m.c_str());
                 continue;
@@ -329,7 +356,7 @@ static void parse_options(int loader_argc, char** loader_argv)
 
     if (options::option_value_exists(options_values, "env")) {
         for (auto t : options::extract_option_values(options_values, "env")) {
-            debug("Setting in environment: %s\n", t);
+            debugf("Setting in environment: %s\n", t.c_str());
             putenv(strdup(t.c_str()));
         }
     }
@@ -374,7 +401,7 @@ static void parse_options(int loader_argc, char** loader_argv)
 
     if (!options_values.empty()) {
         for (auto other_option : options_values) {
-            std::cout << "unrecognized option: " << other_option.first << std::endl;
+            printf("unrecognized option: %s\n", other_option.first.c_str());
         }
 
         usage();
@@ -383,12 +410,25 @@ static void parse_options(int loader_argc, char** loader_argv)
 }
 
 // return the std::string and the commands_args poiting to them as a move
+#if HIDE_SYMBOLS < 1
+#include <iostream>
+#endif
 std::vector<std::vector<std::string> > prepare_commands(char* app_cmdline)
 {
     std::vector<std::vector<std::string> > commands;
     bool ok;
 
+//When the kernel is linked in with full standard C++ library
+//and all symbols exposed, the std::cout needs to be initialized
+//early before any C++ application is executed. This is not necessary
+//when the kernel is built with all symbols but glibc and standard C++
+//library hidden.
+//For details please read comments of this commit a5e83688f1aa30498c5e270a6cdc04222ede8cb6
+#if HIDE_SYMBOLS < 1
+    std::cout << "Cmdline: " << app_cmdline << "\n";
+#else
     printf("Cmdline: %s\n", app_cmdline);
+#endif
     commands = osv::parse_command_line(app_cmdline, ok);
 
     if (!ok) {
@@ -405,9 +445,22 @@ std::vector<std::vector<std::string> > prepare_commands(char* app_cmdline)
 
 static std::string read_file(std::string fn)
 {
-  std::ifstream in(fn, std::ios::in | std::ios::binary);
-  return std::string((std::istreambuf_iterator<char>(in)),
-          std::istreambuf_iterator<char>());
+    FILE *fp = fopen(fn.c_str(), "r");
+    if (!fp) {
+        return "";
+    }
+
+    size_t line_length = 0;
+    char *line_buffer = nullptr;
+    ssize_t read;
+    std::string content;
+    while ((read = getline(&line_buffer, &line_length, fp)) != -1) {
+        content += line_buffer;
+    }
+    free(line_buffer);
+    fclose(fp);
+
+    return content;
 }
 
 static void stop_all_remaining_app_threads()
@@ -426,7 +479,7 @@ static void load_zfs_library(std::function<void()> on_load_fun = nullptr)
            on_load_fun();
         }
     } else {
-        debug("Could not load and/or initialize %s.\n", libsolaris_path);
+        debugf("Could not load and/or initialize %s.\n", libsolaris_path);
     }
 }
 
@@ -515,6 +568,7 @@ void* do_main_thread(void *_main_args)
         load_zfs_library();
     }
 
+#if CONF_networking_stack
 #ifdef INET6
     // Enable IPv6 StateLess Address AutoConfiguration (SLAAC)
     osv::set_ipv6_accept_rtadv(true);
@@ -537,13 +591,15 @@ void* do_main_thread(void *_main_args)
         }
     });
     if (has_if) {
+#if CONF_networking_dhcp
         if (opt_ip.size() == 0) {
             dhcp_start(true);
         } else {
+#endif
             // Add interface IP addresses
             for (auto t : opt_ip) {
                 std::vector<std::string> tmp;
-                boost::split(tmp, t, boost::is_any_of(" ,/"), boost::token_compress_on);
+                osv::split(tmp, t, " ,", true);
                 if (tmp.size() != 3)
                     abort("incorrect parameter on --ip");
 
@@ -587,7 +643,9 @@ void* do_main_thread(void *_main_args)
                     osv::set_dns_config(dns_servers, std::vector<std::string>());
                 }
             }
+#if CONF_networking_dhcp
         }
+#endif
     }
 
     std::string if_ip;
@@ -602,9 +660,10 @@ void* do_main_thread(void *_main_args)
     if (nr_ips == 1) {
        setenv("OSV_IP", if_ip.c_str(), 1);
     }
+#endif
 
     if (!opt_chdir.empty()) {
-        debug("Chdir to: '%s'\n", opt_chdir.c_str());
+        debugf("Chdir to: '%s'\n", opt_chdir.c_str());
 
         if (chdir(opt_chdir.c_str()) != 0) {
             perror("chdir");
@@ -612,10 +671,12 @@ void* do_main_thread(void *_main_args)
         debug("chdir done\n");
     }
 
+#if CONF_memory_tracker
     if (opt_leak) {
         debug("Enabling leak detector.\n");
         memory::tracker_enabled = true;
     }
+#endif
 
     boot_time.event("Total time");
 #ifdef __x86_64__
@@ -641,8 +702,7 @@ void* do_main_thread(void *_main_args)
         if (fd < 0) {
             perror("output redirection failed");
         } else {
-            std::cout << (append ? "Appending" : "Writing") <<
-                    " stdout and stderr to " << fn << "\n";
+            printf("%s stdout and stderr to %s\n", (append ? "Appending" : "Writing"), fn.c_str());
             close(1);
             close(2);
             dup(fd);
@@ -666,7 +726,7 @@ void* do_main_thread(void *_main_args)
             std::string fn("/init/");
             fn += namelist[i]->d_name;
             auto cmdline = read_file(fn);
-            debug("Running from %s: %s\n", fn.c_str(), cmdline.c_str());
+            debugf("Running from %s: %s\n", fn.c_str(), cmdline.c_str());
             bool ok;
             auto new_commands = osv::parse_command_line(cmdline, ok);
             free(namelist[i]);
@@ -708,7 +768,7 @@ void* do_main_thread(void *_main_args)
                 bg.push_back(app);
             }
         } catch (const launch_error& e) {
-            std::cerr << e.what() << ". Powering off.\n";
+            fprintf(stderr, "%s. Powering off.\n", e.what());
             osv::poweroff();
         }
     }
@@ -719,7 +779,7 @@ void* do_main_thread(void *_main_args)
 
     for (auto app : detached) {
         app->request_termination();
-        debug("Requested termination of %s, waiting...\n", app->get_command());
+        debugf("Requested termination of %s, waiting...\n", app->get_command().c_str());
     }
 
     application::join_all();
@@ -730,7 +790,7 @@ void main_cont(int loader_argc, char** loader_argv)
 {
     osv::firmware_probe();
 
-    debug("Firmware vendor: %s\n", osv::firmware_vendor().c_str());
+    debugf("Firmware vendor: %s\n", osv::firmware_vendor().c_str());
 
     elf::create_main_program();
 
@@ -765,12 +825,21 @@ void main_cont(int loader_argc, char** loader_argv)
         poweroff();
     }
 
+#if CONF_tracepoints
+    if (opt_list_tracepoints) {
+        list_all_tracepoints();
+    }
+
     enable_trace();
     if (opt_log_backtrace) {
         // can only do this after smp_launch, otherwise the IDT is not initialized,
         // and backtrace_safe() fails as soon as we get an exception
         enable_backtraces();
     }
+    if (opt_strace) {
+        start_strace();
+    }
+#endif
     sched::init_detached_threads_reaper();
     elf::setup_missing_symbols_detector();
 
@@ -780,8 +849,10 @@ void main_cont(int loader_argc, char** loader_argv)
     boot_time.event("VFS initialized");
     //ramdisk_init();
 
+#if CONF_networking_stack
     net_init();
     boot_time.event("Network initialized");
+#endif
 
     arch::irq_enable();
 
@@ -816,12 +887,16 @@ void main_cont(int loader_argc, char** loader_argv)
         sched::thread::wait_until([] { return false; });
     }
 
+#if CONF_memory_tracker
     if (memory::tracker_enabled) {
         debug("Leak testing done. Please use 'osv leak show' in gdb to analyze results.\n");
         osv::halt();
     } else {
+#endif
         osv::shutdown();
+#if CONF_memory_tracker
     }
+#endif
 }
 
 int __loader_argc = 0;

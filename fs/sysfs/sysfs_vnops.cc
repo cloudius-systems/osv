@@ -8,7 +8,6 @@
 #include <unistd.h>
 #include <osv/mount.h>
 #include <mntent.h>
-#include <osv/printf.hh>
 #include <osv/mempool.hh>
 
 #include "fs/pseudofs/pseudofs.hh"
@@ -38,20 +37,20 @@ static string sysfs_free_page_ranges()
     stats::page_ranges_stats stats;
     stats::get_page_ranges_stats(stats);
 
-    std::ostringstream os;
+    std::string output("");
     if (stats.order[page_ranges_max_order].ranges_num) {
-        osv::fprintf(os, "huge %04d %012ld\n", //TODO: Show in GB/MB/KB
+        output += osv::sprintf("huge %04d %012ld\n", //TODO: Show in GB/MB/KB
            stats.order[page_ranges_max_order].ranges_num, stats.order[page_ranges_max_order].bytes);
     }
 
     for (int order = page_ranges_max_order; order--; ) {
         if (stats.order[order].ranges_num) {
-            osv::fprintf(os, "  %02d %04d %012ld\n",
+            output += osv::sprintf("  %02d %04d %012ld\n",
                order + 1, stats.order[order].ranges_num, stats.order[order].bytes);
         }
     }
 
-    return os.str();
+    return output;
 }
 
 static string sysfs_memory_pools()
@@ -59,18 +58,17 @@ static string sysfs_memory_pools()
     stats::pool_stats stats;
     stats::get_global_l2_stats(stats);
 
-    std::ostringstream os;
-    osv::fprintf(os, "global l2 (in batches) %02d %02d %02d %02d\n",
+    auto output = osv::sprintf("global l2 (in batches) %02d %02d %02d %02d\n",
         stats._max, stats._watermark_lo, stats._watermark_hi, stats._nr);
 
     for (auto cpu : sched::cpus) {
         stats::pool_stats stats;
         stats::get_l1_stats(cpu->id, stats);
-        osv::fprintf(os, "cpu %d l1 (in pages) %03d %03d %03d %03d\n",
+        output += osv::sprintf("cpu %d l1 (in pages) %03d %03d %03d %03d\n",
             cpu->id, stats._max, stats._watermark_lo, stats._watermark_hi, stats._nr);
     }
 
-    return os.str();
+    return output;
 }
 
 static int
@@ -88,6 +86,12 @@ sysfs_mount(mount* mp, const char *dev, int flags, const void* data)
 
     auto system = make_shared<pseudo_dir_node>(inode_count++);
     system->add("node", node);
+
+    auto cpu = make_shared<pseudo_dir_node>(inode_count++);
+    cpu->add("online", inode_count++, [] {
+       return std::string("0-") + std::to_string(sched::cpus.size() - 1);
+    });
+    system->add("cpu", cpu);
 
     auto devices = make_shared<pseudo_dir_node>(inode_count++);
     devices->add("system", system);

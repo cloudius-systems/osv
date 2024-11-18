@@ -7,9 +7,9 @@ INCLUDES += -I. -I../httpserver-api -I $(src)/libc/internal
 # compiler flags:
 #  -g    adds debugging information to the executable file
 #  -Wall turns on most, but not all, compiler warnings
-CXXFLAGS  = -g -Wall -std=c++11 -fPIC $(COMMON) -O2 -DMONITORING -fvisibility=hidden
+CXXFLAGS  = -g -Wall -std=$(conf_cxx_level) -fPIC $(COMMON) -O2 -DMONITORING -fvisibility=hidden
 #TODO: Figure out why lto breaks exception handling
-#CXXFLAGS  = -g -Wall -std=c++11 -fPIC $(COMMON) -O2 -DMONITORING -fvisibility=hidden -flto
+#CXXFLAGS  = -g -Wall -std=$(conf_cxx_level) -fPIC $(COMMON) -O2 -DMONITORING -fvisibility=hidden -flto
 #LDFLAGS = -flto
 
 boost-libs := -lboost_system -lboost_filesystem

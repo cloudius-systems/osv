@@ -6,6 +6,7 @@
  */
 
 #include "drivers/ahci.hh"
+#include "drivers/blk-common.hh"
 #include <string.h>
 #include <osv/debug.h>
 #include <osv/mmu.hh>
@@ -44,7 +45,7 @@ static struct devops hba_devops {
     no_close,
     hba_read,
     hba_write,
-    no_ioctl,
+    blk_ioctl,
     no_devctl,
     multiplex_strategy,
 };
@@ -534,7 +535,7 @@ void hba::scan()
         add_port(pnr, p);
         read_partition_table(dev);
 
-        debug("AHCI: Add sata device port %d as %s, devsize=%lld\n", pnr, dev_name.c_str(), dev->size);
+        debugf("AHCI: Add sata device port %d as %s, devsize=%lld\n", pnr, dev_name.c_str(), dev->size);
     }
 }
 

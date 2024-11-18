@@ -10,6 +10,7 @@
 #include <osv/sched.hh>
 #include <osv/debug.h>
 #include <osv/irqlock.hh>
+#include <osv/kernel_config_logger_debug.h>
 
 #include "arch-cpu.hh"
 #include "exceptions.hh"

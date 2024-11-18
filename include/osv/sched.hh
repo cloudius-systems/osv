@@ -27,9 +27,30 @@
 #include <osv/clock.hh>
 #include <osv/timer-set.hh>
 #include <osv/export.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 #include <string.h>
 
 typedef float runtime_t;
+
+enum {
+    FUTEX_WAIT           = 0,
+    FUTEX_WAKE           = 1,
+    FUTEX_WAIT_BITSET    = 9,
+    FUTEX_PRIVATE_FLAG   = 128,
+    FUTEX_CLOCK_REALTIME = 256,
+    FUTEX_CMD_MASK       = ~(FUTEX_PRIVATE_FLAG|FUTEX_CLOCK_REALTIME),
+};
+
+struct robust_list {
+    struct robust_list *next;
+};
+
+struct robust_list_head {
+    struct robust_list list;
+    long futex_offset;
+    struct robust_list *list_op_pending;
+};
 
 extern "C" {
 void smp_main();
@@ -311,6 +332,24 @@ private:
     // If _renormalize_count == -1, it means the runtime is global
     // (i.e., export_runtime() was called, or this is a new thread).
     int _renormalize_count;
+};
+
+// "Normal" threads are fairly time-shared according to the thread_runtime
+// data above. Such normal threads all have _realtime._priority == 0.
+// A "real-time" thread is one where _realtime._priority > 0. The scheduler
+// always picks the thread with the highest _realtime_priority to run next;
+// In particular normal threads run only when no real-time thread wants to
+// run. When several real-time threads with equal _realtime._priority want to
+// run, each one is run for _realtime._time_slice before switching to the
+// next one; If _realtime_time_slice is == 0, there is no limit on the amount
+// of time the thread may run - it will only be preempted when it waits,
+// yields, or a higher-priority thread comes along.
+// The realtime scheduling policy matches the POSIX SCHED_RR and SCHED_FIFO.
+class thread_realtime {
+public:
+    using duration = thread_runtime::duration;
+    unsigned _priority = 0;
+    duration _time_slice = duration::zero();
 };
 
 // "tau" controls the length of the history we consider for scheduling,
@@ -616,6 +655,54 @@ public:
      */
     float priority() const;
     /**
+     * Set thread's real-time priority
+     *
+     * By default new threads have a "real-time priority" of 0 and participate
+     * in fair time-sharing of the CPUs (the share is determined by
+     * set_priority()).
+     *
+     * A thread becomes a "real-time" thread by setting a positive integer as
+     * real-time priority. The scheduler always picks the thread with the
+     * highest real-time priority to run next; In particular normal threads run
+     * only when no real-time thread wants to run. When several real-time
+     * threads with equal real-time priority want to run, each one is run
+     * until it waits or yields, before switching to the next one.
+     *
+     * The real-time scheduling policy matches POSIX's "SCHED_FIFO" policy,
+     * or "SCHED_RR" if set_realtime_time_slice() was also used.
+     */
+    void set_realtime_priority(unsigned priority);
+    /**
+     * Get thread's real-time priority
+     *
+     * Returns the thread's real-time priority, an unsigned integer whose
+     * meaning is explained in set_realtime_priority().
+     */
+    unsigned realtime_priority() const;
+    /**
+     * Set thread's real-time scheduling time slice.
+     *
+     * By default, real-time threads (see set_realtime_priority()) continue to
+     * run until they yield, wait, or are preempted by a higher-priority
+     * real-time thread. When a time_slice > 0 is set for a thread with this
+     * function, a thread will be limited to that time-slice before it
+     * automatically yields to the next thread of equal real-time priority (if
+     * any). Setting time_slice == 0 reverts to the default behavior, disabling
+     * the time-slice limit for the thread.
+     *
+     * With time_slice == 0, the real-time scheduling policy matches POSIX's
+     * "SCHED_FIFO" policy. With time_slice > 0, it matches POSIX's "SCHED_RR"
+     * policy.
+     */
+    void set_realtime_time_slice(thread_realtime::duration time_slice);
+    /**
+     * Get thread's real-time scheduling time slice
+     *
+     * Returns the thread's real-time scheduling time slice, whose meaning is
+     * explained in set_realtime_time_slice().
+     */
+    thread_realtime::duration realtime_time_slice() const;
+    /**
       * Prevent a waiting thread from ever waking (returns false if the thread
       * was not in waiting state). This capability is not safe: If the thread
       * currently holds critical OSv resources, they will never be released.
@@ -626,6 +713,10 @@ public:
     bool unsafe_stop();
     void setup_large_syscall_stack();
     void free_tiny_syscall_stack();
+#ifdef __x86_64__
+    void* get_syscall_stack_top();
+#endif
+    void* get_exception_stack_top() { return _arch.exception_stack + sizeof(_arch.exception_stack); }
 private:
     static void wake_impl(detached_state* st,
             unsigned allowed_initial_states_mask = 1 << unsigned(status::waiting));
@@ -641,6 +732,7 @@ private:
     void init_stack();
     void setup_tcb();
     void free_tcb();
+    void free_syscall_stack();
     void complete() __attribute__((__noreturn__));
     template <class Action>
     inline void do_wake_with(Action action, unsigned allowed_initial_states_mask);
@@ -669,6 +761,12 @@ public:
     unsigned int parent_id() const
     {
         return _parent_id;
+    }
+    void set_clear_id(int *clear_id) {
+        _clear_id = clear_id;
+    }
+    void set_robust_list(robust_list_head *list_head) {
+        _robust_list_head = list_head;
     }
 private:
     virtual void timer_fired() override;
@@ -708,6 +806,7 @@ private:
     //
     // wake() on any state except waiting is discarded.
     thread_runtime _runtime;
+    thread_realtime _realtime;
     // part of the thread state is detached from the thread structure,
     // and freed by rcu, so that waking a thread and destroying it can
     // occur in parallel without synchronization via thread_handle
@@ -737,6 +836,10 @@ private:
     std::shared_ptr<osv::application_runtime> _app_runtime;
 public:
     void destroy();
+#ifdef __x86_64__
+    unsigned long get_app_tcb() { return _tcb->app_tcb; }
+    void set_app_tcb(unsigned long tcb) { _tcb->app_tcb = tcb; }
+#endif
 private:
 #ifdef __aarch64__
     friend void ::destroy_current_cpu_terminating_thread();
@@ -812,6 +915,11 @@ private:
             osv::clock::uptime::time_point &running_since,
             osv::clock::uptime::duration &total_cpu_time);
     unsigned int _parent_id;
+    //These two variables are only meaningful when running statically
+    //linked executables or dynamically linked ones launched by the
+    //Linux dynamic linker
+    int *_clear_id;
+    robust_list_head *_robust_list_head;
 };
 
 class thread_handle {
@@ -862,7 +970,12 @@ osv::clock::uptime::duration process_cputime();
 class thread_runtime_compare {
 public:
     bool operator()(const thread& t1, const thread& t2) const {
-        return t1._runtime.get_local() < t2._runtime.get_local();
+        if (t1._realtime._priority > t2._realtime._priority)
+            return true;
+        else if (t2._realtime._priority > 0)
+            return false;
+        else
+            return t1._runtime.get_local() < t2._runtime.get_local();
     }
 };
 
@@ -931,6 +1044,7 @@ struct cpu : private timer_base::client {
                                    thread_runtime::duration preempt_after = thyst);
 #endif
     void enqueue(thread& t);
+    void enqueue_first_equal(thread& t);
     void init_idle_thread();
     virtual void timer_fired() override;
     class notifier;

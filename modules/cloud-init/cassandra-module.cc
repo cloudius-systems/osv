@@ -43,14 +43,14 @@ void cassandra_module::handle(const YAML::Node& doc)
     // Runtime config:
     dict.insert({"seeds", reflector_seeds(dict)});
 
-    debug("cloud-init: cassandra: Configuration:\n");
+    debugf("cloud-init: cassandra: Configuration:\n");
     for (auto&& kv : dict) {
-        debug("  '%s' => '%s'\n", kv.first, kv.second);
+        debugf("  '%s' => '%s'\n", kv.first.c_str(), kv.second.c_str());
     }
 
     ifstream input(template_filename);
     if (!input.is_open()) {
-        debug("cloud-init: cassandra: warning: '%s' template not found.\n", template_filename);
+        debugf("cloud-init: cassandra: warning: '%s' template not found.\n", template_filename);
         return;
     }
     template_source source(input);
@@ -58,7 +58,7 @@ void cassandra_module::handle(const YAML::Node& doc)
 
     ofstream output(config_filename, ios::out);
     if (!output.is_open()) {
-        debug("cloud-init: cassandra: warning: unable to open '%s'. Configuration failed.", config_filename);
+        debugf("cloud-init: cassandra: warning: unable to open '%s'. Configuration failed.", config_filename);
         return;
     }
     output << source.expand(dict);
@@ -85,7 +85,7 @@ Json cassandra_module::wait_for_seeds(map<string, string> dict)
 
     constexpr auto reflector_service = "reflector2.datastax.com";
 
-    debug("cloud-init: cassandra: Using %s as reflector.\n", reflector_service);
+    debugf("cloud-init: cassandra: Using %s as reflector.\n", reflector_service);
 
     string url = string("/reflector2.php")
                + "?indexid="           + dict["launch-index"]
@@ -113,7 +113,7 @@ Json cassandra_module::wait_for_seeds(map<string, string> dict)
             return response;
         }
         constexpr auto seconds = 5;
-        debug("No seeds, retrying in %d seconds ...\n", seconds);
+        debugf("No seeds, retrying in %d seconds ...\n", seconds);
         this_thread::sleep_for(chrono::seconds(seconds));
     }
 }

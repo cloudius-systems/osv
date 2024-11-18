@@ -17,7 +17,10 @@
 #include "libc/libc.hh"
 #include <osv/align.hh>
 #include <osv/debug.hh>
+#include <osv/kernel_config_memory_tracker.h>
+#if CONF_memory_tracker
 #include <osv/alloctracker.hh>
+#endif
 #include <atomic>
 #include <osv/mmu.hh>
 #include <osv/trace.hh>
@@ -31,11 +34,22 @@
 #include <osv/shrinker.h>
 #include <osv/defer.hh>
 #include <osv/dbg-alloc.hh>
+#include <osv/migration-lock.hh>
+#include <osv/export.h>
+
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_memory_debug.h>
+#include <osv/kernel_config_memory_l1_pool_size.h>
+#include <osv/kernel_config_memory_page_batch_size.h>
+#include <osv/kernel_config_memory_jvm_balloon.h>
+
+// recent Boost gets confused by the "hidden" macro we add in some Musl
+// header files, so need to undefine it
+#undef hidden
 #include <boost/dynamic_bitset.hpp>
 #include <boost/lockfree/stack.hpp>
 #include <boost/lockfree/policies.hpp>
-#include <osv/migration-lock.hh>
-#include <osv/export.h>
 
 TRACEPOINT(trace_memory_malloc, "buf=%p, len=%d, align=%d", void *, size_t,
            size_t);
@@ -68,6 +82,7 @@ namespace memory {
 
 size_t phys_mem_size;
 
+#if CONF_memory_tracker
 // Optionally track living allocations, and the call chain which led to each
 // allocation. Don't set tracker_enabled before tracker is fully constructed.
 alloc_tracker tracker;
@@ -86,6 +101,7 @@ static inline void tracker_forget(void *addr)
         tracker.forget(addr);
     }
 }
+#endif
 
 //
 // Before smp_allocator=true, threads are not yet available. malloc and free
@@ -434,7 +450,9 @@ mutex free_page_ranges_lock;
 static std::atomic<size_t> total_memory(0);
 static std::atomic<size_t> free_memory(0);
 static size_t watermark_lo(0);
+#if CONF_memory_jvm_balloon
 static std::atomic<size_t> current_jvm_heap_memory(0);
+#endif
 
 // At least two (x86) huge pages worth of size;
 static size_t constexpr min_emergency_pool_size = 4 << 20;
@@ -464,10 +482,16 @@ static void on_free(size_t mem)
 static void on_alloc(size_t mem)
 {
     free_memory.fetch_sub(mem);
+#if CONF_memory_jvm_balloon
     if (balloon_api) {
         balloon_api->adjust_memory(min_emergency_pool_size);
     }
-    if ((stats::free() + stats::jvm_heap()) < watermark_lo) {
+#endif
+    if ((stats::free()
+#if CONF_memory_jvm_balloon
++ stats::jvm_heap()
+#endif
+) < watermark_lo) {
         reclaimer_thread.wake();
     }
 }
@@ -487,7 +511,7 @@ namespace stats {
         auto total = total_memory.load(std::memory_order_relaxed);
         return total - watermark_lo;
     }
-
+#if CONF_memory_jvm_balloon
     void on_jvm_heap_alloc(size_t mem)
     {
         current_jvm_heap_memory.fetch_add(mem);
@@ -498,6 +522,7 @@ namespace stats {
         current_jvm_heap_memory.fetch_sub(mem);
     }
     size_t jvm_heap() { return current_jvm_heap_memory.load(); }
+#endif
 }
 
 void reclaimer::wake()
@@ -1095,6 +1120,7 @@ void reclaimer::_do_reclaim()
             target = bytes_until_normal();
         }
 
+#if CONF_memory_jvm_balloon
         // This means that we are currently ballooning, we should
         // try to serve the waiters from temporary memory without
         // going on hard mode. A big batch of more memory is likely
@@ -1107,6 +1133,7 @@ void reclaimer::_do_reclaim()
                 }
             }
         }
+#endif
 
         _shrinker_loop(target, [this] { return _oom_blocked.has_waiters(); });
 
@@ -1119,9 +1146,11 @@ void reclaimer::_do_reclaim()
                 }
             }
 
+#if CONF_memory_jvm_balloon
             if (balloon_api) {
                 balloon_api->voluntary_return();
             }
+#endif
         }
     }
 }
@@ -1185,7 +1214,7 @@ static std::vector<stats::pool_stats> l1_pool_stats;
 struct l1 {
     l1(sched::cpu* cpu)
         : _fill_thread(sched::thread::make([] { fill_thread(); },
-            sched::thread::attr().pin(cpu).name(osv::sprintf("page_pool_l1_%d", cpu->id))))
+            sched::thread::attr().pin(cpu).name(std::string("page_pool_l1_") + std::to_string(cpu->id))))
     {
         cpu_id = cpu->id;
         _fill_thread->start();
@@ -1216,7 +1245,7 @@ struct l1 {
     }
     void push(void* page)
     {
-        assert(nr < 512);
+        assert(nr < CONF_memory_l1_pool_size);
         _pages[nr++] = page;
         l1_pool_stats[cpu_id]._nr = nr;
 
@@ -1227,7 +1256,7 @@ struct l1 {
     static void refill();
     static void unfill();
 
-    static constexpr size_t max = 512;
+    static constexpr size_t max = CONF_memory_l1_pool_size;
     static constexpr size_t watermark_lo = max * 1 / 4;
     static constexpr size_t watermark_hi = max * 3 / 4;
     size_t nr = 0;
@@ -1240,7 +1269,7 @@ private:
 
 struct page_batch {
     // Number of pages per batch
-    static constexpr size_t nr_pages = 32;
+    static constexpr size_t nr_pages = CONF_memory_page_batch_size;
     void* pages[nr_pages];
 };
 
@@ -1736,7 +1765,9 @@ static void* untracked_alloc_page()
 void* alloc_page()
 {
     void *p = untracked_alloc_page();
+#if CONF_memory_tracker
     tracker_remember(p, page_size);
+#endif
     return p;
 }
 
@@ -1752,7 +1783,9 @@ static inline void untracked_free_page(void *v)
 void free_page(void* v)
 {
     untracked_free_page(v);
+#if CONF_memory_tracker
     tracker_forget(v);
+#endif
 }
 
 /* Allocate a huge page of a given size N (which must be a power of two)
@@ -1853,7 +1886,9 @@ static inline void* std_malloc(size_t size, size_t alignment)
     } else {
         ret = memory::malloc_large(size, alignment, true, false);
     }
+#if CONF_memory_tracker
     memory::tracker_remember(ret, size);
+#endif
     return ret;
 }
 
@@ -1927,7 +1962,9 @@ void free(void* object)
     if (!object) {
         return;
     }
+#if CONF_memory_tracker
     memory::tracker_forget(object);
+#endif
 
     if (!mmu::is_linear_mapped(object, 0)) {
         return memory::mapped_free_large(object);
@@ -2056,7 +2093,7 @@ void* malloc(size_t size)
     if (alignment > size) {
         alignment = 1ul << ilog2_roundup(size);
     }
-#if CONF_debug_memory == 0
+#if CONF_memory_debug == 0
     void* buf = std_malloc(size, alignment);
 #else
     void* buf = dbg::malloc(size, alignment);
@@ -2106,7 +2143,7 @@ int posix_memalign(void **memptr, size_t alignment, size_t size)
     if (!is_power_of_two(alignment)) {
         return EINVAL;
     }
-#if CONF_debug_memory == 0
+#if CONF_memory_debug == 0
     void* ret = std_malloc(size, alignment);
 #else
     void* ret = dbg::malloc(size, alignment);
@@ -2168,12 +2205,28 @@ void free_phys_contiguous_aligned(void* p)
 
 bool throttling_needed()
 {
+#if CONF_memory_jvm_balloon
     if (!balloon_api) {
         return false;
     }
 
     return balloon_api->ballooning();
+#else
+    return false;
+#endif
 }
 
+#if CONF_memory_jvm_balloon
 jvm_balloon_api *balloon_api = nullptr;
+#endif
+}
+
+extern "C" void* alloc_contiguous_aligned(size_t size, size_t align)
+{
+    return memory::alloc_phys_contiguous_aligned(size, align, true);
+}
+
+extern "C" void free_contiguous_aligned(void* p)
+{
+    memory::free_phys_contiguous_aligned(p);
 }

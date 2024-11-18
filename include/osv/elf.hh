@@ -17,6 +17,8 @@
 #include <unordered_map>
 #include <osv/types.h>
 #include <osv/sched.hh>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 #include <atomic>
 
 #include "arch-elf.hh"
@@ -212,6 +214,7 @@ enum {
 };
 enum {
     DF_1_NOW = 0x1,
+    DF_1_PIE = 0x08000000,
 };
 
 enum {
@@ -302,6 +305,13 @@ struct Elf64_Sym {
     Elf64_Xword st_size; /* Size of object (e.g., common) */
 };
 
+#ifdef __x86_64__
+    constexpr const char *linux_dl_soname = "ld-linux-x86-64.so.2";
+#endif
+#ifdef __aarch64__
+    constexpr const char *linux_dl_soname = "ld-linux-aarch64.so.1";
+#endif
+
 class program;
 struct symbol_module;
 
@@ -378,13 +388,40 @@ public:
     size_t initial_tls_size() { return _initial_tls_size; }
     void* initial_tls() { return _initial_tls.get(); }
     void* get_tls_segment() { return _tls_segment; }
-    bool is_non_pie_executable() { return _ehdr.e_type == ET_EXEC; }
     std::vector<ptrdiff_t>& initial_tls_offsets() { return _initial_tls_offsets; }
-    bool is_executable() { return _is_executable; }
+    // OSv is only "interested" in ELF objects with e_type equal to ET_EXEC or ET_DYN
+    // and rejects others (see load_elf_header()). All these can be broken down
+    // into five types:
+    // - (1) dynamically linked position dependent executable
+    // - (2) dynamically linked position independent executable (dynamically linked PIE)
+    // - (3) statically linked position dependent executable
+    // - (4) statically linked position independent executable (statically linked PIE)
+    // - (5) shared library
+    // As OSv processes the ELF objects, most of the time it needs to know if given
+    // object belongs to a superset of these types - dynamically linked executables,
+    // statically linked executables, position dependent object, etc. For this reason
+    // the methods below provide a way to make such determination.
+    //
+    // Is it a position independent code (type 2, 4 or 5)?
+    bool is_pic() { return _ehdr.e_type == ET_DYN; }
+    // Is it a position independent executable (type 2 or 4)?
+    bool is_pie() { return dynamic_exists(DT_FLAGS_1) && (dynamic_val(DT_FLAGS_1) & DF_1_PIE); }
+    // Is it a shared library (type 5)?
+    bool is_shared_library() { return _ehdr.e_type == ET_DYN && !is_pie(); }
+    // Is it a dynamically linked executable (type 1 or 2, determined by presence of PT_INTERP)?
+    bool is_dynamically_linked_executable() { return _is_dynamically_linked_executable; }
+    // Is it a statically linked executable (type 3 or 4)?
+    // Absence of PT_INTERP is not enough to determine it is a statically linked executable
+    // as shared libraries also as missing PT_INTERP.
+    bool is_statically_linked_executable() { return !_is_dynamically_linked_executable && !is_shared_library(); }
+    bool is_linux_dl() { return this->soname() == linux_dl_soname; }
     ulong get_tls_size();
     ulong get_aligned_tls_size();
     void copy_local_tls(void* to_addr);
     void* eh_frame_addr() { return _eh_frame; }
+    Elf64_Half headers_count() { return _ehdr.e_phnum; }
+    Elf64_Half headers_size() { return _ehdr.e_phentsize; }
+    void* headers_start() { return _headers_start; }
 protected:
     virtual void load_segment(const Elf64_Phdr& segment) = 0;
     virtual void unload_segment(const Elf64_Phdr& segment) = 0;
@@ -435,10 +472,11 @@ protected:
     Elf64_Dyn* _dynamic_table;
     ulong _module_index;
     std::unique_ptr<char[]> _section_names_cache;
-    bool _is_executable;
+    bool _is_dynamically_linked_executable;
     bool is_core();
     bool _init_called;
     void* _eh_frame;
+    void* _headers_start;
 
     std::unordered_map<std::string,void*> _cached_symbols;
 
@@ -462,7 +500,7 @@ protected:
     bool arch_relocate_jump_slot(symbol_module& sym, void *addr, Elf64_Sxword addend);
     void arch_relocate_tls_desc(u32 sym, void *addr, Elf64_Sxword addend);
     size_t static_tls_end() {
-        if (is_core() || is_executable()) {
+        if (is_core() || _is_dynamically_linked_executable) {
             return 0;
         }
         return _static_tls_offset + get_tls_size();
@@ -617,6 +655,7 @@ public:
     dladdr_info lookup_addr(const void* addr);
     elf::object *object_containing_addr(const void *addr);
     inline object *tls_object(ulong module);
+    void *get_libvdso_base() { return _libvdso->base(); }
 private:
     void add_debugger_obj(object* obj);
     void del_debugger_obj(object* obj);
@@ -627,10 +666,12 @@ private:
     std::shared_ptr<object> load_object(std::string name,
             std::vector<std::string> extra_path,
             std::vector<std::shared_ptr<object>> &loaded_objects);
+    void initialize_libvdso();
 private:
     mutex _mutex;
     void* _next_alloc;
     std::shared_ptr<object> _core;
+    std::shared_ptr<object> _libvdso;
     std::map<std::string, std::weak_ptr<object>> _files;
     // used to determine object::_module_index, so indexes
     // are stable even when objects are deleted:

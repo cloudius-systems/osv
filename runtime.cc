@@ -32,7 +32,6 @@
 #include <sys/sysinfo.h>
 #include "processor.hh"
 #include <osv/debug.hh>
-#include <boost/format.hpp>
 #include <osv/mempool.hh>
 #include <osv/export.h>
 #include <pwd.h>
@@ -64,6 +63,8 @@
 #include <sys/wait.h>
 #include <pty.h>
 #include <osv/pid.h>
+#include <osv/kernel_config_lazy_stack.h>
+#include <osv/kernel_config_lazy_stack_invariant.h>
 
 // cxxabi.h from gcc 10 and earlier used to say that __cxa_finalize returns
 // an int, while it should return void (and does so on gcc 11). To allow us
@@ -385,7 +386,7 @@ long sysconf(int name)
     case _SC_MINSIGSTKSZ: return MINSIGSTKSZ;
     case _SC_SIGSTKSZ: return SIGSTKSZ;
     default:
-        debug(fmt("sysconf(): stubbed for parameter %1%\n") % name);
+        debugf("sysconf(): stubbed for parameter %ld\n", name);
         errno = EINVAL;
         return -1;
     }
@@ -442,7 +443,7 @@ int pclose(FILE *stream)
 
 void exit(int status)
 {
-    debug(fmt("program exited with status %d\n") % status);
+    debugf("program exited with status %ld\n", status);
     osv::shutdown();
 }
 

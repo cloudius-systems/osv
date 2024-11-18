@@ -4,6 +4,12 @@ import argparse
 import os
 from time import sleep
 
+def write_to_status_file(line):
+    status_file_name = os.getenv('STATUS_FILE')
+    if status_file_name:
+       with open(status_file_name, "a+") as status_file:
+         status_file.write(line + '\n')
+
 def run(command, hypervisor_name, image_path=None, line=None, guest_port=None, host_port=None,
         input_lines=[], kill_app=False, kernel_path=None):
 
@@ -34,18 +40,17 @@ def run(command, hypervisor_name, image_path=None, line=None, guest_port=None, h
     for line in input_lines:
         app.write_line_to_input(line)
 
-    if kill_app:
-       app.kill()
-
-    app.join()
-
-    print('----------')
-    print('  SUCCESS')
-
-    status_file_name = os.getenv('STATUS_FILE')
-    if status_file_name:
-       with open(status_file_name, "a+") as status_file:
-         status_file.write('  SUCCESS\n')
+    try:
+        if kill_app:
+            app.kill()
+        app.join()
+        print('----------')
+        print('  \033[92mSUCCESS\033[00m')
+        write_to_status_file('  SUCCESS')
+    except Exception as ex:
+        print("  \033[91mERROR: Guest failed on kill() or join(): %s\033[00m" % str(ex))
+        write_to_status_file("  ERROR: Guest failed on kill() or join(): %s" % str(ex))
+        success = False
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(prog='test_app')

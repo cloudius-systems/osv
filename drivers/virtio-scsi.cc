@@ -15,6 +15,7 @@
 #include "drivers/virtio.hh"
 #include "drivers/virtio-scsi.hh"
 #include "drivers/scsi-common.hh"
+#include "drivers/blk-common.hh"
 
 #include <string>
 #include <vector>
@@ -61,7 +62,7 @@ static struct devops scsi_devops {
     no_close,
     scsi_read,
     scsi_write,
-    no_ioctl,
+    blk_ioctl,
     no_devctl,
     multiplex_strategy,
 };
@@ -123,7 +124,7 @@ void scsi::add_lun(u16 target, u16 lun)
     dev->max_io_size = _config.max_sectors * VIRTIO_SCSI_SECTOR_SIZE;
     read_partition_table(dev);
 
-    debug("virtio-scsi: Add scsi device target=%d, lun=%-3d as %s, devsize=%lld\n", target, lun, dev_name.c_str(), devsize);
+    debugf("virtio-scsi: Add scsi device target=%d, lun=%-3d as %s, devsize=%lld\n", target, lun, dev_name.c_str(), devsize);
 }
 
 bool scsi::ack_irq()

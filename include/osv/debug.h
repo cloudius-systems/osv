@@ -11,6 +11,7 @@
 #include <sys/cdefs.h>
 #include <sys/types.h>
 #include <stdarg.h>
+#include <osv/kernel_config_logger_debug.h>
 
 typedef enum logger_severity_e {
      logger_debug = 0,
@@ -33,7 +34,7 @@ typedef enum logger_severity_e {
 
 __BEGIN_DECLS
 void debug(const char *msg);
-void debugf(const char *, ...);
+void debugff(const char *, ...);
 void debug_write(const char *msg, size_t len);
 
 /* a lockless version that doesn't take any locks before printing,

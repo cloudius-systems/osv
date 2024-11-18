@@ -82,25 +82,6 @@ ifeq (,$(wildcard conf/$(arch).mk))
 endif
 include conf/$(arch).mk
 
-# This parameter can be passed in to the build command to specify name of
-# a drivers profile. The drivers profile allows to build custom kernel with
-# a specific set of drivers enabled in the corresponding makefile include
-# file - conf/profiles/$(arch)/$(drivers_profile).mk). The default profile is
-# 'all' which incorporates all drivers into kernel.
-# In general the profiles set variables named conf_drivers_*, which then in turn
-# are used in the rules below to decide which object files are linked into
-# kernel.
-drivers_profile?=all
-ifeq (,$(wildcard conf/profiles/$(arch)/$(drivers_profile).mk))
-    $(error unsupported drivers profile $(drivers_profile))
-endif
-include conf/profiles/$(arch)/$(drivers_profile).mk
-# The base profile disables all drivers unless they are explicitly enabled
-# by the profile file included in the line above. The base profile also enforces
-# certain dependencies between drivers, for example the ide driver needs pci support, etc.
-# For more details please read comments in the profile file.
-include conf/profiles/$(arch)/base.mk
-
 CROSS_PREFIX ?= $(if $(filter-out $(arch),$(host_arch)),$(arch)-linux-gnu-)
 CXX=$(CROSS_PREFIX)g++
 CC=$(CROSS_PREFIX)gcc
@@ -117,6 +98,29 @@ OBJCOPY=$(CROSS_PREFIX)objcopy
 out = build/$(mode).$(arch)
 outlink = build/$(mode)
 outlink2 = build/last
+
+ifneq ($(MAKECMDGOALS),menuconfig)
+include $(out)/gen/config/kernel_conf.mk
+endif
+#
+# This parameter can be passed in to the build command to specify name of
+# a drivers profile. The drivers profile allows to build custom kernel with
+# a specific set of drivers enabled in the corresponding makefile include
+# file - conf/profiles/$(arch)/$(conf_drivers_profile).mk). The default profile is
+# 'all' which incorporates all drivers into kernel.
+# In general the profiles set variables named conf_drivers_*, which then in turn
+# are used in the rules below to decide which object files are linked into
+# kernel.
+conf_drivers_profile?=all
+ifeq (,$(wildcard conf/profiles/$(arch)/$(conf_drivers_profile).mk))
+    $(error unsupported drivers profile $(conf_drivers_profile))
+endif
+include conf/profiles/$(arch)/$(conf_drivers_profile).mk
+# The base profile disables all drivers unless they are explicitly enabled
+# by the profile file included in the line above. The base profile also enforces
+# certain dependencies between drivers, for example the ide driver needs pci support, etc.
+# For more details please read comments in the profile file.
+include conf/profiles/$(arch)/base.mk
 
 ifneq ($(MAKECMDGOALS),clean)
 $(info Building into $(out))
@@ -153,12 +157,17 @@ all: $(out)/zfs_builder.img
 endif
 .PHONY: all
 
+menuconfig:
+	$(call quiet, make -s -f conf/Makefile default_config -j1, GEN default $(out)/.config)
+	make -s -f conf/Makefile menuconfig -j1
+
 links:
 	$(call very-quiet, ln -nsf $(notdir $(out)) $(outlink))
 	$(call very-quiet, ln -nsf $(notdir $(out)) $(outlink2))
 .PHONY: links
 
 check:
+	$(call quiet, pkill -e -9 qemu-system || true, Kill lingering QEMU process if any)
 	./scripts/build check
 .PHONY: check
 
@@ -291,7 +300,7 @@ endif
 #     returns option if file builds with -ffoo, empty otherwise
 compiler-flag = $(shell $(CXX) $(CFLAGS_WERROR) $1 -o /dev/null -c $3  > /dev/null 2>&1 && echo $2)
 
-compiler-specific := $(call compiler-flag, -std=gnu++11, -DHAVE_ATTR_COLD_LABEL, compiler/attr/cold-label.cc)
+compiler-specific := $(call compiler-flag, -std=$(conf_cxx_level), -DHAVE_ATTR_COLD_LABEL, compiler/attr/cold-label.cc)
 
 source-dialects = -D_GNU_SOURCE
 
@@ -333,13 +342,13 @@ COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -
 	$(kernel-defines) \
 	-fno-omit-frame-pointer $(compiler-specific) \
 	-include compiler/include/intrinsics.hh \
-	$(arch-cflags) $(conf-opt) $(acpi-defines) $(tracing-flags) $(gcc-sysroot) \
+	$(conf_compiler_cflags) $(conf_compiler_opt) $(acpi-defines) $(tracing-flags) $(gcc-sysroot) \
 	$(configuration) -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207" -DARCH_STRING=$(ARCH_STR) $(EXTRA_FLAGS)
 COMMON += $(standard-includes-flag)
 
 tracing-flags-0 =
 tracing-flags-1 = -finstrument-functions -finstrument-functions-exclude-file-list=c++,trace.cc,trace.hh,align.hh,mmintrin.h
-tracing-flags = $(tracing-flags-$(conf-tracing))
+tracing-flags = $(tracing-flags-$(conf_tracing))
 
 cc-hide-flags-0 =
 cc-hide-flags-1 = -fvisibility=hidden
@@ -355,7 +364,7 @@ gc-flags = $(gc-flags-$(conf_hide_symbols))
 
 gcc-opt-Og := $(call compiler-flag, -Og, -Og, compiler/empty.cc)
 
-CXXFLAGS = -std=gnu++11 $(COMMON) $(cxx-hide-flags)
+CXXFLAGS = -std=$(conf_cxx_level) $(COMMON) $(cxx-hide-flags)
 CFLAGS = -std=gnu99 $(COMMON)
 
 # should be limited to files under libc/ eventually
@@ -371,32 +380,29 @@ $(out)/bsd/%.o: INCLUDES += -isystem bsd/
 # for machine/
 $(out)/bsd/%.o: INCLUDES += -isystem bsd/$(arch)
 
-configuration-defines = conf-preempt conf-debug_memory conf-logger_debug conf-debug_elf conf-INET6 \
-			conf-lazy_stack conf-lazy_stack_invariant
+configuration-defines = conf-INET6
 
 configuration = $(foreach cf,$(configuration-defines), \
                       -D$(cf:conf-%=CONF_%)=$($(cf)))
-
-
 
 makedir = $(call very-quiet, mkdir -p $(dir $@))
 build-so = $(CC) $(CFLAGS) -o $@ $^ $(EXTRA_LIBS)
 q-build-so = $(call quiet, $(build-so), LINK $@)
 
 
-$(out)/%.o: %.cc | generated-headers
+$(out)/%.o: %.cc $(out)/gen/include/osv/kernel_config_hide_symbols.h | generated-headers
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
 
-$(out)/%.o: %.c | generated-headers
+$(out)/%.o: %.c $(out)/gen/include/osv/kernel_config_hide_symbols.h | generated-headers
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $<, CC $*.c)
 
-$(out)/%.o: %.S
+$(out)/%.o: %.S $(out)/gen/include/osv/kernel_config_hide_symbols.h
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) $(ASFLAGS) -c -o $@ $<, AS $*.S)
 
-$(out)/%.o: %.s
+$(out)/%.o: %.s $(out)/gen/include/osv/kernel_config_hide_symbols.h
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) $(ASFLAGS) -c -o $@ $<, AS $*.s)
 
@@ -567,7 +573,9 @@ $(out)/bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/metaslab.o: COMMON+=-W
 $(out)/bsd/%.o: CXXFLAGS += -Wno-class-memaccess
 
 bsd  = bsd/init.o
+ifeq ($(conf_networking_stack),1)
 bsd += bsd/net.o
+endif
 bsd += bsd/$(arch)/machine/in_cksum.o
 bsd += bsd/sys/crypto/rijndael/rijndael-alg-fst.o
 bsd += bsd/sys/crypto/rijndael/rijndael-api.o
@@ -575,9 +583,12 @@ bsd += bsd/sys/crypto/rijndael/rijndael-api-fst.o
 bsd += bsd/sys/crypto/sha2/sha2.o
 bsd += bsd/sys/libkern/arc4random.o
 bsd += bsd/sys/libkern/random.o
+ifeq ($(conf_networking_stack),1)
 bsd += bsd/sys/libkern/inet_ntoa.o
 bsd += bsd/sys/libkern/inet_aton.o
+endif
 bsd += bsd/sys/kern/md5c.o
+ifeq ($(conf_networking_stack),1)
 bsd += bsd/sys/kern/kern_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf.o
 bsd += bsd/sys/kern/uipc_mbuf2.o
@@ -586,15 +597,21 @@ bsd += bsd/sys/kern/uipc_sockbuf.o
 bsd += bsd/sys/kern/uipc_socket.o
 bsd += bsd/sys/kern/uipc_syscalls.o
 bsd += bsd/sys/kern/uipc_syscalls_wrap.o
+endif
+bsd += bsd/sys/kern/subr_bufring.o
 bsd += bsd/sys/kern/subr_sbuf.o
 bsd += bsd/sys/kern/subr_eventhandler.o
 bsd += bsd/sys/kern/subr_hash.o
 bsd += bsd/sys/kern/subr_taskqueue.o
 $(out)/bsd/sys/kern/subr_taskqueue.o: COMMON += -Wno-dangling-pointer
+ifeq ($(conf_networking_stack),1)
 bsd += bsd/sys/kern/sys_socket.o
+endif
 bsd += bsd/sys/kern/subr_disk.o
+ifeq ($(conf_networking_stack),1)
 bsd += bsd/porting/route.o
 bsd += bsd/porting/networking.o
+endif
 bsd += bsd/porting/netport.o
 bsd += bsd/porting/netport1.o
 bsd += bsd/porting/shrinker.o
@@ -607,6 +624,7 @@ bsd += bsd/porting/kthread.o
 bsd += bsd/porting/mmu.o
 bsd += bsd/porting/pcpu.o
 bsd += bsd/porting/bus_dma.o
+ifeq ($(conf_networking_stack),1)
 bsd += bsd/sys/netinet/if_ether.o
 bsd += bsd/sys/compat/linux/linux_socket.o
 bsd += bsd/sys/compat/linux/linux_ioctl.o
@@ -689,8 +707,10 @@ bsd += bsd/sys/netinet6/route6.o
 bsd += bsd/sys/netinet6/scope6.o
 bsd += bsd/sys/netinet6/udp6_usrreq.o
 endif
+endif
 ifeq ($(conf_drivers_xen),1)
 bsd += bsd/sys/xen/evtchn.o
+$(out)/bsd/sys/xen/evtchn.o: COMMON += -Wno-array-bounds -Wno-stringop-overread -Wno-stringop-overflow
 endif
 
 ifeq ($(arch),x64)
@@ -701,11 +721,22 @@ bsd += bsd/sys/xen/xenstore/xenstore.o
 bsd += bsd/sys/xen/xenbus/xenbus.o
 bsd += bsd/sys/xen/xenbus/xenbusb.o
 bsd += bsd/sys/xen/xenbus/xenbusb_front.o
+ifeq ($(conf_networking_stack),1)
 bsd += bsd/sys/dev/xen/netfront/netfront.o
+endif
 bsd += bsd/sys/dev/xen/blkfront/blkfront.o
 endif
 ifeq ($(conf_drivers_hyperv),1)
 bsd += bsd/sys/dev/hyperv/vmbus/hyperv.o
+endif
+ifeq ($(conf_networking_stack),1)
+ifeq ($(conf_drivers_ena),1)
+bsd += bsd/sys/contrib/ena_com/ena_eth_com.o
+bsd += bsd/sys/contrib/ena_com/ena_com.o
+bsd += bsd/sys/dev/ena/ena_datapath.o
+bsd += bsd/sys/dev/ena/ena.o
+$(out)/bsd/sys/dev/ena/%.o: CXXFLAGS += -Ibsd/sys/contrib
+endif
 endif
 endif
 
@@ -740,6 +771,7 @@ solaris += bsd/sys/cddl/contrib/opensolaris/common/acl/acl_common.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/avl/avl.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/fnvpair.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair.o
+$(out)/bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair.o: CFLAGS += -Wno-stringop-overread
 solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair_alloc_fixed.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/unicode/u8_textprep.o
 solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/callb.o
@@ -881,6 +913,7 @@ libtsm += drivers/libtsm/tsm_vte_charsets.o
 drivers := $(bsd)
 drivers += core/mmu.o
 drivers += arch/$(arch)/early-console.o
+drivers += drivers/blk-common.o
 drivers += drivers/console.o
 drivers += drivers/console-multiplexer.o
 drivers += drivers/console-driver.o
@@ -920,16 +953,24 @@ drivers += drivers/virtio-vring.o
 ifeq ($(conf_drivers_mmio),1)
 drivers += drivers/virtio-mmio.o
 endif
+ifeq ($(conf_drivers_nvme),1)
+drivers += drivers/nvme.o
+drivers += drivers/nvme-queue.o
+endif
+ifeq ($(conf_networking_stack),1)
 drivers += drivers/virtio-net.o
+endif
 drivers += drivers/virtio-blk.o
 drivers += drivers/virtio-scsi.o
 drivers += drivers/virtio-rng.o
 drivers += drivers/virtio-fs.o
 endif
 
+ifeq ($(conf_networking_stack),1)
 ifeq ($(conf_drivers_vmxnet3),1)
 drivers += drivers/vmxnet3.o
 drivers += drivers/vmxnet3-queues.o
+endif
 endif
 drivers += drivers/kvmclock.o
 ifeq ($(conf_drivers_hyperv),1)
@@ -963,6 +1004,11 @@ drivers += drivers/xenclock.o
 drivers += drivers/xenfront.o drivers/xenfront-xenbus.o drivers/xenfront-blk.o
 drivers += drivers/xenplatform-pci.o
 endif
+ifeq ($(conf_networking_stack),1)
+ifeq ($(conf_drivers_ena),1)
+drivers += drivers/ena.o
+endif
+endif
 endif # x64
 
 ifeq ($(arch),aarch64)
@@ -992,7 +1038,9 @@ drivers += drivers/virtio-fs.o
 endif
 endif # aarch64
 
+ifeq ($(conf_tracepoints),1)
 objects += arch/$(arch)/arch-trace.o
+endif
 objects += arch/$(arch)/arch-setup.o
 objects += arch/$(arch)/signal.o
 objects += arch/$(arch)/arch-cpu.o
@@ -1008,6 +1056,7 @@ objects += arch/$(arch)/cpuid.o
 objects += arch/$(arch)/firmware.o
 objects += arch/$(arch)/hypervisor.o
 objects += arch/$(arch)/interrupt.o
+objects += arch/$(arch)/clone.o
 ifeq ($(conf_drivers_pci),1)
 objects += arch/$(arch)/pci.o
 objects += arch/$(arch)/msi.o
@@ -1018,17 +1067,23 @@ ifeq ($(conf_drivers_xen),1)
 objects += arch/$(arch)/xen.o
 endif
 
+ifeq ($(conf_memory_optimize),1)
 $(out)/arch/x64/string-ssse3.o: CXXFLAGS += -mssse3
+endif
 
 ifeq ($(arch),aarch64)
 objects += arch/$(arch)/psci.o
 objects += arch/$(arch)/arm-clock.o
-objects += arch/$(arch)/gic.o
+objects += arch/$(arch)/gic-common.o
+objects += arch/$(arch)/gic-v2.o
+objects += arch/$(arch)/gic-v3.o
 objects += arch/$(arch)/arch-dtb.o
 objects += arch/$(arch)/hypercall.o
 objects += arch/$(arch)/memset.o
 objects += arch/$(arch)/memcpy.o
+ifeq ($(conf_memory_optimize),1)
 objects += arch/$(arch)/memmove.o
+endif
 objects += arch/$(arch)/tlsdesc.o
 objects += arch/$(arch)/sched.o
 objects += $(libfdt)
@@ -1036,16 +1091,19 @@ endif
 
 ifeq ($(arch),x64)
 objects += arch/x64/dmi.o
+ifeq ($(conf_memory_optimize),1)
 objects += arch/x64/string.o
 objects += arch/x64/string-ssse3.o
-objects += arch/x64/arch-trace.o
+endif
 objects += arch/x64/ioapic.o
 objects += arch/x64/apic.o
 objects += arch/x64/apic-clock.o
 objects += arch/x64/entry-xen.o
+objects += arch/x64/prctl.o
 objects += arch/x64/vmlinux.o
 objects += arch/x64/vmlinux-boot64.o
 objects += arch/x64/pvh-boot.o
+objects += arch/x64/syscall.o
 ifeq ($(conf_drivers_acpi),1)
 objects += $(acpi)
 endif
@@ -1064,41 +1122,61 @@ objects += core/debug.o
 objects += core/rcu.o
 objects += core/pagecache.o
 objects += core/mempool.o
+ifeq ($(conf_memory_tracker),1)
 objects += core/alloctracker.o
+endif
 objects += core/printf.o
+ifeq ($(conf_tracepoints),1)
 objects += core/sampler.o
+endif
 
 objects += linux.o
 objects += core/commands.o
 objects += core/sched.o
 objects += core/mmio.o
 objects += core/kprintf.o
+ifeq ($(conf_tracepoints),1)
 objects += core/trace.o
 objects += core/trace-count.o
+objects += core/strace.o
 objects += core/callstack.o
+endif
 objects += core/poll.o
 objects += core/select.o
+ifeq ($(conf_core_epoll),1)
 objects += core/epoll.o
+endif
+ifeq ($(conf_core_newpoll),1)
 objects += core/newpoll.o
+endif
 objects += core/power.o
 objects += core/percpu.o
 objects += core/per-cpu-counter.o
 objects += core/percpu-worker.o
+ifeq ($(conf_networking_dhcp),1)
 objects += core/dhcp.o
+endif
 objects += core/run.o
 objects += core/shutdown.o
 objects += core/version.o
 objects += core/waitqueue.o
 objects += core/chart.o
+ifeq ($(conf_networking_stack),1)
 objects += core/net_channel.o
+endif
 objects += core/demangle.o
 objects += core/async.o
 objects += core/net_trace.o
 objects += core/app.o
 objects += core/libaio.o
+ifeq ($(conf_core_namespaces),1)
 objects += core/osv_execve.o
+endif
+ifeq ($(conf_core_c_wrappers),1)
 objects += core/osv_c_wrappers.o
+endif
 objects += core/options.o
+objects += core/string_utils.o
 
 #include $(src)/libc/build.mk:
 libc =
@@ -1454,12 +1532,12 @@ musl += math/truncl.o
 # None of the specific "-fno-*" options disable this buggy optimization,
 # unfortunately. The simplest workaround is to just disable optimization
 # for the affected files.
-$(out)/musl/src/math/lround.o: conf-opt := $(conf-opt) -O0
-$(out)/musl/src/math/lroundf.o: conf-opt := $(conf-opt) -O0
-$(out)/musl/src/math/lroundl.o: conf-opt := $(conf-opt) -O0
-$(out)/musl/src/math/llround.o: conf-opt := $(conf-opt) -O0
-$(out)/musl/src/math/llroundf.o: conf-opt := $(conf-opt) -O0
-$(out)/musl/src/math/llroundl.o: conf-opt := $(conf-opt) -O0
+$(out)/musl/src/math/lround.o: conf_compiler_opt := $(conf_compiler_opt) -O0
+$(out)/musl/src/math/lroundf.o: conf_compiler_opt := $(conf_compiler_opt) -O0
+$(out)/musl/src/math/lroundl.o: conf_compiler_opt := $(conf_compiler_opt) -O0
+$(out)/musl/src/math/llround.o: conf_compiler_opt := $(conf_compiler_opt) -O0
+$(out)/musl/src/math/llroundf.o: conf_compiler_opt := $(conf_compiler_opt) -O0
+$(out)/musl/src/math/llroundl.o: conf_compiler_opt := $(conf_compiler_opt) -O0
 
 musl += misc/a64l.o
 musl += misc/basename.o
@@ -1469,7 +1547,9 @@ musl += misc/ffs.o
 musl += misc/ffsl.o
 musl += misc/ffsll.o
 musl += misc/get_current_dir_name.o
+ifeq ($(conf_networking_stack),1)
 libc += misc/gethostid.o
+endif
 libc += misc/getopt.o
 libc_to_hide += misc/getopt.o
 libc += misc/getopt_long.o
@@ -1515,6 +1595,7 @@ musl += network/htonl.o
 musl += network/htons.o
 musl += network/ntohl.o
 musl += network/ntohs.o
+ifeq ($(conf_networking_stack),1)
 libc += network/gethostbyname_r.o
 musl += network/gethostbyname2_r.o
 musl += network/gethostbyaddr_r.o
@@ -1526,7 +1607,6 @@ $(out)/libc/multibyte/mbsrtowcs.o: CFLAGS += -Imusl/src/multibyte
 musl += network/lookup_ipliteral.o
 libc += network/getaddrinfo.o
 libc += network/freeaddrinfo.o
-musl += network/dn_expand.o
 musl += network/res_mkquery.o
 musl += network/dns_parse.o
 musl += network/in6addr_any.o
@@ -1556,9 +1636,11 @@ musl += network/getservbyport.o
 musl += network/getifaddrs.o
 musl += network/if_nameindex.o
 musl += network/if_freenameindex.o
-musl += network/res_init.o
 musl += network/netlink.o
 $(out)/musl/src/network/netlink.o: CFLAGS += --include libc/syscall_to_function.h --include libc/network/__netlink.h
+endif
+musl += network/dn_expand.o
+musl += network/res_init.o
 
 musl += prng/rand.o
 musl += prng/rand_r.o
@@ -1592,7 +1674,9 @@ libc += arch/$(arch)/ucontext/setcontext.o
 libc += arch/$(arch)/ucontext/start_context.o
 libc_to_hide += arch/$(arch)/ucontext/start_context.o
 libc += arch/$(arch)/ucontext/ucontext.o
+ifeq ($(conf_memory_optimize),1)
 libc += string/memmove.o
+endif
 endif
 
 musl += search/tfind.o
@@ -1751,6 +1835,9 @@ $(out)/libc/stdlib/qsort_r.o: COMMON += -Wno-dangling-pointer
 libc += stdlib/strtol.o
 libc += stdlib/strtod.o
 libc += stdlib/wcstol.o
+ifeq ($(arch),x64)
+libc += stdlib/unimplemented.o
+endif
 
 libc += string/__memcpy_chk.o
 libc += string/explicit_bzero.o
@@ -1762,8 +1849,14 @@ musl += string/index.o
 musl += string/memccpy.o
 musl += string/memchr.o
 musl += string/memcmp.o
+ifeq ($(conf_memory_optimize),1)
 libc += string/memcpy.o
 libc_to_hide += string/memcpy.o
+else
+musl += string/memcpy.o
+musl += string/memset.o
+musl += string/memmove.o
+endif
 musl += string/memmem.o
 musl += string/mempcpy.o
 musl += string/memrchr.o
@@ -1828,6 +1921,7 @@ musl += string/wcsncasecmp_l.o
 musl += string/wcsncat.o
 musl += string/wcsncmp.o
 musl += string/wcsncpy.o
+libc += string/__wcsncpy_chk.o
 musl += string/wcsnlen.o
 musl += string/wcspbrk.o
 musl += string/wcsrchr.o
@@ -1998,8 +2092,12 @@ fs_objs += virtiofs/virtiofs_vfsops.o \
 endif
 
 fs_objs += pseudofs/pseudofs.o
+ifeq ($(conf_fs_procfs),1)
 fs_objs += procfs/procfs_vnops.o
+endif
+ifeq ($(conf_fs_sysfs),1)
 fs_objs += sysfs/sysfs_vnops.o
+endif
 fs_objs += zfs/zfs_null_vfsops.o
 
 objects += $(addprefix fs/, $(fs_objs))
@@ -2085,6 +2183,10 @@ endif
 boost-libs := $(boost-lib-dir)/libboost_system$(boost-mt).a
 
 objects += fs/nfs/nfs_null_vfsops.o
+objects += fs/ext/ext_null_vfsops.o
+
+$(out)/loader.o: CXXFLAGS += -DHIDE_SYMBOLS=$(conf_hide_symbols)
+$(out)/core/trace.o: CXXFLAGS += -DHIDE_SYMBOLS=$(conf_hide_symbols)
 
 # The OSv kernel is linked into an ordinary, non-PIE, executable, so there is no point in compiling
 # with -fPIC or -fpie and objects that can be linked into a PIE. On the contrary, PIE-compatible objects
@@ -2154,7 +2256,7 @@ def_symbols = --defsym=OSV_KERNEL_BASE=$(kernel_base) \
               --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift)
 endif
 
-$(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(loader_options_dep) $(version_script_file)
+$(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(out)/libvdso-content.o $(loader_options_dep) $(version_script_file)
 	$(call quiet, $(LD) -o $@ $(def_symbols) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
             $(patsubst %version_script,--version-script=%version_script,$(patsubst %.ld,-T %.ld,$^)) \
@@ -2164,9 +2266,12 @@ $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(lo
 	@# rule because that caused bug #545.
 	@readelf --dyn-syms --wide $(out)/loader.elf > $(out)/osv.syms
 	@scripts/libosv.py $(out)/osv.syms $(out)/libosv.ld `scripts/osv-version.sh` | $(CC) -c -o $(out)/osv.o -x assembler -
+	@echo '0000000000000000 T _text' > $(out)/osv.kallsyms
+	@echo '0000000000000000 T _stext' >> $(out)/osv.kallsyms
+	@grep ': 0000' $(out)/osv.syms | grep -v 'NOTYPE' | awk '{ print $$2 " T " $$8 }' | c++filt >> $(out)/osv.kallsyms
 	$(call quiet, $(CC) $(out)/osv.o -nostdlib -shared -o $(out)/libosv.so -T $(out)/libosv.ld, LIBOSV.SO)
 
-$(out)/zfs_builder.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/zfs_builder_bootfs.o $(loader_options_dep) $(version_script_file)
+$(out)/zfs_builder.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/zfs_builder_bootfs.o $(out)/libvdso-content.o $(loader_options_dep) $(version_script_file)
 	$(call quiet, $(LD) -o $@ $(def_symbols) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
             $(patsubst %version_script,--version-script=%version_script,$(patsubst %.ld,-T %.ld,$^)) \
@@ -2187,10 +2292,10 @@ $(out)/libenviron.so: $(environ_sources)
 	$(makedir)
 	 $(call quiet, $(CC) $(CFLAGS) -shared -o $(out)/libenviron.so $(environ_sources), CC libenviron.so)
 
-$(out)/libvdso.so: libc/vdso/vdso.c
+$(out)/libvdso.so: libc/vdso/vdso.cc
 	$(makedir)
-	$(call quiet, $(CC) $(CFLAGS) -c -fPIC -o $(out)/libvdso.o libc/vdso/vdso.c, CC libvdso.o)
-	$(call quiet, $(LD) -shared -fPIC -o $(out)/libvdso.so $(out)/libvdso.o --version-script=libc/vdso/vdso.version, LINK libvdso.so)
+	$(call quiet, $(CXX) $(CXXFLAGS) -fno-exceptions -c -fPIC -o $(out)/libvdso.o libc/vdso/vdso.cc, CXX libvdso.o)
+	$(call quiet, $(LD) -shared -z now -o $(out)/libvdso.so $(out)/libvdso.o -T libc/vdso/vdso.lds --version-script=libc/vdso/$(arch)/vdso.version, LINK libvdso.so)
 
 bootfs_manifest ?= bootfs.manifest.skel
 
@@ -2209,11 +2314,17 @@ libgcc_s_dir := ../../$(aarch64_gccbase)/lib64
 endif
 
 $(out)/bootfs.bin: scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep) $(tools:%=$(out)/%) \
-		$(out)/libenviron.so $(out)/libvdso.so $(out)/libsolaris.so
+		$(out)/libenviron.so $(out)/libsolaris.so
 	$(call quiet, olddir=`pwd`; cd $(out); "$$olddir"/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m "$$olddir"/$(bootfs_manifest), MKBOOTFS $@)
 
 $(out)/bootfs.o: $(out)/bootfs.bin
 $(out)/bootfs.o: ASFLAGS += -I$(out)
+
+$(out)/libvdso-stripped.so: $(out)/libvdso.so
+	$(call quiet, $(STRIP) $(out)/libvdso.so -o $(out)/libvdso-stripped.so, STRIP libvdso.so -> libvdso-stripped.so)
+
+$(out)/libvdso-content.o: $(out)/libvdso-stripped.so
+$(out)/libvdso-content.o: ASFLAGS += -I$(out)
 
 # Standard C++ library
 libstd_dir := $(dir $(shell $(CXX) -print-file-name=libstdc++.so))
@@ -2234,7 +2345,7 @@ ifeq ($(conf_hide_symbols),1)
 $(shell echo "/usr/lib/libstdc++.so.6: $$(readlink -f $(libstd_dir))/libstdc++.so" >> $(out)/zfs_builder_bootfs.manifest)
 endif
 $(out)/zfs_builder_bootfs.bin: scripts/mkbootfs.py $(zfs_builder_bootfs_manifest) $(tools:%=$(out)/%) \
-		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so $(out)/libvdso.so $(out)/libsolaris.so
+		$(out)/zpool.so $(out)/zfs.so $(out)/libenviron.so $(out)/libsolaris.so
 	$(call quiet, olddir=`pwd`; cd $(out); "$$olddir"/scripts/mkbootfs.py -o zfs_builder_bootfs.bin -d zfs_builder_bootfs.bin.d -m zfs_builder_bootfs.manifest \
 		-D libgcc_s_dir=$(libgcc_s_dir), MKBOOTFS $@)
 
@@ -2257,7 +2368,7 @@ $(out)/tools/cpiod/cpiod.so: $(out)/tools/cpiod/cpiod.o $(out)/tools/cpiod/cpio.
 # re-created on every compilation. "generated-headers" is used as an order-
 # only dependency on C compilation rules above, so we don't try to compile
 # C code before generating these headers.
-generated-headers: $(out)/gen/include/bits/alltypes.h perhaps-modify-version-h perhaps-modify-drivers-config-h
+generated-headers: $(out)/gen/include/bits/alltypes.h perhaps-modify-version-h perhaps-modify-drivers-config-h perhaps-modify-syscalls-h
 .PHONY: generated-headers
 
 # While other generated headers only need to be generated once, version.h
@@ -2267,6 +2378,16 @@ generated-headers: $(out)/gen/include/bits/alltypes.h perhaps-modify-version-h p
 perhaps-modify-version-h:
 	$(call quiet, sh scripts/gen-version-header $(out)/gen/include/osv/version.h, GEN gen/include/osv/version.h)
 .PHONY: perhaps-modify-version-h
+#
+# This generates 3 files included by linux.cc - syscalls_config.h, syscalls.cc and syscall_tracepoints.cc.
+# By default gen-syscalls copies the syscalls/syscalls.cc.in and syscalls/syscall_tracepoints.cc as is.
+# If conf_syscalls_list_file parameter is specified, it will filter in only parts of these 2 files based on
+# the list of names of the syscalls in the file conf_syscalls_list_file
+# In either case, syscalls_config.h will contain list of '#define CONF_syscall_*' statements for each selected
+# syscall
+perhaps-modify-syscalls-h:
+	$(call quiet, sh scripts/gen-syscalls $(out)/gen/include/osv/ $(conf_syscalls_list_file), GEN gen/include/osv/syscall_*)
+.PHONY: perhaps-modify-syscalls-h
 
 # Using 'if ($(conf_drivers_*),1)' in the rules below is enough to include whole object
 # files. Sometimes though we need to enable or disable portions of the code specific

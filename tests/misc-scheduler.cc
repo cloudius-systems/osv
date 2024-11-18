@@ -139,6 +139,66 @@ void priority_test(std::vector<float> ps)
 }
 #endif
 
+#ifdef __OSV__
+void realtime_test(std::vector<int> ps)
+{
+    std::cerr << "Starting realtime test\n";
+    std::vector<std::thread> threads;
+    mutex mtx;
+    for (auto p : ps) {
+        threads.push_back(std::thread([p]() {
+            sched::thread::current()->set_realtime_priority(p);
+            std::cout << "Starting thread with realtime priority " << p << "\n";
+            // Sleep a bit, to let all test threads get started. The thread
+            // starting the test threads is not realtime, so it can be preempted
+            // by the test threads.
+            sleep(1);
+            for (int i=0; i<10; i++) {
+                _loop(100000);
+                std::cout << p << std::flush;
+            }
+        }));
+    }
+    for (auto &t : threads) {
+        t.join();
+    }
+    std::cerr << "\nRealtime test done\n";
+}
+
+void realtime_test2(bool yield)
+{
+    std::cerr << "Starting realtime test #2 - FIFO order, yield=" << yield << "\n";
+    std::vector<std::thread> threads;
+    mutex mtx;
+    std::atomic<int> last_seen(-1);
+    for (int p = 0; p < 10; p++) {
+        threads.push_back(std::thread([p,yield,&last_seen]() {
+            sched::thread::current()->set_realtime_priority(1);
+            // Sleep a bit, to let all test threads get started. The thread
+            // starting the test threads is not realtime, so it can be preempted
+            // by the test threads.
+            sleep(1);
+            for (int i = 0 ; i < 3; i++) {
+                for(int j = 0; j < 100000; j++) {
+                    if (last_seen.exchange(p) != p) {
+                        std::cout << p << std::flush; // context-switched to p
+                    }
+                    _loop(1);
+                }
+                if (yield)
+                    sched::thread::yield();
+                else
+                    sched::thread::sleep(std::chrono::milliseconds(1));
+            }
+        }));
+    }
+    for (auto &t : threads) {
+        t.join();
+    }
+    std::cerr << "\nRealtime test #2 done\n";
+}
+#endif
+
 
 int main()
 {
@@ -147,6 +207,35 @@ int main()
                 " CPUs, but this test requires exactly 1.\n";
         return 0;
     }
+
+ #ifdef __OSV__
+    // Tests for thread::set_realtime() support for POSIX-like realtime
+    // scheduling.
+    // TODO: Move this code into a real test, and in addition to just
+    // printing progress, also save it into a string and check this string.
+    // (Need to check the first 10 characters of this string repeat 2 more
+    // times and that's it).
+    realtime_test({0, 1, 2});
+    realtime_test2(false);
+    realtime_test2(true);
+    // Check that intermittent thread with priority 2 doesn't force
+    // realtime_test2 to context-switch more often than it normally
+    // should (each time we the priority-2 thread sleeps, we need to
+    // go back to the same priority-1 thread that previously ran - not
+    // to the next one). We expect the output from the test below to
+    // be identical to that from the test above.
+    std::cout << "Additional intermittent thread with priority 2\n";
+    std::atomic<bool> stop(false);
+    std::thread ti([&stop]() {
+        sched::thread::current()->set_realtime_priority(2);
+        while (!stop.load()) {
+            sched::thread::sleep(std::chrono::milliseconds(5));
+        }
+    });
+    realtime_test2(true);
+    stop.store(true);
+    ti.join();
+#endif
 
 #ifdef __OSV__
     auto p = sched::thread::priority_default;

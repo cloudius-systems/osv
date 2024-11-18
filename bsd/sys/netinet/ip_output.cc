@@ -1255,7 +1255,7 @@ static void
 ip_mloopback(struct ifnet *ifp, struct mbuf *m, struct bsd_sockaddr_in *dst,
     int hlen)
 {
-	register struct ip *ip;
+	struct ip *ip;
 	struct mbuf *copym;
 
 	/*

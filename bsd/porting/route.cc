@@ -168,8 +168,6 @@ static struct mbuf*  osv_route_arp_rtmsg(int if_idx, int cmd, const char* ip,
     CP_ADDR(RTA_DST, dst);
     CP_ADDR(RTA_GATEWAY, sdl_m);
 
-#undef CP_ADDR
-
     m_rtmsg->m_rtm.rtm_msglen = cp - (char *)m_rtmsg;
     m->M_dat.MH.MH_pkthdr.len = m->m_hdr.mh_len = m_rtmsg->m_rtm.rtm_msglen;
 
@@ -327,9 +325,6 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
         m_rtmsg->m_rtm.rtm_inits = rtm_inits;
     */
 
-#define CP_ADDR(w, sa) \
-    l = SA_SIZE_ALWAYS(&(sa)); bcopy(&(sa), cp, l); cp += l;\
-
     CP_ADDR(RTA_DST, dst);
     if (is_link) {
         CP_ADDR(RTA_GATEWAY, sdl);
@@ -339,8 +334,6 @@ static struct mbuf*  osv_route_rtmsg(int cmd, const char* destination,
     if (netmask) {
         CP_ADDR(RTA_NETMASK, mask);
     }
-
-#undef CP_ADDR
 
     m_rtmsg->m_rtm.rtm_msglen = cp - (char *)m_rtmsg;
     m->M_dat.MH.MH_pkthdr.len = m->m_hdr.mh_len = m_rtmsg->m_rtm.rtm_msglen;

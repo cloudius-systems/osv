@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <stddef.h>
 #include <osv/msi.hh>
 #include <osv/trace.hh>
 #include "apic.hh"

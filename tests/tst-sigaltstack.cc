@@ -14,6 +14,10 @@
 #include <sys/mman.h>
 
 #include <iostream>
+#ifndef __OSV__
+extern "C" int __sigsetjmp(sigjmp_buf env, int savemask);
+#define sigsetjmp(env, savemask) __sigsetjmp (env, savemask)
+#endif
 
 static int tests = 0, fails = 0;
 
@@ -61,6 +65,7 @@ bool sig_check(Func f, int sig) {
 // does, a SIGSEGV handler will not be able to run on the normal thread stack
 // (which ran out), and only if sigaltstack() is properly supported, will the
 // signal handler be able to run.
+#pragma GCC diagnostic ignored "-Winfinite-recursion"
 int endless_recursive() {
     return endless_recursive() + endless_recursive();
 }
