@@ -154,13 +154,13 @@ def start_osv_qemu(options):
             args += ["-machine", "gic-version=max", "-cpu", "cortex-a57"]
         args += [
         "-machine", "virt",
-        "-device", "virtio-blk-pci,id=blk0,drive=hd0,scsi=off%s%s" % (boot_index, options.virtio_device_suffix),
+        "-device", "virtio-blk-pci,id=blk0,drive=hd0%s%s" % (boot_index, options.virtio_device_suffix),
         "-drive", "file=%s,if=none,id=hd0,%s" % (options.image_file, aio)]
     elif options.hypervisor == 'qemu_microvm':
         args += [
         "-M", "microvm,x-option-roms=off,pit=off,pic=off,rtc=off",
         "-nodefaults", "-no-user-config", "-no-reboot", "-global", "virtio-mmio.force-legacy=off",
-        "-device", "virtio-blk-device,id=blk0,drive=hd0,scsi=off%s%s" % (boot_index, options.virtio_device_suffix),
+        "-device", "virtio-blk-device,id=blk0,drive=hd0%s%s" % (boot_index, options.virtio_device_suffix),
         "-drive", "file=%s,if=none,id=hd0,%s" % (options.image_file, aio)]
     elif options.sata:
         args += [
@@ -181,17 +181,17 @@ def start_osv_qemu(options):
         "-hda", options.image_file]
     else:
         args += [
-        "-device", "virtio-blk-pci,id=blk0,drive=hd0,scsi=off%s%s" % (boot_index, options.virtio_device_suffix),
+        "-device", "virtio-blk-pci,id=blk0,drive=hd0%s%s" % (boot_index, options.virtio_device_suffix),
         "-drive", "file=%s,if=none,id=hd0,%s" % (options.image_file, aio)]
 
     if options.cloud_init_image:
         args += [
-        "-device", "virtio-blk-pci,id=blk1,bootindex=1,drive=hd1,scsi=off%s" % options.virtio_device_suffix,
+        "-device", "virtio-blk-pci,id=blk1,bootindex=1,drive=hd1%s" % options.virtio_device_suffix,
         "-drive", "file=%s,if=none,id=hd1" % (options.cloud_init_image)]
 
     if options.second_disk_image:
         args += [
-        "-device", "virtio-blk-pci,id=blk1,drive=hd1,scsi=off%s" % options.virtio_device_suffix,
+        "-device", "virtio-blk-pci,id=blk1,drive=hd1%s" % options.virtio_device_suffix,
         "-drive", "file=%s,if=none,id=hd1" % (options.second_disk_image)]
 
     if options.virtio_fs_tag:
