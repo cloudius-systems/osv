@@ -158,7 +158,7 @@ def start_osv_qemu(options):
         "-drive", "file=%s,if=none,id=hd0,%s" % (options.image_file, aio)]
     elif options.hypervisor == 'qemu_microvm':
         args += [
-        "-M", "microvm,x-option-roms=off,pit=off,pic=off,rtc=off",
+        "-M", "microvm,x-option-roms=off,pit=off,pic=off,rtc=off,auto-kernel-cmdline=on,acpi=off",
         "-nodefaults", "-no-user-config", "-no-reboot", "-global", "virtio-mmio.force-legacy=off",
         "-device", "virtio-blk-device,id=blk0,drive=hd0%s%s" % (boot_index, options.virtio_device_suffix),
         "-drive", "file=%s,if=none,id=hd0,%s" % (options.image_file, aio)]
