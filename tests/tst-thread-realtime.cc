@@ -3,7 +3,7 @@
 #include <iostream>
 #include <osv/sched.hh>
 
-#define TIME_SLICE 100000
+#define TIME_SLICE 100000000
 
 static std::string name = "tst-thr-wrk";
 static int tests = 0, fails = 0;
