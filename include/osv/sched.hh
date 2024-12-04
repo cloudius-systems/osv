@@ -713,6 +713,8 @@ public:
      * With time_slice == 0, the real-time scheduling policy matches POSIX's
      * "SCHED_FIFO" policy. With time_slice > 0, it matches POSIX's "SCHED_RR"
      * policy.
+     *
+     * Note: The time_slice should be set before the thread is started.
      */
     void set_realtime_time_slice(thread_realtime::duration time_slice);
     /**
