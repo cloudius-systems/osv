@@ -310,7 +310,8 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
 #else
                     return;
 #endif
-                // Otherwise, only switch to a higher-priority realtime thread.
+                // Otherwise, don't switch to a lower-priority realtime thread,
+                // no matter how much time slice was used by the running thread.
                 } else if (t._realtime._priority < p->_realtime._priority) {
 #ifdef __aarch64__
                     return switch_data;
