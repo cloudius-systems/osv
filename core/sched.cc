@@ -408,10 +408,7 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
         n->_runtime.add_context_switch_penalty();
     }
     preemption_timer.cancel();
-    if (n->_realtime.has_slice()) {
-        assert(n->_realtime.has_remaining());
-        preemption_timer.set_with_irq_disabled(now + n->_realtime.remaining());
-    } else if (n->_realtime._priority == 0) {
+    if (n->_realtime._priority == 0) {
         if (!called_from_yield) {
             if (!runqueue.empty()) {
                 auto& t = *runqueue.begin();
@@ -423,6 +420,9 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
         } else {
             preemption_timer.set_with_irq_disabled(now + preempt_after);
         }
+    } else if (n->_realtime.has_slice()) {
+        assert(n->_realtime.has_remaining());
+        preemption_timer.set_with_irq_disabled(now + n->_realtime.remaining());
     }
 
     if (app_thread.load(std::memory_order_relaxed) != n->_app) { // don't write into a cache line if it can be avoided
