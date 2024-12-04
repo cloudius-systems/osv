@@ -146,7 +146,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-sigaction.so tst-syscall.so tst-ifaddrs.so tst-getdents.so \
 	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-pthread-create.so \
 	misc-futex-perf.so misc-syscall-perf.so tst-brk.so tst-reloc.so \
-	misc-vdso-perf.so tst-string-utils.so
+	misc-vdso-perf.so tst-string-utils.so tst-thread-realtime.so
 #	libstatic-thread-variable.so tst-static-thread-variable.so \
 #	tst-f128.so \
 
