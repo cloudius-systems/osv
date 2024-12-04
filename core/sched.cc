@@ -278,7 +278,7 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
     }
     thread* p = thread::current();
 
-    if (p->_realtime.has_slice()) {
+    if (p->_realtime.has_slice() && p->_realtime._priority > 0) {
         p->_realtime._run_time += interval;
     }
 
