@@ -43,11 +43,11 @@ bool runtime_equalized()
 
         threads[i]->pin(c);
         threads[i]->set_realtime_priority(1);
-        threads[i]->set_realtime_time_slice(sched::thread_realtime::duration(TIME_SLICE));
+        threads[i]->set_realtime_time_slice(std::chrono::nanoseconds(TIME_SLICE));
         threads[i]->start();
     }
 
-    auto runtime = sched::thread_realtime::duration(TIME_SLICE * num_threads * switches);
+    auto runtime = std::chrono::nanoseconds(TIME_SLICE * num_threads * switches);
     sched::thread::sleep(runtime);
     stop_threads = true;
 
@@ -99,7 +99,7 @@ bool priority_precedence()
     high_prio->start();
     low_prio->start();
 
-    auto runtime = sched::thread_realtime::duration(TIME_SLICE * 3);
+    auto runtime = std::chrono::nanoseconds(TIME_SLICE * 3);
     sched::thread::sleep(runtime);
 
     // Since both threads are pinned to the CPU and the higher priority
