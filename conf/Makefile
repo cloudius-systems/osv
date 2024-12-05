@@ -37,7 +37,7 @@ default_config: $(out)/.config
 #Build conf and mconf binaries if not built yet
 $(out)/kbuild/kconfig/conf $(out)/kbuild/kconfig/mconf: $(wildcard kbuild/kconfig/*.c)
 	$(call quiet, mkdir -p $(out)/kbuild, MKDIR $(out)/kbuild)
-	$(call quiet, cd $(out)/kbuild && make -s -C ../../../kbuild -f Makefile.sample O=`pwd` -j, MAKE kbuild)
+	$(call quiet, cd $(out)/kbuild && make -s -C ../../../kbuild -f Makefile.osv O=`pwd` -j, MAKE kbuild)
 
 CONF_FILES := conf/base.mk conf/$(mode).mk conf/$(arch).mk conf/profiles/$(arch)/kconfig $(wildcard conf/kconfig/*)
 
