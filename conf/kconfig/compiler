@@ -1,12 +1,12 @@
 config compiler_opt
   prompt "Optimizations"
   string
-  default $(shell,grep ^conf_compiler_opt conf/$mode.mk | cut -d = -f 2)
+  default $(shell,grep ^conf_compiler_opt conf/$mode.mk | cut -d = -f 2-)
 
 config compiler_cflags
   prompt "Other flags"
   string
-  default $(shell,grep ^conf_compiler_cflags conf/$arch.mk | cut -d = -f 2)
+  default $(shell,grep ^conf_compiler_cflags conf/$arch.mk | cut -d = -f 2-)
 
 config compiler_cxx_level
   prompt "C++ level"

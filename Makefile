@@ -2349,7 +2349,7 @@ perhaps-modify-version-h:
 # In either case, syscalls_config.h will contain list of '#define CONF_syscall_*' statements for each selected
 # syscall
 perhaps-modify-syscalls-h:
-	$(call quiet, sh scripts/gen-syscalls $(out)/gen/include/osv/ $(conf_syscalls_list_file), GEN gen/include/osv/syscall_*)
+	$(call quiet, bash scripts/gen-syscalls $(out)/gen/include/osv/ $(conf_syscalls_list_file), GEN gen/include/osv/syscall_*)
 .PHONY: perhaps-modify-syscalls-h
 
 # Using 'if ($(conf_drivers_*),1)' in the rules below is enough to include whole object

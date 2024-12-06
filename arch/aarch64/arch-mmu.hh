@@ -9,6 +9,7 @@
 #define ARCH_MMU_HH
 
 #include <osv/debug.hh>
+#include <cassert>
 
 /* AArch64 MMU
  *
