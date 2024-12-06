@@ -4,7 +4,6 @@
 #include <errno.h>
 #include <osv/mount.h>
 #include <fs/fs.hh>
-#include <sstream>
 #include <libc/libc.hh>
 
 class mtab_file final : public special_file {

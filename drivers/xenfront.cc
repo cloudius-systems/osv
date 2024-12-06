@@ -6,7 +6,6 @@
  */
 
 #include <string.h>
-#include <sstream>
 
 #include "drivers/xenfront.hh"
 #include "drivers/xenfront-xenbus.hh"

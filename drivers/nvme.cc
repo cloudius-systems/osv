@@ -13,7 +13,6 @@
 #include <osv/interrupt.hh>
 
 #include <cassert>
-#include <sstream>
 #include <string>
 #include <string.h>
 #include <map>
