@@ -12,6 +12,14 @@
 #include <unistd.h>
 #include <osv/debug.hh>
 
+//This is another hack to make sure none of the boost spirit headers
+//included do NOT include <iostream> which inflates the kernel
+//size by ~400K. Specifically we want to block pre-processing
+//of /usr/include/boost/phoenix/core/debug.hpp and /usr/include/boost/proto/debug.hpp
+//by defining their header guards.
+#define BOOST_PHOENIX_CORE_DEBUG_HPP 1
+#define BOOST_PROTO_DEBUG_HPP_EAN_12_31_2006 1
+
 #include <boost/config/warning_disable.hpp>
 //#include <boost/spirit/include/qi.hpp>
 //Include only select QI spirit headers to avoid implicitly
