@@ -1089,7 +1089,7 @@ ifeq ($(conf_memory_tracker),1)
 objects += core/alloctracker.o
 endif
 objects += core/printf.o
-ifeq ($(conf_tracepoints),1)
+ifeq ($(conf_tracepoints_sampler),1)
 objects += core/sampler.o
 endif
 
@@ -1101,7 +1101,9 @@ objects += core/kprintf.o
 ifeq ($(conf_tracepoints),1)
 objects += core/trace.o
 objects += core/trace-count.o
+ifeq ($(conf_tracepoints_strace),1)
 objects += core/strace.o
+endif
 objects += core/callstack.o
 endif
 objects += core/poll.o

@@ -153,7 +153,9 @@ bool opt_power_off_on_abort = false;
 #if CONF_tracepoints
 static bool opt_log_backtrace = false;
 static bool opt_list_tracepoints = false;
+#if CONF_tracepoints_strace
 static bool opt_strace = false;
+#endif
 #endif
 static bool opt_mount = true;
 static bool opt_pivot = true;
@@ -174,7 +176,7 @@ bool opt_maxnic = false;
 int maxnic;
 bool opt_pci_disabled = false;
 
-#if CONF_tracepoints
+#if CONF_tracepoints_sampler
 static int sampler_frequency;
 static bool opt_enable_sampler = false;
 #endif
@@ -185,11 +187,15 @@ static void usage()
         "OSv options:\n"
         "  --help                show help text\n"
 #if CONF_tracepoints
+#if CONF_tracepoints_sampler
         "  --sampler=arg         start stack sampling profiler\n"
+#endif
         "  --trace=arg           tracepoints to enable\n"
         "  --trace-backtrace     log backtraces in the tracepoint log\n"
         "  --trace-list          list available tracepoints\n"
+#if CONF_tracepoints_strace
         "  --strace              start a thread to print tracepoints to the console on the fly\n"
+#endif
 #endif
 #if CONF_memory_tracker
         "  --leak                start leak detector after boot\n"
@@ -289,16 +295,18 @@ static void parse_options(int loader_argc, char** loader_argv)
         enable_verbose();
     }
 
-#if CONF_tracepoints
+#if CONF_tracepoints_sampler
     if (options::option_value_exists(options_values, "sampler")) {
         sampler_frequency = options::extract_option_int_value(options_values, "sampler", handle_parse_error);
         opt_enable_sampler = true;
     }
+#endif
 
     if (extract_option_flag(options_values, "bootchart")) {
         opt_bootchart = true;
     }
 
+#if CONF_tracepoints
     if (options::option_value_exists(options_values, "trace")) {
         auto tv = options::extract_option_values(options_values, "trace");
         for (auto t : tv) {
@@ -308,9 +316,11 @@ static void parse_options(int loader_argc, char** loader_argv)
                 enable_tracepoint(t);
             }
         }
+#if CONF_tracepoints_strace
         if (extract_option_flag(options_values, "strace")) {
             opt_strace = true;
         }
+#endif
     }
 #endif
 
@@ -796,9 +806,11 @@ void main_cont(int loader_argc, char** loader_argv)
         // and backtrace_safe() fails as soon as we get an exception
         enable_backtraces();
     }
+#if CONF_tracepoints_strace
     if (opt_strace) {
         start_strace();
     }
+#endif
 #endif
     sched::init_detached_threads_reaper();
     elf::setup_missing_symbols_detector();
@@ -817,10 +829,12 @@ void main_cont(int loader_argc, char** loader_argv)
     arch::irq_enable();
 
 #ifndef AARCH64_PORT_STUB
+#if CONF_tracepoints_sampler
     if (opt_enable_sampler) {
         prof::config config{std::chrono::nanoseconds(1000000000 / sampler_frequency)};
         prof::start_sampler(config);
     }
+#endif
 #endif /* !AARCH64_PORT_STUB */
 
     // multiple programs can be run -> separate their arguments
