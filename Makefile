@@ -1042,9 +1042,9 @@ objects += arch/$(arch)/gic-v2.o
 objects += arch/$(arch)/gic-v3.o
 objects += arch/$(arch)/arch-dtb.o
 objects += arch/$(arch)/hypercall.o
+ifeq ($(conf_memory_optimize),1)
 objects += arch/$(arch)/memset.o
 objects += arch/$(arch)/memcpy.o
-ifeq ($(conf_memory_optimize),1)
 objects += arch/$(arch)/memmove.o
 endif
 objects += arch/$(arch)/tlsdesc.o

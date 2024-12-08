@@ -174,8 +174,10 @@ bool opt_maxnic = false;
 int maxnic;
 bool opt_pci_disabled = false;
 
+#if CONF_tracepoints
 static int sampler_frequency;
 static bool opt_enable_sampler = false;
+#endif
 
 static void usage()
 {
