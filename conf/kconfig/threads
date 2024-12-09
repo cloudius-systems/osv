@@ -19,3 +19,10 @@ config threads_default_pthread_stack_size
   prompt "Pthread thread default stack size"
   hex
   default 0x100000
+
+if $(arch) = aarch64
+config threads_default_exception_stack_size
+  prompt "Thread default exception stack size"
+  hex
+  default 0x10000 #Minimum 0x9000 when clone* syscall enabled
+endif

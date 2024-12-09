@@ -9,7 +9,10 @@
 #include <errno.h>
 #include <osv/sched.hh>
 #include "tls-switch.hh"
+#include <osv/kernel_config_core_syscall.h>
+#include <osv/syscalls_config.h>
 
+#if CONF_core_syscall && (CONF_syscall_sys_clone || CONF_syscall_sys_clone3)
 #define CLONE_SETTLS           0x00080000
 
 static constexpr size_t CHILD_FRAME_OFFSET = 136;
@@ -85,3 +88,4 @@ sched::thread *clone_thread(unsigned long flags, void *child_stack, unsigned lon
 
     return t;
 }
+#endif

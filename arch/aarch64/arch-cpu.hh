@@ -14,6 +14,7 @@
 #include "osv/pagealloc.hh"
 #include <osv/debug.h>
 #include "exceptions.hh"
+#include <osv/kernel_config_threads_default_exception_stack_size.h>
 
 struct init_stack {
     char stack[4096] __attribute__((aligned(16)));
@@ -33,7 +34,7 @@ struct arch_cpu {
 };
 
 struct arch_thread {
-    char exception_stack[4096*16] __attribute__((aligned(16)));
+    char exception_stack[CONF_threads_default_exception_stack_size] __attribute__((aligned(16)));
 };
 
 struct arch_fpu {
