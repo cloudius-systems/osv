@@ -5,12 +5,10 @@ if [[ "$1" == "--help" || "$1" == "-h" ]]; then
 Produce version script file under build/last/app_version_script intended
 to build custom kernel exporting only symbols listed in this file.
 
-The script reads default user manifest file - build/last/usr.manifest
-to identify all ELF files - executables and shared libraries - and
-extract names of all symbols required to be exported by OSv kernel.
-
-You can override location of the source manifest and pass its path
-as 1st argument.
+The script reads manifest file from the standard input or a file
+identified by optional parameter. It then identifies all ELF files -
+executables and shared libraries - and extracts names of all symbols
+required to be exported by OSv kernel.
 
 Usage: ${0} [<manifest_file_path>]
 
@@ -51,15 +49,16 @@ if [[ ! -f $ALL_SYMBOLS_FILE ]]; then
 fi
 
 USR_MANIFEST=$1
-if [[ "$USR_MANIFEST" == "" ]]; then
-  USR_MANIFEST=$BUILD_DIR/usr.manifest
-fi
-if [[ ! -f $USR_MANIFEST ]]; then
-  echo "Could not find $USR_MANIFEST. Please run build first!"
-  exit 1
+if [[ "$USR_MANIFEST" != "" ]]; then
+  if [[ ! -f $USR_MANIFEST ]]; then
+    echo "Could not find $USR_MANIFEST!"
+    exit 1
+  fi
+else
+  USR_MANIFEST=/dev/stdin
 fi
 
-MANIFEST_FILES=$BUILD_DIR/usr.manifest.files
+MANIFEST_FILES=$(mktemp)
 echo "Extracting list of files on host from $USR_MANIFEST"
 scripts/list_manifest_files.py -m $USR_MANIFEST > $MANIFEST_FILES
 
@@ -68,7 +67,7 @@ extract_symbols_from_elf()
   local ELF_PATH=$1
   echo "/*------- $ELF_PATH */"
   objdump -wT ${ELF_PATH} | grep UND | cut -c 62- | \
-  sort -d | uniq | tr -d " " | comm - ${ALL_SYMBOLS_FILE} -12 | \
+  LC_COLLATE=C sort | uniq | tr -d " " | comm - ${ALL_SYMBOLS_FILE} -12 | \
   awk '// { printf("    %s;\n", $0) }' | tee /tmp/generate_app_version_script_symbols
   if [[ $(grep dlsym /tmp/generate_app_version_script_symbols) != "" ]]; then
      echo "WARNING: the $ELF_PATH may use dlsym() to dynamically reference symbols!" 1>&2
@@ -82,3 +81,5 @@ cat $MANIFEST_FILES | xargs file | grep "ELF 64-bit" | cut --delimiter=: -f 1 | 
 while read file; do extract_symbols_from_elf "$file"; done >> $VERSION_SCRIPT_FILE
 
 echo "$VERSION_SCRIPT_END" >> $VERSION_SCRIPT_FILE
+
+rm -f $MANIFEST_FILES
