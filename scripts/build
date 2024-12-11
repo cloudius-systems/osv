@@ -97,6 +97,14 @@ if [[ "${arch-}" == "aarch64" && -d "build/downloaded_packages/aarch64/toolchain
 fi
 
 make "${args[@]}" -f conf/Makefile -j1 config | tee build.out
+# check exit status of make
+status=${PIPESTATUS[0]}
+if [ $status -ne 0 ]
+then
+	echo "make -f conf/Makefile failed. Exiting from build script"
+	exit $status
+fi
+
 make "${args[@]}" ${stage1_args} | tee build.out
 # check exit status of make
 status=${PIPESTATUS[0]}
