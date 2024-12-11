@@ -29,10 +29,23 @@ endif
 quiet = $(if $V, $1, @echo " $2"; $1)
 
 out = build/$(mode).$(arch)
+default_config : $(out)/.config
+
+.PHONY: override_dot_file
+ifneq (,$(conf_dot_file))
+    ifeq (,$(wildcard $(conf_dot_file)))
+        $(error Missing configuration file $(conf_dot_file))
+    endif
+override_dot_file:
+	$(call quiet, mkdir -p $(out), MKDIR $(out))
+	$(call quiet, rsync --checksum $(conf_dot_file) $(out)/.config, RSYNC $(conf_dot_file) TO $(out)/.config)
+endif
 
 .PHONY: config
-config: $(out)/gen/config/kernel_conf.mk
-default_config: $(out)/.config
+config: override_dot_file $(out)/gen/config/kernel_conf.mk $(out)/default_version_script
+
+$(out)/default_version_script: exported_symbols/*.symbols exported_symbols/$(arch)/*.symbols
+	$(call quiet, scripts/generate_version_script.sh $(out)/default_version_script, GEN default_version_script)
 
 #Build conf and mconf binaries if not built yet
 $(out)/kbuild/kconfig/conf $(out)/kbuild/kconfig/mconf: $(wildcard kbuild/kconfig/*.c)
@@ -47,7 +60,7 @@ $(out)/.config: $(CONF_FILES) $(out)/kbuild/kconfig/conf
 
 #Generate the .config.yes, gen/include/osv/kernel_yes_config.h with all available options
 $(out)/.config.yes: $(CONF_FILES) $(out)/kbuild/kconfig/conf
-	$(call quiet, mode=$(mode) arch=$(arch) CONFIG_=CONF_ KCONFIG_AUTOHEADER=$(out)/gen/include/osv/kernel_yes_config.h KCONFIG_AUTOCONFIG=$(out)/gen/config_yes/kernel_yes.conf KCONFIG_RUSTCCFG=$(out)/gen/include/osv/rustc_cfg KCONFIG_CONFIG=$(out)/.config.yes $(out)/kbuild/kconfig/conf -s conf/kconfig/main --allyesconfig, CONF_YES $(out)/.config)
+	$(call quiet, mode=$(mode) arch=$(arch) CONFIG_=CONF_ KCONFIG_AUTOHEADER=$(out)/gen/include/osv/kernel_yes_config.h KCONFIG_AUTOCONFIG=$(out)/gen/config_yes/kernel_yes.conf KCONFIG_RUSTCCFG=$(out)/gen/include/osv/rustc_cfg KCONFIG_CONFIG=$(out)/.config.yes $(out)/kbuild/kconfig/conf -s conf/kconfig/main --allyesconfig, CONF_YES $(out)/.config.yes)
 
 #Synchronize gen/include/osv/kernel_config.h and gen/config/kernel.conf with .config if the latter has changed maybe by mconf
 $(out)/gen/include/osv/kernel_config.h: $(out)/.config

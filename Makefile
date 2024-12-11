@@ -2167,7 +2167,7 @@ $(out)/dummy-shlib.so: $(out)/dummy-shlib.o
 	$(call quiet, $(CXX) -nodefaultlibs -shared $(gcc-sysroot) -o $@ $^, LINK $@)
 
 stage1_targets = $(out)/arch/$(arch)/boot.o $(out)/loader.o $(out)/runtime.o $(drivers:%=$(out)/%) $(objects:%=$(out)/%) $(out)/dummy-shlib.so
-stage1: $(stage1_targets) links $(out)/default_version_script
+stage1: $(stage1_targets) links
 .PHONY: stage1
 
 loader_options_dep = $(out)/arch/$(arch)/loader_options.ld
@@ -2209,9 +2209,6 @@ linker_archives_options = --whole-archive $(libstdc++.a) $(libgcc_eh.a) $(boost-
 musl += locale/iconv.o
 musl += locale/iconv_close.o
 endif
-
-$(out)/default_version_script: exported_symbols/*.symbols exported_symbols/$(arch)/*.symbols
-	$(call quiet, scripts/generate_version_script.sh $(out)/default_version_script, GEN default_version_script)
 
 ifeq ($(arch),aarch64)
 def_symbols = --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base)
