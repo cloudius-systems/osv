@@ -1,0 +1,84 @@
+#
+# Automatically generated file; DO NOT EDIT.
+# OSv Configuration
+#
+
+#
+# Compiler
+#
+CONF_compiler_opt=" -O2 -DNDEBUG"
+CONF_compiler_cflags=" -msse2"
+CONF_compiler_cxx_level="gnu++11"
+# end of Compiler
+
+#
+# Core Components
+#
+# CONF_tracing is not set
+# CONF_logger_debug is not set
+CONF_hide_symbols=y
+# CONF_elf_debug is not set
+# CONF_core_c_wrappers is not set
+# CONF_core_commands_runscript is not set
+# CONF_core_namespaces is not set
+CONF_core_dynamic_percpu_size=4096
+CONF_core_rcu_defer_queue_size=20
+CONF_core_debug_buffer_size=0x4000
+# CONF_core_syscall is not set
+# CONF_core_epoll is not set
+# CONF_core_newpoll is not set
+# end of Core Components
+
+#
+# Threading
+#
+CONF_preempt=y
+# CONF_lazy_stack is not set
+# CONF_lazy_stack_invariant is not set
+CONF_threads_default_kernel_stack_size=16384
+CONF_threads_default_pthread_stack_size=0x10000
+# end of Threading
+
+#
+# Virtual File System
+#
+# CONF_fs_procfs is not set
+# CONF_fs_sysfs is not set
+CONF_fs_max_file_descriptors=0x100
+CONF_fs_buffer_cache_size=16
+# end of Virtual File System
+
+#
+# Memory Management
+#
+# CONF_memory_optimize is not set
+# CONF_memory_debug is not set
+# CONF_memory_tracker is not set
+# CONF_memory_jvm_balloon is not set
+CONF_memory_l1_pool_size=16
+CONF_memory_page_batch_size=4
+# end of Memory Management
+
+#
+# Networking Stack
+#
+# CONF_networking_stack is not set
+# end of Networking Stack
+
+#
+# Tracepoints
+#
+# CONF_tracepoints is not set
+# end of Tracepoints
+
+# CONF_drivers_profile_base is not set
+# CONF_drivers_profile_all is not set
+# CONF_drivers_profile_aws_nitro is not set
+# CONF_drivers_profile_cloud_hypervisor is not set
+# CONF_drivers_profile_hyperv is not set
+CONF_drivers_profile_microvm=y
+# CONF_drivers_profile_vbox is not set
+# CONF_drivers_profile_virtio-mmio is not set
+# CONF_drivers_profile_virtio-pci is not set
+# CONF_drivers_profile_vmware is not set
+# CONF_drivers_profile_xen is not set

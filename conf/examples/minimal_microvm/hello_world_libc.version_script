@@ -1,0 +1,17 @@
+{
+  global:
+
+/* Kernel and VDSO */
+    clock_gettime;
+    gettimeofday;
+    time;
+    __errno_location;
+    fsgsbase_avail;
+
+/* APP */
+    __libc_start_main;
+    abort;
+    puts;
+  local:
+    *;
+};
