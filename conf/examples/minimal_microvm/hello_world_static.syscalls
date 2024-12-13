@@ -1,0 +1,14 @@
+arch_prctl
+clock_gettime
+fstatat
+getrandom
+mprotect
+prlimit64
+readlink
+sys_brk
+sys_ioctl
+sys_set_robust_list
+sys_set_tid_address
+write
+sys_exit
+sys_exit_group

@@ -1,0 +1,12 @@
+{
+  global:
+
+/* Kernel and VDSO */
+    clock_gettime;
+    gettimeofday;
+    time;
+    __errno_location;
+    fsgsbase_avail;
+  local:
+    *;
+};
