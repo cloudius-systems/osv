@@ -36,7 +36,7 @@ ifneq (,$(conf_dot_file))
     ifeq (,$(wildcard $(conf_dot_file)))
         $(error Missing configuration file $(conf_dot_file))
     endif
-override_dot_file:
+override_dot_file: $(out)/kbuild/kconfig/conf $(out)/kbuild/kconfig/mconf
 	$(call quiet, mkdir -p $(out), MKDIR $(out))
 	$(call quiet, rsync --checksum $(conf_dot_file) $(out)/.config, RSYNC $(conf_dot_file) TO $(out)/.config)
 endif
