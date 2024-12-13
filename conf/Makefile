@@ -45,7 +45,7 @@ endif
 config: override_dot_file $(out)/gen/config/kernel_conf.mk $(out)/default_version_script
 
 $(out)/default_version_script: exported_symbols/*.symbols exported_symbols/$(arch)/*.symbols
-	$(call quiet, scripts/generate_version_script.sh $(out)/default_version_script, GEN default_version_script)
+	$(call quiet, scripts/generate_version_script.sh $(out)/default_version_script && cp $(out)/default_version_script $(out)/version_script, GEN default_version_script)
 
 #Build conf and mconf binaries if not built yet
 $(out)/kbuild/kconfig/conf $(out)/kbuild/kconfig/mconf: $(wildcard kbuild/kconfig/*.c)

@@ -2189,9 +2189,6 @@ ifneq ($(shell cmp $(out)/version_script $(conf_version_script)),)
 $(shell cp $(conf_version_script) $(out)/version_script)
 endif
 else
-ifeq ($(shell test -e $(out)/version_script || echo -n no),no)
-$(shell cp $(out)/default_version_script $(out)/version_script)
-endif
 ifneq ($(shell cmp $(out)/version_script $(out)/default_version_script),)
 $(shell cp $(out)/default_version_script $(out)/version_script)
 endif

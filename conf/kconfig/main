@@ -28,4 +28,8 @@ menu "Tracepoints"
   source "conf/kconfig/tracepoints"
 endmenu
 
+menu "Application"
+  source "conf/kconfig/app"
+endmenu
+
 source "conf/profiles/$(arch)/kconfig"

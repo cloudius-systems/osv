@@ -71,6 +71,13 @@ CONF_memory_page_batch_size=4
 # CONF_tracepoints is not set
 # end of Tracepoints
 
+#
+# Application
+#
+CONF_version_script="conf/examples/minimal_microvm/hello_world_libc.version_script"
+CONF_syscalls_list_file=""
+# end of Application
+
 # CONF_drivers_profile_base is not set
 # CONF_drivers_profile_all is not set
 # CONF_drivers_profile_aws_nitro is not set

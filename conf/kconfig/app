@@ -1,0 +1,8 @@
+config version_script
+  prompt "Version script path"
+  string
+  default $(shell,echo build/$mode.$arch/default_version_script)
+
+config syscalls_list_file
+  prompt "Syscalls list file"
+  string
