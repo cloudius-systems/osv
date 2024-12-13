@@ -308,6 +308,13 @@ class Ubuntu(object):
     test_packages = ['libssl-dev', 'zip']
     ec2_post_install = None
 
+    class Ubuntu_24_04(object):
+        packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients', 'python3-dpkt']
+        ec2_packages = ['ec2-api-tools', 'awscli']
+        test_packages = []
+        ec2_post_install = None
+        version = '24.04'
+
     class Ubuntu_22_04(object):
         packages = ['bridge-utils', 'libvirt-daemon-system', 'libvirt-clients', 'python3-dpkt']
         ec2_packages = ['ec2-api-tools', 'awscli']
@@ -385,7 +392,7 @@ class Ubuntu(object):
         ec2_post_install = None
         version = '16.04'
 
-    versions = [Ubuntu_22_04, Ubuntu_21_10, Ubuntu_21_04, Ubuntu_20_10, Ubuntu_20_04, Ubuntu_19_10, Ubuntu_19_04, Ubuntu_18_10, Ubuntu_18_04, Ubuntu_17_04, Ubuntu_16_04]
+    versions = [Ubuntu_24_04, Ubuntu_22_04, Ubuntu_21_10, Ubuntu_21_04, Ubuntu_20_10, Ubuntu_20_04, Ubuntu_19_10, Ubuntu_19_04, Ubuntu_18_10, Ubuntu_18_04, Ubuntu_17_04, Ubuntu_16_04]
 
 class LinuxMint(Ubuntu):
     name = 'LinuxMint'
