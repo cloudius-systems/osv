@@ -76,7 +76,7 @@ CONF_memory_page_batch_size=4
 # Application
 #
 CONF_version_script="conf/examples/minimal_microvm/hello_world_static.version_script"
-CONF_syscalls_list_file="conf/examples/minimal_microvm/hello_world_static.syscalls"
+CONF_syscalls_list_file="conf/examples/minimal_microvm/hello_world_static.syscalls.aarch64"
 # end of Application
 
 # CONF_drivers_profile_base is not set
