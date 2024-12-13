@@ -15,6 +15,7 @@
 #include <xen/xen_intr.h>
 #include <xen/evtchn.h>
 #include <osv/mmio.hh>
+#include <stdexcept>
 #include "xenconsole.hh"
 
 namespace console {
