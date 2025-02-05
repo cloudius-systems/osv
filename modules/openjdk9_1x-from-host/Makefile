@@ -18,6 +18,7 @@ module:
 	@case "$(javac_with_version)" in \
 		"javac 9"*) ;; \
 		"javac 1"[0-9]*) ;; \
+		"javac 2"[0-9]*) ;; \
 		*) echo "Requires Java 9 or later"; exit 1 ;; \
 	esac
 	$(call very-quiet, $(SRC)/scripts/manifest_from_host.sh -li libfreeblpriv3.so > usr.manifest)
