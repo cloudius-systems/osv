@@ -271,16 +271,12 @@ start_secondary_cpu:
         bl      switch_to_runtime_pt
 
         ldr     x0, =smp_stack_free    /* ptr */
-        ldr     x1, [x0]               /* old value */
-        ldr     x2, [x1, #4096]        /* new value */
-        dmb     ish
 1:
-        ldxr    x3, [x0]
-        cmp     x3, x1
-        b.ne    2f
-        stxr    w4, x2, [x0]
-        cbnz    w4, 1b
-2:
+        ldxr    x1, [x0]               /* read current value AND set exclusive monitor */
+        ldr     x2, [x1, #4096]        /* fetch next value */
+        stxr    w4, x2, [x0]           /* write new value AND clear monitor */
+        cbnz    w4, 1b                 /* retry if stxr above failed = w4 == 1 */
+
         dmb     ish
         mov     x0, #1     // select SP_ELx
         msr     spsel, x0
