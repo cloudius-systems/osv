@@ -30,7 +30,7 @@ standard_ec2_post_install = ['pip install awscli &&'
 class Fedora(object):
     name = 'Fedora'
     pre_install = '(yum list installed compat-openssl10-devel 2>/dev/null && yum -y remove compat-openssl10-devel) || echo "package compat-openssl10-devel not found -> no need to remove it"'
-    install = 'yum -y install --allowerasing --forcearch x86_64'
+    install = 'yum -y install --allowerasing --forcearch ' + arch
     packages = [
                 'ant',
                 'autoconf',
