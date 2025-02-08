@@ -764,6 +764,37 @@ void object::relocate_rela()
     elf_debug("Relocated %d symbols in DT_RELA\n", nb);
 }
 
+void object::relocate_relr()
+{
+    //SHT_RELR: The section holds an array of relocation entries, used to encode
+    //relative relocations that do not require explicit addends or other information.
+    auto relr = dynamic_ptr<Elf64_Relr>(DT_RELR);
+    unsigned nb = dynamic_val(DT_RELRSZ) / sizeof(Elf64_Relr);
+    void **reloc_addr = 0;
+    for (auto p = relr; p < relr + nb; ++p) {
+        // - An even entry indicates a location which needs a relocation
+        //   and sets up where for subsequent odd entries.
+        // - An odd entry indicates a bitmap encoding up to 63 locations following where.
+        // - Odd entries can be chained.
+        auto entry = *p;
+        if ((entry & 1) == 0) {
+            reloc_addr = static_cast<void**>(_base + entry);
+            u64 val = *reinterpret_cast<u64*>(reloc_addr);
+            *reloc_addr++ = _base + val;
+        } else {
+            int bit_idx = 0;
+            for (size_t bitmap = entry; (bitmap >>= 1); bit_idx++) {
+                if (bitmap & 1) {
+                    u64 val = *reinterpret_cast<u64*>(reloc_addr + bit_idx);
+                    *(reloc_addr + bit_idx) = _base + val;
+                }
+            }
+            reloc_addr += (8 * sizeof(Elf64_Addr) - 1);
+	}
+    }
+    elf_debug("Relocated %d symbols in DT_RELR\n", nb);
+}
+
 extern "C" { void __elf_resolve_pltgot(void); }
 
 void object::relocate_pltgot()
@@ -863,6 +894,9 @@ void object::relocate()
     }
     if (dynamic_exists(DT_RELA)) {
         relocate_rela();
+    }
+    if (dynamic_exists(DT_RELR)) {
+        relocate_relr();
     }
 }
 
