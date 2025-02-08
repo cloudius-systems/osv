@@ -152,6 +152,8 @@ public:
     Elf64_Word n_type;
 };
 
+typedef Elf64_Xword Elf64_Relr;
+
 enum {
     DT_NULL = 0, // ignored Marks the end of the dynamic array
     DT_NEEDED = 1, // d_val The string table offset of the name of a needed library.Dynamic table 15
@@ -196,6 +198,9 @@ enum {
     DT_FINI_ARRAYSZ = 28, // d_val Size, in bytes, of the array of termination functions.
     DT_RUNPATH = 29, // d_val The string table offset of a shared library search path string.
     DT_FLAGS = 30, // value is various flags, bits from DF_*.
+    DT_RELRSZ = 35,
+    DT_RELR = 36,
+    DT_RELRENT = 37,
     DT_FLAGS_1 = 0x6ffffffb, // value is various flags, bits from DF_1_*.
     DT_VERSYM = 0x6ffffff0, // d_ptr Address of the version symbol table.
     DT_LOOS = 0x60000000, // Defines a range of dynamic table tags that are reserved for
@@ -444,6 +449,7 @@ private:
     symbol_module symbol_other(unsigned idx);
     Elf64_Xword symbol_tls_module(unsigned idx);
     void relocate_rela();
+    void relocate_relr();
     void relocate_pltgot();
     unsigned symtab_len();
     void collect_dependencies(std::unordered_set<elf::object*>& ds);
