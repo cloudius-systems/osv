@@ -29,7 +29,7 @@ endif
 quiet = $(if $V, $1, @echo " $2"; $1)
 
 out = build/$(mode).$(arch)
-default_config : $(out)/.config
+default_config: $(out)/.config
 
 .PHONY: override_dot_file
 ifneq (,$(conf_dot_file))

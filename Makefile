@@ -100,6 +100,11 @@ outlink = build/$(mode)
 outlink2 = build/last
 
 ifneq ($(MAKECMDGOALS),menuconfig)
+# Include the kernel configuration file if present, otherwise generate a default one
+ifeq (,$(wildcard $(out)/gen/config/kernel_conf.mk))
+    $(info Generating default kernel configuration file)
+    $(shell make -f conf/Makefile -j1 config 1>/dev/null)
+endif
 include $(out)/gen/config/kernel_conf.mk
 endif
 #
