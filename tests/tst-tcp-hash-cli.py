@@ -36,7 +36,7 @@ class ThreadPool:
 def hash_function(data):
     result = 0
     for x in data:
-        result ^= ord(x)
+        result ^= ord(chr(x))
     return result
 
 def make_connection():
@@ -46,16 +46,16 @@ def make_connection():
     
     try:
         s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-        s.connect(("192.168.122.89", 2500))
-        data = "".join(data)    
-        s.send(data)
-        s.send("END")
+        s.connect(("192.168.122.89", 2500)) #Change 192.168.122.89 to whatever address OSv guest is listening on
+        s.send(bytes([byte for byte in data]))
+        s.send(str.encode("END"))
         res = s.recv(1)
         s.close()
-        if (ord(res[0]) != expected):
+        if (res[0] != expected):
             hash_errors = hash_errors + 1
         
-    except:
+    except Exception as inst:
+        print(inst)
         drops = drops + 1
     
 if __name__ == "__main__":
@@ -72,7 +72,7 @@ if __name__ == "__main__":
 
     #data = range(0, (4096**2)*2, 11)
     data = list(range(0,4096, 11))
-    data = [chr(x % 256) for x in data]
+    data = [x % 256 for x in data]
     expected = hash_function(data)
 
     print("Sending %d bytes requests, expected hash: %d" % (len(data), expected))
