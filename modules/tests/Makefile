@@ -56,13 +56,13 @@ $(out)/tests/tst-non-pie.so: $(src)/tests/tst-non-pie.cc
 
 $(out)/tests/options.o: $(src)/core/options.cc
 	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX core/options.cc => tests/options.o)
 $(out)/tests/tst-options.so: $(out)/tests/tst-options.o $(out)/tests/options.o
 	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(out)/tests/options.o $(LIBS), LD tests/tst-options.so)
 
 $(out)/tests/string_utils.o: $(src)/core/string_utils.cc
 	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX core/string_utils.cc => tests/string_utils.o)
 $(out)/tests/tst-string-utils.so: $(out)/tests/tst-string-utils.o $(out)/tests/string_utils.o
 	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(out)/tests/string_utils.o $(LIBS), LD tests/tst-string-utils.so)
 
@@ -72,16 +72,16 @@ $(out)/tests/tst-reloc.so: $(src)/tests/tst-reloc.c
 
 $(out)/tests/commands.o: $(src)/core/commands.cc
 	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX core/commands.cc => tests/commands.o)
 $(out)/tests/printf.o: $(src)/core/printf.cc
 	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX core/printf.cc => tests/printf.o)
 $(out)/tests/debug.o: $(src)/core/debug.cc
 	$(makedir)
-	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX $*.cc)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX core/debug.cc => tests/debug.o)
 $(out)/tests/stresep.o: $(src)/libc/string/stresep.c
 	$(makedir)
-	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $<, CC $*.c)
+	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $<, CC libc/string/stresep.c => tests/stresep.o)
 $(out)/tests/tst-commands.so: $(out)/tests/tst-commands.o $(out)/tests/commands.o $(out)/tests/stresep.o $(out)/tests/printf.o $(out)/tests/debug.o
 	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(out)/tests/commands.o $(out)/tests/stresep.o $(out)/tests/printf.o $(out)/tests/debug.o $(LIBS), LD tests/tst-commands.so)
 
