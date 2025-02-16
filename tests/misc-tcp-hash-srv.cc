@@ -73,7 +73,7 @@ public:
         send(_fd, &response, 1, 0);
         close(_fd);
 
-        delete chunk;
+        delete[] chunk;
         delete this;
     }
 
