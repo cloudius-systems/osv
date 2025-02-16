@@ -49,7 +49,7 @@ def unsymlink(f):
 # Reads the manifest and returns it as a list of pairs (guestpath, hostpath).
 def read_manifest(fn):
     ret = []
-    comment = re.compile("^[ \t]*(|#.*|\[manifest])$")
+    comment = re.compile("^[ \t]*(|#.*|\\[manifest])$")
     with open(fn, 'r') as f:
         for line in f:
             line = line.rstrip();

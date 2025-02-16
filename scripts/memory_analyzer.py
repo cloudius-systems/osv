@@ -11,19 +11,19 @@ def is_page(x):
     return x.find("malloc_page ") > 0
 
 def get_alloc_len(x):
-    return int(re.findall("alloc_len=(\d*)", x)[0])
+    return int(re.findall("alloc_len=(\\d*)", x)[0])
 
 def get_req_len(x):
-    return int(re.findall("req_len=(\d*)", x)[0])
+    return int(re.findall("req_len=(\\d*)", x)[0])
 
 def get_buf(x):
     return re.findall("buf=(0x................)", x)[0]
 
 def get_align(x):
-    return int(re.findall("align=(\d*)", x)[0])
+    return int(re.findall("align=(\\d*)", x)[0])
 
 def get_type(x):
-    return re.findall("malloc_(\S*) ", x)[0]
+    return re.findall("malloc_(\\S*) ", x)[0]
 
 class Buffer(object):
     def __init__(self, buf, alloc_type, alloc_len, req_len, align, backtrace):

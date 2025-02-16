@@ -397,7 +397,7 @@ tcp_states = {
 
 def format_tcp_state_sample(sample):
     sample_str = sample.format_data(sample)
-    states = re.findall(".*(\d+) -> (\d+).*", sample_str)
+    states = re.findall(".*(\\d+) -> (\\d+).*", sample_str)
     if states == []:
         return sample_str
     else:

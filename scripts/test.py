@@ -52,7 +52,7 @@ class TestRunnerTest(SingleCommandTest):
 # (e.g., some may have actually remain there from old builds) - so lets take
 # the list of tests actually in the image form the image's manifest file.
 test_files = []
-is_comment = re.compile("^[ \t]*(|#.*|\[manifest])$")
+is_comment = re.compile("^[ \t]*(|#.*|\\[manifest])$")
 is_test = re.compile("^/tests/tst-.*")
 
 def running_with_kvm_on(arch, hypervisor):

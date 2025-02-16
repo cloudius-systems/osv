@@ -72,7 +72,7 @@ def scan_errors(s,scan_for_failed_to_load_object_error=True):
         "Assertion failed",
         "Aborted",
 	    "Error",
-	    "\[BUG\]",
+	    "\\[BUG]",
 	    "Failed looking up symbol",
 	    "Failure",
         "program exited with status",
@@ -81,7 +81,7 @@ def scan_errors(s,scan_for_failed_to_load_object_error=True):
         "at org.junit.runner.JUnitCore.main",
         "ContextFailedException",
         "AppThreadTerminatedWithUncaughtException",
-	    "\[backtrace\]",
+	    "\\[backtrace]",
         "Test setup error"
     ]
 
