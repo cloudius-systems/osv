@@ -10,6 +10,7 @@
 #include "transport.hh"
 #include "ssl_server.hh"
 #include <openssl/ssl.h>
+#include <openssl/rand.h>
 #include <iostream>
 
 namespace http {
