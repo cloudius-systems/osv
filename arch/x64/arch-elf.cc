@@ -17,6 +17,7 @@
 #define elf_debug(...)
 #endif
 
+extern "C" size_t __tlsdesc_static(size_t *);
 namespace elf {
 
 // This function is solely used to relocate symbols in OSv kernel ELF
@@ -182,7 +183,40 @@ bool object::arch_relocate_jump_slot(symbol_module& sym, void *addr, Elf64_Sxwor
 
 void object::arch_relocate_tls_desc(u32 sym, void *addr, Elf64_Sxword addend)
 {
-    abort("Not implemented!");
+    //TODO: Differentiate between DL_NEEDED (static TLS, initial-exec) and dynamic TLS (dlopen)
+    //For now assume it is always static TLS case
+    //
+    // First place the address of the resolver function - __tlsdesc_static
+    *static_cast<size_t*>(addr) = (size_t)__tlsdesc_static;
+    // Secondly calculate and store the argument passed to the resolver function - TLS offset
+    ulong tls_offset;
+    if (sym) {
+        auto sm = symbol(sym);
+        auto offset = sm.symbol->st_value + addend;
+        if (sm.obj->is_dynamically_linked_executable() || sm.obj->is_core()) {
+            // If this is an executable (pie or position-dependant one) then the variable
+            // is located in the reserved slot of the TLS right where the kernel TLS lives
+            // So the offset is negative aligned size of this ELF TLS block
+            tls_offset = sm.obj->get_aligned_tls_size();
+            elf_debug("arch_relocate_tls_desc: static access, other executable, sym:%d, TP offset:%ld\n", sym, offset - tls_offset);
+        } else {
+            // If shared library, the variable is located in one of TLS blocks that are
+            // part of the static TLS before kernel part so the offset needs to shift
+            // by sum of kernel and size of the user static TLS so far
+            sm.obj->alloc_static_tls();
+            tls_offset = sm.obj->static_tls_end() + sched::kernel_tls_size();
+            elf_debug("arch_relocate_tls_desc: static access, %s, sym:%d, TP offset:%ld\n",
+                _module_index == sm.obj->module_index() ? "other shared lib" : "self", sym, offset - tls_offset);
+        }
+        *(static_cast<size_t*>(addr) + 1) = offset - tls_offset;
+    } else {
+        // The static (local to this module) thread-local variable/s being accessed within
+        // same module so we just need to set the offset for corresponding static TLS block
+        alloc_static_tls();
+        auto tls_offset = static_tls_end() + sched::kernel_tls_size();
+        elf_debug("arch_relocate_tls_desc: static access, self, TP offset:%ld\n", addend - tls_offset);
+        *(static_cast<size_t*>(addr) + 1) = addend - tls_offset;
+    }
 }
 
 void object::prepare_initial_tls(void* buffer, size_t size,

@@ -147,7 +147,6 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-pthread-create.so \
 	misc-futex-perf.so misc-syscall-perf.so tst-brk.so tst-reloc.so \
 	misc-vdso-perf.so tst-string-utils.so
-#	libstatic-thread-variable.so tst-static-thread-variable.so \
 #	tst-f128.so \
 
 
@@ -165,7 +164,7 @@ internal-api-tests := tst-app.so tst-async.so tst-bsd-evh.so \
 	tst-vfs.so tst-wait-for.so tst-without-namespace.so
 
 ifeq ($(arch),x64)
-tests += tst-mmx-fpu.so
+tests += tst-mmx-fpu.so tst-tls-desc.so tst-tls-pie-desc.so libtls_desc.so
 endif
 
 tests += testrunner.so
@@ -183,6 +182,8 @@ $(out)/tests/tst-mmap.so: COMMON += -fuse-ld=bfd
 $(out)/tests/tst-elf-permissions.so: COMMON += -fuse-ld=bfd
 $(out)/tests/tst-tls.so: COMMON += -fuse-ld=bfd
 $(out)/tests/tst-tls-pie.so: COMMON += -fuse-ld=bfd
+$(out)/tests/tst-tls-desc.so: COMMON += -fuse-ld=bfd
+$(out)/tests/tst-tls-pie-desc.so: COMMON += -fuse-ld=bfd
 
 $(out)/tests/tst-dlfcn.so: COMMON += -rdynamic -ldl
 
@@ -201,6 +202,31 @@ $(out)/tests/tst-tls-pie.so: \
 		$(out)/tests/libtls.so
 	$(makedir)
 	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -pthread -fpie -o $@ $< $(LIBS) tests/libtls.so, LD tests/tst-tls-pie.so)
+
+$(out)/tests/tst-tls-desc.o: CXXFLAGS += -mtls-dialect=gnu2 -fPIC -D__SHARED_OBJECT__=1
+$(out)/tests/tst-tls-desc.o: $(src)/tests/tst-tls.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX tests/tst-tls-desc.cc)
+$(out)/tests/tst-tls-desc.so: \
+		$(out)/tests/tst-tls-desc.o \
+		$(out)/tests/libtls_desc.so
+	$(makedir)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -pthread -shared -o $@ $< $(LIBS) tests/libtls_desc.so, LD tests/tst-tls-desc.so)
+
+$(out)/tests/tst-tls-pie-desc.o: CXXFLAGS += -mtls-dialect=gnu2 -fPIC -D__SHARED_OBJECT__=1
+$(out)/tests/tst-tls-pie-desc.o: $(src)/tests/tst-tls.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX tests/tst-tls-pie-desc.cc)
+$(out)/tests/tst-tls-pie-desc.so: \
+		$(out)/tests/tst-tls-pie-desc.o \
+		$(out)/tests/libtls_desc.so
+	$(makedir)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -pthread -fpie -o $@ $< $(LIBS) tests/libtls_desc.so, LD tests/tst-tls-pie-desc.so)
+
+$(out)/tests/libtls_desc.so: CXXFLAGS += -mtls-dialect=gnu2
+$(out)/tests/libtls_desc.so: $(src)/tests/libtls.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(LIBS), LD tests/libtls_desc.so)
 
 $(out)/tests/libtls_gold.so: COMMON += -fuse-ld=gold
 $(out)/tests/libtls_gold.so: $(out)/tests/libtls.o

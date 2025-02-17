@@ -1015,6 +1015,7 @@ objects += arch/$(arch)/arch-cpu.o
 objects += arch/$(arch)/backtrace.o
 objects += arch/$(arch)/smp.o
 objects += arch/$(arch)/elf-dl.o
+objects += arch/$(arch)/tlsdesc.o
 objects += arch/$(arch)/entry.o
 objects += arch/$(arch)/mmu.o
 objects += arch/$(arch)/exceptions.o
@@ -1052,7 +1053,6 @@ objects += arch/$(arch)/memset.o
 objects += arch/$(arch)/memcpy.o
 objects += arch/$(arch)/memmove.o
 endif
-objects += arch/$(arch)/tlsdesc.o
 objects += arch/$(arch)/sched.o
 objects += $(libfdt)
 endif
