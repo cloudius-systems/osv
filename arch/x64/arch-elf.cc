@@ -139,6 +139,7 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
         // target thread-local variable
         if (sym) {
             auto sm = symbol(sym);
+            sm.obj->alloc_static_tls();
             ulong tls_offset;
             if (sm.obj->is_dynamically_linked_executable()) {
                 // If this is an executable (pie or position-dependant one)
@@ -151,7 +152,6 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
                 // blocks that are part of the static TLS before kernel part
                 // so the offset needs to shift by sum of kernel and size of the user static
                 // TLS so far
-                sm.obj->alloc_static_tls();
                 tls_offset = sm.obj->static_tls_end() + sched::kernel_tls_size();
             }
             *static_cast<u64*>(addr) = sm.symbol->st_value + addend - tls_offset;
@@ -192,6 +192,7 @@ void object::arch_relocate_tls_desc(u32 sym, void *addr, Elf64_Sxword addend)
     ulong tls_offset;
     if (sym) {
         auto sm = symbol(sym);
+        sm.obj->alloc_static_tls();
         auto offset = sm.symbol->st_value + addend;
         if (sm.obj->is_dynamically_linked_executable() || sm.obj->is_core()) {
             // If this is an executable (pie or position-dependant one) then the variable
@@ -203,7 +204,6 @@ void object::arch_relocate_tls_desc(u32 sym, void *addr, Elf64_Sxword addend)
             // If shared library, the variable is located in one of TLS blocks that are
             // part of the static TLS before kernel part so the offset needs to shift
             // by sum of kernel and size of the user static TLS so far
-            sm.obj->alloc_static_tls();
             tls_offset = sm.obj->static_tls_end() + sched::kernel_tls_size();
             elf_debug("arch_relocate_tls_desc: static access, %s, sym:%d, TP offset:%ld\n",
                 _module_index == sm.obj->module_index() ? "other shared lib" : "self", sym, offset - tls_offset);
