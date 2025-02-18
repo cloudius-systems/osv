@@ -15,6 +15,7 @@ __thread int ex3 = 765;
 extern __thread int v1;
 extern __thread int v5;
 
+extern "C"
 void external_library()
 {
     // ex1 and ex3 get accessed by _tls_get_addr()

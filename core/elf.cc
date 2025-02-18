@@ -98,6 +98,8 @@ void* symbol_module::relocated_addr() const
         break;
     case STT_IFUNC:
         return reinterpret_cast<void *(*)()>(base + symbol->st_value)();
+    case STT_TLS:
+        return obj->tls_addr() + symbol->st_value;
     default:
         abort("Unknown symbol type %d\n", symbol_type(*symbol));
     }
@@ -1264,11 +1266,19 @@ void* object::tls_addr()
 
 void object::alloc_static_tls()
 {
+    if (is_core()) {
+        return;
+    }
+
     auto tls_size = get_tls_size();
     if (!_static_tls && tls_size) {
         _static_tls = true;
-        _static_tls_offset = _static_tls_alloc.fetch_add(tls_size, std::memory_order_relaxed);
-        elf_debug("Allocated static TLS at offset: 0x%x of size: 0x%x\n", _static_tls_offset, tls_size);
+        if (_is_dynamically_linked_executable) {
+            elf_debug("Marked static TLS for a PIE of size: 0x%x\n", tls_size);
+        } else {
+            _static_tls_offset = _static_tls_alloc.fetch_add(tls_size, std::memory_order_relaxed);
+            elf_debug("Allocated static TLS at offset: 0x%x of size: 0x%x\n", _static_tls_offset, tls_size);
+        }
     }
 }
 
@@ -1296,8 +1306,9 @@ void object::init_static_tls()
         _initial_tls_size = 0;
         return;
     }
-    assert(_initial_tls_size);
-    _initial_tls.reset(new char[_initial_tls_size]);
+    if (_initial_tls_size) {
+        _initial_tls.reset(new char[_initial_tls_size]);
+    }
     for (auto&& obj : deps) {
         if (obj->is_core()) {
             continue;
@@ -1306,7 +1317,7 @@ void object::init_static_tls()
             obj->prepare_local_tls(_initial_tls_offsets);
             elf_debug("Initialized local-exec static TLS for %s\n", obj->pathname().c_str());
         }
-        else {
+        else if (_initial_tls_size) {
             obj->prepare_initial_tls(_initial_tls.get(), _initial_tls_size,
                                      _initial_tls_offsets);
             elf_debug("Initialized initial-exec static TLS for %s of size: 0x%x\n", obj->pathname().c_str(), _initial_tls_size);
