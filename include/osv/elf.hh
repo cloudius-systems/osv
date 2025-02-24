@@ -516,8 +516,10 @@ private:
     std::atomic<void*> _visibility_thread;
     std::atomic<VisibilityLevel> _visibility_level;
     bool visible(void) const;
+    bool _dlopen_ed;
 public:
     void set_visibility(VisibilityLevel);
+    void set_dlopen_ed(bool dlopen_ed) { _dlopen_ed = dlopen_ed; }
 };
 
 class file : public object {
@@ -617,7 +619,7 @@ public:
      *                        the init functions are executed right away.
      */
     std::shared_ptr<elf::object>
-    get_library(std::string lib, std::vector<std::string> extra_path = {}, bool delay_init = false);
+    get_library(std::string lib, std::vector<std::string> extra_path = {}, bool delay_init = false, bool dlopen = false);
 
     /**
      * Execute init functions of the library itself and its dependencies.
@@ -671,7 +673,8 @@ private:
     void free_dtv(object* obj);
     std::shared_ptr<object> load_object(std::string name,
             std::vector<std::string> extra_path,
-            std::vector<std::shared_ptr<object>> &loaded_objects);
+            std::vector<std::shared_ptr<object>> &loaded_objects,
+            bool dlopen = false);
     void initialize_libvdso();
 private:
     mutex _mutex;

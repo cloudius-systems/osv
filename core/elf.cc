@@ -128,6 +128,7 @@ object::object(program& prog, std::string pathname)
     , _eh_frame(0)
     , _visibility_thread(nullptr)
     , _visibility_level(VisibilityLevel::Public)
+    , _dlopen_ed(false)
 {
     elf_debug("Instantiated\n");
 }
@@ -1456,7 +1457,7 @@ static std::string canonicalize(std::string p)
 // get_library() will run the init functions later.
 std::shared_ptr<elf::object>
 program::load_object(std::string name, std::vector<std::string> extra_path,
-        std::vector<std::shared_ptr<object>> &loaded_objects)
+        std::vector<std::shared_ptr<object>> &loaded_objects, bool dlopen)
 {
     fileref f;
     if (_files.count(name)) {
@@ -1497,6 +1498,7 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
                 [=](object *obj) { remove_object(obj); });
         ef->set_base(_next_alloc);
         ef->set_visibility(ThreadOnly);
+        ef->set_dlopen_ed(dlopen);
         // We need to push the object at the end of the list (so that the main
         // shared object gets searched before the shared libraries it uses),
         // with one exception: the kernel needs to remain at the end of the
@@ -1532,7 +1534,7 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
 }
 
 std::shared_ptr<object>
-program::get_library(std::string name, std::vector<std::string> extra_path, bool delay_init)
+program::get_library(std::string name, std::vector<std::string> extra_path, bool delay_init, bool dlopen)
 {
     SCOPE_LOCK(_mutex);
     //
@@ -1548,7 +1550,7 @@ program::get_library(std::string name, std::vector<std::string> extra_path, bool
     // structure so each init_library call gets it's corresponding list of objects to operate on.
     //
     std::vector<std::shared_ptr<object>> loaded_objects;
-    auto ret = load_object(name, extra_path, loaded_objects);
+    auto ret = load_object(name, extra_path, loaded_objects, dlopen);
     _loaded_objects_stack.push(loaded_objects);
 
     if (ret) {
