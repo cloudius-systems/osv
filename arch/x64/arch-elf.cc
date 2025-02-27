@@ -188,12 +188,13 @@ void object::arch_relocate_tls_desc(u32 sym, void *addr, Elf64_Sxword addend)
     //
     // First place the address of the resolver function - __tlsdesc_static
     *static_cast<size_t*>(addr) = (size_t)__tlsdesc_static;
+    //
     // Secondly calculate and store the argument passed to the resolver function - TLS offset
-    ulong tls_offset;
     if (sym) {
         auto sm = symbol(sym);
         sm.obj->alloc_static_tls();
         auto offset = sm.symbol->st_value + addend;
+        ulong tls_offset;
         if (sm.obj->is_dynamically_linked_executable() || sm.obj->is_core()) {
             // If this is an executable (pie or position-dependant one) then the variable
             // is located in the reserved slot of the TLS right where the kernel TLS lives
@@ -206,7 +207,7 @@ void object::arch_relocate_tls_desc(u32 sym, void *addr, Elf64_Sxword addend)
             // by sum of kernel and size of the user static TLS so far
             tls_offset = sm.obj->static_tls_end() + sched::kernel_tls_size();
             elf_debug("arch_relocate_tls_desc: static access, %s, sym:%d, TP offset:%ld\n",
-                _module_index == sm.obj->module_index() ? "other shared lib" : "self", sym, offset - tls_offset);
+                _module_index == sm.obj->module_index() ? "self" : "other shared lib", sym, offset - tls_offset);
         }
         *(static_cast<size_t*>(addr) + 1) = offset - tls_offset;
     } else {
