@@ -1111,6 +1111,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
             }
         }
     }
+    update_dtv();
 
     WITH_LOCK(thread_map_mutex) {
         if (!main) {
@@ -1611,7 +1612,8 @@ void* thread::setup_tls(ulong module, const void* tls_template,
         size_t init_size, size_t uninit_size)
 {
     _tls.resize(std::max(module + 1, _tls.size()));
-    _tls[module]  = new char[init_size + uninit_size];
+    _tls[module] = new char[init_size + uninit_size];
+    update_dtv();
     auto p = _tls[module];
     memcpy(p, tls_template, init_size);
     memset(p + init_size, 0, uninit_size);

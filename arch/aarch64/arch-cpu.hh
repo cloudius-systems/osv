@@ -33,7 +33,15 @@ struct arch_cpu {
     u64 mpid;    /* actual MPID as read from the cpu */
 };
 
+//This is an assembly-friendly descriptor of DTV stored in the _tls property
+//The _tls is a C++ std::vector
+struct dtv {
+    u64 last_index; //Index of the last TLS segment in _tls
+    char **first;   //Address of the 1st TLS segment
+};
+
 struct arch_thread {
+    struct dtv _dtv;
     char exception_stack[CONF_threads_default_exception_stack_size] __attribute__((aligned(16)));
 };
 

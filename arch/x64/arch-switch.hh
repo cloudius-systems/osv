@@ -371,6 +371,10 @@ void* thread::get_syscall_stack_top()
     return _state._syscall_stack_descriptor.stack_top;
 }
 
+void thread::update_dtv()
+{
+}
+
 void thread_main_c(thread* t)
 {
     arch::irq_enable();

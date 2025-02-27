@@ -27,6 +27,11 @@
 /// PLT entries so OSv APIs like preempt_disable() can be used
 #define OSV_ELF_MLOCK_OBJECT() asm(".pushsection .note.osv-mlock, \"a\"; .long 0, 0, 0; .popsection")
 
+struct module_and_offset {
+    ulong module;
+    ulong offset;
+};
+
 /**
  * elf namespace
  */

@@ -16,6 +16,7 @@
 #endif
 
 extern "C" size_t __tlsdesc_static(size_t *);
+extern "C" size_t __tlsdesc_dynamic(size_t *);
 namespace elf {
 
 bool arch_init_reloc_dyn(struct init_table *t, u32 type, u32 sym,
@@ -66,6 +67,7 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
     case R_AARCH64_TLS_TPREL64:
         if (sym) {
             auto sm = symbol(sym);
+            sm.obj->alloc_static_tls();
             ulong tls_offset;
             if (sm.obj->is_dynamically_linked_executable()) {
                 // If this is an executable (pie or position-dependant one)
@@ -78,7 +80,6 @@ bool object::arch_relocate_rela(u32 type, u32 sym, void *addr,
                 // blocks that are part of the static TLS after kernel part
                 // so the offset needs to shift by sum of kernel and size of the user static
                 // TLS so far
-                sm.obj->alloc_static_tls();
                 tls_offset = sm.obj->static_tls_offset() + sched::kernel_tls_size();
             }
             *static_cast<u64*>(addr) = sm.symbol->st_value + addend + tls_offset + sizeof(thread_control_block);
@@ -111,39 +112,75 @@ bool object::arch_relocate_jump_slot(symbol_module& sym, void *addr, Elf64_Sxwor
 
 void object::arch_relocate_tls_desc(u32 sym, void *addr, Elf64_Sxword addend)
 {
-    //TODO: Differentiate between DL_NEEDED (static TLS, initial-exec) and dynamic TLS (dlopen)
-    //For now assume it is always static TLS case
-    //
-    // First place the address of the resolver function - __tlsdesc_static
+    // Determine if static or dynamic access
+    // In general, TLS access of a symbol in a dynamically opened ELF (dlopen()-ed)
+    // needs to be handled using a dynamic TLS descriptor, otherwise a static one
+    bool dynamic = false;
+    symbol_module sm;
+    if (sym) {
+        sm = symbol(sym);
+        // In some cases symbol in the same dlopen()-ed ELF may be relocated via
+        // a symbol table and we need to handle it using a dynamic descriptor
+        if (sm.obj->module_index() == _module_index) {
+            dynamic = _dlopen_ed;
+        }
+    } else {
+        dynamic = _dlopen_ed;
+    }
+
+    // Dynamic access
+    if (dynamic) {
+        // First place the address of the resolver function
+        *static_cast<size_t*>(addr) = (size_t)__tlsdesc_dynamic;
+        // Secondly allocate simple structure describing ELF index and symbol TLS offset
+        // that will be passed as an argument to __tlsdesc_dynamic
+        // TODO: For now let us not worry about deallocating it - in most cases ELFs
+        // stay loaded until OSv shutdowns
+        auto *mo = new module_and_offset;
+        *(static_cast<size_t*>(addr) + 1) = reinterpret_cast<size_t>(mo);
+        if (sym) {
+            mo->module = sm.obj->module_index();
+            mo->offset = (size_t)sm.symbol->st_value + addend;
+            elf_debug("arch_relocate_tls_desc: dynamic access, self, sym:%d, module:%d, offset:%lu\n", sym, mo->module, mo->offset);
+        } else {
+            mo->module = _module_index;
+            mo->offset = addend;
+            elf_debug("arch_relocate_tls_desc: dynamic access, self, module:%d, offset:%lu\n", mo->module, mo->offset);
+        }
+        return;
+    }
+
+    // Static access
+    // First place the address of the resolver function
     *static_cast<size_t*>(addr) = (size_t)__tlsdesc_static;
     // Secondly calculate and store the argument passed to the resolver function - TLS offset
-    ulong tls_offset;
     if (sym) {
-        auto sm = symbol(sym);
+        sm.obj->alloc_static_tls();
+        ulong tls_offset;
+        auto offset = (size_t)sm.symbol->st_value + addend + sizeof(thread_control_block);
         if (sm.obj->is_dynamically_linked_executable() || sm.obj->is_core()) {
-            // If this is an executable (pie or position-dependant one)
-            // then the variable is located in the reserved slot of the TLS
-            // right where the kernel TLS lives
+            // If this is an executable (pie or position-dependant one) then the variable
+            // is located in the reserved slot of the TLS right where the kernel TLS lives
             // So the offset is 0 right at the start of the static TLS
             tls_offset = 0;
+            elf_debug("arch_relocate_tls_desc: static access, other executable, sym:%d, TP offset:%ld\n", sym, offset);
         } else {
-            // If shared library, the variable is located in one of TLS
-            // blocks that are part of the static TLS after kernel part
-            // so the offset needs to shift by sum of kernel and size of the user static
-            // TLS so far
-            sm.obj->alloc_static_tls();
+            // If shared library, the variable is located in one of TLS blocks
+            // that are part of the static TLS after kernel part so the offset needs to
+            // shift by sum of kernel and size of the user static TLS so far
             tls_offset = sm.obj->static_tls_offset() + sched::kernel_tls_size();
+            elf_debug("arch_relocate_tls_desc: static access, %s, sym:%d, TP offset:%ld\n",
+                _module_index == sm.obj->module_index() ? "self" : "other shared lib", sym, offset + tls_offset);
         }
-        auto offset = (size_t)sm.symbol->st_value + addend + tls_offset + sizeof(thread_control_block);
-        *(static_cast<size_t*>(addr) + 1) = offset;
+        *(static_cast<size_t*>(addr) + 1) = offset + tls_offset;
     } else {
         // The static (local to this module) thread-local variable/s being accessed within
         // same module so we just need to set the offset for corresponding static TLS block
         alloc_static_tls();
         auto offset = _static_tls_offset + sched::kernel_tls_size() + addend + sizeof(thread_control_block);
+        elf_debug("arch_relocate_tls_desc: static access, TP offset:%ld\n", offset);
         *(static_cast<size_t*>(addr) + 1) = offset;
     }
-    elf_debug("arch_relocate_rela, R_AARCH64_TLSDESC for sym:%d, TP offset:%ld\n", sym, *(static_cast<size_t*>(addr) + 1));
 }
 
 void object::prepare_initial_tls(void* buffer, size_t size,
