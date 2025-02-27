@@ -1971,16 +1971,24 @@ void* elf_resolve_pltgot(unsigned long index, elf::object* obj)
     }
 }
 
-struct module_and_offset {
-    ulong module;
-    ulong offset;
-};
-
 char *object::setup_tls()
 {
     elf_debug("Setting up dynamic TLS of %d bytes\n", _tls_init_size + _tls_uninit_size);
     return (char *) sched::thread::current()->setup_tls(
             _module_index, _tls_segment, _tls_init_size, _tls_uninit_size);
+}
+
+
+extern "C" OSV_LD_LINUX_x86_64_API
+void* __tls_dynamic_setup(module_and_offset* mao)
+{
+    // Invocation of dynamic TLS descriptor can happen with a dirty fpu
+    sched::fpu_lock fpu;
+    WITH_LOCK(fpu) {
+        object *obj = get_program()->tls_object(mao->module);
+        assert(mao->module == obj->module_index());
+        return obj->setup_tls();
+    }
 }
 
 extern "C" OSV_LD_LINUX_x86_64_API

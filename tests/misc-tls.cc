@@ -17,6 +17,8 @@
 
 #include <chrono>
 #include <iostream>
+#include <dlfcn.h>
+#include <cassert>
 
 __thread int var_tls;
 int var_global;
@@ -44,5 +46,17 @@ int main()
     sec = end - start;
     std::cout << "var_tls iteration (ns): " << (sec.count() / N / 1e-9) << "\n";
 
+    auto handle = dlopen("/tests/lib-misc-tls.so", RTLD_NOW);
+    assert(handle);
+    void (*external_library)(int) = reinterpret_cast<void(*)(int)>(dlsym(handle, "external_library"));
+    assert(external_library);
+
+    start = std::chrono::system_clock::now();
+    external_library(N);
+    end = std::chrono::system_clock::now();
+    sec = end - start;
+    std::cout << "var_lib_tls iteration (ns): " << (sec.count() / N / 1e-9) << "\n";
+
+    dlclose(handle);
     return 0;
 }

@@ -142,7 +142,8 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-calloc.so tst-crypt.so tst-non-fpic.so tst-small-malloc.so \
 	tst-getopt.so tst-getopt-pie.so tst-non-pie.so tst-semaphore.so \
 	tst-elf-init.so tst-realloc.so tst-setjmp.so \
-	libtls.so libtls_gold.so tst-tls.so tst-tls-gold.so tst-tls-pie.so \
+	libtls.so libtls_gold.so lib-misc-tls.so tst-tls.so \
+	tst-tls-gold.so tst-tls-pie.so tst-tls-pie-dlopen.so \
 	tst-sigaction.so tst-syscall.so tst-ifaddrs.so tst-getdents.so \
 	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-pthread-create.so \
 	misc-futex-perf.so misc-syscall-perf.so tst-brk.so tst-reloc.so \
@@ -164,8 +165,7 @@ internal-api-tests := tst-app.so tst-async.so tst-bsd-evh.so \
 	tst-vfs.so tst-wait-for.so tst-without-namespace.so
 
 ifeq ($(arch),x64)
-tests += tst-mmx-fpu.so tst-tls-desc.so tst-tls-pie-desc.so libtls_desc.so \
-	tst-tls-pie-dlopen.so
+tests += tst-mmx-fpu.so tst-tls-desc.so tst-tls-pie-desc.so libtls_desc.so
 endif
 
 tests += testrunner.so

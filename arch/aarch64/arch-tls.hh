@@ -15,8 +15,8 @@
 
 /* the structure (roughly) corresponds to the tcbhead_t in glibc */
 struct thread_control_block {
-    void *tls_base; /* dtv */
-    void *privat;   /* private */
+    void *tls_base; // Address of the per-thread static TLS block (kernel, pie, etc)
+    void *dtv;      // Address of the DTV (Dynamic Thread Vector)
 };
 
 #endif /* ARCH_TLS_HH */
