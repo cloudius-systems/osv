@@ -159,6 +159,8 @@ void thread::setup_tcb()
         // TLS layout
         _app_runtime->app.lib()->copy_local_tls(kernel_tls);
     }
+
+    _tcb->dtv = &_arch._dtv;
 }
 
 void thread::free_tcb()
@@ -168,6 +170,12 @@ void thread::free_tcb()
 
 void thread::free_syscall_stack()
 {
+}
+
+void thread::update_dtv()
+{
+    _arch._dtv.last_index = _tls.size() - 1;
+    _arch._dtv.first = &_tls[0];
 }
 
 void thread_main_c(thread* t)

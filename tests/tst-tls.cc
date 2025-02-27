@@ -111,7 +111,6 @@ int main(int argc, char** argv)
     report(ex2 == 433, "ex2 modified");
     report(ex3 == 766, "ex3 modified");
 #endif
-    //printf("Before FAIL: v1:%d, v2:%d\n", v1, v5);
     report(v1 == 124, "v1 modified");
     report(v5 == 568, "v5 modified");
 

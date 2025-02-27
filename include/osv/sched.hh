@@ -376,6 +376,7 @@ struct thread_switch_data {
    thread_state* new_thread_state = nullptr;
 };
 #endif
+
 /**
  * OSv thread
  */
@@ -733,6 +734,7 @@ private:
     void setup_tcb();
     void free_tcb();
     void free_syscall_stack();
+    void update_dtv();
     void complete() __attribute__((__noreturn__));
     template <class Action>
     inline void do_wake_with(Action action, unsigned allowed_initial_states_mask);
