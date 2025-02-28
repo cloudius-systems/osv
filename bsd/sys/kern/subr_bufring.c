@@ -37,6 +37,7 @@
 #include <machine/atomic.h>
 static inline void critical_enter()  { abort(); }
 static inline void critical_exit() { abort(); }
+static inline void atomic_thread_fence_acq() { abort(); }
 
 #include <sys/buf_ring.h>
 
