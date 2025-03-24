@@ -70,24 +70,27 @@ BOOST_AUTO_TEST_CASE(test_rcu_hashtable_basic) {
 }
 
 struct element_status {
-    int insertions_lower_bound = {};
-    int insertions_upper_bound = {};
-    int removals_lower_bound = {};
-    int removals_upper_bound = {};
+    element_status() {}
+    element_status(const element_status& e) :
+        insertions_lower_bound(e.insertions_lower_bound.load(std::memory_order_acquire)),
+        insertions_upper_bound(e.insertions_upper_bound.load(std::memory_order_acquire)),
+        removals_lower_bound(e.removals_lower_bound.load(std::memory_order_acquire)),
+        removals_upper_bound(e.removals_upper_bound.load(std::memory_order_acquire))
+    {}
+
+    std::atomic<int> insertions_lower_bound = {};
+    std::atomic<int> insertions_upper_bound = {};
+    std::atomic<int> removals_lower_bound = {};
+    std::atomic<int> removals_upper_bound = {};
     friend std::ostream& operator<<(std::ostream& os, const element_status& es);
 };
 
 std::ostream& operator<<(std::ostream& os, const element_status& es)
 {
     return os << osv::sprintf("element_status{ins_lb=%d ins_ub=%d rem_lb=%d rem_ub=%d}",
-            es.insertions_lower_bound, es.insertions_upper_bound,
-            es.removals_lower_bound, es.removals_upper_bound);
+            es.insertions_lower_bound.load(std::memory_order_acquire), es.insertions_upper_bound.load(std::memory_order_acquire),
+            es.removals_lower_bound.load(std::memory_order_acquire), es.removals_upper_bound.load(std::memory_order_acquire));
 }
-
-
-element_status* g_b, *g_a;
-size_t g_i;
-int* g_c;
 
 void read_all(osv::rcu_hashtable<test_element>& ht,
         std::vector<element_status>& status)
@@ -101,13 +104,9 @@ void read_all(osv::rcu_hashtable<test_element>& ht,
         });
     }
     auto after = status;
-    g_b = before.data();
-    g_a = after.data();
-    g_c = count.data();
     for (size_t i = 0; i < status.size(); ++i) {
-        g_i = i;
-        assert(count[i] >= before[i].insertions_lower_bound - after[i].removals_upper_bound);
-        assert(count[i] <= after[i].insertions_upper_bound - before[i].removals_lower_bound);
+        assert(count[i] >= before[i].insertions_lower_bound.load(std::memory_order_acquire) - after[i].removals_upper_bound.load(std::memory_order_acquire));
+        assert(count[i] <= after[i].insertions_upper_bound.load(std::memory_order_acquire) - before[i].removals_lower_bound.load(std::memory_order_acquire));
     }
 }
 
@@ -131,7 +130,7 @@ void do_reads(osv::rcu_hashtable<test_element>& ht,
             auto i = ht.reader_find(value, hash, compare);
             element_status after = status[value];
             if (!i) {
-                auto lower_bound = std::max(before.insertions_lower_bound - after.removals_upper_bound, 0);
+                auto lower_bound = std::max(before.insertions_lower_bound.load(std::memory_order_acquire) - after.removals_upper_bound.load(std::memory_order_acquire), 0);
                 if (lower_bound > 0) {
                     DROP_LOCK(osv::rcu_read_lock) {
                         std::cerr << "before: " << before << "\nafter: " << after << "\n";
@@ -140,7 +139,7 @@ void do_reads(osv::rcu_hashtable<test_element>& ht,
                 assert(lower_bound == 0);
             } else {
                 i->validate();
-                auto upper_bound = after.insertions_upper_bound - before.removals_lower_bound;
+                auto upper_bound = after.insertions_upper_bound.load(std::memory_order_acquire) - before.removals_lower_bound.load(std::memory_order_acquire);
                 if (upper_bound < 1) {
                     DROP_LOCK(osv::rcu_read_lock) {
                         std::cerr << "before: " << before << "\nafter: " << after << "\n";
@@ -185,14 +184,14 @@ BOOST_AUTO_TEST_CASE(test_rcu_hashtable) {
                 auto& s = status[value];
                 switch (action) {
                 case 0: { // insert
-                    ++s.insertions_upper_bound;
+                    s.insertions_upper_bound.store(s.insertions_upper_bound.load(std::memory_order_relaxed) + 1, std::memory_order_release);
                     ht.emplace(value);
-                    ++s.insertions_lower_bound;
+                    s.insertions_lower_bound.store(s.insertions_lower_bound.load(std::memory_order_relaxed) + 1, std::memory_order_release);
                     ++size;
                     break;
                 }
                 case 1: {// delete
-                    auto ub = s.insertions_upper_bound - s.removals_lower_bound;
+                    auto ub = s.insertions_upper_bound.load(std::memory_order_relaxed) - s.removals_lower_bound.load(std::memory_order_relaxed);
                     auto hash = [](size_t value) -> size_t { return value; };
                     auto compare = [](unsigned x, const test_element& y) { return x == y._val; };
                     auto i = ht.owner_find(value, hash, compare);
@@ -200,9 +199,9 @@ BOOST_AUTO_TEST_CASE(test_rcu_hashtable) {
                         assert(!i);
                         BOOST_REQUIRE(!i);
                     } else {
-                        ++s.removals_upper_bound;
+                        s.removals_upper_bound.store(s.removals_upper_bound.load(std::memory_order_relaxed) + 1, std::memory_order_release);
                         ht.erase(i);
-                        ++s.removals_lower_bound;
+                        s.removals_lower_bound.store(s.removals_lower_bound.load(std::memory_order_relaxed) + 1, std::memory_order_release);
                         --size;
                     }
                     break;
