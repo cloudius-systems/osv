@@ -42,8 +42,13 @@ inline void irq_disable_notrace()
 }
 
 inline void wait_for_interrupt() {
-    irq_enable();
-    wfi();
+    // Must be called when interrupts are disabled
+    // Perform full system Data Synchronization Barrier
+    // Enter low power 'Wait For Interrupt' mode
+    // On exit from 'Wait For Interrupt' mode enable interrupts
+    // Put the instruction barrier between 'wfi' and 'msr' to enforce
+    // they are executed in this order
+    asm volatile( "dsb sy; wfi; isb; msr daifclr, #2; " ::: "memory");
 }
 
 inline void halt_no_interrupts() {
