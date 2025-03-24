@@ -96,7 +96,7 @@ int main(int argc, char **argv)
         }
         WITH_LOCK (m2) {
             while(!t2_pinned) {
-                c.wait(m2);
+                c2.wait(m2);
             }
         }
         expect(sched::cpu::current(), sched::cpus[1]);
@@ -125,7 +125,7 @@ int main(int argc, char **argv)
         }
         WITH_LOCK (m3) {
             while(!t3_pinned) {
-                c.wait(m3);
+                c3.wait(m3);
             }
         }
         expect(sched::cpu::current(), sched::cpus[1]);
