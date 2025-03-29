@@ -193,11 +193,6 @@ if __name__ == "__main__":
     if cmdargs.linux_ld:
         disabled_list.extend(linux_ld_disabled_list)
 
-    if cmdargs.arch == 'aarch64':
-        if host_arch != cmdargs.arch:
-            #Until the issue #1143 is resolved, we need to force running with 2 CPUs in TCG mode
-            run_py_args = run_py_args + ['-c', '2']
-
     if running_with_kvm_on(cmdargs.arch, cmdargs.hypervisor) and cmdargs.arch != 'aarch64':
         disabled_list.remove("tst-feexcept.so")
         disabled_list.remove("tst-feexcept")
