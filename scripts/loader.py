@@ -681,6 +681,7 @@ timer_type = gdb.lookup_type('sched::timer_base')
 thread_type = gdb.lookup_type('sched::thread')
 
 active_thread_context = None
+thread_map_type = None
 
 def ulong(x):
     if isinstance(x, gdb.Value):
@@ -819,11 +820,15 @@ def derived_from(type, base_class):
                 if x.is_base_class and x.type == base_class]) != 0
 
 class unordered_map:
-
     def __init__(self, map_ref):
         self.map_header = map_ref['_M_h']
-        map_type = self.map_header.type.strip_typedefs()
-        self.node_type = gdb.lookup_type(str(map_type) +  '::__node_type').pointer()
+        global thread_map_type
+        if thread_map_type == None:
+            map_type = self.map_header.type.strip_typedefs()
+            self.node_type = gdb.lookup_type(str(map_type) +  '::__node_type').pointer()
+            thread_map_type = self.node_type
+        else:
+            self.node_type = thread_map_type
 
     def begin(self):
         try:
