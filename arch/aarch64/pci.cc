@@ -30,8 +30,8 @@ static bool ecam;
  * QEMU silently discards programming the BARs to address zero.
  * Linux seems to skip the whole first page on ARM, so we do the same.
  */
-static u64 pci_io_off = 0x1000;
-static u64 pci_mem_off = 0;
+static u64 pci_io_next = 0x1000;
+static u64 pci_mem_next = 0;
 
 /* this maps PCI addresses as returned by build_config_address
  * to platform IRQ numbers. */
@@ -76,6 +76,7 @@ void set_pci_mem(u64 addr, size_t len)
 {
     pci_mem_base = (char *)addr;
     pci_mem_len = len;
+    pci_mem_next = addr;
 }
 
 u64 get_pci_mem(size_t *len)
@@ -120,23 +121,46 @@ static int get_pci_irq_from_bdfp(u32 bdfp)
     return irq_id;
 }
 
-u32 pci::bar::arch_add_bar(u32 val)
+u32 pci::function::arch_add_bar(u32 val, u32 pos, bool is_mmio, bool is_64, u64 addr_size)
 {
-    u64 *off = _is_mmio ? &pci_mem_off : &pci_io_off;
-    u64 addr = _is_mmio ? (u64)pci_mem_base + pci_mem_off : *off;
-
-    *off += _addr_size;
-    *off = align_up(*off, (size_t)16);
-
-    val &= _is_mmio ? ~pci::bar::PCI_BAR_MEM_ADDR_LO_MASK : ~pci::bar::PCI_BAR_PIO_ADDR_MASK;
-    val |= align_down(addr, (size_t)16);
-
-    _dev->pci_writel(_pos, val);
-
-    if (_is_64) {
-        _dev->pci_writel(_pos + 4, addr >> 32);
+    //Read pre-allocated address if any
+    u64 addr_64 = val & (is_mmio ? pci::function::PCI_BAR_MEM_ADDR_LO_MASK : pci::function::PCI_BAR_PIO_ADDR_MASK);
+    if (is_64) {
+        u32 addr_hi = pci_readl(pos + 4);
+        addr_64 |= ((u64)addr_hi << 32);
     }
 
+    //If address has not been alocated by firmware, then allocate it
+    if (!addr_64) {
+        assert(is_mmio ? pci_mem_next : pci_io_next);
+        addr_64 = is_mmio ? pci_mem_next : pci_io_next;
+
+        //According to the "Address and size of the BAR" in
+        //https://wiki.osdev.org/PCI#Base_Address_Registers
+        //which reads this: "The BAR register is naturally aligned and
+        //as such you can only modify the bits that are set. For example,
+        //if a device utilizes 16 MB it will have BAR0 filled with 0xFF000000
+        //(0x1000000 after decoding) and you can only modify the upper 8-bits."
+        //it can be implied that the bar has to be aligned to the maximum
+        //of its size and 16
+        size_t bar_size = std::max((size_t)16, (size_t)addr_size);
+        addr_64 = align_up(addr_64, bar_size);
+        if (is_mmio) {
+            pci_mem_next = addr_64 + bar_size;
+        } else {
+            pci_io_next = addr_64 + bar_size;
+        }
+
+        val |= (u32)addr_64;
+        pci_writel(pos, val);
+
+        if (is_64) {
+            pci_writel(pos + 4, addr_64 >> 32);
+        }
+    }
+
+    pci_d("arch_add_bar(): pos:%d, val:%x, mmio:%d, addr_64:%lx, addr_size:%lx",
+        pos, val, is_mmio, addr_64, addr_size);
     return val;
 }
 

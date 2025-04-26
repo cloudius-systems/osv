@@ -72,7 +72,7 @@ void write_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset, u8 val)
     outb(val, PCI_CONFIG_DATA + (offset & 0x03));
 }
 
-u32 pci::bar::arch_add_bar(u32 val)
+u32 pci::function::arch_add_bar(u32 val, u32 pos, bool is_mmio, bool is_64, u64 addr_size)
 {
     /* nothing to do on X86 since firmware already sets to sane values.
      * why is this not available on other archs (ARM) as well? Damn.
