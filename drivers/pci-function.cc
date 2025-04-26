@@ -15,76 +15,19 @@ using namespace hw;
 
 namespace pci {
 
-    bar::bar(function* dev, u8 pos)
+    bar::bar(function* dev, u8 pos, u32 addr_lo, u32 addr_hi, u64 addr_size,
+             bool is_mmio, bool is_64, bool is_prefetchable)
         : _dev(dev), _pos(pos),
-          _addr_lo(0), _addr_hi(0), _addr_64(0), _addr_size(0),
-          _addr_mmio(mmio_nullptr),
-          _is_mmio(false), _is_64(false), _is_prefetchable(false)
+          _addr_lo(addr_lo), _addr_hi(addr_hi), _addr_64(0),
+          _addr_size(addr_size), _addr_mmio(mmio_nullptr),
+          _is_mmio(is_mmio), _is_64(is_64), _is_prefetchable(is_prefetchable)
     {
-        u32 val = _dev->pci_readl(_pos);
-
-        _is_mmio = ((val & PCI_BAR_MEMORY_INDICATOR_MASK) == PCI_BAR_MMIO);
-        if (_is_mmio) {
-            _is_64 = ((val & PCI_BAR_MEM_ADDR_SPACE_MASK)
-                == PCI_BAR_64BIT_ADDRESS);
-            _is_prefetchable = ((val & PCI_BAR_PREFETCHABLE_MASK)
-                == PCI_BAR_PREFETCHABLE);
-        }
-        _addr_size = read_bar_size();
-
-        val = pci::bar::arch_add_bar(val);
-
-        if (_is_mmio) {
-            _addr_lo = val & PCI_BAR_MEM_ADDR_LO_MASK;
-            if (_is_64) {
-                _addr_hi = _dev->pci_readl(_pos + 4);
-            }
-        } else {
-            _addr_lo = val & PCI_BAR_PIO_ADDR_MASK;
-        }
-
         _addr_64 = ((u64)_addr_hi << 32) | (u64)(_addr_lo);
+        assert(_addr_64);
     }
 
     bar::~bar()
     {
-
-    }
-
-    u64 bar::read_bar_size()
-    {
-        // The device must not decode the following BAR values since they aren't
-        // addresses
-        _dev->disable_bars_decode(true, true);
-
-        u32 lo_orig = _dev->pci_readl(_pos);
-
-        // Size test
-        _dev->pci_writel(_pos, 0xFFFFFFFF);
-        u32 lo = _dev->pci_readl(_pos);
-        // Restore
-        _dev->pci_writel(_pos, lo_orig);
-
-        if (is_pio()) {
-            lo &= PCI_BAR_PIO_ADDR_MASK;
-        } else {
-            lo &= PCI_BAR_MEM_ADDR_LO_MASK;
-        }
-
-        u32 hi = 0xFFFFFFFF;
-
-        if (is_64()) {
-            u32 hi_orig = _dev->pci_readl(_pos+4);
-            _dev->pci_writel(_pos+4, 0xFFFFFFFF);
-            hi = _dev->pci_readl(_pos+4);
-            // Restore
-            _dev->pci_writel(_pos+4, hi_orig);
-        }
-
-        _dev->enable_bars_decode(true, true);
-
-        u64 bits = (u64)hi << 32 | lo;
-        return ~bits + 1;
     }
 
     void bar::map()
@@ -680,6 +623,9 @@ namespace pci {
 
     void function::msix_enable()
     {
+#ifdef __aarch64__
+        return;
+#endif
         if (!is_msix() || _msix_enabled) {
             return;
         }
@@ -888,9 +834,81 @@ namespace pci {
         return it->second;
     }
 
-    void function::add_bar(int idx, bar * bar)
+    bar * function::add_bar(int idx, u32 pos)
     {
-        _bars.insert(std::make_pair(idx, bar));
+        u32 val = pci_readl(pos);
+#ifdef __x86_64__
+        if (!val) {
+            return nullptr;
+        }
+#endif
+        bool is_64 = false, is_prefetchable = false;
+        bool is_mmio = ((val & PCI_BAR_MEMORY_INDICATOR_MASK) == PCI_BAR_MMIO);
+        if (is_mmio) {
+            is_64 = ((val & PCI_BAR_MEM_ADDR_SPACE_MASK)
+                == PCI_BAR_64BIT_ADDRESS);
+            is_prefetchable = ((val & PCI_BAR_PREFETCHABLE_MASK)
+                == PCI_BAR_PREFETCHABLE);
+        }
+
+        u64 addr_size = read_bar_size(pos, !is_mmio, is_64);
+        if (!addr_size) {
+            return nullptr;
+        }
+
+        val = pci::function::arch_add_bar(val, pos, is_mmio, is_64, addr_size);
+
+        u32 addr_lo = 0, addr_hi = 0;
+        if (is_mmio) {
+            addr_lo = val & PCI_BAR_MEM_ADDR_LO_MASK;
+            if (is_64) {
+                addr_hi = pci_readl(pos + 4);
+            }
+        } else {
+            addr_lo = val & PCI_BAR_PIO_ADDR_MASK;
+        }
+
+        bar *pbar = new bar(this, pos, addr_lo, addr_hi, addr_size, is_mmio, is_64, is_prefetchable);
+        _bars.insert(std::make_pair(idx, pbar));
+
+        return pbar;
+    }
+
+    u64 function::read_bar_size(u8 pos, bool is_pio, bool is_64)
+    {
+        // The device must not decode the following BAR values since they aren't
+        // addresses
+        disable_bars_decode(true, true);
+
+        u32 lo_orig = pci_readl(pos);
+
+        // Size test
+        pci_writel(pos, 0xFFFFFFFF);
+        u32 lo = pci_readl(pos);
+        // Restore
+        pci_writel(pos, lo_orig);
+
+        if (is_pio) {
+            lo &= PCI_BAR_PIO_ADDR_MASK;
+        } else {
+            lo &= PCI_BAR_MEM_ADDR_LO_MASK;
+        }
+
+        u32 hi = 0xFFFFFFFF;
+
+        if (is_64) {
+            u32 hi_orig = pci_readl(pos+4);
+            pci_writel(pos+4, 0xFFFFFFFF);
+            hi = pci_readl(pos+4);
+            // Restore
+            pci_writel(pos+4, hi_orig);
+        }
+
+        enable_bars_decode(true, true);
+
+        u64 bits = (u64)hi << 32 | lo;
+        u64 size = ~bits + 1;
+        return is_64 ? size : (u32)size;
     }
 
     void function::dump_config()

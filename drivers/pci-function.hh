@@ -26,38 +26,10 @@ namespace pci {
     class bar {
     public:
 
-        enum pci_bar_encoding_masks {
-            // mmio, pio
-            PCI_BAR_MEMORY_INDICATOR_MASK   = (1 << 0),
-            // 32bit, 64bit
-            PCI_BAR_MEM_ADDR_SPACE_MASK     = (1 << 1) | (1 << 2),
-            PCI_BAR_PREFETCHABLE_MASK       = (1 << 3),
-            PCI_BAR_MEM_ADDR_LO_MASK        = 0xFFFFFFF0,
-            PCI_BAR_PIO_ADDR_MASK           = 0xFFFFFFFC,
-        };
-
-        enum pci_bar_type_indicator {
-            PCI_BAR_MMIO                = 0x00,
-            PCI_BAR_PIO                 = 0x01
-        };
-
-        enum pci_bar_prefetchable {
-            PCI_BAR_NON_PREFETCHABLE    = 0x00,
-            PCI_BAR_PREFETCHABLE        = 0x08
-        };
-
-        enum pci_bar_address_space {
-            PCI_BAR_32BIT_ADDRESS       = 0x00,
-            PCI_BAR_32BIT_BELOW_1MB     = 0x02,
-            PCI_BAR_64BIT_ADDRESS       = 0x04
-        };
-
         // pos is the offset within the configuration space
-        bar(function* dev, u8 pos);
+        bar(function* dev, u8 pos, u32 addr_lo, u32 addr_hi, u64 addr_size,
+            bool is_mmio, bool is_64, bool is_prefetchable);
         virtual ~bar();
-
-        // read/write pci cfg registers to determine size
-        u64 read_bar_size();
 
         bool is_pio() { return !_is_mmio; }
         bool is_mmio() { return _is_mmio; }
@@ -87,11 +59,6 @@ namespace pci {
         void writeb(u64 offset, u8 val);
 
     private:
-        /* Architecture-specific hook on bar creation, which allows
-         * rewriting the bar registers. Returns the bar register.
-         */
-        u32 arch_add_bar(u32 val);
-
         // To which pci_function it relates
         function* _dev;
         // Offset to configuration space
@@ -247,6 +214,32 @@ namespace pci {
             PCI_SUB_CLASS_STORAGE_NVMC      = 0x08,
         };
 
+        enum pci_bar_encoding_masks {
+            // mmio, pio
+            PCI_BAR_MEMORY_INDICATOR_MASK   = (1 << 0),
+            // 32bit, 64bit
+            PCI_BAR_MEM_ADDR_SPACE_MASK     = (1 << 1) | (1 << 2),
+            PCI_BAR_PREFETCHABLE_MASK       = (1 << 3),
+            PCI_BAR_MEM_ADDR_LO_MASK        = 0xFFFFFFF0,
+            PCI_BAR_PIO_ADDR_MASK           = 0xFFFFFFFC,
+        };
+
+        enum pci_bar_type_indicator {
+            PCI_BAR_MMIO                = 0x00,
+            PCI_BAR_PIO                 = 0x01
+        };
+
+        enum pci_bar_prefetchable {
+            PCI_BAR_NON_PREFETCHABLE    = 0x00,
+            PCI_BAR_PREFETCHABLE        = 0x08
+        };
+
+        enum pci_bar_address_space {
+            PCI_BAR_32BIT_ADDRESS       = 0x00,
+            PCI_BAR_32BIT_BELOW_1MB     = 0x02,
+            PCI_BAR_64BIT_ADDRESS       = 0x04
+        };
+
         function(u8 bus, u8 device, u8 func);
         virtual ~function();
 
@@ -347,7 +340,10 @@ namespace pci {
         bool find_capabilities(u8 cap_id, std::vector<u8>& cap_offs);
 
         bar * get_bar(int idx);
-        void add_bar(int idx, bar* bar);
+        bar * add_bar(int idx, u32 pos);
+
+        // read/write pci cfg registers to determine size
+        u64 read_bar_size(u8 pos, bool is_pio, bool is_64);
 
         // Useful function to print device
         virtual void dump_config();
@@ -408,6 +404,11 @@ namespace pci {
         // Capability parsing
         u8 find_capability(u8 cap_id);
         bool find_capabilities(u8 cap_id, std::vector<u8>& cap_offs, bool all);
+
+        /* Architecture-specific hook on bar creation, which allows
+         * rewriting the bar registers. Returns the bar register.
+         */
+        u32 arch_add_bar(u32 val, u32 pos, bool is_mmio, bool is_64, u64 addr_size);
     };
 }
 
