@@ -125,20 +125,17 @@ driver::driver(pci::device &pci_dev)
 
     _id = _instance++;
 
-    _doorbell_stride = 1 << (2 + _control_reg->cap.dstrd);
+    read_capabilities();
 
-    //Wait for controller to become ready
-    assert(wait_for_controller_ready_change(1) == 0);
-
-    //Disable controller
-    assert(enable_disable_controller(false) == 0);
+    //Reset controller
+    assert(reset_controller() == 0);
 
     init_controller_config();
 
     create_admin_queue();
 
     //Enable controller
-    assert(enable_disable_controller(true) == 0);
+    assert(enable_controller() == 0);
 
     assert(identify_controller() == 0);
 
@@ -240,7 +237,10 @@ void driver::create_io_queues()
     }
     assert(ret >= 1);
 
-    int qsize = (NVME_IO_QUEUE_SIZE < _control_reg->cap.mqes) ? NVME_IO_QUEUE_SIZE : _control_reg->cap.mqes + 1;
+    nvme_controller_cap_t cap;
+    cap.val = mmio_getq(&_control_reg->cap);
+
+    int qsize = (NVME_IO_QUEUE_SIZE < cap.mqes) ? NVME_IO_QUEUE_SIZE : cap.mqes + 1;
     if (NVME_QUEUE_PER_CPU_ENABLED) {
         for(sched::cpu* cpu : sched::cpus) {
             int qid = cpu->id + 1;
@@ -256,31 +256,48 @@ enum NVME_CONTROLLER_EN {
     CTRL_EN_ENABLE = 1,
 };
 
-int driver::enable_disable_controller(bool enable)
+int driver::reset_controller()
 {
     nvme_controller_config_t cc;
     cc.val = mmio_getl(&_control_reg->cc);
 
-    u32 expected_en = enable ? CTRL_EN_DISABLE : CTRL_EN_ENABLE;
-    u32 new_en = enable ? CTRL_EN_ENABLE : CTRL_EN_DISABLE;
-
-    assert(cc.en == expected_en); //check current status
-    cc.en = new_en;
-
+    cc.en = CTRL_EN_DISABLE;
     mmio_setl(&_control_reg->cc, cc.val);
-    return wait_for_controller_ready_change(new_en);
+
+    return wait_for_controller_ready_change(CTRL_EN_DISABLE);
+}
+
+int driver::enable_controller()
+{
+    nvme_controller_config_t cc;
+    cc.val = mmio_getl(&_control_reg->cc);
+
+    cc.en = CTRL_EN_ENABLE;
+    mmio_setl(&_control_reg->cc, cc.val);
+
+    return wait_for_controller_ready_change(CTRL_EN_ENABLE);
+}
+
+void driver::read_capabilities()
+{
+    nvme_controller_cap_t cap;
+    cap.val = mmio_getq(&_control_reg->cap);
+
+    _ready_timeout = cap.to * 10000; // timeout in 0.05ms steps
+    _doorbell_stride = 1 << (2 + cap.dstrd);
 }
 
 int driver::wait_for_controller_ready_change(int ready)
 {
-    int timeout = mmio_getb(&_control_reg->cap.to) * 10000; // timeout in 0.05ms steps
     nvme_controller_status_t csts;
-    for (int i = 0; i < timeout; i++) {
+    for (unsigned int i = 0; i < _ready_timeout; i++) {
         csts.val = mmio_getl(&_control_reg->csts);
-        if (csts.rdy == ready) return 0;
+        if (csts.rdy == ready) {
+            return 0;
+        }
         usleep(50);
     }
-    NVME_ERROR("timeout=%d waiting for ready %d", timeout, ready);
+    NVME_ERROR("timeout=%d waiting for ready %d", _ready_timeout, ready);
     return ETIME;
 }
 

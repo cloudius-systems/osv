@@ -69,7 +69,9 @@ private:
 
     void init_controller_config();
 
-    int enable_disable_controller(bool enable);
+    void read_capabilities();
+    int reset_controller();
+    int enable_controller();
     int wait_for_controller_ready_change(int ready);
 
     int set_number_of_queues(u16 num, u16* ret);
@@ -101,6 +103,7 @@ private:
 
     std::vector<std::unique_ptr<io_queue_pair, aligned_new_deleter<io_queue_pair>>> _io_queues;
     u32 _doorbell_stride;
+    unsigned int _ready_timeout;
 
     std::unique_ptr<nvme_identify_ctlr_t> _identify_controller;
     nvme_controller_reg_t* _control_reg = nullptr;
