@@ -482,7 +482,7 @@ bool driver::msix_register(unsigned iv,
     }
 
     if (assign_affinity && t) {
-        vec->set_affinity(t->get_cpu()->arch.apic_id);
+        vec->set_affinity(t->get_cpu());
     }
 
     if (iv < _msix_vectors.size()) {

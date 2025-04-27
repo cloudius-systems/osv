@@ -58,6 +58,17 @@ void interrupt_table::disable_irq(int id)
     gic::gic->mask_irq(id);
 }
 
+unsigned interrupt_table::register_handler(std::function<void ()> handler)
+{
+    //TODO: Implement it
+    return 0;
+}
+
+void interrupt_table::unregister_handler(unsigned vector)
+{
+    //TODO: Implement it
+}
+
 void interrupt_table::register_interrupt(interrupt *interrupt)
 {
     WITH_LOCK(_lock) {

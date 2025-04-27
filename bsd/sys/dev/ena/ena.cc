@@ -1251,7 +1251,7 @@ ena_request_io_irq(struct ena_adapter *adapter)
 		//to re-pin the interrupt vector
 		auto cpu = idx % sched::cpus.size();
 		std::atomic_thread_fence(std::memory_order_seq_cst);
-		vec->set_affinity(sched::cpus[cpu]->arch.apic_id);
+		vec->set_affinity(sched::cpus[cpu]);
 		std::atomic_thread_fence(std::memory_order_seq_cst);
 
 		ena_log(pdev, INFO, "pinned MSIX vector on queue %d - cpu %d\n", idx, cpu);
