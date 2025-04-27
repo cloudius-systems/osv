@@ -12,6 +12,10 @@
 
 #include <list>
 
+namespace sched {
+struct cpu;
+}
+
 class msix_vector {
 public:
     msix_vector(pci::function* dev);
@@ -25,7 +29,7 @@ public:
     void add_entryid(unsigned entry_id);
     void interrupt(void);
     void set_handler(std::function<void ()> handler);
-    void set_affinity(unsigned apic_id);
+    void set_affinity(sched::cpu *cpu);
 
 private:
     // Handler to invoke...

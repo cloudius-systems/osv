@@ -901,6 +901,7 @@ drivers += drivers/pci-generic.o
 drivers += drivers/pci-device.o
 drivers += drivers/pci-function.o
 drivers += drivers/pci-bridge.o
+drivers += drivers/msi.o
 endif
 drivers += drivers/driver.o
 
