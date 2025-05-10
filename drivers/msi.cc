@@ -115,7 +115,6 @@ static inline void set_affinity_and_wake(
 bool interrupt_manager::easy_register(std::initializer_list<msix_binding> bindings)
 {
     unsigned n = bindings.size();
-    debug("interrupt_manager::easy_register()\n");
 
     std::vector<msix_vector*> assigned = request_vectors(n);
 
@@ -139,7 +138,6 @@ bool interrupt_manager::easy_register(std::initializer_list<msix_binding> bindin
         msix_vector* vec = assigned[idx++];
         auto isr = binding.isr;
         auto t = binding.t;
-        debugf("interrupt_manager::easy_register(), idx:%d\n", idx);
 
         bool assign_ok;
 
@@ -156,7 +154,6 @@ bool interrupt_manager::easy_register(std::initializer_list<msix_binding> bindin
             assign_ok = assign_isr(vec, [=]() { if (isr) isr(); });
         }
 
-        debugf("interrupt_manager::easy_register(), idx:%d, assign_ok:%d\n", idx, assign_ok);
         if (!assign_ok) {
             free_vectors(assigned);
             return false;
