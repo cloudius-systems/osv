@@ -17,6 +17,7 @@
 #include <osv/mutex.h>
 #include <osv/interrupt.hh>
 #include <vector>
+#include <atomic>
 
 #include "gic-common.hh"
 
@@ -44,6 +45,7 @@ public:
     std::vector<std::function<bool ()>> acks;
 };
 
+constexpr int max_msi_handlers = 256;
 class interrupt_table {
 public:
     interrupt_table();
@@ -56,9 +58,19 @@ public:
     /* invoke_interrupt returns false if unhandled */
     bool invoke_interrupt(unsigned int id);
 
-protected:
+    void init_msi_vector_base(u32 initial);
+    void set_max_msi_vector(u32 max) { max_msi_vector = max; }
+
+private:
     void enable_irq(int id);
     void disable_irq(int id);
+
+    void enable_msi_vector(unsigned vector);
+
+    std::atomic<u32> next_msi_vector;
+    u32 max_msi_vector;
+    u32 msi_vector_base;
+    std::function<void ()> msi_handlers[max_msi_handlers] = {};
 
     unsigned int nr_irqs; /* number of supported InterruptIDs, read from gic */
     osv::rcu_ptr<interrupt_desc> irq_desc[gic::max_nr_irqs];

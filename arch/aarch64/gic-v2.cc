@@ -7,12 +7,16 @@
  */
 
 #include <osv/mmio.hh>
+#include <osv/mmu.hh>
 #include <osv/irqlock.hh>
 #include <osv/kernel_config_logger_debug.h>
+#include <drivers/pci-function.hh>
 
 #include "processor.hh"
 #include "gic-v2.hh"
 #include "arm-clock.hh"
+
+extern class interrupt_table idt;
 
 namespace gic {
 
@@ -56,6 +60,11 @@ void gic_v2_dist::write_reg_grp(gicd_reg_irq2 reg, unsigned int irq, u8 value)
     old |= value << shift;
 
     mmio_setl((mmioaddr_t)_base + offset, old);
+}
+
+gic_v2_cpu::gic_v2_cpu(mmu::phys b, size_t l) : _base(b)
+{
+    mmu::linear_map((void *)_base, _base, l, "gic_cpuif", mmu::page_size, mmu::mattr::dev);
 }
 
 u32 gic_v2_cpu::read_reg(gicc_reg reg)
@@ -144,6 +153,24 @@ void gic_v2_driver::init_cpuif(int smp_idx)
 #endif
 }
 
+#define GIC2_V2M_TYPER_REG 0x8
+#define GIC2_V2M_MSI_BASE_MASK 0b11111111111ul //Mask with 11bits or 12
+void gic_v2_driver::init_v2m()
+{
+    if (!_v2m_base) {
+        return;
+    }
+    //GICv2m is somewhat documented in https://documentation-service.arm.com/static/5fae4f00ca04df4095c1c988?token=
+    //chapter 9 (Appendix E) - GICV2M ARCHITECTURE)
+    u64 typer = mmio_getl((mmioaddr_t)(_v2m_base + GIC2_V2M_TYPER_REG));
+
+    u64 msi_base = (typer >> 16) & GIC2_V2M_MSI_BASE_MASK;
+    idt.init_msi_vector_base(msi_base);
+
+    u64 msi_vector_num = typer & GIC2_V2M_MSI_BASE_MASK;
+    idt.set_max_msi_vector(msi_base + msi_vector_num - 1);
+}
+
 void gic_v2_driver::mask_irq(unsigned int id)
 {
     WITH_LOCK(gic_lock) {
@@ -210,4 +237,23 @@ void gic_v2_driver::end_irq(unsigned int iar)
     _gicc.write_reg(gicc_reg::GICC_EOIR, iar);
 }
 
+void gic_v2_driver::map_msi_vector(unsigned int vector, pci::function* dev, u32 target_cpu)
+{
+    WITH_LOCK(gic_lock) {
+        unsigned int reg = vector / 4;
+        u32 cpuMask = _gicd.read_reg_at_offset((u32)gicd_reg_irq8::GICD_ITARGETSR, reg * 4);
+
+        unsigned int bitOffset = (vector % 4) * 8;
+        cpuMask &= ~(0b11111111 << bitOffset);
+        cpuMask |= ((1 << target_cpu) << bitOffset);
+        _gicd.write_reg_at_offset((u32)gicd_reg_irq8::GICD_ITARGETSR, reg * 4, cpuMask);
+    }
+}
+
+#define GIC_V2M_MSI_SETSPI_NS        0x40
+void gic_v2_driver::msi_format(u64 *address, u32 *data, int vector)
+{
+    *address = _v2m_base + GIC_V2M_MSI_SETSPI_NS;
+    *data = vector;
+}
 }

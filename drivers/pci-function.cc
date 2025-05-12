@@ -623,9 +623,6 @@ namespace pci {
 
     void function::msix_enable()
     {
-#ifdef __aarch64__
-        return;
-#endif
         if (!is_msix() || _msix_enabled) {
             return;
         }

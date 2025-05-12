@@ -15,13 +15,21 @@ using namespace pci;
 
 void msix_vector::set_affinity(sched::cpu *cpu)
 {
-    //TODO: Implement it
+    u64 msix_address;
+    u32 msix_data;
+
+    gic::gic->msi_format(&msix_address, &msix_data, _vector);
+    for (auto entry_id : _entryids) {
+        _dev->msix_write_entry(entry_id, msix_address, msix_data);
+    }
+
+    gic::gic->map_msi_vector(_vector, _dev, cpu->id);
 }
 
 interrupt_manager::interrupt_manager(pci::function* dev)
     : _dev(dev)
 {
-    //TODO: Implement it
+    gic::gic->allocate_msi_dev_mapping(dev);
 }
 
 interrupt_manager::~interrupt_manager()
@@ -30,6 +38,29 @@ interrupt_manager::~interrupt_manager()
 
 bool interrupt_manager::setup_entry(unsigned entry_id, msix_vector* msix)
 {
-    //TODO: Implement it
+    auto vector = msix->get_vector();
+
+    gic::gic->map_msi_vector(vector, _dev, 0);
+
+    u64 msix_address;
+    u32 msix_data;
+
+    gic::gic->msi_format(&msix_address, &msix_data, vector);
+
+    if (msix_address == 0) {
+        return (false);
+    }
+
+    if (_dev->is_msix()) {
+        if (!_dev->msix_write_entry(entry_id, msix_address, msix_data)) {
+            return false;
+        }
+    } else {
+        if (!_dev->msi_write_entry(entry_id, msix_address, msix_data)) {
+            return false;
+        }
+    }
+
+    msix->add_entryid(entry_id);
     return (true);
 }
