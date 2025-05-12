@@ -149,7 +149,14 @@ def start_osv_qemu(options):
     else:
         boot_index = ",bootindex=0"
 
-    if options.arch == 'aarch64':
+    if options.arch == 'aarch64' and options.nvme:
+        if options.hypervisor == 'qemu':
+            args += ["-machine", "gic-version=%s" % options.gic_version, "-cpu", "cortex-a57"]
+        args += [
+        "-machine", "virt",
+        "-device", "nvme,serial=deadbeef,drive=nvm%s" % (boot_index),
+        "-drive", "file=%s,if=none,id=nvm,%s" % (options.image_file, aio)]
+    elif options.arch == 'aarch64':
         if options.hypervisor == 'qemu':
             args += ["-machine", "gic-version=max", "-cpu", "cortex-a57"]
         args += [

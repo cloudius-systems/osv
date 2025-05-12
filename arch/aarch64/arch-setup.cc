@@ -195,6 +195,9 @@ void arch_init_premain()
 #if CONF_drivers_virtio_fs
 #include "drivers/virtio-fs.hh"
 #endif
+#if CONF_drivers_nvme
+#include "drivers/nvme.hh"
+#endif
 
 void arch_init_drivers()
 {
@@ -246,6 +249,9 @@ void arch_init_drivers()
 #endif
 #if CONF_drivers_virtio_fs
     drvman->register_driver(virtio::fs::probe);
+#endif
+#if CONF_drivers_nvme
+    drvman->register_driver(nvme::driver::probe);
 #endif
     boot_time.event("drivers probe");
     drvman->load_all();
