@@ -1002,8 +1002,12 @@ endif
 drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-rng.o
 drivers += drivers/virtio-blk.o
+drivers += drivers/virtio-scsi.o
 drivers += drivers/virtio-net.o
 drivers += drivers/virtio-fs.o
+endif
+ifeq ($(conf_drivers_scsi),1)
+drivers += drivers/scsi-common.o
 endif
 endif # aarch64
 
