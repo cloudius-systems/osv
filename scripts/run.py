@@ -151,12 +151,10 @@ def start_osv_qemu(options):
 
     if options.arch == 'aarch64':
         if options.hypervisor == 'qemu':
-            args += ["-machine", "gic-version=max", "-cpu", "cortex-a57"]
-        args += [
-        "-machine", "virt",
-        "-device", "virtio-blk-pci,id=blk0,drive=hd0%s%s" % (boot_index, options.virtio_device_suffix),
-        "-drive", "file=%s,if=none,id=hd0,%s" % (options.image_file, aio)]
-    elif options.hypervisor == 'qemu_microvm':
+            args += ["-machine", "gic-version=%s" % options.gic_version, "-cpu", "cortex-a57"]
+        args += ["-machine", "virt"]
+
+    if options.hypervisor == 'qemu_microvm' and options.arch != 'aarch64':
         args += [
         "-M", "microvm,x-option-roms=off,pit=off,pic=off,rtc=off,auto-kernel-cmdline=on,acpi=off",
         "-nodefaults", "-no-user-config", "-no-reboot", "-global", "virtio-mmio.force-legacy=off",
@@ -260,6 +258,9 @@ def start_osv_qemu(options):
             net_device_options_str = net_device_options_str + options.virtio_device_suffix
 
         args += ["-device", net_device_options_str]
+
+    if int(options.nics) == 0:
+         args += ["-nic", "none"]
 
     if options.hypervisor != 'qemu_microvm':
         args += ["-device", "virtio-rng-pci%s" % options.virtio_device_suffix]
