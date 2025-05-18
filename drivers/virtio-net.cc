@@ -320,6 +320,7 @@ net::net(virtio_device& dev)
     };
 #endif
 
+#if CONF_drivers_mmio
 #ifdef __aarch64__
     int_factory.create_spi_edge_interrupt = [this,poll_task]() {
         return new spi_interrupt(
@@ -329,7 +330,6 @@ net::net(virtio_device& dev)
             [=] { poll_task->wake_with_irq_disabled(); });
     };
 #else
-#if CONF_drivers_mmio
     int_factory.create_gsi_edge_interrupt = [this,poll_task]() {
         return new gsi_edge_interrupt(
             _dev.get_irq(),

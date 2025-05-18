@@ -119,8 +119,16 @@ fs::fs(virtio_device& virtio_dev)
     };
 #endif
 
-#ifdef __x86_64__
 #if CONF_drivers_mmio
+#ifdef __aarch64__
+    int_factory.create_spi_edge_interrupt = [this,t]() {
+        return new spi_interrupt(
+            gic::irq_type::IRQ_TYPE_EDGE,
+            _dev.get_irq(),
+            [=] { return this->ack_irq(); },
+            [=] { t->wake_with_irq_disabled(); });
+    };
+#else
     int_factory.create_gsi_edge_interrupt = [this, t]() {
         return new gsi_edge_interrupt(
             _dev.get_irq(),
