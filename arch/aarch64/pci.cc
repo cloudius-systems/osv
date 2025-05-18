@@ -199,43 +199,73 @@ u32 build_config_address(u8 bus, u8 slot, u8 func, u8 offset)
 u32 read_pci_config(u8 bus, u8 slot, u8 func, u8 offset)
 {
     volatile u32 *data;
-    data = (u32 *)(pci_cfg_base + build_config_address(bus, slot, func, offset));
-    return *data;
+    auto address = build_config_address(bus, slot, func, offset);
+    if (address < pci_cfg_len) {
+        data = (u32 *)(pci_cfg_base + address);
+        return *data;
+    } else {
+        return 0xffffffff;
+    }
 }
 
 u16 read_pci_config_word(u8 bus, u8 slot, u8 func, u8 offset)
 {
     volatile u16 *data;
-    data = (u16 *)(pci_cfg_base + build_config_address(bus, slot, func, offset));
-    return *data;
+    auto address = build_config_address(bus, slot, func, offset);
+    if (address < pci_cfg_len) {
+        data = (u16 *)(pci_cfg_base + address);
+        return *data;
+    } else {
+        return 0xffff;
+    }
 }
 
 u8 read_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset)
 {
     volatile u8 *data;
-    data = (u8 *)(pci_cfg_base + build_config_address(bus, slot, func, offset));
-    return *data;
+    auto address = build_config_address(bus, slot, func, offset);
+    if (address < pci_cfg_len) {
+        data = (u8 *)(pci_cfg_base + address);
+        return *data;
+    } else {
+        return 0xff;
+    }
 }
 
 void write_pci_config(u8 bus, u8 slot, u8 func, u8 offset, u32 val)
 {
     volatile u32 *data;
-    data = (u32 *)(pci_cfg_base + build_config_address(bus, slot, func, offset));
-    *data = val;
+    auto address = build_config_address(bus, slot, func, offset);
+    if (address < pci_cfg_len) {
+        data = (u32 *)(pci_cfg_base + address);
+        *data = val;
+    } else {
+        abort("Trying to write beyond PCI config area");
+    }
 }
 
 void write_pci_config_word(u8 bus, u8 slot, u8 func, u8 offset, u16 val)
 {
     volatile u16 *data;
-    data = (u16 *)(pci_cfg_base + build_config_address(bus, slot, func, offset));
-    *data = val;
+    auto address = build_config_address(bus, slot, func, offset);
+    if (address < pci_cfg_len) {
+        data = (u16 *)(pci_cfg_base + address);
+        *data = val;
+    } else {
+        abort("Trying to write beyond PCI config area");
+    }
 }
 
 void write_pci_config_byte(u8 bus, u8 slot, u8 func, u8 offset, u8 val)
 {
     volatile u8 *data;
-    data = (u8 *)(pci_cfg_base + build_config_address(bus, slot, func, offset));
-    *data = val;
+    auto address = build_config_address(bus, slot, func, offset);
+    if (address < pci_cfg_len) {
+        data = (u8 *)(pci_cfg_base + address);
+        *data = val;
+    } else {
+        abort("Trying to write beyond PCI config area");
+    }
 }
 
 void outb(u8 val, u16 port)
