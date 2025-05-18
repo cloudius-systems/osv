@@ -334,7 +334,7 @@ namespace pci {
 
     void function::set_status(u16 status)
     {
-        pci_writew(PCI_CFG_COMMAND, status);
+        pci_writew(PCI_CFG_STATUS, status);
     }
 
     bool function::get_bus_master()
