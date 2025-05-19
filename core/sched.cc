@@ -2093,6 +2093,16 @@ void with_thread_by_id(unsigned id, std::function<void(thread *)> f) {
     }
 }
 
+thread *find_first_app_thread(std::function<bool(thread &)> f) {
+    WITH_LOCK(thread_map_mutex) {
+        for (auto th : thread_map) {
+            if(th.second->is_app() && f(*th.second)) {
+               return th.second;
+            }
+        }
+    }
+    return nullptr;
+}
 
 }
 
