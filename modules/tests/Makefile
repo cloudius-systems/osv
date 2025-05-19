@@ -70,6 +70,14 @@ $(out)/tests/tst-reloc.o: CFLAGS:=$(subst -fPIC,-fpie,$(CFLAGS))
 $(out)/tests/tst-reloc.so: $(src)/tests/tst-reloc.c
 	$(call quiet, $(CC) $(CFLAGS) $(LDFLAGS) -pie -o $@ $< $(LIBS), LD tests/tst-reloc.so)
 
+$(out)/tests/lib-circular-reloc1.so: $(src)/tests/lib-circular-reloc1.o
+$(out)/tests/lib-circular-reloc2.so: $(src)/tests/lib-circular-reloc2.o
+$(out)/tests/tst-elf-circular-reloc.so: \
+		$(src)/tests/tst-elf-circular-reloc.o \
+		$(out)/tests/lib-circular-reloc1.so \
+		$(out)/tests/lib-circular-reloc2.so
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(LIBS) tests/lib-circular-reloc1.so tests/lib-circular-reloc2.so, LD tests/tst-elf-circular-reloc.so)
+
 $(out)/tests/commands.o: $(src)/core/commands.cc
 	$(makedir)
 	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX core/commands.cc => tests/commands.o)
@@ -147,7 +155,8 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-sigaction.so tst-syscall.so tst-ifaddrs.so tst-getdents.so \
 	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-pthread-create.so \
 	misc-futex-perf.so misc-syscall-perf.so tst-brk.so tst-reloc.so \
-	misc-vdso-perf.so tst-string-utils.so
+	misc-vdso-perf.so tst-string-utils.so tst-elf-circular-reloc.so \
+	lib-circular-reloc1.so lib-circular-reloc2.so
 #	tst-f128.so \
 
 
