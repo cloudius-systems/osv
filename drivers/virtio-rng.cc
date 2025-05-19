@@ -46,7 +46,12 @@ rng::rng(virtio_device& dev)
     // Step 7 - generic init of virtqueues
     probe_virt_queues();
 
+    _queue = get_virt_queue(0);
+
     interrupt_factory int_factory;
+    int_factory.register_msi_bindings = [this](interrupt_manager &msi) {
+        msi.easy_register( {{ 0, [=] { this->_queue->disable_interrupts(); }, this->_thread.get() }});
+    };
     int_factory.create_pci_interrupt = [this](pci::device &pci_dev) {
         return new pci_interrupt(
             pci_dev,
@@ -54,8 +59,6 @@ rng::rng(virtio_device& dev)
             [=] { this->handle_irq(); });
     };
     _dev.register_interrupt(int_factory);
-
-    _queue = get_virt_queue(0);
 
     // Step 8
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
