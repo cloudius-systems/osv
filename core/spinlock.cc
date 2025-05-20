@@ -39,9 +39,8 @@ void spin_unlock(spinlock_t *sl)
     sched::preempt_enable();
 }
 
-void irq_spin_lock(irq_spinlock_t *sl)
+void np_spin_lock(np_spinlock_t *sl)
 {
-    sl->_irq_lock.lock();
     while (__sync_lock_test_and_set(&sl->_lock, 1)) {
         while (sl->_lock) {
 #ifdef __x86_64__
@@ -54,18 +53,15 @@ void irq_spin_lock(irq_spinlock_t *sl)
     }
 }
 
-bool irq_spin_trylock(irq_spinlock_t *sl)
+bool np_spin_trylock(np_spinlock_t *sl)
 {
-    sl->_irq_lock.lock();
     if (__sync_lock_test_and_set(&sl->_lock, 1)) {
-        sl->_irq_lock.unlock();
         return false;
     }
     return true;
 }
 
-void irq_spin_unlock(irq_spinlock_t *sl)
+void np_spin_unlock(np_spinlock_t *sl)
 {
     __sync_lock_release(&sl->_lock, 0);
-    sl->_irq_lock.unlock();
 }

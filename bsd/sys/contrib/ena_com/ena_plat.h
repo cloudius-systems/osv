@@ -182,23 +182,28 @@ static inline long PTR_ERR(const void *ptr)
 #define ENA_MAX8(x,y) 	MAX(x, y)
 
 #include <osv/spinlock.h>
+#include <osv/irqlock.hh>
 /* Spinlock related methods */
-#define ena_spinlock_t 	irq_spinlock_t
+#define ena_spinlock_t 	np_spinlock_t
 #define mtx_initialized(spinlock) (1)
 #define ENA_SPINLOCK_INIT(spinlock)				\
-	irq_spinlock_init(&(spinlock))
+	np_spinlock_init(&(spinlock))
 #define ENA_SPINLOCK_DESTROY(spinlock)				\
 	do {							\
 	} while (0)
+//Assumes an irq_lock variable has been defined on stack before and is in scope
 #define ENA_SPINLOCK_LOCK(spinlock, flags)			\
 	do {							\
 		(void)(flags);					\
-		irq_spin_lock(&(spinlock));			\
+		irq_lock.lock();				\
+		np_spin_lock(&(spinlock));			\
 	} while (0)
+//Assumes the same variable irq_lock used by ENA_SPINLOCK_LOCK above
 #define ENA_SPINLOCK_UNLOCK(spinlock, flags)			\
 	do {							\
 		(void)(flags);					\
-		irq_spin_unlock(&(spinlock));			\
+		np_spin_unlock(&(spinlock));			\
+		irq_lock.unlock();				\
 	} while (0)
 
 #define dma_addr_t 	bus_addr_t

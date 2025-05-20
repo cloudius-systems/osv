@@ -336,6 +336,7 @@ static struct ena_comp_ctx *ena_com_submit_admin_cmd(struct ena_com_admin_queue 
 	unsigned long flags = 0;
 	struct ena_comp_ctx *comp_ctx;
 
+	irq_save_lock_type irq_lock;
 	ENA_SPINLOCK_LOCK(admin_queue->q_lock, flags);
 	if (unlikely(!admin_queue->running_state)) {
 		ENA_SPINLOCK_UNLOCK(admin_queue->q_lock, flags);
@@ -591,6 +592,7 @@ static int ena_com_wait_and_process_admin_cq_polling(struct ena_comp_ctx *comp_c
 
 	timeout = ENA_GET_SYSTEM_TIMEOUT(admin_queue->completion_timeout);
 
+	irq_save_lock_type irq_lock;
 	while (1) {
 		ENA_SPINLOCK_LOCK(admin_queue->q_lock, flags);
 		ena_com_handle_admin_completion(admin_queue);
@@ -826,6 +828,7 @@ static u32 ena_com_reg_bar_read32(struct ena_com_dev *ena_dev, u16 offset)
 	if (!mmio_read->readless_supported)
 		return ENA_REG_READ32(ena_dev->bus, ena_dev->reg_bar + offset);
 
+	irq_save_lock_type irq_lock;
 	ENA_SPINLOCK_LOCK(mmio_read->lock, flags);
 	mmio_read->seq_num++;
 
@@ -1481,6 +1484,7 @@ void ena_com_wait_for_abort_completion(struct ena_com_dev *ena_dev)
 	unsigned long flags = 0;
 	u32 exp = 0;
 
+	irq_save_lock_type irq_lock;
 	ENA_SPINLOCK_LOCK(admin_queue->q_lock, flags);
 	while (ATOMIC32_READ(&admin_queue->outstanding_cmds) != 0) {
 		ENA_SPINLOCK_UNLOCK(admin_queue->q_lock, flags);
@@ -1525,6 +1529,7 @@ void ena_com_set_admin_running_state(struct ena_com_dev *ena_dev, bool state)
 	struct ena_com_admin_queue *admin_queue = &ena_dev->admin_queue;
 	unsigned long flags = 0;
 
+	irq_save_lock_type irq_lock;
 	ENA_SPINLOCK_LOCK(admin_queue->q_lock, flags);
 	ena_dev->admin_queue.running_state = state;
 	ENA_SPINLOCK_UNLOCK(admin_queue->q_lock, flags);
