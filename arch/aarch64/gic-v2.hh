@@ -15,7 +15,7 @@ namespace gic {
 
 class gic_v2_dist : public gic_dist {
 public:
-    gic_v2_dist(mmu::phys b) : gic_dist(b) {}
+    gic_v2_dist(mmu::phys b, size_t l) : gic_dist(b, l) {}
 
     void enable();
     void disable();
@@ -46,7 +46,7 @@ enum class gicc_reg : unsigned int {
 /* GIC CPU Interface */
 class gic_v2_cpu {
 public:
-    gic_v2_cpu(mmu::phys b) : _base(b) {}
+    gic_v2_cpu(mmu::phys b, size_t l);
 
     u32 read_reg(gicc_reg r);
     void write_reg(gicc_reg r, u32 value);
@@ -58,12 +58,22 @@ protected:
 
 class gic_v2_driver : public gic_driver {
 public:
-    gic_v2_driver(mmu::phys d, mmu::phys c) : _gicd(d), _gicc(c) {}
+    gic_v2_driver(mmu::phys d, size_t d_len,
+                  mmu::phys c, size_t c_len,
+                  mmu::phys v2m, size_t v2m_len ) :
+        _gicd(d, d_len), _gicc(c, c_len), _v2m_base(v2m)
+    {
+        if (v2m && v2m_len) {
+            mmu::linear_map((void *)_v2m_base, _v2m_base, v2m_len, "gic_v2m",
+                            mmu::page_size, mmu::mattr::dev);
+        }
+    }
 
     virtual void init_on_primary_cpu()
     {
         init_dist();
         init_cpuif(0);
+        init_v2m();
     }
 
     virtual void init_on_secondary_cpu(int smp_idx) { init_cpuif(smp_idx); }
@@ -77,12 +87,22 @@ public:
 
     virtual unsigned int ack_irq();
     virtual void end_irq(unsigned int iar);
+
+    virtual void allocate_msi_dev_mapping(pci::function* dev) {}
+
+    virtual void initialize_msi_vector(unsigned int vector) { set_irq_type(vector, gic::irq_type::IRQ_TYPE_EDGE); }
+    virtual void map_msi_vector(unsigned int vector, pci::function* dev, u32 target_cpu);
+    virtual void unmap_msi_vector(unsigned int vector, pci::function* dev) {}
+    virtual void msi_format(u64 *address, u32 *data, int vector);
+
 private:
     void init_dist();
     void init_cpuif(int smp_idx);
+    void init_v2m();
 
     gic_v2_dist _gicd;
     gic_v2_cpu _gicc;
+    mmu::phys _v2m_base;
 };
 
 }

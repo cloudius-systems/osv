@@ -91,9 +91,9 @@ int dtb_get_timer_irq();
  * gets the GIC v2 distributor and cpu interface.
  * return false on failure.
  */
-bool dtb_get_gic_v2(u64 *dist, size_t *dist_len, u64 *cpu, size_t *cpu_len);
+bool dtb_get_gic_v2(u64 *dist, size_t *dist_len, u64 *cpu, size_t *cpu_len, u64 *v2m, size_t *v2m_len);
 
-bool dtb_get_gic_v3(u64 *dist, size_t *dist_len, u64 *redist, size_t *redist_len);
+bool dtb_get_gic_v3(u64 *dist, size_t *dist_len, u64 *redist, size_t *redist_len, u64 *its, size_t *its_len);
 
 /* int dtb_get_cpus_count();
  *
