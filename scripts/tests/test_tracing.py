@@ -12,7 +12,7 @@ def tracing_smoke_test():
     global arch
     run_args = []
     if os.uname().machine != arch:
-        run_args=['--arch', arch, '-c', '2']
+        run_args=['--arch', arch]
     path = '/this/path/does/not/exist'
     guest = Guest(['--trace=vfs_*,net_packet*,sched_wait*', '--trace-backtrace', '-e', path],
         hold_with_poweroff=True, show_output_on_error=False, scan_for_failed_to_load_object_error=False,

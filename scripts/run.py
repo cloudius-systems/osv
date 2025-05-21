@@ -652,6 +652,8 @@ if __name__ == "__main__":
                         help="Path to an optional disk image that should be attached to the instance as NVMe device")
     parser.add_argument("--pass-pci", action="store",
                         help="passthrough a pci device in given slot if bound to vfio driver")
+    parser.add_argument("--gic-version", action="store", default="max",
+                        help="specify GIC version (only applicable on aarch64)")
     cmdargs = parser.parse_args()
 
     cmdargs.opt_path = "debug" if cmdargs.debug else "release" if cmdargs.release else "last"
