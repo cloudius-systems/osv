@@ -7,10 +7,16 @@
  */
 
 #include <osv/mmio.hh>
+#include <osv/mmu.hh>
 
 #include "gic-common.hh"
 
 namespace gic {
+
+gic_dist::gic_dist(mmu::phys b, size_t l) : _base(b)
+{
+    mmu::linear_map((void *)_base, _base, l, "gic_dist", mmu::page_size, mmu::mattr::dev);
+}
 
 u32 gic_dist::read_reg(gicd_reg reg)
 {

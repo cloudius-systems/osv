@@ -999,6 +999,10 @@ endif
 ifeq ($(conf_drivers_mmio),1)
 drivers += drivers/virtio-mmio.o
 endif
+ifeq ($(conf_drivers_nvme),1)
+drivers += drivers/nvme.o
+drivers += drivers/nvme-queue.o
+endif
 drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-rng.o
 drivers += drivers/virtio-blk.o

@@ -12,14 +12,20 @@
 #include <osv/types.h>
 #include <osv/mmu-defs.hh>
 #include <osv/spinlock.h>
+#include <osv/irqlock.hh>
 
 #define GIC_MAX_IRQ  1019
 #define GIC_SPI_BASE 32
 #define GIC_PPI_BASE 16
 
+namespace pci {
+class function;
+}
+
 namespace gic {
 
 constexpr int max_nr_irqs = 1020;
+constexpr int max_msi_handlers = 256;
 
 enum class gicd_reg : unsigned int {
     GICD_CTLR       = 0x0000, /* Distributor Control Reg */
@@ -90,7 +96,7 @@ enum class irq_type : unsigned int {
 /* GIC Distributor Interface */
 class gic_dist {
 protected:
-    gic_dist(mmu::phys b) : _base(b) {}
+    gic_dist(mmu::phys b, size_t l);
 
 public:
     u32 read_reg(gicd_reg r);
@@ -129,13 +135,33 @@ public:
     virtual void end_irq(unsigned int iar) = 0;
 
     unsigned int nr_of_irqs() { return _nr_irqs; }
+
+    virtual void allocate_msi_dev_mapping(pci::function* dev) = 0;
+
+    virtual void initialize_msi_vector(unsigned int vector) = 0;
+    virtual void map_msi_vector(unsigned int vector, pci::function* dev, u32 target_cpu) = 0;
+    virtual void unmap_msi_vector(unsigned int vector, pci::function* dev) = 0;
+    virtual void msi_format(u64 *address, u32 *data, int vector) = 0;
+
 protected:
     unsigned int _nr_irqs;
-    spinlock_t gic_lock;
+    np_spinlock _gic_lock;
 };
 
 extern class gic_driver *gic;
 
 }
+
+//We disable interrupts before taking a lock to prevent scenarios
+//when interrupt arrives after gic_lock is taken and interrupt handler
+//ends up calling another method taking gic_lock and stays spinning forever
+//in attempt to take a lock again
+#define WITH_IRQ_LOCK(_lock) \
+    irq_save_lock_type _irq_lock; \
+    if (lock_guard_for_with_lock<decltype(_irq_lock)> _wl_lock_guard1{_irq_lock}) \
+        std::abort(); \
+    else if (lock_guard_for_with_lock<decltype(_lock)> _wl_lock_guard2{_lock}) \
+        std::abort(); \
+    else /* locked statement comes here */
 
 #endif
