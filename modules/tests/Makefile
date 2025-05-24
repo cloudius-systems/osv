@@ -70,10 +70,10 @@ $(out)/tests/tst-reloc.o: CFLAGS:=$(subst -fPIC,-fpie,$(CFLAGS))
 $(out)/tests/tst-reloc.so: $(src)/tests/tst-reloc.c
 	$(call quiet, $(CC) $(CFLAGS) $(LDFLAGS) -pie -o $@ $< $(LIBS), LD tests/tst-reloc.so)
 
-$(out)/tests/lib-circular-reloc1.so: $(src)/tests/lib-circular-reloc1.o
-$(out)/tests/lib-circular-reloc2.so: $(src)/tests/lib-circular-reloc2.o
+$(out)/tests/lib-circular-reloc1.so: $(src)/tests/lib-circular-reloc1.cc
+$(out)/tests/lib-circular-reloc2.so: $(src)/tests/lib-circular-reloc2.cc
 $(out)/tests/tst-elf-circular-reloc.so: \
-		$(src)/tests/tst-elf-circular-reloc.o \
+		$(out)/tests/tst-elf-circular-reloc.o \
 		$(out)/tests/lib-circular-reloc1.so \
 		$(out)/tests/lib-circular-reloc2.so
 	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(LIBS) tests/lib-circular-reloc1.so tests/lib-circular-reloc2.so, LD tests/tst-elf-circular-reloc.so)
