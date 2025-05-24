@@ -10,7 +10,7 @@ include ../common.gmk
 .SECONDARY:
 
 COMMON = -g -O2 -fpie -DBOOST_TEST_DYN_LINK \
-	-U _FORTIFY_SOURCE -Wall -Wformat=0 -Wno-pointer-arith
+	-U _FORTIFY_SOURCE -Wall -Wformat=0 -Wno-pointer-arith -isystem $(out)/gen/include
 
 INCLUDES =
 
