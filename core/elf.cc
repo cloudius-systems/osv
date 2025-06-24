@@ -630,6 +630,16 @@ T* object::dynamic_ptr(unsigned tag)
     return static_cast<T*>(_base + dynamic_tag(tag).d_un.d_ptr);
 }
 
+template <typename T>
+T* object::opt_dynamic_ptr(unsigned tag)
+{
+    auto r = _dynamic_tag(tag);
+    if (r) {
+        return static_cast<T*>(_base + r->d_un.d_ptr);
+    }
+    return nullptr;
+}
+
 Elf64_Xword object::dynamic_val(unsigned tag)
 {
     return dynamic_tag(tag).d_un.d_val;
@@ -917,27 +927,6 @@ elf64_hash(const char *name)
     return h;
 }
 
-constexpr Elf64_Versym old_version_symbol_mask = Elf64_Versym(1) << 15;
-
-Elf64_Sym* object::lookup_symbol_old(const char* name)
-{
-    auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
-    auto strtab = dynamic_ptr<char>(DT_STRTAB);
-    auto hashtab = dynamic_ptr<Elf64_Word>(DT_HASH);
-    auto nbucket = hashtab[0];
-    auto buckets = hashtab + 2;
-    auto chain = buckets + nbucket;
-    for (auto ent = buckets[elf64_hash(name) % nbucket];
-            ent != STN_UNDEF;
-            ent = chain[ent]) {
-        auto &sym = symtab[ent];
-        if (strcmp(name, &strtab[sym.st_name]) == 0) {
-            return &sym;
-        }
-    }
-    return nullptr;
-}
-
 uint_fast32_t
 dl_new_hash(const char *s)
 {
@@ -948,56 +937,80 @@ dl_new_hash(const char *s)
     return h & 0xffffffff;
 }
 
-Elf64_Sym* object::lookup_symbol_gnu(const char* name, bool self_lookup)
+constexpr Elf64_Versym old_version_symbol_mask = Elf64_Versym(1) << 15;
+
+// Lookup the given name in the ELF symbol hash table. Two formats of
+// hash tables are supported:
+// 1. Traditional UNIX System V ELF format (the "DT_HASH" dynamic tag).
+// 2. Newer "DT_GNU_HASH" dynamic tag introduced in 2006 in GNU binutils.
+// The newer format has recently become the default because it does
+// faster lookups when the symbol table is large.
+static Elf64_Sym*
+lookup_symbol(const char* name, Elf64_Sym* symtab, const char* strtab,
+              const Elf64_Word* dt_hash, const Elf64_Word* dt_gnu_hash,
+              const Elf64_Versym* version_symtab)
 {
-    auto symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
-    auto strtab = dynamic_ptr<char>(DT_STRTAB);
-    auto hashtab = dynamic_ptr<Elf64_Word>(DT_GNU_HASH);
-    auto nbucket = hashtab[0];
-    auto symndx = hashtab[1];
-    auto maskwords = hashtab[2];
-    auto shift2 = hashtab[3];
-    auto bloom = reinterpret_cast<const Elf64_Xword*>(hashtab + 4);
-    auto C = sizeof(*bloom) * 8;
-    auto hashval = dl_new_hash(name);
-    auto bword = bloom[(hashval / C) % maskwords];
-    auto hashbit1 = hashval % C;
-    auto hashbit2 = (hashval >> shift2) % C;
-    if ((bword >> hashbit1) == 0 || (bword >> hashbit2) == 0) {
-        return nullptr;
+    if (dt_gnu_hash) { // prefer DT_GNU_HASH, if it exists
+        auto nbucket = dt_gnu_hash[0];
+        auto symndx = dt_gnu_hash[1];
+        auto maskwords = dt_gnu_hash[2];
+        auto shift2 = dt_gnu_hash[3];
+        auto bloom = reinterpret_cast<const Elf64_Xword*>(dt_gnu_hash + 4);
+        auto C = sizeof(*bloom) * 8;
+        auto hashval = dl_new_hash(name);
+        auto bword = bloom[(hashval / C) % maskwords];
+        auto hashbit1 = hashval % C;
+        auto hashbit2 = (hashval >> shift2) % C;
+        if ((bword >> hashbit1) == 0 || (bword >> hashbit2) == 0) {
+            return nullptr;
+        }
+        auto buckets = reinterpret_cast<const Elf64_Word*>(bloom + maskwords);
+        auto chains = buckets + nbucket - symndx;
+        auto idx = buckets[hashval % nbucket];
+        if (idx == 0) {
+            return nullptr;
+        }
+        do {
+            if ((chains[idx] & ~1) != (hashval & ~1)) {
+                continue;
+            }
+            if (version_symtab && version_symtab[idx] & old_version_symbol_mask) { //Ignore old version symbols
+                continue;
+            }
+            if (strcmp(&strtab[symtab[idx].st_name], name) == 0) {
+                return &symtab[idx];
+            }
+        } while ((chains[idx++] & 1) == 0);
+    } else { // DT_HASH:
+        auto nbucket = dt_hash[0];
+        auto buckets = dt_hash + 2;
+        auto chain = buckets + nbucket;
+        for (auto ent = buckets[elf64_hash(name) % nbucket];
+                ent != STN_UNDEF;
+                ent = chain[ent]) {
+            auto &sym = symtab[ent];
+            if (strcmp(name, &strtab[sym.st_name]) == 0) {
+                return &sym;
+            }
+        }
     }
-    auto buckets = reinterpret_cast<const Elf64_Word*>(bloom + maskwords);
-    auto chains = buckets + nbucket - symndx;
-    auto idx = buckets[hashval % nbucket];
-    if (idx == 0) {
-        return nullptr;
-    }
-    auto version_symtab = (!self_lookup && dynamic_exists(DT_VERSYM)) ? dynamic_ptr<Elf64_Versym>(DT_VERSYM) : nullptr;
-    do {
-        if ((chains[idx] & ~1) != (hashval & ~1)) {
-            continue;
-        }
-        if (version_symtab && version_symtab[idx] & old_version_symbol_mask) { //Ignore old version symbols
-            continue;
-        }
-        if (strcmp(&strtab[symtab[idx].st_name], name) == 0) {
-            return &symtab[idx];
-        }
-    } while ((chains[idx++] & 1) == 0);
     return nullptr;
 }
+
 
 Elf64_Sym* object::lookup_symbol(const char* name, bool self_lookup)
 {
     if (!visible()) {
         return nullptr;
     }
-    Elf64_Sym* sym;
-    if (dynamic_exists(DT_GNU_HASH)) {
-        sym = lookup_symbol_gnu(name, self_lookup);
-    } else {
-        sym = lookup_symbol_old(name);
-    }
+    Elf64_Sym* symtab = dynamic_ptr<Elf64_Sym>(DT_SYMTAB);
+    char* strtab = dynamic_ptr<char>(DT_STRTAB);
+    Elf64_Word* dt_hash = opt_dynamic_ptr<Elf64_Word>(DT_HASH);
+    Elf64_Word* dt_gnu_hash = opt_dynamic_ptr<Elf64_Word>(DT_GNU_HASH);
+    Elf64_Versym* version_symtab = (!self_lookup) ? opt_dynamic_ptr<Elf64_Versym>(DT_VERSYM) : nullptr;
+
+    Elf64_Sym* sym = elf::lookup_symbol(name, symtab, strtab, dt_hash,
+                                        dt_gnu_hash, version_symtab);
     if (sym && sym->st_shndx == SHN_UNDEF) {
         sym = nullptr;
     }
@@ -1766,22 +1779,9 @@ program* get_program()
 
 const Elf64_Sym *init_dyn_tabs::lookup(u32 sym)
 {
-    auto nbucket = this->hashtab[0];
-    auto buckets = hashtab + 2;
-    auto chain = buckets + nbucket;
-    auto name = strtab + symtab[sym].st_name;
-
-    for (auto ent = buckets[elf64_hash(name) % nbucket];
-         ent != STN_UNDEF;
-         ent = chain[ent]) {
-
-        auto &sym = symtab[ent];
-        if (strcmp(name, &strtab[sym.st_name]) == 0) {
-            return &sym;
-        }
-    }
-
-    return nullptr;
+    const char *name = strtab + symtab[sym].st_name;
+    return elf::lookup_symbol(name, symtab, strtab, dt_hash,
+                              dt_gnu_hash, nullptr/*version_symtab*/);
 };
 
 init_table get_init(Elf64_Ehdr* header)
@@ -1801,7 +1801,7 @@ init_table get_init(Elf64_Ehdr* header)
             auto dyn = reinterpret_cast<Elf64_Dyn*>(phdr->p_vaddr);
             unsigned ndyn = phdr->p_memsz / sizeof(*dyn);
             ret.dyn_tabs = {
-                .symtab = nullptr, .hashtab = nullptr, .strtab = nullptr,
+                .symtab = nullptr, .dt_hash = nullptr, .dt_gnu_hash = nullptr, .strtab = nullptr,
             };
             const Elf64_Rela* rela = nullptr;
             const Elf64_Rela* jmp = nullptr;
@@ -1823,10 +1823,13 @@ init_table get_init(Elf64_Ehdr* header)
                     nrela = d->d_un.d_val / sizeof(*rela);
                     break;
                 case DT_SYMTAB:
-                    ret.dyn_tabs.symtab = reinterpret_cast<const Elf64_Sym*>(d->d_un.d_ptr);
+                    ret.dyn_tabs.symtab = reinterpret_cast<Elf64_Sym*>(d->d_un.d_ptr);
                     break;
                 case DT_HASH:
-                    ret.dyn_tabs.hashtab = reinterpret_cast<const Elf64_Word*>(d->d_un.d_ptr);
+                    ret.dyn_tabs.dt_hash = reinterpret_cast<const Elf64_Word*>(d->d_un.d_ptr);
+                    break;
+                case DT_GNU_HASH:
+                    ret.dyn_tabs.dt_gnu_hash = reinterpret_cast<const Elf64_Word*>(d->d_un.d_ptr);
                     break;
                 case DT_STRTAB:
                     ret.dyn_tabs.strtab = reinterpret_cast<const char*>(d->d_un.d_ptr);

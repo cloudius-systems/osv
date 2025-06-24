@@ -440,10 +440,12 @@ protected:
     bool has_non_writable_text_relocations();
     unsigned get_segment_mmap_permissions(const Elf64_Phdr& phdr);
 private:
-    Elf64_Sym* lookup_symbol_old(const char* name);
-    Elf64_Sym* lookup_symbol_gnu(const char* name, bool self_lookup);
     template <typename T>
     T* dynamic_ptr(unsigned tag);
+    // opt_dynamic_ptr() is the same as dynamic_ptr() but returns nullptr
+    // instead of throwing when the given tag is missing.
+    template <typename T>
+    T* opt_dynamic_ptr(unsigned tag);
     Elf64_Xword dynamic_val(unsigned tag);
     const char* dynamic_str(unsigned tag);
     bool dynamic_exists(unsigned tag);
@@ -726,8 +728,9 @@ program* get_program();
 
 /* tables needed for initial dynamic segment relocations */
 struct init_dyn_tabs {
-    const Elf64_Sym *symtab;
-    const Elf64_Word *hashtab;
+    Elf64_Sym *symtab;
+    const Elf64_Word *dt_hash;
+    const Elf64_Word *dt_gnu_hash;
     const char *strtab;
     const Elf64_Sym *lookup(u32 sym);
 };
