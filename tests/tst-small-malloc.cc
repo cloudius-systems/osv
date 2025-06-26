@@ -9,16 +9,25 @@
 #include <cassert>
 #include <osv/trace-count.hh>
 
+// Since gcc 15, there is a new optimization ("builtin-malloc") where the
+// compiler can see that the return value of malloc() isn't saved, and
+// optimize the call away! Since our goal is for these malloc()s to happen
+// (and count their tracepoints), we need to save their return values
+// somewhere. A single volatile variable is enough to avoid the optimization.
+volatile void* dont_optimize;
+
 void test_malloc(size_t size) {
     void *addr = malloc(size);
     assert(addr);
     assert(reinterpret_cast<uintptr_t>(addr) % 8 == 0);
+    dont_optimize = addr;
 }
 
 void test_aligned_alloc(size_t alignment, size_t size) {
     void *addr = aligned_alloc(alignment, size);
     assert(addr);
     assert(reinterpret_cast<uintptr_t>(addr) % alignment == 0);
+    dont_optimize = addr;
 }
 
 int main() {
