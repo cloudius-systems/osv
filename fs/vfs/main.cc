@@ -2504,7 +2504,7 @@ void unpack_bootfs(void)
     }
 }
 
-void mount_rootfs(void)
+static void mount_init_rootfs(void)
 {
     int ret;
 
@@ -2543,7 +2543,7 @@ int nmount(struct iovec *iov, unsigned niov, int flags)
     return sys_mount(a.from, a.fspath, a.fstype, flags, nullptr);
 }
 
-static void import_extra_zfs_pools(void)
+extern "C" void import_extra_zfs_pools(void)
 {
     struct stat st;
     int ret;
@@ -2667,68 +2667,16 @@ extern "C" void unmount_devfs()
         kprintf("failed to unmount /dev, error = %s\n", strerror(ret));
 }
 
-extern "C" int mount_rofs_rootfs(bool pivot_root)
+extern "C" int mount_rootfs(const char* mp, const char *dev, const char *fsname,
+                            int flags, const void *data, bool pivot_root)
 {
-    constexpr char* mp = "/rofs";
-
     if (mkdir(mp, 0755) < 0) {
         int ret = errno;
         kprintf("failed to create %s, error = %s\n", mp, strerror(errno));
         return ret;
     }
 
-    int ret = sys_mount("/dev/vblk0.1", mp, "rofs", MNT_RDONLY, nullptr);
-    if (ret) {
-        kprintf("failed to mount %s, error = %s\n", mp, strerror(ret));
-        rmdir(mp);
-        return ret;
-    }
-
-    if (pivot_root) {
-        pivot_rootfs(mp);
-    }
-
-    return 0;
-}
-
-extern "C" int mount_zfs_rootfs(bool pivot_root, bool extra_zfs_pools)
-{
-    constexpr char* mp = "/zfs";
-
-    if (mkdir(mp, 0755) < 0) {
-        int ret = errno;
-        kprintf("failed to create %s, error = %s\n", mp, strerror(errno));
-        return ret;
-    }
-
-    int ret = sys_mount("/dev/vblk0.1", mp, "zfs", 0, (void *)"osv/zfs");
-    if (ret) {
-        kprintf("failed to mount %s, error = %s\n", mp, strerror(ret));
-        rmdir(mp);
-        return ret;
-    }
-
-    if (pivot_root) {
-        pivot_rootfs(mp);
-        if (extra_zfs_pools) {
-            import_extra_zfs_pools();
-        }
-    }
-
-    return 0;
-}
-
-extern "C" int mount_virtiofs_rootfs(bool pivot_root)
-{
-    constexpr char* mp = "/virtiofs";
-
-    if (mkdir(mp, 0755) < 0) {
-        int ret = errno;
-        kprintf("failed to create %s, error = %s\n", mp, strerror(errno));
-        return ret;
-    }
-
-    int ret = sys_mount("/dev/virtiofs0", mp, "virtiofs", MNT_RDONLY, nullptr);
+    int ret = sys_mount(dev, mp, fsname, flags, data);
     if (ret) {
         kprintf("failed to mount %s, error = %s\n", mp, strerror(ret));
         rmdir(mp);
@@ -2799,7 +2747,7 @@ vfs_init(void)
         }
     }
 
-    mount_rootfs();
+    mount_init_rootfs();
     unpack_bootfs();
 
     //	if (open("/dev/console", O_RDWR, 0) != 0)

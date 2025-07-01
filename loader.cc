@@ -50,6 +50,7 @@
 #include <osv/xen.hh>
 #endif
 #include <osv/options.hh>
+#include <osv/mount.h>
 #include <dirent.h>
 #include <mntent.h>
 
@@ -93,10 +94,9 @@ extern "C" {
     void vfs_init(void);
     void pivot_rootfs(const char*);
     void unmount_devfs();
-    int mount_zfs_rootfs(bool, bool);
-    int mount_rofs_rootfs(bool);
+    int mount_rootfs(const char*, const char*, const char*, int, const void*, bool);
+    void import_extra_zfs_pools();
     void rofs_disable_cache();
-    int mount_virtiofs_rootfs(bool);
 }
 
 void premain()
@@ -477,36 +477,62 @@ static void stop_all_remaining_app_threads()
     }
 }
 
-static void load_zfs_library(std::function<void()> on_load_fun = nullptr)
+static int load_fs_library(const char* fs_library_path, std::function<int()> on_load_fun = nullptr)
 {
-    // Load and initialize ZFS filesystem driver implemented in libsolaris.so
-    const auto libsolaris_path = "/usr/lib/fs/libsolaris.so";
-    if (dlopen(libsolaris_path, RTLD_LAZY)) {
+    // Load and initialize filesystem driver
+    if (dlopen(fs_library_path, RTLD_LAZY)) {
         if (on_load_fun) {
-           on_load_fun();
+           return on_load_fun();
+        } else {
+           return 0;
         }
     } else {
-        debugf("Could not load and/or initialize %s.\n", libsolaris_path);
+        debugf("Could not load and/or initialize %s.\n", fs_library_path);
+        return 1;
     }
 }
 
-static void load_zfs_library_and_mount_zfs_root(const char* mount_error_msg, bool pivot_when_error = false)
+const auto libsolaris_path = "/usr/lib/fs/libsolaris.so";
+static int load_zfs_library_and_mount_zfs_root(bool pivot_when_error = false)
 {
-    load_zfs_library([mount_error_msg, pivot_when_error]() {
+    // Load and initialize ZFS filesystem driver implemented in libsolaris.so
+    return load_fs_library(libsolaris_path, [pivot_when_error]() {
         zfsdev::zfsdev_init();
-        auto error = mount_zfs_rootfs(opt_pivot, opt_extra_zfs_pools);
+
+        auto error = mount_rootfs("/zfs", "/dev/vblk0.1", "zfs", 0, (void *)"osv/zfs", opt_pivot);
+        if (!error && opt_pivot && opt_extra_zfs_pools) {
+            import_extra_zfs_pools();
+        }
         if (error) {
-            debug(mount_error_msg);
+            debug("Could not mount zfs root filesystem.\n");
             if (pivot_when_error) {
                 // Continue with ramfs (already mounted)
-                // TODO: Avoid the hack of using pivot_rootfs() just for
-                // mounting the fstab entries.
                 pivot_rootfs("/");
             }
         } else {
             bsd_shrinker_init();
             boot_time.event("ZFS mounted");
         }
+        return error;
+    });
+}
+
+
+static int load_ext_library_and_mount_ext_root(bool pivot_when_error = false)
+{
+    // Load and initialize EXT filesystem driver implemented in libext.so
+    return load_fs_library("/usr/lib/fs/libext.so", [pivot_when_error]() {
+        auto error = mount_rootfs("/ext", "/dev/vblk0.1", "ext", 0, nullptr, opt_pivot);
+        if (error) {
+            debug("Could not mount ext root filesystem.\n");
+            if (pivot_when_error) {
+                // Continue with ramfs (already mounted)
+                pivot_rootfs("/");
+            }
+        } else {
+            boot_time.event("EXT mounted");
+        }
+        return error;
     });
 }
 
@@ -529,7 +555,7 @@ void* do_main_thread(void *_main_args)
         unmount_devfs();
 
         if (opt_rootfs.compare("rofs") == 0) {
-            auto error = mount_rofs_rootfs(opt_pivot);
+            auto error = mount_rootfs("/rofs", "/dev/vblk0.1", "rofs", MNT_RDONLY, nullptr, opt_pivot);
             if (error) {
                 debug("Could not mount rofs root filesystem.\n");
             }
@@ -539,8 +565,10 @@ void* do_main_thread(void *_main_args)
                 rofs_disable_cache();
             }
             boot_time.event("ROFS mounted");
+        } else if (opt_rootfs.compare("ext") == 0) {
+            load_ext_library_and_mount_ext_root();
         } else if (opt_rootfs.compare("zfs") == 0) {
-            load_zfs_library_and_mount_zfs_root("Could not mount zfs root filesystem.\n");
+            load_zfs_library_and_mount_zfs_root();
         } else if (opt_rootfs.compare("ramfs") == 0) {
             // NOTE: The ramfs is already mounted, we just need to mount fstab
             // entries. That's the only difference between this and --nomount.
@@ -549,30 +577,39 @@ void* do_main_thread(void *_main_args)
             // the fstab entries.
             pivot_rootfs("/");
         } else if (opt_rootfs.compare("virtiofs") == 0) {
-            auto error = mount_virtiofs_rootfs(opt_pivot);
+            auto error = mount_rootfs("/virtiofs", "/dev/virtiofs0", "virtiofs", MNT_RDONLY, nullptr, opt_pivot);
             if (error) {
                 debug("Could not mount virtiofs root filesystem.\n");
             }
 
             boot_time.event("Virtio-fs mounted");
         } else {
-            // Auto-discovery: try rofs -> virtio-fs -> ZFS
-            if (mount_rofs_rootfs(opt_pivot) == 0) {
+            // Auto-discovery: try rofs -> virtio-fs -> ext -> ZFS
+            debug("Auto-discovering the root filesystem...\n");
+            if (mount_rootfs("/rofs", "/dev/vblk0.1", "rofs", MNT_RDONLY, nullptr, opt_pivot) == 0) {
                 if (opt_disable_rofs_cache) {
                     debug("Disabling ROFS memory cache.\n");
                     rofs_disable_cache();
                 }
                 boot_time.event("ROFS mounted");
-            } else if (mount_virtiofs_rootfs(opt_pivot) == 0) {
+            } else if (mount_rootfs("/virtiofs", "/dev/virtiofs0", "virtiofs", MNT_RDONLY, nullptr, opt_pivot) == 0) {
                 boot_time.event("Virtio-fs mounted");
+            } else if (load_ext_library_and_mount_ext_root(true) == 0) {
+                boot_time.event("Extfs mounted");
             } else {
-                load_zfs_library_and_mount_zfs_root("Could not mount zfs root filesystem (while auto-discovering).\n", true);
+                if (load_zfs_library_and_mount_zfs_root(true)) {
+                    debug("Failed to discover the rootfs filesystem. Staying on bootfs.\n");
+                }
             }
         }
     }
 
+    //This option is only used by ZFS builder
     if (opt_preload_zfs_library) {
-        load_zfs_library();
+        if (load_fs_library(libsolaris_path)) {
+            fprintf(stderr, "Failed to preload ZFS library. Powering off.\n");
+            osv::poweroff();
+        }
     }
 
 #if CONF_networking_stack
