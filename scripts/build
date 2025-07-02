@@ -21,24 +21,24 @@ usage() {
 	  scripts/build clean
 
 	Options:
-	  --help|-h                     Print this help message
-	  arch=x64|aarch64              Specify the build architecture; default is the same as build host arch
-	  mode=release|debug            Specify the build mode; default is release
-	  export=none|selected|all      If 'selected' or 'all' export the app files to <export_dir>
-	  export_dir=<dir>              The directory to export the files to; default is build/export
-	  fs=zfs|rofs|rofs_with_zfs|    Specify the filesystem of the image partition
-	     ramfs|virtiofs
-	  fs_size=N                     Specify the size of the image in bytes
-	  fs_size_mb=N                  Specify the size of the image in MiB
-	  app_local_exec_tls_size=N     Specify the size of app local TLS in bytes; the default is 64
-	  usrskel=<*.skel>              Specify the base manifest for the image
-	  <module_makefile_arg>=<value> Pass value of module_makefile_arg to an app/module makefile
-	                                (can be used to customize specific app/module build process)
-	  -j<N>                         Set number of parallel jobs for make
-	  --append-manifest             Append build/<mode>/append.manifest to usr.manifest
-	  --create-disk                 Instead of usr.img create kernel-less disk.img
-	  --create-zfs-disk             Create extra empty disk with ZFS filesystem
-	  --use-openzfs                 Build and manipulate ZFS images using on host OpenZFS tools
+	  --help|-h                      Print this help message
+	  arch=x64|aarch64               Specify the build architecture; default is the same as build host arch
+	  mode=release|debug             Specify the build mode; default is release
+	  export=none|selected|all       If 'selected' or 'all' export the app files to <export_dir>
+	  export_dir=<dir>               The directory to export the files to; default is build/export
+	  fs=zfs|rofs|ext|ramfs|virtiofs Specify the filesystem of the image partition
+	    |rofs_with_zfs|rofs_with_ext
+	  fs_size=N                      Specify the size of the image in bytes
+	  fs_size_mb=N                   Specify the size of the image in MiB
+	  app_local_exec_tls_size=N      Specify the size of app local TLS in bytes; the default is 64
+	  usrskel=<*.skel>               Specify the base manifest for the image
+	  <module_makefile_arg>=<value>  Pass value of module_makefile_arg to an app/module makefile
+	                                 (can be used to customize specific app/module build process)
+	  -j<N>                          Set number of parallel jobs for make
+	  --append-manifest              Append build/<mode>/append.manifest to usr.manifest
+	  --create-disk                  Instead of usr.img create kernel-less disk.img
+	  --create-zfs-disk              Create extra empty disk with ZFS filesystem
+	  --use-openzfs                  Build and manipulate ZFS images using on host OpenZFS tools
 
 	Examples:
 	  ./scripts/build -j4 fs=rofs image=native-example   # Create image with native-example app
@@ -189,7 +189,7 @@ SRC=`pwd`
 arch=`expr $OUT : '.*\.\(.*\)'`
 mode=`expr $OUT : '.*/\(.*\)\..*'`
 
-# Set "modules" according to the image= or modules= paramters, or some
+# Set "modules" according to the image= or modules= parameters, or some
 # defaults (with same rules as in our old makefile)
 case $arch in
 aarch64) image=${vars[image]-uush};;
@@ -211,7 +211,11 @@ usrskel_arg=
 case $fs_type in
 zfs)
 	;; # Nothing to change here. This is our default behavior
-rofs|rofs_with_zfs|virtiofs)
+ext)
+	cp "$SRC"/static/etc/fstab_ext "$OUT"/fstab
+	manifest=bootfs_ext.manifest.skel
+	usrskel_arg="--usrskel usr_ext.manifest.skel";;
+rofs|rofs_with_zfs|rofs_with_ext|virtiofs)
 	# Both are read-only (in OSv) and require nothing extra on bootfs to work
 	manifest=bootfs_empty.manifest.skel
 	usrskel_arg="--usrskel usr_rofs.manifest.skel";;
@@ -242,6 +246,10 @@ fi
 
 if [[ ${vars[append_manifest]} == "true" && $modules == "!default" ]]; then
 	modules="empty"
+fi
+
+if [[ "$fs_type" == "ext" || "$fs_type" == "rofs_with_ext" ]]; then
+	modules="$modules,libext"
 fi
 
 CC=gcc
@@ -286,7 +294,7 @@ if [[ ${vars[append_manifest]} == "true" && -f "$OSV_BUILD_PATH/append.manifest"
 	fi
 fi
 
-bootfs_manifest=$manifest make "${args[@]}" | tee -a build.out
+fs=$fs_type bootfs_manifest=$manifest make "${args[@]}" | tee -a build.out
 # check exit status of make
 status=${PIPESTATUS[0]}
 if [ $status -ne 0 ]
@@ -342,6 +350,14 @@ create_zfs_disk() {
 	rm ${raw_disk}.raw
 }
 
+create_ext_disk() {
+	cp $bare $raw_disk.raw
+	"$SRC"/scripts/imgedit.py setpartition "-f raw ${raw_disk}.raw" 2 $partition_offset $partition_size
+	qemu-img resize ${raw_disk}.raw ${image_size}b >/dev/null 2>&1
+	dd if=disk.ext of=${raw_disk}.raw obs=$partition_offset seek=1 >/dev/null 2>&1
+	qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
+}
+
 create_rofs_disk() {
 	cp $bare $raw_disk.raw
 	"$SRC"/scripts/imgedit.py setpartition "-f raw ${raw_disk}.raw" 2 $partition_offset $partition_size
@@ -382,6 +398,12 @@ zfs)
 	image_size=$fs_size
 	cp "$SRC"/static/etc/fstab fstab
 	create_zfs_disk ;;
+ext)
+	rm -rf disk.ext
+	"$SRC"/scripts/ext-disk-utils.sh create disk.ext $(((fs_size - partition_offset)/(1024*1024))) true
+	partition_size=`stat --printf %s disk.ext`
+	image_size=$fs_size
+	create_ext_disk ;;
 rofs)
 	rm -rf rofs.img
 	cp "$SRC"/static/etc/fstab_rofs fstab
@@ -392,22 +414,34 @@ rofs)
 	partition_size=`stat --printf %s rofs.img`
 	image_size=$fs_size
 	create_rofs_disk ;;
-rofs_with_zfs)
+rofs_with_zfs|rofs_with_ext)
 	# Create disk with rofs image on it 1st partition
 	rm -rf rofs.img
 	cp "$SRC"/static/etc/fstab_rofs fstab
-	echo "/dev/vblk0.2 /data      zfs       defaults 0 0" >> fstab
+	if [[ "$fs_type" == "rofs_with_zfs" ]]; then
+		echo "/dev/vblk0.2 /data      zfs       defaults 0 0" >> fstab
+	else
+		echo "/dev/vblk0.2 /data      ext       defaults 0 0" >> fstab
+	fi
 	"$SRC"/scripts/gen-rofs-img.py -o rofs.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
 	partition_size=`stat --printf %s rofs.img`
 	image_size=$((fs_size+partition_size))
 	create_rofs_disk
-	# Resize the disk to fit ZFS on it after rofs
+	# Resize the disk to fit ext or zfs on it after rofs
 	qemu-img resize $qcow2_disk.img ${image_size}b >/dev/null 2>&1
-	# Create filesystem on ZFS partition
-	zfs_partition_offset=$((partition_offset + partition_size))
-	zfs_partition_size=$((image_size-zfs_partition_offset))
-	"$SRC"/scripts/imgedit.py setpartition "$qcow2_disk.img" 3 $zfs_partition_offset $zfs_partition_size
-	create_zfs_filesystem $qcow2_disk.img "/dev/vblk0.2" 2;;
+	snd_partition_offset=$((partition_offset + partition_size))
+	snd_partition_size=$((image_size-snd_partition_offset))
+	"$SRC"/scripts/imgedit.py setpartition "$qcow2_disk.img" 3 $snd_partition_offset $snd_partition_size
+	# Create filesystem on ZFS/EXT partition
+	if [[ "$fs_type" == "rofs_with_zfs" ]]; then
+		create_zfs_filesystem $qcow2_disk.img "/dev/vblk0.2" 2
+	else
+		rm -rf disk.ext
+		"$SRC"/scripts/ext-disk-utils.sh create disk.ext $((snd_partition_size/(1024*1024)))
+		qemu-img convert -f qcow2 -O raw $qcow2_disk.img $raw_disk.raw
+		dd if=disk.ext of=${raw_disk}.raw obs=$snd_partition_offset seek=1 >/dev/null 2>&1
+		qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
+	fi ;;
 ramfs|virtiofs)
 	# No need to create extra fs like above: ramfs is already created (as the
 	# bootfs) and virtio-fs is specified with virtiofsd at run time
