@@ -135,13 +135,15 @@ static void ext_bcache_unlock()
     mutex_unlock(&ext_bcache_mutex);
 }
 
+#define META_BLOCK_DEV_CACHE_SIZE 32
+
 static int
 ext_mount(struct mount *mp, const char *dev, int flags, const void *data)
 {
     struct device *device;
 
     const char *dev_name = dev + 5;
-    ext_debug("Trying to open device: [%s]\n", dev_name);
+    ext_debug("[ext4] Trying to open device: [%s]\n", dev_name);
     int error = device_open(dev_name, DO_RDWR, &device);
 
     if (error) {
@@ -172,8 +174,9 @@ ext_mount(struct mount *mp, const char *dev, int flags, const void *data)
 
     ext_debug("Trying to mount ext4 on device: [%s] with size:%ld\n", dev_name, device->size);
     int r = ext4_block_init(&ext_blockdev);
-    if (r != EOK)
+    if (r != EOK) {
         return r;
+    }
 
     r = ext4_fs_init(&ext_fs, &ext_blockdev, false);
     if (r != EOK) {
@@ -184,7 +187,7 @@ ext_mount(struct mount *mp, const char *dev, int flags, const void *data)
     uint32_t bsize = ext4_sb_get_block_size(&ext_fs.sb);
     ext4_block_set_lb_size(&ext_blockdev, bsize);
 
-    r = ext4_bcache_init_dynamic(&ext_block_cache, CONFIG_BLOCK_DEV_CACHE_SIZE, bsize);
+    r = ext4_bcache_init_dynamic(&ext_block_cache, META_BLOCK_DEV_CACHE_SIZE, bsize);
     if (r != EOK) {
         ext4_block_fini(&ext_blockdev);
         return r;
@@ -205,8 +208,12 @@ ext_mount(struct mount *mp, const char *dev, int flags, const void *data)
     ext_blockdev.fs = &ext_fs;
     mp->m_data = &ext_fs;
     mp->m_root->d_vnode->v_ino = EXT4_INODE_ROOT_INDEX;
+    mp->m_root->d_vnode->v_type = VDIR;
+    //Enable write-back cache to optimize reading and writing of metadata blocks
+    ext4_block_cache_write_back(ext_fs.bdev, 1);
 
-    kprintf("[ext4] Mounted ext4 on device: [%s] with code:%d\n", dev_name, r);
+    kprintf("[ext4] Mounted ext with i-node size:%d and block size:%d on device: [%s]\n",
+        ext4_get16(&ext_fs.sb, inode_size), bsize, dev_name);
     return r;
 }
 
@@ -221,14 +228,18 @@ ext_unmount(struct mount *mp, int flags)
 
     ext4_block_fini(&ext_blockdev);
     r = device_close((struct device*)ext_blockdev.bdif->p_user);
-    kprintf("[ext4] Unmounted filesystem with: %d!\n", r);
+    kprintf("[ext4] Unmounted ext filesystem!\n");
     return r;
 }
 
 static int
 ext_sync(struct mount *mp)
 {
-    return EIO;
+    struct ext4_fs *fs = (struct ext4_fs *)mp->m_data;
+    fs->bcache_lock();
+    auto ret = ext4_block_cache_flush(fs->bdev);
+    fs->bcache_unlock();
+    return ret;
 }
 
 static int
@@ -264,6 +275,7 @@ void __attribute__((constructor)) initialize_vfsops() {
     ext_vfsops.vfs_vget = ((vfsop_vget_t)vfs_nullop);
     ext_vfsops.vfs_statfs = ext_statfs;
     ext_vfsops.vfs_vnops = &ext_vnops;
+    ext_debug("libext loaded!\n");
 }
 
 asm(".pushsection .note.osv-mlock, \"a\"; .long 0, 0, 0; .popsection");
