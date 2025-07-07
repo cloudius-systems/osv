@@ -111,6 +111,8 @@ rofs-only-tests := rofs/tst-chdir.so rofs/tst-symlink.so rofs/tst-readdir.so \
 zfs-only-tests := tst-readdir.so tst-fallocate.so tst-fs-link.so \
 	tst-concurrent-read.so tst-solaris-taskq.so
 
+ext-only-tests := tst-readdir.so tst-concurrent-read.so tst-fs-link.so
+
 specific-fs-tests := $($(fs_type)-only-tests)
 
 tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
@@ -275,6 +277,8 @@ boost-tests := $(common-boost-tests)
 rofs-only-boost-tests := rofs/tst-stdio.so
 
 zfs-only-boost-tests := tst-rename.so tst-stdio.so
+
+ext-only-boost-tests := tst-rename.so tst-stdio.so
 
 boost-tests += $($(fs_type)-only-boost-tests)
 
