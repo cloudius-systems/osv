@@ -1,6 +1,5 @@
 #!/bin/bash
 
-
 argv0=${0##*/}
 usage() {
 	cat <<-EOF
@@ -26,47 +25,7 @@ usage() {
 	exit ${1:-0}
 }
 
-connect_image_to_nbd_device() {
-	# Check if we have something connected to nbd0
-	if [[ "" == $(lsblk | grep nbd0 | grep " 0B") ]]; then
-		echo "The device /dev/nbd0 is busy. Please disconnect it or run $0 unmount"
-		return -1
-	fi
-	local image_path="$1"
-	sudo qemu-nbd --connect /dev/nbd0 ${image_path} 1>/dev/null
-	echo "Connected device /dev/nbd0 to the image ${image_path}"
-
-        # Identify nbd device if it maps to a specific ZFS partition 
-	local partition=$2
-        local nbd_device=$(lsblk | grep part | grep -o "nbd0\S*" | head -n $partition | tail -1)
-	if [[ "" == "$nbd_device" ]]; then
-		nbd_device=nbd0
-		echo "Assuming /dev/nbd0 as a device to import from"
-	fi
-	device_path="/dev/$nbd_device"
-}
-
-connect_image_to_loop_device() {
-	local image_path="$1"
-	local partition=$(($2+1))
-	local partition_offset=$($OSV_ROOT/scripts/imgedit.py getpartition_offset "-f raw $image_path" $partition)
-	device_path=$(sudo losetup -o $partition_offset -f --show ${image_path})
-	echo "Connected device $device_path to the image ${image_path}"
-}
-
-connect_image() {
-	local image_path="$1"
-	local image_format=$(qemu-img info ${image_path} | grep "file format")
-
-	if [[ "$image_format" == *"qcow2"* ]]; then
- 		connect_image_to_nbd_device $image_path $2
-	elif [[ "$image_format" == *"raw"* ]]; then
- 		connect_image_to_loop_device $image_path $2
-	else
-		echo "The file $image_path does not seem to be a valid qcow2 nor raw image!"
-		return -1
-	fi
-}
+source $(dirname $0)/disk-utils-common.sh
 
 mount_image() {
 	connect_image $1 $2
@@ -111,18 +70,7 @@ unmount_image() {
 		return -1
 	fi
 
-	# Try NBD sevice
-	if [[ "" == $(lsblk | grep nbd0 | grep " 0B") ]]; then
-		sudo qemu-nbd --disconnect /dev/nbd0 1>/dev/null
-		echo "Disconnected device /dev/nbd0 from the image"
-	fi
-
-	# Try loopback device
-	if [[ "" != $(lsblk | grep loop) ]]; then
-		local device_path=$(losetup -ln | cut -d ' ' -f 1)
-		sudo losetup -d $device_path 1>/dev/null
-		echo "Disconnected device $device_path from the image"
-	fi
+	disconnect_image
 }
 
 build_image() {

@@ -153,12 +153,19 @@ endif
 quiet = $(if $V, $1, @echo " $2"; $1)
 very-quiet = $(if $V, $1, @$1)
 
+ifeq ($(fs),zfs)
 all: $(out)/loader.img links $(out)/zfs_builder-stripped.elf
 ifeq ($(arch),x64)
 all: $(out)/vmlinuz.bin
 endif
 ifeq ($(arch),aarch64)
 all: $(out)/zfs_builder.img
+endif
+else
+all: $(out)/loader.img links
+ifeq ($(arch),x64)
+all: $(out)/vmlinuz.bin
+endif
 endif
 .PHONY: all
 
@@ -2286,8 +2293,15 @@ ifeq ($(filter /%,$(libgcc_s_dir)),)
 libgcc_s_dir := ../../$(aarch64_gccbase)/lib64
 endif
 
-$(out)/bootfs.bin: scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep) $(tools:%=$(out)/%) \
-		$(out)/libenviron.so $(out)/libsolaris.so
+bootfs_dep := scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep) $(out)/libenviron.so
+ifeq ($(fs),ext)
+bootfs_dep += $(out)/modules/libext/libext.so
+else
+ifeq ($(fs),zfs)
+bootfs_dep += $(tools:%=$(out)/%) $(out)/libsolaris.so
+endif
+endif
+$(out)/bootfs.bin: $(bootfs_dep)
 	$(call quiet, olddir=`pwd`; cd $(out); "$$olddir"/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m "$$olddir"/$(bootfs_manifest), MKBOOTFS $@)
 
 $(out)/bootfs.o: $(out)/bootfs.bin

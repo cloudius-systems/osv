@@ -1,0 +1,3 @@
+[manifest]
+/usr/lib/fs/libext.so: modules/libext/libext.so
+/usr/lib/liblwext4.so: ../../modules/lwext4/upstream/lwext4/build_lib_only/src/liblwext4.so
