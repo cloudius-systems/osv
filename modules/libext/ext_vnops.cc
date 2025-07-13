@@ -43,8 +43,10 @@ void free_contiguous_aligned(void* p);
 #include <cstdlib>
 #include <time.h>
 #include <cstddef>
+#include <cassert>
 
 #include <algorithm>
+#include <set>
 
 //#define CONF_debug_ext 1
 #if CONF_debug_ext
@@ -66,6 +68,16 @@ struct auto_inode_ref {
         if (_r == EOK) {
             ext4_fs_put_inode_ref(&_ref);
         }
+    }
+};
+
+struct ext_vdata {
+    int ref_count;
+    bool delete_on_last_close;
+
+    ext_vdata() {
+        ref_count = 0;
+        delete_on_last_close = false;
     }
 };
 
@@ -106,17 +118,74 @@ typedef	struct vattr vattr_t;
 static int
 ext_open(struct file *fp)
 {
-    ext_debug("Opening file\n");
-    //TODO: Reference count (look at ramfs)
+    struct vnode *vp = file_dentry(fp)->d_vnode;
+    ext_debug("open: i-node=%ld\n", vp->v_ino);
+    if (!vp->v_data) {
+        vp->v_data = new ext_vdata();
+        ext_debug("open: i-node=%ld allocating v_data\n", vp->v_ino);
+    }
+    ext_vdata *vdata = (ext_vdata*) vp->v_data;
+    vdata->ref_count++;
     return (EOK);
+}
+
+static mutex_t inodes_to_delete_mutex;
+static std::set<uint64_t> inodes_to_delete;
+
+static void
+set_inode_to_be_deleted(uint64_t inode)
+{
+    mutex_lock(&inodes_to_delete_mutex);
+    inodes_to_delete.emplace(inode);
+    mutex_unlock(&inodes_to_delete_mutex);
+}
+
+static void
+remove_inode_from_being_deleted(uint64_t inode)
+{
+    mutex_lock(&inodes_to_delete_mutex);
+    inodes_to_delete.erase(inode);
+    mutex_unlock(&inodes_to_delete_mutex);
+}
+
+void ext_delete_outstanding_inodes(struct ext4_fs *fs)
+{
+    for (auto inode_no : inodes_to_delete) {
+        auto_inode_ref inode(fs, inode_no);
+        if (inode._r != EOK) {
+            continue;
+        }
+        ext4_fs_free_inode(&inode._ref);
+        ext_debug("delete: i-node=%ld when unmounting\n", inode_no);
+    }
+    inodes_to_delete.clear();
 }
 
 static int
 ext_close(vnode_t *vp, file_t *fp)
 {
-    ext_debug("Closing file\n");
-    //TODO: Reference count (look at ramfs)
-    //TODO: Delete i-node if marked for deletion when remove or friends was called and it was open
+    ext_debug("close: i-node %ld\n", vp->v_ino);
+    if (!vp->v_data) {
+        ext_debug("close: i-node %ld that has not been opened!\n", vp->v_ino);
+        return (EOK);
+    }
+
+    ext_vdata *vdata = (ext_vdata*) vp->v_data;
+    vdata->ref_count--;
+
+    if (vdata->delete_on_last_close && vdata->ref_count == 0) {
+        ext_debug("close: deleting i-node %ld on close\n", vp->v_ino);
+        vdata->delete_on_last_close = false;
+
+        struct ext4_fs *fs = (struct ext4_fs *)vp->v_mount->m_data;
+        auto_inode_ref inode(fs, vp->v_ino);
+        if (inode._r != EOK) {
+            return inode._r;
+        }
+        ext4_fs_free_inode(&inode._ref);
+
+        remove_inode_from_being_deleted(vp->v_ino);
+    }
     return (EOK);
 }
 
@@ -240,7 +309,7 @@ Finish:
 static int
 ext_read(vnode_t *vp, struct file *fp, uio_t *uio, int ioflag)
 {
-    ext_debug("Reading %ld bytes at offset:%ld from file i-node:%ld\n", uio->uio_resid, uio->uio_offset, vp->v_ino);
+    ext_debug("read: %ld bytes at offset:%ld from file i-node=%ld\n", uio->uio_resid, uio->uio_offset, vp->v_ino);
 
     /* Cant read directories */
     if (vp->v_type == VDIR)
@@ -498,7 +567,7 @@ ext_write(vnode_t *vp, uio_t *uio, int ioflag)
         uio->uio_offset = ext4_inode_get_size(&fs->sb, inode_ref._ref.inode);
     }
 
-    ext_debug("Writing %ld bytes at offset:%ld to file i-node:%ld\n", uio->uio_resid, uio->uio_offset, vp->v_ino);
+    ext_debug("write: %ld bytes at offset:%ld to file i-node=%ld\n", uio->uio_resid, uio->uio_offset, vp->v_ino);
 
     uio_t uio_copy = *uio;
     void *buf = alloc_contiguous_aligned(uio->uio_resid, alignof(std::max_align_t));
@@ -548,15 +617,15 @@ ext_readdir(struct vnode *dvp, struct file *fp, struct dirent *dir)
     /* Check if node is directory */
     if (!ext4_inode_is_type(&fs->sb, inode_ref.inode, EXT4_INODE_MODE_DIRECTORY)) {
         ext4_fs_put_inode_ref(&inode_ref);
-        ext_debug("ext_readdir: i-node %li not a directory\n", dvp->v_ino);
+        ext_debug("readdir: i-node %li not a directory\n", dvp->v_ino);
         return ENOTDIR;
     }
 
-    ext_debug("Reading directory with i-node:%ld at offset:%ld\n", dvp->v_ino, file_offset(fp));
+    ext_debug("readdir directory with i-node=%ld at offset:%ld\n", dvp->v_ino, file_offset(fp));
     struct ext4_dir_iter it;
     int rc = ext4_dir_iterator_init(&it, &inode_ref, file_offset(fp));
     if (rc != EOK) {
-        kprintf("[ext4] Reading directory with i-node:%ld at offset:%ld -> FAILED to init iterator\n", dvp->v_ino, file_offset(fp));
+        kprintf("[ext4] Reading directory with i-node=%ld at offset:%ld -> FAILED to init iterator\n", dvp->v_ino, file_offset(fp));
         ext4_fs_put_inode_ref(&inode_ref);
         return rc;
     }
@@ -567,7 +636,7 @@ ext_readdir(struct vnode *dvp, struct file *fp, struct dirent *dir)
             memset(dir->d_name, 0, sizeof(dir->d_name));
             uint16_t name_length = ext4_dir_en_get_name_len(&fs->sb, it.curr);
             memcpy(dir->d_name, it.curr->name, name_length);
-            ext_debug("Reading directory with i-node:%ld at offset:%ld => entry name:%s\n", dvp->v_ino, file_offset(fp), dir->d_name);
+            ext_debug("readdir directory with i-node=%ld at offset:%ld => entry name:%s\n", dvp->v_ino, file_offset(fp), dir->d_name);
 
             dir->d_ino = ext4_dir_en_get_inode(it.curr);
 
@@ -587,12 +656,12 @@ ext_readdir(struct vnode *dvp, struct file *fp, struct dirent *dir)
             dir->d_off = f_offset + 1;
             file_setoffset(fp, it.curr ? it.curr_off : EXT4_DIR_ENTRY_OFFSET_TERM);
         } else {
-            ext_debug("Reading directory with i-node:%ld at offset:%ld -> cos ni tak\n", dvp->v_ino, file_offset(fp));
+            ext_debug("readdir directory with i-node=%ld at offset:%ld -> cos ni tak\n", dvp->v_ino, file_offset(fp));
         }
     } else {
         ext4_dir_iterator_fini(&it);
         ext4_fs_put_inode_ref(&inode_ref);
-        ext_debug("Reading directory with i-node:%ld at offset:%ld -> ENOENT\n", dvp->v_ino, file_offset(fp));
+        ext_debug("readdir directory with i-node=%ld at offset:%ld -> ENOENT\n", dvp->v_ino, file_offset(fp));
         return ENOENT;
     }
 
@@ -607,7 +676,7 @@ ext_readdir(struct vnode *dvp, struct file *fp, struct dirent *dir)
 static int
 ext_lookup(struct vnode *dvp, char *nm, struct vnode **vpp)
 {
-    ext_debug("Looking up %s in directory with i-node:%ld\n", nm, dvp->v_ino);
+    ext_debug("lookup %s in directory with i-node=%ld\n", nm, dvp->v_ino);
     *vpp = nullptr;
     struct ext4_fs *fs = (struct ext4_fs *)dvp->v_mount->m_data;
 
@@ -618,7 +687,7 @@ ext_lookup(struct vnode *dvp, char *nm, struct vnode **vpp)
 
     /* Check if node is directory */
     if (!ext4_inode_is_type(&fs->sb, inode_ref._ref.inode, EXT4_INODE_MODE_DIRECTORY)) {
-        ext_debug("ext_lookup: i-node %li not a directory\n", dvp->v_ino);
+        ext_debug("lookup: i-node %li not a directory\n", dvp->v_ino);
         return ENOTDIR;
     }
 
@@ -628,7 +697,7 @@ ext_lookup(struct vnode *dvp, char *nm, struct vnode **vpp)
         uint32_t inode_no = ext4_dir_en_get_inode(result.dentry);
         struct vnode *vp;
         if (vget(dvp->v_mount, inode_no, &vp)) {
-            ext_debug("ext_lookup: i-node %i found in cache\n", inode_no);
+            ext_debug("lookup: i-node %i found in cache\n", inode_no);
             *vpp = vp;
             return EOK;
         }
@@ -649,8 +718,9 @@ ext_lookup(struct vnode *dvp, char *nm, struct vnode **vpp)
         }
 
         vp->v_mode = ext4_inode_get_mode(&fs->sb, inode_ref2._ref.inode);
+        vp->v_data = new ext_vdata();
 
-        ext_debug("ext_lookup: found %s %s in directory with i-node:%ld as i-node:%d with size:%ld\n",
+        ext_debug("lookup: found %s %s in directory with i-node=%ld as i-node=%d with size:%ld\n",
             vp->v_type == VDIR ? "DIR" : (vp->v_type == VREG ? "FILE" : "SYMLINK"),
             nm, dvp->v_ino, inode_no, vp->v_size);
         *vpp = vp;
@@ -670,7 +740,7 @@ ext_dir_initialize(ext4_inode_ref *parent, ext4_inode_ref *child, bool dir_index
 #if CONFIG_DIR_INDEX_ENABLE
     /* Initialize directory index if supported */
     if (dir_index_on) {
-        ext_debug("DIR_INDEX on initializing directory with inode no:%d\n", child->index);
+        ext_debug("dir_initialize: DIR_INDEX on initializing directory with inode no:%d\n", child->index);
         r = ext4_dir_dx_init(child, parent);
         if (r != EOK)
             return r;
@@ -711,7 +781,7 @@ ext_dir_link(struct vnode *dvp, char *name, int file_type, mode_t mode, uint32_t
 
     /* Check if node is directory */
     if (!ext4_inode_is_type(&fs->sb, inode_ref._ref.inode, EXT4_INODE_MODE_DIRECTORY)) {
-        ext_debug("ext_dir_link: i-node %li not a directory\n", dvp->v_ino);
+        ext_debug("dir_link: i-node=%li not a directory\n", dvp->v_ino);
         return ENOTDIR;
     }
 
@@ -719,7 +789,7 @@ ext_dir_link(struct vnode *dvp, char *name, int file_type, mode_t mode, uint32_t
     int r = ext4_dir_find_entry(&result, &inode_ref._ref, name, strlen(name));
     ext4_dir_destroy_result(&inode_ref._ref, &result);
     if (r == EOK) {
-        ext_debug("%s already exists under i-node %li\n", name, dvp->v_ino);
+        ext_debug("dir_link: %s already exists under i-node=%li\n", name, dvp->v_ino);
         return EEXIST;
     }
 
@@ -734,7 +804,7 @@ ext_dir_link(struct vnode *dvp, char *name, int file_type, mode_t mode, uint32_t
     }
 
     if (!inode_no ) {
-        ext_debug("ext_dir_link: i-node type for %s is %x\n", name, ext4_inode_type(&fs->sb, child_ref.inode));
+        ext_debug("dir_link: i-node type for %s is %x\n", name, ext4_inode_type(&fs->sb, child_ref.inode));
         ext4_fs_inode_blocks_init(fs, &child_ref);
     }
 
@@ -749,7 +819,7 @@ ext_dir_link(struct vnode *dvp, char *name, int file_type, mode_t mode, uint32_t
 #else
             bool dir_index_on = false;
 #endif
-            ext_debug("ext_dir_link: initializing directory %s with i-node:%d\n", name, child_ref.index);
+            ext_debug("dir_link: initializing directory %s with i-node=%d\n", name, child_ref.index);
             r = ext_dir_initialize(&inode_ref._ref, &child_ref, dir_index_on);
             if (r != EOK) {
                 ext4_dir_remove_entry(&inode_ref._ref, name, strlen(name));
@@ -772,7 +842,7 @@ ext_dir_link(struct vnode *dvp, char *name, int file_type, mode_t mode, uint32_t
                 uint32_t current_mode = ext4_inode_get_mode(&fs->sb, child_ref.inode);
                 uint32_t inode_type = current_mode & EXT4_INODE_MODE_TYPE_MASK;
                 uint32_t mode_to_set = (mode & ~EXT4_INODE_MODE_TYPE_MASK) | inode_type;
-                ext_debug("ext_dir_link: set mode of %s to:%x\n", name, mode_to_set);
+                ext_debug("dir_link: set mode of %s to:%x\n", name, mode_to_set);
                 ext4_inode_set_mode(&fs->sb, child_ref.inode, mode_to_set);
             }
         }
@@ -785,13 +855,13 @@ ext_dir_link(struct vnode *dvp, char *name, int file_type, mode_t mode, uint32_t
         if (inode_no_created) {
             *inode_no_created = child_ref.index;
         }
-        ext_debug("ext_dir_link: created %s under i-node %li with filetype:%d\n", name, dvp->v_ino, file_type);
+        ext_debug("dir_link: created %s under i-node=%li with filetype:%d\n", name, dvp->v_ino, file_type);
     } else {
         if (!inode_no) {
             ext4_fs_free_inode(&child_ref);
         }
         //We do not want to write new inode. But block has to be released.
-        kprintf("[ext4] failed to create %s under i-node %li due to error:%d!\n", name, dvp->v_ino, r);
+        kprintf("[ext4] dir_link: failed to create %s under i-node=%li due to error:%d!\n", name, dvp->v_ino, r);
         child_ref.dirty = false;
     }
 
@@ -803,7 +873,7 @@ ext_dir_link(struct vnode *dvp, char *name, int file_type, mode_t mode, uint32_t
 static int
 ext_create(struct vnode *dvp, char *name, mode_t mode)
 {
-    ext_debug("create %s under i-node %li\n", name, dvp->v_ino);
+    ext_debug("create %s under i-node=%li\n", name, dvp->v_ino);
 
     uint32_t len = strlen(name);
     if (len > NAME_MAX || len > EXT4_DIRECTORY_FILENAME_LEN) {
@@ -844,7 +914,7 @@ ext_trunc_inode(struct ext4_fs *fs, uint32_t index, uint64_t new_size, bool *upd
             return inode_ref2._r;
         }
 
-        ext_debug("[ext_trunc_inode] expanding size of the node %d by %ld bytes\n", index, extra_size);
+        ext_debug("trunc_inode: expanding size of the node %d by %ld bytes\n", index, extra_size);
         r = ext_internal_write(fs, &inode_ref2._ref, inode_size, buf, extra_size, &write_count);
         free_contiguous_aligned(buf);
         return r;
@@ -934,7 +1004,7 @@ ext_dir_remove_entry(struct vnode *dvp, struct vnode *vp, char *name)
         return child._r;
     }
 
-    ext_debug("ext_dir_remove_entry: removing %s\n", name);
+    ext_debug("dir_remove_entry: removing %s\n", name);
 
     int r = EOK;
     uint32_t inode_type = ext4_inode_type(&fs->sb, child._ref.inode);
@@ -958,7 +1028,8 @@ ext_dir_remove_entry(struct vnode *dvp, struct vnode *vp, char *name)
         return r;
     }
 
-    //TODO: Remove inode only if there no open descriptors anymore (use reference)
+    ext_vdata *vdata = (ext_vdata*) vp->v_data;
+    assert(vdata);
     if (inode_type != EXT4_INODE_MODE_DIRECTORY) {
         int links_cnt = ext4_inode_get_links_cnt(child._ref.inode);
         if (links_cnt) {
@@ -966,11 +1037,23 @@ ext_dir_remove_entry(struct vnode *dvp, struct vnode *vp, char *name)
             child._ref.dirty = true;
 
             if (links_cnt == 1) {//Zero now
-                ext4_fs_free_inode(&child._ref);
+                if (vdata->ref_count == 0) {
+                    ext4_fs_free_inode(&child._ref);
+                } else {
+                    ext_debug("dir_remove_entry: should remove i-node=%ld of %s on last close\n", vp->v_ino, name);
+                    vdata->delete_on_last_close = true;
+                    set_inode_to_be_deleted(vp->v_ino);
+                }
             }
         }
     } else {
-        ext4_fs_free_inode(&child._ref);
+        if (vdata->ref_count == 0) {
+            ext4_fs_free_inode(&child._ref);
+        } else {
+            ext_debug("dir_remove_entry: should remove i-node=%ld of %s on last close\n", vp->v_ino, name);
+            vdata->delete_on_last_close = true;
+            set_inode_to_be_deleted(vp->v_ino);
+        }
     }
 
     if (r == EOK) {
@@ -1091,7 +1174,7 @@ ext_rename(struct vnode *sdvp, struct vnode *svp, char *snm,
 static int
 ext_mkdir(struct vnode *dvp, char *dirname, mode_t mode)
 {
-    ext_debug("mkdir %s under i-node %li\n", dirname, dvp->v_ino);
+    ext_debug("mkdir %s under i-node=%li\n", dirname, dvp->v_ino);
 
     uint32_t len = strlen(dirname);
     if (len > NAME_MAX || len > EXT4_DIRECTORY_FILENAME_LEN) {
@@ -1114,7 +1197,6 @@ ext_rmdir(vnode_t *dvp, vnode_t *vp, char *name)
 static int
 ext_getattr(vnode_t *vp, vattr_t *vap)
 {
-    ext_debug("Getting attributes at i-node:%ld\n", vp->v_ino);
     struct ext4_fs *fs = (struct ext4_fs *)vp->v_mount->m_data;
 
     auto_inode_ref inode_ref(fs, vp->v_ino);
@@ -1136,7 +1218,7 @@ ext_getattr(vnode_t *vp, vattr_t *vap)
     vap->va_nodeid = vp->v_ino;
     vap->va_size = ext4_inode_get_size(&fs->sb, inode_ref._ref.inode);
     vap->va_nlink = ext4_inode_get_links_cnt(inode_ref._ref.inode);
-    ext_debug("getattr: i-node:%ld va_mode:%o, va_size:%ld\n", vp->v_ino, vap->va_mode, vap->va_size);
+    ext_debug("getattr: i-node=%ld va_mode:%o, va_size:%ld\n", vp->v_ino, vap->va_mode, vap->va_size);
 
     bool extra_avail = ext4_get16(&fs->sb, inode_size) > EXT4_GOOD_OLD_INODE_SIZE;
     get_inode_time(inode_ref._ref.inode, vap->va_atime, access, extra_avail);
@@ -1152,7 +1234,7 @@ ext_getattr(vnode_t *vp, vattr_t *vap)
 static int
 ext_setattr(vnode_t *vp, vattr_t *vap)
 {
-    ext_debug("setattr for inode:%ld\n", vp->v_ino);
+    ext_debug("setattr: inode:%ld\n", vp->v_ino);
     struct ext4_fs *fs = (struct ext4_fs *)vp->v_mount->m_data;
 
     auto_inode_ref inode_ref(fs, vp->v_ino);
@@ -1180,7 +1262,7 @@ ext_setattr(vnode_t *vp, vattr_t *vap)
         uint32_t mode = ext4_inode_get_mode(&fs->sb, inode_ref._ref.inode);
         uint32_t inode_type = mode & EXT4_INODE_MODE_TYPE_MASK;
         uint32_t mode_to_set = (vap->va_mode & ~EXT4_INODE_MODE_TYPE_MASK) | inode_type;
-        ext_debug("setattr: i-node:%ld AT_MODE, va_mode:%o, mode to set:%x\n", vp->v_ino, vap->va_mode, mode_to_set);
+        ext_debug("setattr: i-node=%ld AT_MODE, va_mode:%o, mode to set:%x\n", vp->v_ino, vap->va_mode, mode_to_set);
         ext4_inode_set_mode(&fs->sb, inode_ref._ref.inode, mode_to_set);
         inode_ref._ref.dirty = true;
     }
@@ -1191,7 +1273,7 @@ ext_setattr(vnode_t *vp, vattr_t *vap)
 static int
 ext_truncate(struct vnode *vp, off_t new_size)
 {
-    ext_debug("truncate node:%ld, new_size:%ld\n", vp->v_ino, new_size);
+    ext_debug("truncate i-node=%ld, new_size:%ld\n", vp->v_ino, new_size);
     struct ext4_fs *fs = (struct ext4_fs *)vp->v_mount->m_data;
     bool update_cmtimed = false;
     int r = ext_trunc_inode(fs, vp->v_ino, new_size, &update_cmtimed);
@@ -1233,7 +1315,7 @@ ext_fallocate(vnode_t *vp, int mode, loff_t offset, loff_t len)
 static int
 ext_readlink(vnode_t *vp, uio_t *uio)
 {
-    ext_debug("readlink\n");
+    ext_debug("readlink: i-node=%ld\n", vp->v_ino);
     if (vp->v_type != VLNK) {
         return EINVAL;
     }
@@ -1330,9 +1412,21 @@ ext_symlink(vnode_t *dvp, char *name, char *link)
     return r;
 }
 
+static int
+ext_inactive(vnode_t *vp)
+{
+    if (vp->v_data) {
+        ext_debug("inactive i-node=%ld with ref_count=%d\n", vp->v_ino, ((ext_vdata*)vp->v_data)->ref_count);
+        delete (ext_vdata*)vp->v_data;
+        vp->v_data = nullptr;
+    } else {
+        ext_debug("inactive i-node=%ld with NO v_data\n", vp->v_ino);
+    }
+    return EOK;
+}
+
 #define ext_arc         ((vnop_cache_t)nullptr)
 #define ext_seek        ((vnop_seek_t)vop_nullop)
-#define ext_inactive    ((vnop_inactive_t)vop_nullop)
 
 struct vnops ext_vnops = {
     ext_open,       /* open */
