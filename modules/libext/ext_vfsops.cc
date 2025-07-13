@@ -66,7 +66,7 @@ static int blockdev_bread_or_write(struct ext4_blockdev *bdev, void *buf, uint64
     bio->bio_dev->driver->devops->strategy(bio);
     int error = bio_wait(bio);
 
-    ext_debug("%s %ld bytes at offset %ld to %p with error:%d\n", read ? "Read" : "Wrote",
+    ext_debug("blockdev %s %ld bytes at offset %ld to %p with error:%d\n", read ? "read" : "wrote",
         bio->bio_bcount, bio->bio_offset, bio->bio_data, error);
 
     if (!is_linear_mapped(buf)) {
@@ -217,9 +217,13 @@ ext_mount(struct mount *mp, const char *dev, int flags, const void *data)
     return r;
 }
 
+extern void ext_delete_outstanding_inodes(struct ext4_fs *fs);
+
 static int
 ext_unmount(struct mount *mp, int flags)
 {
+    ext_delete_outstanding_inodes(&ext_fs);
+
     int r = ext4_fs_fini(&ext_fs);
     if (r == EOK) {
         ext4_bcache_cleanup(&ext_block_cache);
