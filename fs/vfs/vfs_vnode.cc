@@ -198,6 +198,7 @@ vget(struct mount *mp, uint64_t ino, struct vnode **vpp)
 	vp->v_refcnt = 1;
 	vp->v_op = mp->m_op->vfs_vnops;
 	vp->v_nrlocks = 0;
+	vp->v_data = nullptr;
 
 	/*
 	 * Request to allocate fs specific data for vnode.
