@@ -13,6 +13,8 @@ dd if=/dev/zero of=ext_images/ext4 bs=1M count=128
 sudo mkfs.ext4 ext_images/ext4
 ```
 
+Note: if you get the following error when mounting the filesystem to OSv `failed to mount ext, error = Not supported`, you may want to exclude the metadata_checksum feature by creating the filesystem as such: `sudo mke2fs -t ext4 -O ^metadata_csum ext_images/ext4`.
+
 ### Mounting Disk as Loop Device
 ```bash
 sudo losetup -o 0 -f --show ext_images/ext4
