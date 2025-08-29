@@ -200,8 +200,37 @@ public:
     inline void unlock() { runlock(); }
 };
 
+class rwlock_write_lock: private rwlock {
+public:
+    inline void lock() { wlock(); }
+    inline void unlock() { wunlock(); }
+    inline unsigned int getdepth() const { return 1; }
+    inline bool owned() { return wowned(); }
+};
+
 int main(int argc, char **argv)
 {
+    int opt = 0;
+    bool run_all = true, run_uncontended = false, run_contended = false, run_misc = false;
+    while ((opt = getopt(argc, argv, "ucm")) != -1) {
+        switch (opt) {
+            case 'u':
+                run_uncontended = true;
+                break;
+            case 'c':
+                run_contended = true;
+                break;
+            case 'm':
+                run_misc = true;
+                break;
+            default:
+                fprintf(stderr, "Usage: %s [-u -c -m]\n", argv[0]);
+                exit(EXIT_FAILURE);
+        }
+    }
+    if (run_uncontended || run_contended || run_misc) {
+        run_all = false;
+    }
     printf("Running mutex tests\n");
 
     printf("\nSizes of mutual exclusion primitives:\n");
@@ -209,11 +238,14 @@ int main(int argc, char **argv)
     show_size<spinlock>();
     show_size<rwlock>();
 
-    printf("\n==== BENCHMARK 1 ====\nUncontended single-thread lock/unlock cycle:\n");
-    measure_uncontended<mutex>(50000000);
-    measure_uncontended<handoff_stressing_mutex>(50000000);
-    measure_uncontended<spinlock>(50000000);
-    measure_uncontended<rwlock_read_lock>(50000000);
+    if (run_uncontended || run_all) {
+        printf("\n==== BENCHMARK 1 ====\nUncontended single-thread lock/unlock cycle:\n");
+        measure_uncontended<mutex>(50000000);
+        measure_uncontended<handoff_stressing_mutex>(50000000);
+        measure_uncontended<spinlock>(50000000);
+        measure_uncontended<rwlock_read_lock>(50000000);
+        measure_uncontended<rwlock_write_lock>(50000000);
+    }
 
     // The lock-free mutex's biggest challenge is what to do in unlock() when
     // we want to wake a concurrent lock() but the wait queue is still empty
@@ -222,34 +254,49 @@ int main(int argc, char **argv)
     // empty queue, so somewhat counter-intuitively, the test with 2 threads
     // stresses the "handoff" feature more than tests with more threads.
 
-    printf("\n==== BENCHMARK 2 ====\nContended tests using increment_thread:\n");
-    auto lff = increment_thread<mutex>;
     int n = 1000000;
-    test<mutex>(2, n, true, lff);
-    test<mutex>((int)sched::cpus.size(), n, true, lff);
-    test<mutex>(20, n, false, lff);
+    if (run_contended || run_all) {
+        printf("\n==== BENCHMARK 2 ====\nContended tests using increment_thread:\n");
+        auto lff = increment_thread<mutex>;
+        test<mutex>(2, n, true, lff);
+        test<mutex>((int)sched::cpus.size(), n, true, lff);
+        test<mutex>(20, n, false, lff);
 
-    auto spf = increment_thread<spinlock>;
-    test<spinlock>(2, n, true, spf);
-    test<spinlock>((int)sched::cpus.size(), n, true, spf);
-    test<spinlock>(20, n, false, spf);
+        auto spf = increment_thread<spinlock>;
+        test<spinlock>(2, n, true, spf);
+        test<spinlock>((int)sched::cpus.size(), n, true, spf);
+        test<spinlock>(20, n, false, spf);
 
-    auto rwf = loop_thread<rwlock_read_lock>;
-    test<rwlock_read_lock>(2, n, true, rwf);
-    test<rwlock_read_lock>((int)sched::cpus.size(), n, true, rwf);
-    test<rwlock_read_lock>(20, n, false, rwf);
+        auto wrwf = increment_thread<rwlock_write_lock>;
+        test<rwlock_write_lock>(2, n, true, wrwf);
+        test<rwlock_write_lock>((int)sched::cpus.size(), n, true, wrwf);
+        test<rwlock_write_lock>(20, n, false, wrwf);
 
-    printf("\n==== MISC TESTS ====\n");
-    printf("\n\nTrylock tests using spinning_increment_thread:\n");
-    lff = spinning_increment_thread<mutex>;
-    test<mutex>(2, n, true, lff);
+        auto rwf = loop_thread<rwlock_read_lock>;
+        test<rwlock_read_lock>(2, n, true, rwf);
+        test<rwlock_read_lock>((int)sched::cpus.size(), n, true, rwf);
+        test<rwlock_read_lock>(20, n, false, rwf);
+    }
 
-    printf("\n\nMutual exclusion test using checker_thread:\n");
-    lff = checker_thread<mutex>;
-    n = 100000;
-    test<mutex>(2, n, true, lff);
-    test<mutex>((int)sched::cpus.size(), n, true, lff);
-    test<mutex>(20, n, false, lff);
+    if (run_misc || run_all) {
+        printf("\n==== MISC TESTS ====\n");
+        printf("\n\nTrylock tests using spinning_increment_thread:\n");
+        auto lff = spinning_increment_thread<mutex>;
+        test<mutex>(2, n, true, lff);
+
+        printf("\n\nMutual exclusion test using checker_thread:\n");
+        n = 100000;
+        lff = checker_thread<mutex>;
+        test<mutex>(2, n, true, lff);
+        test<mutex>((int)sched::cpus.size(), n, true, lff);
+        test<mutex>(20, n, false, lff);
+
+        printf("\n\nMutual exclusion test using checker_thread with rwlock_write_lock:\n");
+        auto wrwlff = checker_thread<rwlock_write_lock>;
+        test<rwlock_write_lock>(2, n, true, wrwlff);
+        test<rwlock_write_lock>((int)sched::cpus.size(), n, true, wrwlff);
+        test<rwlock_write_lock>(20, n, false, wrwlff);
+    }
 
     // Test that SCOPE_LOCK compiles for two different mutexes in the same
     // scope. We used to have a bug in this ;-)
