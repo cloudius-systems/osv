@@ -87,6 +87,7 @@ public:
     void unlock();
 
     bool owned() const;
+    sched::thread *get_owner();
     // getdepth() should only be used by the thread holding the lock
     inline unsigned int getdepth() const { return depth; }
 
