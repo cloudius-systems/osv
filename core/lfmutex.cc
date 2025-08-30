@@ -270,6 +270,10 @@ bool mutex::owned() const
     return owner.load(std::memory_order_relaxed) == sched::thread::current();
 }
 
+sched::thread *mutex::get_owner()
+{
+    return owner.load(std::memory_order_relaxed);
+}
 }
 
 // For use in C, which can't access namespaces or methods. Note that for

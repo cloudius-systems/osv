@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013 Cloudius Systems, Ltd.
+ * Copyright (C) 2025 Waldemar Kozaczuk
  *
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
@@ -9,13 +10,25 @@
 #define __OSV_RWLOCK_H__
 
 #include <osv/mutex.h>
-#include <osv/condvar.h>
 #include <sys/cdefs.h>
 #include <osv/waitqueue.hh>
 
 #define RWLOCK_INITIALIZER {}
 
+#define LOCKFREE_QUEUE_MPSC_ALIGN void*
+#define LOCKFREE_QUEUE_MPSC_SIZE  16
+
 #ifdef __cplusplus
+#include <lockfree/queue-mpsc.hh>
+
+namespace sched {
+    class thread;
+}
+
+static_assert(sizeof(lockfree::queue_mpsc<lockfree::linked_item<sched::thread*>>) == LOCKFREE_QUEUE_MPSC_SIZE,
+         "LOCKFREE_QUEUE_MPSC_SIZE should match size of lockfree::queue_mpsc");
+static_assert(alignof(lockfree::queue_mpsc<lockfree::linked_item<sched::thread*>>) == alignof(LOCKFREE_QUEUE_MPSC_ALIGN),
+         "LOCKFREE_QUEUE_MPSC_ALIGN should match alignment of lockfree::queue_mpsc");
 
 class rwlock;
 
@@ -82,26 +95,30 @@ public:
     bool has_readers();
 
 private:
-
-    void writer_wait_lockable();
-    void reader_wait_lockable();
-
-    bool read_lockable();
-    bool write_lockable();
-
     friend class rwlock_for_read;
     friend class rwlock_for_write;
 
+    void wake_pending_readers(unsigned pending_readers);
+
+    //TODO: Consider replacing with lockfree::unordered_queue_mpsc which is
+    //supposedly faster but uses more memory (has to be CACHELINE_ALIGNED)
+    lockfree::queue_mpsc<lockfree::linked_item<sched::thread*>> _read_waiters;
+#else
+    //For C
+    union {
+        char forsize[LOCKFREE_QUEUE_MPSC_SIZE];
+        LOCKFREE_QUEUE_MPSC_ALIGN foralignment;
+    };
 #endif // __cplusplus
 
-    mutex_t _mtx;
-    unsigned _readers;
-    waitqueue _read_waiters;
-    waitqueue _write_waiters;
-
-    void* _wowner;
-    unsigned _wrecurse;
-
+    mutex_t _wmtx;
+#ifdef __cplusplus
+    std::atomic<unsigned> _readers; //TODO: Consider expanding to a 64-bit long type to increase maximum number of owning readers and pending readers
+    std::atomic<bool> _writer_wait;
+#else
+    unsigned _readers_for_size;
+    bool _writer_wait_for_size;
+#endif
 };
 
 typedef struct rwlock rwlock_t;

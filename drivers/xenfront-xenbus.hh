@@ -11,6 +11,7 @@
 #include "drivers/xenfront.hh"
 #include "drivers/device.hh"
 #include <osv/device.h>
+#include <osv/condvar.h>
 #include <bsd/porting/bus.h>
 
 namespace xenfront {
