@@ -52,6 +52,8 @@ static bool preempts_equalized()
     sched::thread::sleep(runtime);
     stop_threads = true;
 
+    // race: threads can, in theory, accumulate additional runtime here.
+
     std::vector<long> num_preempts(num_threads);
     for (int i = 0; i < num_threads; i++) {
         num_preempts[i] = threads[i]->stat_preemptions.get();
