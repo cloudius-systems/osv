@@ -1,9 +1,9 @@
 #include <atomic>
 #include <string>
 #include <iostream>
-#include <osv/sched.hh>
 
-#define TIME_SLICE 100000000
+#include <osv/elf.hh>
+#include <osv/sched.hh>
 
 static std::string name = "tst-thr-wrk";
 static int tests = 0, fails = 0;
@@ -26,11 +26,12 @@ static int fac(int n)
     }
 }
 
-bool runtime_equalized()
+static bool preempts_equalized()
 {
+    constexpr int slice = 250;
     constexpr int num_threads = 5;
-    constexpr int switches = 3;
-    static std::atomic<bool> stop_threads;
+    constexpr int preempts = 20;
+    std::atomic<bool> stop_threads(false);
     sched::thread *threads[num_threads];
 
     sched::cpu *c = sched::cpu::current();
@@ -43,23 +44,30 @@ bool runtime_equalized()
 
         threads[i]->pin(c);
         threads[i]->set_realtime_priority(1);
-        threads[i]->set_realtime_time_slice(std::chrono::nanoseconds(TIME_SLICE));
+        threads[i]->set_realtime_time_slice(std::chrono::milliseconds(slice));
         threads[i]->start();
     }
 
-    auto runtime = std::chrono::nanoseconds(TIME_SLICE * num_threads * switches);
+    auto runtime = std::chrono::milliseconds((slice * num_threads) * preempts);
     sched::thread::sleep(runtime);
     stop_threads = true;
 
-    bool ok = true;
-    long prev_switches = -1;
+    std::vector<long> num_preempts(num_threads);
     for (int i = 0; i < num_threads; i++) {
-        long switches = threads[i]->stat_switches.get();
-        if (prev_switches != -1 && prev_switches != switches) {
+        num_preempts[i] = threads[i]->stat_preemptions.get();
+    }
+
+    bool ok = true;
+
+    // Fuzzy comparison with `num_preempts` which allows for some
+    // divergence from the expected amount of preempts to account
+    // for scheduler overhead.
+    constexpr int slack = preempts * 0.10; // 10% slack
+    for (auto n : num_preempts) {
+        if (n != preempts && !(n == preempts-slack || n == preempts+slack)) {
             ok = false;
             break;
         }
-        prev_switches = switches;
     }
 
     for (int i = 0; i < num_threads; i++) {
@@ -69,12 +77,23 @@ bool runtime_equalized()
     return ok;
 }
 
-bool priority_precedence()
+static bool priority_precedence()
 {
-    static std::atomic<bool> high_prio_stop;
+    constexpr int slice = 100000000;
+
+    std::atomic<bool> high_prio_stop(false);
+    std::atomic<bool> high_prio_yielded(false);
+    std::atomic<bool> low_prio_enqueued(false);
+
+    sched::thread *main_thread = sched::thread::current();
     sched::thread *high_prio = sched::thread::make([&]{
         while (!high_prio_stop.load()) {
             fac(10);
+
+            if (low_prio_enqueued && !high_prio_yielded) {
+                sched::thread::yield();
+                main_thread->wake_with([&] { high_prio_yielded.store(true); });
+            }
         }
     });
 
@@ -89,17 +108,27 @@ bool priority_precedence()
     high_prio->pin(c);
     low_prio->pin(c);
 
+    // If these are commented, the test will realiably fail.
     high_prio->set_realtime_priority(2);
     low_prio->set_realtime_priority(1);
 
     // The higher priority thread has a time slice, but since there is no other thread
     // with the same priority, it should monopolize the CPU and lower_prio shouldn't run.
-    high_prio->set_realtime_time_slice(sched::thread_realtime::duration(TIME_SLICE));
+    high_prio->set_realtime_time_slice(sched::thread_realtime::duration(slice));
 
     high_prio->start();
     low_prio->start();
 
-    auto runtime = std::chrono::nanoseconds(TIME_SLICE * 3);
+    // Ensure that the high priority thread yields once while the low priority thread
+    // is also in the runqueue. Without real-time scheduling the low priority thread
+    // should then get the CPU.
+    while (low_prio->get_status() != sched::thread::status::queued) {
+        // busy wait until low_prio is enqueued.
+    }
+    low_prio_enqueued.store(true);
+    sched::thread::wait_until([&] { return high_prio_yielded.load(); });
+
+    auto runtime = std::chrono::nanoseconds(slice * 3);
     sched::thread::sleep(runtime);
 
     // Since both threads are pinned to the CPU and the higher priority
@@ -122,7 +151,11 @@ int main(int ac, char** av)
     sched::thread *cur = sched::thread::current();
     cur->set_realtime_priority(10);
 
-    report(runtime_equalized(), "runtime_equalized");
     report(priority_precedence(), "priority_precedence");
+    report(preempts_equalized(), "preempts_equalized");
     std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";
 }
+
+// Because we're using wake_with() and wait_until(), this executable must not
+// cause sleepable lazy symbol resolutions or on-demand paging:
+OSV_ELF_MLOCK_OBJECT();

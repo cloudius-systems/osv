@@ -359,6 +359,12 @@ public:
     }
 
     bool has_slice() const {
+        // If the priority is 0 we don't schedule the thread according
+        // to SCHED_RR and therefore also don't respect the time slice.
+        if (_priority <= 0) {
+            return false;
+        }
+
         return _time_slice != duration::zero();
     }
 
