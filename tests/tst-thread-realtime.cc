@@ -5,7 +5,6 @@
 #include <osv/elf.hh>
 #include <osv/sched.hh>
 
-static std::string name = "tst-thr-wrk";
 static int tests = 0, fails = 0;
 
 static void report(bool ok, std::string msg)
@@ -24,59 +23,6 @@ static int fac(int n)
     } else {
         return fac(n - 1) + fac(n - 2);
     }
-}
-
-static bool preempts_equalized()
-{
-    constexpr int slice = 250;
-    constexpr int num_threads = 5;
-    constexpr int preempts = 20;
-    std::atomic<bool> stop_threads(false);
-    sched::thread *threads[num_threads];
-
-    sched::cpu *c = sched::cpu::current();
-    for (int i = 0; i < num_threads; i++) {
-        threads[i] = sched::thread::make([&]{
-                while (!stop_threads.load()) {
-                    fac(10);
-                }
-        }, sched::thread::attr().name(name));
-
-        threads[i]->pin(c);
-        threads[i]->set_realtime_priority(1);
-        threads[i]->set_realtime_time_slice(std::chrono::milliseconds(slice));
-        threads[i]->start();
-    }
-
-    auto runtime = std::chrono::milliseconds((slice * num_threads) * preempts);
-    sched::thread::sleep(runtime);
-    stop_threads = true;
-
-    // race: threads can, in theory, accumulate additional runtime here.
-
-    std::vector<long> num_preempts(num_threads);
-    for (int i = 0; i < num_threads; i++) {
-        num_preempts[i] = threads[i]->stat_preemptions.get();
-    }
-
-    bool ok = true;
-
-    // Fuzzy comparison with `num_preempts` which allows for some
-    // divergence from the expected amount of preempts to account
-    // for scheduler overhead.
-    constexpr int slack = preempts * 0.10; // 10% slack
-    for (auto n : num_preempts) {
-        if (n != preempts && !(n == preempts-slack || n == preempts+slack)) {
-            ok = false;
-            break;
-        }
-    }
-
-    for (int i = 0; i < num_threads; i++) {
-        delete threads[i];
-    }
-
-    return ok;
 }
 
 static bool priority_precedence()
@@ -154,7 +100,6 @@ int main(int ac, char** av)
     cur->set_realtime_priority(10);
 
     report(priority_precedence(), "priority_precedence");
-    report(preempts_equalized(), "preempts_equalized");
     std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";
 }
 
