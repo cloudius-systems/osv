@@ -21,9 +21,9 @@
 #include <boost/asio.hpp>
 
 #if CONF_logger_debug
-    #define dbg_d(tag, ...) printf(__VA_ARGS__)
+    #define dbg_d(...) printf(__VA_ARGS__)
 #else
-    #define dbg_d(tag, ...) do{}while(0)
+    #define dbg_d(...) do{}while(0)
 #endif
 
 #define LISTEN_PORT (5555)
