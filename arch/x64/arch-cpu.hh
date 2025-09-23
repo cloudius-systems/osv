@@ -15,6 +15,7 @@
 #include <xmmintrin.h>
 #include "syscall.hh"
 #include "msr.hh"
+#include <osv/kernel_config_interrupt_stack_size.h>
 
 struct init_stack {
     char stack[4096] __attribute__((aligned(16)));
@@ -73,11 +74,7 @@ struct arch_cpu {
 };
 
 struct arch_thread {
-#ifndef NDEBUG
-    char interrupt_stack[4096*2] __attribute__((aligned(16)));
-#else
-    char interrupt_stack[4096] __attribute__((aligned(16)));
-#endif
+    char interrupt_stack[CONF_interrupt_stack_size] __attribute__((aligned(16)));
     char exception_stack[4096*4] __attribute__((aligned(16)));
 };
 
