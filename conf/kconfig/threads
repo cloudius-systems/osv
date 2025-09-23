@@ -26,3 +26,15 @@ config threads_default_exception_stack_size
   hex
   default 0x10000 #Minimum 0x9000 when clone* syscall enabled
 endif
+
+if $(arch) = x64
+config interrupt_stack_size
+  prompt "Interrupt stack size"
+  hex
+  default $(shell,if [ $mode = "debug" ]; then echo 0x2000 ; else echo 0x1000; fi)
+
+config syscall_stack_size
+  prompt "Syscall stack size"
+  hex
+  default $(shell,if [ $mode = "debug" ]; then echo 0x2000 ; else echo 0x800; fi)
+endif
