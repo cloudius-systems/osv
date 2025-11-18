@@ -50,6 +50,7 @@
 #include <iostream>
 #include <vector>
 #include <mutex>
+#include <pthread.h>
 
 void loop(int iterations)
 {
@@ -61,12 +62,12 @@ void loop(int iterations)
 
 int main(int argc, char** argv) {
     if (argc <= 2) {
-        std::cerr << "Usage: " << argv[0] << " nthreads worklen\n";
+        std::cerr << "Usage: " << argv[0] << " nthreads worklen <pin>\n";
         return 1;
     }
     int nthreads = atoi(argv[1]);
     if (nthreads <= 0) {
-        std::cerr << "Usage: " << argv[0] << " nthreads worklen\n";
+        std::cerr << "Usage: " << argv[0] << " nthreads worklen <pin>\n";
         return 2;
     }
     // "worklen" is the amount of work to do in each loop iteration, outside
@@ -76,11 +77,13 @@ int main(int argc, char** argv) {
     // parallel.
     int worklen = atoi(argv[2]);
     if (worklen < 0) {
-        std::cerr << "Usage: " << argv[0] << " nthreads worklen\n";
+        std::cerr << "Usage: " << argv[0] << " nthreads worklen <pin>\n";
         return 3;
     }
 
-    std::cerr << "Running " << nthreads << " threads on " <<
+    bool pin = argc >= 4 ? atoi(argv[3]) : false;
+
+    std::cerr << "Running " << nthreads << (pin ? " pinned" : "") << " threads on " <<
             std::thread::hardware_concurrency() << " cores. Worklen = " <<
             worklen << "\n";
 
@@ -98,7 +101,14 @@ int main(int argc, char** argv) {
 
     std::vector<std::thread> threads;
     for (int i = 0; i < nthreads; i++) {
-            threads.push_back(std::thread([&]() {
+            threads.push_back(std::thread([&mut,&counter,&done,&pin,&worklen,i]() {
+                if (pin) {
+                    std::cout << "Pinning " << i << " thread to CPU " << (i % std::thread::hardware_concurrency()) << "\n";
+                    cpu_set_t cs;
+                    CPU_ZERO(&cs);
+                    CPU_SET(i % std::thread::hardware_concurrency(), &cs);
+                    pthread_setaffinity_np(pthread_self(), sizeof(cs), &cs);
+                };
                 while (!done) {
                     mut.lock();
                     counter++;
