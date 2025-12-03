@@ -80,7 +80,7 @@ elf::tls_data tls_data;
 
 boot_time_chart boot_time;
 
-void setup_tls(elf::init_table inittab)
+static void setup_tls(elf::init_table& inittab)
 {
     tls_data = inittab.tls;
     sched::init_tls(tls_data);
