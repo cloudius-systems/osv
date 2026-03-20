@@ -90,6 +90,29 @@ def set_imgargs(options):
     if options.bootchart:
         execute = '--bootchart ' + execute
 
+    # Crucible options must come before the application path in the kernel cmdline
+    crucible_opts = ""
+    if options.crucible:
+        crucible_opts += ' --crucible=%s' % options.crucible
+    if options.crucible_uuid:
+        crucible_opts += ' --crucible-uuid=%s' % options.crucible_uuid
+    if options.crucible_block_size != 512:
+        crucible_opts += ' --crucible-block-size=%d' % options.crucible_block_size
+    if options.crucible_read_only:
+        crucible_opts += ' --crucible-read-only'
+
+    # Multi-volume Crucible support (crucible0-7)
+    for i in range(8):
+        targets_attr = 'crucible%d' % i
+        uuid_attr = 'crucible%d_uuid' % i
+        if hasattr(options, targets_attr) and getattr(options, targets_attr):
+            crucible_opts += ' --crucible%d=%s' % (i, getattr(options, targets_attr))
+        if hasattr(options, uuid_attr) and getattr(options, uuid_attr):
+            crucible_opts += ' --crucible%d-uuid=%s' % (i, getattr(options, uuid_attr))
+
+    if crucible_opts:
+        execute = crucible_opts.lstrip() + ' ' + execute
+
     options.osv_cmdline = execute
     if options.kernel or options.hypervisor == 'qemu_microvm' or options.arch == 'aarch64':
         return
@@ -654,8 +677,23 @@ if __name__ == "__main__":
                         help="passthrough a pci device in given slot if bound to vfio driver")
     parser.add_argument("--gic-version", action="store", default="max",
                         help="specify GIC version (only applicable on aarch64)")
+    parser.add_argument("--crucible", "--crucible-targets", action="store",
+                        help="Crucible downstairs servers (host:port,host:port,host:port)")
+    parser.add_argument("--crucible-uuid", action="store",
+                        help="Crucible region UUID")
+    parser.add_argument("--crucible-block-size", action="store", type=int, default=512,
+                        help="Crucible block size (default: 512)")
+    parser.add_argument("--crucible-read-only", action="store_true",
+                        help="Mount Crucible device as read-only")
     parser.add_argument("--virtio-blk-queues", action="store", type=int, default=1,
                         help="Number of queues for VirtIO-BLK device (default: 1)")
+
+    # Multi-volume Crucible support (crucible0-7)
+    for i in range(8):
+        parser.add_argument("--crucible%d" % i, action="store",
+                            help="Crucible device %d downstairs servers" % i)
+        parser.add_argument("--crucible%d-uuid" % i, action="store", dest="crucible%d_uuid" % i,
+                            help="Crucible device %d region UUID" % i)
 
     cmdargs = parser.parse_args()
 

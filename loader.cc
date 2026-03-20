@@ -58,6 +58,7 @@
 #include "drivers/random.hh"
 #include "drivers/console.hh"
 #include "drivers/null.hh"
+#include "drivers/crucible-blk.hh"
 
 #include "libc/network/__dns.hh"
 #include <processor.hh>
@@ -144,7 +145,13 @@ int main(int loader_argc, char **loader_argv)
 
 static bool opt_preload_zfs_library = false;
 static bool opt_extra_zfs_pools = false;
+static bool opt_zfs_auto_upgrade_internal = true;  // Auto-upgrade ZFS pools by default
 static bool opt_disable_rofs_cache = false;
+
+#if CONF_libzfs
+// C-compatible export for ZFS auto-upgrade (defined in zfs_vfsops.c)
+extern "C" bool opt_zfs_auto_upgrade;
+#endif
 #if CONF_memory_tracker
 static bool opt_leak = false;
 #endif
@@ -175,6 +182,18 @@ std::vector<mntent> opt_mount_fs;
 bool opt_maxnic = false;
 int maxnic;
 bool opt_pci_disabled = false;
+
+#if CONF_drivers_crucible
+static std::string opt_crucible_targets;
+static std::string opt_crucible_uuid;
+static uint32_t opt_crucible_block_size = 512;
+static bool opt_crucible_read_only = false;
+
+// Multi-volume support (up to 8 devices)
+#define MAX_CRUCIBLE_DEVICES 8
+static std::string opt_crucible_targets_indexed[MAX_CRUCIBLE_DEVICES];
+static std::string opt_crucible_uuid_indexed[MAX_CRUCIBLE_DEVICES];
+#endif
 
 #if CONF_tracepoints_sampler
 static int sampler_frequency;
@@ -225,8 +244,32 @@ static void usage()
         "  --disable_rofs_cache  disable ROFS memory cache\n"
         "  --nopci               disable PCI enumeration\n"
         "  --extra-zfs-pools     import extra ZFS pools\n"
+        "  --no-zfs-auto-upgrade disable automatic ZFS pool upgrade on boot\n"
         "  --mount-fs=arg        mount extra filesystem, format:<fs_type,url,path>\n"
-        "  --preload-zfs-library preload ZFS library from /usr/lib/fs\n\n");
+        "  --preload-zfs-library preload ZFS library from /usr/lib/fs\n"
+#if CONF_drivers_crucible
+        "  --crucible=arg        Crucible downstairs servers (host1:port1,host2:port2,host3:port3)\n"
+        "  --crucible-uuid=arg   Crucible region UUID\n"
+        "  --crucible-block-size=arg Block size in bytes (default: 512)\n"
+        "  --crucible-read-only  Mount Crucible volume read-only\n"
+        "  --crucible0=arg       Crucible device 0 downstairs servers\n"
+        "  --crucible0-uuid=arg  Crucible device 0 region UUID\n"
+        "  --crucible1=arg       Crucible device 1 downstairs servers\n"
+        "  --crucible1-uuid=arg  Crucible device 1 region UUID\n"
+        "  --crucible2=arg       Crucible device 2 downstairs servers\n"
+        "  --crucible2-uuid=arg  Crucible device 2 region UUID\n"
+        "  --crucible3=arg       Crucible device 3 downstairs servers\n"
+        "  --crucible3-uuid=arg  Crucible device 3 region UUID\n"
+        "  --crucible4=arg       Crucible device 4 downstairs servers\n"
+        "  --crucible4-uuid=arg  Crucible device 4 region UUID\n"
+        "  --crucible5=arg       Crucible device 5 downstairs servers\n"
+        "  --crucible5-uuid=arg  Crucible device 5 region UUID\n"
+        "  --crucible6=arg       Crucible device 6 downstairs servers\n"
+        "  --crucible6-uuid=arg  Crucible device 6 region UUID\n"
+        "  --crucible7=arg       Crucible device 7 downstairs servers\n"
+        "  --crucible7-uuid=arg  Crucible device 7 region UUID\n"
+#endif
+        "\n");
 }
 
 static void handle_parse_error(const std::string &message)
@@ -266,6 +309,12 @@ static void parse_options(int loader_argc, char** loader_argv)
     if (extract_option_flag(options_values, "extra-zfs-pools")) {
         opt_extra_zfs_pools = true;
     }
+
+    // Note: negation pattern - default is true, flag disables it
+    opt_zfs_auto_upgrade_internal = !extract_option_flag(options_values, "no-zfs-auto-upgrade");
+#if CONF_libzfs
+    opt_zfs_auto_upgrade = opt_zfs_auto_upgrade_internal;
+#endif
 
     if (extract_option_flag(options_values, "noshutdown")) {
         opt_noshutdown = true;
@@ -405,6 +454,38 @@ static void parse_options(int loader_argc, char** loader_argv)
     if (extract_option_flag(options_values, "nopci")) {
         opt_pci_disabled = true;
     }
+
+#if CONF_drivers_crucible
+    if (options::option_value_exists(options_values, "crucible")) {
+        opt_crucible_targets = options::extract_option_value(options_values, "crucible");
+    }
+
+    if (options::option_value_exists(options_values, "crucible-uuid")) {
+        opt_crucible_uuid = options::extract_option_value(options_values, "crucible-uuid");
+    }
+
+    if (options::option_value_exists(options_values, "crucible-block-size")) {
+        opt_crucible_block_size = options::extract_option_int_value(options_values, "crucible-block-size", handle_parse_error);
+    }
+
+    if (options::extract_option_flag(options_values, "crucible-read-only", handle_parse_error)) {
+        opt_crucible_read_only = true;
+    }
+
+    // Parse indexed Crucible volumes (crucible0, crucible1, ...)
+    for (int i = 0; i < MAX_CRUCIBLE_DEVICES; i++) {
+        std::string targets_key = "crucible" + std::to_string(i);
+        std::string uuid_key = "crucible" + std::to_string(i) + "-uuid";
+
+        if (options::option_value_exists(options_values, targets_key)) {
+            opt_crucible_targets_indexed[i] = options::extract_option_value(options_values, targets_key);
+        }
+
+        if (options::option_value_exists(options_values, uuid_key)) {
+            opt_crucible_uuid_indexed[i] = options::extract_option_value(options_values, uuid_key);
+        }
+    }
+#endif
 
     if (!options_values.empty()) {
         for (auto other_option : options_values) {
@@ -549,6 +630,7 @@ void* do_main_thread(void *_main_args)
     if (opt_random) {
         randomdev::randomdev_init();
     }
+
     boot_time.event("drivers loaded");
 
     if (opt_mount) {
@@ -666,6 +748,31 @@ void* do_main_thread(void *_main_args)
     });
     if (nr_ips == 1) {
        setenv("OSV_IP", if_ip.c_str(), 1);
+    }
+#endif
+
+    // Initialize Crucible after network is configured
+#if CONF_drivers_crucible
+    // Legacy single volume support (--crucible)
+    if (!opt_crucible_targets.empty()) {
+        int ret = crucible::crucible_init(opt_crucible_targets, opt_crucible_uuid,
+                                          opt_crucible_block_size, opt_crucible_read_only, 0);
+        if (ret != 0) {
+            kprintf("loader: Crucible initialization returned error %d (boot continues)\n", ret);
+        }
+    }
+
+    // Multi-volume support (--crucible0, --crucible1, ...)
+    for (int i = 0; i < MAX_CRUCIBLE_DEVICES; i++) {
+        if (!opt_crucible_targets_indexed[i].empty()) {
+            int ret = crucible::crucible_init(opt_crucible_targets_indexed[i],
+                                              opt_crucible_uuid_indexed[i],
+                                              opt_crucible_block_size, opt_crucible_read_only, i);
+            if (ret != 0) {
+                kprintf("loader: Crucible device %d initialization returned error %d (boot continues)\n",
+                        i, ret);
+            }
+        }
     }
 #endif
 

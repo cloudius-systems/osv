@@ -104,12 +104,25 @@ physio(struct device *dev, struct uio *uio, int ioflags)
 		return EINVAL;
 	if (uio->uio_resid == 0)
 		return 0;
-    
+
+	/*
+	 * Issue ONE bio per iovec.  Earlier this used uio_resid for
+	 * bio_bcount (the total uio length) which produced garbage data
+	 * when the uio carried more than one iovec — the bio described
+	 * uio_resid bytes of memory starting at iov[0].iov_base, but
+	 * only iov[0].iov_len bytes are actually valid there.  For
+	 * Crucible volumes (which validate per-block xxhash64 server
+	 * side), that mismatch surfaces as "Failed write hash
+	 * validation" the moment ZFS submits a multi-iov write.
+	 */
 	while (uio->uio_resid > 0) {
 		struct iovec *iov = uio->uio_iov;
 
-		if (!iov->iov_len)
+		if (!iov->iov_len) {
+			uio->uio_iov++;
+			uio->uio_iovcnt--;
 			continue;
+		}
 
 		bio = alloc_bio();
 		if (!bio)
@@ -123,7 +136,7 @@ physio(struct device *dev, struct uio *uio, int ioflags)
 		bio->bio_dev = dev;
 		bio->bio_data = iov->iov_base;
 		bio->bio_offset = uio->uio_offset;
-		bio->bio_bcount = uio->uio_resid;
+		bio->bio_bcount = iov->iov_len;
 
 		dev->driver->devops->strategy(bio);
 
@@ -132,10 +145,10 @@ physio(struct device *dev, struct uio *uio, int ioflags)
 		if (ret)
 			return ret;
 
-	        uio->uio_iov++;
-        	uio->uio_iovcnt--;
-        	uio->uio_resid -= iov->iov_len;
-        	uio->uio_offset += iov->iov_len;
+		uio->uio_iov++;
+		uio->uio_iovcnt--;
+		uio->uio_resid -= iov->iov_len;
+		uio->uio_offset += iov->iov_len;
 	}
 
 	return 0;

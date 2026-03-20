@@ -14,6 +14,9 @@
 /tests/tst-huge.so: tests/tst-huge.so
 /tests/tst-io_uring.so: tests/tst-io_uring.so
 /tests/tst-zfs-multirec.so: tests/tst-zfs-multirec.so
+/tests/tst-crucible-blk.so: tests/tst-crucible-blk.so
+/tests/tst-crucible-zfs.so: tests/tst-crucible-zfs.so
+/tests/tst-crucible-bench.so: tests/tst-crucible-bench.so
 /tests/tst-shm-consistency.so: tests/tst-shm-consistency.so
 /tests/tst-zfs-db-sim.so: tests/tst-zfs-db-sim.so
 /tests/tst-fs-bench.so: tests/tst-fs-bench.so
