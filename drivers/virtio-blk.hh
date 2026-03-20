@@ -10,6 +10,7 @@
 #include "drivers/virtio.hh"
 #include "drivers/virtio-device.hh"
 #include <osv/bio.h>
+#include <vector>
 
 namespace virtio {
 
@@ -28,6 +29,8 @@ public:
         VIRTIO_BLK_F_WCE        = 9,  /* Writeback mode enabled after reset */
         VIRTIO_BLK_F_TOPOLOGY   = 10, /* Topology information is available */
         VIRTIO_BLK_F_CONFIG_WCE = 11, /* Writeback mode available in config */
+        VIRTIO_BLK_F_DISCARD    = 13, /* DISCARD is supported */
+        VIRTIO_BLK_F_MQ         = 12, /* Multi-queue support */
     };
 
     enum {
@@ -54,6 +57,8 @@ public:
         VIRTIO_BLK_T_FLUSH = 4,
         /* Get device ID command */
         VIRTIO_BLK_T_GET_ID = 8,
+        /* Discard command */
+        VIRTIO_BLK_T_DISCARD = 11,
         /* Barrier before this op. */
         VIRTIO_BLK_T_BARRIER = 0x80000000,
     };
@@ -96,6 +101,13 @@ public:
 
             /* writeback mode (if VIRTIO_BLK_F_CONFIG_WCE) */
             u8 wce;
+            u8 unused;
+            /* number of queues (if VIRTIO_BLK_F_MQ) */
+            u16 num_queues;
+            /* discard fields (if VIRTIO_BLK_F_DISCARD) */
+            u32 max_discard_sectors;
+            u32 max_discard_seg;
+            u32 discard_sector_alignment;
     } __attribute__((packed));
 
     /* This is the first element of the read scatter-gather list. */
@@ -106,6 +118,15 @@ public:
             u32 ioprio;
             /* Sector (ie. 512 byte offset) */
             u64 sector;
+    };
+
+    struct blk_discard_write_zeroes {
+            /* discard/write zeroes start sector */
+            u64 sector;
+            /* number of discard/write zeroes sectors */
+            u32 num_sectors;
+            /* flags for this range */
+            u32 flags;
     };
 
     struct virtio_scsi_inhdr {
@@ -129,7 +150,7 @@ public:
 
     int make_request(struct bio*);
 
-    void req_done();
+    void req_done(int qid);
     int64_t size();
 
     void set_readonly() {_ro = true;}
@@ -137,7 +158,12 @@ public:
 
     bool ack_irq();
 
+    int get_num_queues() const { return _num_queues; }
+
     static hw_driver* probe(hw_device* dev);
+
+    /* Pull all completed requests off one virtqueue ring. */
+    static int drain_queue(vring* queue);
 private:
 
     struct blk_req {
@@ -147,6 +173,7 @@ private:
         blk_outhdr hdr;
         blk_res res;
         struct bio* bio;
+        blk_discard_write_zeroes discard_desc;
     };
 
     std::string _driver_name;
@@ -156,8 +183,12 @@ private:
     static int _instance;
     int _id;
     bool _ro;
-    // This mutex protects parallel make_request invocations
-    mutex _lock;
+    int _num_queues;
+    // Per-queue submission locks; sized to _num_queues in the constructor.
+    // Single-queue devices use _queue_locks[0].  When VIRTIO_BLK_F_MQ is
+    // active, make_request() selects the queue by CPU id so the queues act
+    // as independent submission channels with no cross-CPU lock contention.
+    std::vector<mutex> _queue_locks;
 };
 
 }

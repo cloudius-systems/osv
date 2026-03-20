@@ -889,6 +889,7 @@ drivers := $(bsd)
 drivers += core/mmu.o
 drivers += arch/$(arch)/early-console.o
 drivers += drivers/blk-common.o
+drivers += drivers/blk-mq.o
 drivers += drivers/console.o
 drivers += drivers/console-multiplexer.o
 drivers += drivers/console-driver.o
