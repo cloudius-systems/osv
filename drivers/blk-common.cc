@@ -42,6 +42,23 @@ blk_ioctl(struct device* dev, u_long io_cmd, void* buf)
                 dev->driver->devops->strategy(bio);
             }
             break;
+        case BLKDISCARD:
+            {
+                if (!buf) {
+                    return EINVAL;
+                }
+                u64* range = (u64*) buf;
+                auto* bio = alloc_bio();
+                bio->bio_dev = dev;
+                bio->bio_done = destroy_bio;
+                bio->bio_cmd = BIO_DISCARD;
+                bio->bio_offset = range[0];
+                bio->bio_bcount = range[1];
+
+                dev->driver->devops->strategy(bio);
+                bio_wait(bio);
+            }
+            break;
         default:
             printf("ioctl not defined; type:%#x nr:%d size:%d, dir:%d\n",_IOC_TYP(io_cmd),_IOC_NR(io_cmd),_IOC_SIZE(io_cmd),_IOC_DIR(io_cmd));
             return EINVAL;
