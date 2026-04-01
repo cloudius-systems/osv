@@ -99,15 +99,26 @@ int af_local::close()
 
 int socketpair_af_local(int type, int proto, int sv[2])
 {
-    assert(type == SOCK_STREAM);
+    int flags = type & (SOCK_NONBLOCK | SOCK_CLOEXEC);
+    int base_type = type & ~(SOCK_NONBLOCK | SOCK_CLOEXEC);
+    assert(base_type == SOCK_STREAM);
     assert(proto == 0);
     pipe_buffer_ref b1{new pipe_buffer};
     pipe_buffer_ref b2{new pipe_buffer};
     try {
         fileref f1 = make_file<af_local>(b1, b2);
         fileref f2 = make_file<af_local>(std::move(b2), std::move(b1));
+        if (flags & SOCK_NONBLOCK) {
+            FD_LOCK(f1.get());
+            f1->f_flags |= FNONBLOCK;
+            FD_UNLOCK(f1.get());
+            FD_LOCK(f2.get());
+            f2->f_flags |= FNONBLOCK;
+            FD_UNLOCK(f2.get());
+        }
         fdesc fd1(f1);
         fdesc fd2(f2);
+        // SOCK_CLOEXEC is a no-op in OSv (no fork/exec)
         // all went well, user owns descriptors now
         sv[0] = fd1.release();
         sv[1] = fd2.release();
