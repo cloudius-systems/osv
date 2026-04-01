@@ -458,9 +458,9 @@ kernel_base := 0x200000
 lzkernel_base := 0x100000
 kernel_vm_base := 0x40200000
 
-# the default of 64 bytes can be overridden by passing the app_local_exec_tls_size
+# the default of 512 bytes can be overridden by passing the app_local_exec_tls_size
 # environment variable to the make or scripts/build
-app_local_exec_tls_size := 0x40
+app_local_exec_tls_size := 0x200
 
 $(out)/arch/x64/boot16.o: $(out)/lzloader.elf
 $(out)/boot.bin: arch/x64/boot16.ld $(out)/arch/x64/boot16.o
@@ -528,7 +528,7 @@ endif # x64
 ifeq ($(arch),aarch64)
 
 kernel_vm_base := 0xfc0080000 #63GB
-app_local_exec_tls_size := 0x40
+app_local_exec_tls_size := 0x200
 
 include $(libfdt_base)/Makefile.libfdt
 libfdt-source := $(patsubst %.c, $(libfdt_base)/%.c, $(LIBFDT_SRCS))
