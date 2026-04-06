@@ -444,6 +444,7 @@ ifeq ($(arch),aarch64)
 # to the bootfs.manifest.skel atm to get it to work.
 #
 tools += tests/tst-hello.so
+tools += tests/tst-io_uring.so
 cmdline = --nomount tests/tst-hello.so
 endif
 
@@ -2087,6 +2088,7 @@ ifeq ($(conf_fs_sysfs),1)
 fs_objs += sysfs/sysfs_vnops.o
 endif
 fs_objs += zfs/zfs_null_vfsops.o
+fs_objs += io_uring.o
 
 objects += $(addprefix fs/, $(fs_objs))
 objects += $(addprefix libc/, $(libc))

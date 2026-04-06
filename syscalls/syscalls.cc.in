@@ -170,3 +170,6 @@
     SYSCALL2(getpriority, int, int);
     SYSCALL3(setpriority, int, int, int);
     SYSCALL4(ppoll, struct pollfd *, nfds_t, const struct timespec *, const sigset_t *);
+    SYSCALL2(sys_io_uring_setup, unsigned, struct io_uring_params *);
+    SYSCALL6(sys_io_uring_enter, int, unsigned, unsigned, unsigned, const void *, size_t);
+    SYSCALL4(sys_io_uring_register, int, unsigned, void *, unsigned);
