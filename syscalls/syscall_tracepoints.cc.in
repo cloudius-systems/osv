@@ -170,3 +170,6 @@ TRACEPOINT(trace_syscall_getrlimit, "%d <= %d %p", int, int, struct rlimit *);
 TRACEPOINT(trace_syscall_getpriority, "%d <= %d %d", int, int, int);
 TRACEPOINT(trace_syscall_setpriority, "%d <= %d %d %d", int, int, int, int);
 TRACEPOINT(trace_syscall_ppoll, "%d <= %p %ld %p %p", int, struct pollfd *, nfds_t, const struct timespec *, const sigset_t *);
+TRACEPOINT(trace_syscall_sys_io_uring_setup, "%d <= %u %p", int, unsigned, struct io_uring_params *);
+TRACEPOINT(trace_syscall_sys_io_uring_enter, "%d <= %d %u %u %u %p %lu", int, int, unsigned, unsigned, unsigned, const void *, size_t);
+TRACEPOINT(trace_syscall_sys_io_uring_register, "%d <= %d %u %p %u", int, int, unsigned, void *, unsigned);
