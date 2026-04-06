@@ -3,3 +3,9 @@
 /zfs.so: zfs.so
 /libzfs.so: libzfs.so
 /libuutil.so: libuutil.so
+/libtpool.so: libtpool.so
+/tests/tst-zfs-direct-io.so: tests/tst-zfs-direct-io.so
+/tests/tst-zfs-recordsize.so: tests/tst-zfs-recordsize.so
+/tests/tst-huge.so: tests/tst-huge.so
+/tests/tst-io_uring.so: tests/tst-io_uring.so
+/tests/tst-shm-consistency.so: tests/tst-shm-consistency.so
