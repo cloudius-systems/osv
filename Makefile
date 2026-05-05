@@ -303,7 +303,7 @@ post-includes-bsd += -isystem bsd/sys
 post-includes-bsd += -isystem bsd/
 post-includes-bsd += -isystem bsd/$(arch)
 
-$(out)/musl/%.o: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include
+$(out)/musl/%.o: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include -isystem musl/arch/$(musl_arch)
 
 ifneq ($(werror),0)
 	CFLAGS_WERROR = -Werror
@@ -1548,6 +1548,7 @@ libc += misc/lockf.o
 libc += misc/mntent.o
 libc_to_hide += misc/mntent.o
 musl += misc/nftw.o
+$(out)/musl/src/misc/nftw.o: CFLAGS += -Wno-maybe-uninitialized
 libc += misc/__longjmp_chk.o
 
 musl += signal/killpg.o
@@ -1685,7 +1686,6 @@ $(out)/musl/src/stdio/__stdio_seek.o: CFLAGS += --include libc/syscall_to_functi
 musl += stdio/__stdio_write.o
 $(out)/musl/src/stdio/__stdio_write.o: CFLAGS += --include libc/syscall_to_function.h
 libc += stdio/__stdout_write.o
-musl += stdio/__string_read.o
 musl += stdio/__toread.o
 musl += stdio/__towrite.o
 musl += stdio/__uflow.o
@@ -1769,11 +1769,11 @@ libc += stdio/stdout.o
 musl += stdio/swprintf.o
 musl += stdio/swscanf.o
 musl += stdio/tempnam.o
-$(out)/musl/src/stdio/tempnam.o: CFLAGS += --include libc/syscall_to_function.h
+$(out)/musl/src/stdio/tempnam.o: CFLAGS += --include libc/syscall_to_function.h -Wno-incompatible-pointer-types
 musl += stdio/tmpfile.o
 $(out)/musl/src/stdio/tmpfile.o: CFLAGS += --include libc/syscall_to_function.h
 musl += stdio/tmpnam.o
-$(out)/musl/src/stdio/tmpnam.o: CFLAGS += --include libc/syscall_to_function.h
+$(out)/musl/src/stdio/tmpnam.o: CFLAGS += --include libc/syscall_to_function.h -Wno-incompatible-pointer-types
 musl += stdio/ungetc.o
 musl += stdio/ungetwc.o
 musl += stdio/vasprintf.o
@@ -1789,6 +1789,7 @@ musl += stdio/vprintf.o
 musl += stdio/vscanf.o
 libc += stdio/vsnprintf.o
 musl += stdio/vsprintf.o
+libc += stdio/__string_read.o
 libc += stdio/vsscanf.o
 libc += stdio/vswprintf.o
 libc += stdio/vswscanf.o
@@ -1932,7 +1933,7 @@ musl += temp/mkostemp.o
 musl += temp/mkostemps.o
 
 musl += time/__map_file.o
-$(out)/musl/src/time/__map_file.o: CFLAGS += --include libc/syscall_to_function.h
+$(out)/musl/src/time/__map_file.o: CFLAGS += --include libc/syscall_to_function.h -Wno-incompatible-pointer-types
 musl += time/__month_to_secs.o
 musl += time/__secs_to_tm.o
 musl += time/__tm_to_secs.o

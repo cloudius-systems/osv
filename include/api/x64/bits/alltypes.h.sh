@@ -151,4 +151,7 @@ TYPEDEF int cpuwhich_t;
 #define _SSIZE_T_DECLARED
 #define _UID_T_DECLARED
 
+/* Architecture-specific limits expected by musl's <limits.h>. */
+#define __LONG_MAX  0x7fffffffffffffffL
+
 EOF
