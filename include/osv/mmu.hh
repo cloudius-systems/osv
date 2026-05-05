@@ -79,6 +79,7 @@ public:
     virtual int validate_perm(unsigned perm) { return 0; }
     virtual page_allocator* page_ops();
     void update_flags(unsigned flag);
+    void clear_flags(unsigned flag);
     bool has_flags(unsigned flag);
     template<typename T> ulong operate_range(T mapper, void *start, size_t size);
     template<typename T> ulong operate_range(T mapper);

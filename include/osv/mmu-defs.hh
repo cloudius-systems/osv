@@ -85,11 +85,13 @@ enum {
     mmap_jvm_balloon = 1ul << 6,
     mmap_file        = 1ul << 7,
     mmap_stack       = 1ul << 8,
+    mmap_huge        = 1ul << 9,    // MAP_HUGETLB: require huge pages, fail if unavailable
 };
 
 enum {
-    advise_dontneed = 1ul << 0,
+    advise_dontneed   = 1ul << 0,
     advise_nohugepage = 1ul << 1,
+    advise_hugepage   = 1ul << 2,   // MADV_HUGEPAGE: re-enable huge pages (clears mmap_small)
 };
 
 enum {
