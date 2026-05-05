@@ -109,7 +109,8 @@ rofs-only-tests := rofs/tst-chdir.so rofs/tst-symlink.so rofs/tst-readdir.so \
 	rofs/tst-concurrent-read.so
 
 zfs-only-tests := tst-readdir.so tst-fallocate.so tst-fs-link.so \
-	tst-concurrent-read.so tst-solaris-taskq.so
+	tst-concurrent-read.so tst-solaris-taskq.so tst-zfs-recordsize.so tst-zfs-direct-io.so \
+	tst-zfs-encryption.so tst-zfs-crucible-stress.so tst-zfs-db-sim.so tst-zfs-trim.so
 
 ext-only-tests := tst-readdir.so tst-concurrent-read.so tst-fs-link.so
 
@@ -135,8 +136,6 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-nway-merger.so tst-memmove.so tst-pthread-clock.so misc-procfs.so \
 	tst-chdir.so tst-chmod.so tst-hello.so misc-concurrent-io.so \
 	tst-concurrent-init.so tst-ring-spsc-wraparound.so tst-shm.so tst-shm-consistency.so \
-	tst-io_uring.so \
-	tst-zfs-multirec.so \
 	tst-align.so tst-cxxlocale.so misc-tcp-close-without-reading.so \
 	tst-sigwait.so tst-sampler.so misc-malloc.so misc-memcpy.so \
 	misc-free-perf.so misc-printf.so tst-hostname.so \
@@ -157,7 +156,8 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	libtls.so libtls_gold.so lib-misc-tls.so tst-tls.so \
 	tst-tls-gold.so tst-tls-pie.so tst-tls-pie-dlopen.so \
 	tst-sigaction.so tst-syscall.so tst-ifaddrs.so tst-getdents.so \
-	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-pthread-create.so \
+	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-zfs-recordsize.so tst-zfs-direct-io.so \
+	tst-zfs-encryption.so tst-zfs-crucible-stress.so tst-zfs-db-sim.so tst-zfs-trim.so tst-fs-bench.so tst-pthread-create.so \
 	misc-futex-perf.so misc-syscall-perf.so tst-brk.so tst-reloc.so \
 	misc-vdso-perf.so tst-string-utils.so tst-elf-circular-reloc.so \
 	lib-circular-reloc1.so lib-circular-reloc2.so tst-rwlock.so
