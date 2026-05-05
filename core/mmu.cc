@@ -1152,6 +1152,21 @@ private:
     }
 };
 
+// Page provider for MAP_HUGETLB strict mode: refuses 4KB small-page fallback.
+// When alloc_huge_page() fails, the level-1 map() throws (existing behaviour).
+// The page walker then falls to level 0; our override returns false so
+// populate_vma() does not account those bytes, letting map_anon() detect
+// mapped < size and return ENOMEM to the caller.
+class huge_only_page_provider : public initialized_anonymous_page_provider {
+public:
+    virtual bool map(uintptr_t offset, hw_ptep<0> ptep,
+                     pt_element<0> pte, bool write) override {
+        return false;   // reject small-page (4KB) fallback
+    }
+};
+static huge_only_page_provider page_allocator_huge_only;
+static page_allocator *page_allocator_huge_onlyp = &page_allocator_huge_only;
+
 class map_file_page_read : public uninitialized_anonymous_page_provider {
 private:
     file *_file;
@@ -1281,6 +1296,23 @@ static void nohugepage(void* addr, size_t length)
     }
 }
 
+// Re-enable huge pages for a VMA range (inverse of nohugepage).
+// Clears the mmap_small flag so subsequent page faults use 2MB huge pages.
+// Already-faulted 4KB pages remain mapped until evicted; new faults use huge pages.
+static void hugepage(void* addr, size_t length)
+{
+    length = align_up(length, mmu::page_size);
+    auto start = reinterpret_cast<uintptr_t>(addr);
+    auto range = find_intersecting_vmas(addr_range(start, start + length));
+    for (auto i = range.first; i != range.second; ++i) {
+        if (i->has_flags(mmap_small)) {
+            i->clear_flags(mmap_small);
+        }
+        start += i->size();
+        length -= i->size();
+    }
+}
+
 error advise(void* addr, size_t size, int advice)
 {
     PREVENT_STACK_PAGE_FAULT
@@ -1293,6 +1325,9 @@ error advise(void* addr, size_t size, int advice)
             return no_error();
         } else if (advice == advise_nohugepage) {
             nohugepage(addr, size);
+            return no_error();
+        } else if (advice == advise_hugepage) {
+            hugepage(addr, size);
             return no_error();
         }
         return make_error(EINVAL);
@@ -1327,7 +1362,16 @@ void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
     SCOPE_LOCK(vma_list_mutex.for_write());
     auto v = (void*) allocate(vma, start, size, search);
     if (flags & mmap_populate) {
-        populate_vma(vma, v, size);
+        auto mapped = populate_vma<account_opt::yes>(vma, v, size);
+        if ((flags & mmap_huge) && mapped < size) {
+            // MAP_HUGETLB strict mode: huge page allocation failed for some pages.
+            // Free the partially-mapped region and signal ENOMEM to the caller.
+            // Evacuate the address actually chosen by allocate(), not the
+            // requested hint (which is 0 for an unhinted mmap).
+            auto allocated = reinterpret_cast<uintptr_t>(v);
+            evacuate(allocated, allocated + size);
+            return nullptr;
+        }
     }
     return v;
 }
@@ -1522,6 +1566,12 @@ void vma::update_flags(unsigned flag)
     _flags |= flag;
 }
 
+void vma::clear_flags(unsigned flag)
+{
+    assert(vma_list_mutex.wowned());
+    _flags &= ~flag;
+}
+
 bool vma::has_flags(unsigned flag)
 {
     return _flags & flag;
@@ -1582,7 +1632,10 @@ static initialized_anonymous_page_provider page_allocator_init;
 static page_allocator *page_allocator_noinitp = &page_allocator_noinit, *page_allocator_initp = &page_allocator_init;
 
 anon_vma::anon_vma(addr_range range, unsigned perm, unsigned flags)
-    : vma(range, perm, flags, true, (flags & mmap_uninitialized) ? page_allocator_noinitp : page_allocator_initp)
+    : vma(range, perm, flags, true,
+          (flags & mmap_huge)          ? page_allocator_huge_onlyp :
+          (flags & mmap_uninitialized) ? page_allocator_noinitp    :
+                                         page_allocator_initp)
 {
 }
 
