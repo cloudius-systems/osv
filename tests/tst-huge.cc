@@ -18,6 +18,7 @@
 #include <iostream>
 #include <cassert>
 #include <cstdlib>
+#include <cerrno>
 
 static unsigned char* align_page_up(void *x)
 {
@@ -86,6 +87,29 @@ int main(int argc, char **argv)
     // able to write to them and read the result back.
     do_test(size);
 
+    // Test MAP_HUGETLB: with memory plentiful a 2MB mapping must succeed.
+    {
+        void *p = mmap(NULL, mmu::huge_page_size, PROT_READ|PROT_WRITE,
+                       MAP_PRIVATE|MAP_ANONYMOUS|MAP_HUGETLB, -1, 0);
+        assert(p != MAP_FAILED && "MAP_HUGETLB should succeed when huge pages are available");
+        volatile unsigned char *up = static_cast<volatile unsigned char *>(p);
+        *up = 0xAB;
+        assert(*up == 0xAB);
+        munmap(p, mmu::huge_page_size);
+    }
+
+    // Test MADV_NOHUGEPAGE / MADV_HUGEPAGE round-trip on a small mapping.
+    {
+        void *ps = mmap(NULL, mmu::page_size, PROT_READ|PROT_WRITE,
+                        MAP_PRIVATE|MAP_ANONYMOUS, -1, 0);
+        assert(ps != MAP_FAILED);
+        int r = madvise(ps, mmu::page_size, MADV_NOHUGEPAGE);
+        assert(r == 0 && "MADV_NOHUGEPAGE should succeed");
+        r = madvise(ps, mmu::page_size, MADV_HUGEPAGE);
+        assert(r == 0 && "MADV_HUGEPAGE should succeed");
+        munmap(ps, mmu::page_size);
+    }
+
     std::vector<void *> addresses;
     std::vector<void *> hpages;
     void *addr;
@@ -107,6 +131,15 @@ int main(int argc, char **argv)
     // huge pages. If everything works, we should have no problems reading back
     // the values we wrote to the mapping.
     do_test(size);
+
+    // With huge pages exhausted, MAP_HUGETLB must fail with ENOMEM.
+    {
+        errno = 0;
+        void *p = mmap(NULL, mmu::huge_page_size, PROT_READ|PROT_WRITE,
+                       MAP_PRIVATE|MAP_ANONYMOUS|MAP_HUGETLB, -1, 0);
+        assert(p == MAP_FAILED && "MAP_HUGETLB must fail when huge pages are exhausted");
+        assert(errno == ENOMEM);
+    }
 
     // Clean up so we have the system back into place.
     while (!addresses.empty()) {

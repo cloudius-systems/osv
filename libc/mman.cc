@@ -55,6 +55,10 @@ unsigned libc_flags_to_mmap(int flags)
     if (flags & MAP_UNINITIALIZED) {
         mmap_flags |= mmu::mmap_uninitialized;
     }
+    if (flags & MAP_HUGETLB) {
+        mmap_flags |= mmu::mmap_huge;
+        mmap_flags |= mmu::mmap_populate;  // pre-populate so ENOMEM is returned at map time
+    }
     return mmap_flags;
 }
 
@@ -79,6 +83,8 @@ unsigned libc_madvise_to_advise(int advice)
         return mmu::advise_dontneed;
     } else if (advice == MADV_NOHUGEPAGE) {
         return mmu::advise_nohugepage;
+    } else if (advice == MADV_HUGEPAGE) {
+        return mmu::advise_hugepage;
     }
     return 0;
 }
@@ -167,6 +173,12 @@ void *mmap(void *addr, size_t length, int prot, int flags,
             ret = mmu::map_anon(addr, length, mmap_flags, mmap_perm);
         } catch (error& err) {
             err.to_libc(); // sets errno
+            trace_memory_mmap_err(errno);
+            return MAP_FAILED;
+        }
+        if (!ret) {
+            // MAP_HUGETLB strict mode could not satisfy the huge-page request.
+            errno = ENOMEM;
             trace_memory_mmap_err(errno);
             return MAP_FAILED;
         }
