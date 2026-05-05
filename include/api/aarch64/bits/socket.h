@@ -1,1 +1,1 @@
-../../../../musl/arch/aarch64/bits/socket.h
+../../../../musl/arch/generic/bits/socket.h

@@ -10,8 +10,12 @@ Original commit
 
 Previous is 0.9.12
 
+Upgraded from 0.9.12 to 1.1.24.
+
+Upgraded from 1.1.24 to 1.2.1.
+
 # State
-The current version of musl that OSv uses is 1.1.24. Most of the musl C files (`grep -P '^musl \+=' Makefile` - 577 files at this point) are directly referenced in the main makefile via a [`musl/`](/musl) symlink that currently points to the [`/musl_1.1.24`](/musl_1.1.24) git subproject. Some of the musl files are also symlinked from [`/libc`](/libc) subdirectory. Please also note that most header files under [`/include/api`](/include/api) symlink to the the musl copies under [`musl/include`](/musl/include) directory, but some are actually modified copies of original musl files. The internal musl headers under [`/include/api/internal_musl_headers`](/include/api/internal_musl_headers) symlink to files under [`musl/src/include`](/musl/src/include].
+The current version of musl that OSv uses is 1.2.1. Most of the musl C files (`grep -P '^musl \+=' Makefile` - 577 files at this point) are directly referenced in the main makefile via a [`musl/`](/musl) symlink that currently points to the [`/musl_1.2.1`](/musl_1.2.1) git subproject. Some of the musl files are also symlinked from [`/libc`](/libc) subdirectory. Please also note that most header files under [`/include/api`](/include/api) symlink to the the musl copies under [`musl/include`](/musl/include) directory, but some are actually modified copies of original musl files. The internal musl headers under [`/include/api/internal_musl_headers`](/include/api/internal_musl_headers) symlink to files under [`musl/src/include`](/musl/src/include].
 
 All C++ (`*.cc/*.hh`) files under `libc/` have been natively implemented in OSv. Also all FORTIFY functions for glibc compatibility (files ending with `_chk.c`) have been implemented natively.
 
@@ -57,8 +61,8 @@ Files in `libc/` subject to musl upgrade.
 Possibly syslog.c might need to get updated.
 
 # Upgrades
-Any upcoming upgrade to a newer version of musl (> 1.1.24) would require at least updating
-the files from mosl that have been adapded for OSv purposes (the last group, see above) and ideally
+Any upcoming upgrade to a newer version of musl (> 1.2.1) would require at least updating
+the files from musl that have been adapted for OSv purposes (the last group, see above) and ideally
 analyzing files used as-is to see if any of those need to be adapted.
 
 Obviously we want to keep the number of adapted files to the minimum to minimize

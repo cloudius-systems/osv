@@ -15,8 +15,8 @@
 [submodule "musl_0.9.12"]
 	path = musl_0.9.12
 	url = https://github.com/cloudius-systems/musl
-[submodule "musl_1.1.24"]
-	path = musl_1.1.24
+[submodule "musl_1.2.1"]
+	path = musl_1.2.1
 	url = https://github.com/osvunikernel/musl
 [submodule "kbuild"]
 	path = kbuild
