@@ -11,10 +11,16 @@
 #include <osv/fcntl.h>
 #include <osv/align.hh>
 #include <unordered_map>
+#include <string>
 #include <fs/fs.hh>
 #include <libc/libc.hh>
 
 static mutex shm_lock;
+
+// POSIX named shared memory objects (shm_open/shm_unlink).
+// Each name maps to a fileref; the underlying shm_file lives as long as
+// any open file descriptor or name registration holds a reference.
+static std::unordered_map<std::string, fileref> posix_shm_objects;
 
 // Maps from custom key to shmid. IPC_PRIVATE are not stored here.
 static std::unordered_map<key_t, int> shmkeys;
@@ -51,6 +57,22 @@ int shmctl(int shmid, int cmd, struct shmid_ds *buf)
 {
     if (cmd == IPC_RMID) {
         close(shmid);
+        return 0;
+    }
+    if (cmd == IPC_STAT) {
+        if (!buf) {
+            return libc_error(EFAULT);
+        }
+        memset(buf, 0, sizeof(*buf));
+        // Count active attachments (shmmap entries whose fd matches shmid).
+        shmatt_t nattch = 0;
+        SCOPE_LOCK(shm_lock);
+        for (auto& e : shmmap) {
+            if (e.second == shmid) {
+                nattch++;
+            }
+        }
+        buf->shm_nattch = nattch;
         return 0;
     }
     return libc_error(EINVAL);
@@ -111,4 +133,64 @@ int shmget(key_t key, size_t size, int shmflg)
         return libc_error(error);
     }
     return fd;
+}
+
+/*
+ * POSIX shared memory — shm_open / shm_unlink.
+ *
+ * Implemented on top of OSv's mmu::shm_file.  The named registry
+ * (posix_shm_objects) keeps one fileref alive per name so that two
+ * independent shm_open() calls with the same name share the same object.
+ * The actual shm_file is freed when all file descriptors are closed AND the
+ * name has been removed by shm_unlink().
+ */
+int shm_open(const char *name, int oflag, mode_t mode)
+{
+    if (!name || name[0] != '/') {
+        return libc_error(EINVAL);
+    }
+    std::string key(name);
+    SCOPE_LOCK(shm_lock);
+
+    auto it = posix_shm_objects.find(key);
+    bool exists = (it != posix_shm_objects.end());
+
+    if ((oflag & O_CREAT) && (oflag & O_EXCL) && exists) {
+        return libc_error(EEXIST);
+    }
+    if (!(oflag & O_CREAT) && !exists) {
+        return libc_error(ENOENT);
+    }
+
+    fileref fref;
+    if (!exists) {
+        int fflags = FREAD | FWRITE;
+        // Size 0; caller must ftruncate() before mapping.
+        fref = make_file<mmu::shm_file>((size_t)0, fflags);
+        posix_shm_objects[key] = fref;
+    } else {
+        fref = it->second;
+    }
+
+    try {
+        fdesc fdesc(fref);
+        return fdesc.release();
+    } catch (...) {
+        return libc_error(EMFILE);
+    }
+}
+
+int shm_unlink(const char *name)
+{
+    if (!name || name[0] != '/') {
+        return libc_error(EINVAL);
+    }
+    std::string key(name);
+    SCOPE_LOCK(shm_lock);
+    auto it = posix_shm_objects.find(key);
+    if (it == posix_shm_objects.end()) {
+        return libc_error(ENOENT);
+    }
+    posix_shm_objects.erase(it);
+    return 0;
 }
