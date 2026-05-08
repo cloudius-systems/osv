@@ -194,6 +194,7 @@ class shm_file final : public special_file {
 public:
     shm_file(size_t size, int flags);
     virtual int stat(struct stat* buf) override;
+    virtual int truncate(off_t len) override;
     virtual int close() override;
     virtual std::unique_ptr<file_vma> mmap(addr_range range, unsigned flags, unsigned perm, off_t offset) override;
 

@@ -2004,6 +2004,8 @@ void* shm_file::page(uintptr_t hp_off)
     auto p = _pages.find(hp_off);
     if (p == _pages.end()) {
         addr = memory::alloc_huge_page(huge_page_size);
+        if (!addr)
+            throw make_error(ENOMEM);
         memset(addr, 0, huge_page_size);
         _pages.emplace(hp_off, addr);
     } else {
@@ -2029,14 +2031,30 @@ bool shm_file::map_page(uintptr_t offset, hw_ptep<1> ptep, pt_element<1> pte, bo
     return write_pte(static_cast<char*>(page(hp_off)) + offset - hp_off, ptep, pte);
 }
 
-bool shm_file::put_page(void *addr, uintptr_t offset, hw_ptep<0> ptep) {return false;}
-bool shm_file::put_page(void *addr, uintptr_t offset, hw_ptep<1> ptep) {return false;}
+bool shm_file::put_page(void *addr, uintptr_t offset, hw_ptep<0> ptep) {
+    // Clear the PTE so the virtual mapping is removed. Return false so the
+    // TLB gather does not free the physical page — shm_file::close() owns it.
+    clear_pte(ptep);
+    return false;
+}
+bool shm_file::put_page(void *addr, uintptr_t offset, hw_ptep<1> ptep) {
+    clear_pte(ptep);
+    return false;
+}
 
 shm_file::shm_file(size_t size, int flags) : special_file(flags, DTYPE_UNSPEC), _size(size) {}
 
 int shm_file::stat(struct stat* buf)
 {
     buf->st_size = _size;
+    return 0;
+}
+
+int shm_file::truncate(off_t len)
+{
+    if (len < 0)
+        return EINVAL;
+    _size = (size_t)len;
     return 0;
 }
 
