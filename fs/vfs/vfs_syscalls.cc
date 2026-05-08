@@ -1143,8 +1143,12 @@ sys_ftruncate(struct file *fp, off_t length)
 	struct vnode *vp;
 	int error;
 
-	if (!fp->f_dentry)
-		return EBADF;
+	if (!fp->f_dentry) {
+		// No VFS dentry — delegate to the file object's own truncate().
+		// special_file::truncate() returns EINVAL by default, but
+		// subclasses (e.g. shm_file) may override it.
+		return fp->truncate(length);
+	}
 
 	vp = fp->f_dentry->d_vnode;
 	vn_lock(vp);
