@@ -1320,7 +1320,7 @@ zfs_lookup(struct vnode *dvp, char *nm, struct vnode **vpp)
 }
 
 static int
-zfs_create(struct vnode *dvp, char *name, mode_t mode)
+zfs_vnop_create(struct vnode *dvp, char *name, mode_t mode)
 {
 	znode_t		*zp, *dzp = VTOZ(dvp);
 	zfsvfs_t	*zfsvfs = dzp->z_zfsvfs;
@@ -5102,7 +5102,7 @@ struct vnops zfs_vnops = {
 	zfs_fsync,			/* fsync */
 	zfs_readdir,			/* readdir */
 	zfs_lookup,			/* lookup */
-	zfs_create,			/* create */
+	zfs_vnop_create,		/* create */
 	zfs_remove,			/* remove */
 	zfs_rename,			/* rename */
 	zfs_mkdir,			/* mkdir */

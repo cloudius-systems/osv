@@ -8,4 +8,5 @@
 /tests/tst-zfs-recordsize.so: tests/tst-zfs-recordsize.so
 /tests/tst-huge.so: tests/tst-huge.so
 /tests/tst-io_uring.so: tests/tst-io_uring.so
+/tests/tst-zfs-multirec.so: tests/tst-zfs-multirec.so
 /tests/tst-shm-consistency.so: tests/tst-shm-consistency.so

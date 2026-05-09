@@ -8,8 +8,10 @@
 #include <osv/mempool.hh>
 #include <osv/debug.hh>
 #include <osv/export.h>
+#include <osv/sched.hh>
 #include <sys/eventhandler.h>
 #include <algorithm>
+#include <chrono>
 
 struct eventhandler_entry_generic {
     struct eventhandler_entry ee;
@@ -57,10 +59,11 @@ size_t arc_shrinker::request_memory(size_t s, bool hard)
     size_t ret = 0;
     if (hard) {
         ret = (*arc_lowmem_fun)(nullptr, 0);
-        // ARC's aggressive mode will call arc_adjust, which will reduce the size of the
-        // cache, but won't necessarily free as much memory as we need. If it doesn't,
-        // keep going in soft mode. This is better than calling arc_lowmem() again, since
-        // that could reduce the cache size even further.
+        // arc_lowmem_fun wakes arc_evict_zthr and signals it to start evicting.
+        // Give the ARC eviction thread time to actually free physical pages
+        // before the reclaimer calls wake_waiters().  Without this yield the
+        // reclaimer immediately finds no free page ranges and calls oom().
+        sched::thread::sleep(std::chrono::milliseconds(100));
         if (ret >= s) {
             return ret;
         }
@@ -76,6 +79,8 @@ size_t arc_shrinker::request_memory(size_t s, bool hard)
             break;
         }
         ret += r;
+        // Allow eviction thread to run between iterations.
+        sched::thread::sleep(std::chrono::milliseconds(50));
     } while (ret < s);
     return ret;
 }
@@ -86,6 +91,11 @@ void bsd_shrinker_init(void)
     struct eventhandler_entry *ep;
 
     debugf("BSD shrinker: event handler list found: %p\n", list);
+
+    if (!list) {
+        debug("BSD shrinker: vm_lowmem event handler list not found, skipping\n");
+        return;
+    }
 
     TAILQ_FOREACH(ep, &list->el_entries, ee_link) {
         debugf("\tBSD shrinker found: %p\n",
@@ -111,4 +121,8 @@ extern "C" OSV_LIBSOLARIS_API void register_shrinker_arc_funs(
     size_t (*_arc_sized_adjust_fun)(int64_t)) {
     arc_lowmem_fun = _arc_lowmem_fun;
     arc_sized_adjust_fun = _arc_sized_adjust_fun;
+    // bsd_shrinker_init() runs at loader startup, before libsolaris.so is
+    // loaded, so it cannot find the arc_shrinker entry.  Register it here
+    // now that the function pointers are valid.
+    new arc_shrinker();
 }

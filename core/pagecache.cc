@@ -125,8 +125,10 @@ protected:
     public:
         ptep_remove(ptep_list& ptes, mmu::hw_ptep<0>& ptep) : ptes_visitor(ptes), _ptep(ptep) {}
         int operator()(std::nullptr_t &v) {
-            assert(0);
-            return -1;
+            // Page was pre-inserted (e.g. by readahead or vop_cache) without a
+            // PTE mapping.  Return 0 so the caller removes it from cache; the
+            // COW path will install a fresh private write-cache page in its place.
+            return 0;
         }
         int operator()(mmu::hw_ptep<0>& ptep) {
             _ptes = nullptr;
@@ -370,6 +372,17 @@ extern "C" void *osv_alloc_page(void)
 extern "C" void osv_free_page(void *p)
 {
     memory::free_page(p);
+}
+
+/*
+ * osv_free_pages() — return number of free physical pages.
+ *
+ * Called from arc_os.c so the ARC sees real memory pressure rather than the
+ * static freemem value initialised at ZFS module load time.
+ */
+extern "C" unsigned long osv_free_pages(void)
+{
+    return memory::stats::free() / mmu::page_size;
 }
 
 /*

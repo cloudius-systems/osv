@@ -35,13 +35,18 @@
 
 #define	KSTAT_FLAG_VIRTUAL	0x01
 
+struct kstat;
+typedef int kstat_update_t(struct kstat *, int);
+
 typedef struct kstat {
-	void	*ks_data;
-	u_int	 ks_ndata;
-#if 0 //def _KERNEL
-	struct sysctl_ctx_list ks_sysctl_ctx;
-	struct sysctl_oid *ks_sysctl_root;
-#endif
+	void		*ks_data;
+	u_int		 ks_ndata;
+	size_t		 ks_data_size;
+	uchar_t		 ks_flags;
+	kstat_update_t	*ks_update;
+	void		*ks_private;
+	void		*ks_private1;
+	void		*ks_lock;
 } kstat_t;
 
 typedef struct kstat_named {

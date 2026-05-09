@@ -136,6 +136,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-chdir.so tst-chmod.so tst-hello.so misc-concurrent-io.so \
 	tst-concurrent-init.so tst-ring-spsc-wraparound.so tst-shm.so tst-shm-consistency.so \
 	tst-io_uring.so \
+	tst-zfs-multirec.so \
 	tst-align.so tst-cxxlocale.so misc-tcp-close-without-reading.so \
 	tst-sigwait.so tst-sampler.so misc-malloc.so misc-memcpy.so \
 	misc-free-perf.so misc-printf.so tst-hostname.so \

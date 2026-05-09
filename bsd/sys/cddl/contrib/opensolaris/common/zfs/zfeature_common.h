@@ -22,6 +22,10 @@
 /*
  * Copyright (c) 2012 by Delphix. All rights reserved.
  * Copyright (c) 2013 by Saso Kiselkov. All rights reserved.
+ *
+ * Updated to match OpenZFS 2.4+ struct layout so that user-space ZFS tools
+ * (libzfs, zpool, zfs) compiled against this header are ABI-compatible with
+ * the zfeature_info_t structs exported by libsolaris.so at runtime.
  */
 
 #ifndef _ZFEATURE_COMMON_H
@@ -36,33 +40,117 @@ extern "C" {
 
 struct zfeature_info;
 
-typedef struct zfeature_info {
-	const char *fi_uname;	/* User-facing feature name */
-	const char *fi_guid;	/* On-disk feature identifier */
-	const char *fi_desc;	/* Feature description */
-	boolean_t fi_can_readonly; /* Can open pool readonly w/o support? */
-	boolean_t fi_mos;	/* Is the feature necessary to read the MOS? */
-	struct zfeature_info **fi_depends; /* array; null terminated */
-} zfeature_info_t;
-
-typedef int (zfeature_func_t)(zfeature_info_t *fi, void *arg);
-
-#define	ZFS_FEATURE_DEBUG
-
-static enum spa_feature {
+/*
+ * spa_feature_t — must exactly match external/openzfs/include/zfeature_common.h
+ * so that spa_feature_table[] from libsolaris.so is indexed correctly.
+ */
+typedef enum spa_feature {
+	SPA_FEATURE_NONE = -1,
 	SPA_FEATURE_ASYNC_DESTROY,
 	SPA_FEATURE_EMPTY_BPOBJ,
 	SPA_FEATURE_LZ4_COMPRESS,
+	SPA_FEATURE_MULTI_VDEV_CRASH_DUMP,
+	SPA_FEATURE_SPACEMAP_HISTOGRAM,
+	SPA_FEATURE_ENABLED_TXG,
+	SPA_FEATURE_HOLE_BIRTH,
+	SPA_FEATURE_EXTENSIBLE_DATASET,
+	SPA_FEATURE_EMBEDDED_DATA,
+	SPA_FEATURE_BOOKMARKS,
+	SPA_FEATURE_FS_SS_LIMIT,
+	SPA_FEATURE_LARGE_BLOCKS,
+	SPA_FEATURE_LARGE_DNODE,
+	SPA_FEATURE_SHA512,
+	SPA_FEATURE_SKEIN,
+	SPA_FEATURE_EDONR,
+	SPA_FEATURE_USEROBJ_ACCOUNTING,
+	SPA_FEATURE_ENCRYPTION,
+	SPA_FEATURE_PROJECT_QUOTA,
+	SPA_FEATURE_DEVICE_REMOVAL,
+	SPA_FEATURE_OBSOLETE_COUNTS,
+	SPA_FEATURE_POOL_CHECKPOINT,
+	SPA_FEATURE_SPACEMAP_V2,
+	SPA_FEATURE_ALLOCATION_CLASSES,
+	SPA_FEATURE_RESILVER_DEFER,
+	SPA_FEATURE_BOOKMARK_V2,
+	SPA_FEATURE_REDACTION_BOOKMARKS,
+	SPA_FEATURE_REDACTED_DATASETS,
+	SPA_FEATURE_BOOKMARK_WRITTEN,
+	SPA_FEATURE_LOG_SPACEMAP,
+	SPA_FEATURE_LIVELIST,
+	SPA_FEATURE_DEVICE_REBUILD,
+	SPA_FEATURE_ZSTD_COMPRESS,
+	SPA_FEATURE_DRAID,
+	SPA_FEATURE_ZILSAXATTR,
+	SPA_FEATURE_HEAD_ERRLOG,
+	SPA_FEATURE_BLAKE3,
+	SPA_FEATURE_BLOCK_CLONING,
+	SPA_FEATURE_AVZ_V2,
+	SPA_FEATURE_REDACTION_LIST_SPILL,
+	SPA_FEATURE_RAIDZ_EXPANSION,
+	SPA_FEATURE_FAST_DEDUP,
+	SPA_FEATURE_LONGNAME,
+	SPA_FEATURE_LARGE_MICROZAP,
+	SPA_FEATURE_DYNAMIC_GANG_HEADER,
+	SPA_FEATURE_BLOCK_CLONING_ENDIAN,
+	SPA_FEATURE_PHYSICAL_REWRITE,
 	SPA_FEATURES
 } spa_feature_t;
+
+#define	SPA_FEATURE_DISABLED	(-1ULL)
+
+typedef enum zfeature_flags {
+	/* Can open pool readonly even if this feature is not supported. */
+	ZFEATURE_FLAG_READONLY_COMPAT =		(1 << 0),
+	/*
+	 * Is this feature necessary to load the pool? i.e. do we need this
+	 * feature to read the full feature list out of the MOS?
+	 */
+	ZFEATURE_FLAG_MOS =			(1 << 1),
+	/* Activate this feature at the same time it is enabled. */
+	ZFEATURE_FLAG_ACTIVATE_ON_ENABLE =	(1 << 2),
+	/* Each dataset has a field set if it has ever used this feature. */
+	ZFEATURE_FLAG_PER_DATASET =		(1 << 3),
+	/*
+	 * This feature isn't enabled by zpool upgrade; it must be explicitly
+	 * listed to be enabled.
+	 */
+	ZFEATURE_FLAG_NO_UPGRADE = 		(1 << 4)
+} zfeature_flags_t;
+
+typedef enum zfeature_type {
+	ZFEATURE_TYPE_BOOLEAN,
+	ZFEATURE_TYPE_UINT64_ARRAY,
+	ZFEATURE_NUM_TYPES
+} zfeature_type_t;
+
+/*
+ * zfeature_info_t layout must exactly match OpenZFS 2.4+
+ * (external/openzfs/include/zfeature_common.h) so that the array
+ * spa_feature_table[] exported by libsolaris.so is accessed correctly.
+ */
+typedef struct zfeature_info {
+	spa_feature_t fi_feature;
+	const char *fi_uname;	/* User-facing feature name */
+	const char *fi_guid;	/* On-disk feature identifier */
+	const char *fi_desc;	/* Feature description */
+	zfeature_flags_t fi_flags;
+	boolean_t fi_zfs_mod_supported;	/* supported by running zfs module */
+	zfeature_type_t fi_type; /* Only relevant for PER_DATASET features */
+	/* array of dependencies, terminated by SPA_FEATURE_NONE */
+	const spa_feature_t *fi_depends;
+} zfeature_info_t;
+
+typedef int (zfeature_func_t)(zfeature_info_t *, void *);
+
+#define	ZFS_FEATURE_DEBUG
 
 extern zfeature_info_t spa_feature_table[SPA_FEATURES];
 
 extern boolean_t zfeature_is_valid_guid(const char *);
 
 extern boolean_t zfeature_is_supported(const char *);
-extern int zfeature_lookup_guid(const char *, zfeature_info_t **res);
-extern int zfeature_lookup_name(const char *, zfeature_info_t **res);
+extern int zfeature_lookup_guid(const char *, spa_feature_t *);
+extern int zfeature_lookup_name(const char *, spa_feature_t *);
 
 extern void zpool_feature_init(void);
 

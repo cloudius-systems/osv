@@ -63,19 +63,16 @@ static void mkfs(int ac, char** av)
     close(fd);
 
     const char *dev_name = ac == 2 ? av[1] : "/dev/vblk0.1";
-    vector<string> zpool_args = {"zpool", "create", "-f", "-R", "/zfs", "osv", dev_name};
+    vector<string> zpool_args = {"zpool", "create", "-f", "-R", "/zfs", "-m", "/", "osv", dev_name};
 
     get_blk_devices(zpool_args);
 
     // Create zpool named osv
     run_cmd("/zpool.so", zpool_args);
 
-    // Create a zfs dataset within the pool named osv.
-    run_cmd("/zfs.so", {"zfs", "create", "-o", "relatime=on", "osv/zfs"});
-
-    // Both osv and osv/zfs datasets shouldn't be mounted automatically.
+    // Set relatime and disable auto-mount on root dataset.
+    run_cmd("/zfs.so", {"zfs", "set", "relatime=on", "osv"});
     run_cmd("/zfs.so", {"zfs", "set", "canmount=noauto", "osv"});
-    run_cmd("/zfs.so", {"zfs", "set", "canmount=noauto", "osv/zfs"});
 
     // Enable lz4 compression on the created zfs dataset
     // NOTE: Compression is disabled after image creation.

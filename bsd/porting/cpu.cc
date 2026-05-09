@@ -16,6 +16,11 @@ extern "C" OSV_LIBSOLARIS_API int get_cpuid(void)
     return sched::cpu::current()->id;
 }
 
+extern "C" OSV_LIBSOLARIS_API unsigned int sched_current_cpu(void)
+{
+    return (unsigned int)sched::cpu::current()->id;
+}
+
 uint64_t get_cyclecount(void)
 {
     return processor::ticks();

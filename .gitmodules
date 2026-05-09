@@ -21,3 +21,8 @@
 [submodule "kbuild"]
 	path = kbuild
 	url = https://github.com/osvunikernel/kbuild-standalone.git
+[submodule "external/openzfs"]
+	path = external/openzfs
+	url = https://codeberg.org/gregburd/zfs
+	branch = osv-2.4.3
+	ignore = dirty

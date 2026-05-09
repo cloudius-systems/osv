@@ -139,9 +139,13 @@ blk::blk(virtio_device& virtio_dev)
     for (int qid = 0; qid < _num_queues; qid++) {
         std::string tname = std::string("virtio-blk") +
                             (_num_queues > 1 ? "/q" + std::to_string(qid) : "");
+        // 256 KB stack (matches the ZFS kthread convention in
+        // bsd/porting/kthread.cc): bio completion runs the filesystem's
+        // bio_done callback inline, and the ZFS path (vdev_disk_bio_done)
+        // overruns the default 64 KB kernel stack.
         sched::thread* t = sched::thread::make(
             [this, qid] { this->req_done(qid); },
-            sched::thread::attr().name(tname));
+            sched::thread::attr().name(tname).stack(256 << 10));
         t->start();
         if (qid == 0) {
             // Only queue-0's thread is woken by the interrupt.
