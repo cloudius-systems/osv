@@ -36,7 +36,6 @@
                     </descriptorRefs>
                     <finalName>runjava-isolated</finalName>
                     <appendAssemblyId>false</appendAssemblyId>
-                    <classifier>jar</classifier>
                 </configuration>
                 <executions>
                     <execution>

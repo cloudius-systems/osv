@@ -1,6 +1,7 @@
 from osv.modules.filemap import FileMap
-from osv.modules import api
+from osv.modules import api, resolve
 import os, os.path
+import shutil
 import subprocess
 
 #Verify that the jdk exists by trying to locate javac (java compiler)
@@ -24,13 +25,37 @@ usr_files = FileMap()
 
 jdk_dir = os.path.basename(jdk_path)
 
+# On NixOS, JDK binaries have absolute /nix/store RUNPATH entries.  When
+# deployed to OSv the libraries live at /usr/lib/jvm/java/lib, so we must
+# patchelf the launcher binaries to use the in-VM path.
+_in_vm_lib = '/usr/lib/jvm/java/lib'
+_patchelf = shutil.which('patchelf')
+
+def _patched_bin(src):
+    """Return path to a copy of src with RUNPATH set to the in-VM lib dir."""
+    if _patchelf is None:
+        return src
+    build_dir = os.path.join(resolve.get_build_path(), 'modules', 'openjdk9_1x-from-host', 'bin')
+    os.makedirs(build_dir, exist_ok=True)
+    dst = os.path.join(build_dir, os.path.basename(src))
+    shutil.copy2(src, dst)
+    os.chmod(dst, 0o755)
+    subprocess.run([_patchelf, '--set-rpath', _in_vm_lib, dst], check=True)
+    return dst
+
+_java_bin = jdk_path + '/bin/java'
+_jshell_bin = jdk_path + '/bin/jshell'
+
 usr_files.add(jdk_path).to('/usr/lib/jvm/java') \
     .include('lib/**') \
     .exclude('lib/security/cacerts') \
     .exclude('man/**') \
-    .exclude('bin/**') \
-    .include('bin/java') \
-    .include('bin/jshell')
+    .exclude('bin/**')
+
+# Add patchelf'd launcher binaries so OSv can find libjli.so at the in-VM path
+usr_files.add(_patched_bin(_java_bin)).to('/usr/lib/jvm/java/bin/java')
+if os.path.exists(_jshell_bin):
+    usr_files.add(_patched_bin(_jshell_bin)).to('/usr/lib/jvm/java/bin/jshell')
 
 usr_files.link('/usr/lib/jvm/' + jdk_dir).to('java')
 usr_files.link('/usr/lib/jvm/java/lib/security/cacerts').to('/etc/pki/java/cacerts')

@@ -20,25 +20,23 @@ def upload(osv, manifest, depends, port):
     files = list(expand(manifest))
     files = [(x, unsymlink(y)) for (x, y) in files]
 
-    # Poll the TCP port until cpiod is ready, then connect.
-    # Waiting for text on QEMU's stdout pipe is unreliable when QEMU uses
-    # '-chardev stdio,mux=on' with a non-tty stdout: the mux/readline layer
-    # does not forward guest serial output to the subprocess pipe.
-    import time as _time
-    s = None
-    for _attempt in range(120):
-        if osv.poll() is not None:
-            sys.exit("qemu failed.")
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect(("127.0.0.1", port))
+    # Wait for cpiod to print its readiness marker on the guest serial console
+    # before connecting.  QEMU slirp hostfwd accepts a host-side connection
+    # before the guest's cpiod has bound port 10000, so connecting on the first
+    # successful connect() races cpiod's listen(): the CPIO stream is delivered
+    # to a connection cpiod never accept()s, cpiod then sees no data, and we
+    # broken-pipe on the TRAILER.  Reading the marker guarantees cpiod is
+    # listening before we connect.
+    while True:
+        line = osv.stdout.readline()
+        if not line:
+            sys.exit("qemu exited before cpiod was ready.")
+        if line.find(b"Waiting for connection") >= 0:
             break
-        except (ConnectionRefusedError, OSError):
-            s.close()
-            s = None
-            _time.sleep(1)
-    else:
-        sys.exit("Timed out waiting for cpiod on port %d" % port)
+        os.write(sys.stdout.fileno(), line)
+
+    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    s.connect(("127.0.0.1", port))
 
     # We'll want to read the rest of the guest's output, so that it doesn't
     # hang, and so the user can see what's happening. Easiest to do this with
@@ -149,7 +147,12 @@ def main():
             make_option('--arch',
                         dest='arch',
                         default=host_arch,
-                        help="specify QEMU architecture: x86_64, aarch64")
+                        help="specify QEMU architecture: x86_64, aarch64"),
+            make_option('--mem',
+                        dest='mem',
+                        default=2048,
+                        type='int',
+                        help="ZFS builder QEMU memory in MB (default: 2048)"),
     ])
 
     (options, args) = opt.parse_args()
@@ -174,7 +177,7 @@ def main():
         console = '--console=serial'
         zfs_builder_name = 'zfs_builder-stripped.elf'
 
-    osv = subprocess.Popen('cd ../..; scripts/run.py -k --kernel-path build/last/%s --arch=%s --vnc none -m 512 -c1 -i "%s" --block-device-cache writeback -s -e "%s --norandom --nomount --noinit --preload-zfs-library /tools/mkfs.so; /tools/cpiod.so --prefix /zfs/; /zfs.so set compression=off osv; /zpool.so export osv" --forward tcp:127.0.0.1:%s-:10000' % (zfs_builder_name,arch,image_path,console,upload_port), shell=True, stdout=subprocess.PIPE)
+    osv = subprocess.Popen('cd ../..; scripts/run.py -k --kernel-path build/last/%s --arch=%s --vnc none -m %d -c1 -i "%s" --block-device-cache writeback -s -e "%s --norandom --nomount --noinit --preload-zfs-library /tools/mkfs.so; /tools/cpiod.so --prefix /zfs/; /zfs.so set compression=off osv; /zpool.so export osv" --forward tcp:127.0.0.1:%s-:10000' % (zfs_builder_name,arch,options.mem,image_path,console,upload_port), shell=True, stdout=subprocess.PIPE)
 
     upload(osv, manifest, depends, upload_port)
 

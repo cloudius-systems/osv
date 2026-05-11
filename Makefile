@@ -2279,7 +2279,7 @@ def_symbols = --defsym=OSV_KERNEL_BASE=$(kernel_base) \
               --defsym=OSV_KERNEL_VM_SHIFT=$(kernel_vm_shift)
 endif
 
-$(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(out)/libvdso-content.o $(loader_options_dep) $(version_script_file)
+$(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(out)/libvdso-content.o $(version_script_file) | $(loader_options_dep)
 	$(call quiet, $(LD) -o $@ $(def_symbols) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
             $(patsubst %version_script,--version-script=%version_script,$(patsubst %.ld,-T %.ld,$^)) \
@@ -2294,7 +2294,7 @@ $(out)/loader.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/bootfs.o $(ou
 	@grep ': 0000' $(out)/osv.syms | grep -v 'NOTYPE' | awk '{ print $$2 " T " $$8 }' | c++filt >> $(out)/osv.kallsyms
 	$(call quiet, $(CC) $(out)/osv.o -nostdlib -shared -o $(out)/libosv.so -T $(out)/libosv.ld, LIBOSV.SO)
 
-$(out)/zfs_builder.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/zfs_builder_bootfs.o $(out)/libvdso-content.o $(loader_options_dep) $(version_script_file)
+$(out)/zfs_builder.elf: $(stage1_targets) arch/$(arch)/loader.ld $(out)/zfs_builder_bootfs.o $(out)/libvdso-content.o $(version_script_file) | $(loader_options_dep)
 	$(call quiet, $(LD) -o $@ $(def_symbols) \
 		-Bdynamic --export-dynamic --eh-frame-hdr --enable-new-dtags -L$(out)/arch/$(arch) \
             $(patsubst %version_script,--version-script=%version_script,$(patsubst %.ld,-T %.ld,$^)) \

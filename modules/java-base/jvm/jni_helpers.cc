@@ -10,6 +10,7 @@
 #include <osv/mutex.h>
 #include "jni_helpers.hh"
 #include <algorithm>
+#include <stdexcept>
 
 using namespace std;
 

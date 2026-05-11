@@ -39,6 +39,7 @@ usage() {
 	  --create-disk                  Instead of usr.img create kernel-less disk.img
 	  --create-zfs-disk              Create extra empty disk with ZFS filesystem
 	  --use-openzfs                  Build and manipulate ZFS images using on host OpenZFS tools
+  zfs_builder_mem=N              RAM (MB) for ZFS builder QEMU; default 2048 (increase for large images)
 
 	Examples:
 	  ./scripts/build -j4 fs=rofs image=native-example   # Create image with native-example app
@@ -345,7 +346,7 @@ create_zfs_disk() {
 	else
 		qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
 		qemu-img resize $qcow2_disk.img ${image_size}b >/dev/null 2>&1
-		"$SRC"/scripts/upload_manifest.py --arch=$arch -o $qcow2_disk.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
+		"$SRC"/scripts/upload_manifest.py --arch=$arch --mem=${vars[zfs_builder_mem]-2048} -o $qcow2_disk.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
 	fi
 	rm ${raw_disk}.raw
 }
@@ -383,7 +384,7 @@ create_zfs_filesystem() {
 			console='--console=serial'
 			zfs_builder_name='zfs_builder-stripped.elf'
 		fi
-		"$SRC"/scripts/run.py -k --kernel-path $zfs_builder_name --arch=$qemu_arch --vnc none -m 512 -c1 -i ${image_path} --block-device-cache writeback \
+		"$SRC"/scripts/run.py -k --kernel-path $zfs_builder_name --arch=$qemu_arch --vnc none -m ${vars[zfs_builder_mem]-2048} -c1 -i ${image_path} --block-device-cache writeback \
 			-s -e "${console} --norandom --nomount --noinit --preload-zfs-library /tools/mkfs.so ${device_path}; /zfs.so set compression=off osv"
 	fi
 }

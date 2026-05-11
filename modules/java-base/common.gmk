@@ -5,7 +5,7 @@ INCLUDES += -I$(jdkbase)/include -I$(jdkbase)/include/linux
 
 COMMON += -g -Wall -fPIC -O2 -DCONF_debug_memory=0 -D_KERNEL
 
-CXXFLAGS = -std=c++11 $(COMMON)
+CXXFLAGS = -std=c++14 $(COMMON)
 CFLAGS = -std=gnu99 $(COMMON)
 
 java-base-path := $(src)/modules/java-base
