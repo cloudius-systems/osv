@@ -312,7 +312,11 @@ template <typename OutputFunc>
 inline
 void virt_to_phys(void* vaddr, size_t len, OutputFunc out)
 {
-    if (CONF_memory_debug && vaddr >= debug_base) {
+    // VMA-mapped pages (below phys_mem) may be physically non-contiguous;
+    // walk page-by-page to produce correct scatter-gather segments.
+    bool page_walk = (CONF_memory_debug && vaddr >= debug_base) ||
+                     (static_cast<char*>(vaddr) < phys_mem);
+    if (page_walk) {
         while (len) {
             auto next = std::min(align_down(vaddr + page_size, page_size), vaddr + len);
             size_t delta = static_cast<char*>(next) - static_cast<char*>(vaddr);
