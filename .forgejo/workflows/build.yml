@@ -1,0 +1,81 @@
+name: Build
+
+on:
+  push:
+    branches: [master, osv-improvements]
+  pull_request:
+    branches: [master]
+
+# Cancel in-flight runs for the same ref so a fast-follow push doesn't queue
+# behind a slow build that will be superseded.
+concurrency:
+  group: build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-x86_64:
+    name: Build x86_64 kernel + ZFS tools
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:22.04
+      options: --privileged
+
+    steps:
+      - name: Install base tools
+        run: |
+          apt-get update -y -q
+          apt-get install -y -q git python3 sudo
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          # Shallow clone is fine for builds; test jobs use full history
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: python3 scripts/setup.py
+        env:
+          DEBIAN_FRONTEND: noninteractive
+
+      - name: Cache compiled objects
+        uses: actions/cache@v4
+        with:
+          path: build/release.x64
+          # Key on the tree of source files that affect compilation
+          key: build-x64-${{ hashFiles('Makefile', 'conf/**', 'core/**', 'arch/x64/**', 'bsd/**', 'drivers/**', 'external/openzfs/**', 'musl_1.1.24/**') }}
+          restore-keys: build-x64-
+
+      - name: Build kernel + ZFS userspace tools
+        run: |
+          # Build the kernel (loader.elf) and ZFS shared libraries.
+          # fs=zfs enables libsolaris.so + ZFS userspace (zpool.so, zfs.so, libzfs.so, etc.).
+          # We do not create the final disk image here — that requires QEMU and takes
+          # significantly longer; it is done in the zfs-image workflow.
+          make -j$(nproc) fs=zfs
+        env:
+          MAKEFLAGS: --no-print-directory
+
+      - name: Verify key outputs exist
+        run: |
+          for f in \
+            build/release.x64/loader.elf \
+            build/release.x64/libsolaris.so \
+            build/release.x64/libzfs.so \
+            build/release.x64/zpool.so \
+            build/release.x64/zfs.so; do
+            test -f "$f" && echo "OK: $f" || (echo "MISSING: $f"; exit 1)
+          done
+
+      - name: Upload kernel artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: osv-kernel-x86_64-${{ github.sha }}
+          path: |
+            build/release.x64/loader.elf
+            build/release.x64/loader.img
+            build/release.x64/libsolaris.so
+            build/release.x64/libzfs.so
+            build/release.x64/libzfs_core.so
+            build/release.x64/zpool.so
+            build/release.x64/zfs.so
+          retention-days: 7

@@ -1,0 +1,185 @@
+name: Test
+
+# Tests require a runner with /dev/kvm for acceptable performance.
+# Codeberg's hosted runners do not expose KVM; use a self-hosted runner
+# tagged 'kvm' for this workflow.
+#
+# To register a self-hosted runner with KVM:
+#   1. In your Codeberg repo → Settings → Actions → Runners → Add runner
+#   2. On the host: install act_runner, add label 'kvm'
+#   3. Ensure the host has /dev/kvm and the runner user is in the 'kvm' group
+#
+# If no 'kvm' runner is registered, these jobs will queue indefinitely.
+# The build and zfs-image workflows run on hosted runners and are unaffected.
+
+on:
+  push:
+    branches: [master, osv-improvements]
+  pull_request:
+    branches: [master]
+  workflow_dispatch:
+
+concurrency:
+  group: test-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  RUN: >-
+    ./scripts/run.py -k --arch=x86_64 --vnc none -m 512 -c1 -s
+
+jobs:
+  # ── fast tests (no ZFS image required) ──────────────────────────────────────
+  boot-smoke:
+    name: Boot smoke test
+    runs-on: [self-hosted, kvm]
+    needs: []
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: python3 scripts/setup.py
+        env:
+          DEBIAN_FRONTEND: noninteractive
+
+      - name: Build kernel
+        run: make -j$(nproc) fs=zfs
+
+      - name: Build ZFS test image (512 MiB pool — smoke only)
+        run: scripts/build fs=zfs fs_size_mb=512 image=zfs-test
+
+      - name: Boot smoke — ZFS mounts
+        run: |
+          timeout 60 ${{ env.RUN }} -e "/zpool.so status" 2>&1 | tee /tmp/boot.log
+          grep -q "state: ONLINE" /tmp/boot.log
+
+  # ── unit tests ───────────────────────────────────────────────────────────────
+  test-huge:
+    name: Huge pages test
+    runs-on: [self-hosted, kvm]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: python3 scripts/setup.py
+        env:
+          DEBIAN_FRONTEND: noninteractive
+
+      - name: Build + image
+        run: |
+          make -j$(nproc) fs=zfs
+          scripts/build fs=zfs fs_size_mb=512 image=zfs-test
+
+      - name: tst-huge
+        run: |
+          timeout 60 ${{ env.RUN }} -e "tests/tst-huge.so" 2>&1 | tee /tmp/tst-huge.log
+          grep -q "huge tests succeeded" /tmp/tst-huge.log
+
+  test-io-uring:
+    name: io_uring tests
+    runs-on: [self-hosted, kvm]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: python3 scripts/setup.py
+        env:
+          DEBIAN_FRONTEND: noninteractive
+
+      - name: Build + image
+        run: |
+          make -j$(nproc) fs=zfs
+          scripts/build fs=zfs fs_size_mb=512 image=zfs-test
+
+      - name: tst-io_uring
+        run: |
+          timeout 120 ${{ env.RUN }} -e "tests/tst-io_uring.so" 2>&1 | tee /tmp/tst-io_uring.log
+          grep -q "All io_uring tests PASSED" /tmp/tst-io_uring.log
+
+  # ── ZFS tests (need larger pool) ─────────────────────────────────────────────
+  test-zfs:
+    name: ZFS test suite
+    runs-on: [self-hosted, kvm]
+
+    strategy:
+      fail-fast: false
+      matrix:
+        test:
+          - name: tst-zfs-direct-io
+            expect: "Results: 9/9 passed"
+            timeout: 120
+          - name: tst-zfs-trim
+            expect: "Results: 5/5 passed"
+            timeout: 120
+          - name: tst-zfs-encryption
+            expect: "Results: 21/21 passed"
+            timeout: 120
+          - name: tst-shm-consistency
+            expect: "Results: 30 passed, 0 failed"
+            timeout: 120
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: python3 scripts/setup.py
+        env:
+          DEBIAN_FRONTEND: noninteractive
+
+      - name: Build kernel
+        run: make -j$(nproc) fs=zfs
+
+      - name: Build ZFS test image (2 GiB pool)
+        run: scripts/build fs=zfs fs_size_mb=2048 image=zfs-test
+
+      - name: ${{ matrix.test.name }}
+        run: |
+          timeout ${{ matrix.test.timeout }} ${{ env.RUN }} \
+            -e "tests/${{ matrix.test.name }}.so" 2>&1 | tee /tmp/${{ matrix.test.name }}.log
+          grep -q "${{ matrix.test.expect }}" /tmp/${{ matrix.test.name }}.log
+
+      # Rebuild between tests — QEMU persists writes to usr.img (QCOW2 writeback)
+      - name: Rebuild image for next test
+        if: always()
+        run: scripts/build fs=zfs fs_size_mb=2048 image=zfs-test
+
+  test-zfs-db-sim:
+    name: ZFS database simulation
+    runs-on: [self-hosted, kvm]
+
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install dependencies
+        run: python3 scripts/setup.py
+        env:
+          DEBIAN_FRONTEND: noninteractive
+
+      - name: Build kernel + ZFS test image (4 GiB pool)
+        run: |
+          make -j$(nproc) fs=zfs
+          scripts/build fs=zfs fs_size_mb=4096 image=zfs-test
+
+      - name: tst-zfs-db-sim (C1/C3/C4/C5)
+        # 4× 30s benchmarks + 3× 30s inter-config sleeps + overhead
+        run: |
+          timeout 360 ${{ env.RUN }} -e "tests/tst-zfs-db-sim.so" 2>&1 \
+            | tee /tmp/tst-zfs-db-sim.log
+          grep -q "Highest config run (C5-full): PASS" /tmp/tst-zfs-db-sim.log

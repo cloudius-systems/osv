@@ -1,0 +1,77 @@
+name: ZFS Image
+
+on:
+  push:
+    branches: [master, osv-improvements]
+  workflow_dispatch:
+    inputs:
+      fs_size_mb:
+        description: 'ZFS pool size in MiB (default: 4096)'
+        required: false
+        default: '4096'
+
+concurrency:
+  group: zfs-image-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build-zfs-image:
+    name: Build ZFS test image
+    runs-on: ubuntu-latest
+    container:
+      image: ubuntu:22.04
+      options: --privileged
+
+    steps:
+      - name: Install base tools
+        run: |
+          apt-get update -y -q
+          apt-get install -y -q git python3 sudo
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+          fetch-depth: 1
+
+      - name: Install build dependencies
+        run: python3 scripts/setup.py
+        env:
+          DEBIAN_FRONTEND: noninteractive
+
+      - name: Cache compiled objects
+        uses: actions/cache@v4
+        with:
+          path: build/release.x64
+          key: build-x64-${{ hashFiles('Makefile', 'conf/**', 'core/**', 'arch/x64/**', 'bsd/**', 'drivers/**', 'external/openzfs/**', 'musl_1.1.24/**') }}
+          restore-keys: build-x64-
+
+      - name: Build ZFS test image
+        run: |
+          FS_SIZE=${{ github.event.inputs.fs_size_mb || '4096' }}
+          # scripts/build (not make) is required to pass fs_size_mb.
+          # The ZFS image builder boots a QEMU VM (TCG mode, ~2-3 min without KVM)
+          # to initialize the ZFS pool, then uploads test binaries via cpiod.
+          scripts/build fs=zfs fs_size_mb=${FS_SIZE} image=zfs-test
+        env:
+          MAKEFLAGS: --no-print-directory
+
+      - name: Verify image
+        run: |
+          test -f build/release.x64/usr.img || (echo "usr.img missing"; exit 1)
+          python3 -c "
+          import subprocess, sys
+          r = subprocess.run(['qemu-img', 'info', 'build/release.x64/usr.img'],
+                             capture_output=True, text=True)
+          print(r.stdout)
+          if 'virtual size' not in r.stdout:
+              sys.exit(1)
+          "
+
+      - name: Upload ZFS test image
+        uses: actions/upload-artifact@v4
+        with:
+          name: zfs-test-image-${{ github.sha }}
+          path: |
+            build/release.x64/loader.img
+            build/release.x64/usr.img
+          retention-days: 3
