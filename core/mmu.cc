@@ -178,9 +178,12 @@ phys virt_to_phys(void *virt)
     }
 #endif
 
-    // For now, only allow non-mmaped areas.  Later, we can either
-    // bounce such addresses, or lock them in memory and translate
-    assert(virt >= phys_mem);
+    // For VMA-mapped addresses (below phys_mem), walk the page table.
+    // This handles e.g. malloc_large fallback allocations used as DMA
+    // buffers when physical memory is fragmented.
+    if (reinterpret_cast<uintptr_t>(virt) < reinterpret_cast<uintptr_t>(phys_mem)) {
+        return virt_to_phys_pt(virt);
+    }
     return reinterpret_cast<uintptr_t>(virt) & (mem_area_size - 1);
 }
 

@@ -1556,6 +1556,20 @@ void l2::refill()
                 total_size += page_size;
             }
             on_alloc(total_size);
+            if (batch.pages[page_batch::nr_pages - 1] == nullptr) {
+                // Last-page allocation failed: the pointer we'd use as the
+                // page_batch header itself is null. Return the pages we did
+                // get and stop rather than crashing on a null dereference.
+                for (size_t i = 0; i < page_batch::nr_pages; i++) {
+                    if (batch.pages[i]) {
+                        free_page_range_locked(
+                            new (batch.pages[i]) page_range(page_size));
+                    } else {
+                        on_free(page_size);  // undo the on_alloc for failed alloc
+                    }
+                }
+                break;
+            }
         }
         // Use the last page to store other page address
         pb = static_cast<page_batch*>(batch.pages[page_batch::nr_pages - 1]);
