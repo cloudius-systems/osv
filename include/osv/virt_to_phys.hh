@@ -13,6 +13,13 @@ namespace mmu {
 typedef uint64_t phys;
 phys virt_to_phys(void *virt);
 
+/*
+ * Page-table walk version: translates any virtual address (including
+ * VMA-mapped addresses below phys_mem) to its physical address.
+ * Used internally by virt_to_phys() for non-linearly-mapped addresses.
+ */
+phys virt_to_phys_pt(void *virt);
+
 };
 
 
