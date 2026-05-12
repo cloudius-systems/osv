@@ -4,7 +4,7 @@
 	ignore = dirty
 [submodule "apps"]
 	path = apps
-	url = ../../cloudius-systems/osv-apps
+	url = https://codeberg.org/gregburd/osv-apps
 	ignore = dirty
 [submodule "modules/httpserver/swagger-ui"]
 	path = modules/httpserver-html5-gui/swagger-ui
