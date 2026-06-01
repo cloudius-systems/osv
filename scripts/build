@@ -388,7 +388,7 @@ create_zfs_filesystem() {
 	fi
 }
 
-if [[ "$arch" == 'aarch64' ]]; then
+if [[ "$host_arch" == "x86_64" && "$arch" == 'aarch64' ]]; then
 	export STRIP=${CROSS_PREFIX:-aarch64-linux-gnu-}strip
 fi
 
