@@ -3186,7 +3186,25 @@ tcp_newreno_partial_ack(struct tcpcb *tp, struct tcphdr *th)
 #include <bsd/sys/net/ethernet.h>
 #include <bsd/sys/net/netisr.h>
 
-// INP_LOCK held
+/*
+ * Net-channel packet callback.  Called from process_queue() in the
+ * context of whoever drained the per-connection queue: usually the
+ * thread that holds SOCK_LOCK after socket_file::poll() / sosend() /
+ * soreceive() / soclose() acquired it before the call.  But a packet
+ * can also be drained from the IRQ-side classifier path which does
+ * NOT hold SOCK_LOCK, and the inpcb may have been detached from the
+ * socket (in_pcbdetach sets inp_socket to NULL) between when the
+ * net_channel was registered and when this callback runs.
+ *
+ * Defensive shape:
+ *   - Re-resolve `so` inside the callback; bail if the inpcb has
+ *     been detached (no socket to deliver to).
+ *   - Acquire SOCK_LOCK if we don't already own it.  OSv's mutex is
+ *     recursive so re-locking when the caller already holds it is a
+ *     cheap depth bump rather than a deadlock.
+ *   - The old SOCK_LOCK_ASSERT guarded against a class of bugs that
+ *     no longer apply once we acquire the lock ourselves; remove it.
+ */
 static void
 tcp_net_channel_packet(tcpcb* tp, mbuf* m)
 {
@@ -3202,14 +3220,56 @@ tcp_net_channel_packet(tcpcb* tp, mbuf* m)
 	auto drop_hdrlen = h - start;
 	tcp_fields_to_host(th);
 	trace_tcp_input_ack(tp, th->th_ack.raw());
-	auto so = tp->t_inpcb->inp_socket;
+	auto inp = tp->t_inpcb;
+	if (!inp) {
+		m_freem(m);
+		return;
+	}
+	auto so = inp->inp_socket;
+	if (!so) {
+		/* inpcb detached from socket; drop and let the close path
+		 * tear down the channel via tcp_free_net_channel(). */
+		m_freem(m);
+		return;
+	}
 	auto ip_len = ntohs(ip_hdr->ip_len);
 	auto tlen = ip_len - (ip_size + (th->th_off << 2));
 	auto iptos = ip_hdr->ip_tos;
-	SOCK_LOCK_ASSERT(so);
+	bool taken = !SOCK_OWNED(so);
+	if (taken) {
+		SOCK_LOCK(so);
+		/* Re-validate after acquiring the lock: detach could have
+		 * raced with us between the !SOCK_OWNED check and the lock
+		 * acquisition. */
+		if (!tp->t_inpcb || tp->t_inpcb->inp_socket != so) {
+			SOCK_UNLOCK(so);
+			m_freem(m);
+			return;
+		}
+	}
+	/*
+	 * tcp_do_segment() asserts the connection is past TCPS_LISTEN and not
+	 * in TIME_WAIT — it only knows how to process segments for a live
+	 * data-bearing connection.  The slow path (tcp_input) drops segments
+	 * for CLOSED/LISTEN connections before ever reaching tcp_do_segment;
+	 * the net-channel fast path must do the same.  Under connection churn
+	 * (e.g. a client tearing down and reconnecting), a packet can still be
+	 * queued in the channel after the tcpcb has transitioned to CLOSED,
+	 * which previously tripped the KASSERT and panicked the kernel.
+	 */
+	if (tp->get_state() <= TCPS_LISTEN || tp->get_state() == TCPS_TIME_WAIT) {
+		if (taken) {
+			SOCK_UNLOCK(so);
+		}
+		m_freem(m);
+		return;
+	}
 	bool want_close;
 	m_trim(m, ETHER_HDR_LEN + ip_len);
 	tcp_do_segment(m, th, so, tp, drop_hdrlen, tlen, iptos, TI_UNLOCKED, want_close);
+	if (taken) {
+		SOCK_UNLOCK(so);
+	}
 	// since a socket is still attached, we should not be closing
 	assert(!want_close);
 }
