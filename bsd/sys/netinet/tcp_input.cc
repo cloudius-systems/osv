@@ -3186,7 +3186,6 @@ tcp_newreno_partial_ack(struct tcpcb *tp, struct tcphdr *th)
 #include <bsd/sys/net/ethernet.h>
 #include <bsd/sys/net/netisr.h>
 
-// INP_LOCK held
 static void
 tcp_net_channel_packet(tcpcb* tp, mbuf* m)
 {
@@ -3202,14 +3201,56 @@ tcp_net_channel_packet(tcpcb* tp, mbuf* m)
 	auto drop_hdrlen = h - start;
 	tcp_fields_to_host(th);
 	trace_tcp_input_ack(tp, th->th_ack.raw());
-	auto so = tp->t_inpcb->inp_socket;
+
+	/*
+	 * Almost always we arrive here with the inpcb lock already held (the
+	 * old code simply assumed it).  The exception is the IRQ-side
+	 * classifier path, which can drain a queued packet without the lock.
+	 * So acquire INP_LOCK(inp) only if we don't already own it, and
+	 * release it below the same number of times (tracked by locked_here).
+	 *
+	 * We lock via the inpcb because tp->t_inpcb is the pointer we know is
+	 * valid; inp_socket is what in_pcbdetach() tears away.  Holding the
+	 * inpcb lock lets us re-read inp_socket and NULL-check it before use.
+	 */
+	auto inp = tp->t_inpcb;
+	if (!inp) {
+		m_freem(m);
+		return;
+	}
+	bool locked_here = !INP_LOCKED(inp);
+	if (locked_here) {
+		INP_LOCK(inp);
+	}
+	auto so = inp->inp_socket;
+	if (!so) {
+		if (locked_here) {
+			INP_UNLOCK(inp);
+		}
+		m_freem(m);
+		return;
+	}
 	auto ip_len = ntohs(ip_hdr->ip_len);
 	auto tlen = ip_len - (ip_size + (th->th_off << 2));
 	auto iptos = ip_hdr->ip_tos;
-	SOCK_LOCK_ASSERT(so);
+	/*
+	 * tcp_do_segment() only handles a live data-bearing connection.  The
+	 * slow path (tcp_input) drops segments for CLOSED/LISTEN/TIME_WAIT
+	 * before reaching it; mirror that here.
+	 */
+	if (tp->get_state() <= TCPS_LISTEN || tp->get_state() == TCPS_TIME_WAIT) {
+		if (locked_here) {
+			INP_UNLOCK(inp);
+		}
+		m_freem(m);
+		return;
+	}
 	bool want_close;
 	m_trim(m, ETHER_HDR_LEN + ip_len);
 	tcp_do_segment(m, th, so, tp, drop_hdrlen, tlen, iptos, TI_UNLOCKED, want_close);
+	if (locked_here) {
+		INP_UNLOCK(inp);
+	}
 	// since a socket is still attached, we should not be closing
 	assert(!want_close);
 }
