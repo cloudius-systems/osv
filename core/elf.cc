@@ -327,8 +327,14 @@ void file::read(Elf64_Off offset, void* data, size_t size)
 {
     // read(fileref, ...) is void, and crashes with assertion failure if the
     // file is not long enough. So we need to check first.
-    if (::size(_f) < offset + size) {
-        throw osv::invalid_elf_error("executable too short");
+    auto fsize = ::size(_f);
+    if (fsize < offset + size) {
+        char buf[256];
+        snprintf(buf, sizeof(buf),
+                 "executable too short %s: file_size=%lu need=%lu",
+                 _pathname.c_str(), (unsigned long)fsize,
+                 (unsigned long)(offset + size));
+        throw osv::invalid_elf_error(buf);
     }
     ::read(_f, data, offset, size);
 }
