@@ -120,8 +120,6 @@ int synch_port::_msleep(void *chan, struct mtx *mtx,
         if (chan) {
             // A pointer to the local "wait" may still be on the list -
             // need to remove it before we can return:
-            // A pointer to the local "wait" may still be on the list -
-            // need to remove it before we can return:
             mutex_lock(&_lock);
             auto ppp = _evlist.equal_range(chan);
             for (auto it=ppp.first; it!=ppp.second; ++it) {
@@ -160,8 +158,8 @@ void synch_port::wakeup_one(void* chan)
 
     mutex_lock(&_lock);
     auto ppp = _evlist.equal_range(chan);
-    auto it = ppp.first;
-    if (it != _evlist.end()) {
+    if (ppp.first != ppp.second) {
+        auto it = ppp.first;
         synch_thread* wait = (*it).second;
         _evlist.erase(it);
         trace_synch_wakeup_one_waking(chan, wait->_thread);
