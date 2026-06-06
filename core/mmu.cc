@@ -1242,7 +1242,7 @@ uintptr_t allocate(vma *v, uintptr_t start, size_t size, bool search)
 
 inline bool in_vma_range(void* addr)
 {
-    return reinterpret_cast<long>(addr) >= 0;
+    return addr < debug_base;
 }
 
 void vpopulate(void* addr, size_t size)
