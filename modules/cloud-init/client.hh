@@ -86,7 +86,7 @@ private:
     void process_headers();
     boost::asio::streambuf response;
     unsigned int status_code;
-    boost::asio::io_service io_service;
+    boost::asio::io_context io_service;
     boost::asio::ip::tcp::socket _socket;
     bool done = false;
     std::unordered_map<std::string, std::string> _headers;

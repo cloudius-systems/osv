@@ -9,7 +9,8 @@ INCLUDES += -I. -I $(src)/libc/internal
 #  -Wall turns on most, but not all, compiler warnings
 CXXFLAGS  = -g -Wall -std=$(conf_cxx_level) -fPIC $(COMMON) -O2
 
-boost-libs := -lboost_system -lboost_filesystem
+# boost::system is header-only since Boost 1.78; link only boost_filesystem
+boost-libs := -lboost_filesystem
 
 # the build target executable:
 TARGET = httpserver-api

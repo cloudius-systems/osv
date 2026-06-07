@@ -26,6 +26,7 @@
 #include "dump.hh"
 #include <osv/rcu.hh>
 #include <osv/rwlock.h>
+#include <algorithm>
 #include <numeric>
 #include <set>
 
