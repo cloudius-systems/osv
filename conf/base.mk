@@ -8,7 +8,7 @@ conf_logger_debug=0
 conf_debug_elf=0
 conf_hide_symbols=0
 conf_linker_extra_options=
-conf_cxx_level=gnu++11
+conf_cxx_level=gnu++14
 
 conf_lazy_stack=0
 conf_lazy_stack_invariant=0

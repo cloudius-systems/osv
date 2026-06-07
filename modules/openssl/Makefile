@@ -7,13 +7,18 @@
 SRC = $(shell readlink -f ../..)
 
 module:
-	$(SRC)/scripts/manifest_from_host.sh -l libssl.so.1.1 > usr.manifest
-	# From krb5-libs
-	$(SRC)/scripts/manifest_from_host.sh -l libgssapi_krb5.so.2 >> usr.manifest
-	# From libselinux
-	$(SRC)/scripts/manifest_from_host.sh -l libselinux.so.1 >> usr.manifest
-	# From xz-libs
-	$(SRC)/scripts/manifest_from_host.sh -l liblzma.so.5 >> usr.manifest
+	# Support OpenSSL 3.x (libssl.so.3) and legacy 1.1.x (libssl.so.1.1).
+	# OpenSSL 3.x is the current standard on modern distros and NixOS.
+	if $(SRC)/scripts/manifest_from_host.sh -l libssl.so.3 > usr.manifest 2>/dev/null && \
+	   grep -q libssl usr.manifest 2>/dev/null; then \
+		true; \
+	else \
+		$(SRC)/scripts/manifest_from_host.sh -l libssl.so.1.1 > usr.manifest; \
+	fi
+	# Optional runtime dependencies -- silently ignored if absent on host
+	$(SRC)/scripts/manifest_from_host.sh -li libgssapi_krb5.so.2 >> usr.manifest
+	$(SRC)/scripts/manifest_from_host.sh -li libselinux.so.1 >> usr.manifest
+	$(SRC)/scripts/manifest_from_host.sh -li liblzma.so.5 >> usr.manifest
 
 .PHONY: module
 

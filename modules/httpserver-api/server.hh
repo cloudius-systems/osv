@@ -63,7 +63,7 @@ private:
      * The io_service used to perform asynchronous operations.
      *
      */
-    boost::asio::io_service io_service_;
+    boost::asio::io_context io_service_;
 
     /**
      * Acceptor used to listen for incoming connections.

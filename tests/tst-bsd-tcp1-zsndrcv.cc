@@ -291,10 +291,10 @@ BOOST_AUTO_TEST_CASE(test_tcp_client_server)
 BOOST_AUTO_TEST_CASE(test_shutdown_wr)
 {
     using namespace boost::asio::ip;
-    boost::asio::io_service io_service;
+    boost::asio::io_context io_service;
     tcp::acceptor acceptor(io_service, tcp::endpoint(tcp::v4(), 10000));
     tcp::socket client(io_service);
-    client.connect(tcp::endpoint(address_v4::from_string("127.0.0.1"), 10000));
+    client.connect(tcp::endpoint(make_address_v4("127.0.0.1"), 10000));
     tcp::socket server(io_service);
     acceptor.accept(server);
     server.shutdown(tcp::socket::shutdown_send);

@@ -45,6 +45,22 @@ find_library()
 	local pattern="$1"
 	local count=$(ldconfig -p | grep -P "$pattern" | grep "${MACHINE}" | wc -l)
 
+	# On NixOS / Nix dev-shell, ldconfig -p returns nothing because libraries
+	# live in /nix/store and are not registered in the system ldconfig cache.
+	# Fall back to searching directories listed in LD_LIBRARY_PATH.
+	if [[ $count == 0 ]] && [[ -n "$LD_LIBRARY_PATH" ]]; then
+		local IFS=':'
+		for dir in $LD_LIBRARY_PATH; do
+			local found=$(find "$dir" -maxdepth 1 -name "*.so*" 2>/dev/null \
+				| grep -P "$pattern" | sort -V | tail -1)
+			if [[ -n "$found" ]]; then
+				so_name=$(basename "$found")
+				so_path="$found"
+				return 0
+			fi
+		done
+	fi
+
 	if [[ $count == 0 && $IGNORE_MISSING == false ]]; then
 		echo "Could not find any so file matching $pattern" >&2
 		return -1
@@ -66,6 +82,10 @@ output_manifest()
 {
 	local so_files="$1"
 	local so_filter="$2"
+	if [ -z "$LDDTREE_INSTALLED" ]; then
+		echo "Please install lddtree which is part of pax-utils package" >&2
+		exit 1
+	fi
 	echo "# --------------------" | tee -a $OUTPUT
 	echo "# Dependencies        " | tee -a $OUTPUT
 	echo "# --------------------" | tee -a $OUTPUT
@@ -74,13 +94,13 @@ output_manifest()
 			sed 's/.*=> //' | awk '// { printf("%s: %s\n", $0, $0); }' | sort | uniq | tee -a $OUTPUT
 		echo "/etc/ld.so.cache: /etc/ld.so.cache" | tee -a $OUTPUT
 	elif [[ $conf_hide_symbols == 1 ]]; then
-		lddtree $so_files | grep -v "not found" | grep -v "$so_filter" | grep -v "ld-linux-${MACHINE}" | \
+		lddtree $so_files | grep -v "not found" | grep -v " => None" | grep -v "$so_filter" | grep -v "ld-linux-${MACHINE}" | \
 			grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
-			sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
+			sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | grep -v ': None$' | sort | uniq | tee -a $OUTPUT
 	else
-		lddtree $so_files | grep -v "not found" | grep -v "$so_filter" | grep -v "ld-linux-${MACHINE}" | \
+		lddtree $so_files | grep -v "not found" | grep -v " => None" | grep -v "$so_filter" | grep -v "ld-linux-${MACHINE}" | \
 			grep -Pv 'lib(gcc_s|resolv|c|m|pthread|dl|rt|stdc\+\+|aio|xenstore|crypt|selinux)\.so([\d.]+)?' | \
-			sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | sort | uniq | tee -a $OUTPUT
+			sed 's/ =>/:/' | sed 's/^\s*lib/\/usr\/lib\/lib/' | grep -v ': None$' | sort | uniq | tee -a $OUTPUT
 	fi
 }
 
@@ -135,10 +155,6 @@ shift $((OPTIND - 1))
 [[ -z $1 ]] && usage 1
 
 LDDTREE_INSTALLED=$(command -v lddtree)
-if [ -z "$LDDTREE_INSTALLED" ]; then
-	echo "Please install lddtree which is part of pax-utils package" >&2
-	exit 1
-fi
 
 NAME_OR_PATH="$1"
 SUBDIRECTORY_PATH="$2"

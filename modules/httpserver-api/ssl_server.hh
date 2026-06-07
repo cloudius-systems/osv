@@ -22,11 +22,11 @@ namespace ssl = boost::asio::ssl;
 class ssl_acceptor : public acceptor
 {
 private:
-    boost::asio::io_service& _io_service;
+    boost::asio::io_context& _io_service;
     ssl::context _ctx;
     tcp::acceptor _tcp_acceptor;
 public:
-    ssl_acceptor(boost::asio::io_service& io_service,
+    ssl_acceptor(boost::asio::io_context& io_service,
             boost::asio::ssl::context&& ctx,
             tcp::acceptor&& tcp_acceptor);
 

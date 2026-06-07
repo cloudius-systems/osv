@@ -221,7 +221,7 @@ void global_server::set_routes()
         if (!fs::exists(plugin_path) && !fs::is_directory(plugin_path)) return;
         BOOST_FOREACH(const fs::path& path, std::make_pair(fs::directory_iterator(plugin_path),
                                                fs::directory_iterator())) {
-            if (fs::extension(path)==".so") {
+            if (path.extension().string()==".so") {
                 load_plugin(path.string());
             }
         }
