@@ -38,7 +38,7 @@ public:
         });
     }
 
-    void async_read_some(boost::asio::mutable_buffers_1 buf,
+    void async_read_some(boost::asio::mutable_buffer buf,
         std::function<void(boost::system::error_code, std::size_t)>&& callback) override
     {
         _socket->async_read_some(buf, std::move(callback));
@@ -56,7 +56,7 @@ public:
     }
 };
 
-ssl_acceptor::ssl_acceptor(boost::asio::io_service& io_service,
+ssl_acceptor::ssl_acceptor(boost::asio::io_context& io_service,
             boost::asio::ssl::context&& ctx,
             tcp::acceptor&& tcp_acceptor)
     : _io_service(io_service)

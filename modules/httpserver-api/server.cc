@@ -43,10 +43,10 @@ server::server(std::map<std::string,std::vector<std::string>> &config,
 {
     // Open the acceptor with the option to reuse the address (i.e. SO_REUSEADDR).
     boost::asio::ip::tcp::resolver resolver(io_service_);
-    boost::asio::ip::tcp::endpoint endpoint = *resolver.resolve({
-        options::extract_option_value(config, "ipaddress"),
-        options::extract_option_value(config, "port")
-    });
+    boost::asio::ip::tcp::endpoint endpoint =
+        resolver.resolve(
+            options::extract_option_value(config, "ipaddress"),
+            options::extract_option_value(config, "port")).begin()->endpoint();
 
     tcp::acceptor tcp_acceptor(io_service_);
     tcp_acceptor.open(endpoint.protocol());
@@ -112,7 +112,7 @@ void server::on_connected(std::shared_ptr<transport> t)
 
 void server::close()
 {
-    io_service_.dispatch([&] {
+    boost::asio::dispatch(io_service_, [&] {
         acceptor_->close();
         connection_manager_.stop_all();
         io_service_.stop();
