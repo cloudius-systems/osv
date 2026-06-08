@@ -34,7 +34,7 @@ public:
         callback(ec);
     }
 
-    void async_read_some(boost::asio::mutable_buffers_1 buf,
+    void async_read_some(boost::asio::mutable_buffer buf,
         std::function<void(boost::system::error_code, std::size_t)>&& callback) override
     {
         _socket.async_read_some(buf, std::move(callback));
@@ -52,7 +52,7 @@ public:
     }
 };
 
-plain_acceptor::plain_acceptor(boost::asio::io_service& io_service,
+plain_acceptor::plain_acceptor(boost::asio::io_context& io_service,
             tcp::acceptor&& tcp_acceptor)
     : _io_service(io_service)
     , _tcp_acceptor(std::move(tcp_acceptor))

@@ -8,7 +8,7 @@
 
 #include <boost/program_options.hpp>
 #include <boost/asio/ip/tcp.hpp>
-#include <boost/asio/io_service.hpp>
+#include <boost/asio/io_context.hpp>
 #include <string>
 #include <thread>
 #include <mutex>
@@ -58,7 +58,7 @@ private:
     private:
         tcp_test_client& _client;
         unique_lock<mutex> _lock;
-        boost::asio::io_service _io;
+        boost::asio::io_context _io;
         thread _thread;
     };
     friend class test_thread;
@@ -98,12 +98,13 @@ void tcp_test_client::test_thread::do_connection(int c)
     unique_lock<decltype(rev_lock)> lock_dropper(rev_lock);
     boost::asio::ip::tcp::socket socket(_io);
     boost::asio::ip::tcp::resolver resolver(_io);
-    boost::asio::ip::tcp::resolver::query query(_client._p.remote, "9999");
-    auto i = resolver.resolve(query);
-    if (i == decltype(resolver)::iterator()) {
+    /* Boost.Asio >= 1.74 removed resolver::query; resolve(host, port)
+     * returns a results_type range directly. */
+    auto results = resolver.resolve(_client._p.remote, "9999");
+    if (results.empty()) {
         throw runtime_error("cannot resolve address");
     }
-    auto endpoint = *i;
+    auto endpoint = results.begin()->endpoint();
     socket.open(boost::asio::ip::tcp::v4());  // for set_option()
     socket.set_option(decltype(socket)::reuse_address(true));
     socket.connect(endpoint);
@@ -117,7 +118,7 @@ void tcp_test_client::test_thread::do_connection(int c)
         auto offset_buffer = offset;
         while (done < transfer && offset < b_size) {
             auto tmp = boost::asio::buffer(send_buffer, transfer - offset_buffer) + offset;
-            auto delta = socket.write_some(boost::asio::const_buffers_1(tmp));
+            auto delta = socket.write_some(boost::asio::const_buffer(tmp));
             if (!delta) {
                 throw runtime_error("short write");
             }
@@ -127,7 +128,7 @@ void tcp_test_client::test_thread::do_connection(int c)
         offset = 0;
         while (rdone < transfer && offset < b_size) {
             auto tmp = boost::asio::buffer(receive_buffer, transfer - offset_buffer) + offset;
-            auto delta = socket.read_some(boost::asio::mutable_buffers_1(tmp));
+            auto delta = socket.read_some(boost::asio::mutable_buffer(tmp));
             if (!delta) {
                 throw runtime_error("short read");
             }

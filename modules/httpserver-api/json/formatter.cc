@@ -8,7 +8,7 @@
 #include "formatter.hh"
 #include "json_elements.hh"
 #include <float.h>
-#include <boost/math/special_functions/fpclassify.hpp>
+#include <cmath>
 #include <iomanip>
 
 using namespace std;
@@ -43,9 +43,9 @@ string formatter::to_json(long n)
 string formatter::to_json(float f)
 {
     int inf;
-    if ((inf = boost::math::isinf(f))) {
+    if ((inf = std::isinf(f))) {
         f = inf * FLT_MAX;
-    } else if (boost::math::isnan(f)) {
+    } else if (std::isnan(f)) {
         f = 0;
     }
     return to_string(f);

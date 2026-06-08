@@ -10,6 +10,7 @@
 #include <unordered_set>
 #include <deque>
 #include <stack>
+#include <algorithm>
 #include <boost/variant.hpp>
 #include <osv/pagecache.hh>
 #include <osv/mempool.hh>

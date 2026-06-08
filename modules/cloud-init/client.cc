@@ -41,7 +41,7 @@ void client::set_header(const std::string& name, const std::string& value)
 }
 
 template<typename Duration>
-static void connect_with_timeout(boost::asio::io_service& io_service,
+static void connect_with_timeout(boost::asio::io_context& io_service,
     boost::asio::ip::tcp::socket& _socket, tcp::endpoint& _endpoint,
     boost::system::error_code& ec, Duration duration)
 {

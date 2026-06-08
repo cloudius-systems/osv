@@ -21,7 +21,7 @@ class transport {
 public:
     virtual void close(std::function<void(boost::system::error_code)> callback) = 0;
 
-    virtual void async_read_some(boost::asio::mutable_buffers_1 buf,
+    virtual void async_read_some(boost::asio::mutable_buffer buf,
         std::function<void(boost::system::error_code, std::size_t)>&& callback) = 0;
 
     virtual void async_write(std::vector<boost::asio::const_buffer> buffers,

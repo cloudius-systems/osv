@@ -177,12 +177,13 @@ int main(int ac, char** av)
         return 1;
     }
 
-    boost::asio::io_service io_service;
+    boost::asio::io_context io_service;
     tcp::acceptor acceptor(io_service, tcp::endpoint(tcp::v4(), port));
 
-    cout << "Waiting for connection from host...\n";
-    boost::asio::ip::tcp::iostream socket;
-    acceptor.accept(*socket.rdbuf());
+    cout << "Waiting for connection from host..." << endl;
+    boost::asio::ip::tcp::socket raw_socket(io_service);
+    acceptor.accept(raw_socket);
+    boost::asio::ip::tcp::iostream socket(std::move(raw_socket));
     cpio_in_expand expand_files(prefix, verbose);
     cpio_in::parse(socket, expand_files);
     sync();
