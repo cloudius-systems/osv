@@ -1550,12 +1550,30 @@ void l2::refill()
                 // predictable.
                 reclaimer_thread.wait_for_memory(mmu::page_size);
             }
-            auto total_size = 0;
-            for (size_t i = 0 ; i < page_batch::nr_pages; i++) {
-                batch.pages[i] = free_page_ranges.alloc(page_size);
-                total_size += page_size;
+            size_t got = 0;
+            for (; got < page_batch::nr_pages; got++) {
+                page_range *pr = free_page_ranges.alloc(page_size);
+                if (!pr) {
+                    // Out of memory mid-batch. A page_batch is only usable
+                    // when completely filled: the last slot doubles as the
+                    // batch header (written below), and alloc_page_batch
+                    // hands out all nr_pages entries. A short batch with a
+                    // null in any slot would fault, so stop here and return
+                    // whatever we managed to grab. Checking inside the loop
+                    // (rather than only the last slot afterwards) is what
+                    // makes this sound: alloc can fail on any iteration.
+                    break;
+                }
+                batch.pages[got] = pr;
             }
-            on_alloc(total_size);
+            on_alloc(got * page_size);
+            if (got < page_batch::nr_pages) {
+                for (size_t i = 0; i < got; i++) {
+                    free_page_range_locked(
+                        new (batch.pages[i]) page_range(page_size));
+                }
+                break;
+            }
         }
         // Use the last page to store other page address
         pb = static_cast<page_batch*>(batch.pages[page_batch::nr_pages - 1]);
