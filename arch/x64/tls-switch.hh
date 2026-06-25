@@ -49,6 +49,28 @@ public:
         }
     }
 };
+//
+//Simple RAII utility classes that implement the logic to switch
+//fsbase to the specified app address and back to the kernel one
+class user_tls_switch {
+    thread_control_block *_kernel_tcb;
+public:
+    user_tls_switch() {
+        asm volatile ( "movq %%gs:16, %0\n\t" : "=r"(_kernel_tcb));
+
+        //Switch to app tcb if app tcb present
+        if (_kernel_tcb->app_tcb) {
+            set_fsbase(reinterpret_cast<u64>(_kernel_tcb->app_tcb));
+        }
+    }
+
+    ~user_tls_switch() {
+        //Switch to kernel tcb if app tcb present
+        if (_kernel_tcb->app_tcb) {
+            set_fsbase(reinterpret_cast<u64>(_kernel_tcb->self));
+        }
+    }
+};
 
 }
 
