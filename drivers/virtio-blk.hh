@@ -28,6 +28,7 @@ public:
         VIRTIO_BLK_F_WCE        = 9,  /* Writeback mode enabled after reset */
         VIRTIO_BLK_F_TOPOLOGY   = 10, /* Topology information is available */
         VIRTIO_BLK_F_CONFIG_WCE = 11, /* Writeback mode available in config */
+        VIRTIO_BLK_F_DISCARD    = 13, /* DISCARD is supported */
     };
 
     enum {
@@ -54,6 +55,8 @@ public:
         VIRTIO_BLK_T_FLUSH = 4,
         /* Get device ID command */
         VIRTIO_BLK_T_GET_ID = 8,
+        /* Discard command */
+        VIRTIO_BLK_T_DISCARD = 11,
         /* Barrier before this op. */
         VIRTIO_BLK_T_BARRIER = 0x80000000,
     };
@@ -96,6 +99,14 @@ public:
 
             /* writeback mode (if VIRTIO_BLK_F_CONFIG_WCE) */
             u8 wce;
+            u8 unused;
+            /* number of queues (if VIRTIO_BLK_F_MQ); kept here so the
+             * discard fields below sit at their spec-defined offsets */
+            u16 num_queues;
+            /* discard fields (if VIRTIO_BLK_F_DISCARD) */
+            u32 max_discard_sectors;
+            u32 max_discard_seg;
+            u32 discard_sector_alignment;
     } __attribute__((packed));
 
     /* This is the first element of the read scatter-gather list. */
@@ -106,6 +117,15 @@ public:
             u32 ioprio;
             /* Sector (ie. 512 byte offset) */
             u64 sector;
+    };
+
+    struct blk_discard_write_zeroes {
+            /* discard/write zeroes start sector */
+            u64 sector;
+            /* number of discard/write zeroes sectors */
+            u32 num_sectors;
+            /* flags for this range */
+            u32 flags;
     };
 
     struct virtio_scsi_inhdr {
@@ -147,6 +167,7 @@ private:
         blk_outhdr hdr;
         blk_res res;
         struct bio* bio;
+        blk_discard_write_zeroes discard_desc;
     };
 
     std::string _driver_name;
