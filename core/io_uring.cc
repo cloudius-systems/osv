@@ -1369,13 +1369,30 @@ int io_uring_file::close()
     return 0;
 }
 
+/* The io_uring_*_impl() functions implement the syscalls and return a negative
+ * errno directly on failure (Linux kernel style).  The sys_io_uring_*()
+ * wrappers below additionally set errno so that syscall_wrapper() in linux.cc
+ * reconstructs the Linux syscall ABI return correctly -- see the sys_ wrapper
+ * comment below for why this matters to liburing. */
+static long io_uring_setup_impl(unsigned entries, struct io_uring_params *params);
+static int  io_uring_enter_impl(int fd, unsigned to_submit, unsigned min_complete,
+                                unsigned flags, const void *sig, size_t sigsz);
+static int  io_uring_register_impl(int fd, unsigned opcode, void *arg,
+                                   unsigned nr_args);
+
 /* -------------------------------------------------------------------------
  * sys_io_uring_setup
+ *
+ * io_uring_setup_impl() returns a negative errno directly on failure (Linux
+ * kernel style), which the in-tree self-tests assert on by calling it through
+ * the sys_ wrapper below.  The sys_ wrapper additionally sets errno, because
+ * syscall_wrapper() in linux.cc reconstructs the Linux syscall ABI return as
+ * -errno for any negative result -- without errno set it would translate a
+ * -EINVAL into 0 (a false success), which makes liburing's
+ * io_uring_queue_init_mem() probe believe an unsupported ring layout works.
  * ---------------------------------------------------------------------- */
 
-extern "C"
-OSV_LIBC_API
-long sys_io_uring_setup(unsigned entries, struct io_uring_params *params)
+static long io_uring_setup_impl(unsigned entries, struct io_uring_params *params)
 {
     if (entries < MIN_ENTRIES || entries > MAX_ENTRIES)
         return -EINVAL;
@@ -1491,6 +1508,16 @@ long sys_io_uring_setup(unsigned entries, struct io_uring_params *params)
     }
 }
 
+extern "C"
+OSV_LIBC_API
+long sys_io_uring_setup(unsigned entries, struct io_uring_params *params)
+{
+    long r = io_uring_setup_impl(entries, params);
+    if (r < 0)
+        errno = -r;
+    return r;
+}
+
 /* -------------------------------------------------------------------------
  * sys_io_uring_enter
  * ---------------------------------------------------------------------- */
@@ -1499,6 +1526,15 @@ extern "C"
 OSV_LIBC_API
 int sys_io_uring_enter(int fd, unsigned to_submit, unsigned min_complete,
                        unsigned flags, const void *sig, size_t sigsz)
+{
+    int r = io_uring_enter_impl(fd, to_submit, min_complete, flags, sig, sigsz);
+    if (r < 0)
+        errno = -r;
+    return r;
+}
+
+static int io_uring_enter_impl(int fd, unsigned to_submit, unsigned min_complete,
+                               unsigned flags, const void *sig, size_t sigsz)
 {
     struct file *fp;
     int error = fget(fd, &fp);
@@ -1547,6 +1583,14 @@ int sys_io_uring_enter(int fd, unsigned to_submit, unsigned min_complete,
 extern "C"
 OSV_LIBC_API
 int sys_io_uring_register(int fd, unsigned opcode, void *arg, unsigned nr_args)
+{
+    int r = io_uring_register_impl(fd, opcode, arg, nr_args);
+    if (r < 0)
+        errno = -r;
+    return r;
+}
+
+static int io_uring_register_impl(int fd, unsigned opcode, void *arg, unsigned nr_args)
 {
     struct file *fp;
     int error = fget(fd, &fp);
