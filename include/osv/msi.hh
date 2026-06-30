@@ -11,6 +11,7 @@
 #include "drivers/pci-function.hh"
 
 #include <list>
+#include <vector>
 
 namespace sched {
 struct cpu;
@@ -65,6 +66,11 @@ public:
     // 3. Setup entries
     // 4. Unmask interrupts
     bool easy_register(std::initializer_list<msix_binding> bindings);
+    // Same as above but accepts a runtime-sized list of bindings, for devices
+    // (e.g. multiqueue virtio-blk) that assign one MSI-X vector per queue where
+    // the queue count is only known at probe time.  Both overloads forward to a
+    // common (pointer, count) helper, so neither copies the bindings.
+    bool easy_register(const std::vector<msix_binding>& bindings);
     void easy_unregister();
 
     /////////////////////
@@ -80,6 +86,10 @@ public:
     bool unmask_interrupts(const std::vector<msix_vector*>& vectors);
 
 private:
+    // Common implementation for both easy_register() overloads (initializer_list
+    // and std::vector); takes a raw (pointer, count) range so neither caller
+    // copies its bindings.
+    bool easy_register(const msix_binding* bindings, unsigned n);
     pci::function* _dev;
     // Used by the easy interface
     std::vector<msix_vector*> _easy_vectors;

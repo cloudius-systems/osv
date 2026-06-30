@@ -132,6 +132,20 @@ namespace virtio {
         trace_virtio_enable_interrupts(this);
         _avail->enable_interrupt();
         set_used_event(_used_ring_host_head, std::memory_order_relaxed);
+        // StoreLoad barrier: this seq_cst fence pairs with the device-side
+        // barrier so the enable-then-recheck idiom is race-free.  A consumer
+        // enables interrupts here and then re-reads the used ring; the device
+        // posts a completion (bumping used->_idx) and then reads _avail->_flags
+        // to decide whether to interrupt.  The fence orders our _flags=enabled
+        // store before our used->_idx load, so at least one side observes the
+        // other: either our re-check sees the new completion, or the device
+        // sees interrupts enabled and raises one.  Without this fence a
+        // completion could be missed with interrupts left disabled.  (The
+        // relaxed _flags stores in enable_interrupt()/disable_interrupt() are
+        // adequate only because of this fence.)  With multiqueue this reasoning
+        // holds per queue: each vring's _flags/used->_idx/_used_ring_host_head
+        // are independent and _used_ring_host_head is advanced only by the
+        // single consumer thread, never by an interrupt handler.
         std::atomic_thread_fence(std::memory_order_seq_cst);
     }
 
