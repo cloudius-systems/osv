@@ -22,6 +22,7 @@ extern "C" {
 #define BLKBSZGET  _IOR(0x12,112,size_t)
 #define BLKBSZSET  _IOW(0x12,113,size_t)
 #define BLKGETSIZE64 _IOR(0x12,114,size_t)
+#define BLKDISCARD _IO(0x12,119)
 
 #define MS_RDONLY      1
 #define MS_NOSUID      2

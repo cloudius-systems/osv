@@ -57,7 +57,7 @@ __BEGIN_DECLS
 #define BIO_FLUSH	0x10
 #define BIO_SCSI	0x20
 #define BIO_CMD1	0x40	/* Available for local hacks */
-#define BIO_CMD2	0x80	/* Available for local hacks */
+#define BIO_DISCARD	0x80	/* Space reclamation (TRIM) */
 
 /* bio_flags */
 #define BIO_ERROR	0x01
