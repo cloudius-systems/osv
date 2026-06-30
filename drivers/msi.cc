@@ -113,8 +113,16 @@ static inline void set_affinity_and_wake(
 
 bool interrupt_manager::easy_register(std::initializer_list<msix_binding> bindings)
 {
-    unsigned n = bindings.size();
+    return easy_register(bindings.begin(), bindings.size());
+}
 
+bool interrupt_manager::easy_register(const std::vector<msix_binding>& bindings)
+{
+    return easy_register(bindings.data(), bindings.size());
+}
+
+bool interrupt_manager::easy_register(const msix_binding* bindings, unsigned n)
+{
     std::vector<msix_vector*> assigned = request_vectors(n);
 
     if (assigned.size() != n) {
@@ -131,10 +139,9 @@ bool interrupt_manager::easy_register(std::initializer_list<msix_binding> bindin
         _dev->msi_enable();
     }
 
-    int idx=0;
-
-    for (auto binding : bindings) {
-        msix_vector* vec = assigned[idx++];
+    for (unsigned idx = 0; idx < n; idx++) {
+        msix_vector* vec = assigned[idx];
+        const msix_binding& binding = bindings[idx];
         auto isr = binding.isr;
         auto t = binding.t;
 
