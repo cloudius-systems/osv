@@ -235,6 +235,13 @@ void blk::read_config()
         set_readonly();
         trace_virtio_blk_read_config_ro();
     }
+    if (get_guest_feature_bit(VIRTIO_BLK_F_DISCARD)) {
+        READ_CONFIGURATION_FIELD(blk_config,max_discard_sectors,_config.max_discard_sectors)
+        READ_CONFIGURATION_FIELD(blk_config,max_discard_seg,_config.max_discard_seg)
+        READ_CONFIGURATION_FIELD(blk_config,discard_sector_alignment,_config.discard_sector_alignment)
+        virtio_i("virtio-blk: DISCARD support enabled (max_sectors=%u, max_seg=%u, alignment=%u)\n",
+                _config.max_discard_sectors, _config.max_discard_seg, _config.discard_sector_alignment);
+    }
 }
 
 void blk::req_done()
@@ -314,6 +321,21 @@ int blk::make_request(struct bio* bio)
         case BIO_FLUSH:
             type = VIRTIO_BLK_T_FLUSH;
             break;
+        case BIO_DISCARD:
+            if (!get_guest_feature_bit(VIRTIO_BLK_F_DISCARD)) {
+                biodone(bio, false);
+                return EOPNOTSUPP;
+            }
+            // The discard range must be sector-aligned; silently rounding it
+            // down would discard a different range than the caller asked for.
+            if (bio->bio_bcount == 0 ||
+                (bio->bio_offset % sector_size) != 0 ||
+                (bio->bio_bcount % sector_size) != 0) {
+                biodone(bio, false);
+                return EINVAL;
+            }
+            type = VIRTIO_BLK_T_DISCARD;
+            break;
         default:
             return ENOTBLK;
         }
@@ -327,7 +349,12 @@ int blk::make_request(struct bio* bio)
         queue->init_sg();
         queue->add_out_sg(hdr, sizeof(struct blk_outhdr));
 
-        if (bio->bio_data && bio->bio_bcount > 0) {
+        if (type == VIRTIO_BLK_T_DISCARD) {
+            req->discard_desc.sector = bio->bio_offset / sector_size;
+            req->discard_desc.num_sectors = bio->bio_bcount / sector_size;
+            req->discard_desc.flags = 0;
+            queue->add_out_sg(&req->discard_desc, sizeof(req->discard_desc));
+        } else if (bio->bio_data && bio->bio_bcount > 0) {
             if (type == VIRTIO_BLK_T_OUT)
                 queue->add_out_sg(bio->bio_data, bio->bio_bcount);
             else
@@ -354,7 +381,8 @@ u64 blk::get_driver_features()
                  | ( 1 << VIRTIO_BLK_F_RO)
                  | ( 1 << VIRTIO_BLK_F_BLK_SIZE)
                  | ( 1 << VIRTIO_BLK_F_CONFIG_WCE)
-                 | ( 1 << VIRTIO_BLK_F_WCE));
+                 | ( 1 << VIRTIO_BLK_F_WCE)
+                 | ( 1 << VIRTIO_BLK_F_DISCARD));
 }
 
 hw_driver* blk::probe(hw_device* dev)
