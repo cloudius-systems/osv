@@ -117,7 +117,7 @@ bool blk::ack_irq()
 }
 
 blk::blk(virtio_device& virtio_dev)
-    : virtio_driver(virtio_dev), _ro(false)
+    : virtio_driver(virtio_dev), _ro(false), _num_queues(1), _queue_locks(1)
 {
     _driver_name = "virtio-blk";
     _id = _instance++;
@@ -130,12 +130,31 @@ blk::blk(virtio_device& virtio_dev)
     // Step 7 - generic init of virtqueues
     probe_virt_queues();
 
-    //register the single irq callback for the block
-    sched::thread* t = sched::thread::make([this] { this->req_done(); },
-            sched::thread::attr().name("virtio-blk"));
-    t->start();
-    auto queue = get_virt_queue(0);
+    // read_config() recorded the device's advertised num_queues, but
+    // probe_virt_queues() determines how many virtqueues actually exist and
+    // stores that in the base class _num_queues.  Use the probed count as the
+    // authoritative value so make_request()/req_done() never index a queue the
+    // base class did not set up.
+    _num_queues = virtio_driver::_num_queues;
 
+    // Resize per-queue lock vector now that _num_queues is known.
+    _queue_locks = std::vector<mutex>(_num_queues);
+
+    // Enable indirect descriptors on every queue so large multi-segment
+    // requests use a single descriptor entry on whichever queue
+    // make_request() selects.
+    for (int qid = 0; qid < _num_queues; qid++) {
+        get_virt_queue(qid)->set_use_indirect(true);
+    }
+
+    // virtio-blk uses a single shared interrupt, so one completion thread
+    // services all queues: it wakes on the IRQ, then drains every queue.
+    sched::thread* t = sched::thread::make(
+        [this] { this->req_done(); },
+        sched::thread::attr().name("virtio-blk"));
+    t->start();
+
+    auto queue = get_virt_queue(0);
     interrupt_factory int_factory;
 #if CONF_drivers_pci
     int_factory.register_msi_bindings = [queue, t](interrupt_manager &msi) {
@@ -167,12 +186,7 @@ blk::blk(virtio_device& virtio_dev)
     };
 #endif
 #endif
-
     _dev.register_interrupt(int_factory);
-
-    // Enable indirect descriptor
-    queue->set_use_indirect(true);
-
     // Step 8
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
 
@@ -235,6 +249,10 @@ void blk::read_config()
         set_readonly();
         trace_virtio_blk_read_config_ro();
     }
+    if (get_guest_feature_bit(VIRTIO_BLK_F_MQ)) {
+        READ_CONFIGURATION_FIELD(blk_config,num_queues,_config.num_queues)
+        virtio_i("virtio-blk: multiqueue, device advertises %d queues\n", _config.num_queues);
+    }
     if (get_guest_feature_bit(VIRTIO_BLK_F_DISCARD)) {
         READ_CONFIGURATION_FIELD(blk_config,max_discard_sectors,_config.max_discard_sectors)
         READ_CONFIGURATION_FIELD(blk_config,max_discard_seg,_config.max_discard_seg)
@@ -244,41 +262,90 @@ void blk::read_config()
     }
 }
 
-void blk::req_done()
+/*
+ * drain_queue() — pull all completed requests off one virtqueue ring.
+ * Returns the number of completions processed.
+ */
+int blk::drain_queue(vring* queue)
 {
-    auto* queue = get_virt_queue(0);
+    int n = 0;
+    u32 len;
     blk_req* req;
 
-    while (1) {
+    while ((req = static_cast<blk_req*>(queue->get_buf_elem(&len))) != nullptr) {
+        if (req->bio) {
+            switch (req->res.status) {
+            case VIRTIO_BLK_S_OK:
+                trace_virtio_blk_req_ok(req->bio, req->hdr.sector,
+                                        req->bio->bio_bcount, req->hdr.type);
+                biodone(req->bio, true);
+                break;
+            case VIRTIO_BLK_S_UNSUPP:
+                trace_virtio_blk_req_unsupp(req->bio, req->hdr.sector,
+                                            req->bio->bio_bcount, req->hdr.type);
+                biodone(req->bio, false);
+                break;
+            default:
+                trace_virtio_blk_req_err(req->bio, req->hdr.sector,
+                                         req->bio->bio_bcount, req->hdr.type);
+                biodone(req->bio, false);
+                break;
+            }
+        }
+        delete req;
+        queue->get_buf_finalize();
+        n++;
+    }
+    return n;
+}
 
-        virtio_driver::wait_for_queue(queue, &vring::used_ring_not_empty);
+/*
+ * req_done() — single completion thread for all virtqueues.
+ *
+ * virtio-blk uses one shared interrupt, so a completion landing on any queue
+ * wakes this thread.  It sleeps until at least one queue's used ring is
+ * non-empty, then drains every queue.  Each queue's lock is held only while
+ * that queue is drained, so make_request() on other CPUs/queues can proceed
+ * concurrently.
+ */
+bool blk::any_queue_not_empty()
+{
+    for (int q = 0; q < _num_queues; q++) {
+        auto* ring = get_virt_queue(q);
+        if (ring->used_ring_not_empty()) {
+            ring->disable_interrupts();
+            return true;
+        }
+    }
+    // Nothing pending: re-arm interrupts on every queue, then re-check to
+    // close the race where a completion arrives between the loop above and
+    // enabling interrupts here.
+    for (int q = 0; q < _num_queues; q++) {
+        get_virt_queue(q)->enable_interrupts();
+    }
+    for (int q = 0; q < _num_queues; q++) {
+        auto* ring = get_virt_queue(q);
+        if (ring->used_ring_not_empty()) {
+            ring->disable_interrupts();
+            return true;
+        }
+    }
+    return false;
+}
+
+void blk::req_done()
+{
+    while (1) {
+        sched::thread::wait_until([this] { return this->any_queue_not_empty(); });
         trace_virtio_blk_wake();
 
-        u32 len;
-        while((req = static_cast<blk_req*>(queue->get_buf_elem(&len))) != nullptr) {
-            if (req->bio) {
-                switch (req->res.status) {
-                case VIRTIO_BLK_S_OK:
-                    trace_virtio_blk_req_ok(req->bio, req->hdr.sector, req->bio->bio_bcount, req->hdr.type);
-                    biodone(req->bio, true);
-                    break;
-                case VIRTIO_BLK_S_UNSUPP:
-                    trace_virtio_blk_req_unsupp(req->bio, req->hdr.sector, req->bio->bio_bcount, req->hdr.type);
-                    biodone(req->bio, false);
-                    break;
-                default:
-                    trace_virtio_blk_req_err(req->bio, req->hdr.sector, req->bio->bio_bcount, req->hdr.type);
-                    biodone(req->bio, false);
-                    break;
-               }
+        for (int q = 0; q < _num_queues; q++) {
+            WITH_LOCK(_queue_locks[q]) {
+                auto* q_ring = get_virt_queue(q);
+                drain_queue(q_ring);
+                q_ring->wakeup_waiter();
             }
-
-            delete req;
-            queue->get_buf_finalize();
         }
-
-        // wake up the requesting thread in case the ring was full before
-        queue->wakeup_waiter();
     }
 }
 
@@ -291,19 +358,21 @@ int64_t blk::size()
 
 int blk::make_request(struct bio* bio)
 {
-    // The lock is here for parallel requests protection
-    WITH_LOCK(_lock) {
+    if (!bio) return EIO;
 
-        if (!bio) return EIO;
-
-        if (get_guest_feature_bit(VIRTIO_BLK_F_SEG_MAX)) {
-            if (bio->bio_bcount/mmu::page_size + 1 > _config.seg_max) {
-                trace_virtio_blk_make_request_seg_max(bio->bio_bcount, _config.seg_max);
-                return EIO;
-            }
+    if (get_guest_feature_bit(VIRTIO_BLK_F_SEG_MAX)) {
+        if (bio->bio_bcount/mmu::page_size + 1 > _config.seg_max) {
+            trace_virtio_blk_make_request_seg_max(bio->bio_bcount, _config.seg_max);
+            return EIO;
         }
+    }
 
-        auto* queue = get_virt_queue(0);
+    /* Select a queue by CPU id so parallel CPUs use independent rings. */
+    int qid = sched::cpu::current()->id % _num_queues;
+
+    WITH_LOCK(_queue_locks[qid]) {
+
+        auto* queue = get_virt_queue(qid);
         blk_request_type type;
 
         switch (bio->bio_cmd) {
@@ -382,6 +451,7 @@ u64 blk::get_driver_features()
                  | ( 1 << VIRTIO_BLK_F_BLK_SIZE)
                  | ( 1 << VIRTIO_BLK_F_CONFIG_WCE)
                  | ( 1 << VIRTIO_BLK_F_WCE)
+                 | ( 1 << VIRTIO_BLK_F_MQ)
                  | ( 1 << VIRTIO_BLK_F_DISCARD));
 }
 
