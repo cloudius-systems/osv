@@ -36,6 +36,7 @@
 #include <osv/export.h>
 #include <pwd.h>
 #include <fcntl.h>
+#include <sys/stat.h>
 #include <osv/barrier.hh>
 #include "smp.hh"
 #include "bsd/sys/sys/sysctl.h"
@@ -281,7 +282,24 @@ LFS64(posix_fadvise) __attribute__((nothrow));
 OSV_LIBC_API
 int posix_fallocate(int fd, off_t offset, off_t len)
 {
-    return ENOSYS;
+    if (offset < 0 || len <= 0) {
+        return EINVAL;
+    }
+    // OSv has no SYS_fallocate; emulate by extending the file with ftruncate.
+    // POSIX posix_fallocate never shrinks, so only grow when the requested
+    // region ends beyond the current size. This covers the callers that matter
+    // (PostgreSQL DSM, which prefers posix_fallocate over ftruncate on Linux).
+    struct stat st;
+    if (fstat(fd, &st) < 0) {
+        return errno;
+    }
+    off_t end = offset + len;
+    if (end > st.st_size) {
+        if (ftruncate(fd, end) < 0) {
+            return errno;
+        }
+    }
+    return 0;
 }
 LFS64(posix_fallocate) __attribute__((nothrow));
 
