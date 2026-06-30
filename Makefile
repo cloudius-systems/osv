@@ -86,6 +86,12 @@ CROSS_PREFIX ?= $(if $(filter-out $(arch),$(host_arch)),$(arch)-linux-gnu-)
 CXX=$(CROSS_PREFIX)g++
 CC=$(CROSS_PREFIX)gcc
 LD=$(CROSS_PREFIX)ld.bfd
+# binutils >= 2.39 warns about LOAD segments with RWX permissions. OSv intentionally
+# uses a single RWX LOAD segment in loader.ld, so suppress the warning if supported.
+ld_no_warn_rwx := $(shell $(LD) --no-warn-rwx-segments 2>&1 | grep -c "unrecognized option")
+ifeq ($(ld_no_warn_rwx),0)
+conf_linker_extra_options += --no-warn-rwx-segments
+endif
 export STRIP=$(CROSS_PREFIX)strip
 OBJCOPY=$(CROSS_PREFIX)objcopy
 
