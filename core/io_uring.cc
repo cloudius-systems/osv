@@ -382,8 +382,17 @@ static int32_t exec_single_sqe(struct io_uring_ctx *ctx,
         pfd.events  = (short)(sqe->poll32_events ? sqe->poll32_events
                                                   : sqe->poll_events);
         pfd.revents = 0;
-        /* Blocking poll: wait up to ~30 s, then return 0 (timeout) */
-        int r = ::poll(&pfd, 1, 30000);
+        /*
+         * io_uring POLL_ADD has no implicit timeout -- it completes only when
+         * an event fires or an error occurs.  poll() with a finite timeout is
+         * used so the worker stays responsive, but a plain timeout (r == 0) is
+         * not a completion: retry until we get events or a hard error.
+         */
+        int r;
+        do {
+            pfd.revents = 0;
+            r = ::poll(&pfd, 1, 30000);
+        } while (r == 0);
         if (r < 0)  res = -errno;
         else        res = pfd.revents;
         break;
@@ -402,7 +411,23 @@ static int32_t exec_single_sqe(struct io_uring_ctx *ctx,
 
     /* --- TIMEOUT --- */
     case IORING_OP_TIMEOUT: {
+        /*
+         * This implementation treats the timespec as a relative duration and
+         * honors only IORING_TIMEOUT_ETIME_SUCCESS.  Absolute/clock-select and
+         * multishot variants are not implemented, so reject them rather than
+         * silently mistreating an absolute deadline as a relative sleep.
+         */
+        const uint32_t supported_timeout_flags = IORING_TIMEOUT_ETIME_SUCCESS;
+        if (sqe->timeout_flags & ~supported_timeout_flags) {
+            res = -EINVAL;
+            break;
+        }
         auto *ts = reinterpret_cast<const struct __kernel_timespec *>(sqe->addr);
+        if (!ts) { res = -EFAULT; break; }
+        if (ts->tv_sec < 0 || ts->tv_nsec < 0 || ts->tv_nsec >= 1000000000L) {
+            res = -EINVAL;
+            break;
+        }
         auto ns  = std::chrono::seconds(ts->tv_sec) +
                    std::chrono::nanoseconds(ts->tv_nsec);
 
@@ -825,6 +850,12 @@ static int32_t exec_single_sqe(struct io_uring_ctx *ctx,
 
     /* --- RENAMEAT --- */
     case IORING_OP_RENAMEAT: {
+        /*
+         * The Linux ABI for this opcode uses renameat2() semantics, carrying
+         * flags in sqe->rename_flags.  OSv only implements plain renameat(),
+         * so reject any nonzero flags rather than silently dropping them.
+         */
+        if (sqe->rename_flags) { res = -EINVAL; break; }
         const char *oldpath = reinterpret_cast<const char *>(sqe->addr);
         const char *newpath = reinterpret_cast<const char *>(sqe->addr2);
         int r = ::renameat(sqe->fd, oldpath, (int)sqe->len, newpath);
@@ -1612,6 +1643,7 @@ static int io_uring_register_impl(int fd, unsigned opcode, void *arg, unsigned n
         case IORING_REGISTER_BUFFERS: {
             if (ctx->registered_buffers) { ret = -EBUSY; break; }
             if (nr_args == 0 || nr_args > 1024) { ret = -EINVAL; break; }
+            if (!arg) { ret = -EFAULT; break; }
 
             auto *iovecs = static_cast<struct iovec *>(arg);
             ctx->registered_buffers = new void *[nr_args];
@@ -1631,6 +1663,7 @@ static int io_uring_register_impl(int fd, unsigned opcode, void *arg, unsigned n
         case IORING_REGISTER_FILES: {
             if (ctx->registered_files) { ret = -EBUSY; break; }
             if (nr_args == 0 || nr_args > 1024) { ret = -EINVAL; break; }
+            if (!arg) { ret = -EFAULT; break; }
 
             int *fds = static_cast<int *>(arg);
             ctx->registered_files = new struct file *[nr_args]();
@@ -1743,10 +1776,18 @@ static int io_uring_register_impl(int fd, unsigned opcode, void *arg, unsigned n
              */
             if (!arg) { ret = -EFAULT; break; }
             auto *reg = static_cast<struct io_uring_buf_reg *>(arg);
+            uint32_t nent = reg->ring_entries;
+            /*
+             * The ring is indexed with a mask of (nent - 1), so nent must be
+             * a nonzero power of two, and the ring address must be valid.
+             */
+            if (!reg->ring_addr || nent == 0 || (nent & (nent - 1)) != 0) {
+                ret = -EINVAL;
+                break;
+            }
             auto *ring = reinterpret_cast<struct io_uring_buf_ring *>(
                              reg->ring_addr);
             uint16_t bgid = reg->bgid;
-            uint32_t nent = reg->ring_entries;
 
             auto &group = ctx->buf_groups[bgid];
             group.clear();

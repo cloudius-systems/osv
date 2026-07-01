@@ -293,7 +293,10 @@ int posix_fallocate(int fd, off_t offset, off_t len)
     if (fstat(fd, &st) < 0) {
         return errno;
     }
-    off_t end = offset + len;
+    off_t end;
+    if (__builtin_add_overflow(offset, len, &end)) {
+        return EOVERFLOW;
+    }
     if (end > st.st_size) {
         if (ftruncate(fd, end) < 0) {
             return errno;
