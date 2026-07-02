@@ -73,7 +73,32 @@ enum {
     IORING_OP_MKDIRAT,          /* 37 */
     IORING_OP_SYMLINKAT,        /* 38 */
     IORING_OP_LINKAT,           /* 39 */
-    IORING_OP_LAST,             /* 40 - not a real op, used as sentinel */
+    IORING_OP_MSG_RING,         /* 40 */
+    IORING_OP_FSETXATTR,        /* 41 */
+    IORING_OP_SETXATTR,         /* 42 */
+    IORING_OP_FGETXATTR,        /* 43 */
+    IORING_OP_GETXATTR,         /* 44 */
+    IORING_OP_SOCKET,           /* 45 */
+    IORING_OP_URING_CMD,        /* 46 */
+    IORING_OP_SEND_ZC,          /* 47 */
+    IORING_OP_SENDMSG_ZC,       /* 48 */
+    IORING_OP_READ_MULTISHOT,   /* 49 */
+    IORING_OP_WAITID,           /* 50 */
+    IORING_OP_FUTEX_WAIT,       /* 51 */
+    IORING_OP_FUTEX_WAKE,       /* 52 */
+    IORING_OP_FUTEX_WAITV,      /* 53 */
+    IORING_OP_FIXED_FD_INSTALL, /* 54 */
+    IORING_OP_FTRUNCATE,        /* 55 */
+    IORING_OP_BIND,             /* 56 */
+    IORING_OP_LISTEN,           /* 57 */
+    IORING_OP_RECV_ZC,          /* 58 */
+    IORING_OP_EPOLL_WAIT,       /* 59 */
+    IORING_OP_READV_FIXED,      /* 60 */
+    IORING_OP_WRITEV_FIXED,     /* 61 */
+    IORING_OP_PIPE,             /* 62 */
+    IORING_OP_NOP128,           /* 63 */
+    IORING_OP_URING_CMD128,     /* 64 */
+    IORING_OP_LAST,             /* 65 - not a real op, used as sentinel */
 };
 
 /* SQE flags (sqe->flags) */
@@ -92,6 +117,21 @@ enum {
 #define IORING_SETUP_CQSIZE     (1U << 3)
 #define IORING_SETUP_CLAMP      (1U << 4)
 #define IORING_SETUP_ATTACH_WQ  (1U << 5)
+#define IORING_SETUP_R_DISABLED         (1U << 6)   /* start with ring disabled */
+#define IORING_SETUP_SUBMIT_ALL         (1U << 7)   /* continue submit on error */
+#define IORING_SETUP_COOP_TASKRUN       (1U << 8)
+#define IORING_SETUP_TASKRUN_FLAG       (1U << 9)
+#define IORING_SETUP_SQE128             (1U << 10)  /* SQEs are 128 byte */
+#define IORING_SETUP_CQE32              (1U << 11)  /* CQEs are 32 byte */
+#define IORING_SETUP_SINGLE_ISSUER      (1U << 12)
+#define IORING_SETUP_DEFER_TASKRUN      (1U << 13)
+#define IORING_SETUP_NO_MMAP            (1U << 14)
+#define IORING_SETUP_REGISTERED_FD_ONLY (1U << 15)
+#define IORING_SETUP_NO_SQARRAY         (1U << 16)
+#define IORING_SETUP_HYBRID_IOPOLL      (1U << 17)
+#define IORING_SETUP_CQE_MIXED          (1U << 18)
+#define IORING_SETUP_SQE_MIXED          (1U << 19)
+#define IORING_SETUP_SQ_REWIND          (1U << 20)
 
 /* Feature flags returned in io_uring_params.features */
 #define IORING_FEAT_SINGLE_MMAP         (1U << 0)
@@ -104,6 +144,14 @@ enum {
 #define IORING_FEAT_SQPOLL_NONFIXED     (1U << 7)
 #define IORING_FEAT_EXT_ARG             (1U << 8)
 #define IORING_FEAT_NATIVE_WORKERS      (1U << 9)
+#define IORING_FEAT_RSRC_TAGS           (1U << 10)
+#define IORING_FEAT_CQE_SKIP            (1U << 11)
+#define IORING_FEAT_LINKED_FILE         (1U << 12)
+#define IORING_FEAT_REG_REG_RING        (1U << 13)
+#define IORING_FEAT_RECVSEND_BUNDLE     (1U << 14)
+#define IORING_FEAT_MIN_TIMEOUT         (1U << 15)
+#define IORING_FEAT_RW_ATTR             (1U << 16)
+#define IORING_FEAT_NO_IOWAIT           (1U << 17)
 
 /* SQ ring flags (sq_ring->flags, written by kernel) */
 #define IORING_SQ_NEED_WAKEUP   (1U << 0)
@@ -112,10 +160,40 @@ enum {
 /* io_uring_enter() flags */
 #define IORING_ENTER_GETEVENTS  (1U << 0)
 #define IORING_ENTER_SQ_WAKEUP  (1U << 1)
+#define IORING_ENTER_SQ_WAIT            (1U << 2)
+#define IORING_ENTER_EXT_ARG            (1U << 3)
+#define IORING_ENTER_REGISTERED_RING    (1U << 4)
+#define IORING_ENTER_ABS_TIMER          (1U << 5)
+#define IORING_ENTER_EXT_ARG_REG        (1U << 6)
+#define IORING_ENTER_NO_IOWAIT          (1U << 7)
 
 /* CQE flags */
-#define IORING_CQE_F_BUFFER     (1U << 0)   /* upper 16 bits are buffer index */
-#define IORING_CQE_F_MORE       (1U << 1)   /* more completions follow (multishot) */
+#define IORING_CQE_F_BUFFER         (1U << 0)   /* upper 16 bits are buffer index */
+#define IORING_CQE_F_MORE           (1U << 1)   /* more completions follow (multishot) */
+#define IORING_CQE_F_SOCK_NONEMPTY  (1U << 2)   /* socket has more data to read */
+#define IORING_CQE_F_NOTIF          (1U << 3)   /* zero-copy notification CQE */
+#define IORING_CQE_F_BUF_MORE       (1U << 4)   /* current buffer not fully consumed */
+#define IORING_CQE_F_SKIP           (1U << 5)   /* skipped CQE */
+#define IORING_CQE_F_32             (1U << 15)  /* 32-byte CQE variant */
+
+/* POLL_ADD command flags (stored in sqe->len, NOT poll_events) */
+#define IORING_POLL_ADD_MULTI       (1U << 0)   /* multishot poll */
+#define IORING_POLL_UPDATE_EVENTS   (1U << 1)
+#define IORING_POLL_UPDATE_USER_DATA (1U << 2)
+#define IORING_POLL_ADD_LEVEL       (1U << 3)
+
+/* ACCEPT command flags (stored in sqe->ioprio) */
+#define IORING_ACCEPT_MULTISHOT     (1U << 0)   /* multishot accept */
+#define IORING_ACCEPT_DONTWAIT      (1U << 1)
+#define IORING_ACCEPT_POLL_FIRST    (1U << 2)
+
+/* RECV/SEND command flags (stored in sqe->ioprio) */
+#define IORING_RECVSEND_POLL_FIRST  (1U << 0)
+#define IORING_RECV_MULTISHOT       (1U << 1)   /* multishot recv */
+#define IORING_RECVSEND_FIXED_BUF   (1U << 2)
+#define IORING_SEND_ZC_REPORT_USAGE (1U << 3)
+#define IORING_RECVSEND_BUNDLE      (1U << 4)
+#define IORING_SEND_VECTORIZED      (1U << 5)
 
 /* Timeout flags (sqe->timeout_flags) */
 #define IORING_TIMEOUT_ABS              (1U << 0)
@@ -128,6 +206,14 @@ enum {
 
 /* SPLICE_F_FD_IN_FIXED: fd_in for IORING_OP_SPLICE is a registered file */
 #define SPLICE_F_FD_IN_FIXED    (1U << 31)
+
+/* IORING_OP_MSG_RING command (sqe->addr) */
+#define IORING_MSG_DATA         0   /* pass sqe->len as res, sqe->off as user_data */
+#define IORING_MSG_SEND_FD      1   /* send a registered file descriptor */
+
+/* IORING_OP_MSG_RING flags (sqe->msg_ring_flags == sqe->rw_flags/fsync_flags union) */
+#define IORING_MSG_RING_CQE_SKIP    (1U << 0)   /* don't post a CQE on the source ring */
+#define IORING_MSG_RING_FLAGS_PASS  (1U << 1)   /* pass sqe->file_index as cqe->flags */
 
 /* Submission Queue Entry */
 struct io_uring_sqe {
@@ -271,6 +357,23 @@ enum {
     IORING_REGISTER_PBUF_RING           = 22,
     IORING_UNREGISTER_PBUF_RING        = 23,
     IORING_REGISTER_SYNC_CANCEL         = 24,
+    IORING_REGISTER_FILE_ALLOC_RANGE    = 25,
+    IORING_REGISTER_PBUF_STATUS         = 26,
+    IORING_REGISTER_NAPI                = 27,
+    IORING_UNREGISTER_NAPI              = 28,
+    IORING_REGISTER_CLOCK               = 29,
+    IORING_REGISTER_CLONE_BUFFERS       = 30,
+    IORING_REGISTER_SEND_MSG_RING       = 31,
+    IORING_REGISTER_ZCRX_IFQ            = 32,
+    IORING_REGISTER_RESIZE_RINGS        = 33,
+    IORING_REGISTER_MEM_REGION          = 34,
+    IORING_REGISTER_QUERY               = 35,
+    IORING_REGISTER_ZCRX_CTRL           = 36,
+    IORING_REGISTER_BPF_FILTER          = 37,
+    IORING_REGISTER_LAST,
+
+    /* set iff a registered-ring fd index (not a raw fd) is being passed */
+    IORING_REGISTER_USE_REGISTERED_RING = 1U << 31,
 };
 
 /* Probe operation entry for IORING_REGISTER_PROBE */
@@ -359,6 +462,14 @@ struct io_uring_sync_cancel_reg {
     uint32_t flags;
     struct __kernel_timespec timeout;
     uint64_t pad[4];
+};
+
+/* Passed as the sig argument when io_uring_enter() sets IORING_ENTER_EXT_ARG */
+struct io_uring_getevents_arg {
+    uint64_t sigmask;
+    uint32_t sigmask_sz;
+    uint32_t min_wait_usec;
+    uint64_t ts;
 };
 
 /* System call entry points */
