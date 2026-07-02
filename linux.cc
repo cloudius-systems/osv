@@ -15,6 +15,7 @@
 #include <osv/stubbing.hh>
 #include <osv/export.h>
 #include <osv/trace.hh>
+#include <osv/io_uring.h>
 #include <memory>
 
 #include <syscall.h>
@@ -673,6 +674,12 @@ static int tgkill(int tgid, int tid, int sig)
 #define __NR_sys_getdents64 __NR_getdents64
 extern "C" ssize_t sys_getdents64(int fd, void *dirp, size_t count);
 
+// io_uring syscalls
+extern "C" long sys_io_uring_setup(unsigned entries, struct io_uring_params *params);
+extern "C" int sys_io_uring_enter(int fd, unsigned to_submit, unsigned min_complete,
+                                   unsigned flags, const void *sig, size_t sigsz);
+extern "C" int sys_io_uring_register(int fd, unsigned opcode, void *arg, unsigned nr_args);
+
 extern long arch_prctl(int code, unsigned long addr);
 
 #if CONF_syscall_sys_brk
@@ -695,6 +702,7 @@ static long sys_brk(void *addr)
 #define __NR_utimensat4 __NR_utimensat
 extern int utimensat4(int dirfd, const char *pathname, const struct timespec times[2], int flags);
 #endif
+
 TRACEPOINT(trace_syscall_futex, "%d <= %p %d %d %p %p %d", int, int *, int, int, const struct timespec *, int *, uint32_t);
 #if CONF_core_syscall
 #include <osv/syscall_tracepoints.cc>

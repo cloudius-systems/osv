@@ -611,6 +611,17 @@ int fdatasync(int fd)
     return fsync(fd);
 }
 
+// sync_file_range(2) is a Linux-specific writeback hint: it asks the kernel to
+// flush a byte range of a file without the broader guarantees of fsync().  OSv
+// has no separate writeback path, so flush the whole file -- this is stronger
+// than requested, hence always correct.  The offset/nbytes/flags hints are
+// ignored.
+OSV_LIBC_API
+int sync_file_range(int fd, off_t offset, off_t nbytes, unsigned int flags)
+{
+    return fsync(fd);
+}
+
 TRACEPOINT(trace_vfs_fstat, "%d %p", int, struct stat*);
 TRACEPOINT(trace_vfs_fstat_ret, "");
 TRACEPOINT(trace_vfs_fstat_err, "%d", int);

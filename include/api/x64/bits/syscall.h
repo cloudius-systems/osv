@@ -644,6 +644,9 @@
 #define SYS_kcmp				312
 #define SYS_finit_module			313
 #define SYS_statx				332
+#define SYS_io_uring_setup			425
+#define SYS_io_uring_enter			426
+#define SYS_io_uring_register			427
 
 #undef SYS_fstatat
 #undef SYS_pread
@@ -654,3 +657,10 @@
 #define SYS_pwrite SYS_pwrite64
 #define SYS_getdents SYS_getdents64
 #define SYS_fadvise SYS_fadvise64
+
+#define __NR_io_uring_setup 425
+#define __NR_io_uring_enter 426
+#define __NR_io_uring_register 427
+#define __NR_sys_io_uring_setup __NR_io_uring_setup
+#define __NR_sys_io_uring_enter __NR_io_uring_enter
+#define __NR_sys_io_uring_register __NR_io_uring_register

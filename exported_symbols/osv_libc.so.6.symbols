@@ -898,6 +898,8 @@ swscanf
 symlink
 symlinkat
 sync
+sync_file_range
+syncfs
 syscall
 sysconf
 __sysconf
