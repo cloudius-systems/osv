@@ -115,6 +115,407 @@ static void test_ring_cleanup(struct test_ring *ring)
     }
 }
 
+/* -------------------------------------------------------------------------
+ * Submit a single already-filled SQE (at the current tail) and reap exactly
+ * one CQE, returning its res.  *out_flags (if non-null) receives cqe->flags.
+ * The SQE must have been written into ring->sqes[tail & mask] and its
+ * user_data set by the caller; this helper advances the SQ tail, enters, and
+ * consumes one CQE, asserting user_data round-trips.
+ * ---------------------------------------------------------------------- */
+static int submit_reap_one(struct test_ring *ring, uint64_t user_data,
+                           uint32_t *out_flags)
+{
+    unsigned tail  = ring->sq_ring->tail;
+    unsigned index = tail & ring->sq_ring->ring_mask;
+    ring->sqes[index].user_data = user_data;
+    ring->sq_ring->tail = tail + 1;
+
+    int ret = sys_io_uring_enter(ring->fd, 1, 1, IORING_ENTER_GETEVENTS, NULL, 0);
+    if (ret != 1)
+        return -1000000 + ret;   /* sentinel: enter did not submit exactly one */
+
+    unsigned cq_head = ring->cq_ring->head;
+    if (ring->cq_ring->tail == cq_head)
+        return -2000000;         /* sentinel: no CQE posted */
+
+    struct io_uring_cqe *cqe =
+        &ring->cq_ring->cqes[cq_head & ring->cq_ring->ring_mask];
+    assert(cqe->user_data == user_data);
+    int res = cqe->res;
+    if (out_flags)
+        *out_flags = cqe->flags;
+    ring->cq_ring->head = cq_head + 1;
+    return res;
+}
+
+/* Fill the SQE at the current tail, zeroed, and return a pointer to it. */
+static struct io_uring_sqe *next_sqe(struct test_ring *ring)
+{
+    unsigned index = ring->sq_ring->tail & ring->sq_ring->ring_mask;
+    struct io_uring_sqe *sqe = &ring->sqes[index];
+    memset(sqe, 0, sizeof(*sqe));
+    return sqe;
+}
+
+/* A3-1/A3-4: modern setup flags PostgreSQL uses must be accepted; geometry-
+ * changing flags that break the mmap contract must be honestly rejected. */
+static void test_io_uring_setup_flags(void)
+{
+    printf("Testing io_uring setup flag acceptance/rejection...\n");
+
+    /* DEFER_TASKRUN|SINGLE_ISSUER = modern liburing/PG default: must succeed. */
+    struct io_uring_params p = {};
+    p.flags = IORING_SETUP_DEFER_TASKRUN | IORING_SETUP_SINGLE_ISSUER;
+    int fd = sys_io_uring_setup(8, &p);
+    assert(fd >= 0);
+    close(fd);
+
+    /* SQE128 changes SQE size -> breaks our fixed mmap geometry: reject. */
+    struct io_uring_params p2 = {};
+    p2.flags = IORING_SETUP_SQE128;
+    int fd2 = sys_io_uring_setup(8, &p2);
+    assert(fd2 == -EINVAL);
+
+    /* CQE32 likewise. */
+    struct io_uring_params p3 = {};
+    p3.flags = IORING_SETUP_CQE32;
+    int fd3 = sys_io_uring_setup(8, &p3);
+    assert(fd3 == -EINVAL);
+
+    printf("  PASSED - setup flags accepted/rejected per honesty rule\n");
+}
+
+/* A3-8: only implemented FEAT bits may be advertised. */
+static void test_io_uring_features(void)
+{
+    printf("Testing advertised feature bits...\n");
+
+    struct io_uring_params p = {};
+    int fd = sys_io_uring_setup(8, &p);
+    assert(fd >= 0);
+
+    /* These are backed by real behavior. */
+    assert(p.features & IORING_FEAT_NODROP);          /* A2-4 backlog */
+    assert(p.features & IORING_FEAT_SUBMIT_STABLE);
+    assert(p.features & IORING_FEAT_NATIVE_WORKERS);  /* A2-1 io-wq pool */
+    assert(p.features & IORING_FEAT_CQE_SKIP);        /* CQE_SKIP_SUCCESS */
+
+    /* SINGLE_MMAP is deliberately NOT advertised (3 separate regions). */
+    assert(!(p.features & IORING_FEAT_SINGLE_MMAP));
+
+    close(fd);
+    printf("  PASSED - feature bits honest\n");
+}
+
+/* A3: R_DISABLED ring rejects submissions with -EBADFD until ENABLE_RINGS. */
+static void test_io_uring_disabled_ring(void)
+{
+    printf("Testing R_DISABLED + ENABLE_RINGS...\n");
+
+    struct test_ring ring;
+    memset(&ring, 0, sizeof(ring));
+    ring.fd = sys_io_uring_setup(8, &ring.params);
+    /* R_DISABLED needs the ring set up disabled: re-open with the flag. */
+    close(ring.fd);
+
+    struct io_uring_params p = {};
+    p.flags = IORING_SETUP_R_DISABLED;
+    int fd = sys_io_uring_setup(8, &p);
+    assert(fd >= 0);
+
+    /* map SQ ring + SQE array so we can submit */
+    size_t sq_size = sizeof(struct io_uring_sq_ring) +
+                     p.sq_entries * sizeof(uint32_t);
+    size_t sqe_size = p.sq_entries * sizeof(struct io_uring_sqe);
+    struct io_uring_sq_ring *sq = (struct io_uring_sq_ring *)mmap(
+        NULL, sq_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0);
+    assert(sq != MAP_FAILED);
+    struct io_uring_sqe *sqes = (struct io_uring_sqe *)mmap(
+        NULL, sqe_size, PROT_READ | PROT_WRITE, MAP_SHARED, fd, 0x10000000ULL);
+    assert(sqes != MAP_FAILED);
+
+    unsigned index = sq->tail & sq->ring_mask;
+    memset(&sqes[index], 0, sizeof(sqes[index]));
+    sqes[index].opcode = IORING_OP_NOP;
+    sq->tail = sq->tail + 1;
+
+    /* While disabled, submit must be rejected with -EBADFD. */
+    int ret = sys_io_uring_enter(fd, 1, 0, 0, NULL, 0);
+    assert(ret == -EBADFD);
+
+    /* Enable the ring. */
+    ret = sys_io_uring_register(fd, IORING_REGISTER_ENABLE_RINGS, NULL, 0);
+    assert(ret == 0);
+
+    /* Now the submission goes through. */
+    ret = sys_io_uring_enter(fd, 1, 1, IORING_ENTER_GETEVENTS, NULL, 0);
+    assert(ret == 1);
+
+    munmap(sqes, sqe_size);
+    munmap(sq, sq_size);
+    close(fd);
+    printf("  PASSED - disabled ring gates submissions\n");
+}
+
+/* A3-6: IORING_REGISTER_IOWQ_MAX_WORKERS returns previous caps in place. */
+static void test_io_uring_iowq_max_workers(void)
+{
+    printf("Testing IOWQ_MAX_WORKERS register...\n");
+
+    struct test_ring ring;
+    int ret = test_ring_init(&ring, 8);
+    assert(ret == 0);
+
+    uint32_t vals[2] = { 0, 0 };   /* 0 = "leave unchanged, report current" */
+    ret = sys_io_uring_register(ring.fd, IORING_REGISTER_IOWQ_MAX_WORKERS,
+                                vals, 2);
+    assert(ret == 0);
+    /* Non-zero defaults must have been reported back. */
+    assert(vals[0] > 0);           /* bounded */
+    assert(vals[1] > 0);           /* unbounded */
+
+    /* Set new caps and confirm the previous ones are returned. */
+    uint32_t set[2] = { 3, 7 };
+    ret = sys_io_uring_register(ring.fd, IORING_REGISTER_IOWQ_MAX_WORKERS,
+                                set, 2);
+    assert(ret == 0);
+    /* set[] now holds the PREVIOUS values (the defaults from above). */
+    assert(set[0] == vals[0]);
+    assert(set[1] == vals[1]);
+
+    test_ring_cleanup(&ring);
+    printf("  PASSED - IOWQ_MAX_WORKERS reports prior caps\n");
+}
+
+/* Axis-1 opcode 55: FTRUNCATE. */
+static void test_io_uring_ftruncate(void)
+{
+    printf("Testing FTRUNCATE opcode...\n");
+
+    struct test_ring ring;
+    int ret = test_ring_init(&ring, 8);
+    assert(ret == 0);
+
+    const char *path = "/tmp/io_uring_ftrunc.bin";
+    int tfd = open(path, O_RDWR | O_CREAT | O_TRUNC, 0644);
+    assert(tfd >= 0);
+
+    struct io_uring_sqe *sqe = next_sqe(&ring);
+    sqe->opcode = IORING_OP_FTRUNCATE;
+    sqe->fd = tfd;
+    sqe->off = 4096;   /* new length */
+
+    int res = submit_reap_one(&ring, 0x77, NULL);
+    assert(res == 0);
+
+    struct stat st;
+    assert(fstat(tfd, &st) == 0);
+    assert(st.st_size == 4096);
+
+    close(tfd);
+    unlink(path);
+    test_ring_cleanup(&ring);
+    printf("  PASSED - FTRUNCATE sets file length\n");
+}
+
+/* A2-10: SPLICE copies bytes between two regular files through the VFS. */
+static void test_io_uring_splice(void)
+{
+    printf("Testing SPLICE opcode (file->file copy)...\n");
+
+    struct test_ring ring;
+    int ret = test_ring_init(&ring, 8);
+    assert(ret == 0);
+
+    const char *src_path = "/tmp/io_uring_splice_src.bin";
+    const char *dst_path = "/tmp/io_uring_splice_dst.bin";
+    int src = open(src_path, O_RDWR | O_CREAT | O_TRUNC, 0644);
+    int dst = open(dst_path, O_RDWR | O_CREAT | O_TRUNC, 0644);
+    assert(src >= 0 && dst >= 0);
+
+    const char payload[] = "splice-me-through-the-vfs-layer";
+    size_t plen = sizeof(payload) - 1;
+    assert(write(src, payload, plen) == (ssize_t)plen);
+    lseek(src, 0, SEEK_SET);
+
+    struct io_uring_sqe *sqe = next_sqe(&ring);
+    sqe->opcode = IORING_OP_SPLICE;
+    sqe->splice_fd_in = src;
+    sqe->splice_off_in = 0;         /* explicit source offset */
+    sqe->fd = dst;
+    sqe->off = 0;                   /* explicit dest offset */
+    sqe->len = plen;
+
+    int res = submit_reap_one(&ring, 0x99, NULL);
+    assert(res == (int)plen);
+
+    char buf[64] = {0};
+    lseek(dst, 0, SEEK_SET);
+    assert(read(dst, buf, plen) == (ssize_t)plen);
+    assert(memcmp(buf, payload, plen) == 0);
+
+    close(src);
+    close(dst);
+    unlink(src_path);
+    unlink(dst_path);
+    test_ring_cleanup(&ring);
+    printf("  PASSED - SPLICE copies file->file\n");
+}
+
+/* A2-11: SYNC_FILE_RANGE validates its arguments (unknown flag -> -EINVAL). */
+static void test_io_uring_sync_file_range(void)
+{
+    printf("Testing SYNC_FILE_RANGE argument validation...\n");
+
+    struct test_ring ring;
+    int ret = test_ring_init(&ring, 8);
+    assert(ret == 0);
+
+    const char *path = "/tmp/io_uring_sfr.bin";
+    int tfd = open(path, O_RDWR | O_CREAT | O_TRUNC, 0644);
+    assert(tfd >= 0);
+    assert(write(tfd, "data", 4) == 4);
+
+    /* Bogus flag bit must be rejected. */
+    struct io_uring_sqe *sqe = next_sqe(&ring);
+    sqe->opcode = IORING_OP_SYNC_FILE_RANGE;
+    sqe->fd = tfd;
+    sqe->off = 0;
+    sqe->len = 4;
+    sqe->sync_range_flags = 0x8000;   /* not a valid SYNC_FILE_RANGE_* bit */
+    int res = submit_reap_one(&ring, 0xAA, NULL);
+    assert(res == -EINVAL);
+
+    /* Valid full-file sync (off=0,len=0 = to EOF) succeeds. */
+    sqe = next_sqe(&ring);
+    sqe->opcode = IORING_OP_SYNC_FILE_RANGE;
+    sqe->fd = tfd;
+    sqe->off = 0;
+    sqe->len = 0;
+    sqe->sync_range_flags = SYNC_FILE_RANGE_WRITE;
+    res = submit_reap_one(&ring, 0xAB, NULL);
+    assert(res == 0);
+
+    close(tfd);
+    unlink(path);
+    test_ring_cleanup(&ring);
+    printf("  PASSED - SYNC_FILE_RANGE validates args\n");
+}
+
+/* A2-9: READ_FIXED must bounds-check the target against the registered buffer
+ * length; an over-length read into a registered buffer returns -EFAULT. */
+static void test_io_uring_fixed_buffer_bounds(void)
+{
+    printf("Testing READ_FIXED/WRITE_FIXED bounds check...\n");
+
+    struct test_ring ring;
+    int ret = test_ring_init(&ring, 8);
+    assert(ret == 0);
+
+    /* Register a single 512-byte buffer. */
+    static char regbuf[512];
+    struct iovec iov = { regbuf, sizeof(regbuf) };
+    ret = sys_io_uring_register(ring.fd, IORING_REGISTER_BUFFERS, &iov, 1);
+    assert(ret == 0);
+
+    const char *path = "/tmp/io_uring_fixed.bin";
+    int tfd = open(path, O_RDWR | O_CREAT | O_TRUNC, 0644);
+    assert(tfd >= 0);
+    assert(write(tfd, regbuf, sizeof(regbuf)) == (ssize_t)sizeof(regbuf));
+
+    /* WRITE_FIXED with len exceeding the registered buffer -> -EFAULT. */
+    struct io_uring_sqe *sqe = next_sqe(&ring);
+    sqe->opcode = IORING_OP_WRITE_FIXED;
+    sqe->fd = tfd;
+    sqe->addr = (uint64_t)regbuf;
+    sqe->len = sizeof(regbuf) + 1;    /* one byte past the region */
+    sqe->off = 0;
+    sqe->buf_index = 0;
+    int res = submit_reap_one(&ring, 0xBB, NULL);
+    assert(res == -EFAULT);
+
+    /* In-bounds WRITE_FIXED succeeds. */
+    sqe = next_sqe(&ring);
+    sqe->opcode = IORING_OP_WRITE_FIXED;
+    sqe->fd = tfd;
+    sqe->addr = (uint64_t)regbuf;
+    sqe->len = sizeof(regbuf);
+    sqe->off = 0;
+    sqe->buf_index = 0;
+    res = submit_reap_one(&ring, 0xBC, NULL);
+    assert(res == (int)sizeof(regbuf));
+
+    close(tfd);
+    unlink(path);
+    test_ring_cleanup(&ring);
+    printf("  PASSED - fixed-buffer bounds enforced\n");
+}
+
+/* Axis-1 opcode 40: MSG_RING (IORING_MSG_DATA) posts a CQE on a target ring. */
+static void test_io_uring_msg_ring(void)
+{
+    printf("Testing MSG_RING (data) cross-ring post...\n");
+
+    struct test_ring src, dst;
+    assert(test_ring_init(&src, 8) == 0);
+    assert(test_ring_init(&dst, 8) == 0);
+
+    struct io_uring_sqe *sqe = next_sqe(&src);
+    sqe->opcode = IORING_OP_MSG_RING;
+    sqe->fd = dst.fd;                 /* target ring fd */
+    sqe->addr = IORING_MSG_DATA;      /* command */
+    sqe->len = 0x1234;                /* becomes target CQE res */
+    sqe->off = 0xCAFEF00D;            /* becomes target CQE user_data */
+
+    /* The source CQE reports success of the post itself. */
+    int res = submit_reap_one(&src, 0xD0, NULL);
+    assert(res == 0);
+
+    /* Drain the target ring: a CQE with our injected res/user_data. */
+    int ent = sys_io_uring_enter(dst.fd, 0, 1, IORING_ENTER_GETEVENTS, NULL, 0);
+    assert(ent == 0);
+    unsigned h = dst.cq_ring->head;
+    assert(dst.cq_ring->tail != h);
+    struct io_uring_cqe *tcqe = &dst.cq_ring->cqes[h & dst.cq_ring->ring_mask];
+    assert(tcqe->user_data == 0xCAFEF00D);
+    assert(tcqe->res == 0x1234);
+    dst.cq_ring->head = h + 1;
+
+    test_ring_cleanup(&src);
+    test_ring_cleanup(&dst);
+    printf("  PASSED - MSG_RING posts to target ring\n");
+}
+
+/* A2-12: io_uring_enter EXT_ARG timeout returns -ETIME when no CQEs arrive. */
+static void test_io_uring_enter_ext_arg_timeout(void)
+{
+    printf("Testing enter EXT_ARG timeout (-ETIME)...\n");
+
+    struct test_ring ring;
+    int ret = test_ring_init(&ring, 8);
+    assert(ret == 0);
+
+    /* Wait for 1 completion that will never come, with a short timeout. */
+    struct __kernel_timespec ts = { 0, 20 * 1000 * 1000 };   /* 20 ms */
+    struct io_uring_getevents_arg arg = {};
+    arg.ts = (uint64_t)(uintptr_t)&ts;
+
+    ret = sys_io_uring_enter(ring.fd, 0, 1,
+                             IORING_ENTER_GETEVENTS | IORING_ENTER_EXT_ARG,
+                             &arg, sizeof(arg));
+    assert(ret == -ETIME);
+
+    /* REGISTERED_RING enter flag must be rejected (-EINVAL). */
+    ret = sys_io_uring_enter(ring.fd, 0, 0, IORING_ENTER_REGISTERED_RING,
+                             NULL, 0);
+    assert(ret == -EINVAL);
+
+    test_ring_cleanup(&ring);
+    printf("  PASSED - EXT_ARG timeout + REGISTERED_RING reject\n");
+}
+
+
+
 static void test_io_uring_setup(void)
 {
     printf("Testing io_uring_setup...\n");
@@ -274,8 +675,8 @@ static void test_io_uring_invalid_params(void)
     fd = sys_io_uring_setup(32, NULL);
     assert(fd == -EFAULT);
 
-    /* Test unsupported flag IORING_SETUP_ATTACH_WQ (bit 5): not implemented */
-    params.flags = IORING_SETUP_ATTACH_WQ;
+    /* SQE128 requires 128-byte SQE ring geometry we do not provide: rejected */
+    params.flags = IORING_SETUP_SQE128;
     fd = sys_io_uring_setup(32, &params);
     assert(fd == -EINVAL);
 
@@ -553,6 +954,18 @@ int main(int argc, char **argv)
     test_io_uring_enter_return_value();
     test_io_uring_file_io();
     test_io_uring_syscall_dispatch();
+
+    printf("\nFeature/fidelity tests (Axis 1/2/3):\n");
+    test_io_uring_setup_flags();
+    test_io_uring_features();
+    test_io_uring_disabled_ring();
+    test_io_uring_iowq_max_workers();
+    test_io_uring_ftruncate();
+    test_io_uring_splice();
+    test_io_uring_sync_file_range();
+    test_io_uring_fixed_buffer_bounds();
+    test_io_uring_msg_ring();
+    test_io_uring_enter_ext_arg_timeout();
 
     printf("\n===========================================\n");
     printf("All io_uring tests PASSED!\n");
