@@ -935,10 +935,6 @@ drivers += drivers/virtio-vring.o
 ifeq ($(conf_drivers_mmio),1)
 drivers += drivers/virtio-mmio.o
 endif
-ifeq ($(conf_drivers_nvme),1)
-drivers += drivers/nvme.o
-drivers += drivers/nvme-queue.o
-endif
 ifeq ($(conf_networking_stack),1)
 drivers += drivers/virtio-net.o
 endif
@@ -946,6 +942,11 @@ drivers += drivers/virtio-blk.o
 drivers += drivers/virtio-scsi.o
 drivers += drivers/virtio-rng.o
 drivers += drivers/virtio-fs.o
+endif
+
+ifeq ($(conf_drivers_nvme),1)
+drivers += drivers/nvme.o
+drivers += drivers/nvme-queue.o
 endif
 
 ifeq ($(conf_networking_stack),1)
@@ -1012,16 +1013,16 @@ endif
 ifeq ($(conf_drivers_mmio),1)
 drivers += drivers/virtio-mmio.o
 endif
-ifeq ($(conf_drivers_nvme),1)
-drivers += drivers/nvme.o
-drivers += drivers/nvme-queue.o
-endif
 drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-rng.o
 drivers += drivers/virtio-blk.o
 drivers += drivers/virtio-scsi.o
 drivers += drivers/virtio-net.o
 drivers += drivers/virtio-fs.o
+endif
+ifeq ($(conf_drivers_nvme),1)
+drivers += drivers/nvme.o
+drivers += drivers/nvme-queue.o
 endif
 ifeq ($(conf_drivers_scsi),1)
 drivers += drivers/scsi-common.o
