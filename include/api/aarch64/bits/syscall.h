@@ -281,6 +281,9 @@
 #define __NR_io_uring_setup 425
 #define __NR_io_uring_enter 426
 #define __NR_io_uring_register 427
+#define __NR_sys_io_uring_setup __NR_io_uring_setup
+#define __NR_sys_io_uring_enter __NR_io_uring_enter
+#define __NR_sys_io_uring_register __NR_io_uring_register
 #define __NR_open_tree		428
 #define __NR_move_mount		429
 #define __NR_fsopen		430

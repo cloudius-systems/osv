@@ -37,7 +37,12 @@
 #include <machine/atomic.h>
 static inline void critical_enter()  { abort(); }
 static inline void critical_exit() { abort(); }
+#if !defined(__aarch64__)
+// On aarch64 machine/atomic.h provides a real atomic_thread_fence_acq(),
+// which buf_ring.h's single-consumer dequeue path uses. On other arches
+// that path is compiled out, so a stub is enough to satisfy the header.
 static inline void atomic_thread_fence_acq() { abort(); }
+#endif
 
 #include <sys/buf_ring.h>
 
