@@ -39,6 +39,17 @@
 #define	rmb()	__asm __volatile("dmb ISHLD;" : : : "memory")
 
 /*
+ * Acquire fence. Ordered so that no subsequent load/store is reordered
+ * before it. On ARM64 an inner-shareable load-acquire barrier (dmb ishld)
+ * provides the required load->load / load->store ordering. Used by
+ * bsd/sys/sys/buf_ring.h in its ARM-only single-consumer dequeue path.
+ */
+static __inline void atomic_thread_fence_acq(void)
+{
+	__asm __volatile("dmb ishld" : : : "memory");
+}
+
+/*
  * Various simple operations on memory, each of which is atomic in the
  * presence of interrupts and multiple processors.
  *
@@ -74,12 +85,42 @@
  * This allows kernel modules to be portable between UP and SMP systems.
  */
 #define __GNUCLIKE_ASM
-#define	ATOMIC_ASM(NAME, TYPE, OP, CONS, V)			\
-void atomic_##NAME##_##TYPE(volatile u_##TYPE *p, u_##TYPE v);	\
-void atomic_##NAME##_barr_##TYPE(volatile u_##TYPE *p, u_##TYPE v)
+/*
+ * atomic_set/clear/add/subtract for char/short/int/long. Unlike x86 (whose
+ * strong memory model lets these be non-barrier RMW ops), aarch64 needs real
+ * atomic read-modify-write. We implement them with the GCC __atomic builtins,
+ * which lower to LSE (or LL/SC) sequences. The _barr_ variant is the acquire+
+ * release-ordered form FreeBSD uses for atomic_{set,clear,...}_acq/rel_*.
+ * These were previously prototype-only (no definitions), which was fine until
+ * the first aarch64 driver — ENA — actually referenced them.
+ */
+#define	ATOMIC_ASM(NAME, TYPE, OP, CONS, V)				\
+static __inline void							\
+atomic_##NAME##_##TYPE(volatile u_##TYPE *p, u_##TYPE v)		\
+{									\
+	(void)__atomic_##OP((volatile u_##TYPE *)p, V,			\
+	    __ATOMIC_RELAXED);						\
+}									\
+static __inline void							\
+atomic_##NAME##_barr_##TYPE(volatile u_##TYPE *p, u_##TYPE v)		\
+{									\
+	(void)__atomic_##OP((volatile u_##TYPE *)p, V,			\
+	    __ATOMIC_SEQ_CST);						\
+}
 
-int	atomic_cmpset_int(volatile u_int *dst, u_int expect, u_int src);
-int	atomic_cmpset_long(volatile u_long *dst, u_long expect, u_long src);
+static __inline int
+atomic_cmpset_int(volatile u_int *dst, u_int expect, u_int src)
+{
+	return __atomic_compare_exchange_n(dst, &expect, src, 0,
+	    __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+}
+
+static __inline int
+atomic_cmpset_long(volatile u_long *dst, u_long expect, u_long src)
+{
+	return __atomic_compare_exchange_n(dst, &expect, src, 0,
+	    __ATOMIC_SEQ_CST, __ATOMIC_SEQ_CST);
+}
 
 static __inline u_int atomic_fetchadd_int(volatile u_int *p, u_int val)
 {
@@ -127,60 +168,35 @@ static __inline void atomic_store_rel_long(volatile u_long *p, u_long val)
     __asm __volatile("stlr %1, %0 ; " : "+Q"(*p) : "r"(val));
 }
 
-static __inline void atomic_add_int(volatile u_int *p, u_int val)
-{
-    (void)atomic_fetchadd_int(p, val);
-}
-
-static __inline void atomic_add_barr_int(volatile u_int *p, u_int val)
-{
-    (void)atomic_fetchadd_int(p, val);
-}
-
-static __inline void atomic_add_long(volatile u_long *p, u_long val)
-{
-    (void)atomic_fetchadd_long(p, val);
-}
-
-static __inline void atomic_add_barr_long(volatile u_long *p, u_long val)
-{
-    (void)atomic_fetchadd_long(p, val);
-}
-
-static __inline void atomic_subtract_int(volatile u_int *p, u_int val)
-{
-    (void)atomic_fetchadd_int(p, -val);
-}
-
-static __inline void atomic_subtract_long(volatile u_long *p, u_long val)
-{
-    (void)atomic_fetchadd_long(p, -val);
-}
-
 #define	ATOMIC_LOAD(TYPE, LOP)					\
-u_##TYPE	atomic_load_acq_##TYPE(volatile u_##TYPE *p)
+static __inline u_##TYPE					\
+atomic_load_acq_##TYPE(volatile u_##TYPE *p)			\
+{								\
+	return __atomic_load_n((volatile u_##TYPE *)p,		\
+	    __ATOMIC_ACQUIRE);					\
+}
 #define	ATOMIC_STORE(TYPE)					\
 void		atomic_store_rel_##TYPE(volatile u_##TYPE *p, u_##TYPE v)
 
-ATOMIC_ASM(set,	     char,  "unused", "unused",  v);
-ATOMIC_ASM(clear,    char,  "unused", "unused", ~v);
-ATOMIC_ASM(add,	     char,  "unused", "unused", v);
-ATOMIC_ASM(subtract, char,  "unused", "unused", v);
+ATOMIC_ASM(set,	     char,  fetch_or,  "unused",  v);
+ATOMIC_ASM(clear,    char,  fetch_and, "unused", ~v);
+ATOMIC_ASM(add,	     char,  fetch_add, "unused", v);
+ATOMIC_ASM(subtract, char,  fetch_sub, "unused", v);
 
-ATOMIC_ASM(set,	     short, "unused", "unused", v);
-ATOMIC_ASM(clear,    short, "unused", "unused", ~v);
-ATOMIC_ASM(add,	     short, "unused", "unused",  v);
-ATOMIC_ASM(subtract, short, "unused", "unused",  v);
+ATOMIC_ASM(set,	     short, fetch_or,  "unused", v);
+ATOMIC_ASM(clear,    short, fetch_and, "unused", ~v);
+ATOMIC_ASM(add,	     short, fetch_add, "unused",  v);
+ATOMIC_ASM(subtract, short, fetch_sub, "unused",  v);
 
-ATOMIC_ASM(set,	     int,   "unused", "unused",  v);
-ATOMIC_ASM(clear,    int,   "unused", "unused", ~v);
-ATOMIC_ASM(add,	     int,   "unused", "unused",  v);
-ATOMIC_ASM(subtract, int,   "unused", "unused",  v);
+ATOMIC_ASM(set,	     int,   fetch_or,  "unused",  v);
+ATOMIC_ASM(clear,    int,   fetch_and, "unused", ~v);
+ATOMIC_ASM(add,	     int,   fetch_add, "unused",  v);
+ATOMIC_ASM(subtract, int,   fetch_sub, "unused",  v);
 
-ATOMIC_ASM(set,	     long,  "unused", "unused",  v);
-ATOMIC_ASM(clear,    long,  "unused", "unused", ~v);
-ATOMIC_ASM(add,	     long,  "unused", "unused",  v);
-ATOMIC_ASM(subtract, long,  "unused", "unused",  v);
+ATOMIC_ASM(set,	     long,  fetch_or,  "unused",  v);
+ATOMIC_ASM(clear,    long,  fetch_and, "unused", ~v);
+ATOMIC_ASM(add,	     long,  fetch_add, "unused",  v);
+ATOMIC_ASM(subtract, long,  fetch_sub, "unused",  v);
 
 ATOMIC_LOAD(char,  "unused");
 ATOMIC_LOAD(short, "unused");

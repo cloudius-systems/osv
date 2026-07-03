@@ -6,6 +6,8 @@ config drivers_profile_base
   bool "No Device Drivers"
 config drivers_profile_all
   bool "All Device Drivers"
+config drivers_profile_aws_nitro
+  bool "AWS Nitro Device Drivers"
 config drivers_profile_microvm
   bool "MicroVM Device Drivers"
 config drivers_profile_virtio-mmio
