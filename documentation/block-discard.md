@@ -12,7 +12,7 @@ A `BIO_DISCARD` command was added to the bio layer
 (`include/osv/bio.h`):
 
 ```c
-#define BIO_DISCARD  0x20  /* Space reclamation (TRIM) */
+#define BIO_DISCARD  0x80  /* Space reclamation (TRIM) */
 ```
 
 A bio carrying `BIO_DISCARD` describes a byte range
