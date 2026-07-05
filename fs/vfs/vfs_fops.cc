@@ -47,6 +47,20 @@ int vfs_file::read(struct uio *uio, int flags)
 
 	bytes = uio->uio_resid;
 
+	/*
+	 * Block devices carry no mutable per-vnode state that VOP_READ touches,
+	 * and the block layer below (bdev_read -> strategy -> driver) is already
+	 * thread-safe and asynchronous. Holding the exclusive per-vnode mutex
+	 * across the whole synchronous VOP_READ (which blocks in bio_wait)
+	 * serializes every concurrent pread on a shared fd, pinning throughput at
+	 * the queue-depth-1 value. A pread supplies its own offset (FOF_OFFSET),
+	 * so there is no fp->f_offset to protect: skip the lock and let N callers
+	 * keep N requests in flight. The FOF_OFFSET==0 path still shares
+	 * fp->f_offset, so it keeps the lock.
+	 */
+	if (vp->v_type == VBLK && (flags & FOF_OFFSET) != 0)
+		return VOP_READ(vp, fp, uio, 0);
+
 	vn_lock(vp);
 	if ((flags & FOF_OFFSET) == 0)
 		uio->uio_offset = fp->f_offset;
@@ -73,6 +87,19 @@ int vfs_file::write(struct uio *uio, int flags)
 	ssize_t bytes;
 
 	bytes = uio->uio_resid;
+
+	/*
+	 * See vfs_file::read: a pwrite to a block device supplies its own offset
+	 * and the block layer is thread-safe, so drop the per-vnode mutex that
+	 * would otherwise serialize concurrent pwrites and cap queue depth at 1.
+	 * O_APPEND cannot apply to a block device, so the ioflags computed below
+	 * are irrelevant here.
+	 */
+	if (vp->v_type == VBLK && (flags & FOF_OFFSET) != 0) {
+		if (fp->f_flags & (O_DSYNC|O_SYNC))
+			ioflags |= IO_SYNC;
+		return VOP_WRITE(vp, uio, ioflags);
+	}
 
 	vn_lock(vp);
 
