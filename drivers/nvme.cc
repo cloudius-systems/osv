@@ -432,6 +432,20 @@ int driver::identify_namespace(u32 nsid)
 
 int driver::make_request(bio* bio, u32 nsid)
 {
+    // Reject commands this driver does not implement (e.g. BIO_DISCARD) up
+    // front, before the block-alignment math and >> blockshift below run on a
+    // bio whose offset/bcount are not sector counts.  The per-queue path also
+    // rejects unknown commands, but doing it here avoids the misleading
+    // alignment error / debug-only assert on a discard request.
+    switch (bio->bio_cmd) {
+    case BIO_READ:
+    case BIO_WRITE:
+    case BIO_FLUSH:
+        break;
+    default:
+        biodone(bio, false);
+        return EOPNOTSUPP;
+    }
     if (bio->bio_bcount % _ns_data[nsid]->blocksize || bio->bio_offset % _ns_data[nsid]->blocksize) {
         NVME_ERROR("bio request not block-aligned length=%d, offset=%d blocksize=%d\n",bio->bio_bcount, bio->bio_offset, _ns_data[nsid]->blocksize);
         return EINVAL;

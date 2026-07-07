@@ -310,6 +310,7 @@ int scsi_common::handle_bio(u16 target, u16 lun, struct bio *bio)
             exec_cmd(bio);
             break;
         default:
+            biodone(bio, false);
             return ENOTBLK;
         }
         return 0;

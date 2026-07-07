@@ -107,7 +107,11 @@ void multiplex_strategy(struct bio *bio)
 
 	assert(strategy != nullptr);
 
-	if (len <= dev->max_io_size) {
+	// A discard request carries no data payload (bio_data is nullptr) even
+	// though bio_bcount is non-zero, so the max_io_size data-segment limit
+	// does not apply and splitting it would do pointer arithmetic on nullptr.
+	// Forward it whole; the driver enforces its own discard-size limit.
+	if (bio->bio_cmd == BIO_DISCARD || len <= dev->max_io_size) {
 		strategy(bio);
 		return;
 	}
