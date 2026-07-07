@@ -313,6 +313,7 @@ int io_queue_pair::make_request(struct bio* bio, u32 nsid = 1)
 
     default:
         NVME_ERROR("Operation not implemented\n");
+        biodone(bio, false);
         return ENOTBLK;
     }
     return 0;

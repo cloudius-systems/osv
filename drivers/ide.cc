@@ -134,6 +134,7 @@ int ide_drive::make_request(struct bio* bio)
             }
             break;
         default:
+            biodone(bio, false);
             return ENOTBLK;
         }
 

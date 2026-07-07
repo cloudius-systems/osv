@@ -382,13 +382,6 @@ int blk::make_request(struct bio* bio)
 {
     if (!bio) return EIO;
 
-    if (get_guest_feature_bit(VIRTIO_BLK_F_SEG_MAX)) {
-        if (bio->bio_bcount/mmu::page_size + 1 > _config.seg_max) {
-            trace_virtio_blk_make_request_seg_max(bio->bio_bcount, _config.seg_max);
-            return EIO;
-        }
-    }
-
     /* Select a queue by CPU id so parallel CPUs use independent rings. */
     int qid = sched::cpu::current()->id % _num_queues;
 
@@ -425,10 +418,36 @@ int blk::make_request(struct bio* bio)
                 biodone(bio, false);
                 return EINVAL;
             }
+            // num_sectors is a u32 in the virtio descriptor and the device
+            // advertises an upper bound via max_discard_sectors.  Reject a
+            // range that would overflow the field or exceed the device limit
+            // rather than truncating it and discarding the wrong amount.
+            {
+                u64 nsectors = bio->bio_bcount / sector_size;
+                u32 max_sectors = _config.max_discard_sectors ?
+                    _config.max_discard_sectors : UINT32_MAX;
+                if (nsectors > max_sectors) {
+                    biodone(bio, false);
+                    return EINVAL;
+                }
+            }
             type = VIRTIO_BLK_T_DISCARD;
             break;
         default:
+            biodone(bio, false);
             return ENOTBLK;
+        }
+
+        // SEG_MAX bounds the number of data segments a request may span, so it
+        // only applies to requests that carry a data payload (READ/WRITE).
+        // FLUSH and DISCARD add no data SG, so skip the check for them.
+        if ((type == VIRTIO_BLK_T_IN || type == VIRTIO_BLK_T_OUT) &&
+            get_guest_feature_bit(VIRTIO_BLK_F_SEG_MAX)) {
+            if (bio->bio_bcount/mmu::page_size + 1 > _config.seg_max) {
+                trace_virtio_blk_make_request_seg_max(bio->bio_bcount, _config.seg_max);
+                biodone(bio, false);
+                return EIO;
+            }
         }
 
         auto* req = new blk_req(bio);

@@ -299,6 +299,7 @@ int port::make_request(struct bio* bio)
             disk_flush(bio);
             break;
         default:
+            biodone(bio, false);
             return ENOTBLK;
         }
         return 0;
