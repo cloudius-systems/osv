@@ -3203,30 +3203,24 @@ tcp_net_channel_packet(tcpcb* tp, mbuf* m)
 	trace_tcp_input_ack(tp, th->th_ack.raw());
 
 	/*
-	 * Almost always we arrive here with the inpcb lock already held (the
-	 * old code simply assumed it).  The exception is the IRQ-side
-	 * classifier path, which can drain a queued packet without the lock.
-	 * So acquire INP_LOCK(inp) only if we don't already own it, and
-	 * release it below the same number of times (tracked by locked_here).
-	 *
-	 * We lock via the inpcb because tp->t_inpcb is the pointer we know is
-	 * valid; inp_socket is what in_pcbdetach() tears away.  Holding the
-	 * inpcb lock lets us re-read inp_socket and NULL-check it before use.
+	 * Every caller reaches this through net_channel::process_queue(),
+	 * which always runs with the inpcb lock held (that lock aliases the
+	 * socket mutex - see in_pcb.cc: so->set_mutex(&inp->inp_lock)).  The
+	 * IRQ classifier only enqueues via post_packet(), it never invokes
+	 * the process function directly, so we can assert the lock rather
+	 * than re-acquire it.
 	 */
 	auto inp = tp->t_inpcb;
-	if (!inp) {
-		m_freem(m);
-		return;
-	}
-	bool locked_here = !INP_LOCKED(inp);
-	if (locked_here) {
-		INP_LOCK(inp);
-	}
+	INP_LOCK_ASSERT(inp);
+
+	/*
+	 * process_queue() drains a batch of mbufs in a loop; an earlier
+	 * segment can close the connection and detach the socket
+	 * (in_pcbdetach() clears inp_socket) before a later iteration runs.
+	 * Drop the packet instead of dereferencing a torn-down socket.
+	 */
 	auto so = inp->inp_socket;
 	if (!so) {
-		if (locked_here) {
-			INP_UNLOCK(inp);
-		}
 		m_freem(m);
 		return;
 	}
@@ -3239,18 +3233,12 @@ tcp_net_channel_packet(tcpcb* tp, mbuf* m)
 	 * before reaching it; mirror that here.
 	 */
 	if (tp->get_state() <= TCPS_LISTEN || tp->get_state() == TCPS_TIME_WAIT) {
-		if (locked_here) {
-			INP_UNLOCK(inp);
-		}
 		m_freem(m);
 		return;
 	}
 	bool want_close;
 	m_trim(m, ETHER_HDR_LEN + ip_len);
 	tcp_do_segment(m, th, so, tp, drop_hdrlen, tlen, iptos, TI_UNLOCKED, want_close);
-	if (locked_here) {
-		INP_UNLOCK(inp);
-	}
 	// since a socket is still attached, we should not be closing
 	assert(!want_close);
 }
