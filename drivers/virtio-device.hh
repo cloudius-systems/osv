@@ -76,6 +76,7 @@ public:
     virtual void set_status(u8 status) = 0;
 
     virtual u8 read_config(u32 offset) = 0;
+    virtual void write_config(u32 offset, u8 val) = 0;
     virtual void dump_config() = 0;
 
     virtual bool get_shm(u8 id, mmioaddr_t &addr, u64 &length) = 0;

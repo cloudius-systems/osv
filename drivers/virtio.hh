@@ -91,6 +91,7 @@ public:
 
     // Access virtio config space
     void virtio_conf_read(u32 offset, void* buf, int length);
+    void virtio_conf_write(u32 offset, const void* buf, int length);
 
     bool kick(int queue);
     void reset_device();

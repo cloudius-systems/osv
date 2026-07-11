@@ -184,6 +184,9 @@ void arch_init_premain()
 #if CONF_drivers_virtio_rng
 #include "drivers/virtio-rng.hh"
 #endif
+#if CONF_drivers_virtio
+#include "drivers/virtio-balloon.hh"
+#endif
 #if CONF_drivers_virtio_blk
 #include "drivers/virtio-blk.hh"
 #endif
@@ -241,6 +244,9 @@ void arch_init_drivers()
     hw::driver_manager* drvman = hw::driver_manager::instance();
 #if CONF_drivers_virtio_rng
     drvman->register_driver(virtio::rng::probe);
+#endif
+#if CONF_drivers_virtio
+    drvman->register_driver(virtio::balloon::probe);
 #endif
 #if CONF_drivers_virtio_blk
     drvman->register_driver(virtio::blk::probe);

@@ -101,6 +101,11 @@ u8 mmio_device::read_config(u32 offset)
     return mmio_getb(_addr_mmio + VIRTIO_MMIO_CONFIG + offset);
 }
 
+void mmio_device::write_config(u32 offset, u8 val)
+{
+    mmio_setb(_addr_mmio + VIRTIO_MMIO_CONFIG + offset, val);
+}
+
 void mmio_device::register_interrupt(interrupt_factory irq_factory)
 {
 #ifdef __aarch64__

@@ -265,6 +265,9 @@ def start_osv_qemu(options):
     if options.hypervisor != 'qemu_microvm':
         args += ["-device", "virtio-rng-pci%s" % options.virtio_device_suffix]
 
+    if options.virtio_balloon:
+        args += ["-device", "virtio-balloon-pci%s" % options.virtio_device_suffix]
+
     if options.hypervisor == "kvm" or options.hypervisor == 'qemu_microvm':
         if options.arch == 'aarch64':
             args += ["-enable-kvm", "-cpu", "host", "-machine", "gic-version=max"]
@@ -634,6 +637,8 @@ if __name__ == "__main__":
                         help="path to loader-stripped.elf. defaults to build/$mode/loader-stripped.elf")
     parser.add_argument("--virtio", action="store", choices=["legacy","transitional","modern"], default="transitional",
                         help="specify virtio version: legacy, transitional or modern")
+    parser.add_argument("--virtio-balloon", action="store_true",
+                        help="attach a virtio-balloon device so the host can inflate/deflate guest memory")
     parser.add_argument("--arch", action="store", choices=["x86_64","aarch64"], default=host_arch,
                         help="specify QEMU architecture: x86_64, aarch64")
     parser.add_argument("--virtio-fs-tag", action="store",
