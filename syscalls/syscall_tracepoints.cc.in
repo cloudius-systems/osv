@@ -8,6 +8,7 @@ TRACEPOINT(trace_syscall_gettid, "%d <=", pid_t);
 TRACEPOINT(trace_syscall_clock_gettime, "%d <= %d %p", int, clockid_t, struct timespec *);
 TRACEPOINT(trace_syscall_clock_getres, "%d <= %d %p", int, clockid_t, struct timespec *);
 TRACEPOINT(trace_syscall_close, "%d <= %d", int, int);
+TRACEPOINT(trace_syscall_close_range, "%d <= %u %u %u", int, unsigned int, unsigned int, unsigned int);
 TRACEPOINT(trace_syscall_pipe2, "%d <= %p 0%0o", int, int *, int);
 #if CONF_core_epoll
 TRACEPOINT(trace_syscall_epoll_create1, "%d <= 0%0o", int, int);
