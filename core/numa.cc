@@ -44,6 +44,16 @@ unsigned node_of_cpu(unsigned cpu_id)
     return it == s_cpu_to_node.end() ? 0 : it->second;
 }
 
+int node_of_phys(uint64_t phys)
+{
+    for (auto& r : s_mem_ranges) {
+        if (phys >= r.base && phys < r.base + r.length) {
+            return (int)r.node;
+        }
+    }
+    return -1;
+}
+
 unsigned distance(unsigned from, unsigned to)
 {
     if (from == to) {
