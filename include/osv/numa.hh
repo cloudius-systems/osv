@@ -50,6 +50,10 @@ bool available();
 // The node a CPU (by sched cpu id) belongs to, or 0 if unknown.
 unsigned node_of_cpu(unsigned cpu_id);
 
+// The node that owns a physical address, or -1 if it falls in no known range.
+// Only meaningful when available() is true.
+int node_of_phys(uint64_t phys);
+
 // The SLIT distance from node `from` to node `to`.  Linux/ACPI convention:
 // 10 == local (same node), higher == farther.  Returns 10 for the diagonal and
 // a default (10 local / 20 remote) when no SLIT is present.
