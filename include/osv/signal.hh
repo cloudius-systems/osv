@@ -34,4 +34,9 @@ public:
 
 }
 
+// signalfd delivery hook (libc/signalfd.cc).  Called by kill() when a signal is
+// raised: returns true if a signalfd consumed the signal, in which case the
+// caller must not run the default action or a handler.
+extern "C" bool osv_signalfd_deliver(int signo);
+
 #endif /* OSV_SIGNAL_HH_ */
