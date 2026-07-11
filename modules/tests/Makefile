@@ -197,6 +197,7 @@ tests += testrunner.so
 tests += tst-libaio.so
 tests += tst-rlimit.so
 tests += tst-close-range.so
+tests += tst-numa.so
 
 # Tests with special compilation parameters needed...
 $(out)/tests/tst-mmap.so: COMMON += -Wl,-z,now
