@@ -119,6 +119,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-smoke.so tst-bsd-evh.
 	misc-bsd-callout.so tst-bsd-kthread.so tst-bsd-taskqueue.so \
 	tst-fpu.so tst-preempt.so tst-tracepoint.so tst-hub.so \
 	misc-console.so misc-leak.so misc-readbench.so misc-mmap-anon-perf.so \
+	misc-balloon.so \
 	tst-mmap-file.so misc-mmap-big-file.so tst-mmap.so tst-huge.so \
 	tst-pthread-timedlock.so \
 	tst-signal-fills.so \

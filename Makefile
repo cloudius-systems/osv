@@ -944,6 +944,7 @@ endif
 drivers += drivers/virtio-blk.o
 drivers += drivers/virtio-scsi.o
 drivers += drivers/virtio-rng.o
+drivers += drivers/virtio-balloon.o
 drivers += drivers/virtio-fs.o
 endif
 
@@ -1013,6 +1014,7 @@ drivers += drivers/virtio-mmio.o
 endif
 drivers += drivers/virtio-vring.o
 drivers += drivers/virtio-rng.o
+drivers += drivers/virtio-balloon.o
 drivers += drivers/virtio-blk.o
 drivers += drivers/virtio-scsi.o
 drivers += drivers/virtio-net.o

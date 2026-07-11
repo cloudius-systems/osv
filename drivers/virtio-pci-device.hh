@@ -116,6 +116,7 @@ public:
     virtual void set_status(u8 status);
 
     virtual u8 read_config(u32 offset);
+    virtual void write_config(u32 offset, u8 val);
     virtual u8 read_and_ack_isr();
 
     virtual bool is_modern() { return false; }
@@ -286,6 +287,7 @@ public:
     virtual void set_status(u8 status);
 
     virtual u8 read_config(u32 offset);
+    virtual void write_config(u32 offset, u8 val);
     virtual u8 read_and_ack_isr();
 
     virtual bool is_modern() { return true; };

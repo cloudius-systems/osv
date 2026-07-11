@@ -119,6 +119,12 @@ u8 virtio_legacy_pci_device::read_config(u32 offset)
     return _bar1->readb(conf_start + offset);
 }
 
+void virtio_legacy_pci_device::write_config(u32 offset, u8 val)
+{
+    auto conf_start = _dev->is_msix_enabled()? 24 : 20;
+    _bar1->writeb(conf_start + offset, val);
+}
+
 u8 virtio_legacy_pci_device::read_and_ack_isr()
 {
     return virtio_conf_readb(VIRTIO_PCI_ISR);
@@ -247,6 +253,11 @@ void virtio_modern_pci_device::set_status(u8 status)
 u8 virtio_modern_pci_device::read_config(u32 offset)
 {
     return _device_cfg->virtio_conf_readb(offset);
+}
+
+void virtio_modern_pci_device::write_config(u32 offset, u8 val)
+{
+    _device_cfg->virtio_conf_writeb(offset, val);
 }
 
 u8 virtio_modern_pci_device::read_and_ack_isr()

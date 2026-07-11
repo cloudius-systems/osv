@@ -297,6 +297,9 @@ void arch_init_premain()
 #if CONF_drivers_virtio_rng
 #include "drivers/virtio-rng.hh"
 #endif
+#if CONF_drivers_virtio
+#include "drivers/virtio-balloon.hh"
+#endif
 #if CONF_drivers_virtio_fs
 #include "drivers/virtio-fs.hh"
 #endif
@@ -363,6 +366,9 @@ void arch_init_drivers()
 #endif
 #if CONF_drivers_virtio_rng
     drvman->register_driver(virtio::rng::probe);
+#endif
+#if CONF_drivers_virtio
+    drvman->register_driver(virtio::balloon::probe);
 #endif
 #if CONF_drivers_virtio_fs
     drvman->register_driver(virtio::fs::probe);

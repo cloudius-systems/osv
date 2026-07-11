@@ -216,4 +216,11 @@ void virtio_driver::virtio_conf_read(u32 offset, void* buf, int length)
         ptr[i] = _dev.read_config(offset + i);
 }
 
+void virtio_driver::virtio_conf_write(u32 offset, const void* buf, int length)
+{
+    const unsigned char* ptr = reinterpret_cast<const unsigned char*>(buf);
+    for (int i = 0; i < length; i++)
+        _dev.write_config(offset + i, ptr[i]);
+}
+
 }

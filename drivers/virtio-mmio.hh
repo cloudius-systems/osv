@@ -130,6 +130,7 @@ public:
     virtual void set_status(u8 status);
 
     virtual u8 read_config(u32 offset);
+    virtual void write_config(u32 offset, u8 val);
 
     virtual void dump_config() {}
 
