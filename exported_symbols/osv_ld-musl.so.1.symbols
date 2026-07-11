@@ -78,6 +78,7 @@ clock_getres
 clock_gettime
 clock_nanosleep
 close
+close_range
 closedir
 closelog
 confstr

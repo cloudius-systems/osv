@@ -67,6 +67,7 @@
 #include <osv/syscalls_config.h>
 
 extern "C" int eventfd2(unsigned int, int);
+extern "C" int close_range(unsigned int first, unsigned int last, unsigned int flags);
 
 extern "C" OSV_LIBC_API long gettid()
 {
