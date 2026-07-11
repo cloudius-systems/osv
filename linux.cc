@@ -246,10 +246,18 @@ static int sys_sched_setaffinity(
 
 #define __NR_long_mmap __NR_mmap
 
+#define __NR_long_mremap __NR_mremap
+
 #define __NR_long_shmat __NR_shmat
 // Only void* return value of mmap is type casted, as syscall returns long.
 long long_mmap(void *addr, size_t length, int prot, int flags, int fd, off_t offset) {
     return (long) mmap(addr, length, prot, flags, fd, offset);
+}
+
+// mremap's 5th argument (new_address) is only consumed with MREMAP_FIXED, which
+// is not supported yet; the 4-arg form covers every case we honor.
+long long_mremap(void *old_addr, size_t old_size, size_t new_size, int flags) {
+    return (long) mremap(old_addr, old_size, new_size, flags);
 }
 
 long long_shmat(int shmid, const void *shmaddr, int shmflg) {
