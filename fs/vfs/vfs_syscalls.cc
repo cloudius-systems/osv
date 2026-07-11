@@ -54,6 +54,7 @@
 #include <osv/vnode.h>
 #include <osv/vfs_file.hh>
 #include <osv/export.h>
+#include <osv/pagecache.hh>
 #include "vfs.h"
 #include <fs/fs.hh>
 
@@ -387,6 +388,25 @@ sys_fsync(struct file *fp)
 		return EINVAL;
 
 	vp = fp->f_dentry->d_vnode;
+
+	/*
+	 * Flush any dirty pages from the write cache (MAP_SHARED mmap writes)
+	 * before calling the filesystem's fsync handler.  Without this, mmap
+	 * writes that have not been msync()ed would not reach the filesystem's
+	 * journal/WAL and could be lost even after fsync() returns.  A writeback
+	 * failure here must be reported: fsync() may not claim success if dirty
+	 * data did not reach the filesystem.
+	 */
+	{
+		struct stat st;
+		if (sys_fstat(fp, &st) == 0) {
+			error = pagecache::writeback_inode(st.st_dev, st.st_ino,
+			                                   0, (off_t)st.st_size);
+			if (error)
+				return error;
+		}
+	}
+
 	vn_lock(vp);
 	error = VOP_FSYNC(vp, fp);
 	vn_unlock(vp);
