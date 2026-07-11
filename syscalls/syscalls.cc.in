@@ -167,6 +167,7 @@
     SYSCALL3(shmget, key_t, size_t, int);
     SYSCALL4(rt_sigtimedwait, const sigset_t *, siginfo_t *, const struct timespec *, size_t);
     SYSCALL2(getrlimit, int, struct rlimit *);
+    SYSCALL2(setrlimit, int, const struct rlimit *);
     SYSCALL2(getpriority, int, int);
     SYSCALL3(setpriority, int, int, int);
     SYSCALL4(ppoll, struct pollfd *, nfds_t, const struct timespec *, const sigset_t *);
