@@ -26,6 +26,7 @@
 #endif /* __x86_64__ */
 
 #include <osv/sched.hh>
+#include <osv/numa.hh>
 #include <osv/barrier.hh>
 #include "arch.hh"
 #include "arch-setup.hh"
@@ -824,6 +825,7 @@ void main_cont(int loader_argc, char** loader_argv)
 #ifdef __x86_64__
 #if CONF_drivers_acpi
     acpi::init();
+    numa::init();
 #endif
 #endif /* __x86_64__ */
 
