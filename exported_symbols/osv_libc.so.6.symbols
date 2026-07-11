@@ -520,6 +520,7 @@ mbstowcs
 mbtowc
 memalign
 __memalign_hook
+membarrier
 memccpy
 memchr
 memcmp

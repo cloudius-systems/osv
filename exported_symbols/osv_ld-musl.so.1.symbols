@@ -630,6 +630,7 @@ mbsrtowcs
 mbstowcs
 mbtowc
 memalign
+membarrier
 memccpy
 memchr
 memcmp

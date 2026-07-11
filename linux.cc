@@ -67,6 +67,7 @@
 #include <osv/syscalls_config.h>
 
 extern "C" int eventfd2(unsigned int, int);
+extern "C" int membarrier(int cmd, unsigned int flags, int cpu_id);
 
 extern "C" OSV_LIBC_API long gettid()
 {
