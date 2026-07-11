@@ -606,8 +606,57 @@ int initgroups(const char *user, gid_t group)
 OSV_LIBC_API
 int prctl(int option, ...)
 {
+    va_list ap;
+    va_start(ap, option);
+    unsigned long arg2 = va_arg(ap, unsigned long);
+    va_end(ap);
+
     switch (option) {
+    case PR_SET_NAME: {
+        // Set the current thread's name.  Linux limits it to 16 bytes
+        // including the NUL; OSv's thread name is likewise 16 bytes.
+        const char *name = reinterpret_cast<const char *>(arg2);
+        if (!name) {
+            errno = EFAULT;
+            return -1;
+        }
+        char buf[16];
+        strncpy(buf, name, sizeof(buf) - 1);
+        buf[sizeof(buf) - 1] = '\0';
+        sched::thread::current()->set_name(buf);
+        return 0;
+    }
+    case PR_GET_NAME: {
+        char *out = reinterpret_cast<char *>(arg2);
+        if (!out) {
+            errno = EFAULT;
+            return -1;
+        }
+        auto raw = sched::thread::current()->name_raw();
+        // Copy up to 16 bytes; the caller-supplied buffer must be >= 16.
+        memcpy(out, raw.data(), raw.size());
+        out[raw.size() - 1] = '\0';
+        return 0;
+    }
     case PR_SET_DUMPABLE:
+    case PR_GET_DUMPABLE:
+        // OSv has a single address space; dumpability is a no-op.  GET reports
+        // "dumpable" (1), the Linux default.
+        return option == PR_GET_DUMPABLE ? 1 : 0;
+    case PR_SET_PDEATHSIG:
+        // No parent process to die, so nothing to signal.  Accept silently.
+        return 0;
+    case PR_GET_PDEATHSIG:
+        if (arg2) {
+            *reinterpret_cast<int *>(arg2) = 0;
+        }
+        return 0;
+    case PR_SET_KEEPCAPS:
+    case PR_SET_NO_NEW_PRIVS:
+        // No capability/privilege model in a unikernel; accept as no-ops.
+        return 0;
+    case PR_GET_KEEPCAPS:
+    case PR_GET_NO_NEW_PRIVS:
         return 0;
     }
     errno = EINVAL;
