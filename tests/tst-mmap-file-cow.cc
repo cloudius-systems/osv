@@ -24,8 +24,11 @@
 
 int main()
 {
-    const char* path = "/rofs/mmap-file-test1";   // ~32 KiB, read-only
-    int fd = open(path, O_RDONLY);
+    const char* path1 = "/rofs/mmap-file-test1", * path2 = "/tmp/mmap-file-test1";   // ~32 KiB, read-only
+    int fd = open(path1, O_RDONLY);
+    if (fd < 0) {
+        fd = open(path2, O_RDONLY);
+    }
     assert(fd >= 0);
     struct stat st;
     assert(fstat(fd, &st) == 0);
