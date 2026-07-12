@@ -70,6 +70,7 @@ extern std::atomic<unsigned> pagecache_wb_interval_secs;
 void unmap_arc_buf(arc_buf_t* ab);
 void map_arc_buf(hashkey* key, arc_buf_t* ab, void* page);
 bool map_read_cached_page(hashkey *key, void *page);
+bool map_owned_read_cached_page(hashkey *key, void *page);
 }
 
 #ifdef __cplusplus

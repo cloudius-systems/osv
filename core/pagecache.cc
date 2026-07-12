@@ -239,6 +239,28 @@ public:
     }
 };
 
+// A read-cache page whose backing memory is owned by the page cache and must
+// be freed when the entry is dropped.  ROFS and ZFS hand map_read_cached_page()
+// a borrowed page (ROFS's own read-around cache, or an ARC buffer via the arc
+// variant) that they free themselves, so the plain cached_page's no-op dtor is
+// correct for them.  Filesystems like ext, which allocate a fresh page per
+// vop_cache call and have nowhere else to track it, use this subclass so the
+// page is freed on eviction (delete cp goes through the virtual dtor) instead
+// of leaking.
+class cached_page_read_owned : public cached_page {
+public:
+    cached_page_read_owned(hashkey key, void* page) : cached_page(key, page) {}
+    virtual ~cached_page_read_owned() {
+        if (_page) {
+            memory::free_page(_page);
+        }
+    }
+    // Detach the backing page so this wrapper can be deleted without freeing
+    // it -- used when a concurrent insert wins and page ownership must stay
+    // with the caller (see map_owned_read_cached_page()).
+    void detach_page() { _page = nullptr; }
+};
+
 class cached_page_write : public cached_page {
 private:
     struct vnode* _vp;
@@ -519,6 +541,30 @@ bool map_read_cached_page(hashkey *key, void *page)
     if (!res.second) {
         // Key already present; emplace() did not take ownership of the wrapper,
         // so free the wrapper (always OSv-owned).  Leave @page to the caller.
+        delete pc;
+        return false;
+    }
+    return true;
+}
+
+// Like map_read_cached_page(), but the page cache TAKES OWNERSHIP of @page on a
+// successful insert and will memory::free_page() it when the entry is evicted.
+// For callers (e.g. ext) that allocate a fresh page per vop_cache and have no
+// other place to track it, this closes the leak the borrowed-page contract of
+// map_read_cached_page() would otherwise cause.  On a false return (@key was
+// already cached, no insert happened) ownership stays with the caller, exactly
+// like map_read_cached_page().
+bool map_owned_read_cached_page(hashkey *key, void *page)
+{
+    SCOPE_LOCK(read_lock);
+    cached_page_read_owned* pc = new cached_page_read_owned(*key, page);
+    auto res = read_cache.emplace(*key, pc);
+    if (!res.second) {
+        // Key already present; emplace() did not take ownership.  Detach @page
+        // from the wrapper first so deleting the wrapper does not free it --
+        // ownership of @page stays with the caller, who frees it (matches
+        // map_read_cached_page()).
+        pc->detach_page();
         delete pc;
         return false;
     }
