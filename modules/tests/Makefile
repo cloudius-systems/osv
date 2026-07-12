@@ -120,6 +120,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-fpu.so tst-preempt.so tst-tracepoint.so tst-hub.so \
 	misc-console.so misc-leak.so misc-readbench.so misc-mmap-anon-perf.so \
 	tst-mmap-file.so misc-mmap-big-file.so tst-mmap.so tst-huge.so \
+	tst-pthread-timedlock.so \
 	tst-prctl.so \
 	tst-elf-permissions.so misc-mutex.so misc-sockets.so tst-condvar.so \
 	tst-queue-mpsc.so tst-af-local.so tst-pipe.so tst-yield.so \
