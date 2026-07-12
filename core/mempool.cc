@@ -23,6 +23,7 @@
 #endif
 #include <atomic>
 #include <osv/mmu.hh>
+#include <osv/numa.hh>
 #include <osv/trace.hh>
 #include <lockfree/ring.hh>
 #include <osv/percpu-worker.hh>
@@ -597,6 +598,11 @@ public:
     page_range* alloc(size_t size, bool contiguous = true);
     page_range* alloc_aligned(size_t size, size_t offset, size_t alignment,
                               bool fill = false);
+    // Carve a single page from a free range that lies on NUMA node `node`,
+    // returning it, or nullptr if no free memory on that node is available.
+    // Used by the node-preferring allocator; the caller falls back to a normal
+    // allocation when this returns nullptr.
+    page_range* alloc_page_from_node(int node);
     void free(page_range* pr);
 
     void initial_add(page_range* pr);
@@ -793,6 +799,38 @@ page_range* page_range_allocator::alloc(size_t size, bool contiguous)
     if (UseBitmap) {
         set_bits(pr, false);
     }
+    return &pr;
+}
+
+page_range* page_range_allocator::alloc_page_from_node(int node)
+{
+    // Find a free range whose memory lies on the requested NUMA node, then
+    // carve a single page from its front (mirroring alloc()).  This is a
+    // best-effort preference: a linear scan over the free lists, returning the
+    // first range on the node.  Returns nullptr if none is found, so the caller
+    // can fall back to a node-agnostic allocation.
+    page_range* found = nullptr;
+    for_each(0, [&] (page_range& pr) {
+        auto phys = mmu::virt_to_phys(static_cast<void*>(&pr));
+        if (numa::node_of_phys(phys) == node) {
+            found = &pr;
+            return false;   // stop iterating
+        }
+        return true;
+    });
+    if (!found) {
+        return nullptr;
+    }
+
+    auto& pr = *found;
+    remove(pr);
+    if (pr.size > page_size) {
+        auto& np = *new (static_cast<void*>(&pr) + page_size)
+                        page_range(pr.size - page_size);
+        insert(np);
+        pr.size = page_size;
+    }
+    set_bits(pr, false);
     return &pr;
 }
 
@@ -1787,6 +1825,40 @@ void* alloc_page()
     tracker_remember(p, page_size);
 #endif
     return p;
+}
+
+// Allocate one page, preferring memory local to NUMA node `node`.  Falls back
+// to a node-agnostic allocation when the node has no free memory local to it
+// in the global page-range allocator (or NUMA is not available).
+//
+// This is a best-effort node-preferring hint that the scheduler and
+// mbind/set_mempolicy can build on.  It only sees memory still held by the
+// global page-range allocator: OSv drains much of physical memory into per-CPU
+// L1/L2 pools that are not (yet) node-partitioned, so once a node's global
+// ranges are exhausted this falls back.  Full per-node pools are future work
+// (roadmap B2.2-full); this step gives correct placement while node-local
+// global memory is available and never fails or misplaces.
+void* alloc_page_on_node(int node)
+{
+    if (node < 0 || !numa::available() || (unsigned)node >= numa::nr_nodes()) {
+        return alloc_page();
+    }
+    void* ret = nullptr;
+    WITH_LOCK(free_page_ranges_lock) {
+        page_range* pr = free_page_ranges.alloc_page_from_node(node);
+        if (pr) {
+            on_alloc(page_size);
+            ret = static_cast<void*>(pr);
+        }
+    }
+    if (!ret) {
+        // No free memory on that node: fall back rather than fail.
+        return alloc_page();
+    }
+#if CONF_memory_tracker
+    tracker_remember(ret, page_size);
+#endif
+    return ret;
 }
 
 static inline void untracked_free_page(void *v)
