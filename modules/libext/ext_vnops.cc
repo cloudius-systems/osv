@@ -68,6 +68,16 @@ void free_contiguous_aligned(void* p);
 #define ext_debug(...)
 #endif
 
+// Mark an inode as deleted with a non-zero deletion time before it is freed, so
+// Linux e2fsck does not flag "deleted inode has zero dtime".  lwext4's own
+// delete path uses ext4_inode_set_del_time(inode, -1L), but that symbol is not
+// exported from liblwext4.so, so set the field directly.  0xffffffff is
+// byte-order invariant, so no to_le32() is needed.
+static inline void ext_mark_inode_deleted(struct ext4_inode *inode)
+{
+    inode->deletion_time = 0xffffffff;
+}
+
 //Simple RAII struct to automate release of i-node reference
 //when it goes out of scope.
 struct auto_inode_ref {
@@ -168,6 +178,10 @@ void ext_delete_outstanding_inodes(struct ext4_fs *fs)
         if (inode._r != EOK) {
             continue;
         }
+        // Set a non-zero deletion time before freeing so Linux e2fsck does not
+        // flag "deleted inode has zero dtime" (lwext4's own delete path does the
+        // same with -1L).
+        ext_mark_inode_deleted(inode._ref.inode);
         ext4_fs_free_inode(&inode._ref);
         ext_debug("delete: i-node=%ld when unmounting\n", inode_no);
     }
@@ -195,6 +209,7 @@ ext_close(vnode_t *vp, file_t *fp)
         if (inode._r != EOK) {
             return inode._r;
         }
+        ext_mark_inode_deleted(inode._ref.inode);
         ext4_fs_free_inode(&inode._ref);
 
         remove_inode_from_being_deleted(vp->v_ino);
@@ -885,6 +900,7 @@ ext_dir_link(struct vnode *dvp, char *name, int file_type, mode_t mode, uint32_t
         ext_debug("dir_link: created %s under i-node=%li with filetype:%d\n", name, dvp->v_ino, file_type);
     } else {
         if (!inode_no) {
+            ext_mark_inode_deleted(child_ref.inode);
             ext4_fs_free_inode(&child_ref);
         }
         //We do not want to write new inode. But block has to be released.
@@ -1065,6 +1081,7 @@ ext_dir_remove_entry(struct vnode *dvp, struct vnode *vp, char *name)
 
             if (links_cnt == 1) {//Zero now
                 if (vdata->ref_count == 0) {
+                    ext_mark_inode_deleted(child._ref.inode);
                     ext4_fs_free_inode(&child._ref);
                 } else {
                     ext_debug("dir_remove_entry: should remove i-node=%ld of %s on last close\n", vp->v_ino, name);
@@ -1075,6 +1092,7 @@ ext_dir_remove_entry(struct vnode *dvp, struct vnode *vp, char *name)
         }
     } else {
         if (vdata->ref_count == 0) {
+            ext_mark_inode_deleted(child._ref.inode);
             ext4_fs_free_inode(&child._ref);
         } else {
             ext_debug("dir_remove_entry: should remove i-node=%ld of %s on last close\n", vp->v_ino, name);
