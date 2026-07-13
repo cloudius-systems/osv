@@ -58,6 +58,7 @@ void free_contiguous_aligned(void* p);
 #include <time.h>
 #include <cstddef>
 #include <cassert>
+#include <pthread.h>
 
 #include <algorithm>
 #include <set>
@@ -99,31 +100,102 @@ struct ext_vdata {
     int ref_count;
     bool delete_on_last_close;
 
-    // Sequential read-ahead cache. ext4_blocks_get_direct issues one
+    // Double-buffered ASYNC sequential read-ahead. lwext4's read path issues one
     // synchronous bio per read() with no prefetch, so many small sequential
-    // reads can't keep the device busy (the seq-read gap vs Linux). When a
-    // sequential pattern is detected we read a large window once and serve the
-    // following reads from this buffer (a memcpy, no I/O). Guarded by ra_lock;
-    // invalidated on any write to the file.
-    mutex_t ra_lock;
-    char *ra_buf;         // owned, alloc_contiguous_aligned; nullptr = empty
-    uint64_t ra_start;    // file offset of ra_buf[0]
-    size_t ra_len;        // valid bytes in ra_buf
-    uint64_t ra_next;     // expected offset of the next sequential read
+    // reads leave the NVMe queue idle during the app's compute (the seq-read
+    // gap vs Linux, which keeps the device busy via async prefetch).
+    //
+    // Design: two 1 MiB windows, "cur" (being served to the app) and "next"
+    // (being prefetched). A dedicated worker thread fills "next" while the app
+    // consumes "cur". When a read crosses out of "cur", we swap next->cur and
+    // ask the worker to prefetch the following window. So by the time the app
+    // needs the next bytes they are usually already in memory, and the device
+    // stays busy.  All state is under ra_lock. Any write/truncate invalidates
+    // both windows; ~ext_vdata joins and frees the worker.
+    //
+    // ponytail: one worker pthread per open vnode, not a shared pool. Correct
+    // and keeps the device busy; a bounded pool is the upgrade if thousands of
+    // files are read sequentially at once.
+    mutex_t ra_lock;             // protects all fields below except the worker
+                                 // handshake fields (those use ra_cvmtx)
+    char *cur_buf;               // owned; window currently served to the app
+    uint64_t cur_start;
+    size_t cur_len;
+    char *next_buf;              // owned; window being / to be prefetched
+    uint64_t next_start;         // file offset the worker should prefetch
+    size_t next_len;             // valid bytes in next_buf once ready
+    bool next_ready;             // worker finished filling next_buf
+    bool next_pending;           // worker asked to fill next_buf (in flight)
+    uint64_t ra_next;            // expected offset of next sequential read
+    uint32_t inode_no;           // for the worker to get its own inode_ref
+    struct ext4_fs *fs;          // filesystem the worker reads from
+
+    // Worker thread handshake (separate mutex/cond so the worker never blocks
+    // on ra_lock while the read path holds it, and the read path never blocks
+    // on the worker while holding ra_lock).
+    pthread_t worker;
+    bool worker_started;
+    pthread_mutex_t ra_cvmtx;
+    pthread_cond_t ra_req_cv;    // signalled to give the worker work
+    pthread_cond_t ra_done_cv;   // signalled by the worker when done
+    bool req_work;               // there is a prefetch request for the worker
+    bool worker_busy;            // worker is currently reading
+    bool shutdown;               // tell the worker to exit
+    // Prefetch request the read path hands to the worker:
+    char *req_buf;
+    uint64_t req_off;
+    size_t req_len;
+    // Result the worker hands back:
+    size_t req_got;
+    int req_err;
 
     ext_vdata() {
         ref_count = 0;
         delete_on_last_close = false;
         mutex_init(&ra_lock);
-        ra_buf = nullptr;
-        ra_start = 0;
-        ra_len = 0;
+        cur_buf = nullptr;
+        cur_start = 0;
+        cur_len = 0;
+        next_buf = nullptr;
+        next_start = 0;
+        next_len = 0;
+        next_ready = false;
+        next_pending = false;
         ra_next = 0;
+        inode_no = 0;
+        fs = nullptr;
+        worker_started = false;
+        pthread_mutex_init(&ra_cvmtx, nullptr);
+        pthread_cond_init(&ra_req_cv, nullptr);
+        pthread_cond_init(&ra_done_cv, nullptr);
+        req_work = false;
+        worker_busy = false;
+        shutdown = false;
+        req_buf = nullptr;
+        req_off = 0;
+        req_len = 0;
+        req_got = 0;
+        req_err = 0;
     }
 
     ~ext_vdata() {
-        if (ra_buf) {
-            free_contiguous_aligned(ra_buf);
+        // Tell the worker to exit and wait for it, so nothing touches the
+        // buffers after we free them.
+        if (worker_started) {
+            pthread_mutex_lock(&ra_cvmtx);
+            shutdown = true;
+            pthread_cond_signal(&ra_req_cv);
+            pthread_mutex_unlock(&ra_cvmtx);
+            pthread_join(worker, nullptr);
+        }
+        pthread_cond_destroy(&ra_req_cv);
+        pthread_cond_destroy(&ra_done_cv);
+        pthread_mutex_destroy(&ra_cvmtx);
+        if (cur_buf) {
+            free_contiguous_aligned(cur_buf);
+        }
+        if (next_buf) {
+            free_contiguous_aligned(next_buf);
         }
     }
 };
@@ -358,6 +430,161 @@ Finish:
     return r;
 }
 
+static const size_t RA_WINDOW = 1 << 20;   // 1 MiB read-ahead window
+
+// Prefetch worker: one per open vnode, spawned lazily. Sleeps until the read
+// path hands it a request (req_buf/req_off/req_len), fills the buffer with its
+// own inode_ref (concurrent reads of the same inode are safe: lwext4 locks its
+// block cache internally and inode refs are per-caller), then reports the
+// result. This keeps the NVMe queue busy while the app consumes the current
+// window.
+static void *ext_prefetch_worker(void *arg)
+{
+    ext_vdata *vdata = (ext_vdata *)arg;
+    pthread_mutex_lock(&vdata->ra_cvmtx);
+    for (;;) {
+        while (!vdata->req_work && !vdata->shutdown) {
+            pthread_cond_wait(&vdata->ra_req_cv, &vdata->ra_cvmtx);
+        }
+        if (vdata->shutdown) {
+            break;
+        }
+        // Take the request. Copy out under the handshake lock, then read
+        // without holding it so the read path can keep serving from cur_buf.
+        char *buf = vdata->req_buf;
+        uint64_t off = vdata->req_off;
+        size_t len = vdata->req_len;
+        vdata->req_work = false;
+        vdata->worker_busy = true;
+        pthread_mutex_unlock(&vdata->ra_cvmtx);
+
+        size_t got = 0;
+        int err = EIO;
+        struct ext4_fs *fs = vdata->fs;
+        if (fs && buf) {
+            auto_inode_ref ref(fs, vdata->inode_no);
+            if (ref._r == EOK) {
+                err = ext_internal_read(fs, &ref._ref, off, buf, len, &got);
+            } else {
+                err = ref._r;
+            }
+        }
+
+        pthread_mutex_lock(&vdata->ra_cvmtx);
+        vdata->req_got = got;
+        vdata->req_err = err;
+        vdata->worker_busy = false;
+        pthread_cond_signal(&vdata->ra_done_cv);
+    }
+    pthread_mutex_unlock(&vdata->ra_cvmtx);
+    return nullptr;
+}
+
+// Ask the worker to prefetch [off, off+len) into next_buf. Called with ra_lock
+// held. Non-blocking: just posts the request and marks next_pending.
+static void ext_kick_prefetch(ext_vdata *vdata, uint64_t off, size_t len)
+{
+    if (!vdata->next_buf) {
+        vdata->next_buf = (char *)alloc_contiguous_aligned(
+            RA_WINDOW, alignof(std::max_align_t));
+        if (!vdata->next_buf) {
+            return;
+        }
+    }
+    pthread_mutex_lock(&vdata->ra_cvmtx);
+    // Don't queue a new request while the worker is still busy with the last
+    // one; the read path harvests completion before kicking again.
+    if (vdata->worker_busy || vdata->req_work) {
+        pthread_mutex_unlock(&vdata->ra_cvmtx);
+        return;
+    }
+    vdata->req_buf = vdata->next_buf;
+    vdata->req_off = off;
+    vdata->req_len = len;
+    vdata->req_work = true;
+    vdata->next_start = off;
+    vdata->next_len = 0;
+    vdata->next_ready = false;
+    vdata->next_pending = true;
+    pthread_cond_signal(&vdata->ra_req_cv);
+    pthread_mutex_unlock(&vdata->ra_cvmtx);
+}
+
+// Harvest a finished prefetch into next_ready/next_len. Called with ra_lock
+// held. If block is true, wait for the worker to finish (used when the app
+// needs the next window right now); otherwise just poll.
+static void ext_reap_prefetch(ext_vdata *vdata, bool block)
+{
+    if (!vdata->next_pending) {
+        return;
+    }
+    pthread_mutex_lock(&vdata->ra_cvmtx);
+    while (block && (vdata->worker_busy || vdata->req_work)) {
+        pthread_cond_wait(&vdata->ra_done_cv, &vdata->ra_cvmtx);
+    }
+    if (!vdata->worker_busy && !vdata->req_work) {
+        // Completed.
+        vdata->next_pending = false;
+        if (vdata->req_err == EOK) {
+            vdata->next_len = vdata->req_got;
+            vdata->next_ready = true;
+        } else {
+            vdata->next_len = 0;
+            vdata->next_ready = false;
+        }
+    }
+    pthread_mutex_unlock(&vdata->ra_cvmtx);
+}
+
+// Cancel any in-flight prefetch and drop both windows. Called with ra_lock
+// held on write/truncate invalidation. Blocks until the worker is idle so its
+// buffer is not being written when we discard it.
+static void ext_ra_invalidate(ext_vdata *vdata)
+{
+    if (vdata->next_pending) {
+        pthread_mutex_lock(&vdata->ra_cvmtx);
+        while (vdata->worker_busy || vdata->req_work) {
+            pthread_cond_wait(&vdata->ra_done_cv, &vdata->ra_cvmtx);
+        }
+        pthread_mutex_unlock(&vdata->ra_cvmtx);
+        vdata->next_pending = false;
+    }
+    vdata->cur_len = 0;
+    vdata->cur_start = 0;
+    vdata->next_len = 0;
+    vdata->next_ready = false;
+    vdata->ra_next = 0;
+}
+
+// Serve read_amt bytes at cur_start-relative offset `off` from cur_buf into the
+// uio, then advance the uio. Caller guarantees the range is inside cur_buf.
+static void ext_serve_from_cur(ext_vdata *vdata, uio_t *uio, uint64_t off,
+                               uint64_t read_amt)
+{
+    memcpy(uio->uio_iov[0].iov_base,
+           vdata->cur_buf + (off - vdata->cur_start), read_amt);
+    uio->uio_iov[0].iov_base = (char *)uio->uio_iov[0].iov_base + read_amt;
+    uio->uio_iov[0].iov_len -= read_amt;
+    uio->uio_resid -= read_amt;
+    uio->uio_offset += read_amt;
+    vdata->ra_next = off + read_amt;
+}
+
+// Ensure the worker thread exists. Called with ra_lock held.
+static bool ext_ensure_worker(ext_vdata *vdata, struct ext4_fs *fs,
+                              uint32_t inode_no)
+{
+    if (vdata->worker_started) {
+        return true;
+    }
+    vdata->fs = fs;
+    vdata->inode_no = inode_no;
+    if (pthread_create(&vdata->worker, nullptr, ext_prefetch_worker, vdata) == 0) {
+        vdata->worker_started = true;
+    }
+    return vdata->worker_started;
+}
+
 static int
 ext_read(vnode_t *vp, struct file *fp, uio_t *uio, int ioflag)
 {
@@ -392,51 +619,89 @@ ext_read(vnode_t *vp, struct file *fp, uio_t *uio, int ioflag)
     }
     uint64_t read_amt = std::min(fsize - uio->uio_offset, (uint64_t)uio->uio_resid);
 
-    // Sequential read-ahead: for a single-iovec read smaller than the window,
-    // consult (and populate) a per-vnode read-ahead buffer. On a sequential
-    // access pattern this turns many small synchronous per-read() bios into one
-    // large read plus cheap memcpys, which is the dominant cost for sequential
-    // reads (a single small read() cannot keep the device pipeline busy).
-    static const size_t RA_WINDOW = 1 << 20;   // 1 MiB read-ahead window
+    // ASYNC double-buffered sequential read-ahead. For a single-iovec read
+    // smaller than half a window, serve from cur_buf (a memcpy) and keep the
+    // device busy by prefetching the next window in the background. On a
+    // sequential pattern this hides read latency behind the app's compute.
     ext_vdata *vdata = (ext_vdata *)vp->v_data;
     if (vdata && uio->uio_iovcnt == 1 && read_amt <= RA_WINDOW / 2) {
         uint64_t off = uio->uio_offset;
         mutex_lock(&vdata->ra_lock);
-        // Serve from the cached window if the request lies fully inside it.
-        if (vdata->ra_buf && off >= vdata->ra_start &&
-            off + read_amt <= vdata->ra_start + vdata->ra_len) {
-            memcpy(uio->uio_iov[0].iov_base,
-                   vdata->ra_buf + (off - vdata->ra_start), read_amt);
-            vdata->ra_next = off + read_amt;
+
+        // 1) Fully inside the current window -> serve it, then top up next.
+        if (vdata->cur_buf && vdata->cur_len && off >= vdata->cur_start &&
+            off + read_amt <= vdata->cur_start + vdata->cur_len) {
+            ext_serve_from_cur(vdata, uio, off, read_amt);
+            // If the app is near the end of cur, make sure a prefetch of the
+            // window after next is in flight (kick once per window).
+            uint64_t cur_end = vdata->cur_start + vdata->cur_len;
+            if (vdata->ra_next >= vdata->cur_start + vdata->cur_len / 2 &&
+                !vdata->next_pending && !vdata->next_ready &&
+                cur_end < fsize) {
+                size_t win = (size_t)std::min((uint64_t)RA_WINDOW, fsize - cur_end);
+                if (ext_ensure_worker(vdata, fs, vp->v_ino)) {
+                    ext_kick_prefetch(vdata, cur_end, win);
+                }
+            }
             mutex_unlock(&vdata->ra_lock);
-            uio->uio_iov[0].iov_base = (char *)uio->uio_iov[0].iov_base + read_amt;
-            uio->uio_iov[0].iov_len -= read_amt;
-            uio->uio_resid -= read_amt;
-            uio->uio_offset += read_amt;
             return 0;
         }
-        // Miss. If this looks sequential (or is the first read), fill the
-        // window from disk once and serve from it.
-        if (off == vdata->ra_next || vdata->ra_buf == nullptr) {
+
+        // 2) Crossed out of cur. If a prefetched "next" window covers this
+        //    offset, promote it to cur (waiting for it if still in flight),
+        //    serve, and kick the following window.
+        if (off == vdata->ra_next && vdata->next_pending) {
+            ext_reap_prefetch(vdata, /*block=*/true);
+        }
+        if (vdata->next_ready && off >= vdata->next_start &&
+            off + read_amt <= vdata->next_start + vdata->next_len) {
+            // Swap next -> cur.
+            std::swap(vdata->cur_buf, vdata->next_buf);
+            vdata->cur_start = vdata->next_start;
+            vdata->cur_len = vdata->next_len;
+            vdata->next_ready = false;
+            vdata->next_len = 0;
+            ext_serve_from_cur(vdata, uio, off, read_amt);
+            uint64_t cur_end = vdata->cur_start + vdata->cur_len;
+            if (cur_end < fsize) {
+                size_t win = (size_t)std::min((uint64_t)RA_WINDOW, fsize - cur_end);
+                if (ext_ensure_worker(vdata, fs, vp->v_ino)) {
+                    ext_kick_prefetch(vdata, cur_end, win);
+                }
+            }
+            mutex_unlock(&vdata->ra_lock);
+            return 0;
+        }
+
+        // 3) Cold miss / seek. Fill cur synchronously (as before) and, if this
+        //    looks sequential, immediately kick prefetch of the next window.
+        if (off == vdata->ra_next || vdata->cur_len == 0) {
             size_t win = (size_t)std::min((uint64_t)RA_WINDOW, fsize - off);
-            if (!vdata->ra_buf) {
-                vdata->ra_buf = (char *)alloc_contiguous_aligned(
+            if (!vdata->cur_buf) {
+                vdata->cur_buf = (char *)alloc_contiguous_aligned(
                     RA_WINDOW, alignof(std::max_align_t));
             }
-            if (vdata->ra_buf) {
+            if (vdata->cur_buf) {
+                // Any stale in-flight prefetch is invalid after a seek.
+                ext_reap_prefetch(vdata, /*block=*/true);
+                vdata->next_ready = false;
+                vdata->next_len = 0;
                 size_t got = 0;
                 int rr = ext_internal_read(fs, &inode_ref._ref, off,
-                                           vdata->ra_buf, win, &got);
+                                           vdata->cur_buf, win, &got);
                 if (rr == 0 && got >= read_amt) {
-                    vdata->ra_start = off;
-                    vdata->ra_len = got;
-                    memcpy(uio->uio_iov[0].iov_base, vdata->ra_buf, read_amt);
-                    vdata->ra_next = off + read_amt;
+                    vdata->cur_start = off;
+                    vdata->cur_len = got;
+                    ext_serve_from_cur(vdata, uio, off, read_amt);
+                    uint64_t cur_end = off + got;
+                    if (cur_end < fsize) {
+                        size_t win2 = (size_t)std::min((uint64_t)RA_WINDOW,
+                                                       fsize - cur_end);
+                        if (ext_ensure_worker(vdata, fs, vp->v_ino)) {
+                            ext_kick_prefetch(vdata, cur_end, win2);
+                        }
+                    }
                     mutex_unlock(&vdata->ra_lock);
-                    uio->uio_iov[0].iov_base = (char *)uio->uio_iov[0].iov_base + read_amt;
-                    uio->uio_iov[0].iov_len -= read_amt;
-                    uio->uio_resid -= read_amt;
-                    uio->uio_offset += read_amt;
                     return 0;
                 }
             }
@@ -692,13 +957,13 @@ ext_write(vnode_t *vp, uio_t *uio, int ioflag)
         return inode_ref._r;
     }
 
-    // A write invalidates any cached read-ahead window for this file.
+    // A write invalidates any cached read-ahead window for this file, and must
+    // cancel any in-flight prefetch before it can free/reuse those buffers.
     {
         ext_vdata *vdata = (ext_vdata *)vp->v_data;
         if (vdata) {
             mutex_lock(&vdata->ra_lock);
-            vdata->ra_len = 0;
-            vdata->ra_next = 0;
+            ext_ra_invalidate(vdata);
             mutex_unlock(&vdata->ra_lock);
         }
     }
@@ -1448,6 +1713,16 @@ ext_truncate(struct vnode *vp, off_t new_size)
 {
     ext_debug("truncate i-node=%ld, new_size:%ld\n", vp->v_ino, new_size);
     struct ext4_fs *fs = (struct ext4_fs *)vp->v_mount->m_data;
+    // Truncation changes the file's block layout; drop any read-ahead windows
+    // and cancel in-flight prefetch first.
+    {
+        ext_vdata *vdata = (ext_vdata *)vp->v_data;
+        if (vdata) {
+            mutex_lock(&vdata->ra_lock);
+            ext_ra_invalidate(vdata);
+            mutex_unlock(&vdata->ra_lock);
+        }
+    }
     bool update_cmtimed = false;
     int r = ext_trunc_inode(fs, vp->v_ino, new_size, &update_cmtimed);
     if (update_cmtimed) {
