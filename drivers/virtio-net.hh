@@ -273,6 +273,8 @@ private:
     bool _guest_csum = false;
     bool _guest_tso4 = false;
     bool _host_tso4 = false;
+    bool _guest_tso6 = false;
+    bool _host_tso6 = false;
     bool _guest_ufo = false;
     bool _use_large_buffers = false;
 
