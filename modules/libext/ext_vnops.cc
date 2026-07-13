@@ -40,6 +40,7 @@ extern "C" {
 #include <osv/debug.h>
 #include <osv/file.h>
 #include <osv/vnode_attr.h>
+#include <osv/mutex.h>
 
 void* alloc_contiguous_aligned(size_t size, size_t align);
 void free_contiguous_aligned(void* p);
@@ -98,9 +99,32 @@ struct ext_vdata {
     int ref_count;
     bool delete_on_last_close;
 
+    // Sequential read-ahead cache. ext4_blocks_get_direct issues one
+    // synchronous bio per read() with no prefetch, so many small sequential
+    // reads can't keep the device busy (the seq-read gap vs Linux). When a
+    // sequential pattern is detected we read a large window once and serve the
+    // following reads from this buffer (a memcpy, no I/O). Guarded by ra_lock;
+    // invalidated on any write to the file.
+    mutex_t ra_lock;
+    char *ra_buf;         // owned, alloc_contiguous_aligned; nullptr = empty
+    uint64_t ra_start;    // file offset of ra_buf[0]
+    size_t ra_len;        // valid bytes in ra_buf
+    uint64_t ra_next;     // expected offset of the next sequential read
+
     ext_vdata() {
         ref_count = 0;
         delete_on_last_close = false;
+        mutex_init(&ra_lock);
+        ra_buf = nullptr;
+        ra_start = 0;
+        ra_len = 0;
+        ra_next = 0;
+    }
+
+    ~ext_vdata() {
+        if (ra_buf) {
+            free_contiguous_aligned(ra_buf);
+        }
     }
 };
 
@@ -368,6 +392,59 @@ ext_read(vnode_t *vp, struct file *fp, uio_t *uio, int ioflag)
     }
     uint64_t read_amt = std::min(fsize - uio->uio_offset, (uint64_t)uio->uio_resid);
 
+    // Sequential read-ahead: for a single-iovec read smaller than the window,
+    // consult (and populate) a per-vnode read-ahead buffer. On a sequential
+    // access pattern this turns many small synchronous per-read() bios into one
+    // large read plus cheap memcpys, which is the dominant cost for sequential
+    // reads (a single small read() cannot keep the device pipeline busy).
+    static const size_t RA_WINDOW = 1 << 20;   // 1 MiB read-ahead window
+    ext_vdata *vdata = (ext_vdata *)vp->v_data;
+    if (vdata && uio->uio_iovcnt == 1 && read_amt <= RA_WINDOW / 2) {
+        uint64_t off = uio->uio_offset;
+        mutex_lock(&vdata->ra_lock);
+        // Serve from the cached window if the request lies fully inside it.
+        if (vdata->ra_buf && off >= vdata->ra_start &&
+            off + read_amt <= vdata->ra_start + vdata->ra_len) {
+            memcpy(uio->uio_iov[0].iov_base,
+                   vdata->ra_buf + (off - vdata->ra_start), read_amt);
+            vdata->ra_next = off + read_amt;
+            mutex_unlock(&vdata->ra_lock);
+            uio->uio_iov[0].iov_base = (char *)uio->uio_iov[0].iov_base + read_amt;
+            uio->uio_iov[0].iov_len -= read_amt;
+            uio->uio_resid -= read_amt;
+            uio->uio_offset += read_amt;
+            return 0;
+        }
+        // Miss. If this looks sequential (or is the first read), fill the
+        // window from disk once and serve from it.
+        if (off == vdata->ra_next || vdata->ra_buf == nullptr) {
+            size_t win = (size_t)std::min((uint64_t)RA_WINDOW, fsize - off);
+            if (!vdata->ra_buf) {
+                vdata->ra_buf = (char *)alloc_contiguous_aligned(
+                    RA_WINDOW, alignof(std::max_align_t));
+            }
+            if (vdata->ra_buf) {
+                size_t got = 0;
+                int rr = ext_internal_read(fs, &inode_ref._ref, off,
+                                           vdata->ra_buf, win, &got);
+                if (rr == 0 && got >= read_amt) {
+                    vdata->ra_start = off;
+                    vdata->ra_len = got;
+                    memcpy(uio->uio_iov[0].iov_base, vdata->ra_buf, read_amt);
+                    vdata->ra_next = off + read_amt;
+                    mutex_unlock(&vdata->ra_lock);
+                    uio->uio_iov[0].iov_base = (char *)uio->uio_iov[0].iov_base + read_amt;
+                    uio->uio_iov[0].iov_len -= read_amt;
+                    uio->uio_resid -= read_amt;
+                    uio->uio_offset += read_amt;
+                    return 0;
+                }
+            }
+        }
+        vdata->ra_next = off + read_amt;   // track for next-time detection
+        mutex_unlock(&vdata->ra_lock);
+    }
+
     // Fast path: a single contiguous user iovec lets lwext4 read straight into
     // the caller's buffer, avoiding a full-size bounce allocation and the
     // extra uiomove() copy that dominated the old read path.
@@ -613,6 +690,17 @@ ext_write(vnode_t *vp, uio_t *uio, int ioflag)
     auto_inode_ref inode_ref(fs, vp->v_ino);
     if (inode_ref._r != EOK) {
         return inode_ref._r;
+    }
+
+    // A write invalidates any cached read-ahead window for this file.
+    {
+        ext_vdata *vdata = (ext_vdata *)vp->v_data;
+        if (vdata) {
+            mutex_lock(&vdata->ra_lock);
+            vdata->ra_len = 0;
+            vdata->ra_next = 0;
+            mutex_unlock(&vdata->ra_lock);
+        }
     }
 
     if (ioflag & IO_APPEND) {
