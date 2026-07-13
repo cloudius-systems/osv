@@ -455,20 +455,24 @@ int pthread_mutex_trylock(pthread_mutex_t *m)
 // Try to lock @m, spinning-with-backoff until the absolute deadline given by
 // @abs_timeout on clock @clock.  OSv's lockfree mutex has no native timed lock,
 // so we poll try_lock() with a short sleep between attempts.  Returns 0 on
-// success or ETIMEDOUT if the deadline passes first.
+// success, EINVAL for an invalid @abs_timeout, or ETIMEDOUT if the deadline
+// passes first.
 //
-// ponytail: poll+backoff, not a native timed acquire.  Fine for the rare
-// contended timedlock; if it ever needs to be tight, add a timed wait to the
-// lockfree mutex itself.
+// Note: this is a poll+backoff, not a native timed acquire.  That is fine for
+// the rare contended timedlock; if it ever needs to be tight, add a timed wait
+// to the lockfree mutex itself.
 static int mutex_timedlock_until(pthread_mutex_t *m, clockid_t clock,
                                  const struct timespec *abs_timeout)
 {
-    if (from_libc(m)->try_lock()) {
-        return 0;   // uncontended fast path
-    }
+    // Validate the timeout up front so an invalid @abs_timeout fails with
+    // EINVAL without acquiring the mutex, as POSIX requires, even on the
+    // uncontended fast path.
     if (!abs_timeout || abs_timeout->tv_nsec < 0 ||
         abs_timeout->tv_nsec >= 1000000000) {
         return EINVAL;
+    }
+    if (from_libc(m)->try_lock()) {
+        return 0;   // uncontended fast path
     }
 
     auto deadline_ns = std::chrono::seconds(abs_timeout->tv_sec) +
