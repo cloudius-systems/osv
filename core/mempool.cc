@@ -802,18 +802,56 @@ page_range* page_range_allocator::alloc(size_t size, bool contiguous)
     return &pr;
 }
 
+// Return the byte offset of the first page-aligned page within the physical
+// range [base, base+size) that lies on NUMA node `node`, or (size_t)-1 if the
+// range has no memory on that node.  Uses the SRAT memory ranges to intersect
+// directly rather than probing page by page, so a multi-hundred-MB free range
+// costs a handful of comparisons.
+static size_t node_offset_within(uint64_t base, size_t size, int node)
+{
+    uint64_t end = base + size;
+    uint64_t best = end;   // lowest on-node start found so far
+    for (auto& r : numa::memory_ranges()) {
+        if ((int)r.node != node) {
+            continue;
+        }
+        uint64_t lo = std::max(base, r.base);
+        uint64_t hi = std::min(end, r.base + r.length);
+        if (lo < hi) {
+            // Align the intersection start up to a page; must still leave room
+            // for one page inside both the free range and the node's range.
+            uint64_t start = align_up(lo, (uint64_t)page_size);
+            if (start + page_size <= hi && start < best) {
+                best = start;
+            }
+        }
+    }
+    return best == end ? (size_t)-1 : (size_t)(best - base);
+}
+
 page_range* page_range_allocator::alloc_page_from_node(int node)
 {
-    // Find a free range whose memory lies on the requested NUMA node, then
-    // carve a single page from its front (mirroring alloc()).  This is a
-    // best-effort preference: a linear scan over the free lists, returning the
-    // first range on the node.  Returns nullptr if none is found, so the caller
-    // can fall back to a node-agnostic allocation.
+    // Carve a single page physically on NUMA node `node` from the free lists.
+    //
+    // A free range may straddle a node boundary: OSv's boot allocator coalesces
+    // physically adjacent memory, and node N and node N+1 are usually adjacent
+    // in physical space, so one free range can begin on a low node and extend
+    // into a higher one.  Classifying a range only by its base address would
+    // therefore make a higher node's memory invisible (it lives inside a range
+    // whose base is on a lower node).  Instead, for each free range we find the
+    // first page-aligned offset within it that lies on `node`, then carve there,
+    // splitting the range into up-to-three pieces (prefix / the page / suffix).
+    //
+    // Best-effort: a linear scan over the free lists returning the first match,
+    // and nullptr if the node has no free memory so the caller can fall back.
     page_range* found = nullptr;
+    size_t found_off = 0;   // byte offset of the on-node page within *found
     for_each(0, [&] (page_range& pr) {
-        auto phys = mmu::virt_to_phys(static_cast<void*>(&pr));
-        if (numa::node_of_phys(phys) == node) {
+        auto base = mmu::virt_to_phys(static_cast<void*>(&pr));
+        size_t off = node_offset_within(base, pr.size, node);
+        if (off != (size_t)-1) {
             found = &pr;
+            found_off = off;
             return false;   // stop iterating
         }
         return true;
@@ -824,14 +862,24 @@ page_range* page_range_allocator::alloc_page_from_node(int node)
 
     auto& pr = *found;
     remove(pr);
-    if (pr.size > page_size) {
-        auto& np = *new (static_cast<void*>(&pr) + page_size)
-                        page_range(pr.size - page_size);
-        insert(np);
-        pr.size = page_size;
+    char* v = static_cast<char*>(static_cast<void*>(&pr));
+    // Suffix after the carved page stays free.
+    size_t tail = pr.size - found_off - page_size;
+    if (tail) {
+        insert(*new (v + found_off + page_size) page_range(tail));
     }
-    set_bits(pr, false);
-    return &pr;
+    // Prefix before the carved page stays free.
+    page_range* ret;
+    if (found_off) {
+        pr.size = found_off;
+        insert(pr);
+        ret = new (v + found_off) page_range(page_size);
+    } else {
+        pr.size = page_size;
+        ret = &pr;
+    }
+    set_bits(*ret, false);
+    return ret;
 }
 
 page_range* page_range_allocator::alloc_aligned(size_t size, size_t offset,
