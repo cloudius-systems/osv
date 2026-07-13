@@ -1,6 +1,7 @@
 module: usr.manifest common.manifest fs.manifest build_all_tests
 
 include ../common.gmk
+include $(OSV_BASE)/conf/base.mk
 
 # Ask make to not delete "intermediate" results, such as the .o in the chain
 # .cc -> .o -> .so. Otherwise, during the first build, make considers the .o
@@ -9,8 +10,15 @@ include ../common.gmk
 # See commit fac05c95 for a longer explanation.
 .SECONDARY:
 
+# CONF_* macros generally come from the generated config headers (via
+# -isystem $(out)/gen/include).  We only override CONF_debug_memory here (like
+# the kernel's own tests build) and pass CONF_INET6 through so the IPv6 tests
+# compile against the enabled stack.  Do NOT reintroduce the old
+# configuration-defines mechanism: defining e.g. CONF_logger_debug to an empty
+# value on the command line shadows the generated header and breaks debug.h's
+# "#if CONF_logger_debug".
 COMMON += -g -O2 -fPIC -DBOOST_TEST_DYN_LINK \
-	-U _FORTIFY_SOURCE -D_KERNEL -D__OSV__ -DCONF_debug_memory=0 \
+	-U _FORTIFY_SOURCE -D_KERNEL -D__OSV__ -DCONF_debug_memory=0 -DCONF_INET6=$(conf-INET6) \
 	-Wall -Wno-pointer-arith -Wformat=0 -Wno-format-security
 
 LIBS = $(libgcc_s_dir)/libgcc_s.so.1
@@ -151,7 +159,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-pthread-setcancelstate.so tst-pin.so tst-run.so \
 	tst-pthread-affinity-inherit.so tst-sem-timed-wait.so \
 	tst-ttyname.so tst-pthread-barrier.so tst-feexcept.so tst-math.so \
-	tst-sigaltstack.so tst-fread.so tst-tcp-cork.so tst-tcp-v6.so \
+	tst-sigaltstack.so tst-fread.so tst-tcp-cork.so \
 	tst-calloc.so tst-crypt.so tst-non-fpic.so tst-small-malloc.so \
 	tst-getopt.so tst-getopt-pie.so tst-non-pie.so tst-semaphore.so \
 	tst-elf-init.so tst-realloc.so tst-setjmp.so \
@@ -161,7 +169,9 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-bsd-evh.so \
 	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-pthread-create.so \
 	misc-futex-perf.so misc-syscall-perf.so tst-brk.so tst-reloc.so \
 	misc-vdso-perf.so tst-string-utils.so tst-elf-circular-reloc.so \
-	lib-circular-reloc1.so lib-circular-reloc2.so tst-rwlock.so
+	lib-circular-reloc1.so lib-circular-reloc2.so tst-rwlock.so \
+	tst-socket-timestamp.so tst-pktinfo.so
+#	libstatic-thread-variable.so tst-static-thread-variable.so \
 #	tst-f128.so \
 
 
@@ -273,7 +283,7 @@ common-boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	tst-poll.so tst-bitset-iter.so tst-timer-set.so tst-clock.so \
 	tst-rcu-hashtable.so tst-unordered-ring-mpsc.so \
 	tst-seek.so tst-ctype.so tst-wctype.so tst-string.so tst-time.so tst-dax.so \
-	tst-net_if_test.so
+	tst-net_if_test.so tst-tcp-v6.so tst-tcp-v6-smoke.so tst-ipv6-internet.so tst-ifaddr-dump.so
 
 boost-tests := $(common-boost-tests)
 
