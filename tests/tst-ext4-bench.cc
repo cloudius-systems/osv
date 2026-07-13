@@ -41,11 +41,14 @@ static double bench_write(const char *path, size_t total, size_t bs, bool do_fsy
     int fd = open(path, O_WRONLY | O_CREAT | O_TRUNC, 0644);
     if (fd < 0) { perror("open(write)"); return -1; }
     std::vector<char> buf(bs);
-    for (size_t i = 0; i < bs; i++) buf[i] = (char)((i * 7 + 3) & 0xff);
 
     auto t0 = clk::now();
     size_t written = 0;
     while (written < total) {
+        // Absolute-offset pattern so a sequential read can verify integrity
+        // regardless of chunk size / read-ahead window boundaries.
+        for (size_t i = 0; i < bs; i++)
+            buf[i] = (char)(((written + i) * 7 + 3) & 0xff);
         ssize_t n = write(fd, buf.data(), bs);
         if (n != (ssize_t)bs) { perror("write"); close(fd); return -1; }
         written += n;
@@ -56,8 +59,10 @@ static double bench_write(const char *path, size_t total, size_t bs, bool do_fsy
     return (total / (1024.0 * 1024.0)) / secs(t0, t1);
 }
 
-// Sequential read of `total` bytes in `bs` chunks; return MB/s.
-static double bench_read_seq(const char *path, size_t total, size_t bs)
+// Sequential read of `total` bytes in `bs` chunks; return MB/s. If verify is
+// set, checks each byte matches the write pattern (i*7+3)&0xff, proving the
+// read path (incl. read-ahead) returns correct data.
+static double bench_read_seq(const char *path, size_t total, size_t bs, bool verify = false)
 {
     int fd = open(path, O_RDONLY);
     if (fd < 0) { perror("open(read)"); return -1; }
@@ -67,6 +72,17 @@ static double bench_read_seq(const char *path, size_t total, size_t bs)
     while (rd < total) {
         ssize_t n = read(fd, buf.data(), bs);
         if (n <= 0) break;
+        if (verify) {
+            for (ssize_t i = 0; i < n; i++) {
+                char expect = (char)(((rd + i) * 7 + 3) & 0xff);
+                if (buf[i] != expect) {
+                    fprintf(stderr, "VERIFY FAIL at byte %zu: got %d want %d\n",
+                            rd + i, (unsigned char)buf[i], (unsigned char)expect);
+                    close(fd);
+                    return -2;
+                }
+            }
+        }
         rd += n;
     }
     auto t1 = clk::now();
@@ -111,7 +127,7 @@ int main(int argc, char **argv)
             dir, total >> 20, bs >> 10);
 
     double w   = bench_write(path, total, bs, /*fsync=*/true);
-    double rs  = bench_read_seq(path, total, bs);        // warm (just written)
+    double rs  = bench_read_seq(path, total, bs, /*verify=*/true); // warm + integrity check
     double rr  = bench_read_rand(path, total, 4096, 4096); // 4K random, 4096 ops
 
     fprintf(stderr, "RESULT seq_write_fsync %.1f MB/s\n", w);
