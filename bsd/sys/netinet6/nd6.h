@@ -73,6 +73,8 @@ struct nd_ifinfo {
 	int recalctm;			/* BaseReacable re-calculation timer */
 	u_int8_t chlim;			/* CurHopLimit */
 	u_int8_t initialized; /* Flag to see the entry is initialized */
+	u_int8_t managed;		/* last RA had the Managed (M) flag set:
+					   use DHCPv6 for address configuration */
 	/* the following 3 members are for privacy extension for addrconf */
 	u_int8_t randomseed0[8]; /* upper 64 bits of MD5 digest */
 	u_int8_t randomseed1[8]; /* lower 64 bits (usually the EUI64 IFID) */
@@ -428,6 +430,7 @@ void nd6_na_output(struct ifnet *, const struct in6_addr *,
 void nd6_ns_input(struct mbuf *, int, int);
 void nd6_ns_output(struct ifnet *, const struct in6_addr *,
 	const struct in6_addr *, struct llentry *, int);
+void nd6_rs_output(struct ifnet *, struct in6_ifaddr *);
 caddr_t nd6_ifptomac(struct ifnet *);
 void nd6_dad_start(struct bsd_ifaddr *, int);
 void nd6_dad_stop(struct bsd_ifaddr *);

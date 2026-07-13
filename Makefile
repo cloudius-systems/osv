@@ -783,6 +783,9 @@ bsd += bsd/sys/netinet/cc/cc_htcp.o
 bsd += bsd/sys/netinet/cc/cc_newreno.o
 bsd += bsd/sys/netinet/arpcache.o
 ifeq ($(conf-INET6), 1)
+ifeq ($(conf_networking_dhcp6),1)
+bsd += bsd/porting/dhcp6.o
+endif
 bsd += bsd/sys/netinet6/dest6.o
 bsd += bsd/sys/netinet6/frag6.o
 bsd += bsd/sys/netinet6/icmp6.o
@@ -1153,6 +1156,11 @@ objects += core/per-cpu-counter.o
 objects += core/percpu-worker.o
 ifeq ($(conf_networking_dhcp),1)
 objects += core/dhcp.o
+endif
+ifeq ($(conf-INET6),1)
+ifeq ($(conf_networking_dhcp6),1)
+# bsd/porting/dhcp6.o is added to the bsd list (needs BSD-internal headers)
+endif
 endif
 objects += core/run.o
 objects += core/shutdown.o

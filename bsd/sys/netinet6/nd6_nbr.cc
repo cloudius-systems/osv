@@ -609,6 +609,127 @@ nd6_ns_output(struct ifnet *ifp, const struct in6_addr *daddr6,
 }
 
 /*
+ * Output a Router Solicitation (RFC 4861 6.3.7) to the all-routers link-local
+ * multicast address (ff02::2) on the given interface.  FreeBSD normally leaves
+ * this to the userspace rtsold daemon; OSv is a unikernel with no such daemon,
+ * so we send the RS from the kernel at interface bring-up.  This prompts the
+ * on-link router (a cloud VPC router, QEMU SLIRP, a radvd/host on the Firecracker
+ * or QEMU tap bridge) to reply with a Router Advertisement immediately rather
+ * than making us wait up to MaxRtrAdvInterval for an unsolicited RA, which is
+ * what makes SLAAC prompt enough to use during boot.
+ */
+void
+nd6_rs_output(struct ifnet *ifp, struct in6_ifaddr *ia)
+{
+	struct mbuf *m;
+	struct ip6_hdr *ip6;
+	struct nd_router_solicit *nd_rs;
+	struct ip6_moptions im6o;
+	struct route_in6 ro;
+	caddr_t mac;
+	int icmp6len, maxlen, optlen;
+
+	/* Router solicitation only makes sense on multicast-capable links. */
+	if ((ifp->if_flags & IFF_MULTICAST) == 0)
+		return;
+
+	maxlen = sizeof(*ip6) + sizeof(*nd_rs);
+	maxlen += (sizeof(struct nd_opt_hdr) + ifp->if_addrlen + 7) & ~7;
+	if (max_linkhdr + maxlen >= MCLBYTES)
+		return;
+
+	MGETHDR(m, M_DONTWAIT, MT_DATA);
+	if (m && max_linkhdr + maxlen >= MHLEN) {
+		MCLGET(m, M_DONTWAIT);
+		if ((m->m_hdr.mh_flags & M_EXT) == 0) {
+			m_free(m);
+			m = NULL;
+		}
+	}
+	if (m == NULL)
+		return;
+	m->M_dat.MH.MH_pkthdr.rcvif = NULL;
+
+	bzero(&ro, sizeof(ro));
+
+	/* Always sent to the all-routers link-local multicast group. */
+	m->m_hdr.mh_flags |= M_MCAST;
+	bzero(&im6o, sizeof(im6o));
+	im6o.im6o_multicast_ifp = ifp;
+	im6o.im6o_multicast_hlim = 255;
+	im6o.im6o_multicast_loop = 0;
+
+	icmp6len = sizeof(*nd_rs);
+	m->M_dat.MH.MH_pkthdr.len = m->m_hdr.mh_len = sizeof(*ip6) + icmp6len;
+	m->m_hdr.mh_data += max_linkhdr;
+
+	ip6 = mtod(m, struct ip6_hdr *);
+	ip6->ip6_flow = 0;
+	ip6->ip6_vfc &= ~IPV6_VERSION_MASK;
+	ip6->ip6_vfc |= IPV6_VERSION;
+	ip6->ip6_nxt = IPPROTO_ICMPV6;
+	ip6->ip6_hlim = 255;
+	/* ff02::2 - all routers on this link. */
+	ip6->ip6_dst.s6_addr32[0] = 0;
+	ip6->ip6_dst.s6_addr32[1] = 0;
+	ip6->ip6_dst.s6_addr32[2] = 0;
+	ip6->ip6_dst.s6_addr32[3] = 0;
+	ip6->ip6_dst.s6_addr16[0] = IPV6_ADDR_INT16_MLL;
+	ip6->ip6_dst.s6_addr8[15] = 0x02;
+	if (in6_setscope(IP6_HDR_FIELD_ADDR(ip6, ip6_dst, in6_addr), ifp, NULL) != 0)
+		goto bad;
+
+	/*
+	 * Use our link-local address as source if it is usable (not tentative);
+	 * otherwise send from the unspecified address, in which case we must
+	 * not include the source link-layer address option (RFC 4861 6.3.7).
+	 */
+	if (ia != NULL && (ia->ia6_flags & (IN6_IFF_ANYCAST | IN6_IFF_NOTREADY)) == 0)
+		ip6->ip6_src = ia->ia_addr.sin6_addr;
+	else
+		bzero(&ip6->ip6_src, sizeof(ip6->ip6_src));
+
+	nd_rs = (struct nd_router_solicit *)(ip6 + 1);
+	nd_rs->nd_rs_type = ND_ROUTER_SOLICIT;
+	nd_rs->nd_rs_code = 0;
+	nd_rs->nd_rs_cksum = 0;
+	nd_rs->nd_rs_reserved = 0;
+
+	/* Source link-layer address option, only when we have a valid source. */
+	if (!IN6_IS_ADDR_UNSPECIFIED(IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr)) &&
+	    (mac = nd6_ifptomac(ifp)) != NULL) {
+		struct nd_opt_hdr *nd_opt = (struct nd_opt_hdr *)(nd_rs + 1);
+		optlen = (sizeof(struct nd_opt_hdr) + ifp->if_addrlen + 7) & ~7;
+		m->M_dat.MH.MH_pkthdr.len += optlen;
+		m->m_hdr.mh_len += optlen;
+		icmp6len += optlen;
+		bzero((caddr_t)nd_opt, optlen);
+		nd_opt->nd_opt_type = ND_OPT_SOURCE_LINKADDR;
+		nd_opt->nd_opt_len = optlen >> 3;
+		bcopy(mac, (caddr_t)(nd_opt + 1), ifp->if_addrlen);
+	}
+
+	ip6->ip6_plen = htons((u_short)icmp6len);
+	nd_rs->nd_rs_cksum = 0;
+	nd_rs->nd_rs_cksum = in6_cksum(m, IPPROTO_ICMPV6, sizeof(*ip6), icmp6len);
+
+	ip6_output(m, NULL, &ro, IN6_IS_ADDR_UNSPECIFIED(
+	    IP6_HDR_FIELD_ADDR(ip6, ip6_src, in6_addr)) ? IPV6_UNSPECSRC : 0,
+	    &im6o, NULL, NULL);
+	icmp6_ifstat_inc(ifp, ifs6_out_msg);
+	icmp6_ifstat_inc(ifp, ifs6_out_routersolicit);
+	ICMP6STAT_INC(icp6s_outhist[ND_ROUTER_SOLICIT]);
+
+	RO_RTFREE(&ro);
+	return;
+
+  bad:
+	if (ro.ro_rt)
+		RTFREE(ro.ro_rt);
+	m_freem(m);
+}
+
+/*
  * Neighbor advertisement input handling.
  *
  * Based on RFC 2461

@@ -111,6 +111,11 @@ __FBSDID("$FreeBSD: stable/9/sys/netinet6/udp6_usrreq.c 243586 2012-11-27 01:59:
 #include <bsd/sys/netinet6/udp6_var.h>
 #include <bsd/sys/netinet6/scope6_var.h>
 
+#include <osv/kernel_config_networking_dhcp6.h>
+#if CONF_networking_dhcp6
+extern "C" int dhcp6_hook_rx_at(struct mbuf* m, int off);
+#endif
+
 #ifdef IPSEC
 #include <bsd/sys/netipsec/ipsec.h>
 #include <bsd/sys/netipsec/ipsec6.h>
@@ -426,6 +431,16 @@ udp6_input(struct mbuf **mp, int *offp, int proto)
 		    INPLOOKUP_WILDCARD | INPLOOKUP_LOCKPCB,
 		    m->M_dat.MH.MH_pkthdr.rcvif, m);
 	if (inp == NULL) {
+#if CONF_networking_dhcp6
+		// DHCPv6 client: there is no in-kernel socket bound to the client
+		// port (546), so intercept replies here before we would bounce them
+		// with an ICMPv6 port-unreachable. udp6_input has already validated
+		// and located the UDP payload at @off, so hand the whole mbuf to the
+		// DHCPv6 worker.
+		if (uh->uh_dport == htons(546) && dhcp6_hook_rx_at(m, off)) {
+			return (IPPROTO_DONE);
+		}
+#endif
 		if (udp_log_in_vain) {
 			char ip6bufs[INET6_ADDRSTRLEN];
 			char ip6bufd[INET6_ADDRSTRLEN];

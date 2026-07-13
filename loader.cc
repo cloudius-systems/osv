@@ -40,6 +40,7 @@
 #include <bsd/porting/shrinker.h>
 #include <bsd/porting/route.h>
 #include <osv/dhcp.hh>
+#include <osv/dhcp6.hh>
 #include <osv/version.h>
 #include <osv/run.hh>
 #include <osv/shutdown.hh>
@@ -172,6 +173,9 @@ static bool opt_bootchart = false;
 static std::vector<std::string> opt_ip;
 static std::vector<std::string> opt_defaultgw;
 static std::vector<std::string> opt_nameserver;
+#ifdef INET6
+static bool opt_ipv6_only = false;
+#endif
 static std::string opt_redirect;
 static std::chrono::nanoseconds boot_delay;
 std::vector<mntent> opt_mount_fs;
@@ -226,6 +230,10 @@ static void usage()
         "  --ip=arg              set static IP on NIC\n"
         "  --defaultgw=arg       set default gateway address\n"
         "  --nameserver=arg      set nameserver address\n"
+#ifdef INET6
+        "  --ipv6                IPv6-only boot: skip the blocking DHCPv4 wait\n"
+        "                        and rely on SLAAC for IPv6 autoconfiguration\n"
+#endif
 #endif
         "  --delay=arg (=0)      delay in seconds before boot\n"
         "  --redirect=arg        redirect stdout and stderr to file\n"
@@ -408,6 +416,13 @@ static void parse_options(int loader_argc, char** loader_argv)
             opt_nameserver.push_back(t);
         }
     }
+
+#ifdef INET6
+    // --ipv6 forces the IPv6-only boot path: skip the (blocking) DHCPv4 wait
+    // and rely on SLAAC for address configuration. Useful on IPv6-only
+    // networks where waiting for a DHCPv4 lease would otherwise hang boot.
+    opt_ipv6_only = extract_option_flag(options_values, "ipv6");
+#endif
 
     if (options::option_value_exists(options_values, "redirect")) {
         opt_redirect = options::extract_option_value(options_values, "redirect");
@@ -684,6 +699,14 @@ void* do_main_thread(void *_main_args)
     if (has_if) {
 #if CONF_networking_dhcp
         if (opt_ip.size() == 0) {
+#ifdef INET6
+            if (opt_ipv6_only) {
+                // IPv6-only: don't block on a DHCPv4 lease that will never
+                // arrive. Kick DHCPv4 off in the background (harmless if there
+                // is no v4 server) and rely on SLAAC below for addressing.
+                dhcp_start(false);
+            } else
+#endif
             dhcp_start(true);
         } else {
 #endif
@@ -738,6 +761,33 @@ void* do_main_thread(void *_main_args)
         }
 #endif
     }
+
+#ifdef INET6
+    // Autoconfigure IPv6 on each interface once it is up. We solicit a Router
+    // Advertisement (FreeBSD leaves this to userspace rtsold, which a unikernel
+    // lacks) and then, based on the RA flags, either let SLAAC form the address
+    // (Autonomous/A-flag prefix, e.g. QEMU SLIRP, radvd) or run the DHCPv6
+    // client (Managed/M-flag network). Skipped when a static --ip was set.
+    if (has_if && opt_ip.size() == 0 && osv::get_ipv6_accept_rtadv()) {
+        // Wait longer when IPv6 is the only stack we can rely on for boot.
+        int timeout_ms = opt_ipv6_only ? 10000 : 3000;
+        osv::for_each_if([timeout_ms] (std::string if_name) {
+            if (if_name == "lo0")
+                return;
+            if (osv::if_ipv6_autoconf(if_name, timeout_ms) == 0) {
+                debugf("%s: IPv6 autoconfigured via SLAAC\n", if_name.c_str());
+            }
+#if CONF_networking_dhcp6
+            else if (osv::if_ipv6_wants_dhcp(if_name)) {
+                // The RA set the Managed flag (SLAAC did not apply); use DHCPv6.
+                debugf("%s: RA requests DHCPv6, starting client\n",
+                       if_name.c_str());
+                dhcp6_start(true);
+            }
+#endif
+        });
+    }
+#endif
 
     std::string if_ip;
     auto nr_ips = 0;

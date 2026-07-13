@@ -271,6 +271,15 @@ nd6_ra_input(struct mbuf *m, int off, int icmp6len)
 	dr0.rtaddr = saddr6;
 	dr0.flags  = nd_ra->nd_ra_flags_reserved;
 	/*
+	 * Record whether this RA asks us to use DHCPv6 (Managed flag). The boot
+	 * autoconfiguration path checks this to choose DHCPv6 vs SLAAC. A
+	 * Managed-flag network sets the M flag (and does NOT set the prefix A
+	 * flag), so on such a network this is how OSv learns to run the DHCPv6
+	 * client.
+	 */
+	if (nd_ra->nd_ra_flags_reserved & ND_RA_FLAG_MANAGED)
+		ndi->managed = 1;
+	/*
 	 * Effectively-disable routes from RA messages when
 	 * ND6_IFF_NO_RADR enabled on the receiving interface or
 	 * (ip6.forwarding == 1 && ip6.rfc6204w3 != 1).
