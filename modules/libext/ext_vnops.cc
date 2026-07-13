@@ -363,14 +363,38 @@ ext_read(vnode_t *vp, struct file *fp, uio_t *uio, int ioflag)
 
     // Total read amount is what they requested, or what is left
     uint64_t fsize = ext4_inode_get_size(&fs->sb, inode_ref._ref.inode);
+    if ((uint64_t)uio->uio_offset >= fsize) {
+        return 0;
+    }
     uint64_t read_amt = std::min(fsize - uio->uio_offset, (uint64_t)uio->uio_resid);
+
+    // Fast path: a single contiguous user iovec lets lwext4 read straight into
+    // the caller's buffer, avoiding a full-size bounce allocation and the
+    // extra uiomove() copy that dominated the old read path.
+    if (uio->uio_iovcnt == 1 && uio->uio_iov[0].iov_len >= read_amt) {
+        size_t read_count = 0;
+        int ret = ext_internal_read(fs, &inode_ref._ref, uio->uio_offset,
+                                    uio->uio_iov[0].iov_base, read_amt, &read_count);
+        if (ret) {
+            kprintf("[ext_read] Error reading data\n");
+            return ret;
+        }
+        // Advance the uio to reflect what we consumed (mirrors uiomove).
+        uio->uio_iov[0].iov_base = (char *)uio->uio_iov[0].iov_base + read_count;
+        uio->uio_iov[0].iov_len -= read_count;
+        uio->uio_resid -= read_count;
+        uio->uio_offset += read_count;
+        return 0;
+    }
+
+    // Slow path (scatter/gather or short iovec): bounce through a temp buffer.
     void *buf = alloc_contiguous_aligned(read_amt, alignof(std::max_align_t));
 
     size_t read_count = 0;
     int ret = ext_internal_read(fs, &inode_ref._ref, uio->uio_offset, buf, read_amt, &read_count);
     if (ret) {
         kprintf("[ext_read] Error reading data\n");
-        free(buf);
+        free_contiguous_aligned(buf);
         return ret;
     }
 
@@ -597,12 +621,28 @@ ext_write(vnode_t *vp, uio_t *uio, int ioflag)
 
     ext_debug("write: %ld bytes at offset:%ld to file i-node=%ld\n", uio->uio_resid, uio->uio_offset, vp->v_ino);
 
+    // Fast path: a single contiguous user iovec lets lwext4 write straight from
+    // the caller's buffer, avoiding a full-size bounce allocation and the extra
+    // uiomove() copy.
+    if (uio->uio_iovcnt == 1 && (size_t)uio->uio_iov[0].iov_len >= (size_t)uio->uio_resid) {
+        size_t want = uio->uio_resid;
+        size_t write_count = 0;
+        int ret = ext_internal_write(fs, &inode_ref._ref, uio->uio_offset,
+                                     uio->uio_iov[0].iov_base, want, &write_count);
+        uio->uio_iov[0].iov_base = (char *)uio->uio_iov[0].iov_base + write_count;
+        uio->uio_iov[0].iov_len -= write_count;
+        uio->uio_resid -= write_count;
+        uio->uio_offset += write_count;
+        vp->v_size = ext4_inode_get_size(&fs->sb, inode_ref._ref.inode);
+        return ret;
+    }
+
     uio_t uio_copy = *uio;
     void *buf = alloc_contiguous_aligned(uio->uio_resid, alignof(std::max_align_t));
     int ret = uiomove(buf, uio->uio_resid, &uio_copy);
     if (ret) {
         kprintf("[ext_write] Error copying data\n");
-        free(buf);
+        free_contiguous_aligned(buf);
         return ret;
     }
 
