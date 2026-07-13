@@ -1328,13 +1328,19 @@ struct page_batch {
 // Single thread is created to help filling the L2-pool.
 class l2 {
 public:
-    l2()
-        : _max(sched::cpus.size() * (l1::max / page_batch::nr_pages))
+    // node == -1 means the node-agnostic global pool (single-node / non-NUMA
+    // systems, and the fallback pool). node >= 0 is a per-NUMA-node pool whose
+    // refill() prefers pages physically local to that node.
+    explicit l2(int node = -1)
+        : _node(node)
+        , _max(sched::cpus.size() * (l1::max / page_batch::nr_pages))
         , _nr(0)
         , _watermark_lo(_max * 1 / 4)
         , _watermark_hi(_max * 3 / 4)
         , _stack(_max)
-        , _fill_thread(sched::thread::make([=] { fill_thread(); }, sched::thread::attr().name("page_pool_l2")))
+        , _fill_thread(sched::thread::make([=] { fill_thread(); },
+              sched::thread::attr().name(std::string("page_pool_l2_") +
+                  (node < 0 ? std::string("g") : std::to_string(node)))))
     {
        _fill_thread->start();
     }
@@ -1411,6 +1417,7 @@ public:
     void dec_nr() { _nr.fetch_sub(1, std::memory_order_relaxed); }
 
 private:
+    int _node;
     size_t _max;
     std::atomic<size_t> _nr;
     size_t _watermark_lo;
@@ -1420,6 +1427,7 @@ private:
 };
 
 std::atomic<unsigned int> l1_initialized_cnt{};
+static void init_node_l2_pools();   // defined below; called from the cpu notifier
 PERCPU(l1*, percpu_l1);
 static sched::cpu::notifier _notifier([] () {
     *percpu_l1 = new l1(sched::cpu::current());
@@ -1429,6 +1437,10 @@ static sched::cpu::notifier _notifier([] () {
     // N per-cpu threads for L1 page pool, 1 thread for L2 page pool
     // Switch to smp_allocator only when all the N + 1 threads are ready
     if (smp_allocator_cnt++ == sched::cpus.size()) {
+        // All CPUs are up and NUMA topology is known; bring up the per-node
+        // L2 pools before flipping smp_allocator so the first SMP allocations
+        // already draw node-local pages.
+        init_node_l2_pools();
         smp_allocator = true;
     }
 });
@@ -1438,6 +1450,37 @@ static inline l1& get_l1()
 }
 
 class l2 global_l2;
+
+// Per-NUMA-node L2 pools. On a single-node/non-NUMA system this is just
+// global_l2 (node_l2 stays empty and get_l2() returns global_l2), preserving
+// the original behavior. On a multi-node system each node gets its own L2
+// whose refill() prefers node-local pages, and each CPU draws from its node's
+// pool so allocations stay local; a drained node falls back to any page.
+static std::vector<l2*> node_l2;
+
+static void init_node_l2_pools()
+{
+    if (!numa::available() || numa::nr_nodes() <= 1) {
+        return;   // single pool (global_l2) is enough
+    }
+    node_l2.resize(numa::nr_nodes());
+    for (unsigned n = 0; n < numa::nr_nodes(); n++) {
+        node_l2[n] = new l2((int)n);
+    }
+}
+
+// Return the L2 pool for the calling CPU's NUMA node, or the global pool when
+// per-node pools are not in use.
+static inline l2& get_l2()
+{
+    if (!node_l2.empty()) {
+        unsigned node = numa::node_of_cpu(sched::cpu::current()->id);
+        if (node < node_l2.size() && node_l2[node]) {
+            return *node_l2[node];
+        }
+    }
+    return global_l2;
+}
 
 // Percpu thread for L1 page pool
 void l1::fill_thread()
@@ -1477,7 +1520,8 @@ void l1::refill()
     SCOPE_LOCK(preempt_lock);
     auto& pbuf = get_l1();
     if (pbuf.nr + page_batch::nr_pages < pbuf.max / 2) {
-        auto* pb = global_l2.alloc_page_batch();
+        auto& l2pool = get_l2();
+        auto* pb = l2pool.alloc_page_batch();
         if (pb) {
             // Other threads might have filled the array while we waited for
             // the page batch.  Make sure there is enough room to add the pages
@@ -1487,7 +1531,7 @@ void l1::refill()
                     pbuf.push(page);
                 }
             } else {
-                global_l2.free_page_batch(pb);
+                l2pool.free_page_batch(pb);
             }
         }
     }
@@ -1508,7 +1552,7 @@ void l1::unfill()
         for (size_t i = 0 ; i < page_batch::nr_pages; i++) {
             pb->pages[i] = pbuf.pop();
         }
-        global_l2.free_page_batch(pb);
+        get_l2().free_page_batch(pb);
     }
 }
 
@@ -1590,7 +1634,16 @@ void l2::refill()
             }
             size_t got = 0;
             for (; got < page_batch::nr_pages; got++) {
-                page_range *pr = free_page_ranges.alloc(page_size);
+                page_range *pr = nullptr;
+                if (_node >= 0) {
+                    // Prefer a page physically local to this L2's NUMA node;
+                    // fall back to any page so a drained node still makes
+                    // progress (correctness over strict locality).
+                    pr = free_page_ranges.alloc_page_from_node(_node);
+                }
+                if (!pr) {
+                    pr = free_page_ranges.alloc(page_size);
+                }
                 if (!pr) {
                     // Out of memory mid-batch. A page_batch is only usable
                     // when completely filled: the last slot doubles as the
