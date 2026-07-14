@@ -323,6 +323,54 @@ int sigwait(const sigset_t *set, int *sig)
     return 0;
 }
 
+// Timed variant used by rt_sigtimedwait(2).  Waits for one of the signals in
+// @set to be delivered, or for the relative @timeout to elapse.  A {0,0}
+// timeout polls (returns immediately with EAGAIN if nothing matching is
+// pending).  Returns the signal number, or -1 with errno set (EAGAIN on
+// timeout, EINVAL on a malformed timeout).  Called from linux.cc; kept here
+// because it needs the signal-waiter internals.
+extern "C" OSV_LIBC_API
+int osv_sigtimedwait(const sigset_t *set, siginfo_t *si,
+                     const struct timespec *timeout)
+{
+    // Validate the timeout as Linux does: a malformed timespec must fail with
+    // EINVAL rather than arm a bogus (or negative) timer.
+    if (!timeout || timeout->tv_sec < 0 ||
+        timeout->tv_nsec < 0 || timeout->tv_nsec >= 1000000000) {
+        errno = EINVAL;
+        return -1;
+    }
+    sched::timer tmr(*sched::thread::current());
+    tmr.set(osv::clock::uptime::now() +
+            std::chrono::seconds(timeout->tv_sec) +
+            std::chrono::nanoseconds(timeout->tv_nsec));
+
+    // Only accept a delivered signal that is a member of @set (rt_sigtimedwait
+    // waits for a specific set); a signal outside the set is not what the
+    // caller asked for, so keep waiting for it (or the timeout).
+    int signo = 0;
+    sched::thread::wait_until([&] {
+        int pending = thread_pending_signal;
+        if (pending != 0 && (!set || sigismember(set, pending))) {
+            signo = pending;
+            return true;
+        }
+        return tmr.expired();
+    });
+
+    if (signo == 0) {
+        // Timed out (or polled with {0,0}) with no matching signal.
+        errno = EAGAIN;
+        return -1;
+    }
+    thread_pending_signal = 0;
+    if (si) {
+        memset(si, 0, sizeof(*si));
+        si->si_signo = signo;
+    }
+    return signo;
+}
+
 // Partially-Linux-compatible support for kill(2).
 // Note that this is different from our generate_signal() - the latter is only
 // suitable for delivering SIGFPE and SIGSEGV to the same thread that called
