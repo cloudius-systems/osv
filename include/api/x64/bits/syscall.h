@@ -295,6 +295,9 @@
 #define __NR_inotify_init1			294
 #define __NR_preadv					295
 #define __NR_pwritev				296
+#define __NR_renameat2				316
+#define __NR_preadv2				327
+#define __NR_pwritev2				328
 #define __NR_rt_tgsigqueueinfo		297
 #define __NR_perf_event_open		298
 #define __NR_recvmmsg				299
@@ -594,6 +597,9 @@
 #define SYS_newfstatat				262
 #define SYS_unlinkat				263
 #define SYS_renameat				264
+#define SYS_renameat2				316
+#define SYS_preadv2				327
+#define SYS_pwritev2				328
 #define SYS_linkat					265
 #define SYS_symlinkat				266
 #define SYS_readlinkat				267
