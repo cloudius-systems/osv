@@ -12,6 +12,8 @@
 #include <memory>
 #include <stdio.h>
 #include <errno.h>
+#include <limits.h>
+#include <time.h>
 #include <signal.h>
 
 #include <osv/file.h>
@@ -353,6 +355,43 @@ int epoll_pwait(int epfd, struct epoll_event *events, int maxevents, int timeout
     auto ret = epoll_wait(epfd, events, maxevents, timeout_ms);
     sigprocmask(SIG_SETMASK, &origmask, NULL);
     return ret;
+}
+
+// epoll_pwait2(2): like epoll_pwait but the timeout is a struct timespec (ns
+// resolution) instead of an int millisecond count.  A NULL timeout means block
+// indefinitely.  OSv's epoll_wait takes a millisecond timeout, so we round the
+// timespec up to whole milliseconds (a sub-ms nonzero timeout becomes 1 ms so
+// we do not busy-spin as if it were 0).
+//
+// Declared extern "C" here (musl's <sys/epoll.h> does not declare it) so the
+// syscall dispatch and callers get an unmangled symbol.
+extern "C" OSV_LIBC_API
+int epoll_pwait2(int epfd, struct epoll_event *events, int maxevents,
+            const struct timespec *timeout, const sigset_t *sigmask);
+
+int epoll_pwait2(int epfd, struct epoll_event *events, int maxevents,
+            const struct timespec *timeout, const sigset_t *sigmask)
+{
+    int timeout_ms;
+    if (!timeout) {
+        timeout_ms = -1;   // block indefinitely
+    } else if (timeout->tv_sec < 0 || timeout->tv_nsec < 0 ||
+               timeout->tv_nsec >= 1000000000) {
+        // Malformed timespec -> EINVAL, matching Linux, before any arithmetic.
+        errno = EINVAL;
+        return -1;
+    } else if (timeout->tv_sec == 0 && timeout->tv_nsec == 0) {
+        timeout_ms = 0;    // return immediately
+    } else if (timeout->tv_sec >= (long long)INT_MAX / 1000) {
+        // Would overflow the millisecond count; saturate to the max wait rather
+        // than risk signed-overflow UB in the multiply below.
+        timeout_ms = INT_MAX;
+    } else {
+        long long ms = (long long)timeout->tv_sec * 1000 +
+                       (timeout->tv_nsec + 999999) / 1000000;   // round up
+        timeout_ms = ms > INT_MAX ? INT_MAX : (int)ms;
+    }
+    return epoll_pwait(epfd, events, maxevents, timeout_ms, sigmask);
 }
 
 void epoll_file_closed(epoll_ptr ptr)
