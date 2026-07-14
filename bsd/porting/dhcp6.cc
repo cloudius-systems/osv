@@ -272,7 +272,18 @@ bool dhcp6_interface_state::parse(struct mbuf* m, msg_type& out_type)
     if (payload_off <= 0)
         payload_off = sizeof(struct ip6_hdr) + sizeof(struct udphdr);
     u8* p = mtod(m, u8*) + payload_off;
-    int blen = m->M_dat.MH.MH_pkthdr.len - payload_off;
+    // udp6_input only makes the UDP header contiguous, not the DHCPv6 body.
+    // pkthdr.len covers the whole mbuf chain, but p points into the FIRST
+    // mbuf, so bound the option walk by the contiguous first-mbuf length, not
+    // the chain total - otherwise a >4 KiB reply (jumbo / host GRO -> mbuf
+    // chain from a malicious on-link DHCPv6 server) would make the walk read
+    // past this mbuf.  A well-formed DHCPv6 reply is far smaller than one RX
+    // buffer, so clamping to the contiguous region loses nothing legitimate.
+    int chain_len = m->M_dat.MH.MH_pkthdr.len - payload_off;
+    int contig_len = (int)m->m_hdr.mh_len - payload_off;
+    int blen = (chain_len < contig_len) ? chain_len : contig_len;
+    if (blen < 0)
+        blen = 0;
     if (blen < 4)
         return false;
 
@@ -280,6 +291,12 @@ bool dhcp6_interface_state::parse(struct mbuf* m, msg_type& out_type)
     u32 xid = (p[1] << 16) | (p[2] << 8) | p[3];
     if (xid != _xid)
         return false;   // not our transaction
+
+    // Only after confirming this reply is for our transaction do we reset the
+    // per-reply learned state, so a non-matching (e.g. spoofed) packet cannot
+    // wipe good state, and repeated matching replies do not accumulate.
+    _dns.clear();
+    _have_addr = false;
 
     int off = 4;
     while (off + 4 <= blen) {
@@ -358,6 +375,14 @@ void dhcp6_interface_state::bind_address()
 
 void dhcp6_interface_state::process_packet(struct mbuf* m)
 {
+    // Only process replies while we are actually soliciting/requesting. Once
+    // bound (or before we start), ignore unsolicited packets: otherwise an
+    // on-link attacker who observed our SOLICIT's transaction id could spray
+    // crafted REPLYs, each of which parse() would append to _dns/_server_duid,
+    // growing them without bound (memory DoS).
+    if (_state != DH6_SOLICITING && _state != DH6_REQUESTING) {
+        return;
+    }
     msg_type t;
     if (!parse(m, t))
         return;

@@ -285,6 +285,19 @@ net_channel* classifier::classify_ipv6_tcp(mbuf* m, ip6_hdr *ip_hdr, size_t ip_l
         return nullptr;
     }
 
+    // ip6_lasthdr_nofrag only guarantees the base IPv6 header (and any
+    // extension headers) fit; it does NOT guarantee a full TCP header is
+    // present and contiguous in this mbuf.  A crafted frame (short, or with
+    // extension headers pushing nxt_off toward the end, or split across an
+    // mbuf chain) could otherwise make the tcp_hdr dereferences below read out
+    // of bounds on the lock-free RX fast path.  Require the TCP header to lie
+    // wholly within the contiguous first mbuf before touching it; anything
+    // else falls through to the slow path (tcp_input), which pulls up.
+    if (nxt_off < 0 ||
+        (size_t)nxt_off + sizeof(struct tcphdr) > (size_t)m->m_hdr.mh_len) {
+        return nullptr;
+    }
+
     auto tcp_hdr = reinterpret_cast<tcphdr*>(start + nxt_off);
     if (tcp_hdr->th_flags & (TH_SYN | TH_FIN | TH_RST)) {
 	    return nullptr;
