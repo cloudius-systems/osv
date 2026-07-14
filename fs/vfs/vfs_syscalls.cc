@@ -250,6 +250,16 @@ sys_read(struct file *fp, const struct iovec *iov, size_t niov,
     if ((fp->f_flags & FREAD) == 0)
         return EBADF;
 
+    // Reject an out-of-range iovec count with EINVAL *before* touching iov: a
+    // caller-controlled niov > UIO_MAXIOV would otherwise (a) walk iov[] for
+    // up to niov entries in the summation loop below (OOB read) and (b) hit
+    // the assert() further down, which in a _KERNEL build is compiled in and
+    // calls abort() -> whole-VM panic.  It also caps the VLA below to a sane
+    // size.  (niov is size_t; guard both the >MAXIOV and, defensively, the
+    // count itself.)
+    if (niov > UIO_MAXIOV)
+        return EINVAL;
+
     size_t bytes = 0;
     auto iovp = iov;
     for (unsigned i = 0; i < niov; i++) {
@@ -288,6 +298,10 @@ sys_write(struct file *fp, const struct iovec *iov, size_t niov,
 {
     if ((fp->f_flags & FWRITE) == 0)
         return EBADF;
+
+    // See sys_read: reject niov > UIO_MAXIOV up front (OOB-read + abort() DoS).
+    if (niov > UIO_MAXIOV)
+        return EINVAL;
 
     size_t bytes = 0;
     auto iovp = iov;
