@@ -271,6 +271,13 @@ namespace virtio {
             elem = _used->_used_elements[used_ptr];
             *len = elem._len;
 
+            // elem._id is written by the device/backend; a malicious or buggy
+            // backend can return an id outside [0, _num), which would index
+            // _cookie[] out of bounds (OOB read of a bogus cookie pointer that
+            // is then dereferenced/freed, plus an OOB NULL write).  Reject it.
+            if (elem._id >= _num) {
+                return nullptr;
+            }
             cookie = _cookie[elem._id];
             _cookie[elem._id] = nullptr; //maybe use this array for the full size hdrs?
 
