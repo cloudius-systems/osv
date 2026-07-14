@@ -71,6 +71,9 @@ extern "C" int osv_sigtimedwait(const sigset_t *, siginfo_t *, const struct time
 extern "C" int epoll_pwait2(int epfd, struct epoll_event *events, int maxevents,
             const struct timespec *timeout, const sigset_t *sigmask);
 extern "C" int membarrier(int cmd, unsigned int flags, int cpu_id);
+extern "C" int renameat2(int, const char *, int, const char *, unsigned int);
+extern "C" ssize_t preadv2(int, const struct iovec *, int, off_t, int);
+extern "C" ssize_t pwritev2(int, const struct iovec *, int, off_t, int);
 
 extern "C" OSV_LIBC_API long gettid()
 {
