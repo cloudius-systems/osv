@@ -122,12 +122,27 @@ struct auto_inode_ref {
 // ra_lock. A slot in FILLING is never freed/reused until its worker completes;
 // invalidate/seek/teardown all drain in-flight fills first (no use-after-free).
 //
-// Memory: RA_WINDOW * RA_WINDOWS per open file (256K * 8 = 2 MiB). Buffers are
+// Memory: RA_WINDOW * RA_WINDOWS per open file (256K * 4 = 1 MiB by default).
+// Buffers are
 // allocated lazily as slots are first armed, so a file shorter than the ring
 // only allocates the windows it actually uses.
 static const size_t   RA_WINDOW  = 256 * 1024; // per-window bytes
-static const unsigned RA_WINDOWS = 8;          // ring depth (windows ahead)
-static const unsigned RA_WORKERS = 4;          // concurrent fill threads => QD
+// N (ring depth) and M (worker count = device queue depth) are the two tuning
+// knobs; override at build time with -DRA_WINDOWS_N=<n> -DRA_WORKERS_M=<m> for
+// the sweep. Defaults from the m5d.metal EC2 sweep: throughput climbs from
+// ~0.69 GB/s at N=1/M=1 to a ~1.28 GB/s plateau at N=4/M=4; going deeper
+// (N=8/M=8, N=16/M=16) yields no further gain because OSv's virtio-blk
+// make_request() serialises submission under a single _lock/virtqueue, capping
+// the effective device queue depth at ~2-4. N=4/M=4 sits at the knee and uses
+// only 1 MiB of prefetch memory per open file (4 x 256 KiB).
+#ifndef RA_WINDOWS_N
+#define RA_WINDOWS_N 4
+#endif
+#ifndef RA_WORKERS_M
+#define RA_WORKERS_M 4
+#endif
+static const unsigned RA_WINDOWS = RA_WINDOWS_N; // ring depth (windows ahead)
+static const unsigned RA_WORKERS = RA_WORKERS_M; // concurrent fill threads => QD
 
 enum ra_slot_state { RA_EMPTY = 0, RA_FILLING, RA_READY };
 
