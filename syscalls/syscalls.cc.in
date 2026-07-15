@@ -125,6 +125,9 @@
     SYSCALL0(getppid);
     SYSCALL1(sysinfo, struct sysinfo *);
     SYSCALL4(sendfile, int, int, off_t *, size_t);
+    SYSCALL6(splice, int, off_t *, int, off_t *, size_t, unsigned int);
+    SYSCALL4(vmsplice, int, const struct iovec *, size_t, unsigned int);
+    SYSCALL4(tee, int, int, size_t, unsigned int);
 #if CONF_networking_stack
     SYSCALL4(socketpair, int, int, int, int *);
     SYSCALL2(shutdown, int, int);

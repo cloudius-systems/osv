@@ -125,6 +125,9 @@ TRACEPOINT(trace_syscall_gettimeofday, "%d <= %p %p", int, struct timeval *, str
 TRACEPOINT(trace_syscall_getppid, "%d <=", pid_t);
 TRACEPOINT(trace_syscall_sysinfo, "%d <= %p", int, struct sysinfo *);
 TRACEPOINT(trace_syscall_sendfile, "%lu <= %d %d %p %lu", ssize_t, int, int, off_t *, size_t);
+TRACEPOINT(trace_syscall_splice, "%lu <= %d %p %d %p %lu %u", ssize_t, int, off_t *, int, off_t *, size_t, unsigned int);
+TRACEPOINT(trace_syscall_vmsplice, "%lu <= %d %p %lu %u", ssize_t, int, const struct iovec *, size_t, unsigned int);
+TRACEPOINT(trace_syscall_tee, "%lu <= %d %d %lu %u", ssize_t, int, int, size_t, unsigned int);
 #if CONF_networking_stack
 TRACEPOINT(trace_syscall_socketpair, "%d <= %d %d %d %p", int, int, int, int, int *);
 TRACEPOINT(trace_syscall_shutdown, "%d <= %d %d", int, int, int);
