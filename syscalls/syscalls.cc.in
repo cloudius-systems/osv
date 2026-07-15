@@ -69,6 +69,7 @@
     SYSCALL1(fsync, int);
 #if CONF_core_epoll
     SYSCALL5(epoll_pwait, int, struct epoll_event *, int, int, const sigset_t*);
+    SYSCALL5(epoll_pwait2, int, struct epoll_event *, int, const struct timespec *, const sigset_t*);
 #endif
     SYSCALL3(getrandom, char *, size_t, unsigned int);
     SYSCALL2(nanosleep, const struct timespec*, struct timespec *);
