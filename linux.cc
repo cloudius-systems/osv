@@ -67,6 +67,7 @@
 #include <osv/syscalls_config.h>
 
 extern "C" int eventfd2(unsigned int, int);
+extern "C" int osv_sigtimedwait(const sigset_t *, siginfo_t *, const struct timespec *);
 
 extern "C" OSV_LIBC_API long gettid()
 {
@@ -395,12 +396,15 @@ int rt_sigprocmask(int how, sigset_t * nset, sigset_t * oset, size_t sigsetsize)
 
 int rt_sigtimedwait(const sigset_t *set, siginfo_t *info, const struct timespec *timeout, size_t sigsetsize)
 {
-    if (!timeout || (!timeout->tv_sec && !timeout->tv_nsec)) {
+    if (!timeout) {
+        // No timeout: block indefinitely for a matching signal.
         return sigwaitinfo(set, info);
-    } else {
-        errno = ENOSYS;
-        return -1;
     }
+    // A timeout of {0,0} is a non-blocking poll (return EAGAIN if nothing is
+    // already pending); a positive timeout blocks up to that long.  Both are
+    // handled by osv_sigtimedwait, which returns immediately when the deadline
+    // is already in the past.
+    return osv_sigtimedwait(set, info, timeout);
 }
 
 #if CONF_syscall_sys_exit
@@ -656,17 +660,39 @@ static int pselect6(int nfds, fd_set *readfds, fd_set *writefds,
 #if CONF_syscall_tgkill
 static int tgkill(int tgid, int tid, int sig)
 {
-    //
-    // Given OSv supports sigle process only, we only support this syscall
-    // when thread group id is self (getpid()) or -1 (see https://linux.die.net/man/2/tgkill)
-    // AND tid points to the current thread (caller)
-    // Ideally we would want to delegate to pthread_kill() but there is no
-    // easy way to map tgid to pthread_t so we directly delegate to kill().
-    if ((tgid == -1 || tgid == getpid()) && (tid == gettid())) {
-        return kill(tgid, sig);
+    // On Linux tid<=0 and tgid<=0 are malformed arguments -> EINVAL (ESRCH is
+    // reserved for well-formed IDs that simply do not exist).
+    if (tid <= 0 || tgid <= 0) {
+        errno = EINVAL;
+        return -1;
     }
-
-    errno = ENOSYS;
+    // OSv is a single process, so the only valid thread-group id is our own.
+    if (tgid != getpid()) {
+        errno = ESRCH;
+        return -1;
+    }
+    // The self case is the common one (raise()/abort()); deliver directly.
+    if (tid == gettid()) {
+        return kill(getpid(), sig);
+    }
+    // Targeting another thread: verify the thread exists, then deliver via the
+    // process-wide signal path.  OSv delivers signals process-wide rather than
+    // to one specific thread, so the signal is handled by the process (a waiter
+    // or a fresh handler thread) rather than strictly by `tid`; this is the
+    // same approximation kill() already makes, and is far better than the
+    // previous ENOSYS for a valid live tid.
+    //
+    // Use with_thread_by_id() rather than find_by_id(): it holds the thread
+    // map lock for the duration, so the thread cannot be freed out from under
+    // the existence check (find_by_id returns a pointer with no such guarantee).
+    bool exists = false;
+    sched::with_thread_by_id((unsigned)tid, [&exists] (sched::thread *t) {
+        exists = (t != nullptr);
+    });
+    if (exists) {
+        return kill(getpid(), sig);
+    }
+    errno = ESRCH;
     return -1;
 }
 #endif

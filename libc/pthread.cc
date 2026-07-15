@@ -452,19 +452,62 @@ int pthread_mutex_trylock(pthread_mutex_t *m)
     return 0;
 }
 
+// Try to lock @m, spinning-with-backoff until the absolute deadline given by
+// @abs_timeout on clock @clock.  OSv's lockfree mutex has no native timed lock,
+// so we poll try_lock() with a short sleep between attempts.  Returns 0 on
+// success, EINVAL for an invalid @abs_timeout, or ETIMEDOUT if the deadline
+// passes first.
+//
+// Note: this is a poll+backoff, not a native timed acquire.  That is fine for
+// the rare contended timedlock; if it ever needs to be tight, add a timed wait
+// to the lockfree mutex itself.
+static int mutex_timedlock_until(pthread_mutex_t *m, clockid_t clock,
+                                 const struct timespec *abs_timeout)
+{
+    // Validate the timeout up front so an invalid @abs_timeout fails with
+    // EINVAL without acquiring the mutex, as POSIX requires, even on the
+    // uncontended fast path.
+    if (!abs_timeout || abs_timeout->tv_nsec < 0 ||
+        abs_timeout->tv_nsec >= 1000000000) {
+        return EINVAL;
+    }
+    if (from_libc(m)->try_lock()) {
+        return 0;   // uncontended fast path
+    }
+
+    auto deadline_ns = std::chrono::seconds(abs_timeout->tv_sec) +
+                       std::chrono::nanoseconds(abs_timeout->tv_nsec);
+    auto now = [clock]() -> std::chrono::nanoseconds {
+        if (clock == CLOCK_MONOTONIC) {
+            return osv::clock::uptime::now().time_since_epoch();
+        }
+        return osv::clock::wall::now().time_since_epoch();
+    };
+
+    while (now() < deadline_ns) {
+        if (from_libc(m)->try_lock()) {
+            return 0;
+        }
+        sched::thread::sleep(std::chrono::microseconds(50));
+    }
+    // One last attempt right at the deadline.
+    return from_libc(m)->try_lock() ? 0 : ETIMEDOUT;
+}
+
 int pthread_mutex_timedlock(pthread_mutex_t *m,
         const struct timespec *abs_timeout)
 {
-    WARN_STUBBED();
-    return EINVAL;
+    return mutex_timedlock_until(m, CLOCK_REALTIME, abs_timeout);
 }
 
 int pthread_mutex_clocklock(pthread_mutex_t *m,
                             clockid_t clock,
                             const struct timespec *abs_timeout)
 {
-    WARN_STUBBED();
-    return EINVAL;
+    if (clock != CLOCK_REALTIME && clock != CLOCK_MONOTONIC) {
+        return EINVAL;
+    }
+    return mutex_timedlock_until(m, clock, abs_timeout);
 }
 
 int pthread_mutex_unlock(pthread_mutex_t *m)
