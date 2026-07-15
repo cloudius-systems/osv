@@ -69,6 +69,7 @@ TRACEPOINT(trace_syscall_ftruncate, "%d <= %d %ld", int, int, off_t);
 TRACEPOINT(trace_syscall_fsync, "%d <= %d", int, int);
 #if CONF_core_epoll
 TRACEPOINT(trace_syscall_epoll_pwait, "%d <= %d %p %d %d %p", int, int, struct epoll_event *, int, int, const sigset_t*);
+TRACEPOINT(trace_syscall_epoll_pwait2, "%d <= %d %p %d %p %p", int, int, struct epoll_event *, int, const struct timespec *, const sigset_t*);
 #endif
 TRACEPOINT(trace_syscall_getrandom, "%lu <= 0x%x %lu %u", ssize_t, char *, size_t, unsigned int);
 TRACEPOINT(trace_syscall_nanosleep, "%d <= %p %p", int, const struct timespec*, struct timespec *);
