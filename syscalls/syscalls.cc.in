@@ -72,6 +72,7 @@
     SYSCALL5(epoll_pwait2, int, struct epoll_event *, int, const struct timespec *, const sigset_t*);
 #endif
     SYSCALL3(getrandom, char *, size_t, unsigned int);
+    SYSCALL3(membarrier, int, unsigned int, int);
     SYSCALL2(nanosleep, const struct timespec*, struct timespec *);
     SYSCALL4(fstatat, int, const char *, struct stat *, int);
     SYSCALL1(sys_exit_group, int);

@@ -43,6 +43,8 @@
 #include <osv/power.hh>
 #include <sys/time.h>
 #include <osv/mmu.hh>
+#include <atomic>
+#include <sys/membarrier.h>
 #include "libc/libc.hh"
 #include <api/sys/times.h>
 #include <map>
@@ -257,6 +259,54 @@ int munlock(const void*, size_t)
 {
     WARN_STUBBED();
     return 0;
+}
+
+// membarrier(2).  OSv is a single process whose threads share one address
+// space, so a "global" and a "private" barrier are equivalent here.  We
+// implement the expedited barrier by forcing every other CPU through an IPI
+// (mmu::flush_tlb_all() broadcasts an IPI and waits for each CPU to run its
+// handler; taking and returning from an interrupt is a context-synchronizing,
+// full-barrier event on that CPU on both x86-64 and aarch64) plus a local
+// seq_cst fence.  This is a correct superset of what membarrier promises (it
+// also flushes TLBs, which is harmless).  Non-expedited GLOBAL degrades to the
+// same.
+//
+// Note: reuses the proven, arch-portable flush_tlb_all() broadcast rather than
+// adding a dedicated membarrier IPI (which would be per-arch, x64
+// inter_processor_interrupt vs aarch64 sgi_interrupt).  Add a lighter dedicated
+// IPI only if membarrier ever shows up hot in a profile.
+OSV_LIBC_API
+int membarrier(int cmd, unsigned int flags, int cpu_id)
+{
+    // We do not implement the SYNC_CORE / RSEQ / CPU-flag variants.  flags and
+    // cpu_id must be 0: cpu_id is only meaningful with MEMBARRIER_CMD_FLAG_CPU
+    // (a flag we reject), so a nonzero cpu_id here is an invalid request.
+    if (flags != 0 || cpu_id != 0) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    switch (cmd) {
+    case MEMBARRIER_CMD_QUERY:
+        // Report the commands we support.
+        return MEMBARRIER_CMD_GLOBAL | MEMBARRIER_CMD_GLOBAL_EXPEDITED |
+               MEMBARRIER_CMD_REGISTER_GLOBAL_EXPEDITED |
+               MEMBARRIER_CMD_PRIVATE_EXPEDITED |
+               MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED;
+    case MEMBARRIER_CMD_REGISTER_GLOBAL_EXPEDITED:
+    case MEMBARRIER_CMD_REGISTER_PRIVATE_EXPEDITED:
+        // Registration is a no-op: any thread may issue the barrier.
+        return 0;
+    case MEMBARRIER_CMD_GLOBAL:
+    case MEMBARRIER_CMD_GLOBAL_EXPEDITED:
+    case MEMBARRIER_CMD_PRIVATE_EXPEDITED:
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+        mmu::flush_tlb_all();
+        return 0;
+    default:
+        errno = EINVAL;
+        return -1;
+    }
 }
 
 NO_SYS(OSV_LIBC_API int mkfifo(const char*, mode_t));

@@ -72,6 +72,7 @@ TRACEPOINT(trace_syscall_epoll_pwait, "%d <= %d %p %d %d %p", int, int, struct e
 TRACEPOINT(trace_syscall_epoll_pwait2, "%d <= %d %p %d %p %p", int, int, struct epoll_event *, int, const struct timespec *, const sigset_t*);
 #endif
 TRACEPOINT(trace_syscall_getrandom, "%lu <= 0x%x %lu %u", ssize_t, char *, size_t, unsigned int);
+TRACEPOINT(trace_syscall_membarrier, "%d <= %d %u %d", int, int, unsigned int, int);
 TRACEPOINT(trace_syscall_nanosleep, "%d <= %p %p", int, const struct timespec*, struct timespec *);
 TRACEPOINT(trace_syscall_fstatat, "%d <= %d \"%s\" %p 0%0o", int, int, const char *, struct stat *, int);
 TRACEPOINT(trace_syscall_sys_exit_group, "%d <= %d", int, int);

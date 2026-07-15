@@ -313,6 +313,7 @@
 #define __NR_kcmp				312
 #define __NR_finit_module			313
 #define __NR_getrandom				318
+#define __NR_membarrier				324
 #define __NR_statx				332
 
 #undef __NR_fstatat
@@ -643,6 +644,7 @@
 #define SYS_process_vm_writev			311
 #define SYS_kcmp				312
 #define SYS_finit_module			313
+#define SYS_membarrier				324
 #define SYS_statx				332
 #define SYS_io_uring_setup			425
 #define SYS_io_uring_enter			426
