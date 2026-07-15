@@ -798,6 +798,7 @@ snprintf
 __snprintf_chk
 socket
 socketpair
+splice
 sprintf
 __sprintf_chk
 srand
@@ -920,6 +921,7 @@ tcgetpgrp
 tcsendbreak
 tcsetattr
 tcsetpgrp
+tee
 telldir
 tempnam
 textdomain
@@ -985,6 +987,7 @@ __vfprintf_chk
 vfscanf
 vfwprintf
 vfwscanf
+vmsplice
 vprintf
 __vprintf_chk
 vscanf

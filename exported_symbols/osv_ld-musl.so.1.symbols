@@ -1000,6 +1000,7 @@ sleep
 snprintf
 socket
 socketpair
+splice
 sprintf
 sqrt
 sqrtf
@@ -1113,6 +1114,7 @@ tcgetpgrp
 tcsendbreak
 tcsetattr
 tcsetpgrp
+tee
 telldir
 tempnam
 textdomain
@@ -1182,6 +1184,7 @@ vfprintf
 vfscanf
 vfwprintf
 vfwscanf
+vmsplice
 vprintf
 vscanf
 vsnprintf
