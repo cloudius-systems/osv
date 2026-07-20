@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Mon, 20 Jul 2026 18:36:00 +0000
+Subject: [PATCH 22/22] zfs: force serial dataset mounting on OSv
+
+Belt-and-suspenders companion to the libtpool inline-dispatch fix:
+zfs_foreach_mountpoint() already has a serial path gated on nthr<=1 or
+ZFS_SERIAL_MOUNT.  Force it on OSv so the parallel tpool mount path is
+never taken, avoiding the lockfree::mutex/condvar wait-morphing teardown
+race described in the libtpool patch.  Datasets mount fast on OSv and
+parallel mounting is not needed.
+
+Signed-off-by: Greg Burd <greg@burd.me>
+---
+diff --git a/lib/libzfs/libzfs_mount.c b/lib/libzfs/libzfs_mount.c
+index e68b0db57..459d234a2 100644
+--- a/lib/libzfs/libzfs_mount.c
++++ b/lib/libzfs/libzfs_mount.c
+@@ -1270,6 +1270,25 @@ zfs_foreach_mountpoint(libzfs_handle_t *hdl, zfs_handle_t **handles,
+ 	boolean_t serial_mount = nthr <= 1 ||
+ 	    (getenv("ZFS_SERIAL_MOUNT") != NULL);
+ 
++#ifdef __OSV__
++	/*
++	 * Force serial mounting on OSv.
++	 *
++	 * The parallel path below drives libtpool worker pthreads that block
++	 * in pthread_cond_wait() on a shared tp_mutex.  On OSv pthread mutex +
++	 * condvar are the kernel lockfree::mutex + condvar, whose wait-morphing
++	 * protocol hands mutex ownership between the signalling thread and a
++	 * waiter.  During tpool_destroy()'s teardown that handoff races: a
++	 * worker returns from pthread_cond_wait() and re-enters it to unlock a
++	 * tp_mutex it no longer owns, tripping the lfmutex owner assertion
++	 * (core/lfmutex.cc unlock: owner == current).  It is intermittent and
++	 * shows up notably on zpool import (mount_tp_nthr defaults to 512).
++	 * OSv threads are cheap and datasets mount fast; serial mounting side-
++	 * steps the whole thread-pool teardown race with no practical cost.
++	 */
++	serial_mount = B_TRUE;
++#endif
++
+ 	/*
+ 	 * Sort the datasets by mountpoint. See mountpoint_cmp for details
+ 	 * of how these are sorted.
