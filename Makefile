@@ -2797,6 +2797,13 @@ $(libzfs-zcommon-objects): CFLAGS += $(ozfs-cflags-common) \
 	-Ibsd/cddl/compat/opensolaris/misc
 
 libzfs-new-objects = $(patsubst %.c, $(out)/%.o, $(libzfs-new-src-files))
+# OSv-only C++ shim: getmntent/getmntany backed by osv::current_mounts().
+# Filter out the C-only warning flags in ozfs-cflags-common that a C++ TU rejects.
+libzfs-osv-cxx-objects = $(out)/$(OZFS)/lib/libzfs/os/osv/libzfs_mnttab_os.o
+libzfs-new-objects += $(libzfs-osv-cxx-objects)
+$(libzfs-osv-cxx-objects): $(OZFS)/lib/libzfs/os/osv/libzfs_mnttab_os.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) $(filter-out -Wno-pointer-sign -Wno-incompatible-pointer-types -Wno-implicit-function-declaration,$(ozfs-cflags-common)) -isystem $(OZFS)/lib/libspl/include -isystem $(OZFS)/lib/libspl/include/os/osv -isystem $(OZFS)/lib/libzutil -isystem $(OZFS)/lib/libnvpair -c -o $@ $<, CXX libzfs_mnttab_os.cc)
 
 $(libzfs-new-objects): kernel-defines =
 $(libzfs-new-objects): post-includes-bsd =
