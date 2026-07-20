@@ -149,9 +149,13 @@ blk::blk(virtio_device& virtio_dev)
 
     // One completion thread services all virtqueues: it wakes when any queue's
     // MSI-X vector fires, then drains every queue.
+    // 256 KB stack (matches the ZFS kthread convention in
+    // bsd/porting/kthread.cc): bio completion runs the filesystem's bio_done
+    // callback inline, and the ZFS path (vdev_disk_bio_done) overruns the
+    // default kernel stack.
     sched::thread* t = sched::thread::make(
         [this] { this->req_done(); },
-        sched::thread::attr().name("virtio-blk"));
+        sched::thread::attr().name("virtio-blk").stack(256 << 10));
     t->start();
 
     // With VIRTIO_BLK_F_MQ, setup_queue() maps queue index i -> MSI-X entry i

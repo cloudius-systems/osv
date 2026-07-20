@@ -545,6 +545,70 @@ extern "C" void osv_free_page(void *p)
     memory::free_page(p);
 }
 
+// ------------------------------------------------------------------------
+// OpenZFS 2.x borrowed-ARC-page path (conf_zfs=openzfs).
+//
+// OpenZFS 2.x made arc_share_buf() static, so the legacy BSD-ZFS ARC bridge
+// (map_arc_buf/register_pagecache_arc_funs + cached_page_arc above, which
+// tracks arc_buf_t* in arc_read_cache) cannot hook OpenZFS ARC buffers.
+// Instead, the OpenZFS libsolaris.so inserts decompressed dbuf pages directly
+// into the plain read_cache via osv_pagecache_map_arc_page(): the page is
+// borrowed from a pinned dbuf (not owned by the cache) and the dbuf hold is
+// released via a registered callback when the cached page is dropped.  This
+// coexists with the BSD path -- the two use different caches
+// (read_cache vs arc_read_cache) and different libsolaris.so builds.
+static void (*arc_dbuf_rele)(void*) = nullptr;
+
+// A read-cache page borrowed from a pinned ZFS ARC dbuf.  Unlike cached_page
+// (whose _page it does not own) and cached_page_write (which frees its own
+// page), this page IS owned by the ARC: we must not free it, but we must
+// release the dbuf hold that keeps it resident when the page is dropped.
+class cached_page_arc_borrow : public cached_page {
+private:
+    void* _db;
+public:
+    cached_page_arc_borrow(hashkey key, void* db, void* page)
+        : cached_page(key, page), _db(db) {}
+    virtual ~cached_page_arc_borrow() {
+        if (_db && arc_dbuf_rele) {
+            arc_dbuf_rele(_db);
+        }
+    }
+};
+
+// Insert a borrowed ARC page (see osv/pagecache.hh).  Ownership of the dbuf
+// hold @db transfers to the read cache on success; if the key is already
+// present the hold is released immediately so no double-map/leak occurs.
+extern "C" void osv_pagecache_map_arc_page(void *key, void *db, void *page)
+{
+    hashkey* hk = static_cast<hashkey*>(key);
+    SCOPE_LOCK(read_lock);
+    if (find_in_cache(read_cache, *hk)) {
+        if (arc_dbuf_rele) {
+            arc_dbuf_rele(db);
+        }
+        return;
+    }
+    cached_page* cp = new cached_page_arc_borrow(*hk, db, page);
+    read_cache.emplace(*hk, cp);
+}
+
+extern "C" void osv_pagecache_register_arc_rele(void (*rele)(void*))
+{
+    arc_dbuf_rele = rele;
+}
+
+/*
+ * osv_free_pages() — return number of free physical pages.
+ *
+ * Called from arc_os.c (OpenZFS) so the ARC sees real memory pressure rather
+ * than the static freemem value initialised at ZFS module load time.
+ */
+extern "C" unsigned long osv_free_pages(void)
+{
+    return memory::stats::free() / mmu::page_size;
+}
+
 /*
  * osv_pagecache_read_page() — copy a cached read page into @buf.
  *

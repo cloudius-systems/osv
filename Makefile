@@ -41,6 +41,31 @@ endif
 
 include conf/base.mk
 
+# Select the in-kernel ZFS implementation at build time:
+#   conf_zfs=bsd     (default) - legacy in-tree BSD/Illumos ZFS (c. 2014)
+#   conf_zfs=openzfs           - vendored OpenZFS 2.4.x (external/openzfs)
+# Both build libsolaris.so (the ZFS kernel) + the zpool/zfs userspace; only one
+# is compiled per build.  A handful of shared kernel/compat sources behave
+# differently between the two (e.g. cv_timedwait uses an absolute deadline for
+# OpenZFS but a relative timeout for BSD), gated on CONF_ZFS_OPENZFS.
+conf_zfs ?= bsd
+ifeq ($(conf_zfs),openzfs)
+# The external/openzfs submodule is pinned to a PUBLISHED upstream OpenZFS tag
+# (github.com/openzfs/zfs, zfs-2.4.2).  Our OSv platform-layer changes live as a
+# git patch series in modules/open_zfs/patches/ and are applied here before the
+# OpenZFS sources are compiled, so we never maintain an OpenZFS fork.  The stamp
+# file makes this idempotent.
+openzfs_patch_stamp := external/openzfs/.osv-patches-applied
+$(shell if [ -d external/openzfs/module ] && [ ! -f $(openzfs_patch_stamp) ]; then \
+	git -C external/openzfs apply --whitespace=nowarn $(addprefix ../../modules/open_zfs/patches/,$(notdir $(wildcard modules/open_zfs/patches/*.patch))) 2>/dev/null \
+	&& touch $(openzfs_patch_stamp); fi)
+include bsd/sys/cddl/openzfs_sources.mk
+# CONF_ZFS_OPENZFS selects the OpenZFS conventions in the few shared sources
+# that differ between the two ZFS implementations (scoped per-object rather
+# than global so it cannot perturb the rest of the kernel build).
+$(out)/tools/mkfs/mkfs.o: CXXFLAGS += -DCONF_ZFS_OPENZFS
+endif
+
 # The build mode defaults to "release" (optimized build), the other option
 # is "debug" (unoptimized build). In the latter the optimizer interferes
 # less with the debugging, but the release build is fully debuggable too.
@@ -752,16 +777,7 @@ solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_sysevent.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_taskq.o
 solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_uio.o
 solaris += bsd/sys/cddl/contrib/opensolaris/common/acl/acl_common.o
-solaris += bsd/sys/cddl/contrib/opensolaris/common/avl/avl.o
-solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/fnvpair.o
-solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair.o
-$(out)/bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair.o: CFLAGS += -Wno-stringop-overread
-solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair_alloc_fixed.o
-solaris += bsd/sys/cddl/contrib/opensolaris/common/unicode/u8_textprep.o
 solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/callb.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/fm.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/list.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/nvpair_alloc_system.o
 solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/adler32.o
 solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/deflate.o
 solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/inffast.o
@@ -865,7 +881,68 @@ zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zrlock.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zvol.o
 zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/lz4.o
 
+# Old BSD-ZFS objects replaced by OpenZFS 2.4.x via openzfs_sources.mk
+ifeq ($(conf_zfs),openzfs)
+solaris += $(openzfs-all)
+
+# OpenZFS-specific CFLAGS (for openzfs-all objects)
+$(openzfs-all:%=$(out)/%): CFLAGS+= \
+	-fPIC \
+	$(OPENZFS_CFLAGS) \
+	-DBUILDING_ZFS \
+	-Wno-array-bounds \
+	-Ibsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs \
+	-Ibsd/sys/cddl/contrib/opensolaris/common/zfs
+
+# zfs_initialize_osv.c accesses zfs_driver_initialized from loader.elf; needs
+# -fPIC to generate a GOT-indirect reference instead of a PC32 reloc (which
+# the linker rejects when building a shared object).
+$(out)/$(OPENZFS)/module/os/osv/zfs/zfs_initialize_osv.o: CFLAGS+= -fPIC
+
+# Lua files: #undef panic (conflicts with Lua struct member) and add setjmp.h
+$(openzfs-lua:%=$(out)/%): CFLAGS+= $(OPENZFS_LUA_CFLAGS)
+
+# ZSTD files need lib/ directory in include path
+$(openzfs-zstd:%=$(out)/%): CFLAGS+= -I$(OPENZFS)/module/zstd/lib
+
+# Solaris compat layer CFLAGS (for non-ZFS solaris objects)
+# -fPIC is required since all solaris objects are linked into libsolaris.so
+$(solaris:%=$(out)/%): CFLAGS+= \
+	-fPIC \
+	-fno-strict-aliasing \
+	-Wno-unknown-pragmas \
+	-Wno-unused-variable \
+	-Wno-switch \
+	-Wno-maybe-uninitialized \
+	-Ibsd/sys/cddl/compat/opensolaris \
+	-Ibsd/sys/cddl/contrib/opensolaris/common \
+	-Ibsd/sys/cddl/contrib/opensolaris/uts/common \
+	-Ibsd/sys
+
+$(solaris:%=$(out)/%): ASFLAGS+= \
+	-Ibsd/sys/cddl/contrib/opensolaris/uts/common
+
+# OpenZFS assembly files define _ASM themselves. Use = (not +=) so that
+# OPENZFS_INCLUDES comes first; the solaris ASFLAGS += rule adds
+# -Ibsd/sys/cddl/contrib/opensolaris/uts/common which would otherwise shadow
+# the OpenZFS sys/asm_linkage.h with the older BSD-compat version.
+$(openzfs-icp-asm:%=$(out)/%): ASFLAGS = -g $(autodepend) -D__ASSEMBLY__ $(OPENZFS_INCLUDES)
+
+else
+# conf_zfs=bsd: legacy in-tree BSD/Illumos ZFS.
 solaris += $(zfs)
+
+# Common objects that OpenZFS otherwise provides (openzfs-avl/nvpair/unicode/
+# fm/list); BSD ZFS needs its own copies.
+solaris += bsd/sys/cddl/contrib/opensolaris/common/avl/avl.o
+solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/fnvpair.o
+solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair.o
+$(out)/bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair.o: CFLAGS += -Wno-stringop-overread
+solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair_alloc_fixed.o
+solaris += bsd/sys/cddl/contrib/opensolaris/common/unicode/u8_textprep.o
+solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/fm.o
+solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/list.o
+solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/nvpair_alloc_system.o
 
 $(zfs:%=$(out)/%): CFLAGS+= \
 	-DBUILDING_ZFS \
@@ -886,6 +963,7 @@ $(solaris:%=$(out)/%): CFLAGS+= \
 
 $(solaris:%=$(out)/%): ASFLAGS+= \
 	-Ibsd/sys/cddl/contrib/opensolaris/uts/common
+endif
 
 
 libtsm :=
@@ -2354,7 +2432,12 @@ else
 endif
 endif
 
+ifeq ($(conf_zfs),openzfs)
 $(shell mkdir -p $(out) && cp zfs_builder_bootfs.manifest.skel $(out)/zfs_builder_bootfs.manifest)
+else
+# conf_zfs=bsd does not build libzutil/libshare/libzfs_core/libtpool.
+$(shell mkdir -p $(out) && grep -vE '^/(libzutil|libshare|libzfs_core|libtpool)\.so:' zfs_builder_bootfs.manifest.skel > $(out)/zfs_builder_bootfs.manifest)
+endif
 ifeq ($(conf_hide_symbols),1)
 $(shell echo "/usr/lib/libstdc++.so.6: $$(readlink -f $(libstd_dir))/libstdc++.so" >> $(out)/zfs_builder_bootfs.manifest)
 endif
@@ -2434,6 +2517,376 @@ $(out)/gen-ctype-data: gen-ctype-data.cc
 
 
 
+
+ifeq ($(conf_zfs),openzfs)
+###########################################################################
+# OpenZFS 2.4.1 userspace libraries and commands
+#
+# Build libuutil, libzutil, libzfs_core, libzfs, and the zpool/zfs commands
+# from the OpenZFS 2.4.1 sources in external/openzfs rather than from the
+# old bsd/cddl sources.  This ensures the new zfs_cmd_t layout (MAXPATHLEN=
+# 4096) matches what the libsolaris.so kernel module expects.
+###########################################################################
+
+# Short alias for the OpenZFS source tree (already defined in openzfs_sources.mk
+# as OPENZFS, but we need it here before that file sets kernel-defines etc.)
+OZFS := external/openzfs
+
+# ZFS_META_ALIAS — normally generated by autoconf.  We define it directly.
+ZFS_META_ALIAS := "zfs-2.4.1-osv"
+
+# -----------------------------------------------------------------------
+# Common include flags for all OpenZFS userspace targets.
+# These come BEFORE any bsd/cddl paths to avoid the old layout headers.
+# -----------------------------------------------------------------------
+define ozfs-userspace-includes
+  $(OZFS)/include
+  $(OZFS)/include/os/osv
+  $(OZFS)/lib/libspl/include
+  $(OZFS)/lib/libspl/include/os/osv
+  $(OZFS)/lib/libzfs
+  bsd/cddl/compat/opensolaris/misc
+  include
+endef
+
+# Note: -DHAVE_MAKEDEV_IN_SYSMACROS tells libspl sys/types.h to include
+# sys/sysmacros.h for makedev(). -DHAVE_INTTYPES suppresses the duplicate
+# typedefs in libspl sys/types.h (those are already in sys/stdtypes.h).
+OPENSSL_INCLUDE := $(shell ls -d /nix/store/mvl4lw9v8p9f6hlw258j2slrhy7gjggl-openssl-3.0.11-dev/include 2>/dev/null || \
+	ls -d /nix/store/*-openssl-*-dev/include 2>/dev/null | head -1)
+ZLIB_INCLUDE := $(shell ls -d /nix/store/pcs65d7kzpd5dq3wm1nx99i3ax8y1dw6-zlib-1.3-dev/include 2>/dev/null || \
+	ls -d /nix/store/*-zlib-*-dev/include 2>/dev/null | head -1)
+
+ozfs-cflags-common = \
+	$(foreach p, $(strip $(ozfs-userspace-includes)), -isystem $(p)) \
+	$(if $(OPENSSL_INCLUDE), -isystem $(OPENSSL_INCLUDE)) \
+	$(if $(ZLIB_INCLUDE), -isystem $(ZLIB_INCLUDE)) \
+	-D_GNU_SOURCE \
+	-D__OSV__ \
+	-DHAVE_ATTRIBUTE_VISIBILITY_DEFAULT \
+	'-DTEXT_DOMAIN=""' \
+	'-DZFS_META_ALIAS="zfs-2.4.1-osv"' \
+	-DHAVE_MAKEDEV_IN_SYSMACROS \
+	-D_ZFS_LITTLE_ENDIAN \
+	'-DSYSCONFDIR="/etc"' \
+	'-DPKGDATADIR="/usr/share/zfs"' \
+	'-DZFSEXECDIR="/usr/lib/zfs"' \
+	-DECKSUM=52 \
+	-DEFRAGS=53 \
+	-DENOTACTIVE=55 \
+	-fPIC \
+	-Wno-unused-parameter \
+	-Wno-sign-compare \
+	-Wno-switch \
+	-Wno-maybe-uninitialized \
+	-Wno-unused-variable \
+	-Wno-unknown-pragmas \
+	-Wno-unused-function \
+	-Wno-pointer-sign \
+	-Wno-incompatible-pointer-types \
+	-Wno-implicit-function-declaration
+
+# Macro to apply per-target flags for an OpenZFS userspace object list.
+# Usage: $(call ozfs-userspace-obj-setup, object-list-variable)
+define ozfs-apply-flags
+$(1): kernel-defines =
+$(1): post-includes-bsd =
+endef
+
+# -----------------------------------------------------------------------
+# libuutil — AVL / linked-list utilities
+# -----------------------------------------------------------------------
+libuutil-src-files = \
+	$(OZFS)/lib/libuutil/uu_alloc.c \
+	$(OZFS)/lib/libuutil/uu_avl.c \
+	$(OZFS)/lib/libuutil/uu_ident.c \
+	$(OZFS)/lib/libuutil/uu_list.c \
+	$(OZFS)/lib/libuutil/uu_misc.c \
+	$(OZFS)/lib/libuutil/uu_string.c
+
+libuutil-objects = $(libuutil-src-files:%.c=$(out)/%.o)
+
+$(libuutil-objects): kernel-defines =
+$(libuutil-objects): post-includes-bsd =
+$(libuutil-objects): pre-include-api = -isystem $(OZFS)/lib/libspl/include -isystem $(OZFS)/lib/libspl/include/os/osv
+$(libuutil-objects): CFLAGS += $(ozfs-cflags-common)
+
+$(out)/libuutil.so: $(libuutil-objects)
+	$(makedir)
+	$(q-build-so)
+
+# -----------------------------------------------------------------------
+# libzutil — device-path utilities and pool import helpers
+# -----------------------------------------------------------------------
+libzutil-src-files = \
+	$(OZFS)/lib/libzutil/zutil_device_path.c \
+	$(OZFS)/lib/libzutil/zutil_import.c \
+	$(OZFS)/lib/libzutil/zutil_nicenum.c \
+	$(OZFS)/lib/libzutil/zutil_pool.c \
+	$(OZFS)/lib/libzutil/os/osv/zutil_device_path_os.c \
+	$(OZFS)/lib/libzutil/os/osv/zutil_import_os.c \
+	$(OZFS)/lib/libzutil/os/osv/zutil_setproctitle.c \
+	$(OZFS)/lib/libspl/assert.c \
+	$(OZFS)/lib/libspl/page.c \
+	$(OZFS)/lib/libspl/timestamp.c \
+	$(OZFS)/lib/libspl/os/osv/gethostid.c \
+	$(OZFS)/lib/libspl/os/osv/zone.c \
+	$(OZFS)/lib/libspl/os/osv/getmntany.c
+
+libzutil-objects = $(libzutil-src-files:%.c=$(out)/%.o)
+
+$(libzutil-objects): kernel-defines =
+$(libzutil-objects): post-includes-bsd =
+$(libzutil-objects): pre-include-api = -isystem $(OZFS)/lib/libspl/include -isystem $(OZFS)/lib/libspl/include/os/osv
+$(libzutil-objects): CFLAGS += $(ozfs-cflags-common) \
+	-isystem $(OZFS)/lib/libzutil
+
+$(out)/libzutil.so: $(libzutil-objects)
+	$(makedir)
+	$(q-build-so)
+
+# -----------------------------------------------------------------------
+# libshare — NFS/SMB sharing stubs (no-op on OSv)
+# -----------------------------------------------------------------------
+libshare-src-files = \
+	$(OZFS)/lib/libshare/libshare.c \
+	$(OZFS)/lib/libshare/os/osv/nfs.c \
+	$(OZFS)/lib/libshare/os/osv/smb.c
+
+libshare-objects = $(libshare-src-files:%.c=$(out)/%.o)
+
+$(libshare-objects): kernel-defines =
+$(libshare-objects): post-includes-bsd =
+$(libshare-objects): pre-include-api = -isystem $(OZFS)/lib/libspl/include -isystem $(OZFS)/lib/libspl/include/os/osv
+$(libshare-objects): CFLAGS += $(ozfs-cflags-common) \
+	-isystem $(OZFS)/lib/libspl/include
+
+$(out)/libshare.so: $(libshare-objects)
+	$(makedir)
+	$(q-build-so)
+
+# -----------------------------------------------------------------------
+# libzfs_core — thin ioctl wrapper library
+# -----------------------------------------------------------------------
+libzfs-core-src-files = \
+	$(OZFS)/lib/libzfs_core/libzfs_core.c \
+	$(OZFS)/lib/libzfs_core/os/osv/libzfs_core_ioctl.c
+
+libzfs-core-objects = $(libzfs-core-src-files:%.c=$(out)/%.o)
+
+$(libzfs-core-objects): kernel-defines =
+$(libzfs-core-objects): post-includes-bsd =
+$(libzfs-core-objects): pre-include-api = -isystem $(OZFS)/lib/libspl/include -isystem $(OZFS)/lib/libspl/include/os/osv
+$(libzfs-core-objects): CFLAGS += $(ozfs-cflags-common)
+
+$(out)/libzfs_core.so: $(libzfs-core-objects)
+	$(makedir)
+	$(q-build-so)
+
+# -----------------------------------------------------------------------
+# libtpool — Solaris thread-pool implementation (used by libzutil/libzfs)
+# -----------------------------------------------------------------------
+libtpool-src-files = \
+	$(OZFS)/lib/libtpool/thread_pool.c
+
+libtpool-objects = $(libtpool-src-files:%.c=$(out)/%.o)
+
+$(libtpool-objects): kernel-defines =
+$(libtpool-objects): post-includes-bsd =
+$(libtpool-objects): pre-include-api = -isystem $(OZFS)/lib/libspl/include -isystem $(OZFS)/lib/libspl/include/os/osv
+$(libtpool-objects): CFLAGS += $(ozfs-cflags-common) \
+	-isystem $(OZFS)/include
+
+$(out)/libtpool.so: $(libtpool-objects)
+	$(makedir)
+	$(q-build-so)
+
+# -----------------------------------------------------------------------
+# libsolaris.so — OpenZFS kernel module (unchanged)
+# -----------------------------------------------------------------------
+libsolaris-objects = $(foreach file, $(solaris) $(xdr), $(out)/$(file))
+# zfs_initialize is provided by external/openzfs/module/os/osv/zfs/zfs_initialize_osv.c
+# (included via openzfs-osv in openzfs-all).  The old fs/zfs/zfs_initialize.o is removed.
+libsolaris-objects += $(out)/bsd/porting/kobj.o
+
+$(libsolaris-objects): kernel-defines = -D_KERNEL $(source-dialects) -fvisibility=hidden -ffunction-sections -fdata-sections
+
+$(out)/fs/zfs/zfs_initialize.o: CFLAGS+= \
+	-DBUILDING_ZFS \
+	-Ibsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs \
+	-Ibsd/sys/cddl/contrib/opensolaris/common/zfs \
+	-Ibsd/sys/cddl/compat/opensolaris \
+	-Ibsd/sys/cddl/contrib/opensolaris/common \
+	-Ibsd/sys/cddl/contrib/opensolaris/uts/common \
+	-Ibsd/sys \
+	-Wno-array-bounds \
+	-fno-strict-aliasing \
+	-Wno-unknown-pragmas \
+	-Wno-unused-variable \
+	-Wno-switch \
+	-Wno-maybe-uninitialized
+
+#build libsolaris.so with -z,now so that all symbols get resolved eagerly (BIND_NOW)
+#also make sure libsolaris.so has osv-mlock note (see zfs_initialize.c) so that
+# the file segments get loaded eagerly as well when mmapped
+comma:=,
+$(out)/libsolaris.so: $(libsolaris-objects)
+	$(makedir)
+	$(call quiet, $(CC) $(CFLAGS) -Wl$(comma)-z$(comma)now -Wl$(comma)--gc-sections -Wl$(comma)-Bsymbolic-functions -o $@ $(libsolaris-objects) -L$(out), LINK libsolaris.so)
+
+# -----------------------------------------------------------------------
+# libzfs — main ZFS management library (uses new OpenZFS 2.4.1 sources)
+# -----------------------------------------------------------------------
+libzfs-new-src-files = \
+	$(OZFS)/lib/libzfs/libzfs_changelist.c \
+	$(OZFS)/lib/libzfs/libzfs_config.c \
+	$(OZFS)/lib/libzfs/os/osv/libzfs_crypto_os.c \
+	$(OZFS)/lib/libzfs/libzfs_dataset.c \
+	$(OZFS)/lib/libzfs/libzfs_diff.c \
+	$(OZFS)/lib/libzfs/libzfs_import.c \
+	$(OZFS)/lib/libzfs/libzfs_iter.c \
+	$(OZFS)/lib/libzfs/libzfs_mount.c \
+	$(OZFS)/lib/libzfs/libzfs_pool.c \
+	$(OZFS)/lib/libzfs/libzfs_sendrecv.c \
+	$(OZFS)/lib/libzfs/libzfs_status.c \
+	$(OZFS)/lib/libzfs/libzfs_util.c \
+	$(OZFS)/lib/libzfs/os/osv/libzfs_mount_os.c \
+	$(OZFS)/lib/libzfs/os/osv/libzfs_pool_os.c \
+	$(OZFS)/lib/libzfs/os/osv/libzfs_util_os.c \
+	bsd/cddl/compat/opensolaris/misc/mkdirp.c \
+	$(OZFS)/lib/libnvpair/libnvpair.c \
+	$(OZFS)/lib/libnvpair/libnvpair_json.c \
+	$(OZFS)/lib/libnvpair/nvpair_alloc_system.c
+
+# The zcommon module files are also compiled into libsolaris.so (kernel build)
+# at $(out)/external/openzfs/module/zcommon/*.o.  Those kernel objects carry
+# -D_KERNEL which hides the #ifndef _KERNEL sections (zprop_width,
+# zpool_prop_values, etc.) needed by the userspace zpool/zfs commands.
+# Compile the same sources again WITHOUT -D_KERNEL into a separate output
+# directory $(out)/lib-zcommon/ to avoid the path collision.
+libzfs-zcommon-src = \
+	$(OZFS)/module/zcommon/cityhash.c \
+	$(OZFS)/module/zcommon/zfeature_common.c \
+	$(OZFS)/module/zcommon/zfs_comutil.c \
+	$(OZFS)/module/zcommon/zfs_deleg.c \
+	$(OZFS)/module/zcommon/zfs_namecheck.c \
+	$(OZFS)/module/zcommon/zfs_prop.c \
+	$(OZFS)/module/zcommon/zfs_valstr.c \
+	$(OZFS)/module/zcommon/zpool_prop.c \
+	$(OZFS)/module/zcommon/zprop_common.c
+
+libzfs-zcommon-objects = $(patsubst $(OZFS)/module/zcommon/%.c, $(out)/lib-zcommon/%.o, $(libzfs-zcommon-src))
+
+$(out)/lib-zcommon/%.o: $(OZFS)/module/zcommon/%.c $(out)/gen/include/osv/kernel_config_hide_symbols.h | generated-headers
+	$(makedir)
+	$(call quiet, $(CC) $(CFLAGS) -c -o $@ $<, CC $<)
+
+$(libzfs-zcommon-objects): kernel-defines =
+$(libzfs-zcommon-objects): post-includes-bsd =
+$(libzfs-zcommon-objects): pre-include-api = -isystem $(OZFS)/lib/libspl/include -isystem $(OZFS)/lib/libspl/include/os/osv
+$(libzfs-zcommon-objects): CFLAGS += $(ozfs-cflags-common) \
+	-isystem $(OZFS)/lib/libzutil \
+	-isystem $(OZFS)/lib/libspl/include \
+	-isystem $(OZFS)/lib/libspl/include/os/osv \
+	-isystem $(OZFS)/lib/libnvpair \
+	-Ibsd/cddl/compat/opensolaris/misc
+
+libzfs-new-objects = $(patsubst %.c, $(out)/%.o, $(libzfs-new-src-files))
+
+$(libzfs-new-objects): kernel-defines =
+$(libzfs-new-objects): post-includes-bsd =
+$(libzfs-new-objects): pre-include-api = -isystem $(OZFS)/lib/libspl/include -isystem $(OZFS)/lib/libspl/include/os/osv
+$(libzfs-new-objects): CFLAGS += $(ozfs-cflags-common) \
+	-isystem $(OZFS)/lib/libzutil \
+	-isystem $(OZFS)/lib/libspl/include \
+	-isystem $(OZFS)/lib/libspl/include/os/osv \
+	-isystem $(OZFS)/lib/libnvpair \
+	-Ibsd/cddl/compat/opensolaris/misc
+
+$(out)/libzfs.so: $(libzfs-new-objects) $(libzfs-zcommon-objects) \
+                  $(out)/libuutil.so \
+                  $(out)/libzutil.so $(out)/libzfs_core.so \
+                  $(out)/libshare.so $(out)/libsolaris.so \
+                  $(out)/libtpool.so
+	$(makedir)
+	$(call quiet, $(CC) $(CFLAGS) -o $@ $(libzfs-new-objects) $(libzfs-zcommon-objects) \
+		-L$(out) -luutil -lzutil -lzfs_core -lshare -ltpool \
+		-lsolaris, LINK libzfs.so)
+
+# -----------------------------------------------------------------------
+# zpool.so — pool management command
+# -----------------------------------------------------------------------
+zpool-cmd-src-files = \
+	$(OZFS)/cmd/zpool/zpool_iter.c \
+	$(OZFS)/cmd/zpool/zpool_main.c \
+	$(OZFS)/cmd/zpool/zpool_util.c \
+	$(OZFS)/cmd/zpool/zpool_vdev.c \
+	$(OZFS)/cmd/zpool/os/osv/zpool_vdev_os.c
+
+# OSv entry-point wrapper: re-exports main with DEFAULT ELF visibility so
+# OSv's lookup("main") can find it in .dynsym (see zpool_main_entry.c).
+zpool-entry-src = $(OZFS)/cmd/zpool/os/osv/zpool_main_entry.c
+zpool-entry-obj = $(patsubst %.c, $(out)/%.o, $(zpool-entry-src))
+
+zpool-cmd-objects = $(patsubst %.c, $(out)/%.o, $(zpool-cmd-src-files))
+
+$(zpool-cmd-objects): kernel-defines =
+$(zpool-cmd-objects): post-includes-bsd =
+$(zpool-cmd-objects): pre-include-api = -isystem $(OZFS)/lib/libspl/include -isystem $(OZFS)/lib/libspl/include/os/osv
+$(zpool-cmd-objects): CFLAGS += $(ozfs-cflags-common) \
+	-isystem $(OZFS)/lib/libzutil \
+	-isystem $(OZFS)/lib/libzfs \
+	-isystem $(OZFS)/lib/libspl/include \
+	-isystem $(OZFS)/lib/libspl/include/os/osv \
+	-I$(OZFS)/cmd/zpool \
+	-Dmain=zpool_real_main
+
+$(zpool-entry-obj): kernel-defines =
+$(zpool-entry-obj): post-includes-bsd =
+$(zpool-entry-obj): CFLAGS += -fPIC
+
+$(out)/zpool.so: $(zpool-cmd-objects) $(zpool-entry-obj) $(out)/libzfs.so
+	$(makedir)
+	$(call quiet, $(CC) $(CFLAGS) -o $@ $(zpool-cmd-objects) $(zpool-entry-obj) -L$(out) -lzfs, LINK zpool.so)
+
+# -----------------------------------------------------------------------
+# zfs.so — dataset management command
+# -----------------------------------------------------------------------
+zfs-cmd-src-files = \
+	$(OZFS)/cmd/zfs/zfs_iter.c \
+	$(OZFS)/cmd/zfs/zfs_main.c \
+	$(OZFS)/cmd/zfs/zfs_project.c
+
+# OSv entry-point wrapper (same pattern as zpool — see zpool section above).
+zfs-entry-src = $(OZFS)/cmd/zfs/os/osv/zfs_main_entry.c
+zfs-entry-obj = $(patsubst %.c, $(out)/%.o, $(zfs-entry-src))
+
+zfs-cmd-objects = $(patsubst %.c, $(out)/%.o, $(zfs-cmd-src-files))
+
+$(zfs-cmd-objects): kernel-defines =
+$(zfs-cmd-objects): post-includes-bsd =
+$(zfs-cmd-objects): pre-include-api = -isystem $(OZFS)/lib/libspl/include -isystem $(OZFS)/lib/libspl/include/os/osv
+$(zfs-cmd-objects): CFLAGS += $(ozfs-cflags-common) \
+	-isystem $(OZFS)/lib/libzutil \
+	-isystem $(OZFS)/lib/libzfs \
+	-isystem $(OZFS)/lib/libspl/include \
+	-isystem $(OZFS)/lib/libspl/include/os/osv \
+	-I$(OZFS)/cmd/zfs \
+	-Dmain=zfs_real_main
+
+$(zfs-entry-obj): kernel-defines =
+$(zfs-entry-obj): post-includes-bsd =
+$(zfs-entry-obj): CFLAGS += -fPIC
+
+$(out)/zfs.so: $(zfs-cmd-objects) $(zfs-entry-obj) $(out)/libzfs.so
+	$(makedir)
+	$(call quiet, $(CC) $(CFLAGS) -o $@ $(zfs-cmd-objects) $(zfs-entry-obj) -L$(out) -lzfs, LINK zfs.so)
+
+else
+###########################################################################
+# conf_zfs=bsd: legacy in-tree BSD/Illumos ZFS userspace libraries + cmds
+# (copied verbatim from the pre-OpenZFS Makefile).
+###########################################################################
 
 #include $(src)/bsd/cddl/contrib/opensolaris/lib/libuutil/common/build.mk:
 libuutil-file-list = uu_alloc uu_avl uu_dprintf uu_ident uu_list uu_misc uu_open uu_pname uu_string uu_strtoint
@@ -2599,3 +3052,4 @@ $(zfs-cmd-objects): CFLAGS += -Wno-switch -D__va_list=__builtin_va_list '-DTEXT_
 $(out)/zfs.so: $(zfs-cmd-objects) $(out)/libzfs.so
 	$(makedir)
 	$(call quiet, $(CC) $(CFLAGS) -o $@ $(zfs-cmd-objects) -L$(out) -lzfs, LINK zfs.so)
+endif
