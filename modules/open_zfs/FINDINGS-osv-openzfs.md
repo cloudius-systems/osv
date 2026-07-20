@@ -93,3 +93,27 @@ Test harness: zfs_builder.elf booted with --nomount --noinit --preload-zfs-libra
 sequences against raw virtio-blk disks (vblkN).  File I/O + byte-verify via a
 small /zfsio.so helper.  Corruption-repair by dd over a raw disk file between
 export and re-import.
+
+### Tier 3 (OpenZFS-only)
+
+| Feature | Result |
+|---|---|
+| compression zstd | worked (write+verify, scrub clean) |
+| compression gzip | worked |
+| compression zle | worked |
+| compression lzjb | worked |
+| checksum sha512 | worked |
+| checksum skein | worked |
+| checksum edonr | worked |
+| checksum blake3 | worked |
+| encryption aes-256-gcm | worked (create keyformat=hex, write+verify, unmount/unload-key -> keystatus unavailable, load-key/mount -> write+verify again) |
+| large_blocks (recordsize=1M) | worked (8 MiB file write+verify at 1M recordsize) |
+| large_dnode (dnodesize=auto) | worked |
+| dedup | worked (two identical 8 MiB files -> 8.1 MiB used, second copy deduplicated) |
+| device_removal (zpool remove) | worked (device removed, mappings retained, data intact) |
+| checkpoint | worked (zpool checkpoint create + discard) |
+| draid (draid1:2d:4c:0s) | worked (ONLINE, io+scrub) |
+| TRIM (zpool trim / autotrim) | fixed-by patch 0027 (vdev_disk_open now sets vdev_has_trim; trim completes 100% on virtio-blk with discard, and stays ONLINE/ENOTSUP-graceful without) |
+| O_DIRECT (direct=always) | worked out of box (spl_uio.c OSv single-address-space adaptation treats page-aligned VAs as dio pages; O_DIRECT aligned write/read verified, buffered re-read consistent) |
+| block_cloning | feature enabled and on-disk machinery present, BUT clone-on-copy is NOT wired: OSv copy_file_range() delegates to sendfile() (a byte copy) and there is no FICLONE ioctl / vop_copy_file_range reaching zfs_clone_range(), so copies do not share blocks.  Needs a vop_copy_file_range -> zfs_clone_range bridge. |
+| raidz_expansion (zpool attach to raidz) | needs work: attach of an EMPTY raidz completes; attach with existing data starts the reflow and then STALLS at native speed (zpool status/get on the pool blocks on the dsl_pool config rrwlock held during reflow).  The run COMPLETES when slowed under gdb, i.e. it is a timing-sensitive lost-wakeup on vre->vre_cv (raidz_reflow_write_done cv_signal vs the zthr cv_wait throttle loop in vdev_raidz.c) - same class as Bug 1.  Not root-caused to a committed fix within budget. |
