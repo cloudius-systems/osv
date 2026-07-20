@@ -296,3 +296,52 @@ taskq_dispatch_ent(taskq_t *tq, task_func_t func, void *arg, uint_t flags,
 	e->tqent_id   = taskq_dispatch_safe(tq, func, arg, flags,
 	    &e->tqent_ostask);
 }
+
+/*
+ * kstat_create / kstat_install / kstat_delete
+ *
+ * OpenZFS modules are compiled against the OSv SPL kstat_t layout in
+ * external/openzfs/include/os/osv/spl/sys/kstat.h (ks_data, ks_ndata,
+ * ks_data_size, ks_flags, ks_update, ks_private, ks_private1, ks_lock).
+ * The legacy BSD-ZFS compat stub (opensolaris_kstat.c) defines an
+ * incompatible 16-byte kstat_t, so linking that stub into the OpenZFS
+ * libsolaris.so caused every OpenZFS kstat caller (arc_init, dnode_init,
+ * ...) to write ks_update/ks_private past the end of a 16-byte allocation,
+ * corrupting the heap and crashing at early boot.  These implementations
+ * use the correct OpenZFS layout.  OSv exposes no /proc or sysctl kstat
+ * consumer, so a virtual kstat only needs to allocate the struct with the
+ * right size and record the caller's fields; install/delete are no-ops
+ * beyond freeing.  Mirrors upstream behavior when no backing store exists.
+ */
+kstat_t *
+kstat_create(const char *module, int instance, const char *name,
+    const char *cls, uchar_t type, ulong_t ndata, uchar_t flags)
+{
+	kstat_t *ksp;
+
+	(void) module; (void) instance; (void) name; (void) cls;
+
+	ksp = kmem_zalloc(sizeof (*ksp), KM_SLEEP);
+	if (ksp == NULL)
+		return (NULL);
+
+	ksp->ks_ndata = (u_int)ndata;
+	ksp->ks_flags = flags;
+	if (type == KSTAT_TYPE_NAMED)
+		ksp->ks_data_size = ndata * sizeof (kstat_named_t);
+
+	return (ksp);
+}
+
+void
+kstat_install(kstat_t *ksp)
+{
+	(void) ksp;
+}
+
+void
+kstat_delete(kstat_t *ksp)
+{
+	if (ksp != NULL)
+		kmem_free(ksp, sizeof (*ksp));
+}
