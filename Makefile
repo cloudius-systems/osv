@@ -884,6 +884,11 @@ zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/lz4.o
 # Old BSD-ZFS objects replaced by OpenZFS 2.4.x via openzfs_sources.mk
 ifeq ($(conf_zfs),openzfs)
 solaris += $(openzfs-all)
+# OpenZFS provides its own kstat_t layout (external/openzfs/include/os/osv/
+# spl/sys/kstat.h, ~64 bytes) and OSv-native kstat_create/install/delete in
+# openzfs_osv_compat.c.  Drop the legacy BSD-ZFS kstat stub whose 16-byte
+# kstat_t is ABI-incompatible with the OpenZFS callers (heap overflow at boot).
+solaris := $(filter-out bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kstat.o,$(solaris))
 
 # OpenZFS-specific CFLAGS (for openzfs-all objects)
 $(openzfs-all:%=$(out)/%): CFLAGS+= \
