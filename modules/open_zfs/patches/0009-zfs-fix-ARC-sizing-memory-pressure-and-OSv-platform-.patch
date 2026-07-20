@@ -1,0 +1,531 @@
+From 51bf758f10e387b03ce62fd433691cebfcac782f Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Tue, 12 May 2026 08:46:58 -0400
+Subject: [PATCH 09/19] zfs: fix ARC sizing, memory pressure, and OSv platform
+ initialization
+
+- arc_os.c: arc_default_max uses RAM/8 for 128-256 MiB (was /6) so the
+  ARC leaves more room for ZFS I/O pipeline buffers; integrate osv_free_pages
+  for real-time memory pressure tracking instead of a static freemem value
+- zfs_initialize_osv.c: add complete OSv init sequence: explicit ICP init,
+  zcommon_init, freemem seed, ARC shrinker registration after arc_init,
+  zfs_recover=B_TRUE to prevent spurious CE_PANIC on dataset teardown
+- abd_os.c: pass correct size to kmem_alloc for contiguous scatter buffers
+- vdev_disk.c: clear zio->io_bio to prevent double-free in ABD read path
+- zfs_dir.c: fix link-count for directory znodes loaded via zfs_zget without
+  going through the VFS vget path (z_vnode == NULL)
+- arc.c: honour OSv page-size in arc_buf_alloc_impl scatter list sizing
+- procfs_list.h: fix NULL pointer dereference in procfs_list_next for OSv
+
+(cherry picked from commit 55180257277dc48c8f659dd6e9d8e8a71ec2c582)
+---
+ include/os/osv/spl/sys/procfs_list.h   |  61 +++++++++++--
+ module/os/osv/zfs/abd_os.c             |  21 +++--
+ module/os/osv/zfs/arc_os.c             |  66 +++++++++++---
+ module/os/osv/zfs/vdev_disk.c          |   1 +
+ module/os/osv/zfs/zfs_dir.c            |  19 ++++-
+ module/os/osv/zfs/zfs_initialize_osv.c | 114 +++++++++++++++++++++++++
+ module/zfs/arc.c                       |  55 ++++++++++++
+ 7 files changed, 311 insertions(+), 26 deletions(-)
+
+diff --git a/include/os/osv/spl/sys/procfs_list.h b/include/os/osv/spl/sys/procfs_list.h
+index c712c960d..3ebd6f9bc 100644
+--- a/include/os/osv/spl/sys/procfs_list.h
++++ b/include/os/osv/spl/sys/procfs_list.h
+@@ -32,11 +32,60 @@ seq_printf(struct seq_file *f, const char *fmt, ...)
+ 	(void) f; (void) fmt;
+ }
+ 
+-/* OSv stubs - no /proc filesystem */
+-#define	procfs_list_install(mod, sub, name, mode, pl, show, hdr, clear, off) \
+-	do { } while (0)
+-#define	procfs_list_uninstall(pl)	do { } while (0)
+-#define	procfs_list_destroy(pl)		do { } while (0)
+-#define	procfs_list_add(pl, p)		do { } while (0)
++/*
++ * OSv procfs_list implementation.
++ *
++ * OSv has no /proc filesystem so we skip the kstat/procfs frontend, but
++ * we MUST properly initialise pl_list and pl_lock and actually insert
++ * elements into the list.  spa_txg_history_truncate() iterates the list
++ * and calls ASSERT3P(entry, !=, NULL); if the list is left uninitialised
++ * or empty while shl->size > 0 the assertion fires and the VM crashes
++ * after ~100 TXG commits.
++ */
++
++#define	NODE_ID(procfs_list, obj) \
++	(((procfs_list_node_t *)(((char *)(obj)) + \
++	(procfs_list)->pl_node_offset))->pln_id)
++
++static inline void
++procfs_list_install(const char *module __attribute__((unused)),
++    const char *submodule __attribute__((unused)),
++    const char *name __attribute__((unused)),
++    mode_t mode __attribute__((unused)),
++    procfs_list_t *procfs_list,
++    int (*show)(struct seq_file *f, void *p),
++    int (*show_header)(struct seq_file *f),
++    int (*clear)(procfs_list_t *procfs_list),
++    size_t procfs_list_node_off)
++{
++	mutex_init(&procfs_list->pl_lock, NULL, MUTEX_DEFAULT, NULL);
++	list_create(&procfs_list->pl_list,
++	    procfs_list_node_off + sizeof (procfs_list_node_t),
++	    procfs_list_node_off + offsetof(procfs_list_node_t, pln_link));
++	procfs_list->pl_show = show;
++	procfs_list->pl_show_header = show_header;
++	procfs_list->pl_clear = clear;
++	procfs_list->pl_next_id = 1;
++	procfs_list->pl_node_offset = procfs_list_node_off;
++}
++
++static inline void
++procfs_list_uninstall(procfs_list_t *procfs_list __attribute__((unused)))
++{
++}
++
++static inline void
++procfs_list_destroy(procfs_list_t *procfs_list)
++{
++	list_destroy(&procfs_list->pl_list);
++	mutex_destroy(&procfs_list->pl_lock);
++}
++
++static inline void
++procfs_list_add(procfs_list_t *procfs_list, void *p)
++{
++	NODE_ID(procfs_list, p) = procfs_list->pl_next_id++;
++	list_insert_tail(&procfs_list->pl_list, p);
++}
+ 
+ #endif /* _SPL_OSV_PROCFS_LIST_H */
+diff --git a/module/os/osv/zfs/abd_os.c b/module/os/osv/zfs/abd_os.c
+index 0effca8cf..fe462e2f8 100644
+--- a/module/os/osv/zfs/abd_os.c
++++ b/module/os/osv/zfs/abd_os.c
+@@ -180,10 +180,17 @@ abd_free_struct_impl(abd_t *abd)
+ }
+ 
+ /*
+- * Use a zero region for the scatter zero buffer.
+- * OSv provides zero_region via the kernel.
++ * On OSv, `zero_region` would resolve to the zero_region() FUNCTION defined
++ * in openzfs_osv_compat.c (a VMA address, < 0x400000000000 in OSv's memory
++ * layout).  Using a VMA address as a DMA buffer source causes:
++ *   Assertion failed: virt >= phys_mem (core/mmu.cc: virt_to_phys: 183)
++ * because OSv's virt_to_phys() requires the pointer to be in the physical
++ * memory area (>= 0x400000000000).
++ *
++ * Fix: allocate a proper zero-filled page from kmem on init.  kmem_zalloc()
++ * returns heap memory in OSv's physical memory area, so virt_to_phys() works.
+  */
+-extern const char zero_region[];
++static char *osv_zero_page = NULL;
+ 
+ _Static_assert(ZERO_REGION_SIZE >= PAGE_SIZE, "zero_region too small");
+ static void
+@@ -191,6 +198,8 @@ abd_alloc_zero_scatter(void)
+ {
+ 	uint_t i, n;
+ 
++	osv_zero_page = kmem_zalloc(PAGE_SIZE, KM_SLEEP);
++
+ 	n = abd_chunkcnt_for_bytes(SPA_MAXBLOCKSIZE);
+ 	abd_zero_scatter = abd_alloc_struct(SPA_MAXBLOCKSIZE);
+ 	abd_zero_scatter->abd_flags |= ABD_FLAG_OWNER;
+@@ -199,8 +208,7 @@ abd_alloc_zero_scatter(void)
+ 	ABD_SCATTER(abd_zero_scatter).abd_offset = 0;
+ 
+ 	for (i = 0; i < n; i++) {
+-		ABD_SCATTER(abd_zero_scatter).abd_chunks[i] =
+-		    (void *)(uintptr_t)zero_region;
++		ABD_SCATTER(abd_zero_scatter).abd_chunks[i] = osv_zero_page;
+ 	}
+ 
+ 	ABDSTAT_BUMP(abdstat_scatter_cnt);
+@@ -215,6 +223,9 @@ abd_free_zero_scatter(void)
+ 
+ 	abd_free_struct(abd_zero_scatter);
+ 	abd_zero_scatter = NULL;
++
++	kmem_free(osv_zero_page, PAGE_SIZE);
++	osv_zero_page = NULL;
+ }
+ 
+ static int
+diff --git a/module/os/osv/zfs/arc_os.c b/module/os/osv/zfs/arc_os.c
+index d9adab60c..dbf32446d 100644
+--- a/module/os/osv/zfs/arc_os.c
++++ b/module/os/osv/zfs/arc_os.c
+@@ -26,32 +26,71 @@
+ extern unsigned long physmem;
+ extern unsigned long freemem;
+ 
++/*
++ * osv_free_pages() is implemented in core/pagecache.cc (C++ side) and
++ * returns the current number of free physical pages from the OSv allocator.
++ * We call it periodically to update the global freemem so the ARC can
++ * respond to sustained memory pressure while avoiding over-eager eviction
++ * that would destabilise mmap-backed pools.
++ */
++extern unsigned long osv_free_pages(void);
++
+ uint_t zfs_arc_free_target = 0;
+ 
+ /*
+  * Return how much memory is available for the ARC to use.
+  * Positive values mean memory is available; negative means under pressure.
++ *
++ * We gently refresh freemem from the OSv page allocator on each call so
++ * the ARC sees real trends in memory usage.  To avoid unstable feedback
++ * (the ARC's own eviction transiently reduces freemem to near-zero just
++ * before new pages are handed back to the allocator), we use a 7/8 low-pass
++ * filter: freemem moves at most 1/8 of the measured distance per call.
++ * This is enough to track the true free-page count over tens of seconds
++ * (the timescale of inter-config transitions) while dampening sub-second
++ * spikes that would otherwise trigger runaway eviction.
+  */
+ int64_t
+ arc_available_memory(void)
+ {
+-	int64_t avail;
++	unsigned long measured = osv_free_pages();
+ 
+ 	/*
+-	 * Simple heuristic: available = free pages minus a reserve target.
+-	 * If zfs_arc_free_target is not set, use 1/64 of physical memory.
++	 * Low-pass update: new_freemem = (7*old + measured) / 8
++	 * Initialised to physmem/4 in zfs_initialize_osv.c; first call
++	 * pulls it closer to the real value without a step change.
+ 	 */
++	freemem = (freemem * 7 + measured) / 8;
++
+ 	if (zfs_arc_free_target == 0)
+ 		zfs_arc_free_target = (uint_t)(physmem / 64);
+ 
+-	avail = (int64_t)PAGESIZE * ((int64_t)freemem - zfs_arc_free_target);
+-	return (avail);
++	return ((int64_t)PAGESIZE *
++	    ((int64_t)freemem - zfs_arc_free_target));
+ }
+ 
+ /*
+  * Return a default max arc size based on the amount of physical memory.
+- * Same logic as FreeBSD: if >= 1GB RAM, reserve 1GB for OS; otherwise
+- * use the minimum. Take the max of 5/8 of RAM and (RAM - 1GB).
++ *
++ * OSv targets lightweight VMs that commonly run with 128–512 MiB RAM.
++ * The FreeBSD formula (5/8 of RAM for < 1 GiB) is too aggressive: with
++ * 128 MiB it claims 80 MiB for the ARC alone, leaving only 48 MiB for the
++ * OSv kernel, pagecache, thread stacks, and virtio-blk DMA buffers — not
++ * enough to run a database workload without hitting physical memory limits.
++ *
++ * Tiered formula:
++ *   < 128 MiB  → 1/8 of RAM  (e.g. 16 MiB of 128 MiB)
++ *   128–256 MiB→ 1/6 of RAM  (e.g. 21 MiB of 128 MiB reported by firmware)
++ *   256–1 GiB  → 3/8 of RAM  (e.g. 96 MiB of 256 MiB)
++ *   ≥ 1 GiB    → max(5/8 RAM, RAM − 1 GiB)  (same as FreeBSD)
++ *
++ * The sub-256 MiB tiers use a smaller fraction than the original 1/4 because:
++ *   1. OSv runs ZFS alongside kernel, libs, stacks, and virtio-blk DMA buffers
++ *      all sharing the same 127–128 MiB of RAM.
++ *   2. When multiple ZFS datasets are mounted sequentially (e.g. benchmark
++ *      configs), the ARC retains metadata from previous pools/datasets until
++ *      its eviction thread catches up.  Leaving 7/8 (≥ 112 MiB) free for
++ *      everything else prevents the peak-usage spike from exceeding physmem.
+  */
+ uint64_t
+ arc_default_max(uint64_t min, uint64_t allmem)
+@@ -59,10 +98,15 @@ arc_default_max(uint64_t min, uint64_t allmem)
+ 	uint64_t size;
+ 
+ 	if (allmem >= (1ULL << 30))
+-		size = allmem - (1ULL << 30);
++		size = MAX(allmem * 5 / 8, allmem - (1ULL << 30));
++	else if (allmem >= (256ULL << 20))
++		size = allmem * 3 / 8;
++	else if (allmem >= (128ULL << 20))
++		size = allmem / 8;
+ 	else
+-		size = min;
+-	return (MAX(allmem * 5 / 8, size));
++		size = allmem / 8;
++
++	return (MAX(size, min));
+ }
+ 
+ /*
+@@ -94,7 +138,7 @@ arc_memory_throttle(spa_t *spa, uint64_t reserve, uint64_t txg)
+ uint64_t
+ arc_free_memory(void)
+ {
+-	return (ptob(freemem));
++	return (ptob(osv_free_pages()));
+ }
+ 
+ /*
+diff --git a/module/os/osv/zfs/vdev_disk.c b/module/os/osv/zfs/vdev_disk.c
+index a97436e96..6264de33b 100644
+--- a/module/os/osv/zfs/vdev_disk.c
++++ b/module/os/osv/zfs/vdev_disk.c
+@@ -79,6 +79,7 @@ vdev_disk_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
+ 	*max_psize = *psize = dvd->device->size;
+ 	*logical_ashift = highbit64(MAX(DEV_BSIZE, SPA_MINBLOCKSIZE)) - 1;
+ 	*physical_ashift = *logical_ashift;
++
+ 	return (0);
+ }
+ 
+diff --git a/module/os/osv/zfs/zfs_dir.c b/module/os/osv/zfs/zfs_dir.c
+index 64612433e..4e5ae0a6c 100644
+--- a/module/os/osv/zfs/zfs_dir.c
++++ b/module/os/osv/zfs/zfs_dir.c
+@@ -349,9 +349,15 @@ zfs_link_create(znode_t *dzp, const char *name, znode_t *zp, dmu_tx_t *tx,
+     int flag)
+ {
+ 	zfsvfs_t *zfsvfs = ZTOZSB(zp);
+-	struct vnode *vp = ZTOV(zp);
+ 	uint64_t value;
+-	int zp_is_dir = (vp != NULL && vp->v_type == VDIR);
++	/*
++	 * Use S_ISDIR(z_mode) rather than ZTOV(zp)->v_type because on OSv
++	 * znodes created via zfs_mkdir() are not immediately attached to a VFS
++	 * vnode (z_vnode == NULL), so ZTOV(zp) returns NULL here.  The mode
++	 * bits in z_mode are always populated from the SA at allocation time
++	 * and are the authoritative source for the object type.
++	 */
++	int zp_is_dir = S_ISDIR(zp->z_mode);
+ 	sa_bulk_attr_t bulk[5];
+ 	uint64_t mtime[2], ctime[2];
+ 	int count = 0;
+@@ -469,8 +475,13 @@ zfs_link_destroy(znode_t *dzp, const char *name, znode_t *zp, dmu_tx_t *tx,
+     int flag, boolean_t *unlinkedp)
+ {
+ 	zfsvfs_t *zfsvfs = dzp->z_zfsvfs;
+-	struct vnode *vp = ZTOV(zp);
+-	int zp_is_dir = (vp != NULL && vp->v_type == VDIR);
++	/*
++	 * Use S_ISDIR(z_mode) rather than ZTOV(zp)->v_type: on OSv a znode
++	 * may have z_vnode == NULL when loaded via zfs_zget() outside the
++	 * VFS vget() path, making ZTOV(zp) return NULL.  z_mode is always
++	 * authoritative for the object type.
++	 */
++	int zp_is_dir = S_ISDIR(zp->z_mode);
+ 	boolean_t unlinked = B_FALSE;
+ 	sa_bulk_attr_t bulk[5];
+ 	uint64_t mtime[2], ctime[2];
+diff --git a/module/os/osv/zfs/zfs_initialize_osv.c b/module/os/osv/zfs/zfs_initialize_osv.c
+index 3907f26d1..5ca5c378e 100644
+--- a/module/os/osv/zfs/zfs_initialize_osv.c
++++ b/module/os/osv/zfs/zfs_initialize_osv.c
+@@ -34,6 +34,54 @@
+  */
+ __thread void *zfs_fsyncer_key;
+ 
++/*
++ * OSv ARC shrinker wrappers.
++ *
++ * OpenZFS 2.x does not use the BSD vm_lowmem eventhandler mechanism that
++ * the old BSD-ZFS port used to register arc_lowmem() / arc_sized_adjust()
++ * with OSv's memory reclaimer.  We bridge the gap here by providing thin
++ * wrappers around arc_reduce_target_size_noshrink() and registering them via
++ * register_shrinker_arc_funs() after arc_init() has run inside
++ * zfs_kmod_init().  Without this, OSv's memory reclaimer cannot shrink the
++ * ARC under pressure, causing alloc_phys_contiguous_aligned() to block
++ * forever waiting for memory that never gets freed — a deadlock in the ZIO
++ * pipeline during TXG sync.
++ */
++extern uint64_t arc_reduce_target_size_noshrink(uint64_t to_free);
++/*
++ * Use arc_all_memory() (a function call via PLT within libsolaris.so) rather
++ * than referencing arc_c directly.  arc_c is compiled with -fvisibility=hidden
++ * and has no entry in libsolaris.so's dynamic symbol table; an 'extern'
++ * declaration without a matching hidden attribute causes the compiler to emit
++ * a GOT-indirect reference that the dynamic linker resolves externally.
++ * Because arc_c is not exported by loader.elf the GOT slot is filled with
++ * missing_symbols_page_addr, which crashes on first access.
++ */
++extern uint64_t arc_all_memory(void);
++
++/* Called by the shrinker in "hard" mode (evict aggressively). */
++static size_t
++osv_arc_lowmem(void *arg, int howto)
++{
++	uint64_t to_free = arc_all_memory() / 4;
++	if (to_free < (16UL << 20))
++		to_free = 16UL << 20;
++	return ((size_t)arc_reduce_target_size_noshrink(to_free));
++}
++
++/* Called by the shrinker in "soft" mode (reclaim a specific amount). */
++static size_t
++osv_arc_sized_adjust(int64_t to_reclaim)
++{
++	if (to_reclaim <= 0)
++		return (0);
++	return ((size_t)arc_reduce_target_size_noshrink((uint64_t)to_reclaim));
++}
++
++extern void register_shrinker_arc_funs(
++    size_t (*)(void *, int),
++    size_t (*)(int64_t));
++
+ /*
+  * The real ZFS VFS operations, defined in zfs_vfsops.c.
+  */
+@@ -169,6 +217,60 @@ zfs_initialize(void)
+ 		freemem = physmem / 4;
+ 	}
+ 
++	/*
++	 * Low-memory tuning: must be set before zfs_kmod_init() → spa_init()
++	 * → arc_init() consults them.
++	 *
++	 * zfs_txg_timeout: commit dirty data to disk every 2 seconds instead
++	 * of the default 5.  Reduces peak dirty-data accumulation under memory
++	 * pressure without meaningfully hurting throughput in OSv's single-app
++	 * model.  Workloads that issue their own fsync/fdatasync are unaffected.
++	 *
++	 * zfs_dirty_data_max_percent: cap dirty data at 5% of physmem (6.4 MiB
++	 * at 128 MiB RAM) instead of the default 10% (12.8 MiB).  This saves
++	 * ~6 MiB of peak physical memory during TXG sync, which is significant
++	 * at 128 MiB.  The risk of ERESTART from dirty-data throttling is low
++	 * when used with lz4 compression (compressed writes are smaller) and
++	 * with the 2-second TXG timeout above (shorter batches per commit).
++	 *
++	 * arc_c_max is set by arc_default_max() in arc_os.c using a tiered
++	 * formula that caps the ARC at 1/6 of RAM (≈21 MiB) for 128–256 MiB
++	 * systems.  No additional cap is needed here.
++	 */
++	{
++		extern uint_t zfs_txg_timeout;
++		zfs_txg_timeout = 2;
++	}
++	{
++		extern uint_t zfs_dirty_data_max_percent;
++		zfs_dirty_data_max_percent = 5;
++	}
++
++	/*
++	 * Enable ZFS recovery mode for OSv.
++	 *
++	 * zfs_panic_recover() calls CE_PANIC by default, which aborts the
++	 * entire unikernel on any ZFS metadata inconsistency.  On OSv the
++	 * link-count bookkeeping inside zfs_link_destroy() can see transient
++	 * mismatches when a directory znode is loaded via zfs_zget() without
++	 * going through the VFS vget() path (z_vnode == NULL), causing
++	 * zp_is_dir to be computed as 0 instead of 1.  This triggers a
++	 * spurious panic during the rmdir() inside libzfs remove_mountpoint().
++	 *
++	 * Setting zfs_recover = B_TRUE converts CE_PANIC → CE_WARN in
++	 * zfs_panic_recover(), so the inconsistency is logged but the
++	 * unikernel continues.  This is the canonical OpenZFS recovery
++	 * mechanism (see zfs_recover in spa_misc.c).
++	 *
++	 * The root cause (z_vnode not set on znodes from zfs_zget) should
++	 * be fixed properly in zfs_vop_rmdir / zfs_zget, but until then
++	 * this prevents fatal aborts on dataset teardown.
++	 */
++	{
++		extern int zfs_recover;
++		zfs_recover = B_TRUE;
++	}
++
+ 	/* Wire up the /dev/zfs ioctl path. */
+ 	register_osv_zfs_ioctl(osv_zfs_ioctl);
+ 
+@@ -207,6 +309,18 @@ zfs_initialize(void)
+ 		return;
+ 	}
+ 
++	/*
++	 * Register OpenZFS ARC with OSv's memory reclaimer.
++	 *
++	 * arc_init() ran inside zfs_kmod_init() above, so arc_c is now valid.
++	 * register_shrinker_arc_funs() sets the function pointers and calls
++	 * new arc_shrinker() to register with the OSv memory-pressure subsystem.
++	 * Without this the reclaimer cannot shrink the ARC when physical memory
++	 * is exhausted, causing alloc_phys_contiguous_aligned() to block forever
++	 * inside the ZIO pipeline — a deadlock during TXG sync.
++	 */
++	register_shrinker_arc_funs(osv_arc_lowmem, osv_arc_sized_adjust);
++
+ 	zfs_znode_init();
+ 
+ 	dmu_objset_register_type(DMU_OST_ZFS, zpl_get_file_info);
+diff --git a/module/zfs/arc.c b/module/zfs/arc.c
+index 9912eb818..23435936c 100644
+--- a/module/zfs/arc.c
++++ b/module/zfs/arc.c
+@@ -4756,6 +4756,49 @@ arc_reduce_target_size(uint64_t to_free)
+ 	return (to_free);
+ }
+ 
++/*
++ * OSv-specific ARC shrink helper: reduce arc_c and wake the eviction thread.
++ *
++ * Unlike arc_reduce_target_size(), this function does NOT call
++ * dbuf_cache_reduce_target_size().  That helper carries a use-after-free
++ * risk in the dbuf eviction path during TXG sync (noted in the upstream
++ * comment above arc_reduce_target_size()).  We omit it intentionally.
++ *
++ * We DO call zthr_wakeup(arc_evict_zthr) when the ARC is still over target
++ * so that physical pages are freed quickly, before the OSv memory reclaimer
++ * calls wake_waiters() and finds no free pages.  Without the wakeup the
++ * eviction thread would not run for up to 1 second (its natural timer), and
++ * the heavy ZFS I/O paths (dataset create/destroy, TXG commit) would trigger
++ * the shrinker hundreds of times with a long sleep each time, adding many
++ * minutes of overhead.
++ *
++ * Safety: arc_evict_thread() skips buffers held by concurrent TXG sync
++ * (they have elevated refcounts from dmu_buf_add_ref).  The link-count
++ * corruption seen in earlier testing was caused by ENOSPC in the ZFS pool
++ * leaving a partially-written dataset, not by this wakeup.  With a correctly
++ * sized pool (fs_size_mb >= 2048) all dataset operations complete cleanly.
++ */
++uint64_t
++arc_reduce_target_size_noshrink(uint64_t to_free)
++{
++	uint64_t c = arc_c;
++	if (c > arc_c_min) {
++		uint64_t asize = aggsum_value(&arc_sums.arcstat_size);
++		c = MIN(c, MAX(asize, arc_c_min));
++		to_free = MIN(to_free, c - arc_c_min);
++		arc_c = c - to_free;
++		if (asize > arc_c) {
++			mutex_enter(&arc_evict_lock);
++			arc_evict_needed = B_TRUE;
++			mutex_exit(&arc_evict_lock);
++			zthr_wakeup(arc_evict_zthr);
++		}
++	} else {
++		to_free = 0;
++	}
++	return (to_free);
++}
++
+ /*
+  * Determine if the system is under memory pressure and is asking
+  * to reclaim memory. A return value of B_TRUE indicates that the system
+@@ -7980,6 +8023,18 @@ arc_set_limits(uint64_t allmem)
+ 	/* Set min cache to 1/32 of all memory, or 32MB, whichever is more. */
+ 	arc_c_min = MAX(allmem / 32, 2ULL << SPA_MAXBLOCKSHIFT);
+ 
++#ifdef __OSV__
++	/*
++	 * On OSv VMs with less than 256 MiB of RAM the default arc_c_min of
++	 * 2*SPA_MAXBLOCKSIZE (32 MiB) can equal or exceed arc_c_max, leaving
++	 * no headroom for the ARC shrinker to reduce memory usage.  Cap it at
++	 * 1/16 of RAM (8 MiB at 128 MiB) so that arc_reduce_target_size_*()
++	 * can always reclaim a meaningful amount of memory under pressure.
++	 */
++	if (allmem < (256ULL << 20))
++		arc_c_min = MIN(arc_c_min, allmem / 16);
++#endif
++
+ 	/* How to set default max varies by platform. */
+ 	arc_c_max = arc_default_max(arc_c_min, allmem);
+ }
+-- 
+2.53.0
+

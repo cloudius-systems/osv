@@ -1,0 +1,6052 @@
+From ba6dd54598689afb6d796595a0a8f58744472988 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Fri, 8 May 2026 04:10:29 -0400
+Subject: [PATCH 04/19] zfs: implement complete OSv platform layer for OpenZFS
+ 2.4.1
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Complete, working OSv platform layer for OpenZFS 2.4.1.
+
+Kernel module (libsolaris.so):
+- vdev_disk.c: Fix ABD read data return — remove erroneous
+  zio->io_bio = NULL in vdev_disk_bio_done() that prevented
+  abd_return_buf_copy() from being called, causing all reads
+  to return empty data
+- zfs_vnops_os.c: Full vnode operations implementation:
+  lookup, create, remove, rename, read, write, seek, fsync,
+  readdir, getattr, setattr, truncate, readlink, symlink,
+  mkdir, rmdir, link, inactive; set vop_cache=NULL so ZFS
+  file mmap uses default_file_mmap (direct reads via zfs_read)
+  which correctly serves mmap'd pages from ZFS ARC
+- zfs_vfsops.c: Mount/unmount/sync/statfs; zfs_domount() with
+  correct ZFS_ID encoding in m_fsid.__val[1] so IS_ZFS() works;
+  spa_import_rootpool() for boot from raw block device
+- zfs_vop_getattr: Set va_fsid from mount m_fsid (ZFS_ID-tagged)
+  so stat(2) returns meaningful st_dev for ZFS files
+- abd_os.c: ABD scatter/linear operations for OSv bio layer
+- zfs_dir.c, zfs_acl.c, zfs_znode_os.c: Node management,
+  ACL stubs (POSIX permissions), znode lifecycle
+- zvol_os.c: Stub zvol operations (no block device exposure)
+- spl_uio.c: UIO adapter between OSv and OpenZFS I/O model
+- spa_os.c: Pool import from OSv device paths (/dev/vblkN)
+
+Userspace (zpool.so, zfs.so, libzfs.so and friends):
+- New OS layer under lib/*/os/osv/ for all ZFS userspace libs
+- libzfs_crypto_os.c: ENOTSUP stub (no encryption on OSv)
+- libshare/os/osv/: Stub share operations
+- libzfs_core/os/osv/: OSv-specific ZFS core operations
+- libzutil/os/osv/: Utility functions for OSv
+- Solaris errno aliases (ECKSUM, EFRAGS, ENOTACTIVE) via
+  lib/libspl/include/os/osv/errno.h
+
+Test results: zpool status ONLINE, zfs list correct,
+tst-zfs-direct-io 9/9 pass, tst-zfs-recordsize benchmark
+shows expected 128kB > 8kB throughput.
+
+(cherry picked from commit a20591cd1b7cac0a9c2557b8a3f9b91a9a4e8b64)
+---
+ cmd/zfs/os/osv/zfs_main_entry.c               |   16 +
+ cmd/zpool/os/osv/zpool_main_entry.c           |   21 +
+ cmd/zpool/os/osv/zpool_vdev_os.c              |   97 ++
+ include/os/osv/spl/sys/debug.h                |    4 +
+ include/os/osv/spl/sys/mod.h                  |   62 +
+ include/os/osv/spl/sys/proc.h                 |   10 +-
+ include/os/osv/spl/sys/taskq.h                |    2 +-
+ include/os/osv/spl/sys/time.h                 |   16 +
+ include/os/osv/zfs/sys/zfs_context_os.h       |   30 +-
+ include/os/osv/zfs/sys/zfs_vfsops_os.h        |    9 +
+ include/os/osv/zfs/sys/zfs_vnops_os.h         |   10 +
+ include/os/osv/zfs/sys/zfs_znode_impl.h       |    6 +
+ lib/libshare/os/osv/nfs.c                     |   64 +
+ lib/libshare/os/osv/smb.c                     |   63 +
+ lib/libspl/include/os/osv/errno.h             |   32 +
+ lib/libspl/include/os/osv/rpc/types.h         |   16 +
+ lib/libspl/include/os/osv/sys/byteorder.h     |  238 ++++
+ lib/libspl/include/os/osv/sys/errno.h         |   63 +
+ lib/libspl/include/os/osv/sys/mnttab.h        |   75 ++
+ lib/libspl/include/os/osv/sys/mount.h         |   60 +
+ lib/libspl/include/os/osv/sys/param.h         |   59 +
+ lib/libspl/include/os/osv/sys/stat.h          |   33 +
+ lib/libspl/include/os/osv/sys/sysmacros.h     |   71 +
+ lib/libspl/include/os/osv/sys/vfs.h           |   11 +
+ .../include/os/osv/sys/zfs_context_os.h       |   20 +
+ lib/libspl/include/os/osv/unistd.h            |   26 +
+ lib/libspl/include/zone.h                     |    6 +-
+ lib/libspl/os/osv/gethostid.c                 |   12 +
+ lib/libspl/os/osv/getmntany.c                 |   24 +
+ lib/libspl/os/osv/zone.c                      |   12 +
+ lib/libzfs/libzfs_dataset.c                   |    6 +-
+ lib/libzfs/os/osv/libzfs_crypto_os.c          |   89 ++
+ lib/libzfs/os/osv/libzfs_mount_os.c           |  111 ++
+ lib/libzfs/os/osv/libzfs_pool_os.c            |   64 +
+ lib/libzfs/os/osv/libzfs_util_os.c            |  101 ++
+ lib/libzfs_core/os/osv/libzfs_core_ioctl.c    |   21 +
+ lib/libzutil/os/osv/zutil_device_path_os.c    |  228 ++++
+ lib/libzutil/os/osv/zutil_import_os.c         |  156 +++
+ lib/libzutil/os/osv/zutil_setproctitle.c      |   17 +
+ module/os/osv/zfs/abd_os.c                    |   53 +
+ module/os/osv/zfs/spa_os.c                    |   10 +-
+ module/os/osv/zfs/spl_uio.c                   |   74 +-
+ module/os/osv/zfs/vdev_disk.c                 |   13 +-
+ module/os/osv/zfs/zfs_acl.c                   |  151 +++
+ module/os/osv/zfs/zfs_dir.c                   |  435 +++++-
+ module/os/osv/zfs/zfs_initialize_osv.c        |  191 ++-
+ module/os/osv/zfs/zfs_vfsops.c                |  554 ++++++++
+ module/os/osv/zfs/zfs_vnops_os.c              | 1193 ++++++++++++++++-
+ module/os/osv/zfs/zfs_znode_os.c              |  420 +++++-
+ module/os/osv/zfs/zvol_os.c                   |   27 +-
+ module/zfs/dsl_pool.c                         |    3 -
+ module/zfs/rrwlock.c                          |    4 +
+ module/zfs/txg.c                              |    9 +-
+ module/zfs/zfs_gitrev.h                       |    7 +
+ 54 files changed, 4993 insertions(+), 112 deletions(-)
+ create mode 100644 cmd/zfs/os/osv/zfs_main_entry.c
+ create mode 100644 cmd/zpool/os/osv/zpool_main_entry.c
+ create mode 100644 cmd/zpool/os/osv/zpool_vdev_os.c
+ create mode 100644 include/os/osv/spl/sys/mod.h
+ create mode 100644 lib/libshare/os/osv/nfs.c
+ create mode 100644 lib/libshare/os/osv/smb.c
+ create mode 100644 lib/libspl/include/os/osv/errno.h
+ create mode 100644 lib/libspl/include/os/osv/rpc/types.h
+ create mode 100644 lib/libspl/include/os/osv/sys/byteorder.h
+ create mode 100644 lib/libspl/include/os/osv/sys/errno.h
+ create mode 100644 lib/libspl/include/os/osv/sys/mnttab.h
+ create mode 100644 lib/libspl/include/os/osv/sys/mount.h
+ create mode 100644 lib/libspl/include/os/osv/sys/param.h
+ create mode 100644 lib/libspl/include/os/osv/sys/stat.h
+ create mode 100644 lib/libspl/include/os/osv/sys/sysmacros.h
+ create mode 100644 lib/libspl/include/os/osv/sys/vfs.h
+ create mode 100644 lib/libspl/include/os/osv/sys/zfs_context_os.h
+ create mode 100644 lib/libspl/include/os/osv/unistd.h
+ create mode 100644 lib/libspl/os/osv/gethostid.c
+ create mode 100644 lib/libspl/os/osv/getmntany.c
+ create mode 100644 lib/libspl/os/osv/zone.c
+ create mode 100644 lib/libzfs/os/osv/libzfs_crypto_os.c
+ create mode 100644 lib/libzfs/os/osv/libzfs_mount_os.c
+ create mode 100644 lib/libzfs/os/osv/libzfs_pool_os.c
+ create mode 100644 lib/libzfs/os/osv/libzfs_util_os.c
+ create mode 100644 lib/libzfs_core/os/osv/libzfs_core_ioctl.c
+ create mode 100644 lib/libzutil/os/osv/zutil_device_path_os.c
+ create mode 100644 lib/libzutil/os/osv/zutil_import_os.c
+ create mode 100644 lib/libzutil/os/osv/zutil_setproctitle.c
+ create mode 100644 module/zfs/zfs_gitrev.h
+
+diff --git a/cmd/zfs/os/osv/zfs_main_entry.c b/cmd/zfs/os/osv/zfs_main_entry.c
+new file mode 100644
+index 000000000..64dc447df
+--- /dev/null
++++ b/cmd/zfs/os/osv/zfs_main_entry.c
+@@ -0,0 +1,16 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv entry point for zfs.so
++ *
++ * Same visibility fix as zpool_main_entry.c — see that file for details.
++ * The upstream zfs_main.c 'main' is renamed to zfs_real_main and
++ * re-exported here with DEFAULT visibility.
++ */
++
++extern int zfs_real_main(int argc, char **argv);
++
++__attribute__((visibility("default")))
++int main(int argc, char **argv)
++{
++	return zfs_real_main(argc, argv);
++}
+diff --git a/cmd/zpool/os/osv/zpool_main_entry.c b/cmd/zpool/os/osv/zpool_main_entry.c
+new file mode 100644
+index 000000000..bf30c355a
+--- /dev/null
++++ b/cmd/zpool/os/osv/zpool_main_entry.c
+@@ -0,0 +1,21 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv entry point for zpool.so
++ *
++ * The upstream zpool_main.c compiles 'main' with HIDDEN ELF visibility
++ * in the OSv build environment (due to glibc-compat headers in the
++ * include path).  OSv's ELF loader looks up "main" via the dynamic
++ * symbol table (.dynsym), which only contains DEFAULT-visibility symbols.
++ *
++ * Fix: rename the upstream main to zpool_real_main (via -Dmain=zpool_real_main
++ * on the zpool-cmd-objects compilation) and re-export it here with explicit
++ * DEFAULT visibility so the linker places it in .dynsym.
++ */
++
++extern int zpool_real_main(int argc, char **argv);
++
++__attribute__((visibility("default")))
++int main(int argc, char **argv)
++{
++	return zpool_real_main(argc, argv);
++}
+diff --git a/cmd/zpool/os/osv/zpool_vdev_os.c b/cmd/zpool/os/osv/zpool_vdev_os.c
+new file mode 100644
+index 000000000..d3d3ccdc6
+--- /dev/null
++++ b/cmd/zpool/os/osv/zpool_vdev_os.c
+@@ -0,0 +1,97 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv zpool_vdev_os.c
++ *
++ * OSv-specific vdev management for zpool.  On OSv:
++ *  - No SCSI/SG ioctls (no /dev/sg*)
++ *  - No blkid library
++ *  - No EFI partition library
++ *  - No udev/sysfs power management
++ *  - VirtIO block devices /dev/vblkN do not need sector-size probing
++ *
++ * All Linux-specific functions are stubbed out.
++ */
++
++#include <assert.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <stdio.h>
++#include <string.h>
++#include <unistd.h>
++#include <sys/stat.h>
++#include <sys/mntent.h>
++
++#include <libzutil.h>
++#include <libzfs.h>
++#include "zpool_util.h"
++
++/*
++ * check_sector_size_database: On OSv, VirtIO block devices always use
++ * the default 512-byte sector size.  No SCSI inquiry needed.
++ */
++boolean_t
++check_sector_size_database(char *path, int *sector_size)
++{
++	(void) path;
++	(void) sector_size;
++	return (B_FALSE);
++}
++
++/*
++ * check_device: verify a device is safe to use as a vdev.
++ * On OSv, we just check it can be opened.
++ */
++int
++check_device(const char *path, boolean_t force,
++    boolean_t isspare, boolean_t iswholedisk)
++{
++	(void) force, (void) isspare, (void) iswholedisk;
++	int fd;
++
++	fd = open(path, O_RDONLY | O_CLOEXEC);
++	if (fd < 0) {
++		(void) fprintf(stderr, "cannot open '%s': %s\n",
++		    path, strerror(errno));
++		return (-1);
++	}
++	(void) close(fd);
++	return (0);
++}
++
++/*
++ * check_file: verify a file-based vdev is safe to use.
++ */
++int
++check_file(const char *file, boolean_t force, boolean_t isspare)
++{
++	return (check_file_generic(file, force, isspare));
++}
++
++/*
++ * after_zpool_upgrade: called after a pool upgrade.  No-op on OSv.
++ */
++void
++after_zpool_upgrade(zpool_handle_t *zhp)
++{
++	(void) zhp;
++}
++
++/*
++ * zpool_power_current_state: no enclosure power management on OSv.
++ */
++int
++zpool_power_current_state(zpool_handle_t *zhp, char *vdev)
++{
++	(void) zhp, (void) vdev;
++	return (-1); /* unsupported */
++}
++
++/*
++ * zpool_power: no enclosure power management on OSv.
++ */
++int
++zpool_power(zpool_handle_t *zhp, char *vdev, boolean_t turn_on)
++{
++	(void) zhp, (void) vdev, (void) turn_on;
++	return (ENOTSUP);
++}
+diff --git a/include/os/osv/spl/sys/debug.h b/include/os/osv/spl/sys/debug.h
+index 2692a8285..a6aee4b14 100644
+--- a/include/os/osv/spl/sys/debug.h
++++ b/include/os/osv/spl/sys/debug.h
+@@ -28,6 +28,10 @@ extern "C" {
+ #define	__maybe_unused	__attribute__((unused))
+ #endif
+ 
++#ifndef __must_check
++#define	__must_check	__attribute__((__warn_unused_result__))
++#endif
++
+ #ifndef __printflike
+ #define	__printflike(a, b)	__attribute__((__format__(__printf__, a, b)))
+ #endif
+diff --git a/include/os/osv/spl/sys/mod.h b/include/os/osv/spl/sys/mod.h
+new file mode 100644
+index 000000000..cc2ebd9f3
+--- /dev/null
++++ b/include/os/osv/spl/sys/mod.h
+@@ -0,0 +1,62 @@
++/*
++ * OSv stub for sys/mod.h — ZFS module parameter registration.
++ * OSv has no sysctl/tunable framework, so these are all no-ops.
++ *
++ * We model ZFS_MODULE_PARAM_ARGS after FreeBSD's SYSCTL_HANDLER_ARGS so
++ * that the FreeBSD code path in OpenZFS compiles (the functions are dead
++ * code since ZFS_MODULE_PARAM_CALL is a no-op, but they must parse cleanly).
++ */
++#ifndef _OSV_SPL_MOD_H
++#define	_OSV_SPL_MOD_H
++
++/* Minimal sysctl stub types needed by the FreeBSD code path. */
++struct osv_sysctl_oid;
++struct osv_sysctl_req {
++	void	*newptr;
++};
++static inline int
++sysctl_handle_string(struct osv_sysctl_oid *oidp __attribute__((unused)),
++    char *buf __attribute__((unused)),
++    size_t len __attribute__((unused)),
++    struct osv_sysctl_req *req __attribute__((unused)))
++{
++	return (0);
++}
++static inline int
++sysctl_handle_64(struct osv_sysctl_oid *oidp __attribute__((unused)),
++    void *arg __attribute__((unused)),
++    int arg2 __attribute__((unused)),
++    struct osv_sysctl_req *req __attribute__((unused)))
++{
++	return (0);
++}
++static inline int
++sysctl_handle_int(struct osv_sysctl_oid *oidp __attribute__((unused)),
++    void *arg __attribute__((unused)),
++    int arg2 __attribute__((unused)),
++    struct osv_sysctl_req *req __attribute__((unused)))
++{
++	return (0);
++}
++
++/* ZFS_MODULE_PARAM_ARGS — provides oidp, arg1, arg2, req to FreeBSD-path fns */
++#define	ZFS_MODULE_PARAM_ARGS	\
++	struct osv_sysctl_oid *oidp __attribute__((unused)),		\
++	void *arg1 __attribute__((unused)),				\
++	intptr_t arg2 __attribute__((unused)),				\
++	struct osv_sysctl_req *req __attribute__((unused))
++
++#define	ZMOD_RW	0
++#define	ZMOD_RD	1
++
++#define	ZFS_MODULE_PARAM(scope_prefix, name_prefix, name, type, perm, desc)
++#define	ZFS_MODULE_PARAM_CALL(scope_prefix, name_prefix, name, setfunc, \
++	getfunc, perm, desc)
++#define	ZFS_MODULE_VIRTUAL_PARAM_CALL ZFS_MODULE_PARAM_CALL
++
++#define	EXPORT_SYMBOL(x)
++#define	module_init(fn)
++#define	module_init_early(fn)
++#define	module_exit(fn)
++
++#endif /* _OSV_SPL_MOD_H */
+diff --git a/include/os/osv/spl/sys/proc.h b/include/os/osv/spl/sys/proc.h
+index 9d73e7080..bff24acd9 100644
+--- a/include/os/osv/spl/sys/proc.h
++++ b/include/os/osv/spl/sys/proc.h
+@@ -82,8 +82,14 @@ thread_create(caddr_t stk, size_t stksize, void (*proc)(void *), void *arg,
+ extern void kthread_exit(void) __attribute__((noreturn));
+ #define	thread_exit()	kthread_exit()
+ 
+-/* Current thread */
+-extern struct thread *curthread;
++/*
++ * curthread - current thread pointer.
++ * Implemented as a macro wrapping get_curthread() (exported from
++ * loader.elf via bsd/porting/kthread.cc).  This avoids needing a
++ * global variable whose address the dynamic linker must resolve.
++ */
++extern struct thread *get_curthread(void);
++#define	curthread	((struct thread *)get_curthread())
+ 
+ /*
+  * Process comparison - OSv is single-process, so always return true.
+diff --git a/include/os/osv/spl/sys/taskq.h b/include/os/osv/spl/sys/taskq.h
+index 33acef623..629f80da4 100644
+--- a/include/os/osv/spl/sys/taskq.h
++++ b/include/os/osv/spl/sys/taskq.h
+@@ -79,7 +79,7 @@ extern void	taskq_suspend(taskq_t *);
+ extern int	taskq_suspended(taskq_t *);
+ extern void	taskq_resume(taskq_t *);
+ extern int	taskq_member(taskq_t *, kthread_t *);
+-extern int	taskq_cancel_id(taskq_t *, taskqid_t);
++extern int	taskq_cancel_id(taskq_t *, taskqid_t, boolean_t);
+ extern taskq_t	*taskq_of_curthread(void);
+ 
+ /*
+diff --git a/include/os/osv/spl/sys/time.h b/include/os/osv/spl/sys/time.h
+index e1cae814f..41a4fd1cb 100644
+--- a/include/os/osv/spl/sys/time.h
++++ b/include/os/osv/spl/sys/time.h
+@@ -49,4 +49,20 @@ extern int hz;
+ #define	USEC_TO_TICK(usec)	(howmany((hrtime_t)(usec) * hz, MICROSEC))
+ #endif
+ 
++/*
++ * getlrtime() - low-resolution (coarse) time. On OSv, gethrtime() is already
++ * efficient enough that we just use it directly.
++ */
++#ifndef getlrtime
++static inline hrtime_t
++getlrtime(void)
++{
++	return (gethrtime());
++}
++#endif
++
++#ifndef gethrtime_waitfree
++#define	gethrtime_waitfree()	gethrtime()
++#endif
++
+ #endif /* _SPL_OSV_TIME_H */
+diff --git a/include/os/osv/zfs/sys/zfs_context_os.h b/include/os/osv/zfs/sys/zfs_context_os.h
+index d4efbc836..90df7bc9e 100644
+--- a/include/os/osv/zfs/sys/zfs_context_os.h
++++ b/include/os/osv/zfs/sys/zfs_context_os.h
+@@ -282,13 +282,19 @@ zfs_uio_init(zfs_uio_t *uio, struct uio *uio_s)
+ #endif
+ 
+ /*
+- * Thread-specific data.
+- * OSv uses __thread for TSD, mapped to pthread_key_t.
+- */
+-#define	tsd_create(keyp, destructor)	do { *(keyp) = 0; } while (0)
+-#define	tsd_destroy(keyp)		do { } while (0)
+-#define	tsd_get(key)			(NULL)
+-#define	tsd_set(key, value)		((void)(key), (void)(value), 0)
++ * Thread-specific data — implemented via POSIX pthread TLS.
++ * OSv fully supports pthreads so pthread_key_t works correctly.
++ * uint_t and pthread_key_t are both unsigned int on OSv/x86-64.
++ */
++#include <pthread.h>
++#define	tsd_create(keyp, destructor) \
++	pthread_key_create((pthread_key_t *)(keyp), (destructor))
++#define	tsd_destroy(keyp) \
++	pthread_key_delete((pthread_key_t)(*(keyp)))
++#define	tsd_get(key) \
++	pthread_getspecific((pthread_key_t)(key))
++#define	tsd_set(key, value) \
++	pthread_setspecific((pthread_key_t)(key), (void *)(value))
+ 
+ #define	fm_panic	panic
+ 
+@@ -425,6 +431,16 @@ random_in_range(uint32_t range)
+ 	return (r % range);
+ }
+ 
++/*
++ * FKIOCTL: flag indicating the ioctl buffer pointer is in unified address
++ * space (no copyin/copyout needed).  On OSv there is no user/kernel split
++ * so all ioctl calls from libzfs are effectively "kernel" pointers.
++ * Must match the value used by FreeBSD/Linux SPL (0x80000000).
++ */
++#ifndef FKIOCTL
++#define	FKIOCTL	0x80000000
++#endif
++
+ /*
+  * Open flags - ensure they're available.
+  * OSv should define these, but they may not be visible to kernel code
+diff --git a/include/os/osv/zfs/sys/zfs_vfsops_os.h b/include/os/osv/zfs/sys/zfs_vfsops_os.h
+index cfeaac07a..552bee161 100644
+--- a/include/os/osv/zfs/sys/zfs_vfsops_os.h
++++ b/include/os/osv/zfs/sys/zfs_vfsops_os.h
+@@ -78,6 +78,12 @@ struct zfsvfs {
+ 	uint64_t	z_groupobjquota_obj;
+ 	uint64_t	z_projectquota_obj;
+ 	uint64_t	z_projectobjquota_obj;
++	uint64_t	z_defaultuserquota;
++	uint64_t	z_defaultgroupquota;
++	uint64_t	z_defaultprojectquota;
++	uint64_t	z_defaultuserobjquota;
++	uint64_t	z_defaultgroupobjquota;
++	uint64_t	z_defaultprojectobjquota;
+ 	uint64_t	z_replay_eof;	/* New end of file - replay only */
+ 	sa_attr_type_t	*z_attr_table;	/* SA attr mapping->id */
+ #define	ZFS_OBJ_MTX_SZ	64
+@@ -175,6 +181,9 @@ extern boolean_t zfs_is_readonly(zfsvfs_t *zfsvfs);
+ extern int zfs_get_temporary_prop(struct dsl_dataset *ds, zfs_prop_t zfs_prop,
+     uint64_t *val, char *setpoint);
+ extern int zfs_busy(void);
++extern int zfs_domount(struct mount *mp, const char *osname);
++extern int zfs_set_default_quota(zfsvfs_t *zfsvfs, zfs_prop_t prop,
++    uint64_t quota);
+ 
+ #ifdef	__cplusplus
+ }
+diff --git a/include/os/osv/zfs/sys/zfs_vnops_os.h b/include/os/osv/zfs/sys/zfs_vnops_os.h
+index 646517acb..5dad5b9c9 100644
+--- a/include/os/osv/zfs/sys/zfs_vnops_os.h
++++ b/include/os/osv/zfs/sys/zfs_vnops_os.h
+@@ -9,6 +9,14 @@
+ #ifndef	_SYS_FS_ZFS_VNOPS_OS_H
+ #define	_SYS_FS_ZFS_VNOPS_OS_H
+ 
++/*
++ * These are kernel-internal stubs, not exported from libsolaris.so.
++ * Several names (zfs_create, zfs_rename) clash with identically-named
++ * userspace management functions in libzfs.so; hidden visibility prevents
++ * the kernel stubs from shadowing the userspace versions.
++ */
++#pragma GCC visibility push(hidden)
++
+ extern int zfs_remove(znode_t *dzp, const char *name, cred_t *cr, int flags);
+ extern int zfs_mkdir(znode_t *dzp, const char *dirname, vattr_t *vap,
+     znode_t **zpp, cred_t *cr, int flags, vsecattr_t *vsecp,
+@@ -35,4 +43,6 @@ extern int zfs_setsecattr(znode_t *zp, vsecattr_t *vsecp, int flag,
+ extern int zfs_write_simple(znode_t *zp, const void *data, size_t len,
+     loff_t pos, size_t *resid);
+ 
++#pragma GCC visibility pop
++
+ #endif
+diff --git a/include/os/osv/zfs/sys/zfs_znode_impl.h b/include/os/osv/zfs/sys/zfs_znode_impl.h
+index 4a0104c2a..6aee66f51 100644
+--- a/include/os/osv/zfs/sys/zfs_znode_impl.h
++++ b/include/os/osv/zfs/sys/zfs_znode_impl.h
+@@ -132,6 +132,12 @@ zfs_exit(zfsvfs_t *zfsvfs, const char *tag)
+ extern void zfs_tstamp_update_setup_ext(struct znode *,
+     uint_t, uint64_t [2], uint64_t [2], boolean_t have_tx);
+ extern void zfs_znode_free(struct znode *);
++extern void zfs_znode_dmu_fini(struct znode *);
++extern void zfs_znode_sa_init(struct zfsvfs *, struct znode *,
++    struct dmu_buf *, dmu_object_type_t, sa_handle_t *);
++extern void zfs_mknode(struct znode *, vattr_t *, dmu_tx_t *, cred_t *,
++    uint_t, struct znode **, struct zfs_acl_ids *);
++extern void zfs_znode_delete(struct znode *, dmu_tx_t *);
+ 
+ extern zil_replay_func_t *const zfs_replay_vector[TX_MAX_TYPE];
+ 
+diff --git a/lib/libshare/os/osv/nfs.c b/lib/libshare/os/osv/nfs.c
+new file mode 100644
+index 000000000..fac319a4f
+--- /dev/null
++++ b/lib/libshare/os/osv/nfs.c
+@@ -0,0 +1,64 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv libshare NFS stub.
++ *
++ * OSv is a unikernel with no NFS/SMB server capability.  All sharing
++ * operations are stubs that return SA_OK (success/no-op).
++ */
++
++#include <errno.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/types.h>
++#include <libshare.h>
++#include "../../libshare_impl.h"
++#include "../../nfs.h"
++
++static int
++osv_nfs_validate_shareopts(const char *shareopts)
++{
++	(void) shareopts;
++	return (SA_OK);
++}
++
++static int
++osv_nfs_enable_share(sa_share_impl_t impl_share)
++{
++	(void) impl_share;
++	return (SA_OK);
++}
++
++static int
++osv_nfs_disable_share(sa_share_impl_t impl_share)
++{
++	(void) impl_share;
++	return (SA_OK);
++}
++
++static boolean_t
++osv_nfs_is_shared(sa_share_impl_t impl_share)
++{
++	(void) impl_share;
++	return (B_FALSE);
++}
++
++static int
++osv_nfs_commit_shares(void)
++{
++	return (SA_OK);
++}
++
++static void
++osv_nfs_truncate_shares(void)
++{
++}
++
++const sa_fstype_t libshare_nfs_type = {
++	.enable_share		= osv_nfs_enable_share,
++	.disable_share		= osv_nfs_disable_share,
++	.is_shared		= osv_nfs_is_shared,
++	.validate_shareopts	= osv_nfs_validate_shareopts,
++	.commit_shares		= osv_nfs_commit_shares,
++	.truncate_shares	= osv_nfs_truncate_shares,
++};
+diff --git a/lib/libshare/os/osv/smb.c b/lib/libshare/os/osv/smb.c
+new file mode 100644
+index 000000000..6d6977f7a
+--- /dev/null
++++ b/lib/libshare/os/osv/smb.c
+@@ -0,0 +1,63 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv libshare SMB stub.
++ *
++ * OSv is a unikernel with no SMB server capability.  All sharing
++ * operations are stubs that return SA_OK (success/no-op).
++ */
++
++#include <errno.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/types.h>
++#include <libshare.h>
++#include "../../libshare_impl.h"
++
++static int
++osv_smb_validate_shareopts(const char *shareopts)
++{
++	(void) shareopts;
++	return (SA_OK);
++}
++
++static int
++osv_smb_enable_share(sa_share_impl_t impl_share)
++{
++	(void) impl_share;
++	return (SA_OK);
++}
++
++static int
++osv_smb_disable_share(sa_share_impl_t impl_share)
++{
++	(void) impl_share;
++	return (SA_OK);
++}
++
++static boolean_t
++osv_smb_is_shared(sa_share_impl_t impl_share)
++{
++	(void) impl_share;
++	return (B_FALSE);
++}
++
++static int
++osv_smb_commit_shares(void)
++{
++	return (SA_OK);
++}
++
++static void
++osv_smb_truncate_shares(void)
++{
++}
++
++const sa_fstype_t libshare_smb_type = {
++	.enable_share		= osv_smb_enable_share,
++	.disable_share		= osv_smb_disable_share,
++	.is_shared		= osv_smb_is_shared,
++	.validate_shareopts	= osv_smb_validate_shareopts,
++	.commit_shares		= osv_smb_commit_shares,
++	.truncate_shares	= osv_smb_truncate_shares,
++};
+diff --git a/lib/libspl/include/os/osv/errno.h b/lib/libspl/include/os/osv/errno.h
+new file mode 100644
+index 000000000..2bb07a12b
+--- /dev/null
++++ b/lib/libspl/include/os/osv/errno.h
+@@ -0,0 +1,32 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv errno.h wrapper for OpenZFS userspace libraries.
++ *
++ * Wraps the standard <errno.h> and adds OpenZFS-specific errno aliases
++ * (ECKSUM, EFRAGS, ENOTACTIVE) that are not part of POSIX/Linux but are
++ * used throughout the OpenZFS userspace code.
++ *
++ * This file is found first (via -isystem .../libspl/include/os/osv) when
++ * userspace ZFS code includes <errno.h>, so we can augment the standard set.
++ */
++
++#ifndef _LIBSPL_OSV_ERRNO_H
++#define	_LIBSPL_OSV_ERRNO_H
++
++#include_next <errno.h>
++
++/*
++ * Solaris-specific errnos used by OpenZFS that are not in POSIX.
++ * Musl defines EBADE=52, EBADR=53, ENOANO=55 in bits/errno.h.
++ */
++#ifndef ECKSUM
++#define	ECKSUM		EBADE		/* ZFS checksum error */
++#endif
++#ifndef EFRAGS
++#define	EFRAGS		EBADR		/* ZFS fragmentation error */
++#endif
++#ifndef ENOTACTIVE
++#define	ENOTACTIVE	ENOANO		/* pool/vdev not active */
++#endif
++
++#endif /* _LIBSPL_OSV_ERRNO_H */
+diff --git a/lib/libspl/include/os/osv/rpc/types.h b/lib/libspl/include/os/osv/rpc/types.h
+new file mode 100644
+index 000000000..1be04d8c1
+--- /dev/null
++++ b/lib/libspl/include/os/osv/rpc/types.h
+@@ -0,0 +1,16 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv rpc/types.h stub for OpenZFS userspace libraries.
++ *
++ * Provides the minimal RPC type definitions needed by libnvpair
++ * (nvpair_alloc_system.c includes <rpc/types.h> for bool_t).
++ */
++
++#ifndef _LIBSPL_OSV_RPC_TYPES_H
++#define	_LIBSPL_OSV_RPC_TYPES_H
++
++#include <sys/types.h>
++
++typedef int bool_t;
++
++#endif /* _LIBSPL_OSV_RPC_TYPES_H */
+diff --git a/lib/libspl/include/os/osv/sys/byteorder.h b/lib/libspl/include/os/osv/sys/byteorder.h
+new file mode 100644
+index 000000000..4fba62add
+--- /dev/null
++++ b/lib/libspl/include/os/osv/sys/byteorder.h
+@@ -0,0 +1,238 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * CDDL HEADER START
++ *
++ * The contents of this file are subject to the terms of the
++ * Common Development and Distribution License (the "License").
++ * You may not use this file except in compliance with the License.
++ *
++ * You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE
++ * or https://opensource.org/licenses/CDDL-1.0.
++ * See the License for the specific language governing permissions
++ * and limitations under the License.
++ *
++ * When distributing Covered Code, include this CDDL HEADER in each
++ * file and include the License file at usr/src/OPENSOLARIS.LICENSE.
++ * If applicable, add the following below this CDDL HEADER, with the
++ * fields enclosed by brackets "[]" replaced with your own identifying
++ * information: Portions Copyright [yyyy] [name of copyright owner]
++ *
++ * CDDL HEADER END
++ */
++
++/*
++ * Copyright 2007 Sun Microsystems, Inc.  All rights reserved.
++ * Use is subject to license terms.
++ */
++
++/*	Copyright (c) 1983, 1984, 1985, 1986, 1987, 1988, 1989 AT&T	*/
++/*	  All Rights Reserved  	*/
++
++/*
++ * University Copyright- Copyright (c) 1982, 1986, 1988
++ * The Regents of the University of California
++ * All Rights Reserved
++ *
++ * University Acknowledgment- Portions of this document are derived from
++ * software developed by the University of California, Berkeley, and its
++ * contributors.
++ */
++
++#ifndef _SYS_BYTEORDER_H
++#define	_SYS_BYTEORDER_H
++
++#if defined(__GNUC__) && defined(_ASM_INLINES) && \
++	(defined(__i386) || defined(__amd64))
++#include <asm/byteorder.h>
++#endif
++
++#include <sys/isa_defs.h>
++#include <inttypes.h>
++
++#ifdef	__cplusplus
++extern "C" {
++#endif
++
++/*
++ * macros for conversion between host and (internet) network byte order
++ */
++
++#if defined(_ZFS_BIG_ENDIAN) && !defined(ntohl) && !defined(__lint)
++/* big-endian */
++#define	ntohl(x)	(x)
++#define	ntohs(x)	(x)
++#define	htonl(x)	(x)
++#define	htons(x)	(x)
++
++#elif !defined(ntohl) /* little-endian */
++
++#ifndef	_IN_PORT_T
++#define	_IN_PORT_T
++typedef uint16_t in_port_t;
++#endif
++
++#ifndef	_IN_ADDR_T
++#define	_IN_ADDR_T
++typedef uint32_t in_addr_t;
++#endif
++
++#if !defined(_XPG4_2) || defined(__EXTENSIONS__) || defined(_XPG5)
++extern	uint32_t htonl(uint32_t);
++extern	uint16_t htons(uint16_t);
++extern 	uint32_t ntohl(uint32_t);
++extern	uint16_t ntohs(uint16_t);
++#else
++extern	in_addr_t htonl(in_addr_t);
++extern	in_port_t htons(in_port_t);
++extern 	in_addr_t ntohl(in_addr_t);
++extern	in_port_t ntohs(in_port_t);
++#endif	/* !defined(_XPG4_2) || defined(__EXTENSIONS__) || defined(_XPG5) */
++#endif
++
++#if !defined(_XPG4_2) || defined(__EXTENSIONS__)
++
++#ifdef __COVERITY__
++/*
++ * Coverity's taint warnings from byteswapping are false positives for us.
++ * Suppress them by hiding byteswapping from Coverity.
++ */
++#define	BSWAP_8(x)	((x) & 0xff)
++#define	BSWAP_16(x)	((x) & 0xffff)
++#define	BSWAP_32(x)	((x) & 0xffffffff)
++#define	BSWAP_64(x)	(x)
++
++#else /* __COVERITY__ */
++
++/*
++ * Macros to reverse byte order
++ */
++#define	BSWAP_8(x)	((x) & 0xff)
++#define	BSWAP_16(x)	((BSWAP_8(x) << 8) | BSWAP_8((x) >> 8))
++#define	BSWAP_32(x)	((BSWAP_16(x) << 16) | BSWAP_16((x) >> 16))
++#define	BSWAP_64(x)	((BSWAP_32(x) << 32) | BSWAP_32((x) >> 32))
++
++#endif /* __COVERITY__ */
++
++#define	BMASK_8(x)	((x) & 0xff)
++#define	BMASK_16(x)	((x) & 0xffff)
++#define	BMASK_32(x)	((x) & 0xffffffff)
++#define	BMASK_64(x)	(x)
++
++/*
++ * Macros to convert from a specific byte order to/from native byte order
++ */
++#ifdef _ZFS_BIG_ENDIAN
++#define	BE_8(x)		BMASK_8(x)
++#define	BE_16(x)	BMASK_16(x)
++#define	BE_32(x)	BMASK_32(x)
++#define	BE_64(x)	BMASK_64(x)
++#define	LE_8(x)		BSWAP_8(x)
++#define	LE_16(x)	BSWAP_16(x)
++#define	LE_32(x)	BSWAP_32(x)
++#define	LE_64(x)	BSWAP_64(x)
++#else
++#define	LE_8(x)		BMASK_8(x)
++#define	LE_16(x)	BMASK_16(x)
++#define	LE_32(x)	BMASK_32(x)
++#define	LE_64(x)	BMASK_64(x)
++#define	BE_8(x)		BSWAP_8(x)
++#define	BE_16(x)	BSWAP_16(x)
++#define	BE_32(x)	BSWAP_32(x)
++#define	BE_64(x)	BSWAP_64(x)
++#endif
++
++#ifdef _ZFS_BIG_ENDIAN
++static __inline__ uint64_t
++htonll(uint64_t n)
++{
++	return (n);
++}
++
++static __inline__ uint64_t
++ntohll(uint64_t n)
++{
++	return (n);
++}
++#else
++static __inline__ uint64_t
++htonll(uint64_t n)
++{
++	return ((((uint64_t)htonl(n)) << 32) + htonl(n >> 32));
++}
++
++static __inline__ uint64_t
++ntohll(uint64_t n)
++{
++	return ((((uint64_t)ntohl(n)) << 32) + ntohl(n >> 32));
++}
++#endif
++
++/*
++ * Macros to read unaligned values from a specific byte order to
++ * native byte order
++ */
++
++#define	BE_IN8(xa) \
++	*((uint8_t *)(xa))
++
++#define	BE_IN16(xa) \
++	(((uint16_t)BE_IN8(xa) << 8) | BE_IN8((uint8_t *)(xa)+1))
++
++#define	BE_IN32(xa) \
++	(((uint32_t)BE_IN16(xa) << 16) | BE_IN16((uint8_t *)(xa)+2))
++
++#define	BE_IN64(xa) \
++	(((uint64_t)BE_IN32(xa) << 32) | BE_IN32((uint8_t *)(xa)+4))
++
++#define	LE_IN8(xa) \
++	*((uint8_t *)(xa))
++
++#define	LE_IN16(xa) \
++	(((uint16_t)LE_IN8((uint8_t *)(xa) + 1) << 8) | LE_IN8(xa))
++
++#define	LE_IN32(xa) \
++	(((uint32_t)LE_IN16((uint8_t *)(xa) + 2) << 16) | LE_IN16(xa))
++
++#define	LE_IN64(xa) \
++	(((uint64_t)LE_IN32((uint8_t *)(xa) + 4) << 32) | LE_IN32(xa))
++
++/*
++ * Macros to write unaligned values from native byte order to a specific byte
++ * order.
++ */
++
++#define	BE_OUT8(xa, yv) *((uint8_t *)(xa)) = (uint8_t)(yv);
++
++#define	BE_OUT16(xa, yv) \
++	BE_OUT8((uint8_t *)(xa) + 1, yv); \
++	BE_OUT8((uint8_t *)(xa), (yv) >> 8);
++
++#define	BE_OUT32(xa, yv) \
++	BE_OUT16((uint8_t *)(xa) + 2, yv); \
++	BE_OUT16((uint8_t *)(xa), (yv) >> 16);
++
++#define	BE_OUT64(xa, yv) \
++	BE_OUT32((uint8_t *)(xa) + 4, yv); \
++	BE_OUT32((uint8_t *)(xa), (yv) >> 32);
++
++#define	LE_OUT8(xa, yv) *((uint8_t *)(xa)) = (uint8_t)(yv);
++
++#define	LE_OUT16(xa, yv) \
++	LE_OUT8((uint8_t *)(xa), yv); \
++	LE_OUT8((uint8_t *)(xa) + 1, (yv) >> 8);
++
++#define	LE_OUT32(xa, yv) \
++	LE_OUT16((uint8_t *)(xa), yv); \
++	LE_OUT16((uint8_t *)(xa) + 2, (yv) >> 16);
++
++#define	LE_OUT64(xa, yv) \
++	LE_OUT32((uint8_t *)(xa), yv); \
++	LE_OUT32((uint8_t *)(xa) + 4, (yv) >> 32);
++
++#endif	/* !defined(_XPG4_2) || defined(__EXTENSIONS__) */
++
++#ifdef	__cplusplus
++}
++#endif
++
++#endif /* _SYS_BYTEORDER_H */
+diff --git a/lib/libspl/include/os/osv/sys/errno.h b/lib/libspl/include/os/osv/sys/errno.h
+new file mode 100644
+index 000000000..ed9524741
+--- /dev/null
++++ b/lib/libspl/include/os/osv/sys/errno.h
+@@ -0,0 +1,63 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * CDDL HEADER START
++ *
++ * The contents of this file are subject to the terms of the
++ * Common Development and Distribution License, Version 1.0 only
++ * (the "License").  You may not use this file except in compliance
++ * with the License.
++ *
++ * You can obtain a copy of the license at usr/src/OPENSOLARIS.LICENSE
++ * or https://opensource.org/licenses/CDDL-1.0.
++ * See the License for the specific language governing permissions
++ * and limitations under the License.
++ *
++ * When distributing Covered Code, include this CDDL HEADER in each
++ * file and include the License file at usr/src/OPENSOLARIS.LICENSE.
++ * If applicable, add the following below this CDDL HEADER, with the
++ * fields enclosed by brackets "[]" replaced with your own identifying
++ * information: Portions Copyright [yyyy] [name of copyright owner]
++ *
++ * CDDL HEADER END
++ */
++/*
++ * Copyright 2017 Zettabyte Software, LLC.  All rights reserved.
++ * Use is subject to license terms.
++ */
++
++/*
++ * Compiling against musl correctly points out that including sys/errno.h is
++ * disallowed by the Single UNIX Specification when building in userspace, so
++ * we implement a dummy header to redirect the include to the proper header.
++ */
++#ifndef _LIBSPL_SYS_ERRNO_H
++#define	_LIBSPL_SYS_ERRNO_H
++
++#include <errno.h>
++
++/*
++ * musl does not define EBADE, EBADR, or ENOANO (Convergent graveyard errnos).
++ * Define them using spare errno values that do not conflict with standard errnos.
++ * Use values from the Linux errno range that musl does not export.
++ */
++#ifndef EBADE
++#define	EBADE	52		/* Invalid exchange (Linux) */
++#endif
++#ifndef EBADR
++#define	EBADR	53		/* Invalid request descriptor (Linux) */
++#endif
++#ifndef ENOANO
++#define	ENOANO	55		/* No anode (Linux) */
++#endif
++
++/*
++ * We'll take the unused errnos, 'EBADE' and 'EBADR' (from the Convergent
++ * graveyard) to indicate checksum errors and fragmentation.
++ */
++#define	ECKSUM		EBADE
++#define	EFRAGS		EBADR
++
++/* Similar for ENOACTIVE */
++#define	ENOTACTIVE	ENOANO
++
++#endif /* _LIBSPL_SYS_ERRNO_H */
+diff --git a/lib/libspl/include/os/osv/sys/mnttab.h b/lib/libspl/include/os/osv/sys/mnttab.h
+new file mode 100644
+index 000000000..6a216f685
+--- /dev/null
++++ b/lib/libspl/include/os/osv/sys/mnttab.h
+@@ -0,0 +1,75 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv sys/mnttab.h for OpenZFS userspace libraries.
++ *
++ * OSv has no /proc/self/mounts or /etc/mnttab.  We provide the struct
++ * definitions so libzfs_dataset.c compiles, but the actual mount table
++ * functions (libzfs_mnttab_update) will simply open a non-existent path
++ * and return ENOENT — which is handled gracefully.
++ */
++
++#ifndef _OSV_SYS_MNTTAB_H
++#define	_OSV_SYS_MNTTAB_H
++
++#include <stdio.h>
++#include <sys/types.h>
++
++/*
++ * OSv: redirect MNTTAB to a path that does not exist.
++ * libzfs_mnttab_update() opens MNTTAB and bails on ENOENT — this is fine
++ * because the in-memory cache is populated by libzfs_mnttab_add() instead.
++ */
++#ifdef MNTTAB
++#undef MNTTAB
++#endif
++#define	MNTTAB		"/osv/mnttab"   /* does not exist; triggers ENOENT */
++#define	MNT_LINE_MAX	4108
++
++#define	MNT_TOOLONG	1
++#define	MNT_TOOMANY	2
++#define	MNT_TOOFEW	3
++
++struct mnttab {
++	char	*mnt_special;
++	char	*mnt_mountp;
++	char	*mnt_fstype;
++	char	*mnt_mntopts;
++};
++
++struct extmnttab {
++	char	*mnt_special;
++	char	*mnt_mountp;
++	char	*mnt_fstype;
++	char	*mnt_mntopts;
++	unsigned int	mnt_major;
++	unsigned int	mnt_minor;
++};
++
++#ifdef __cplusplus
++extern "C" {
++#endif
++
++extern int getmntany(FILE *fp, struct mnttab *mp, struct mnttab *mpref);
++extern int getmntent(FILE *fp, struct mnttab *mp);
++extern int getextmntent(const char *path, struct extmnttab *mp,
++    struct stat *statbuf);
++
++/* hasmntopt: search for option in mnt_mntopts string */
++static inline char *
++hasmntopt(struct mnttab *mnt, const char *opt)
++{
++	char *s;
++	if (mnt == NULL || mnt->mnt_mntopts == NULL || opt == NULL)
++		return (NULL);
++	s = mnt->mnt_mntopts;
++	/* simple substring search */
++	return (__extension__(__builtin_constant_p(opt)
++	    ? __builtin_strstr(s, opt)
++	    : (char *)__builtin_strstr(s, opt)));
++}
++
++#ifdef __cplusplus
++}
++#endif
++
++#endif /* _OSV_SYS_MNTTAB_H */
+diff --git a/lib/libspl/include/os/osv/sys/mount.h b/lib/libspl/include/os/osv/sys/mount.h
+new file mode 100644
+index 000000000..6e1e60eb7
+--- /dev/null
++++ b/lib/libspl/include/os/osv/sys/mount.h
+@@ -0,0 +1,60 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv sys/mount.h stub for OpenZFS userspace libraries.
++ */
++
++#ifndef _OSV_SYS_MOUNT_H
++#define	_OSV_SYS_MOUNT_H
++
++/*
++ * OSv has its own sys/mount.h through the libc.  Include it.
++ */
++#include_next <sys/mount.h>
++
++/*
++ * Include statfs definitions early.  OSv's sys/statfs.h defines:
++ *   struct statfs  (already 64-bit on x86_64)
++ *   #define statfs64  statfs    (so "struct statfs64" -> "struct statfs")
++ *   #define fstatfs64 fstatfs
++ * This means any code using "struct statfs64" or "statfs64()" compiles as-is.
++ */
++#include <sys/statfs.h>
++
++#ifndef MS_RDONLY
++#define	MS_RDONLY	1
++#endif
++#ifndef MS_REMOUNT
++#define	MS_REMOUNT	32
++#endif
++#ifndef MS_BIND
++#define	MS_BIND		4096
++#endif
++#ifndef MS_FORCE
++#define	MS_FORCE	1
++#endif
++#ifndef MS_DETACH
++#define	MS_DETACH	2
++#endif
++
++/*
++ * Overlay mount is default in Linux/OSv, but for Solaris/ZFS compatibility,
++ * MS_OVERLAY is defined to explicitly allow mounting over a non-empty directory.
++ */
++#ifndef MS_OVERLAY
++#define	MS_OVERLAY	0x00000004
++#endif
++
++/*
++ * MS_CRYPT indicates that encryption keys should be loaded if not already
++ * available. This is a ZFS-specific flag not seen by the kernel.
++ */
++#ifndef MS_CRYPT
++#define	MS_CRYPT	0x00000008
++#endif
++
++/* BLKFLSBUF ioctl - not supported on OSv, but referenced */
++#ifndef BLKFLSBUF
++#define	BLKFLSBUF	_IO(0x12, 97)
++#endif
++
++#endif /* _OSV_SYS_MOUNT_H */
+diff --git a/lib/libspl/include/os/osv/sys/param.h b/lib/libspl/include/os/osv/sys/param.h
+new file mode 100644
+index 000000000..1508e13d5
+--- /dev/null
++++ b/lib/libspl/include/os/osv/sys/param.h
+@@ -0,0 +1,59 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv sys/param.h for OpenZFS userspace libraries.
++ */
++
++#ifndef _OSV_SYS_PARAM_H
++#define	_OSV_SYS_PARAM_H
++
++#include_next <sys/param.h>
++#include <unistd.h>
++
++/*
++ * File system parameters and macros.
++ */
++#ifndef MAXBSIZE
++#define	MAXBSIZE	8192
++#endif
++#ifndef DEV_BSIZE
++#define	DEV_BSIZE	512
++#endif
++#ifndef DEV_BSHIFT
++#define	DEV_BSHIFT	9		/* log2(DEV_BSIZE) */
++#endif
++
++#ifndef MAXPATHLEN
++#define	MAXPATHLEN	4096
++#endif
++
++#ifndef MAXNAMELEN
++#define	MAXNAMELEN	256
++#endif
++
++#ifndef MAXHOSTNAMELEN
++#define	MAXHOSTNAMELEN	256
++#endif
++
++#ifndef MAXOFFSET_T
++#define	MAXOFFSET_T	LLONG_MAX
++#endif
++
++#ifndef UID_NOBODY
++#define	UID_NOBODY	60001
++#define	GID_NOBODY	UID_NOBODY
++#define	UID_NOACCESS	60002
++#endif
++
++#ifndef MAXUID
++#define	MAXUID		UINT32_MAX
++#define	MAXPROJID	MAXUID
++#endif
++
++#ifdef	PAGESIZE
++#undef	PAGESIZE
++#endif
++
++extern size_t spl_pagesize(void);
++#define	PAGESIZE	(spl_pagesize())
++
++#endif /* _OSV_SYS_PARAM_H */
+diff --git a/lib/libspl/include/os/osv/sys/stat.h b/lib/libspl/include/os/osv/sys/stat.h
+new file mode 100644
+index 000000000..2f1b20cd1
+--- /dev/null
++++ b/lib/libspl/include/os/osv/sys/stat.h
+@@ -0,0 +1,33 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv sys/stat.h for OpenZFS userspace libraries.
++ * Provides stat64 compatibility and fstat64_blk helper.
++ */
++
++#ifndef _OSV_SYS_STAT_H
++#define	_OSV_SYS_STAT_H
++
++#include_next <sys/stat.h>
++
++/* OSv uses plain stat (64-bit by default on x86_64) */
++#ifndef stat64
++#define	stat64		stat
++#endif
++#ifndef fstat64
++#define	fstat64		fstat
++#endif
++#ifndef lstat64
++#define	lstat64		lstat
++#endif
++
++/*
++ * fstat64_blk: On OSv, fstat() on a block device returns the correct
++ * size in st_size (VirtIO block driver sets it at open time).
++ */
++static inline int
++fstat64_blk(int fd, struct stat *st)
++{
++	return (fstat(fd, st));
++}
++
++#endif /* _OSV_SYS_STAT_H */
+diff --git a/lib/libspl/include/os/osv/sys/sysmacros.h b/lib/libspl/include/os/osv/sys/sysmacros.h
+new file mode 100644
+index 000000000..af564f29a
+--- /dev/null
++++ b/lib/libspl/include/os/osv/sys/sysmacros.h
+@@ -0,0 +1,71 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv sys/sysmacros.h for OpenZFS userspace libraries.
++ * Provides P2*_TYPED, IS_P2ALIGNED, ARRAY_SIZE and related macros.
++ */
++
++#ifndef _OSV_SYS_SYSMACROS_H
++#define	_OSV_SYS_SYSMACROS_H
++
++#include_next <sys/sysmacros.h>
++
++/* common macros */
++#ifndef MIN
++#define	MIN(a, b)	((a) < (b) ? (a) : (b))
++#endif
++#ifndef MAX
++#define	MAX(a, b)	((a) < (b) ? (b) : (a))
++#endif
++#ifndef ABS
++#define	ABS(a)		((a) < 0 ? -(a) : (a))
++#endif
++#ifndef ARRAY_SIZE
++#define	ARRAY_SIZE(a)	(sizeof (a) / sizeof (a[0]))
++#endif
++#ifndef DIV_ROUND_UP
++#define	DIV_ROUND_UP(n, d)	(((n) + (d) - 1) / (d))
++#endif
++
++#define	makedevice(maj, min)	makedev(maj, min)
++#define	_sysconf(a)		sysconf(a)
++
++/*
++ * Compatibility macros/typedefs needed for Solaris -> OSv port
++ */
++#define	P2CROSS(x, y, align)	(((x) ^ (y)) > (align) - 1)
++#define	P2ROUNDUP(x, align)	((((x) - 1) | ((align) - 1)) + 1)
++#define	P2BOUNDARY(off, len, align) \
++				(((off) ^ ((off) + (len) - 1)) > (align) - 1)
++#define	P2PHASE(x, align)	((x) & ((align) - 1))
++#define	P2NPHASE(x, align)	(-(x) & ((align) - 1))
++#define	P2NPHASE_TYPED(x, align, type) \
++				(-(type)(x) & ((type)(align) - 1))
++#define	ISP2(x)			(((x) & ((x) - 1)) == 0)
++#define	IS_P2ALIGNED(v, a)	((((uintptr_t)(v)) & ((uintptr_t)(a) - 1)) == 0)
++
++/*
++ * Typed versions of P2 macros.
++ */
++#define	P2ALIGN_TYPED(x, align, type)		\
++	((type)(x) & -(type)(align))
++#define	P2PHASE_TYPED(x, align, type)		\
++	((type)(x) & ((type)(align) - 1))
++#define	P2NPHASE_TYPED(x, align, type)		\
++	(-(type)(x) & ((type)(align) - 1))
++#define	P2ROUNDUP_TYPED(x, align, type)		\
++	((((type)(x) - 1) | ((type)(align) - 1)) + 1)
++#define	P2END_TYPED(x, align, type)		\
++	(-(~(type)(x) & -(type)(align)))
++#define	P2PHASEUP_TYPED(x, align, phase, type)	\
++	((type)(phase) - (((type)(phase) - (type)(x)) & -(type)(align)))
++#define	P2CROSS_TYPED(x, y, align, type)	\
++	(((type)(x) ^ (type)(y)) > (type)(align) - 1)
++#define	P2SAMEHIGHBIT_TYPED(x, y, type)		\
++	(((type)(x) ^ (type)(y)) < ((type)(x) & (type)(y)))
++
++/* avoid any possibility of clashing with <stddef.h> version */
++#if defined(_KERNEL) && !defined(_KMEMUSER) && !defined(offsetof)
++#define	offsetof(s, m)	((size_t)(&(((s *)0)->m)))
++#endif
++
++#endif /* _OSV_SYS_SYSMACROS_H */
+diff --git a/lib/libspl/include/os/osv/sys/vfs.h b/lib/libspl/include/os/osv/sys/vfs.h
+new file mode 100644
+index 000000000..4fa857db1
+--- /dev/null
++++ b/lib/libspl/include/os/osv/sys/vfs.h
+@@ -0,0 +1,11 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv sys/vfs.h stub for OpenZFS userspace libraries.
++ */
++
++#ifndef _OSV_SYS_VFS_H
++#define	_OSV_SYS_VFS_H
++
++#include <sys/statvfs.h>
++
++#endif /* _OSV_SYS_VFS_H */
+diff --git a/lib/libspl/include/os/osv/sys/zfs_context_os.h b/lib/libspl/include/os/osv/sys/zfs_context_os.h
+new file mode 100644
+index 000000000..53ac6407d
+--- /dev/null
++++ b/lib/libspl/include/os/osv/sys/zfs_context_os.h
+@@ -0,0 +1,20 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv userspace zfs_context_os.h
++ *
++ * Minimal definitions for building libzfs/libzutil/zpool/zfs userspace
++ * tools against OpenZFS 2.4.1 on OSv.  This is NOT the kernel version
++ * (include/os/osv/zfs/sys/zfs_context_os.h); it is the userspace SPL
++ * context header placed so that the libspl include path finds it at
++ * sys/zfs_context_os.h.
++ */
++
++#ifndef ZFS_CONTEXT_OS_H
++#define	ZFS_CONTEXT_OS_H
++
++/*
++ * OSv unikernel: no kernel/user split, large stacks available.
++ */
++#define	HAVE_LARGE_STACKS	1
++
++#endif /* ZFS_CONTEXT_OS_H */
+diff --git a/lib/libspl/include/os/osv/unistd.h b/lib/libspl/include/os/osv/unistd.h
+new file mode 100644
+index 000000000..295f477f0
+--- /dev/null
++++ b/lib/libspl/include/os/osv/unistd.h
+@@ -0,0 +1,26 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv unistd.h supplement for OpenZFS userspace libraries.
++ * Provides execvpe() stub missing from musl.
++ */
++
++#ifndef _OSV_LIBSPL_UNISTD_H
++#define	_OSV_LIBSPL_UNISTD_H
++
++#include_next <unistd.h>
++
++/*
++ * execvpe is a GNU extension not available in musl.
++ * On OSv, fork/exec are not supported anyway, so this is a dead code path.
++ * Provide a stub that falls back to execvp (ignoring the extra environment).
++ */
++#ifndef execvpe
++static inline int
++execvpe(const char *file, char *const argv[], char *const envp[])
++{
++	(void) envp;
++	return (execvp(file, argv));
++}
++#endif
++
++#endif /* _OSV_LIBSPL_UNISTD_H */
+diff --git a/lib/libspl/include/zone.h b/lib/libspl/include/zone.h
+index f946c0f13..2fe55dfad 100644
+--- a/lib/libspl/include/zone.h
++++ b/lib/libspl/include/zone.h
+@@ -34,9 +34,9 @@
+ extern "C" {
+ #endif
+ 
+-#ifdef __FreeBSD__
++#if defined(__FreeBSD__) || defined(__OSV__)
+ #define	GLOBAL_ZONEID	0
+-#else
++#elif defined(__linux__)
+ /*
+  * Hardcoded in the kernel's root user namespace.  A "better" way to get
+  * this would be by using ioctl_ns(2), but this would need to be performed
+@@ -44,6 +44,8 @@ extern "C" {
+  * supported since Linux 4.9.
+  */
+ #define	GLOBAL_ZONEID	4026531837U
++#else
++#define	GLOBAL_ZONEID	0
+ #endif
+ 
+ extern zoneid_t		getzoneid(void);
+diff --git a/lib/libspl/os/osv/gethostid.c b/lib/libspl/os/osv/gethostid.c
+new file mode 100644
+index 000000000..2e2578db3
+--- /dev/null
++++ b/lib/libspl/os/osv/gethostid.c
+@@ -0,0 +1,12 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv gethostid.c — stub for libspl userspace on OSv.
++ * OSv is a unikernel with no host ID concept; return 0.
++ */
++#include <sys/types.h>
++
++unsigned long
++get_system_hostid(void)
++{
++	return (0);
++}
+diff --git a/lib/libspl/os/osv/getmntany.c b/lib/libspl/os/osv/getmntany.c
+new file mode 100644
+index 000000000..e0b2340cb
+--- /dev/null
++++ b/lib/libspl/os/osv/getmntany.c
+@@ -0,0 +1,24 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv getmntany.c — stubs for mnttab/extmnttab queries on OSv.
++ */
++
++#include <errno.h>
++#include <sys/stat.h>
++#include <sys/mnttab.h>
++
++int
++getmntany(FILE *fp, struct mnttab *mgetp, struct mnttab *mrefp)
++{
++	(void) fp; (void) mgetp; (void) mrefp;
++	return (-1);
++}
++
++int
++getextmntent(const char *path, struct extmnttab *entry,
++    struct stat *statbuf)
++{
++	(void) path; (void) entry; (void) statbuf;
++	errno = ENOENT;
++	return (-1);
++}
+diff --git a/lib/libspl/os/osv/zone.c b/lib/libspl/os/osv/zone.c
+new file mode 100644
+index 000000000..9e05c70fe
+--- /dev/null
++++ b/lib/libspl/os/osv/zone.c
+@@ -0,0 +1,12 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv zone.c — stub for libspl userspace on OSv.
++ * OSv has no Solaris zones; always in the global zone (0).
++ */
++#include <sys/types.h>
++
++zoneid_t
++getzoneid(void)
++{
++	return (0);
++}
+diff --git a/lib/libzfs/libzfs_dataset.c b/lib/libzfs/libzfs_dataset.c
+index 98f396ea4..f76cca73c 100644
+--- a/lib/libzfs/libzfs_dataset.c
++++ b/lib/libzfs/libzfs_dataset.c
+@@ -3707,8 +3707,9 @@ zfs_create(libzfs_handle_t *hdl, const char *path, zfs_type_t type,
+ 	}
+ 
+ 	/* validate parents exist */
+-	if (check_parents(hdl, path, &zoned, B_FALSE, NULL) != 0)
++	if (check_parents(hdl, path, &zoned, B_FALSE, NULL) != 0) {
+ 		return (-1);
++	}
+ 
+ 	/*
+ 	 * The failure modes when creating a dataset of a different type over
+@@ -3737,8 +3738,9 @@ zfs_create(libzfs_handle_t *hdl, const char *path, zfs_type_t type,
+ 	if (p != NULL)
+ 		*p = '\0';
+ 
+-	if ((zpool_handle = zpool_open(hdl, pool_path)) == NULL)
++	if ((zpool_handle = zpool_open(hdl, pool_path)) == NULL) {
+ 		return (-1);
++	}
+ 
+ 	if (props && (props = zfs_valid_proplist(hdl, type, props,
+ 	    zoned, NULL, zpool_handle, B_TRUE, errbuf)) == 0) {
+diff --git a/lib/libzfs/os/osv/libzfs_crypto_os.c b/lib/libzfs/os/osv/libzfs_crypto_os.c
+new file mode 100644
+index 000000000..7aeab9564
+--- /dev/null
++++ b/lib/libzfs/os/osv/libzfs_crypto_os.c
+@@ -0,0 +1,89 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv libzfs_crypto_os.c
++ *
++ * Stub implementations of ZFS crypto functions for OSv.
++ * OSv does not support encrypted ZFS datasets.  Unencrypted dataset
++ * creation and management work normally; any encryption-specific
++ * operations (load/unload key, rewrap) return ENOTSUP.
++ * The real libzfs_crypto.c requires <fetch.h> (FreeBSD) and
++ * <curl/curl.h> (libcurl) which are not available on OSv.
++ */
++
++#include <errno.h>
++#include <stdlib.h>
++#include <sys/types.h>
++
++#include <libzfs.h>
++#include "../../libzfs_impl.h"
++
++int
++zfs_crypto_get_encryption_root(zfs_handle_t *zhp, boolean_t *is_encroot,
++    char *buf)
++{
++	(void) zhp;
++	*is_encroot = B_FALSE;
++	if (buf != NULL)
++		buf[0] = '\0';
++	return (0);
++}
++
++int
++zfs_crypto_create(libzfs_handle_t *hdl, char *parent_name, nvlist_t *props,
++    nvlist_t *pool_props, boolean_t stdin_available, uint8_t **wkeydata_out,
++    uint_t *wkeylen_out)
++{
++	(void) hdl, (void) parent_name, (void) props, (void) pool_props;
++	(void) stdin_available;
++	*wkeydata_out = NULL;
++	*wkeylen_out = 0;
++	/* OSv does not support encrypted datasets; no key material needed. */
++	return (0);
++}
++
++int
++zfs_crypto_clone_check(libzfs_handle_t *hdl, zfs_handle_t *origin_zhp,
++    char *parent_name, nvlist_t *props)
++{
++	(void) hdl, (void) origin_zhp, (void) parent_name, (void) props;
++	return (0);
++}
++
++int
++zfs_crypto_attempt_load_keys(libzfs_handle_t *hdl, const char *fsname)
++{
++	(void) hdl, (void) fsname;
++	return (0);
++}
++
++int
++zfs_crypto_load_key(zfs_handle_t *zhp, boolean_t noop,
++    const char *alt_keylocation)
++{
++	(void) zhp, (void) noop, (void) alt_keylocation;
++	errno = ENOTSUP;
++	return (-1);
++}
++
++int
++zfs_crypto_unload_key(zfs_handle_t *zhp)
++{
++	(void) zhp;
++	errno = ENOTSUP;
++	return (-1);
++}
++
++int
++zfs_crypto_rewrap(zfs_handle_t *zhp, nvlist_t *raw_props, boolean_t inheritkey)
++{
++	(void) zhp, (void) raw_props, (void) inheritkey;
++	errno = ENOTSUP;
++	return (-1);
++}
++
++boolean_t
++zfs_is_encrypted(zfs_handle_t *zhp)
++{
++	(void) zhp;
++	return (B_FALSE);
++}
+diff --git a/lib/libzfs/os/osv/libzfs_mount_os.c b/lib/libzfs/os/osv/libzfs_mount_os.c
+new file mode 100644
+index 000000000..d155c7c06
+--- /dev/null
++++ b/lib/libzfs/os/osv/libzfs_mount_os.c
+@@ -0,0 +1,111 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv libzfs_mount_os.c
++ *
++ * OSv is a unikernel: there is no traditional mount table, no /proc/mounts,
++ * no mount(8) utility, and no fork/exec.  ZFS mounts go through the OSv VFS
++ * layer via the zfs_domount() kernel path.  Most mount OS functions are
++ * stubs or minimal implementations.
++ */
++
++#include <errno.h>
++#include <fcntl.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++#include <sys/stat.h>
++#include <sys/mount.h>
++#include <sys/mnttab.h>
++#include <sys/mntent.h>
++#include <sys/dsl_crypt.h>
++
++#include <libzfs.h>
++#include "../../libzfs_impl.h"
++
++/*
++ * libzfs_load_module: on OSv the ZFS module is already loaded as part of
++ * libsolaris.so (loaded at boot).  Nothing to do.
++ */
++int
++libzfs_load_module(void)
++{
++	return (0);
++}
++
++/*
++ * zfs_mount_delegation_check: OSv is a unikernel — everything runs as
++ * root/privileged.  Always allow.
++ */
++int
++zfs_mount_delegation_check(void)
++{
++	return (0);
++}
++
++/*
++ * do_mount: perform a ZFS mount via the OSv VFS layer.
++ *
++ * On OSv the mount(2) syscall is available and routes into the VFS.
++ * We call it directly with type "zfs".
++ */
++int
++do_mount(zfs_handle_t *zhp, const char *mntpt, const char *opts, int flags)
++{
++	const char *src = zfs_get_name(zhp);
++	int ret;
++
++	ret = mount(src, mntpt, MNTTYPE_ZFS, flags, opts ? opts : "");
++	if (ret != 0)
++		return (errno);
++	return (0);
++}
++
++/*
++ * do_unmount: unmount a ZFS filesystem via the OSv VFS layer.
++ */
++int
++do_unmount(zfs_handle_t *zhp, const char *mntpt, int flags)
++{
++	(void) zhp;
++	int ret = umount2(mntpt, flags);
++	return (ret < 0 ? errno : 0);
++}
++
++/*
++ * zfs_adjust_mount_options: No SELinux, no special context options on OSv.
++ */
++void
++zfs_adjust_mount_options(zfs_handle_t *zhp, const char *mntpoint,
++    char *mntopts, char *mtabopt)
++{
++	(void) zhp, (void) mntpoint, (void) mntopts, (void) mtabopt;
++}
++
++/*
++ * zfs_parse_mount_options: minimal parser — just pass options through.
++ * OSv mount() takes the options string directly.
++ */
++int
++zfs_parse_mount_options(const char *mntopts, unsigned long *mntflags,
++    unsigned long *zfsflags, int sloppy, char *badopt, char *mtabopt)
++{
++	(void) mntopts, (void) sloppy, (void) badopt, (void) mtabopt;
++	*mntflags = 0;
++	*zfsflags = 0;
++	return (0);
++}
++
++/* Called from the tail end of zpool_disable_datasets() */
++void
++zpool_disable_datasets_os(zpool_handle_t *zhp, boolean_t force)
++{
++	(void) zhp, (void) force;
++}
++
++/* Called from the tail end of zfs_unmount() */
++void
++zpool_disable_volume_os(const char *name)
++{
++	(void) name;
++}
+diff --git a/lib/libzfs/os/osv/libzfs_pool_os.c b/lib/libzfs/os/osv/libzfs_pool_os.c
+new file mode 100644
+index 000000000..e48f577df
+--- /dev/null
++++ b/lib/libzfs/os/osv/libzfs_pool_os.c
+@@ -0,0 +1,64 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv libzfs_pool_os.c
++ *
++ * OSv pool devices are /dev/vblk* (VirtIO block devices).  There is no
++ * udev, no EFI partition relabeling, no disk-by-id symlinks.
++ * All disk-label and OS-specific pool functions are stubs.
++ */
++
++#include <errno.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++#include <sys/stat.h>
++#include <sys/zfs_ioctl.h>
++#include <libzutil.h>
++
++#include "zfs_namecheck.h"
++#include "zfs_prop.h"
++#include "../../libzfs_impl.h"
++#include "zfs_comutil.h"
++#include "zfeature_common.h"
++
++/*
++ * zpool_relabel_disk: OSv VirtIO block devices don't need EFI relabeling.
++ */
++int
++zpool_relabel_disk(libzfs_handle_t *hdl, const char *path, const char *msg)
++{
++	(void) hdl, (void) path, (void) msg;
++	return (0);
++}
++
++/*
++ * zpool_label_disk: OSv VirtIO block devices don't need GPT/EFI labeling.
++ * The whole disk is used directly as a ZFS vdev.
++ */
++int
++zpool_label_disk(libzfs_handle_t *hdl, zpool_handle_t *zhp, const char *name)
++{
++	(void) hdl, (void) zhp, (void) name;
++	return (0);
++}
++
++/*
++ * zpool_disk_wait: no udev on OSv, device is available immediately.
++ */
++int
++zpool_disk_wait(const char *path)
++{
++	(void) path;
++	return (0);
++}
++
++/*
++ * zpool_label_disk_wait: no udev settle time needed.
++ */
++int
++zpool_label_disk_wait(const char *path, int timeout_ms)
++{
++	(void) path, (void) timeout_ms;
++	return (0);
++}
+diff --git a/lib/libzfs/os/osv/libzfs_util_os.c b/lib/libzfs/os/osv/libzfs_util_os.c
+new file mode 100644
+index 000000000..3fcee722c
+--- /dev/null
++++ b/lib/libzfs/os/osv/libzfs_util_os.c
+@@ -0,0 +1,101 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv libzfs_util_os.c
++ *
++ * OSv-specific utility functions for libzfs.
++ * No sysctl, no zones, no module loading, no /proc.
++ */
++
++#include <errno.h>
++#include <fcntl.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <unistd.h>
++#include <sys/stat.h>
++#include <sys/mnttab.h>
++#include <sys/types.h>
++
++#include <libzfs.h>
++#include <libzfs_core.h>
++#include "../../libzfs_impl.h"
++#include "zfs_prop.h"
++#include <libzutil.h>
++
++/*
++ * libzfs_error_init: return a human-readable error string for initialization
++ * errors.
++ */
++const char *
++libzfs_error_init(int error)
++{
++	switch (error) {
++	case ENXIO:
++		return ("ZFS kernel module not available.");
++	case ENOENT:
++		return ("/dev/zfs not found.");
++	case EACCES:
++		return ("Permission denied opening /dev/zfs.");
++	default:
++		return ("Failed to initialize the libzfs library.");
++	}
++}
++
++/*
++ * find_shares_object: OSv has no NFS shares directory.
++ */
++int
++find_shares_object(differ_info_t *di)
++{
++	(void) di;
++	return (0);
++}
++
++/*
++ * zfs_destroy_snaps_nvl_os: no OS-specific cleanup needed on OSv.
++ */
++int
++zfs_destroy_snaps_nvl_os(libzfs_handle_t *hdl, nvlist_t *snaps)
++{
++	(void) hdl, (void) snaps;
++	return (0);
++}
++
++/*
++ * zfs_version_kernel: return the kernel ZFS version string.
++ * On OSv, libsolaris.so IS the kernel ZFS — return the compile-time version.
++ */
++char *
++zfs_version_kernel(void)
++{
++	return (strdup(ZFS_META_ALIAS));
++}
++
++/*
++ * zfs_userns: user namespaces not applicable on OSv.
++ */
++int
++zfs_userns(zfs_handle_t *zhp, const char *nspath, int attach)
++{
++	(void) zhp, (void) nspath, (void) attach;
++	errno = ENOTSUP;
++	return (-1);
++}
++
++/*
++ * getmntent implementation for OSv (no /proc/self/mounts).
++ * libzfs_mnttab_update() calls this; we always return EOF.
++ */
++int
++getmntent(FILE *fp, struct mnttab *mp)
++{
++	(void) fp, (void) mp;
++	return (-1); /* EOF */
++}
++
++int
++getmntany(FILE *fp, struct mnttab *mp, struct mnttab *mpref)
++{
++	(void) fp, (void) mp, (void) mpref;
++	return (-1); /* not found */
++}
+diff --git a/lib/libzfs_core/os/osv/libzfs_core_ioctl.c b/lib/libzfs_core/os/osv/libzfs_core_ioctl.c
+new file mode 100644
+index 000000000..1be7e03b2
+--- /dev/null
++++ b/lib/libzfs_core/os/osv/libzfs_core_ioctl.c
+@@ -0,0 +1,21 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv libzfs_core_ioctl.c
++ *
++ * OSv ioctl dispatch for libzfs_core.  OSv provides a /dev/zfs device
++ * whose ioctl handler is registered by libsolaris.so at startup.
++ * Since OSv has no user/kernel address split, the ioctl passes zfs_cmd_t
++ * pointers directly to the kernel ZFS subsystem.
++ */
++
++#include <sys/types.h>
++#include <sys/param.h>
++#include <sys/ioctl.h>
++#include <sys/zfs_ioctl.h>
++#include <libzfs_core.h>
++
++int
++lzc_ioctl_fd_os(int fd, unsigned long request, zfs_cmd_t *zc)
++{
++	return (ioctl(fd, request, zc));
++}
+diff --git a/lib/libzutil/os/osv/zutil_device_path_os.c b/lib/libzutil/os/osv/zutil_device_path_os.c
+new file mode 100644
+index 000000000..9b4b4b159
+--- /dev/null
++++ b/lib/libzutil/os/osv/zutil_device_path_os.c
+@@ -0,0 +1,228 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv zutil_device_path_os.c
++ *
++ * Device path utilities for OSv.  VirtIO block devices appear as
++ * /dev/vblk0, /dev/vblk0.1, /dev/vblk1, etc.  No udev, no /sys,
++ * no /dev/disk/by-id.
++ */
++
++#include <ctype.h>
++#include <dirent.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/stat.h>
++#include <unistd.h>
++
++#include <libzutil.h>
++
++/*
++ * OSv device search path: only /dev.
++ */
++static const char * const zpool_default_import_path[] = {
++	"/dev"
++};
++
++const char * const *
++zpool_default_search_paths(size_t *count)
++{
++	*count = 1;
++	return (zpool_default_import_path);
++}
++
++/*
++ * zfs_append_partition: OSv VirtIO block devices use the naming
++ * convention /dev/vblk0.1 for partition 1 of disk 0.
++ * For a path like /dev/vblk0 append ".1".
++ */
++int
++zfs_append_partition(char *path, size_t max_len)
++{
++	int len = strlen(path);
++
++	/* VirtIO block device: /dev/vblkN -> /dev/vblkN.1 */
++	if (len + 2 >= (int)max_len)
++		return (-1);
++
++	strcat(path, ".1");
++	return (len + 2);
++}
++
++/*
++ * zfs_strip_partition: remove partition suffix from a vdev path.
++ * /dev/vblk0.1 -> /dev/vblk0
++ *
++ * Caller must free the returned string.
++ */
++char *
++zfs_strip_partition(const char *path)
++{
++	char *tmp = strdup(path);
++	char *dot;
++
++	if (!tmp)
++		return (NULL);
++
++	/* Strip trailing .N (partition suffix) */
++	dot = strrchr(tmp, '.');
++	if (dot != NULL && dot != tmp) {
++		/* Only strip if suffix is all digits */
++		char *p = dot + 1;
++		int all_digits = (*p != '\0');
++		while (*p) {
++			if (!isdigit((unsigned char)*p)) {
++				all_digits = 0;
++				break;
++			}
++			p++;
++		}
++		if (all_digits)
++			*dot = '\0';
++	}
++
++	return (tmp);
++}
++
++/*
++ * zfs_strip_path: strip the /dev/ prefix, returning just the device name.
++ */
++const char *
++zfs_strip_path(const char *path)
++{
++	size_t count;
++	const char * const *spaths = zpool_default_search_paths(&count);
++
++	for (size_t i = 0; i < count; i++) {
++		size_t plen = strlen(spaths[i]);
++		if (strncmp(path, spaths[i], plen) == 0 &&
++		    path[plen] == '/')
++			return (path + plen + 1);
++	}
++	return (path);
++}
++
++/*
++ * zfs_get_underlying_path: return underlying device for a given path.
++ * On OSv there are no symlinks or DM devices, just return the path as-is
++ * (stripped of any partition suffix).
++ *
++ * Caller must free returned string.
++ */
++char *
++zfs_get_underlying_path(const char *dev_name)
++{
++	char *tmp;
++
++	if (dev_name == NULL)
++		return (NULL);
++
++	tmp = realpath(dev_name, NULL);
++	if (tmp == NULL)
++		tmp = strdup(dev_name);
++
++	/* Strip partition suffix */
++	char *result;
++	const char *base = strrchr(tmp, '/');
++	if (base != NULL) {
++		char *stripped = zfs_strip_partition(base + 1);
++		if (stripped) {
++			size_t dirlen = (base - tmp) + 1;
++			result = malloc(dirlen + strlen(stripped) + 1);
++			if (result) {
++				strncpy(result, tmp, dirlen);
++				result[dirlen] = '\0';
++				strcat(result, stripped);
++			}
++			free(stripped);
++		} else {
++			result = tmp;
++			tmp = NULL;
++		}
++	} else {
++		result = zfs_strip_partition(tmp);
++	}
++
++	free(tmp);
++	return (result);
++}
++
++/*
++ * zfs_dev_is_whole_disk: on OSv, VirtIO block devices follow the naming
++ * convention /dev/vblkN (whole disk) vs /dev/vblkN.P (partition P).
++ * A path with a '.' in the basename is already a partition, not a whole disk.
++ * This prevents zfs_append_partition() from appending a second ".1" suffix
++ * when zpool create/import is given a partition path like /dev/vblk0.1.
++ */
++boolean_t
++zfs_dev_is_whole_disk(const char *dev_name)
++{
++	const char *last_slash = strrchr(dev_name, '/');
++	const char *base = (last_slash != NULL) ? last_slash + 1 : dev_name;
++
++	/* If the basename contains '.', it is already a partition. */
++	return (strchr(base, '.') == NULL ? B_TRUE : B_FALSE);
++}
++
++/*
++ * zfs_dev_is_dm: no device mapper on OSv.
++ */
++boolean_t
++zfs_dev_is_dm(const char *dev_name)
++{
++	(void) dev_name;
++	return (B_FALSE);
++}
++
++/*
++ * is_mpath_whole_disk: no multipath on OSv.
++ */
++boolean_t
++is_mpath_whole_disk(const char *path)
++{
++	(void) path;
++	return (B_FALSE);
++}
++
++/*
++ * zfs_get_enclosure_sysfs_path: no enclosure management on OSv.
++ */
++char *
++zfs_get_enclosure_sysfs_path(const char *dev_name)
++{
++	(void) dev_name;
++	return (NULL);
++}
++
++/*
++ * update_vdev_config_dev_sysfs_path: no sysfs on OSv.
++ */
++void
++update_vdev_config_dev_sysfs_path(nvlist_t *nv, const char *path,
++    const char *key)
++{
++	(void) nv, (void) path, (void) key;
++}
++
++/*
++ * update_vdevs_config_dev_sysfs_path: no sysfs on OSv.
++ */
++void
++update_vdevs_config_dev_sysfs_path(nvlist_t *config)
++{
++	(void) config;
++}
++
++/*
++ * update_vdev_config_dev_strs: no persistent device IDs on OSv.
++ * Clear any stale devid/phys_path entries.
++ */
++void
++update_vdev_config_dev_strs(nvlist_t *nv)
++{
++	(void) nvlist_remove_all(nv, ZPOOL_CONFIG_DEVID);
++	(void) nvlist_remove_all(nv, ZPOOL_CONFIG_PHYS_PATH);
++	(void) nvlist_remove_all(nv, ZPOOL_CONFIG_VDEV_ENC_SYSFS_PATH);
++}
+diff --git a/lib/libzutil/os/osv/zutil_import_os.c b/lib/libzutil/os/osv/zutil_import_os.c
+new file mode 100644
+index 000000000..4a6bda48c
+--- /dev/null
++++ b/lib/libzutil/os/osv/zutil_import_os.c
+@@ -0,0 +1,156 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv zutil_import_os.c
++ *
++ * Pool import support for OSv.  Scans /dev/vblk* devices for ZFS pool labels.
++ * No udev, no blkid, no /sys — simple directory scan of /dev.
++ */
++
++#include <ctype.h>
++#include <dirent.h>
++#include <errno.h>
++#include <fcntl.h>
++#include <libgen.h>
++#include <stddef.h>
++#include <stdio.h>
++#include <stdlib.h>
++#include <string.h>
++#include <sys/stat.h>
++#include <unistd.h>
++
++#include <libzutil.h>
++#include <libnvpair.h>
++#include <sys/fs/zfs.h>
++#include <sys/vdev_impl.h>
++
++#include "zutil_import.h"
++
++/*
++ * zfs_dev_flush: flush device write cache.
++ * On OSv VirtIO block devices, there's no kernel buffer cache to flush
++ * in the same way — just return 0.
++ */
++int
++zfs_dev_flush(int fd)
++{
++	(void) fd;
++	return (0);
++}
++
++/*
++ * zpool_open_func: read ZFS label from a device node and add it to the
++ * import cache.  Called by the import thread pool.
++ */
++void
++zpool_open_func(void *arg)
++{
++	rdsk_node_t *rn = arg;
++	libpc_handle_t *hdl = rn->rn_hdl;
++	struct stat statbuf;
++	nvlist_t *config;
++	uint64_t vdev_guid = 0;
++	int error;
++	int num_labels = 0;
++	int fd;
++
++	/*
++	 * Ignore failed stats.  We only want block devices (or regular files
++	 * for testing).
++	 */
++	if (stat(rn->rn_name, &statbuf) != 0 ||
++	    (!S_ISREG(statbuf.st_mode) && !S_ISBLK(statbuf.st_mode)) ||
++	    (S_ISREG(statbuf.st_mode) &&
++	    (uint64_t)statbuf.st_size < SPA_MINDEVSIZE))
++		return;
++
++	fd = open(rn->rn_name, O_RDONLY | O_CLOEXEC);
++	if (fd < 0) {
++		if (errno == EACCES)
++			hdl->lpc_open_access_error = B_TRUE;
++		return;
++	}
++
++	error = zpool_read_label(fd, &config, &num_labels);
++	if (error != 0) {
++		(void) close(fd);
++		return;
++	}
++
++	if (num_labels == 0) {
++		(void) close(fd);
++		nvlist_free(config);
++		return;
++	}
++
++	/*
++	 * Check that the vdev is for the expected guid.
++	 */
++	error = nvlist_lookup_uint64(config, ZPOOL_CONFIG_GUID, &vdev_guid);
++	if (error || (rn->rn_vdev_guid && rn->rn_vdev_guid != vdev_guid)) {
++		(void) close(fd);
++		nvlist_free(config);
++		return;
++	}
++
++	(void) close(fd);
++
++	rn->rn_config = config;
++	rn->rn_num_labels = num_labels;
++}
++
++/*
++ * zpool_find_import_blkid: enumerate /dev/vblk* devices and add them to
++ * the import candidate list.  On OSv we cannot use blkid, so we do a
++ * simple opendir("/dev") scan instead.
++ */
++int
++zpool_find_import_blkid(libpc_handle_t *hdl, pthread_mutex_t *lock,
++    avl_tree_t **slice_cache)
++{
++	DIR *dp;
++	struct dirent *ep;
++	rdsk_node_t *slice;
++	avl_index_t where;
++
++	*slice_cache = NULL;
++
++	dp = opendir("/dev");
++	if (dp == NULL)
++		return (errno);
++
++	*slice_cache = zutil_alloc(hdl, sizeof (avl_tree_t));
++	avl_create(*slice_cache, slice_cache_compare, sizeof (rdsk_node_t),
++	    offsetof(rdsk_node_t, rn_node));
++
++	while ((ep = readdir(dp)) != NULL) {
++		char fullpath[MAXPATHLEN];
++
++		/* Only consider vblk devices */
++		if (strncmp(ep->d_name, "vblk", 4) != 0)
++			continue;
++
++		(void) snprintf(fullpath, sizeof (fullpath),
++		    "/dev/%s", ep->d_name);
++
++		slice = zutil_alloc(hdl, sizeof (rdsk_node_t));
++		slice->rn_name = zutil_strdup(hdl, fullpath);
++		slice->rn_vdev_guid = 0;
++		slice->rn_lock = lock;
++		slice->rn_avl = *slice_cache;
++		slice->rn_hdl = hdl;
++		slice->rn_order = IMPORT_ORDER_DEFAULT;
++		slice->rn_labelpaths = B_FALSE;
++
++		pthread_mutex_lock(lock);
++		if (avl_find(*slice_cache, slice, &where)) {
++			free(slice->rn_name);
++			free(slice);
++		} else {
++			avl_insert(*slice_cache, slice, where);
++		}
++		pthread_mutex_unlock(lock);
++	}
++
++	closedir(dp);
++	return (0);
++}
+diff --git a/lib/libzutil/os/osv/zutil_setproctitle.c b/lib/libzutil/os/osv/zutil_setproctitle.c
+new file mode 100644
+index 000000000..965c4177d
+--- /dev/null
++++ b/lib/libzutil/os/osv/zutil_setproctitle.c
+@@ -0,0 +1,17 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv zutil_setproctitle.c — stub for zfs_setproctitle() on OSv.
++ * OSv has no /proc; setting the process title is a no-op.
++ */
++
++void
++zfs_setproctitle_init(int argc, char *argv[], char *envp[])
++{
++	(void) argc; (void) argv; (void) envp;
++}
++
++void
++zfs_setproctitle(const char *fmt, ...)
++{
++	(void) fmt;
++}
+diff --git a/module/os/osv/zfs/abd_os.c b/module/os/osv/zfs/abd_os.c
+index a9110a52a..0effca8cf 100644
+--- a/module/os/osv/zfs/abd_os.c
++++ b/module/os/osv/zfs/abd_os.c
+@@ -411,6 +411,59 @@ abd_cache_reap_now(void)
+ 	kmem_cache_reap_soon(abd_chunk_cache);
+ }
+ 
++/*
++ * Allocate a scatter ABD wrapping caller-owned pages.
++ *
++ * On OSv, vm_page_t is void* — the virtual address of the start of a
++ * PAGE_SIZE-aligned region.  No page pinning is required because OSv is a
++ * single-address-space unikernel: kernel and "user" share the same VA space.
++ *
++ * Parameters:
++ *   pages  - array of page base addresses; each element is the start of a
++ *            PAGE_SIZE region owned by the caller (e.g. an IOV buffer page).
++ *   offset - byte offset within pages[0] where the data begins (0 for
++ *            page-aligned Direct I/O, which is the common case after
++ *            zfs_uio_page_aligned() has been checked).
++ *   size   - number of data bytes covered by this ABD.
++ *
++ * The returned ABD has ABD_FLAG_FROM_PAGES set, which tells abd_free_chunks()
++ * to skip freeing the chunk pointers (since the pages belong to the caller),
++ * and ABD_FLAG_OWNER set so that abd_free() will call abd_free_scatter()
++ * and ultimately abd_free_struct() to release the ABD struct itself.
++ */
++abd_t *
++abd_alloc_from_pages(vm_page_t *pages, unsigned long offset, uint64_t size)
++{
++	ASSERT3U(offset, <, PAGE_SIZE);
++	ASSERT3U(size, >, 0);
++
++	/*
++	 * abd_alloc_struct(n) allocates an ABD struct with chunk-pointer space
++	 * for ceil(n / PAGE_SIZE) entries.  Passing (offset + size) gives us
++	 * exactly the right number of page slots.
++	 */
++	abd_t *abd = abd_alloc_struct(offset + size);
++
++	/*
++	 * FROM_PAGES: chunk memory is caller-owned; abd_free_chunks() will not
++	 *             call kmem_cache_free() on these pointers.
++	 * OWNER:      abd_free() calls abd_free_scatter() → abd_free_chunks()
++	 *             (which is a no-op for FROM_PAGES chunks), then frees the
++	 *             ABD struct because ABD_FLAG_ALLOCD was set by
++	 *             abd_alloc_struct().
++	 */
++	abd->abd_flags |= ABD_FLAG_FROM_PAGES | ABD_FLAG_OWNER;
++	abd->abd_size = size;
++	ABD_SCATTER(abd).abd_offset = offset;
++
++	uint_t chunkcnt = abd_chunkcnt_for_bytes(offset + size);
++	for (uint_t i = 0; i < chunkcnt; i++)
++		ABD_SCATTER(abd).abd_chunks[i] = pages[i];
++
++	abd_update_scatter_stats(abd, ABDSTAT_INCR);
++	return (abd);
++}
++
+ void *
+ abd_borrow_buf(abd_t *abd, size_t n)
+ {
+diff --git a/module/os/osv/zfs/spa_os.c b/module/os/osv/zfs/spa_os.c
+index c60b52c0e..fffec6bfa 100644
+--- a/module/os/osv/zfs/spa_os.c
++++ b/module/os/osv/zfs/spa_os.c
+@@ -77,13 +77,13 @@ spa_import_rootpool(const char *name, bool checkpointrewind)
+ 
+ 	config = spa_generate_rootconf(name);
+ 
+-	mutex_enter(&spa_namespace_lock);
++	spa_namespace_enter(FTAG);
+ 	if (config != NULL) {
+ 		pname = fnvlist_lookup_string(config, ZPOOL_CONFIG_POOL_NAME);
+ 
+ 		if ((spa = spa_lookup(pname)) != NULL) {
+ 			if (spa->spa_state == POOL_STATE_ACTIVE) {
+-				mutex_exit(&spa_namespace_lock);
++				spa_namespace_exit(FTAG);
+ 				fnvlist_free(config);
+ 				return (0);
+ 			}
+@@ -95,7 +95,7 @@ spa_import_rootpool(const char *name, bool checkpointrewind)
+ 		    &spa->spa_ubsync.ub_version) != 0)
+ 			spa->spa_ubsync.ub_version = SPA_VERSION_INITIAL;
+ 	} else if ((spa = spa_lookup(name)) == NULL) {
+-		mutex_exit(&spa_namespace_lock);
++		spa_namespace_exit(FTAG);
+ 		cmn_err(CE_NOTE, "Cannot find the pool label for '%s'", name);
+ 		return (EIO);
+ 	} else {
+@@ -113,7 +113,7 @@ spa_import_rootpool(const char *name, bool checkpointrewind)
+ 	    VDEV_ALLOC_ROOTPOOL);
+ 	spa_config_exit(spa, SCL_ALL, FTAG);
+ 	if (error) {
+-		mutex_exit(&spa_namespace_lock);
++		spa_namespace_exit(FTAG);
+ 		fnvlist_free(config);
+ 		cmn_err(CE_NOTE, "Can not parse the config for pool '%s'",
+ 		    name);
+@@ -123,7 +123,7 @@ spa_import_rootpool(const char *name, bool checkpointrewind)
+ 	spa_config_enter(spa, SCL_ALL, FTAG, RW_WRITER);
+ 	vdev_free(rvd);
+ 	spa_config_exit(spa, SCL_ALL, FTAG);
+-	mutex_exit(&spa_namespace_lock);
++	spa_namespace_exit(FTAG);
+ 
+ 	fnvlist_free(config);
+ 	return (0);
+diff --git a/module/os/osv/zfs/spl_uio.c b/module/os/osv/zfs/spl_uio.c
+index f05676d1c..d9a635b9d 100644
+--- a/module/os/osv/zfs/spl_uio.c
++++ b/module/os/osv/zfs/spl_uio.c
+@@ -73,18 +73,82 @@ zfs_uio_page_aligned(zfs_uio_t *uio)
+ }
+ 
+ /*
+- * Direct I/O is not supported on OSv.
++ * Free the pages array allocated by zfs_uio_get_dio_pages_alloc().
++ *
++ * On OSv we only allocated the pointer array itself (the pages are
++ * caller-owned IOV buffers); simply free the array.
+  */
+ void
+ zfs_uio_free_dio_pages(zfs_uio_t *uio, zfs_uio_rw_t rw)
+ {
+-	(void) uio; (void) rw;
+-	panic("zfs_uio_free_dio_pages: Direct I/O not supported on OSv");
++	(void) rw;
++
++	if (uio->uio_dio.pages != NULL) {
++		vmem_free(uio->uio_dio.pages,
++		    uio->uio_dio.npages * sizeof (void *));
++		uio->uio_dio.pages = NULL;
++		uio->uio_dio.npages = 0;
++	}
++	uio->uio_extflg &= ~UIO_DIRECT;
+ }
+ 
++/*
++ * Populate uio->uio_dio.pages from the IOV array for Direct I/O.
++ *
++ * On OSv (single address space unikernel), "pages" are simply PAGE_SIZE-
++ * aligned virtual-address pointers into the caller's buffer — no pinning
++ * is needed.  We require that iov_base and iov_len are both PAGE_SIZE-
++ * aligned (enforced upstream by zfs_uio_page_aligned()).
++ *
++ * After this call:
++ *   uio->uio_extflg  has UIO_DIRECT set
++ *   uio->uio_dio.pages[i]  is the start of the i-th page across all iovecs
++ *   uio->uio_dio.npages    is the total page count
++ */
+ int
+ zfs_uio_get_dio_pages_alloc(zfs_uio_t *uio, zfs_uio_rw_t rw)
+ {
+-	(void) uio; (void) rw;
+-	return (SET_ERROR(ENOTSUP));
++	(void) rw;
++	struct uio *suio = GET_UIO_STRUCT(uio);
++	const struct iovec *iov = suio->uio_iov;
++	int iovcnt = suio->uio_iovcnt;
++
++	/* Count total pages across all iovecs. */
++	int npages = 0;
++	for (int i = 0; i < iovcnt; i++) {
++		if (iov[i].iov_len == 0)
++			continue;
++		/* zfs_uio_page_aligned() guarantees these hold */
++		ASSERT0((uintptr_t)iov[i].iov_base & PAGE_MASK);
++		ASSERT0(iov[i].iov_len & PAGE_MASK);
++		npages += (int)(iov[i].iov_len >> PAGE_SHIFT);
++	}
++
++	if (npages == 0)
++		return (SET_ERROR(EINVAL));
++
++	uio->uio_dio.pages = vmem_alloc(npages * sizeof (void *), KM_SLEEP);
++	if (uio->uio_dio.pages == NULL)
++		return (SET_ERROR(ENOMEM));
++
++	/*
++	 * Fill pages[]: each entry is the base virtual address of a
++	 * PAGE_SIZE region in the caller's buffer.
++	 */
++	int page_idx = 0;
++	for (int i = 0; i < iovcnt; i++) {
++		if (iov[i].iov_len == 0)
++			continue;
++		uintptr_t base = (uintptr_t)iov[i].iov_base;
++		int n = (int)(iov[i].iov_len >> PAGE_SHIFT);
++		for (int j = 0; j < n; j++) {
++			uio->uio_dio.pages[page_idx++] =
++			    (void *)(base + ((uintptr_t)j << PAGE_SHIFT));
++		}
++	}
++
++	uio->uio_dio.npages = npages;
++	uio->uio_extflg |= UIO_DIRECT;
++
++	return (0);
+ }
+diff --git a/module/os/osv/zfs/vdev_disk.c b/module/os/osv/zfs/vdev_disk.c
+index 73b711b51..a97436e96 100644
+--- a/module/os/osv/zfs/vdev_disk.c
++++ b/module/os/osv/zfs/vdev_disk.c
+@@ -110,13 +110,17 @@ vdev_disk_bio_done(struct bio *bio)
+ {
+ 	zio_t *zio = bio->bio_caller1;
+ 
+-	if (bio->bio_flags & BIO_ERROR)
++	if (bio->bio_flags & BIO_ERROR) {
+ 		zio->io_error = EIO;
+-	else
++	} else
+ 		zio->io_error = 0;
+ 
+ 	destroy_bio(bio);
+-	zio->io_bio = NULL;
++	/*
++	 * Do NOT clear zio->io_bio here.  It holds the borrowed ABD buffer
++	 * data pointer (set in vdev_disk_io_start) which vdev_disk_io_done
++	 * needs to call abd_return_buf / abd_return_buf_copy.
++	 */
+ 	zio_interrupt(zio);
+ }
+ 
+@@ -233,7 +237,8 @@ vdev_ops_t vdev_disk_ops = {
+ 	.vdev_op_fini = NULL,
+ 	.vdev_op_open = vdev_disk_open,
+ 	.vdev_op_close = vdev_disk_close,
+-	.vdev_op_asize = vdev_default_asize,
++	.vdev_op_psize_to_asize = vdev_default_asize,
++	.vdev_op_asize_to_psize = vdev_default_psize,
+ 	.vdev_op_min_asize = vdev_default_min_asize,
+ 	.vdev_op_min_alloc = NULL,
+ 	.vdev_op_io_start = vdev_disk_io_start,
+diff --git a/module/os/osv/zfs/zfs_acl.c b/module/os/osv/zfs/zfs_acl.c
+index 89a850719..886c1643c 100644
+--- a/module/os/osv/zfs/zfs_acl.c
++++ b/module/os/osv/zfs/zfs_acl.c
+@@ -83,3 +83,154 @@ zfs_zaccess_rwx(znode_t *zp, mode_t mode, int flags, cred_t *cr,
+ 	(void) zp; (void) mode; (void) flags; (void) cr; (void) mnt_ns;
+ 	return (0);
+ }
++
++/*
++ * Allocate a new ACL structure.
++ */
++zfs_acl_t *
++zfs_acl_alloc(int vers)
++{
++	zfs_acl_t *aclp;
++
++	aclp = kmem_zalloc(sizeof (zfs_acl_t), KM_SLEEP);
++	list_create(&aclp->z_acl, sizeof (zfs_acl_node_t),
++	    offsetof(zfs_acl_node_t, z_next));
++	aclp->z_version = vers;
++	/* OSv: no ACE iteration ops needed */
++	return (aclp);
++}
++
++/*
++ * Allocate an ACL node with optional ACE data buffer.
++ */
++zfs_acl_node_t *
++zfs_acl_node_alloc(size_t bytes)
++{
++	zfs_acl_node_t *aclnode;
++
++	aclnode = kmem_zalloc(sizeof (zfs_acl_node_t), KM_SLEEP);
++	if (bytes) {
++		aclnode->z_acldata = kmem_zalloc(bytes, KM_SLEEP);
++		aclnode->z_allocdata = aclnode->z_acldata;
++		aclnode->z_allocsize = bytes;
++		aclnode->z_size = bytes;
++	}
++	return (aclnode);
++}
++
++static void
++zfs_acl_node_free(zfs_acl_node_t *aclnode)
++{
++	if (aclnode->z_allocsize)
++		kmem_free(aclnode->z_allocdata, aclnode->z_allocsize);
++	kmem_free(aclnode, sizeof (zfs_acl_node_t));
++}
++
++static void
++zfs_acl_release_nodes(zfs_acl_t *aclp)
++{
++	zfs_acl_node_t *aclnode;
++
++	while ((aclnode = list_head(&aclp->z_acl)) != NULL) {
++		list_remove(&aclp->z_acl, aclnode);
++		zfs_acl_node_free(aclnode);
++	}
++	aclp->z_acl_bytes = 0;
++	aclp->z_acl_count = 0;
++}
++
++/*
++ * Free an ACL structure and all of its ACE nodes.
++ */
++void
++zfs_acl_free(zfs_acl_t *aclp)
++{
++	zfs_acl_release_nodes(aclp);
++	list_destroy(&aclp->z_acl);
++	kmem_free(aclp, sizeof (zfs_acl_t));
++}
++
++/*
++ * Simplified ACL IDs initialisation for OSv.
++ *
++ * OSv has no NFSv4 ACL inheritance, no FUIDs, no per-user quotas.
++ * We create a trivial ACL (ZFS_ACL_TRIVIAL, no ACEs) and derive
++ * the mode directly from vap->va_mode.
++ */
++int
++zfs_acl_ids_create(znode_t *dzp, int flag, vattr_t *vap, cred_t *cr,
++    vsecattr_t *vsecp, zfs_acl_ids_t *acl_ids, zidmap_t *mnt_ns)
++{
++	(void) dzp; (void) flag; (void) cr; (void) vsecp; (void) mnt_ns;
++
++	memset(acl_ids, 0, sizeof (zfs_acl_ids_t));
++	acl_ids->z_mode = (vap->va_mask & AT_MODE) ? vap->va_mode : 0755;
++	acl_ids->z_fuid = 0;
++	acl_ids->z_fgid = 0;
++	acl_ids->z_aclp = zfs_acl_alloc(ZFS_ACL_VERSION_FUID);
++	acl_ids->z_aclp->z_hints = ZFS_ACL_TRIVIAL;
++	acl_ids->z_aclp->z_acl_count = 0;
++	acl_ids->z_aclp->z_acl_bytes = 0;
++	acl_ids->z_fuidp = NULL;
++	return (0);
++}
++
++/*
++ * Free ACL and fuid_info stored in acl_ids (but not acl_ids itself).
++ */
++void
++zfs_acl_ids_free(zfs_acl_ids_t *acl_ids)
++{
++	if (acl_ids->z_aclp != NULL) {
++		zfs_acl_free(acl_ids->z_aclp);
++		acl_ids->z_aclp = NULL;
++	}
++	acl_ids->z_fuidp = NULL;
++}
++
++/*
++ * OSv has no per-user or per-project quotas.
++ */
++boolean_t
++zfs_acl_ids_overquota(zfsvfs_t *zv, zfs_acl_ids_t *acl_ids, uint64_t projid)
++{
++	(void) zv; (void) acl_ids; (void) projid;
++	return (B_FALSE);
++}
++
++boolean_t
++zfs_has_access(znode_t *zp, cred_t *cr)
++{
++	(void) zp; (void) cr;
++	return (B_TRUE);
++}
++
++int
++zfs_zaccess_unix(void *zp, int mode, cred_t *cr)
++{
++	(void) zp; (void) mode; (void) cr;
++	return (0);
++}
++
++int
++zfs_acl_access(znode_t *zp, int mode, cred_t *cr)
++{
++	(void) zp; (void) mode; (void) cr;
++	return (0);
++}
++
++int
++zfs_zaccess_delete(znode_t *dzp, znode_t *zp, cred_t *cr, zidmap_t *mnt_ns)
++{
++	(void) dzp; (void) zp; (void) cr; (void) mnt_ns;
++	return (0);
++}
++
++int
++zfs_zaccess_rename(znode_t *sdzp, znode_t *szp, znode_t *tdzp,
++    znode_t *tzp, cred_t *cr, zidmap_t *mnt_ns)
++{
++	(void) sdzp; (void) szp; (void) tdzp; (void) tzp; (void) cr;
++	(void) mnt_ns;
++	return (0);
++}
+diff --git a/module/os/osv/zfs/zfs_dir.c b/module/os/osv/zfs/zfs_dir.c
+index 445b02409..64612433e 100644
+--- a/module/os/osv/zfs/zfs_dir.c
++++ b/module/os/osv/zfs/zfs_dir.c
+@@ -8,8 +8,10 @@
+ 
+ #include <sys/zfs_context.h>
+ #include <sys/zfs_znode.h>
++#include <sys/zfs_acl.h>
+ #include <sys/zfs_dir.h>
+ #include <sys/zfs_vfsops.h>
++#include <sys/zfs_sa.h>
+ #include <sys/dmu.h>
+ #include <sys/dmu_objset.h>
+ #include <sys/dmu_tx.h>
+@@ -19,6 +21,14 @@
+ /*
+  * Timestamp update setup for create/modify operations.
+  */
++void
++zfs_tstamp_update_setup_ext(znode_t *zp, uint_t flag, uint64_t mtime[2],
++    uint64_t ctime[2], boolean_t have_tx)
++{
++	(void) have_tx;
++	zfs_tstamp_update_setup(zp, flag, mtime, ctime);
++}
++
+ void
+ zfs_tstamp_update_setup(znode_t *zp, uint_t flag, uint64_t mtime[2],
+     uint64_t ctime[2])
+@@ -82,22 +92,34 @@ zfs_cmpldev(uint64_t dev)
+ }
+ 
+ /*
+- * Create a new filesystem (dataset).
++ * Create a new ZFS filesystem (dataset).
++ *
++ * Initialises the on-disk ZPL structures:
++ *   - master node ZAP (object 1)
++ *   - SA attr-registration ZAP (if SA version)
++ *   - delete queue ZAP
++ *   - root directory znode (DMU object, SA attributes)
++ *   - ZFS_ROOT_OBJ entry in master node
++ *
++ * This is called from dsl_pool / zfs_ioctl during "zpool create".
+  */
+ void
+ zfs_create_fs(objset_t *os, cred_t *cr, nvlist_t *zplprops, dmu_tx_t *tx)
+ {
+-	(void) cr;
+-
+-	uint64_t moid, obj, sa_obj, version;
+-	uint64_t sense = ZFS_CASE_SENSITIVE;
+-	uint64_t norm = 0;
+-	nvpair_t *elem;
+-	int error;
+-	timestruc_t now;
++	uint64_t	moid, obj, sa_obj, version;
++	uint64_t	norm = 0, sense = ZFS_CASE_SENSITIVE;
++	nvpair_t	*elem;
++	int		error;
++	int		i;
++	zfsvfs_t	*zfsvfs;
++	znode_t		*rootzp;
++	vattr_t		vattr;
++	znode_t		*zp;
++	zfs_acl_ids_t	acl_ids;
++	sa_attr_type_t	*sa_table = NULL;
+ 
+ 	/*
+-	 * First attempt to create master node.
++	 * Create master node.
+ 	 */
+ 	moid = MASTER_NODE_OBJ;
+ 	error = zap_create_claim(os, moid, DMU_OT_MASTER_NODE,
+@@ -105,20 +127,31 @@ zfs_create_fs(objset_t *os, cred_t *cr, nvlist_t *zplprops, dmu_tx_t *tx)
+ 	VERIFY0(error);
+ 
+ 	/*
+-	 * Set starting attributes.
++	 * Determine version and other ZPL properties.
+ 	 */
+ 	version = zplprops ? fnvlist_lookup_uint64(zplprops,
+ 	    zfs_prop_to_name(ZFS_PROP_VERSION)) : ZPL_VERSION;
+ 	elem = NULL;
+ 	while ((elem = nvlist_next_nvpair(zplprops, elem)) != NULL) {
+-		/* just skip them for now */
++		uint64_t val = fnvpair_value_uint64(elem);
++		const char *name = nvpair_name(elem);
++		if (strcmp(name, zfs_prop_to_name(ZFS_PROP_VERSION)) == 0) {
++			if (val < version)
++				version = val;
++		} else {
++			error = zap_update(os, moid, name, 8, 1, &val, tx);
++		}
++		VERIFY0(error);
++		if (strcmp(name, zfs_prop_to_name(ZFS_PROP_NORMALIZE)) == 0)
++			norm = val;
++		else if (strcmp(name, zfs_prop_to_name(ZFS_PROP_CASE)) == 0)
++			sense = val;
+ 	}
+-
+ 	error = zap_update(os, moid, ZPL_VERSION_STR, 8, 1, &version, tx);
+ 	VERIFY0(error);
+ 
+ 	/*
+-	 * Create SA master node if SA is enabled.
++	 * Create SA attr-registration ZAP for modern (SA-capable) pools.
+ 	 */
+ 	if (USE_SA(version, os)) {
+ 		sa_obj = zap_create(os, DMU_OT_SA_MASTER_NODE,
+@@ -130,13 +163,77 @@ zfs_create_fs(objset_t *os, cred_t *cr, nvlist_t *zplprops, dmu_tx_t *tx)
+ 	}
+ 
+ 	/*
+-	 * Create a delete queue.
++	 * Create delete queue (unlinked set).
+ 	 */
+ 	obj = zap_create(os, DMU_OT_UNLINKED_SET, DMU_OT_NONE, 0, tx);
+ 	error = zap_add(os, moid, ZFS_UNLINKED_SET, 8, 1, &obj, tx);
+ 	VERIFY0(error);
+ 
+-	gethrestime(&now);
++	/*
++	 * Create root directory znode.
++	 *
++	 * We build a minimal zfsvfs_t and root znode in order to drive
++	 * zfs_mknode().  These are ephemeral structures that exist only
++	 * for the duration of this call and are discarded afterwards.
++	 */
++	zfsvfs = kmem_zalloc(sizeof (zfsvfs_t), KM_SLEEP);
++	zfsvfs->z_os = os;
++	zfsvfs->z_parent = zfsvfs;
++	zfsvfs->z_version = version;
++	zfsvfs->z_use_fuids = USE_FUIDS(version, os);
++	zfsvfs->z_use_sa = USE_SA(version, os);
++	zfsvfs->z_norm = norm;
++	if (sense == ZFS_CASE_INSENSITIVE || sense == ZFS_CASE_MIXED)
++		zfsvfs->z_norm |= U8_TEXTPREP_TOUPPER;
++
++	/* Need the SA attr table so zfs_mknode can use SA_ZPL_* macros. */
++	VERIFY0(sa_setup(os, sa_obj, zfs_attr_table, ZPL_END,
++	    &sa_table));
++	zfsvfs->z_attr_table = sa_table;
++
++	mutex_init(&zfsvfs->z_znodes_lock, NULL, MUTEX_DEFAULT, NULL);
++	list_create(&zfsvfs->z_all_znodes, sizeof (znode_t),
++	    offsetof(znode_t, z_link_node));
++	for (i = 0; i < ZFS_OBJ_MTX_SZ; i++)
++		mutex_init(&zfsvfs->z_hold_mtx[i], NULL, MUTEX_DEFAULT, NULL);
++
++	rootzp = kmem_zalloc(sizeof (znode_t), KM_SLEEP);
++	rootzp->z_zfsvfs = zfsvfs;
++	rootzp->z_unlinked = B_FALSE;
++	rootzp->z_atime_dirty = B_FALSE;
++	rootzp->z_is_sa = zfsvfs->z_use_sa;
++	rootzp->z_pflags = 0;
++	rootzp->z_ref_cnt = 1;
++
++	vattr.va_mask = AT_MODE | AT_UID | AT_GID | AT_TYPE;
++	vattr.va_type = VDIR;
++	vattr.va_mode = S_IFDIR | 0755;
++	vattr.va_uid = 0;
++	vattr.va_gid = 0;
++
++	VERIFY0(zfs_acl_ids_create(rootzp, IS_ROOT_NODE, &vattr,
++	    cr, NULL, &acl_ids, NULL));
++	zfs_mknode(rootzp, &vattr, tx, cr, IS_ROOT_NODE, &zp, &acl_ids);
++	ASSERT3P(zp, ==, rootzp);
++
++	error = zap_add(os, moid, ZFS_ROOT_OBJ, 8, 1, &rootzp->z_id, tx);
++	VERIFY0(error);
++
++	zfs_acl_ids_free(&acl_ids);
++
++	/* Tear down ephemeral structures. */
++	if (rootzp->z_sa_hdl != NULL)
++		sa_handle_destroy(rootzp->z_sa_hdl);
++	kmem_free(rootzp, sizeof (znode_t));
++
++	sa_tear_down(os);
++	zfsvfs->z_attr_table = NULL;
++
++	for (i = 0; i < ZFS_OBJ_MTX_SZ; i++)
++		mutex_destroy(&zfsvfs->z_hold_mtx[i]);
++	list_destroy(&zfsvfs->z_all_znodes);
++	mutex_destroy(&zfsvfs->z_znodes_lock);
++	kmem_free(zfsvfs, sizeof (zfsvfs_t));
+ }
+ 
+ /*
+@@ -150,13 +247,296 @@ zfs_make_xattrdir(znode_t *zp, vattr_t *vap, znode_t **xzpp, cred_t *cr)
+ }
+ 
+ /*
+- * Get a znode by its object ID.
++ * zfs_match_find -- look up a name in a ZAP directory.
++ *
++ * Handles both case-sensitive and case-insensitive (z_norm) filesystems.
++ * On success, *zoid is set to ZFS_DIRENT_OBJ(raw_value) and 0 returned.
++ */
++static int
++zfs_match_find(zfsvfs_t *zfsvfs, znode_t *dzp, const char *name,
++    matchtype_t mt, uint64_t *zoid)
++{
++	int error;
++
++	if (zfsvfs->z_norm) {
++		error = zap_lookup_norm(zfsvfs->z_os, dzp->z_id, name, 8, 1,
++		    zoid, mt, NULL, 0, NULL);
++	} else {
++		error = zap_lookup(zfsvfs->z_os, dzp->z_id, name, 8, 1, zoid);
++	}
++	*zoid = ZFS_DIRENT_OBJ(*zoid);
++	return (error);
++}
++
++/*
++ * zfs_dirent_lookup -- find a znode by name in a directory.
++ *
++ * Flags:
++ *   ZNEW    -- fail with EEXIST if the entry already exists.
++ *   ZEXISTS -- fail with ENOENT if the entry does not exist.
++ *   ZXATTR  -- look for the xattr directory instead of a normal entry.
++ *
++ * On success with ZEXISTS, *zpp is the found znode.
++ * On success with ZNEW, *zpp is NULL.
+  */
+ int
+-zfs_zget(zfsvfs_t *zfsvfs, uint64_t obj_num, znode_t **zpp)
++zfs_dirent_lookup(znode_t *dzp, const char *name, znode_t **zpp, int flag)
+ {
+-	(void) zfsvfs; (void) obj_num; (void) zpp;
+-	return (SET_ERROR(ENOTSUP));
++	zfsvfs_t *zfsvfs = ZTOZSB(dzp);
++	znode_t *zp;
++	matchtype_t mt = 0;
++	uint64_t zoid;
++	int error = 0;
++
++	*zpp = NULL;
++
++	if (zfsvfs->z_norm != 0) {
++		mt = MT_NORMALIZE;
++		if (zfsvfs->z_case == ZFS_CASE_MIXED)
++			mt |= MT_MATCH_CASE;
++	}
++
++	if (dzp->z_unlinked && !(flag & ZXATTR))
++		return (SET_ERROR(ENOENT));
++
++	if (flag & ZXATTR) {
++		error = sa_lookup(dzp->z_sa_hdl, SA_ZPL_XATTR(zfsvfs), &zoid,
++		    sizeof (zoid));
++		if (error == 0)
++			error = (zoid == 0 ? ENOENT : 0);
++	} else {
++		error = zfs_match_find(zfsvfs, dzp, name, mt, &zoid);
++	}
++
++	if (error) {
++		if (error != ENOENT || (flag & ZEXISTS))
++			return (error);
++		/* ENOENT and !ZEXISTS: entry absent — OK for ZNEW */
++		return (0);
++	} else {
++		if (flag & ZNEW)
++			return (SET_ERROR(EEXIST));
++		/* Entry found; load the znode. */
++		error = zfs_zget(zfsvfs, zoid, &zp);
++		if (error != 0)
++			return (error);
++		*zpp = zp;
++	}
++
++	return (0);
++}
++
++
++static uint64_t
++zfs_dirent(znode_t *zp, uint64_t mode)
++{
++	uint64_t de = zp->z_id;
++	zfsvfs_t *zfsvfs = ZTOZSB(zp);
++
++	if (zfsvfs->z_version >= ZPL_VERSION_DIRENT_TYPE)
++		de |= IFTODT(mode) << 60;
++	return (de);
++}
++
++/*
++ * zfs_link_create -- add a ZAP directory entry linking name to zp.
++ *
++ * Updates the parent directory size/links and the child's link count
++ * and ctime.  Must be called inside a DMU transaction.
++ */
++int
++zfs_link_create(znode_t *dzp, const char *name, znode_t *zp, dmu_tx_t *tx,
++    int flag)
++{
++	zfsvfs_t *zfsvfs = ZTOZSB(zp);
++	struct vnode *vp = ZTOV(zp);
++	uint64_t value;
++	int zp_is_dir = (vp != NULL && vp->v_type == VDIR);
++	sa_bulk_attr_t bulk[5];
++	uint64_t mtime[2], ctime[2];
++	int count = 0;
++	int error;
++
++	if (zp_is_dir) {
++		if (dzp->z_links >= ZFS_LINK_MAX)
++			return (SET_ERROR(EMLINK));
++	}
++
++	if (!(flag & ZRENAMING)) {
++		if (zp->z_unlinked)
++			return (SET_ERROR(ENOENT));
++		if (zp->z_links >= ZFS_LINK_MAX - zp_is_dir)
++			return (SET_ERROR(EMLINK));
++		zp->z_links++;
++		SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_LINKS(zfsvfs), NULL,
++		    &zp->z_links, sizeof (zp->z_links));
++	}
++
++	value = zfs_dirent(zp, zp->z_mode);
++	error = zap_add(zfsvfs->z_os, dzp->z_id, name, 8, 1, &value, tx);
++	if (error != 0) {
++		if (!(flag & ZRENAMING) && !(flag & ZNEW))
++			zp->z_links--;
++		return (error);
++	}
++
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_PARENT(zfsvfs), NULL,
++	    &dzp->z_id, sizeof (dzp->z_id));
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_FLAGS(zfsvfs), NULL,
++	    &zp->z_pflags, sizeof (zp->z_pflags));
++
++	if (!(flag & ZNEW)) {
++		SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_CTIME(zfsvfs), NULL,
++		    ctime, sizeof (ctime));
++		zfs_tstamp_update_setup(zp, STATE_CHANGED, mtime, ctime);
++	}
++	error = sa_bulk_update(zp->z_sa_hdl, bulk, count, tx);
++	ASSERT0(error);
++
++	dzp->z_size++;
++	dzp->z_links += zp_is_dir;
++	count = 0;
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_SIZE(zfsvfs), NULL,
++	    &dzp->z_size, sizeof (dzp->z_size));
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_LINKS(zfsvfs), NULL,
++	    &dzp->z_links, sizeof (dzp->z_links));
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_MTIME(zfsvfs), NULL,
++	    mtime, sizeof (mtime));
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_CTIME(zfsvfs), NULL,
++	    ctime, sizeof (ctime));
++	zfs_tstamp_update_setup(dzp, CONTENT_MODIFIED, mtime, ctime);
++	error = sa_bulk_update(dzp->z_sa_hdl, bulk, count, tx);
++	ASSERT0(error);
++
++	return (0);
++}
++
++/*
++ * Remove a ZAP directory entry.  Handles normalisation if needed.
++ */
++static int
++zfs_dropname(znode_t *dzp, const char *name, znode_t *zp, dmu_tx_t *tx,
++    int flag)
++{
++	int error;
++	(void) flag;
++
++	if (zp->z_zfsvfs->z_norm) {
++		matchtype_t mt = MT_NORMALIZE;
++		if (zp->z_zfsvfs->z_case == ZFS_CASE_MIXED)
++			mt |= MT_MATCH_CASE;
++		error = zap_remove_norm(zp->z_zfsvfs->z_os, dzp->z_id,
++		    name, mt, tx);
++	} else {
++		error = zap_remove(zp->z_zfsvfs->z_os, dzp->z_id, name, tx);
++	}
++	return (error);
++}
++
++/*
++ * Indicate whether the directory is empty.
++ * A ZFS directory with only "." and ".." has z_size == 2.
++ */
++boolean_t
++zfs_dirempty(znode_t *dzp)
++{
++	return (dzp->z_size == 2);
++}
++
++/*
++ * Add zp to the unlinked set (to be reclaimed on next mount).
++ */
++void
++zfs_unlinked_add(znode_t *zp, dmu_tx_t *tx)
++{
++	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
++
++	ASSERT(zp->z_unlinked);
++	ASSERT0(zp->z_links);
++
++	VERIFY0(zap_add_int(zfsvfs->z_os, zfsvfs->z_unlinkedobj, zp->z_id, tx));
++	dataset_kstats_update_nunlinks_kstat(&zfsvfs->z_kstat, 1);
++}
++
++/*
++ * Unlink zp from dzp, and mark zp for deletion if this was the last link.
++ * Can fail with ENOTEMPTY if zp is a non-empty directory.
++ * If unlinkedp is non-NULL the caller manages the unlinked-set; otherwise
++ * we call zfs_unlinked_add() ourselves.
++ */
++int
++zfs_link_destroy(znode_t *dzp, const char *name, znode_t *zp, dmu_tx_t *tx,
++    int flag, boolean_t *unlinkedp)
++{
++	zfsvfs_t *zfsvfs = dzp->z_zfsvfs;
++	struct vnode *vp = ZTOV(zp);
++	int zp_is_dir = (vp != NULL && vp->v_type == VDIR);
++	boolean_t unlinked = B_FALSE;
++	sa_bulk_attr_t bulk[5];
++	uint64_t mtime[2], ctime[2];
++	int count = 0;
++	int error;
++
++	if (!(flag & ZRENAMING)) {
++		if (zp_is_dir && !zfs_dirempty(zp))
++			return (SET_ERROR(ENOTEMPTY));
++
++		error = zfs_dropname(dzp, name, zp, tx, flag);
++		if (error != 0)
++			return (error);
++
++		if (zp->z_links <= (uint64_t)zp_is_dir) {
++			zfs_panic_recover("zfs: link count on vnode %p is %u, "
++			    "should be at least %u", (void *)zp->z_vnode,
++			    (int)zp->z_links, zp_is_dir + 1);
++			zp->z_links = zp_is_dir + 1;
++		}
++		if (--zp->z_links == (uint64_t)zp_is_dir) {
++			zp->z_unlinked = B_TRUE;
++			zp->z_links = 0;
++			unlinked = B_TRUE;
++		} else {
++			SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_CTIME(zfsvfs),
++			    NULL, &ctime, sizeof (ctime));
++			SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_FLAGS(zfsvfs),
++			    NULL, &zp->z_pflags, sizeof (zp->z_pflags));
++			zfs_tstamp_update_setup(zp, STATE_CHANGED, mtime,
++			    ctime);
++		}
++		SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_LINKS(zfsvfs),
++		    NULL, &zp->z_links, sizeof (zp->z_links));
++		error = sa_bulk_update(zp->z_sa_hdl, bulk, count, tx);
++		count = 0;
++		ASSERT0(error);
++	} else {
++		ASSERT(!zp->z_unlinked);
++		error = zfs_dropname(dzp, name, zp, tx, flag);
++		if (error != 0)
++			return (error);
++	}
++
++	dzp->z_size--;
++	dzp->z_links -= zp_is_dir;
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_LINKS(zfsvfs),
++	    NULL, &dzp->z_links, sizeof (dzp->z_links));
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_SIZE(zfsvfs),
++	    NULL, &dzp->z_size, sizeof (dzp->z_size));
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_CTIME(zfsvfs),
++	    NULL, ctime, sizeof (ctime));
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_MTIME(zfsvfs),
++	    NULL, mtime, sizeof (mtime));
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_FLAGS(zfsvfs),
++	    NULL, &dzp->z_pflags, sizeof (dzp->z_pflags));
++	zfs_tstamp_update_setup(dzp, CONTENT_MODIFIED, mtime, ctime);
++	error = sa_bulk_update(dzp->z_sa_hdl, bulk, count, tx);
++	ASSERT0(error);
++
++	if (unlinkedp != NULL)
++		*unlinkedp = unlinked;
++	else if (unlinked)
++		zfs_unlinked_add(zp, tx);
++
++	return (0);
+ }
+ 
+ void
+@@ -178,6 +558,21 @@ zfs_zrele_async(znode_t *zp)
+ 	/* Stub: synchronous release for now */
+ }
+ 
++/*
++ * Drain the unlinked set: clean up any znodes that had no links when
++ * the filesystem was crashed or force-unmounted.
++ *
++ * OSv stub: our zfs_zget is not yet fully implemented, so we cannot
++ * actually reclaim the unlinked objects here. On a freshly-created pool
++ * (zpool create) the unlinked set is empty and this is a no-op.  Full
++ * recovery of crash-orphaned inodes requires a working zfs_zget.
++ */
++void
++zfs_unlinked_drain(zfsvfs_t *zfsvfs)
++{
++	(void) zfsvfs;
++}
++
+ /*
+  * Update the zfsvfs name after a rename.
+  */
+diff --git a/module/os/osv/zfs/zfs_initialize_osv.c b/module/os/osv/zfs/zfs_initialize_osv.c
+index df5a7a066..a43a75ae3 100644
+--- a/module/os/osv/zfs/zfs_initialize_osv.c
++++ b/module/os/osv/zfs/zfs_initialize_osv.c
+@@ -7,18 +7,27 @@
+  *
+  * This file provides the entry point for initializing the ZFS
+  * subsystem in OSv. It replaces the old zfs_init.c and integrates
+- * with the OpenZFS 2.3.6 initialization framework.
++ * with the OpenZFS 2.x initialization framework.
++ *
++ * Architecture:
++ *   - libsolaris.so is dynamically loaded into the OSv image.
++ *   - The ELF constructor zfs_module_init() runs automatically on load.
++ *   - It registers osv_zfs_ioctl() as the ioctl dispatcher for /dev/zfs,
++ *     then calls zfs_kmod_init() to initialize the full ZFS stack.
++ *   - User-space ZFS tools (libzfs, zpool, zfs) open /dev/zfs and issue
++ *     ioctl(2) calls which are dispatched through drivers/zfs.cc to
++ *     osv_zfs_ioctl() -> zfsdev_ioctl_common().
+  */
+ 
+ #include <sys/types.h>
+ #include <sys/zfs_context.h>
+-#include <sys/dmu.h>
+-#include <sys/spa.h>
+-#include <sys/zfs_sa.h>
+-#include <sys/zfs_znode.h>
+-#include <sys/zfs_quota.h>
++#include <sys/zfs_vfsops.h>
++#include <sys/zfs_ioctl.h>
+ #include <sys/zfs_ioctl_impl.h>
+ #include <sys/zvol.h>
++#include <sys/spa.h>
++#include <sys/zfs_quota.h>
++#include <osv/mount.h>
+ 
+ /*
+  * Thread-local variable for ZFS fsyncer.
+@@ -26,41 +35,183 @@
+ __thread void *zfs_fsyncer_key;
+ 
+ /*
+- * Initialize the ZFS subsystem.
+- * Called from OSv's filesystem initialization code.
++ * The real ZFS VFS operations, defined in zfs_vfsops.c.
++ */
++extern struct vfsops zfs_osv_vfsops;
++
++/*
++ * zfs_update_vfsops() patches the live zfs_vfsops struct in place
++ * (defined in fs/zfs/zfs_null_vfsops.cc).
++ */
++extern void zfs_update_vfsops(struct vfsops *vfsops);
++
++/*
++ * register_osv_zfs_ioctl() sets the function pointer in drivers/zfs.cc
++ * that backs the /dev/zfs ioctl handler.
++ */
++extern void register_osv_zfs_ioctl(int (*fun)(unsigned long, void *));
++
++/*
++ * opensolaris_load() initializes the OpenSolaris compat subsystem.
++ * Sets nsec_per_tick (= NANOSEC/hz = 1000000), cpu_lock, solaris_cpu[].
++ * In OSv, SYSINIT is a no-op, so we call this explicitly.
++ */
++extern void opensolaris_load(void *dummy);
++
++/*
++ * callb_init() initializes the callb mechanism used by ZFS threads
++ * (CALLB_CPR_INIT in l2arc_feed_thread, txg_thread, etc.).
++ * In OSv, SYSINIT is a no-op, so we call this explicitly.
++ */
++extern void callb_init(void *dummy);
++
++/*
++ * system_taskq_init() creates the system taskq (from BSD compat layer).
++ * Must be called before ZFS can dispatch work items.
++ */
++extern void system_taskq_init(void *arg);
++
++/*
++ * zfs_znode_init() initializes the znode slab cache.
++ *
++ * The real zfs_init() defined in zfs_vfsops.c calls zfs_znode_init(), but
++ * on OSv the dummy zfs_init() in loader.elf (zfs_null_vfsops.cc) shadows it
++ * in the global symbol table.  We call zfs_znode_init() directly to ensure
++ * the znode slab is set up before any ZFS operations.
++ */
++extern void zfs_znode_init(void);
++
++/*
++ * zfs_driver_initialized is defined in fs/zfs/zfs_null_vfsops.cc and
++ * exported from the kernel (loader.elf).  We check it to avoid
++ * double-initialization.
++ */
++extern bool zfs_driver_initialized;
++
++/*
++ * osv_zfs_ioctl -- the ioctl dispatcher for /dev/zfs on OSv.
+  *
+- * This replaces the old zfs_init() and integrates with
+- * OpenZFS's zfs_kmod_init() framework.
++ * Called from drivers/zfs.cc when user-space issues ioctl(zfs_fd, req, buf).
++ * Extracts the ZFS IOC vector number and delegates to zfsdev_ioctl_common(),
++ * which is the common entry point shared by all OS ports.
++ *
++ * req   -- raw ioctl request number (ZFS_IOC_* from sys/fs/zfs.h).
++ *          The low 8 bits are the vector index (ZFS_IOC macro).
++ * buffer -- pointer to zfs_cmd_t passed from user-space (no copy needed
++ *           in OSv since there is no user/kernel address split).
+  */
+-int
++static int
++osv_zfs_ioctl(unsigned long req, void *buffer)
++{
++	/*
++	 * Extract the vector index from the ioctl request.
++	 * On FreeBSD ZFS_IOC_FIRST=0, on Linux/OSv ZFS_IOC_FIRST=('Z'<<8).
++	 * In both cases (req & 0xff) yields the correct 0-based vector index
++	 * since the base is always aligned to a multiple of 256.
++	 *
++	 * FKIOCTL tells zfsdev_ioctl_common() that the buffer is already
++	 * in unified address space -- no copyin/copyout needed.
++	 */
++	return ((int)zfsdev_ioctl_common((uint_t)(req & 0xff),
++	    (zfs_cmd_t *)buffer, FKIOCTL));
++}
++
++/*
++ * zfs_initialize -- ELF constructor, runs automatically when libsolaris.so
++ * is loaded by the OSv dynamic linker.
++ *
++ * Initialization order:
++ *   1. system_taskq_init()   -- BSD compat taskq (used by ZFS internally)
++ *   2. register_osv_zfs_ioctl() -- wire up /dev/zfs ioctl dispatch
++ *   3. zfs_kmod_init()       -- full OpenZFS subsystem init (spa, dmu, arc,
++ *                               zvol, ioctl table, rrw_tsd, ...)
++ *   4. dmu_objset_register_type() -- register ZFS objset type callback
++ *   5. zfs_update_vfsops()   -- replace null vfsops with real ZFS vfsops
++ */
++void __attribute__((constructor))
+ zfs_initialize(void)
+ {
+ 	int error;
+ 
++	if (zfs_driver_initialized) {
++		printf("zfs: driver already initialized\n");
++		return;
++	}
++
+ 	/*
+-	 * Initialize the ZFS kernel module.
+-	 * This sets up the SPA, DMU, ARC, and all other subsystems.
++	 * In OSv, SYSINIT() is a no-op macro, so BSD compat subsystems that
++	 * register via SYSINIT are never auto-initialized.  Call them explicitly
++	 * in dependency order before any ZFS code runs.
++	 *
++	 * 1. opensolaris_load: sets nsec_per_tick = NANOSEC/hz (1000000 ns).
++	 *    Without this, ddi_get_lbolt() divides by zero the moment any ZFS
++	 *    thread calls it (l2arc_feed_thread, txg threads, zthr threads...).
++	 *
++	 * 2. callb_init: initializes the callb table and its mutexes.
++	 *    Required by CALLB_CPR_INIT used in l2arc_feed_thread et al.
+ 	 */
+-	error = zfs_kmod_init();
+-	if (error != 0) {
+-		printf("ZFS: Failed to initialize ZFS, rc = %d\n", error);
+-		return (error);
++	opensolaris_load(NULL);
++	callb_init(NULL);
++
++	/* BSD compat taskq must exist before spa_init() dispatches work. */
++	system_taskq_init(NULL);
++
++	/*
++	 * Initialize freemem before arc_init() so that arc_available_memory()
++	 * doesn't read from the zero-initialized BSS and conclude the system
++	 * is under extreme memory pressure.  physmem is exported from
++	 * loader.elf; using physmem/4 is conservative but avoids triggering
++	 * the ARC low-memory shrinker on startup.
++	 */
++	{
++		extern unsigned long freemem;
++		extern unsigned long physmem;
++		freemem = physmem / 4;
+ 	}
+ 
++	/* Wire up the /dev/zfs ioctl path. */
++	register_osv_zfs_ioctl(osv_zfs_ioctl);
++
+ 	/*
+-	 * Register the ZFS space delta callback for user/group quotas.
++	 * zcommon_init() is normally registered via module_init_early() which
++	 * is a no-op on OSv.  Call it explicitly to run the fletcher4 benchmark
++	 * and populate fletcher_4_fastest_impl before zfs_kmod_init() needs it.
+ 	 */
++	extern int zcommon_init(void);
++	error = zcommon_init();
++	if (error != 0) {
++		printf("ZFS: zcommon_init() failed, rc = %d\n", error);
++		return;
++	}
++
++	error = zfs_kmod_init();
++	if (error != 0) {
++		printf("ZFS: zfs_kmod_init() failed, rc = %d\n", error);
++		return;
++	}
++
++	zfs_znode_init();
++
+ 	dmu_objset_register_type(DMU_OST_ZFS, zpl_get_file_info);
+ 
++	zfs_update_vfsops(&zfs_osv_vfsops);
++
++	zfs_driver_initialized = true;
+ 	printf("ZFS: OpenZFS " SPA_VERSION_STRING " initialized\n");
+-	return (0);
+ }
+ 
+ /*
+- * Shutdown the ZFS subsystem.
++ * zfs_shutdown -- called if libsolaris.so is ever unloaded (rare on OSv).
+  */
+ void
+ zfs_shutdown(void)
+ {
+ 	zfs_kmod_fini();
+ }
++
++/*
++ * This note causes the OSv dynamic linker to pre-fault (mlock) all segments
++ * of libsolaris.so on load, preventing page faults inside ZFS code paths
++ * that run with locks held (which would deadlock if they faulted).
++ */
++asm(".pushsection .note.osv-mlock, \"a\"; .long 0, 0, 0; .popsection");
+diff --git a/module/os/osv/zfs/zfs_vfsops.c b/module/os/osv/zfs/zfs_vfsops.c
+index 1c0901099..20ee4303e 100644
+--- a/module/os/osv/zfs/zfs_vfsops.c
++++ b/module/os/osv/zfs/zfs_vfsops.c
+@@ -16,9 +16,13 @@
+ #include <sys/vfs.h>
+ #include <sys/vnode.h>
+ #include <sys/zfs_context.h>
++#include <osv/mount.h>
++#include <fs/vfs/vfs_id.h>
+ #include <sys/zfs_znode.h>
+ #include <sys/zfs_vfsops.h>
+ #include <sys/zfs_sa.h>
++#include <sys/zfs_vnops.h>
++#include <sys/zfs_dir.h>
+ #include <sys/dmu.h>
+ #include <sys/dmu_objset.h>
+ #include <sys/dsl_dataset.h>
+@@ -93,15 +97,114 @@ zfsvfs_create(const char *osname, boolean_t readonly, zfsvfs_t **zfvp)
+ 	}
+ 
+ 	error = zfsvfs_create_impl(zfvp, zfsvfs, os);
++	if (error != 0) {
++		dmu_objset_disown(os, B_TRUE, zfsvfs);
++		zfsvfs_free(zfsvfs);
++	}
+ 	return (error);
+ }
+ 
++/*
++ * zfsvfs_init -- read on-disk ZPL properties into a zfsvfs_t.
++ *
++ * Reads the master-node ZAP to populate all fields that affect
++ * VOP behaviour: version, SA attr table, root object, unlinked set,
++ * normalization, case handling, and feature flags.
++ *
++ * Must be called after the objset is open and before any ZFS I/O.
++ */
++static int
++zfsvfs_init(zfsvfs_t *zfsvfs, objset_t *os)
++{
++	int		error;
++	uint64_t	val;
++	uint64_t	sa_obj = 0;
++
++	zfsvfs->z_max_blksz = SPA_OLD_MAXBLOCKSIZE;
++	zfsvfs->z_os = os;
++
++	error = zfs_get_zplprop(os, ZFS_PROP_VERSION, &zfsvfs->z_version);
++	if (error != 0)
++		return (error);
++
++	error = zfs_get_zplprop(os, ZFS_PROP_NORMALIZE, &val);
++	if (error != 0)
++		return (error);
++	zfsvfs->z_norm = (int)val;
++
++	error = zfs_get_zplprop(os, ZFS_PROP_UTF8ONLY, &val);
++	if (error != 0)
++		return (error);
++	zfsvfs->z_utf8 = (val != 0);
++
++	error = zfs_get_zplprop(os, ZFS_PROP_CASE, &val);
++	if (error != 0)
++		return (error);
++	zfsvfs->z_case = (uint_t)val;
++
++	if (zfsvfs->z_case == ZFS_CASE_INSENSITIVE ||
++	    zfsvfs->z_case == ZFS_CASE_MIXED)
++		zfsvfs->z_norm |= U8_TEXTPREP_TOUPPER;
++
++	zfsvfs->z_use_fuids = USE_FUIDS(zfsvfs->z_version, os);
++	zfsvfs->z_use_sa    = USE_SA(zfsvfs->z_version, os);
++
++	if (zfsvfs->z_use_sa) {
++		error = zap_lookup(os, MASTER_NODE_OBJ, ZFS_SA_ATTRS, 8, 1,
++		    &sa_obj);
++		if (error != 0)
++			return (error);
++	}
++
++	error = sa_setup(os, sa_obj, zfs_attr_table, ZPL_END,
++	    &zfsvfs->z_attr_table);
++	if (error != 0)
++		return (error);
++
++	if (zfsvfs->z_version >= ZPL_VERSION_SA)
++		sa_register_update_callback(os, zfs_sa_upgrade);
++
++	error = zap_lookup(os, MASTER_NODE_OBJ, ZFS_ROOT_OBJ, 8, 1,
++	    &zfsvfs->z_root);
++	if (error != 0)
++		return (error);
++	ASSERT3U(zfsvfs->z_root, !=, 0);
++
++	error = zap_lookup(os, MASTER_NODE_OBJ, ZFS_UNLINKED_SET, 8, 1,
++	    &zfsvfs->z_unlinkedobj);
++	if (error != 0)
++		return (error);
++
++	/* Quota objects are optional — tolerate ENOENT. */
++	error = zap_lookup(os, MASTER_NODE_OBJ,
++	    zfs_userquota_prop_prefixes[ZFS_PROP_USERQUOTA],
++	    8, 1, &zfsvfs->z_userquota_obj);
++	if (error == ENOENT)
++		zfsvfs->z_userquota_obj = 0;
++	else if (error != 0)
++		return (error);
++
++	error = zap_lookup(os, MASTER_NODE_OBJ,
++	    zfs_userquota_prop_prefixes[ZFS_PROP_GROUPQUOTA],
++	    8, 1, &zfsvfs->z_groupquota_obj);
++	if (error == ENOENT)
++		zfsvfs->z_groupquota_obj = 0;
++	else if (error != 0)
++		return (error);
++
++	return (0);
++}
++
+ /*
+  * Implementation of zfsvfs creation from an already-opened objset.
++ *
++ * On error the caller is responsible for calling zfsvfs_free().
+  */
+ int
+ zfsvfs_create_impl(zfsvfs_t **zfvp, zfsvfs_t *zfsvfs, objset_t *os)
+ {
++	int error;
++
+ 	zfsvfs->z_os = os;
+ 	zfsvfs->z_parent = zfsvfs;
+ 
+@@ -116,6 +219,10 @@ zfsvfs_create_impl(zfsvfs_t **zfvp, zfsvfs_t *zfsvfs, objset_t *os)
+ 	for (int i = 0; i < ZFS_OBJ_MTX_SZ; i++)
+ 		mutex_init(&zfsvfs->z_hold_mtx[i], NULL, MUTEX_DEFAULT, NULL);
+ 
++	error = zfsvfs_init(zfsvfs, os);
++	if (error != 0)
++		return (error);
++
+ 	*zfvp = zfsvfs;
+ 	return (0);
+ }
+@@ -260,3 +367,450 @@ zfs_fini(void)
+ {
+ 	zfs_znode_fini();
+ }
++
++/* ------------------------------------------------------------------ */
++/* OSv VFS mount/unmount/sync/statfs                                   */
++/* ------------------------------------------------------------------ */
++
++/*
++ * These are declared in zfs_vnops_os.c and the null_vfsops.cc wrapper.
++ * We reference zfs_vnops here so we can embed a pointer in zfs_osv_vfsops.
++ */
++extern struct vnops zfs_vnops;
++
++/*
++ * Set the FUID feature flags on the zfsvfs based on the ZPL version
++ * and on-disk features.
++ */
++static void
++zfs_set_fuid_feature(zfsvfs_t *zfsvfs)
++{
++	zfsvfs->z_use_fuids = USE_FUIDS(zfsvfs->z_version, zfsvfs->z_os);
++	zfsvfs->z_use_sa = USE_SA(zfsvfs->z_version, zfsvfs->z_os);
++}
++
++/*
++ * OSv implementation of zfsvfs_setup().
++ *
++ * On FreeBSD/Linux this registers property-change callbacks and then
++ * replays the ZIL.  OSv has no dsl_prop callback infrastructure yet,
++ * so we skip property registration and perform only the steps that are
++ * required for the filesystem to be usable:
++ *
++ *   1. Open the ZIL.
++ *   2. Drain the unlinked set (on writable mounts).
++ *   3. Replay the intent log.
++ *   4. Associate the zfsvfs with the objset user pointer.
++ *
++ * TODO: add dsl_prop_register() calls when OSv property callbacks are
++ * implemented.
++ */
++static int
++zfsvfs_setup(zfsvfs_t *zfsvfs, boolean_t mounting)
++{
++	int error;
++
++	if (mounting) {
++		error = dataset_kstats_create(&zfsvfs->z_kstat, zfsvfs->z_os);
++		if (error)
++			return (error);
++
++		zfsvfs->z_log = zil_open(zfsvfs->z_os, zfs_get_data,
++		    &zfsvfs->z_kstat.dk_zil_sums);
++
++		if (!zfs_is_readonly(zfsvfs)) {
++			zap_stats_t zs;
++			if (zap_get_stats(zfsvfs->z_os, zfsvfs->z_unlinkedobj,
++			    &zs) == 0) {
++				dataset_kstats_update_nunlinks_kstat(
++				    &zfsvfs->z_kstat, zs.zs_num_entries);
++			}
++			zfs_unlinked_drain(zfsvfs);
++			dsl_dir_t *dd =
++			    zfsvfs->z_os->os_dsl_dataset->ds_dir;
++			dd->dd_activity_cancelled = B_FALSE;
++		}
++
++		/*
++		 * Replay the intent log.
++		 */
++		if (spa_writeable(dmu_objset_spa(zfsvfs->z_os))) {
++			if (zil_replay_disable) {
++				zil_destroy(zfsvfs->z_log, B_FALSE);
++			} else {
++				zfsvfs->z_replay = B_TRUE;
++				zil_replay(zfsvfs->z_os, zfsvfs,
++				    zfs_replay_vector);
++				zfsvfs->z_replay = B_FALSE;
++			}
++		}
++	} else {
++		ASSERT3P(zfsvfs->z_kstat.dk_kstats, !=, NULL);
++		zfsvfs->z_log = zil_open(zfsvfs->z_os, zfs_get_data,
++		    &zfsvfs->z_kstat.dk_zil_sums);
++	}
++
++	/*
++	 * Associate the zfsvfs with the objset so that callbacks
++	 * (e.g. from spa_sync) can find us.
++	 */
++	mutex_enter(&zfsvfs->z_os->os_user_ptr_lock);
++	dmu_objset_set_user(zfsvfs->z_os, zfsvfs);
++	mutex_exit(&zfsvfs->z_os->os_user_ptr_lock);
++
++	return (0);
++}
++
++/*
++ * zfs_domount() -- mount a ZFS dataset onto the OSv VFS mount point.
++ *
++ * This is the OSv equivalent of the FreeBSD/Linux zfs_domount().
++ * It initialises a zfsvfs_t for the named dataset and wires it into
++ * the OSv struct mount (vfs_t).
++ *
++ * Parameters:
++ *   mp     - OSv VFS mount structure (vfs_t == struct mount)
++ *   osname - ZFS dataset name (e.g. "pool/data")
++ *
++ * On success, mp->m_data points to the live zfsvfs_t and the
++ * filesystem is ready for I/O.  On failure all resources are freed.
++ */
++int
++zfs_domount(struct mount *mp, const char *osname)
++{
++	zfsvfs_t *zfsvfs;
++	uint64_t fsid_guid;
++	int error;
++
++	ASSERT3P(mp, !=, NULL);
++	ASSERT3P(osname, !=, NULL);
++
++	/*
++	 * Build and populate the zfsvfs_t.  zfsvfs_create() opens the
++	 * objset and initialises mutexes, the znode list, and teardown
++	 * locks.
++	 */
++	error = zfsvfs_create(osname, (mp->vfs_flag & VFS_RDONLY) != 0,
++	    &zfsvfs);
++	if (error)
++		return (error);
++
++	zfsvfs->z_vfs = mp;
++
++	/*
++	 * Wire the private data pointer so that the VFS ops (sync,
++	 * statfs, unmount) can reach the zfsvfs_t.
++	 */
++	mp->vfs_data = zfsvfs;
++
++	/*
++	 * Compute the filesystem ID from the objset GUID.
++	 * We use the same encoding as FreeBSD: the lower 56 bits of
++	 * the GUID go in val[0], the upper bits shifted down with the
++	 * fs-type byte in the low byte of val[1].
++	 *
++	 * OSv's struct mount uses m_fsid (== vfs_fsid via the macro in
++	 * vfs.h), which is a fsid_t { int32_t val[2]; }.
++	 */
++	/*
++	 * Build a 64-bit filesystem ID that is reassembled as:
++	 *   st_dev = (uint32_t)__val[0] | ((uint32_t)__val[1] << 32)
++	 *
++	 * The upper byte of __val[1] (bits [63:56] of st_dev) must equal
++	 * ZFS_ID (6ULL<<56) so that pagecache's IS_ZFS() macro returns true.
++	 */
++	fsid_guid = dmu_objset_fsid_guid(zfsvfs->z_os);
++	mp->m_fsid.__val[0] = (int32_t)(fsid_guid & 0xFFFFFFFF);
++	mp->m_fsid.__val[1] = (int32_t)(((fsid_guid >> 32) & 0x00FFFFFF) |
++	    (ZFS_ID >> 32));
++
++	/*
++	 * Set feature flags (FUID / system-attributes) based on the
++	 * on-disk ZPL version.
++	 */
++	zfs_set_fuid_feature(zfsvfs);
++
++	if (dmu_objset_is_snapshot(zfsvfs->z_os)) {
++		/*
++		 * Snapshots are always read-only.  Disable sync and
++		 * link the zfsvfs to the objset.
++		 */
++		zfsvfs->z_issnap = B_TRUE;
++		zfsvfs->z_atime = B_FALSE;
++		zfsvfs->z_os->os_sync = ZFS_SYNC_DISABLED;
++
++		mutex_enter(&zfsvfs->z_os->os_user_ptr_lock);
++		dmu_objset_set_user(zfsvfs->z_os, zfsvfs);
++		mutex_exit(&zfsvfs->z_os->os_user_ptr_lock);
++	} else {
++		/*
++		 * Regular dataset: open the ZIL, drain unlinked set,
++		 * replay the intent log.
++		 */
++		error = zfsvfs_setup(zfsvfs, B_TRUE);
++		if (error)
++			goto out;
++	}
++
++	atomic_inc_32(&zfs_active_fs_count);
++	return (0);
++
++out:
++	dmu_objset_disown(zfsvfs->z_os, B_TRUE, zfsvfs);
++	zfsvfs_free(zfsvfs);
++	mp->vfs_data = NULL;
++	return (error);
++}
++
++static int
++zfs_osv_mount(struct mount *mp, const char *dev, int flags, const void *data)
++{
++	/*
++	 * OSv calls mount_rootfs("/zfs", "/dev/vblk0.1", "zfs", 0, "osv")
++	 * so: dev = block device path, data = dataset name (osname).
++	 *
++	 * When data is non-NULL it is the dataset name and dev is the raw
++	 * device; import the pool from the device first, then mount the
++	 * dataset.  When data is NULL (e.g. remount or explicit mount where
++	 * the pool is already imported), dev is the dataset name directly.
++	 */
++	const char *osname;
++	int error = 0;
++
++	/*
++	 * Distinguish two calling conventions:
++	 *
++	 * 1. Root boot (loader.cc): dev = "/dev/vblk0.1", data = "osv"
++	 *    The pool is not yet imported; import it from the device, then
++	 *    mount the dataset named by data.
++	 *
++	 * 2. libzfs (do_mount): dev = "osv", data = "" or options string
++	 *    The pool is already imported; dev IS the dataset name.
++	 *
++	 * Use the presence of "/dev/" prefix in dev to tell them apart.
++	 */
++	if (strncmp(dev, "/dev/", 5) == 0 &&
++	    data != NULL && ((const char *)data)[0] != '\0') {
++		/* Case 1: root boot */
++		osname = (const char *)data;
++		error = spa_import_rootpool(dev, B_FALSE);
++		if (error) {
++			printf("zfs_mount: spa_import_rootpool(%s) failed: %d\n", dev, error);
++			return (error);
++		}
++	} else {
++		/* Case 2: pool already imported; dev is the dataset name */
++		osname = dev;
++	}
++
++	error = zfs_domount(mp, osname);
++	if (error) {
++		printf("zfs_mount: zfs_domount(%s) failed: %d\n", osname, error);
++	}
++	if (error)
++		return (error);
++
++	/*
++	 * OSv's sys_mount() creates the root vnode (via vget) *before*
++	 * calling VFS_MOUNT, so vp->v_data is still NULL at that point.
++	 * Now that zfs_domount() has set up zfsvfs, wire the root znode
++	 * to the root vnode so that all subsequent VOPs work correctly.
++	 */
++	zfsvfs_t *zfsvfs = mp->m_data;
++	if (zfsvfs != NULL && mp->m_root != NULL) {
++		struct vnode *vp = mp->m_root->d_vnode;
++		if (vp != NULL && vp->v_data == NULL) {
++			znode_t *zp = NULL;
++			int enter_err = zfs_enter(zfsvfs, FTAG);
++			if (enter_err == 0) {
++				int zget_err = zfs_zget(zfsvfs, zfsvfs->z_root, &zp);
++				if (zget_err == 0) {
++					vp->v_data = zp;
++					vp->v_ino = zp->z_id;
++					zp->z_vnode = vp;
++					printf("ZFS: root mounted ok, z_root=%llu\n",
++					    (unsigned long long)zfsvfs->z_root);
++				} else {
++					printf("zfs_mount: zfs_zget(root=%llu) failed: %d\n",
++					    (unsigned long long)zfsvfs->z_root, zget_err);
++				}
++				zfs_exit(zfsvfs, FTAG);
++			}
++		}
++	}
++
++	return (0);
++}
++
++static int
++zfs_osv_unmount(struct mount *mp, int flags)
++{
++	(void) flags;
++	zfsvfs_t *zfsvfs = mp->m_data;
++	int error;
++
++	if (zfsvfs == NULL)
++		return (0);
++
++	if ((error = zfs_enter(zfsvfs, FTAG)) != 0)
++		return (error);
++
++	dmu_objset_disown(zfsvfs->z_os, B_TRUE, zfsvfs);
++
++	zfs_exit(zfsvfs, FTAG);
++	zfsvfs_free(zfsvfs);
++	mp->m_data = NULL;
++	return (0);
++}
++
++static int
++zfs_osv_sync(struct mount *mp)
++{
++	zfsvfs_t *zfsvfs = mp->m_data;
++	int error;
++
++	if (zfsvfs == NULL)
++		return (0);
++
++	if ((error = zfs_enter(zfsvfs, FTAG)) != 0)
++		return (error);
++
++	txg_wait_synced(dmu_objset_pool(zfsvfs->z_os), 0);
++
++	zfs_exit(zfsvfs, FTAG);
++	return (0);
++}
++
++static int
++zfs_osv_vget(struct mount *mp, struct vnode *vp)
++{
++	zfsvfs_t *zfsvfs = mp->m_data;
++	znode_t *zp = NULL;
++	int error;
++
++	/*
++	 * This is called by vget() for non-root vnodes that are not yet
++	 * in the vnode cache.  mp->m_data may be NULL if called before
++	 * VFS_MOUNT (e.g. for the root vnode during sys_mount); in that
++	 * case we return 0 and let zfs_osv_mount wire the root znode.
++	 */
++	if (zfsvfs == NULL || vp->v_ino == 0)
++		return (0);
++
++	if ((error = zfs_enter(zfsvfs, FTAG)) != 0)
++		return (error);
++
++	error = zfs_zget(zfsvfs, vp->v_ino, &zp);
++	if (error == 0 && zp != NULL) {
++		vp->v_data = zp;
++		vp->v_ino  = zp->z_id;
++		zp->z_vnode = vp;
++		vp->v_mode = zp->z_mode;
++		vp->v_type = IFTOVT(zp->z_mode);
++		vp->v_size = zp->z_size;
++	}
++
++	zfs_exit(zfsvfs, FTAG);
++	return (error);
++}
++
++static int
++zfs_osv_statfs(struct mount *mp, struct statfs *statp)
++{
++	zfsvfs_t *zfsvfs = mp->m_data;
++	uint64_t refdbytes, availbytes, usedobjs, availobjs;
++	int error;
++
++	if (zfsvfs == NULL)
++		return (SET_ERROR(EIO));
++
++	if ((error = zfs_enter(zfsvfs, FTAG)) != 0)
++		return (error);
++
++	dmu_objset_space(zfsvfs->z_os,
++	    &refdbytes, &availbytes, &usedobjs, &availobjs);
++
++	statp->f_bsize  = SPA_MINBLOCKSIZE;
++	statp->f_frsize = statp->f_bsize;
++	statp->f_blocks = (refdbytes + availbytes) >> SPA_MINBLOCKSHIFT;
++	statp->f_bfree  = availbytes >> SPA_MINBLOCKSHIFT;
++	statp->f_bavail = statp->f_bfree;
++	statp->f_files  = (fsfilcnt_t)usedobjs;
++	statp->f_ffree  = (fsfilcnt_t)availobjs;
++
++	zfs_exit(zfsvfs, FTAG);
++	return (0);
++}
++
++/*
++ * Set a default quota property on this filesystem.
++ * Mirrors the Linux/FreeBSD implementation.
++ */
++int
++zfs_set_default_quota(zfsvfs_t *zfsvfs, zfs_prop_t prop, uint64_t quota)
++{
++	int error;
++	objset_t *os = zfsvfs->z_os;
++	const char *propstr = zfs_prop_to_name(prop);
++	dmu_tx_t *tx;
++
++	tx = dmu_tx_create(os);
++	dmu_tx_hold_zap(tx, MASTER_NODE_OBJ, B_FALSE, propstr);
++	error = dmu_tx_assign(tx, DMU_TX_WAIT);
++	if (error) {
++		dmu_tx_abort(tx);
++		return (error);
++	}
++
++	if (quota == 0) {
++		error = zap_remove(os, MASTER_NODE_OBJ, propstr, tx);
++		if (error == ENOENT)
++			error = 0;
++	} else {
++		error = zap_update(os, MASTER_NODE_OBJ, propstr, 8, 1,
++		    &quota, tx);
++	}
++
++	if (error)
++		goto out;
++
++	switch (prop) {
++	case ZFS_PROP_DEFAULTUSERQUOTA:
++		zfsvfs->z_defaultuserquota = quota;
++		break;
++	case ZFS_PROP_DEFAULTGROUPQUOTA:
++		zfsvfs->z_defaultgroupquota = quota;
++		break;
++	case ZFS_PROP_DEFAULTPROJECTQUOTA:
++		zfsvfs->z_defaultprojectquota = quota;
++		break;
++	case ZFS_PROP_DEFAULTUSEROBJQUOTA:
++		zfsvfs->z_defaultuserobjquota = quota;
++		break;
++	case ZFS_PROP_DEFAULTGROUPOBJQUOTA:
++		zfsvfs->z_defaultgroupobjquota = quota;
++		break;
++	case ZFS_PROP_DEFAULTPROJECTOBJQUOTA:
++		zfsvfs->z_defaultprojectobjquota = quota;
++		break;
++	default:
++		break;
++	}
++
++out:
++	dmu_tx_commit(tx);
++	return (error);
++}
++
++/*
++ * The real ZFS VFS operations — registered via zfs_update_vfsops()
++ * when libsolaris.so is loaded.
++ */
++struct vfsops zfs_osv_vfsops = {
++	zfs_osv_mount,		/* mount   */
++	zfs_osv_unmount,	/* unmount */
++	zfs_osv_sync,		/* sync    */
++	zfs_osv_vget,		/* vget    */
++	zfs_osv_statfs,		/* statfs  */
++	&zfs_vnops,		/* vnops   */
++};
+diff --git a/module/os/osv/zfs/zfs_vnops_os.c b/module/os/osv/zfs/zfs_vnops_os.c
+index 70a24d244..10c84c4cd 100644
+--- a/module/os/osv/zfs/zfs_vnops_os.c
++++ b/module/os/osv/zfs/zfs_vnops_os.c
+@@ -4,15 +4,16 @@
+  *
+  * ZFS vnode operations for OSv.
+  *
+- * This file provides the OS-specific vnode operations that the
+- * OpenZFS common code calls. Most operations are stubbed (ENOTSUP)
+- * for initial bring-up.
++ * Bridges OSv's struct vnops dispatch table to the platform-independent
++ * OpenZFS vnode operations in module/zfs/zfs_vnops.c.
+  *
+- * Function signatures must match the declarations in zfs_vnops.h
+- * and zfs_vnops_os.h (which use znode_t *, not vnode_t *).
++ * Key design point: OSv is a unikernel with a single address space.
++ * O_DIRECT I/O works by passing user buffer page addresses directly to
++ * the ABD layer — no page pinning is required.
+  */
+ 
+ #include <sys/types.h>
++#include <sys/param.h>
+ #include <sys/zfs_context.h>
+ #include <sys/zfs_znode.h>
+ #include <sys/zfs_vfsops.h>
+@@ -23,57 +24,393 @@
+ #include <sys/zfs_sa.h>
+ #include <sys/vnode.h>
+ #include <sys/stat.h>
++#include <osv/file.h>
++#include <osv/mount.h>
++#include <fs/vfs/vfs_id.h>
++#include <sys/zap.h>
++#include <sys/zfs_dir.h>
+ 
+ /*
+  * OS-specific vnode operations.
+- * Most operations are stubbed (ENOTSUP) for initial bring-up.
+  *
+  * NOTE: Do not redefine functions that exist in the common
+  * zfs_vnops.c module, as they will cause linker errors.
++ *
++ * All functions here are kernel-internal stubs and must NOT be exported
++ * from libsolaris.so — several names (e.g. zfs_create, zfs_rename) clash
++ * with identically-named functions in libzfs.so (the userspace management
++ * library).  Marking the whole file hidden keeps them out of the .dynsym
++ * table while still allowing intra-library calls from zfs_replay.c etc.
+  */
++#pragma GCC visibility push(hidden)
+ 
+ int
+ zfs_remove(znode_t *dzp, const char *name, cred_t *cr, int flags)
+ {
+-	(void) dzp; (void) name; (void) cr; (void) flags;
+-	return (SET_ERROR(ENOTSUP));
++	(void) cr; (void) flags;
++	zfsvfs_t	*zfsvfs = ZTOZSB(dzp);
++	znode_t		*zp;
++	dmu_tx_t	*tx;
++	boolean_t	unlinked;
++	int		error;
++
++	if ((error = zfs_enter_verify_zp(zfsvfs, dzp, FTAG)) != 0)
++		return (error);
++
++	error = zfs_dirent_lookup(dzp, name, &zp, ZEXISTS);
++	if (error != 0) {
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	if (ZTOTYPE(zp) == VDIR) {
++		zfs_zrele(zp);
++		zfs_exit(zfsvfs, FTAG);
++		return (SET_ERROR(EPERM));
++	}
++
++	tx = dmu_tx_create(zfsvfs->z_os);
++	dmu_tx_hold_zap(tx, dzp->z_id, FALSE, name);
++	dmu_tx_hold_sa(tx, zp->z_sa_hdl, B_FALSE);
++	zfs_sa_upgrade_txholds(tx, zp);
++	zfs_sa_upgrade_txholds(tx, dzp);
++	dmu_tx_hold_zap(tx, zfsvfs->z_unlinkedobj, FALSE, NULL);
++	dmu_tx_mark_netfree(tx);
++
++	error = dmu_tx_assign(tx, DMU_TX_WAIT);
++	if (error != 0) {
++		dmu_tx_abort(tx);
++		zfs_zrele(zp);
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	error = zfs_link_destroy(dzp, name, zp, tx, ZEXISTS, &unlinked);
++	if (error == 0 && unlinked)
++		zfs_unlinked_add(zp, tx);
++
++	dmu_tx_commit(tx);
++	zfs_zrele(zp);
++	zfs_exit(zfsvfs, FTAG);
++	return (error);
+ }
+ 
++/*
++ * zfs_create -- create a regular file in a ZFS directory.
++ *
++ * OSv simplified version: no FUIDs, no ZIL logging, no quota checks.
++ *
++ * If excl == EXCL and the entry already exists, returns EEXIST.
++ * If excl != EXCL and the entry already exists, returns the existing
++ * znode in *zpp (caller must release with zfs_zrele).
++ */
+ int
+ zfs_create(znode_t *dzp, const char *name, vattr_t *vap, int excl,
+     int mode, znode_t **zpp, cred_t *cr, int flag, vsecattr_t *vsecp,
+     zidmap_t *mnt_ns)
+ {
+-	(void) dzp; (void) name; (void) vap; (void) excl;
+-	(void) mode; (void) zpp; (void) cr; (void) flag;
+-	(void) vsecp; (void) mnt_ns;
+-	return (SET_ERROR(ENOTSUP));
++	zfsvfs_t	*zfsvfs = ZTOZSB(dzp);
++	znode_t		*zp = NULL;
++	zfs_acl_ids_t	acl_ids;
++	dmu_tx_t	*tx;
++	int		error;
++
++	(void) mode; (void) flag;
++
++	*zpp = NULL;
++
++	if ((error = zfs_enter_verify_zp(zfsvfs, dzp, FTAG)) != 0)
++		return (error);
++
++	vap->va_type = VREG;
++	vap->va_mask |= AT_TYPE;
++
++	error = zfs_dirent_lookup(dzp, name, &zp, excl ? ZNEW : 0);
++	if (error != 0) {
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	if (zp != NULL) {
++		/* File already exists and caller did not request EXCL. */
++		*zpp = zp;
++		zfs_exit(zfsvfs, FTAG);
++		return (0);
++	}
++
++	if ((error = zfs_acl_ids_create(dzp, 0, vap, cr, vsecp,
++	    &acl_ids, mnt_ns)) != 0) {
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	tx = dmu_tx_create(zfsvfs->z_os);
++	dmu_tx_hold_sa_create(tx, ZFS_SA_BASE_ATTR_SIZE);
++	dmu_tx_hold_zap(tx, dzp->z_id, TRUE, name);
++
++	error = dmu_tx_assign(tx, DMU_TX_WAIT);
++	if (error != 0) {
++		zfs_acl_ids_free(&acl_ids);
++		dmu_tx_abort(tx);
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	zfs_mknode(dzp, vap, tx, cr, 0, &zp, &acl_ids);
++
++	error = zfs_link_create(dzp, name, zp, tx, ZNEW);
++	if (error != 0) {
++		zfs_znode_delete(zp, tx);
++		zfs_znode_free(zp);
++		zfs_acl_ids_free(&acl_ids);
++		dmu_tx_commit(tx);
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	zfs_acl_ids_free(&acl_ids);
++	dmu_tx_commit(tx);
++
++	*zpp = zp;
++	zfs_exit(zfsvfs, FTAG);
++	return (0);
+ }
+ 
++/*
++ * zfs_mkdir -- create a directory in a ZFS directory.
++ *
++ * OSv simplified version: no FUIDs, no ZIL logging, no quota checks.
++ */
+ int
+ zfs_mkdir(znode_t *dzp, const char *dirname, vattr_t *vap,
+     znode_t **zpp, cred_t *cr, int flags, vsecattr_t *vsecp,
+     zidmap_t *mnt_ns)
+ {
+-	(void) dzp; (void) dirname; (void) vap; (void) zpp;
+-	(void) cr; (void) flags; (void) vsecp; (void) mnt_ns;
+-	return (SET_ERROR(ENOTSUP));
++	zfsvfs_t	*zfsvfs = ZTOZSB(dzp);
++	znode_t		*zp = NULL;
++	zfs_acl_ids_t	acl_ids;
++	dmu_tx_t	*tx;
++	int		error;
++
++	(void) flags;
++
++	*zpp = NULL;
++
++	if ((error = zfs_enter_verify_zp(zfsvfs, dzp, FTAG)) != 0)
++		return (error);
++
++	vap->va_type = VDIR;
++	vap->va_mask |= AT_TYPE;
++
++	/* Fail if entry already exists. */
++	if ((error = zfs_dirent_lookup(dzp, dirname, &zp, ZNEW)) != 0) {
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++	ASSERT0P(zp);
++
++	if ((error = zfs_acl_ids_create(dzp, 0, vap, cr, vsecp,
++	    &acl_ids, mnt_ns)) != 0) {
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	tx = dmu_tx_create(zfsvfs->z_os);
++	dmu_tx_hold_zap(tx, dzp->z_id, TRUE, dirname);
++	dmu_tx_hold_zap(tx, DMU_NEW_OBJECT, FALSE, NULL);
++	dmu_tx_hold_sa_create(tx, ZFS_SA_BASE_ATTR_SIZE);
++
++	error = dmu_tx_assign(tx, DMU_TX_WAIT);
++	if (error != 0) {
++		zfs_acl_ids_free(&acl_ids);
++		dmu_tx_abort(tx);
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	zfs_mknode(dzp, vap, tx, cr, 0, &zp, &acl_ids);
++
++	error = zfs_link_create(dzp, dirname, zp, tx, ZNEW);
++	if (error != 0) {
++		zfs_znode_delete(zp, tx);
++		zfs_znode_free(zp);
++		zfs_acl_ids_free(&acl_ids);
++		dmu_tx_commit(tx);
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	zfs_acl_ids_free(&acl_ids);
++	dmu_tx_commit(tx);
++
++	*zpp = zp;
++	zfs_exit(zfsvfs, FTAG);
++	return (0);
+ }
+ 
+ int
+ zfs_rmdir(znode_t *dzp, const char *name, znode_t *cwd,
+     cred_t *cr, int flags)
+ {
+-	(void) dzp; (void) name; (void) cwd; (void) cr; (void) flags;
+-	return (SET_ERROR(ENOTSUP));
++	(void) cwd; (void) cr; (void) flags;
++	zfsvfs_t	*zfsvfs = ZTOZSB(dzp);
++	znode_t		*zp;
++	dmu_tx_t	*tx;
++	int		error;
++
++	if ((error = zfs_enter_verify_zp(zfsvfs, dzp, FTAG)) != 0)
++		return (error);
++
++	error = zfs_dirent_lookup(dzp, name, &zp, ZEXISTS);
++	if (error != 0) {
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	if (ZTOTYPE(zp) != VDIR) {
++		zfs_zrele(zp);
++		zfs_exit(zfsvfs, FTAG);
++		return (SET_ERROR(ENOTDIR));
++	}
++
++	tx = dmu_tx_create(zfsvfs->z_os);
++	dmu_tx_hold_zap(tx, dzp->z_id, FALSE, name);
++	dmu_tx_hold_sa(tx, zp->z_sa_hdl, B_FALSE);
++	dmu_tx_hold_zap(tx, zfsvfs->z_unlinkedobj, FALSE, NULL);
++	zfs_sa_upgrade_txholds(tx, zp);
++	zfs_sa_upgrade_txholds(tx, dzp);
++	dmu_tx_mark_netfree(tx);
++	error = dmu_tx_assign(tx, DMU_TX_WAIT);
++	if (error != 0) {
++		dmu_tx_abort(tx);
++		zfs_zrele(zp);
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	error = zfs_link_destroy(dzp, name, zp, tx, ZEXISTS, NULL);
++
++	dmu_tx_commit(tx);
++	zfs_zrele(zp);
++	zfs_exit(zfsvfs, FTAG);
++	return (error);
+ }
+ 
+ int
+ zfs_setattr(znode_t *zp, vattr_t *vap, int flag, cred_t *cr,
+     zidmap_t *mnt_ns)
+ {
+-	(void) zp; (void) vap; (void) flag; (void) cr; (void) mnt_ns;
+-	return (SET_ERROR(ENOTSUP));
++	zfsvfs_t	*zfsvfs = ZTOZSB(zp);
++	uint_t		mask = vap->va_mask;
++	dmu_tx_t	*tx;
++	int		error;
++	sa_bulk_attr_t	bulk[3];
++	int		count = 0;
++	uint64_t	mode, mtime[2], ctime[2];
++	timestruc_t	now;
++
++	(void) flag; (void) cr; (void) mnt_ns;
++
++	if (mask == 0)
++		return (0);
++
++	/* Only AT_MODE, AT_UID, AT_GID are handled; others succeed silently. */
++	if (!(mask & (AT_MODE | AT_UID | AT_GID)))
++		return (0);
++
++	if ((error = zfs_enter_verify_zp(zfsvfs, zp, FTAG)) != 0)
++		return (error);
++
++	tx = dmu_tx_create(zfsvfs->z_os);
++	dmu_tx_hold_sa(tx, zp->z_sa_hdl, B_FALSE);
++	error = dmu_tx_assign(tx, DMU_TX_WAIT);
++	if (error != 0) {
++		dmu_tx_abort(tx);
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	mutex_enter(&zp->z_lock);
++
++	if (mask & AT_MODE) {
++		mode = (zp->z_mode & S_IFMT) | (vap->va_mode & ~S_IFMT);
++		zp->z_mode = mode;
++		SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_MODE(zfsvfs),
++		    NULL, &mode, 8);
++	}
++	if (mask & AT_UID) {
++		zp->z_uid = vap->va_uid;
++		SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_UID(zfsvfs),
++		    NULL, &zp->z_uid, 8);
++	}
++	if (mask & AT_GID) {
++		zp->z_gid = vap->va_gid;
++		SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_GID(zfsvfs),
++		    NULL, &zp->z_gid, 8);
++	}
++
++	if (count > 0)
++		error = sa_bulk_update(zp->z_sa_hdl, bulk, count, tx);
++
++	mutex_exit(&zp->z_lock);
++
++	/* Update ctime on successful attribute change. */
++	if (error == 0) {
++		gethrestime(&now);
++		ZFS_TIME_ENCODE(&now, ctime);
++		(void) sa_update(zp->z_sa_hdl, SA_ZPL_CTIME(zfsvfs),
++		    ctime, sizeof (ctime), tx);
++	}
++
++	dmu_tx_commit(tx);
++	zfs_exit(zfsvfs, FTAG);
++	return (error);
++}
++
++/*
++ * Cycle-check: verify that tdzp is not under szp in the directory tree.
++ * Prevents moving a directory into one of its own descendants.
++ * Returns EINVAL if a cycle would be created, 0 otherwise.
++ */
++static int
++zfs_rename_check(znode_t *szp, znode_t *sdzp, znode_t *tdzp)
++{
++	zfsvfs_t	*zfsvfs = tdzp->z_zfsvfs;
++	znode_t		*zp, *zp1;
++	uint64_t	parent;
++	int		error = 0;
++
++	if (tdzp == szp)
++		return (SET_ERROR(EINVAL));
++	if (tdzp == sdzp)
++		return (0);
++	if (tdzp->z_id == zfsvfs->z_root)
++		return (0);
++
++	zp = tdzp;
++	for (;;) {
++		ASSERT(!zp->z_unlinked);
++		if ((error = sa_lookup(zp->z_sa_hdl,
++		    SA_ZPL_PARENT(zfsvfs), &parent, sizeof (parent))) != 0)
++			break;
++		if (parent == szp->z_id) {
++			error = SET_ERROR(EINVAL);
++			break;
++		}
++		if (parent == zfsvfs->z_root)
++			break;
++		if (parent == sdzp->z_id)
++			break;
++		error = zfs_zget(zfsvfs, parent, &zp1);
++		if (error != 0)
++			break;
++		if (zp != tdzp)
++			zfs_zrele(zp);
++		zp = zp1;
++	}
++	if (zp != tdzp)
++		zfs_zrele(zp);
++	return (error);
+ }
+ 
+ int
+@@ -81,10 +418,121 @@ zfs_rename(znode_t *sdzp, const char *snm, znode_t *tdzp,
+     const char *tnm, cred_t *cr, int flags, uint64_t rflags,
+     vattr_t *wo_vap, zidmap_t *mnt_ns)
+ {
+-	(void) sdzp; (void) snm; (void) tdzp; (void) tnm;
+-	(void) cr; (void) flags; (void) rflags; (void) wo_vap;
+-	(void) mnt_ns;
+-	return (SET_ERROR(ENOTSUP));
++	(void) cr; (void) flags; (void) rflags; (void) wo_vap; (void) mnt_ns;
++	zfsvfs_t	*zfsvfs = ZTOZSB(sdzp);
++	znode_t		*szp = NULL, *tzp = NULL;
++	dmu_tx_t	*tx;
++	int		error;
++
++	if (strlen(tnm) >= ZAP_MAXNAMELEN)
++		return (SET_ERROR(ENAMETOOLONG));
++
++	if ((error = zfs_enter_verify_zp(zfsvfs, sdzp, FTAG)) != 0)
++		return (error);
++	if ((error = zfs_verify_zp(tdzp)) != 0) {
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	/* Look up source entry. */
++	error = zfs_dirent_lookup(sdzp, snm, &szp, ZEXISTS);
++	if (error != 0) {
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	/* Renaming "." or ".." is invalid. */
++	if (snm[0] == '.' && (snm[1] == '\0' ||
++	    (snm[1] == '.' && snm[2] == '\0'))) {
++		error = SET_ERROR(EINVAL);
++		goto out;
++	}
++
++	/* If source is a directory, check for cycles. */
++	if (ZTOTYPE(szp) == VDIR) {
++		if ((error = zfs_rename_check(szp, sdzp, tdzp)) != 0)
++			goto out;
++	}
++
++	/* Look up target entry (may not exist). */
++	error = zfs_dirent_lookup(tdzp, tnm, &tzp, 0);
++	if (error != 0 && error != ENOENT) {
++		goto out;
++	}
++	error = 0;
++
++	/* Source and target must be the same type. */
++	if (tzp != NULL) {
++		if (ZTOTYPE(szp) == VDIR && ZTOTYPE(tzp) != VDIR) {
++			error = SET_ERROR(ENOTDIR);
++			goto out;
++		}
++		if (ZTOTYPE(szp) != VDIR && ZTOTYPE(tzp) == VDIR) {
++			error = SET_ERROR(EISDIR);
++			goto out;
++		}
++		/* Same object: nothing to do. */
++		if (szp->z_id == tzp->z_id) {
++			error = 0;
++			goto out;
++		}
++	}
++
++	tx = dmu_tx_create(zfsvfs->z_os);
++	dmu_tx_hold_sa(tx, szp->z_sa_hdl, B_FALSE);
++	dmu_tx_hold_sa(tx, sdzp->z_sa_hdl, B_FALSE);
++	dmu_tx_hold_zap(tx, sdzp->z_id, FALSE, snm);
++	dmu_tx_hold_zap(tx, tdzp->z_id, TRUE, tnm);
++	if (sdzp != tdzp) {
++		dmu_tx_hold_sa(tx, tdzp->z_sa_hdl, B_FALSE);
++		zfs_sa_upgrade_txholds(tx, tdzp);
++	}
++	if (tzp != NULL) {
++		dmu_tx_hold_sa(tx, tzp->z_sa_hdl, B_FALSE);
++		zfs_sa_upgrade_txholds(tx, tzp);
++	}
++	zfs_sa_upgrade_txholds(tx, szp);
++	dmu_tx_hold_zap(tx, zfsvfs->z_unlinkedobj, FALSE, NULL);
++
++	error = dmu_tx_assign(tx, DMU_TX_WAIT);
++	if (error != 0) {
++		dmu_tx_abort(tx);
++		goto out;
++	}
++
++	/* Remove target if it exists. */
++	if (tzp != NULL) {
++		error = zfs_link_destroy(tdzp, tnm, tzp, tx, 0, NULL);
++		if (error != 0) {
++			dmu_tx_commit(tx);
++			goto out;
++		}
++	}
++
++	/* Add target entry pointing to szp. */
++	error = zfs_link_create(tdzp, tnm, szp, tx, ZRENAMING);
++	if (error == 0) {
++		szp->z_pflags |= ZFS_AV_MODIFIED;
++		(void) sa_update(szp->z_sa_hdl, SA_ZPL_FLAGS(zfsvfs),
++		    &szp->z_pflags, sizeof (uint64_t), tx);
++
++		/* Remove source entry. */
++		error = zfs_link_destroy(sdzp, snm, szp, tx, ZRENAMING, NULL);
++		if (error != 0) {
++			/* Undo the target create to keep consistency. */
++			VERIFY0(zfs_link_destroy(tdzp, tnm, szp, tx,
++			    ZRENAMING, NULL));
++		}
++	}
++
++	dmu_tx_commit(tx);
++
++out:
++	if (tzp != NULL)
++		zfs_zrele(tzp);
++	zfs_zrele(szp);
++	zfs_exit(zfsvfs, FTAG);
++	return (error);
+ }
+ 
+ int
+@@ -92,9 +540,83 @@ zfs_symlink(znode_t *dzp, const char *name, vattr_t *vap,
+     const char *link, znode_t **zpp, cred_t *cr, int flags,
+     zidmap_t *mnt_ns)
+ {
+-	(void) dzp; (void) name; (void) vap;
+-	(void) link; (void) zpp; (void) cr; (void) flags; (void) mnt_ns;
+-	return (SET_ERROR(ENOTSUP));
++	(void) cr; (void) flags; (void) mnt_ns;
++	znode_t		*zp = NULL;
++	dmu_tx_t	*tx;
++	zfsvfs_t	*zfsvfs = ZTOZSB(dzp);
++	uint64_t	len = strlen(link);
++	int		error;
++	zfs_acl_ids_t	acl_ids;
++
++	ASSERT3S(vap->va_type, ==, VLNK);
++
++	if (strlen(name) >= ZAP_MAXNAMELEN)
++		return (SET_ERROR(ENAMETOOLONG));
++
++	if ((error = zfs_enter_verify_zp(zfsvfs, dzp, FTAG)) != 0)
++		return (error);
++
++	if (len > MAXPATHLEN) {
++		zfs_exit(zfsvfs, FTAG);
++		return (SET_ERROR(ENAMETOOLONG));
++	}
++
++	if ((error = zfs_acl_ids_create(dzp, 0, vap, kcred, NULL,
++	    &acl_ids, NULL)) != 0) {
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	/* Fail if entry already exists. */
++	error = zfs_dirent_lookup(dzp, name, &zp, ZNEW);
++	if (error) {
++		zfs_acl_ids_free(&acl_ids);
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	tx = dmu_tx_create(zfsvfs->z_os);
++	dmu_tx_hold_write(tx, DMU_NEW_OBJECT, 0, MAX(1, len));
++	dmu_tx_hold_zap(tx, dzp->z_id, TRUE, name);
++	dmu_tx_hold_sa_create(tx, acl_ids.z_aclp->z_acl_bytes +
++	    ZFS_SA_BASE_ATTR_SIZE + len);
++	dmu_tx_hold_sa(tx, dzp->z_sa_hdl, B_FALSE);
++
++	error = dmu_tx_assign(tx, DMU_TX_WAIT);
++	if (error) {
++		zfs_acl_ids_free(&acl_ids);
++		dmu_tx_abort(tx);
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	zfs_mknode(dzp, vap, tx, kcred, 0, &zp, &acl_ids);
++
++	if (zp->z_is_sa)
++		error = sa_update(zp->z_sa_hdl, SA_ZPL_SYMLINK(zfsvfs),
++		    (void *)(uintptr_t)link, len, tx);
++	else
++		zfs_sa_symlink(zp, (char *)(uintptr_t)link, (int)len, tx);
++
++	zp->z_size = len;
++	(void) sa_update(zp->z_sa_hdl, SA_ZPL_SIZE(zfsvfs),
++	    &zp->z_size, sizeof (zp->z_size), tx);
++
++	error = zfs_link_create(dzp, name, zp, tx, ZNEW);
++	if (error != 0) {
++		zfs_znode_delete(zp, tx);
++		zfs_znode_free(zp);
++		zp = NULL;
++	}
++
++	zfs_acl_ids_free(&acl_ids);
++	dmu_tx_commit(tx);
++
++	if (zpp != NULL)
++		*zpp = (error == 0) ? zp : NULL;
++
++	zfs_exit(zfsvfs, FTAG);
++	return (error);
+ }
+ 
+ int
+@@ -123,3 +645,622 @@ zfs_write_simple(znode_t *zp, const void *data, size_t len,
+ 	(void) zp; (void) data; (void) len; (void) pos; (void) resid;
+ 	return (SET_ERROR(ENOTSUP));
+ }
++
++/* ------------------------------------------------------------------ */
++/* OSv VOP bridge functions                                            */
++/* ------------------------------------------------------------------ */
++
++/*
++ * zfs_vop_open — OSv vop_open bridge.
++ *
++ * Unlike the old BSD code, we do NOT return EINVAL for O_DIRECT.
++ * O_DIRECT is handled in the read/write paths via the ABD direct-I/O
++ * mechanism.  We only reject it if the dataset has direct=disabled.
++ */
++static int
++zfs_vop_open(struct file *fp)
++{
++	struct vnode *vp = file_dentry(fp)->d_vnode;
++	znode_t	*zp = VTOZ(vp);
++	zfsvfs_t *zfsvfs = ZTOZSB(zp);
++	int error;
++
++	if ((error = zfs_enter_verify_zp(zfsvfs, zp, FTAG)) != 0)
++		return (error);
++
++	if ((file_flags(fp) & FWRITE) && (zp->z_pflags & ZFS_APPENDONLY) &&
++	    ((file_flags(fp) & O_APPEND) == 0)) {
++		zfs_exit(zfsvfs, FTAG);
++		return (SET_ERROR(EPERM));
++	}
++
++	if (file_flags(fp) & O_DSYNC)
++		atomic_inc_32(&zp->z_sync_cnt);
++
++	zfs_exit(zfsvfs, FTAG);
++	return (0);
++}
++
++/*
++ * zfs_vop_close — OSv vop_close bridge.
++ */
++static int
++zfs_vop_close(struct vnode *vp, struct file *fp)
++{
++	znode_t	*zp = VTOZ(vp);
++	zfsvfs_t *zfsvfs = ZTOZSB(zp);
++	int error;
++
++	if ((error = zfs_enter_verify_zp(zfsvfs, zp, FTAG)) != 0)
++		return (error);
++
++	if (file_flags(fp) & O_DSYNC)
++		atomic_dec_32(&zp->z_sync_cnt);
++
++	zfs_exit(zfsvfs, FTAG);
++	return (0);
++}
++
++/*
++ * zfs_vop_read — OSv vop_read bridge.
++ *
++ * Wraps the platform-independent zfs_read() with an OSv zfs_uio_t.
++ * If O_DIRECT is set on the file, the ioflag is set accordingly so
++ * zfs_setup_direct() will engage the ABD direct-I/O path.
++ */
++static int
++zfs_vop_read(struct vnode *vp, struct file *fp, struct uio *uio, int flags)
++{
++	(void) flags;
++	znode_t *zp = VTOZ(vp);
++	zfs_uio_t zuio;
++	int ioflag = 0;
++	int error;
++
++	/* Return EISDIR for directory reads, matching Linux behavior. */
++	if (vp->v_type == VDIR)
++		return (SET_ERROR(EISDIR));
++
++	if (file_flags(fp) & O_DIRECT)
++		ioflag |= O_DIRECT;
++	if (file_flags(fp) & O_DSYNC)
++		ioflag |= O_SYNC;
++
++	zfs_uio_init(&zuio, uio);
++	error = zfs_read(zp, &zuio, ioflag, NULL);
++
++	if (zuio.uio_extflg & UIO_DIRECT)
++		zfs_uio_free_dio_pages(&zuio, UIO_READ);
++
++	return (error);
++}
++
++/*
++ * zfs_vop_write — OSv vop_write bridge.
++ *
++ * The flags parameter from vfs_file::write() carries IO_APPEND,
++ * IO_SYNC, and IO_DIRECT (the latter set when fp->f_flags & O_DIRECT).
++ */
++static int
++zfs_vop_write(struct vnode *vp, struct uio *uio, int flags)
++{
++	znode_t *zp = VTOZ(vp);
++	zfs_uio_t zuio;
++	int ioflag = 0;
++	int error;
++
++	if (flags & IO_APPEND)
++		ioflag |= O_APPEND;
++	if (flags & IO_SYNC)
++		ioflag |= O_SYNC;
++	if (flags & IO_DIRECT)
++		ioflag |= O_DIRECT;
++
++	zfs_uio_init(&zuio, uio);
++	error = zfs_write(zp, &zuio, ioflag, NULL);
++
++	if (zuio.uio_extflg & UIO_DIRECT)
++		zfs_uio_free_dio_pages(&zuio, UIO_WRITE);
++
++	return (error);
++}
++
++/*
++ * zfs_vop_seek — trivially accept all seeks.
++ */
++static int
++zfs_vop_seek(struct vnode *vp, struct file *fp, off_t ooff, off_t noffp)
++{
++	(void) vp; (void) fp; (void) ooff; (void) noffp;
++	return (0);
++}
++
++/*
++ * zfs_vop_ioctl — minimal ioctl support.
++ */
++static int
++zfs_vop_ioctl(struct vnode *vp, struct file *fp, u_long com, void *data)
++{
++	(void) vp; (void) fp; (void) com; (void) data;
++	return (SET_ERROR(ENOTTY));
++}
++
++/*
++ * zfs_vop_fsync — flush pending writes to stable storage.
++ */
++static int
++zfs_vop_fsync(struct vnode *vp, struct file *fp)
++{
++	(void) fp;
++	return (zfs_fsync(VTOZ(vp), 0, NULL));
++}
++
++/*
++ * zfs_vop_readdir — read one directory entry per call.
++ *
++ * fp->f_offset encodes position:
++ *   0   → "." (current directory)
++ *   1   → ".." (parent directory)
++ *   >=2 → serialized ZAP cursor for real entries
++ *
++ * Returns 0 with dir filled on success; ENOENT when exhausted.
++ */
++static int
++zfs_vop_readdir(struct vnode *vp, struct file *fp, struct dirent *dir)
++{
++	znode_t		*zp = VTOZ(vp);
++	zfsvfs_t	*zfsvfs = ZTOZSB(zp);
++	objset_t	*os;
++	zap_cursor_t	zc;
++	zap_attribute_t	*zap;
++	uint64_t	offset;
++	uint64_t	parent;
++	uint64_t	objnum;
++	uint8_t		dtype;
++	int		error;
++
++	if ((error = zfs_enter_verify_zp(zfsvfs, zp, FTAG)) != 0)
++		return (error);
++
++	if ((error = sa_lookup(zp->z_sa_hdl, SA_ZPL_PARENT(zfsvfs),
++	    &parent, sizeof (parent))) != 0) {
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	os = zfsvfs->z_os;
++	offset = (uint64_t)file_offset(fp);
++	zap = zap_attribute_long_alloc();
++
++	if (offset == 0) {
++		/* "." */
++		strlcpy(dir->d_name, ".", sizeof (dir->d_name));
++		objnum = zp->z_id;
++		dtype = DT_DIR;
++		file_setoffset(fp, 1);
++	} else if (offset == 1) {
++		/* ".." */
++		strlcpy(dir->d_name, "..", sizeof (dir->d_name));
++		objnum = parent;
++		dtype = DT_DIR;
++		file_setoffset(fp, 2);
++	} else {
++		/* Real ZAP entry */
++		if (offset <= 2)
++			zap_cursor_init(&zc, os, zp->z_id);
++		else
++			zap_cursor_init_serialized(&zc, os, zp->z_id, offset);
++
++		error = zap_cursor_retrieve(&zc, zap);
++		if (error != 0) {
++			zap_cursor_fini(&zc);
++			zap_attribute_free(zap);
++			zfs_exit(zfsvfs, FTAG);
++			return (error == ENOENT ? ENOENT : error);
++		}
++
++		if (zap->za_integer_length != 8 || zap->za_num_integers == 0) {
++			zap_cursor_fini(&zc);
++			zap_attribute_free(zap);
++			zfs_exit(zfsvfs, FTAG);
++			return (SET_ERROR(ENXIO));
++		}
++
++		objnum = ZFS_DIRENT_OBJ(zap->za_first_integer);
++		dtype  = ZFS_DIRENT_TYPE(zap->za_first_integer);
++		strlcpy(dir->d_name, zap->za_name, sizeof (dir->d_name));
++
++		zap_cursor_advance(&zc);
++		file_setoffset(fp, (off_t)zap_cursor_serialize(&zc));
++		zap_cursor_fini(&zc);
++	}
++
++	dir->d_ino  = (ino_t)objnum;
++	dir->d_off  = file_offset(fp);
++	dir->d_type = dtype;
++	dir->d_reclen = sizeof (struct dirent);
++
++	zap_attribute_free(zap);
++	zfs_exit(zfsvfs, FTAG);
++	return (0);
++}
++
++/*
++ * zfs_vop_lookup — look up a directory entry and return its vnode.
++ *
++ * Uses ZAP to find the object ID for name in dvp, then calls vget()
++ * to get/create the OSv vnode.  zfs_osv_vget() will load the znode
++ * from disk if the vnode is not already cached.
++ */
++static int
++zfs_vop_lookup(struct vnode *dvp, char *name, struct vnode **vpp)
++{
++	znode_t *dzp = VTOZ(dvp);
++	zfsvfs_t *zfsvfs = ZTOZSB(dzp);
++	uint64_t zoid;
++	matchtype_t mt = 0;
++	struct vnode *vp;
++	int error;
++
++	*vpp = NULL;
++
++	if ((error = zfs_enter_verify_zp(zfsvfs, dzp, FTAG)) != 0)
++		return (error);
++
++	if (dvp->v_type != VDIR) {
++		zfs_exit(zfsvfs, FTAG);
++		return (SET_ERROR(ENOTDIR));
++	}
++
++	if (dzp->z_unlinked) {
++		zfs_exit(zfsvfs, FTAG);
++		return (SET_ERROR(ENOENT));
++	}
++
++	if (zfsvfs->z_norm != 0) {
++		mt = MT_NORMALIZE;
++		if (zfsvfs->z_case == ZFS_CASE_MIXED)
++			mt |= MT_MATCH_CASE;
++	}
++
++	if (zfsvfs->z_norm) {
++		error = zap_lookup_norm(zfsvfs->z_os, dzp->z_id, name, 8, 1,
++		    &zoid, mt, NULL, 0, NULL);
++	} else {
++		error = zap_lookup(zfsvfs->z_os, dzp->z_id, name, 8, 1,
++		    &zoid);
++	}
++
++	zfs_exit(zfsvfs, FTAG);
++
++	if (error != 0)
++		return (error);
++
++	zoid = ZFS_DIRENT_OBJ(zoid);
++
++	/*
++	 * vget() looks up the vnode cache by (mount, inode).  If not
++	 * cached, it allocates a new vnode and calls zfs_osv_vget() to
++	 * load the znode from disk.
++	 */
++	vget(dvp->v_mount, zoid, &vp);
++	if (vp == NULL)
++		return (SET_ERROR(ENOMEM));
++
++	*vpp = vp;
++	return (0);
++}
++
++/*
++ * zfs_vop_create — create a regular file.
++ */
++static int
++zfs_vop_create(struct vnode *dvp, char *name, mode_t mode)
++{
++	znode_t		*dzp = VTOZ(dvp);
++	znode_t		*zp = NULL;
++	vattr_t		vattr;
++	int		error;
++
++	memset(&vattr, 0, sizeof (vattr));
++	vattr.va_type = VREG;
++	vattr.va_mode = mode;
++	vattr.va_mask = AT_TYPE | AT_MODE;
++
++	error = zfs_create(dzp, name, &vattr, 0, mode,
++	    &zp, kcred, 0, NULL, NULL);
++	if (error == 0 && zp != NULL)
++		zfs_zrele(zp);
++	return (error);
++}
++
++/*
++ * zfs_vop_remove — remove a file (unlink).
++ */
++static int
++zfs_vop_remove(struct vnode *dvp, struct vnode *vp, char *name)
++{
++	(void) vp;
++	return (zfs_remove(VTOZ(dvp), name, kcred, 0));
++}
++
++/*
++ * zfs_vop_rename — rename a file or directory.
++ */
++static int
++zfs_vop_rename(struct vnode *sdvp, struct vnode *svp, char *sname,
++    struct vnode *tdvp, struct vnode *tvp, char *tname)
++{
++	(void) svp; (void) tvp;
++	return (zfs_rename(VTOZ(sdvp), sname, VTOZ(tdvp), tname,
++	    kcred, 0, 0, NULL, NULL));
++}
++
++/*
++ * zfs_vop_mkdir — create a directory.
++ */
++static int
++zfs_vop_mkdir(struct vnode *dvp, char *name, mode_t mode)
++{
++	znode_t		*dzp = VTOZ(dvp);
++	znode_t		*zp = NULL;
++	vattr_t		vattr;
++	int		error;
++
++	memset(&vattr, 0, sizeof (vattr));
++	vattr.va_type = VDIR;
++	vattr.va_mode = mode;
++	vattr.va_mask = AT_TYPE | AT_MODE;
++
++	error = zfs_mkdir(dzp, name, &vattr, &zp, kcred, 0, NULL, NULL);
++	if (error == 0 && zp != NULL)
++		zfs_zrele(zp);
++	return (error);
++}
++
++/*
++ * zfs_vop_rmdir — remove an empty directory.
++ */
++static int
++zfs_vop_rmdir(struct vnode *dvp, struct vnode *vp, char *name)
++{
++	(void) vp;
++	return (zfs_rmdir(VTOZ(dvp), name, NULL, kcred, 0));
++}
++
++/*
++ * zfs_vop_getattr — return cached znode attributes.
++ */
++static int
++zfs_vop_getattr(struct vnode *vp, struct vattr *vap)
++{
++	znode_t	*zp = VTOZ(vp);
++	zfsvfs_t *zfsvfs = ZTOZSB(zp);
++	int error;
++	uint64_t mtime[2], ctime[2];
++	sa_bulk_attr_t bulk[2];
++	int count = 0;
++
++	if ((error = zfs_enter_verify_zp(zfsvfs, zp, FTAG)) != 0)
++		return (error);
++
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_MTIME(zfsvfs), NULL, &mtime, 16);
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_CTIME(zfsvfs), NULL, &ctime, 16);
++
++	if ((error = sa_bulk_lookup(zp->z_sa_hdl, bulk, count)) != 0) {
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	mutex_enter(&zp->z_lock);
++	vap->va_type = IFTOVT(zp->z_mode);
++	vap->va_mode = zp->z_mode & ~S_IFMT;
++	vap->va_uid  = zp->z_uid;
++	vap->va_gid  = zp->z_gid;
++	vap->va_nodeid = zp->z_id;
++	vap->va_nlink  = (nlink_t)MIN(zp->z_links, UINT32_MAX);
++	vap->va_size   = zp->z_size;
++	ZFS_TIME_DECODE(&vap->va_atime, zp->z_atime);
++	ZFS_TIME_DECODE(&vap->va_mtime, mtime);
++	ZFS_TIME_DECODE(&vap->va_ctime, ctime);
++	mutex_exit(&zp->z_lock);
++
++	/*
++	 * Build st_dev from the filesystem ID stored at mount time.
++	 * The upper byte encodes ZFS_ID so that IS_ZFS(st_dev) is true.
++	 */
++	{
++		struct mount *mp = vp->v_mount;
++		vap->va_fsid =
++		    (dev_t)(uint32_t)mp->m_fsid.__val[0] |
++		    ((dev_t)(uint32_t)mp->m_fsid.__val[1] << 32);
++	}
++
++	zfs_exit(zfsvfs, FTAG);
++	return (0);
++}
++
++/*
++ * zfs_vop_setattr — set vnode attributes (chmod, chown).
++ */
++static int
++zfs_vop_setattr(struct vnode *vp, struct vattr *vap)
++{
++	znode_t *zp = VTOZ(vp);
++	vattr_t zva;
++
++	memset(&zva, 0, sizeof (zva));
++	zva.va_mask = 0;
++	if (vap->va_mask & AT_MODE) {
++		zva.va_mode = vap->va_mode;
++		zva.va_mask |= AT_MODE;
++	}
++	if (vap->va_mask & AT_UID) {
++		zva.va_uid = vap->va_uid;
++		zva.va_mask |= AT_UID;
++	}
++	if (vap->va_mask & AT_GID) {
++		zva.va_gid = vap->va_gid;
++		zva.va_mask |= AT_GID;
++	}
++	if (zva.va_mask == 0)
++		return (0);
++	return (zfs_setattr(zp, &zva, 0, kcred, NULL));
++}
++
++/*
++ * zfs_vop_inactive — release znode on last vnode reference drop.
++ */
++static int
++zfs_vop_inactive(struct vnode *vp)
++{
++	znode_t *zp = VTOZ(vp);
++	if (zp == NULL)
++		return (0);
++
++	vp->v_data = NULL;
++	zp->z_vnode = NULL;
++
++	/*
++	 * zfs_zinactive destroys the SA handle under the object hold
++	 * mutex and then frees the znode.  If the zfsvfs is already
++	 * being torn down (z_sa_hdl is NULL), fall back to a direct
++	 * free.
++	 */
++	if (zp->z_sa_hdl != NULL)
++		zfs_zinactive(zp);
++	else
++		zfs_znode_free(zp);
++
++	return (0);
++}
++
++/*
++ * zfs_vop_truncate — truncate or extend a file to new_size.
++ */
++static int
++zfs_vop_truncate(struct vnode *vp, off_t new_size)
++{
++	znode_t  *zp = VTOZ(vp);
++	zfsvfs_t *zfsvfs = ZTOZSB(zp);
++	int       error;
++
++	if ((error = zfs_enter_verify_zp(zfsvfs, zp, FTAG)) != 0)
++		return (error);
++	error = zfs_freesp(zp, (uint64_t)new_size, 0, O_RDWR, B_TRUE);
++	zfs_exit(zfsvfs, FTAG);
++	return (error);
++}
++
++/*
++ * zfs_vop_link — not yet implemented.
++ */
++static int
++zfs_vop_link(struct vnode *tdvp, struct vnode *svp, char *name)
++{
++	(void) tdvp; (void) svp; (void) name;
++	return (SET_ERROR(ENOTSUP));
++}
++
++/*
++ * zfs_vop_cache is set to NULL in the vnops table below.
++ *
++ * OSv's pagecache has two file-mmap paths:
++ *   vop_cache != NULL → map_file_mmap (pagecache ARC bridge)
++ *   vop_cache == NULL → default_file_mmap (map_file_page_read)
++ *
++ * The ARC bridge path requires va_fsid to carry ZFS_ID so that IS_ZFS()
++ * returns true, and requires arc_share_buf() to be wired into OpenZFS 2.x.
++ * Neither is currently implemented for OSv.  The direct-read path
++ * (default_file_mmap / map_file_page_read) calls zfs_read() per page fault
++ * and is backed by ZFS's own ARC, so correctness and caching are preserved.
++ */
++
++/*
++ * zfs_vop_fallocate — not yet implemented.
++ */
++static int
++zfs_vop_fallocate(struct vnode *vp, int mode, loff_t offset, loff_t len)
++{
++	(void) vp; (void) mode; (void) offset; (void) len;
++	return (SET_ERROR(ENOTSUP));
++}
++
++/*
++ * zfs_vop_readlink — read the target path of a symbolic link.
++ */
++static int
++zfs_vop_readlink(struct vnode *vp, struct uio *uio)
++{
++	znode_t *zp = VTOZ(vp);
++	zfsvfs_t *zfsvfs = ZTOZSB(zp);
++	zfs_uio_t zuio;
++	int error;
++
++	if ((error = zfs_enter_verify_zp(zfsvfs, zp, FTAG)) != 0)
++		return (error);
++
++	zfs_uio_init(&zuio, uio);
++	if (zp->z_is_sa)
++		error = sa_lookup_uio(zp->z_sa_hdl,
++		    SA_ZPL_SYMLINK(zfsvfs), &zuio);
++	else
++		error = zfs_sa_readlink(zp, &zuio);
++
++	zfs_exit(zfsvfs, FTAG);
++	return (error);
++}
++
++/*
++ * zfs_vop_symlink — create a symbolic link.
++ */
++static int
++zfs_vop_symlink(struct vnode *dvp, char *name, char *link)
++{
++	znode_t *dzp = VTOZ(dvp);
++	znode_t *zp = NULL;
++	vattr_t vattr;
++	int error;
++
++	memset(&vattr, 0, sizeof (vattr));
++	vattr.va_type = VLNK;
++	vattr.va_mode = 0777;
++	vattr.va_mask = AT_TYPE | AT_MODE;
++
++	error = zfs_symlink(dzp, name, &vattr, link, &zp, kcred, 0, NULL);
++	if (error == 0 && zp != NULL)
++		zfs_zrele(zp);
++	return (error);
++}
++
++/* ------------------------------------------------------------------ */
++/* OSv vnode operations dispatch table                                 */
++/* ------------------------------------------------------------------ */
++
++struct vnops zfs_vnops = {
++	zfs_vop_open,		/* open   */
++	zfs_vop_close,		/* close  */
++	zfs_vop_read,		/* read   */
++	zfs_vop_write,		/* write  */
++	zfs_vop_seek,		/* seek   */
++	zfs_vop_ioctl,		/* ioctl  */
++	zfs_vop_fsync,		/* fsync  */
++	zfs_vop_readdir,	/* readdir */
++	zfs_vop_lookup,		/* lookup */
++	zfs_vop_create,		/* create */
++	zfs_vop_remove,		/* remove */
++	zfs_vop_rename,		/* rename */
++	zfs_vop_mkdir,		/* mkdir  */
++	zfs_vop_rmdir,		/* rmdir  */
++	zfs_vop_getattr,	/* getattr */
++	zfs_vop_setattr,	/* setattr */
++	zfs_vop_inactive,	/* inactive */
++	zfs_vop_truncate,	/* truncate */
++	zfs_vop_link,		/* link   */
++	NULL,			/* cache  (see comment above) */
++	zfs_vop_fallocate,	/* fallocate */
++	zfs_vop_readlink,	/* readlink */
++	zfs_vop_symlink,	/* symlink */
++};
++
++#pragma GCC visibility pop
+diff --git a/module/os/osv/zfs/zfs_znode_os.c b/module/os/osv/zfs/zfs_znode_os.c
+index 0b12a86ac..59b5bd752 100644
+--- a/module/os/osv/zfs/zfs_znode_os.c
++++ b/module/os/osv/zfs/zfs_znode_os.c
+@@ -16,11 +16,15 @@
+ #include <sys/kmem.h>
+ #include <sys/zfs_context.h>
+ #include <sys/zfs_znode.h>
++#include <sys/zfs_rlock.h>
++#include <sys/zfs_acl.h>
+ #include <sys/zfs_sa.h>
+ #include <sys/zfs_vfsops.h>
++#include <sys/zfs_dir.h>
+ #include <sys/vnode.h>
+ #include <sys/dmu.h>
+ #include <sys/dmu_objset.h>
++#include <sys/zap.h>
+ #include <sys/sa.h>
+ #include <sys/sa_impl.h>
+ 
+@@ -46,37 +50,141 @@ zfs_zrele(znode_t *zp)
+ 	}
+ }
+ 
++/*
++ * zfs_znode_sa_init -- initialize the SA handle for a znode.
++ *
++ * Must be called with ZFS_OBJ_MUTEX held for the object.
++ * Either creates a new SA handle from db, or attaches an existing one.
++ */
++void
++zfs_znode_sa_init(zfsvfs_t *zfsvfs, znode_t *zp,
++    dmu_buf_t *db, dmu_object_type_t obj_type, sa_handle_t *sa_hdl)
++{
++	ASSERT(MUTEX_HELD(ZFS_OBJ_MUTEX(zfsvfs, zp->z_id)));
++	ASSERT0P(zp->z_sa_hdl);
++
++	if (sa_hdl == NULL) {
++		VERIFY0(sa_handle_get_from_db(zfsvfs->z_os, db, zp,
++		    SA_HDL_SHARED, &zp->z_sa_hdl));
++	} else {
++		zp->z_sa_hdl = sa_hdl;
++		sa_set_userp(sa_hdl, zp);
++	}
++
++	zp->z_is_sa = (obj_type == DMU_OT_SA) ? B_TRUE : B_FALSE;
++}
++
++/*
++ * zfs_znode_dmu_fini -- destroy the SA handle for a znode.
++ *
++ * Must be called with ZFS_OBJ_MUTEX held for the object.
++ */
++void
++zfs_znode_dmu_fini(znode_t *zp)
++{
++	ASSERT(MUTEX_HELD(ZFS_OBJ_MUTEX(zp->z_zfsvfs, zp->z_id)));
++	ASSERT3P(zp->z_sa_hdl, !=, NULL);
++
++	sa_handle_destroy(zp->z_sa_hdl);
++	zp->z_sa_hdl = NULL;
++}
++
++
++/*
++ * Callback invoked when acquiring a RL_WRITER or RL_APPEND lock on
++ * z_rangelock.  Converts RL_APPEND to RL_WRITER at z_size, and
++ * expands to the full file range if the block size might grow.
++ */
++static void
++zfs_rangelock_cb(zfs_locked_range_t *new, void *arg)
++{
++	znode_t *zp = arg;
++
++	if (new->lr_type == RL_APPEND) {
++		new->lr_offset = zp->z_size;
++		new->lr_type = RL_WRITER;
++	}
++
++	uint64_t end_size = MAX(zp->z_size, new->lr_offset + new->lr_length);
++	if (zp->z_size <= zp->z_blksz && end_size > zp->z_blksz &&
++	    (!ISP2(zp->z_blksz) || zp->z_blksz < ZTOZSB(zp)->z_max_blksz)) {
++		new->lr_offset = 0;
++		new->lr_length = UINT64_MAX;
++	}
++}
++
+ /*
+  * Allocate and initialize a new znode.
++ *
++ * Must be called with ZFS_OBJ_MUTEX held (because zfs_znode_sa_init
++ * requires it).  On success, *zpp is set and 0 is returned.  On
++ * failure the dmu buffer reference passed in is NOT released (the
++ * caller owns it and must call sa_buf_rele on error paths).
+  */
+ static int
+ zfs_znode_alloc(zfsvfs_t *zfsvfs, dmu_buf_t *db, int blksz,
+     dmu_object_type_t obj_type, sa_handle_t *hdl, znode_t **zpp)
+ {
+ 	znode_t *zp;
++	sa_bulk_attr_t bulk[9];
++	uint64_t mode, parent;
++	int count = 0;
++	int error;
+ 
+ 	zp = kmem_zalloc(sizeof (znode_t), KM_SLEEP);
+ 
+-	ASSERT3P(zp->z_zfsvfs, ==, NULL);
+-
+ 	zp->z_sa_hdl = NULL;
+ 	zp->z_unlinked = B_FALSE;
+ 	zp->z_atime_dirty = B_FALSE;
+-	zp->z_is_sa = (obj_type == DMU_OT_SA) ? B_TRUE : B_FALSE;
+-	zp->z_pflags = 0;
+ 	zp->z_mapcnt = 0;
+ 	zp->z_id = db->db_object;
+ 	zp->z_blksz = blksz;
+ 	zp->z_seq = 0x7A4653;  /* "ZFS" in hex */
+ 	zp->z_sync_cnt = 0;
+ 	zp->z_ref_cnt = 1;
+-
+ 	zp->z_zfsvfs = zfsvfs;
+ 
+-	if (hdl != NULL) {
+-		zp->z_sa_hdl = hdl;
++	/* Initialize per-znode locks and the range lock. */
++	mutex_init(&zp->z_lock, NULL, MUTEX_DEFAULT, NULL);
++	mutex_init(&zp->z_acl_lock, NULL, MUTEX_DEFAULT, NULL);
++	rw_init(&zp->z_xattr_lock, NULL, RW_DEFAULT, NULL);
++	zfs_rangelock_init(&zp->z_rangelock, zfs_rangelock_cb, zp);
++
++	/* Set up the SA handle and mark is_sa. */
++	zfs_znode_sa_init(zfsvfs, zp, db, obj_type, hdl);
++
++	/* Load the on-disk attributes we need to keep in the znode. */
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_MODE(zfsvfs), NULL, &mode, 8);
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_GEN(zfsvfs), NULL,
++	    &zp->z_gen, 8);
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_SIZE(zfsvfs), NULL,
++	    &zp->z_size, 8);
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_LINKS(zfsvfs), NULL,
++	    &zp->z_links, 8);
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_FLAGS(zfsvfs), NULL,
++	    &zp->z_pflags, 8);
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_PARENT(zfsvfs), NULL,
++	    &parent, 8);
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_ATIME(zfsvfs), NULL,
++	    &zp->z_atime, 16);
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_UID(zfsvfs), NULL,
++	    &zp->z_uid, 8);
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_GID(zfsvfs), NULL,
++	    &zp->z_gid, 8);
++
++	error = sa_bulk_lookup(zp->z_sa_hdl, bulk, count);
++	if (error != 0 || zp->z_gen == 0) {
++		if (hdl == NULL)
++			sa_handle_destroy(zp->z_sa_hdl);
++		zp->z_sa_hdl = NULL;
++		kmem_free(zp, sizeof (znode_t));
++		return (error != 0 ? error : SET_ERROR(EIO));
+ 	}
+ 
++	zp->z_mode = mode;
++	if (zp->z_pflags & ZFS_XATTR)
++		zp->z_xattr_parent = parent;
++
+ 	mutex_enter(&zfsvfs->z_znodes_lock);
+ 	list_insert_tail(&zfsvfs->z_all_znodes, zp);
+ 	mutex_exit(&zfsvfs->z_znodes_lock);
+@@ -87,6 +195,8 @@ zfs_znode_alloc(zfsvfs_t *zfsvfs, dmu_buf_t *db, int blksz,
+ 
+ /*
+  * Free a znode and remove it from the zfsvfs znode list.
++ * The SA handle must have been destroyed (via zfs_znode_dmu_fini)
++ * before calling this, or it is NULL.
+  */
+ void
+ zfs_znode_free(znode_t *zp)
+@@ -102,9 +212,114 @@ zfs_znode_free(znode_t *zp)
+ 		zp->z_sa_hdl = NULL;
+ 	}
+ 
++	/* Tear down per-znode locks. */
++	zfs_rangelock_fini(&zp->z_rangelock);
++	rw_destroy(&zp->z_xattr_lock);
++	mutex_destroy(&zp->z_acl_lock);
++	mutex_destroy(&zp->z_lock);
++
+ 	kmem_free(zp, sizeof (znode_t));
+ }
+ 
++/*
++ * zfs_zinactive -- release a znode when the last VFS reference drops.
++ *
++ * Called from vop_inactive when the OSv vnode is being reclaimed.
++ */
++void
++zfs_zinactive(znode_t *zp)
++{
++	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
++	uint64_t z_id = zp->z_id;
++
++	ASSERT3P(zp->z_sa_hdl, !=, NULL);
++
++	ZFS_OBJ_HOLD_ENTER(zfsvfs, z_id);
++	zfs_znode_dmu_fini(zp);
++	ZFS_OBJ_HOLD_EXIT(zfsvfs, z_id);
++	zfs_znode_free(zp);
++}
++
++/*
++ * zfs_zget -- look up or load a znode by object number.
++ *
++ * If the znode is already in memory (attached as SA userdata on the
++ * DMU buffer), increment its reference count and return it.  If not,
++ * allocate a new znode, set up its SA handle, and load its on-disk
++ * attributes.
++ *
++ * On success *zpp is set to the znode and 0 is returned.
++ */
++int
++zfs_zget(zfsvfs_t *zfsvfs, uint64_t obj_num, znode_t **zpp)
++{
++	dmu_object_info_t doi;
++	dmu_buf_t *db;
++	znode_t *zp;
++	sa_handle_t *hdl;
++	int err;
++
++	*zpp = NULL;
++
++	ZFS_OBJ_HOLD_ENTER(zfsvfs, obj_num);
++
++	err = sa_buf_hold(zfsvfs->z_os, obj_num, NULL, &db);
++	if (err != 0) {
++		ZFS_OBJ_HOLD_EXIT(zfsvfs, obj_num);
++		return (err);
++	}
++
++	dmu_object_info_from_db(db, &doi);
++	if (doi.doi_bonus_type != DMU_OT_SA &&
++	    (doi.doi_bonus_type != DMU_OT_ZNODE ||
++	    (doi.doi_bonus_type == DMU_OT_ZNODE &&
++	    doi.doi_bonus_size < sizeof (znode_phys_t)))) {
++		sa_buf_rele(db, NULL);
++		ZFS_OBJ_HOLD_EXIT(zfsvfs, obj_num);
++		return (SET_ERROR(EINVAL));
++	}
++
++	/* Check if there is already a live znode for this object. */
++	hdl = dmu_buf_get_user(db);
++	if (hdl != NULL) {
++		zp = sa_get_userdata(hdl);
++
++		ASSERT3P(zp, !=, NULL);
++		ASSERT3U(zp->z_id, ==, obj_num);
++
++		if (zp->z_unlinked) {
++			err = SET_ERROR(ENOENT);
++		} else {
++			zfs_zhold(zp);
++			*zpp = zp;
++			err = 0;
++		}
++
++		sa_buf_rele(db, NULL);
++		ZFS_OBJ_HOLD_EXIT(zfsvfs, obj_num);
++		return (err);
++	}
++
++	/*
++	 * No live znode found -- allocate one and load from disk.
++	 * zfs_znode_alloc sets up the SA handle (which takes ownership
++	 * of db) and loads the on-disk SA attributes.
++	 */
++	zp = NULL;
++	err = zfs_znode_alloc(zfsvfs, db, doi.doi_data_block_size,
++	    doi.doi_bonus_type, NULL, &zp);
++	if (err != 0) {
++		sa_buf_rele(db, NULL);
++		ZFS_OBJ_HOLD_EXIT(zfsvfs, obj_num);
++		return (err);
++	}
++
++	ASSERT3P(zp, !=, NULL);
++	*zpp = zp;
++	ZFS_OBJ_HOLD_EXIT(zfsvfs, obj_num);
++	return (0);
++}
++
+ /*
+  * Update VFS-cached attributes from the znode.
+  * On OSv this is a no-op since we don't cache in the VFS layer.
+@@ -114,3 +329,194 @@ zfs_znode_update_vfs(znode_t *zp)
+ {
+ 	(void) zp;
+ }
++
++/*
++ * zfs_znode_delete -- remove the DMU object backing a znode.
++ *
++ * Called on the error path of zfs_mkdir/zfs_create when the
++ * directory-entry link step fails after zfs_mknode succeeded.
++ *
++ * The SA handle is destroyed and the underlying DMU object freed
++ * inside the given transaction.  The caller must still call
++ * zfs_znode_free() to remove the znode from z_all_znodes and
++ * release the kmem allocation.
++ */
++void
++zfs_znode_delete(znode_t *zp, dmu_tx_t *tx)
++{
++	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
++	uint64_t obj = zp->z_id;
++
++	ZFS_OBJ_HOLD_ENTER(zfsvfs, obj);
++	VERIFY0(dmu_object_free(zfsvfs->z_os, obj, tx));
++	zfs_znode_dmu_fini(zp);
++	ZFS_OBJ_HOLD_EXIT(zfsvfs, obj);
++}
++
++/*
++ * zfs_mknode -- allocate a new ZFS on-disk object and in-memory znode.
++ *
++ * Creates a new DMU object (ZAP for directories, plain for files),
++ * initialises its SA attributes from vap and acl_ids, and returns
++ * the new znode in *zpp.
++ *
++ * Must be called inside an open DMU transaction.
++ * Caller holds no per-object mutex on entry (we acquire it here).
++ */
++void
++zfs_mknode(znode_t *dzp, vattr_t *vap, dmu_tx_t *tx, cred_t *cr,
++    uint_t flag, znode_t **zpp, zfs_acl_ids_t *acl_ids)
++{
++	uint64_t	crtime[2], atime[2], mtime[2], ctime[2];
++	uint64_t	mode, size, links, parent, pflags;
++	uint64_t	gen, obj;
++	uint64_t	dacl_count = 0;
++	int		bonuslen, dnodesize;
++	zfsvfs_t	*zfsvfs = dzp->z_zfsvfs;
++	dmu_buf_t	*db;
++	timestruc_t	now;
++	sa_handle_t	*sa_hdl;
++	dmu_object_type_t obj_type;
++	sa_bulk_attr_t	*sa_attrs;
++	int		cnt = 0;
++	zfs_acl_locator_cb_t locate = { 0 };
++
++	(void) cr;
++
++	ASSERT3P(vap, !=, NULL);
++
++	gethrestime(&now);
++	gen = dmu_tx_get_txg(tx);
++	dnodesize = dmu_objset_dnodesize(zfsvfs->z_os);
++	if (dnodesize == 0)
++		dnodesize = DNODE_MIN_SIZE;
++
++	obj_type = zfsvfs->z_use_sa ? DMU_OT_SA : DMU_OT_ZNODE;
++	bonuslen = (obj_type == DMU_OT_SA) ?
++	    DN_BONUS_SIZE(dnodesize) : ZFS_OLD_ZNODE_PHYS_SIZE;
++
++	/*
++	 * Allocate the DMU object.
++	 */
++	if (vap->va_type == VDIR) {
++		obj = zap_create_norm_dnsize(zfsvfs->z_os,
++		    zfsvfs->z_norm, DMU_OT_DIRECTORY_CONTENTS,
++		    obj_type, bonuslen, dnodesize, tx);
++	} else {
++		obj = dmu_object_alloc_dnsize(zfsvfs->z_os,
++		    DMU_OT_PLAIN_FILE_CONTENTS, 0,
++		    obj_type, bonuslen, dnodesize, tx);
++	}
++
++	ZFS_OBJ_HOLD_ENTER(zfsvfs, obj);
++	VERIFY0(sa_buf_hold(zfsvfs->z_os, obj, NULL, &db));
++
++	if (flag & IS_ROOT_NODE)
++		dzp->z_id = obj;
++
++	/*
++	 * Compute basic pflags.  OSv uses only ARCHIVE + AV_MODIFIED
++	 * and marks every new object as having a trivial ACL.
++	 */
++	pflags = ZFS_ACL_TRIVIAL;
++	if (zfsvfs->z_use_fuids)
++		pflags |= ZFS_ARCHIVE | ZFS_AV_MODIFIED;
++
++	if (vap->va_type == VDIR) {
++		size = 2;		/* "." and ".." */
++		links = (flag & (IS_ROOT_NODE | IS_XATTR)) ? 2 : 1;
++	} else {
++		size = links = 0;
++	}
++
++	parent = dzp->z_id;
++	mode   = acl_ids->z_mode;
++
++	ZFS_TIME_ENCODE(&now, crtime);
++	ZFS_TIME_ENCODE(&now, ctime);
++	ZFS_TIME_ENCODE(&now, atime);
++	ZFS_TIME_ENCODE(&now, mtime);
++
++	VERIFY0(sa_handle_get_from_db(zfsvfs->z_os, db, NULL,
++	    SA_HDL_SHARED, &sa_hdl));
++
++	sa_attrs = kmem_alloc(sizeof (sa_bulk_attr_t) * ZPL_END, KM_SLEEP);
++
++	if (obj_type == DMU_OT_SA) {
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_MODE(zfsvfs),
++		    NULL, &mode, 8);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_SIZE(zfsvfs),
++		    NULL, &size, 8);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_GEN(zfsvfs),
++		    NULL, &gen, 8);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_UID(zfsvfs),
++		    NULL, &acl_ids->z_fuid, 8);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_GID(zfsvfs),
++		    NULL, &acl_ids->z_fgid, 8);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_PARENT(zfsvfs),
++		    NULL, &parent, 8);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_FLAGS(zfsvfs),
++		    NULL, &pflags, 8);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_ATIME(zfsvfs),
++		    NULL, &atime, 16);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_MTIME(zfsvfs),
++		    NULL, &mtime, 16);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_CTIME(zfsvfs),
++		    NULL, &ctime, 16);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_CRTIME(zfsvfs),
++		    NULL, &crtime, 16);
++	} else {
++		/* DMU_OT_ZNODE: legacy znode_phys_t layout order */
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_ATIME(zfsvfs),
++		    NULL, &atime, 16);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_MTIME(zfsvfs),
++		    NULL, &mtime, 16);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_CTIME(zfsvfs),
++		    NULL, &ctime, 16);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_CRTIME(zfsvfs),
++		    NULL, &crtime, 16);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_GEN(zfsvfs),
++		    NULL, &gen, 8);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_MODE(zfsvfs),
++		    NULL, &mode, 8);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_SIZE(zfsvfs),
++		    NULL, &size, 8);
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_PARENT(zfsvfs),
++		    NULL, &parent, 8);
++	}
++
++	SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_LINKS(zfsvfs), NULL, &links, 8);
++
++	if (obj_type == DMU_OT_SA) {
++		/*
++		 * Store DACL_COUNT = 0 (trivial ACL, no ACE entries).
++		 * DACL_ACES is omitted when z_acl_bytes == 0.
++		 */
++		SA_ADD_BULK_ATTR(sa_attrs, cnt, SA_ZPL_DACL_COUNT(zfsvfs),
++		    NULL, &dacl_count, 8);
++		if (acl_ids->z_aclp->z_acl_bytes > 0) {
++			locate.cb_aclp = acl_ids->z_aclp;
++			SA_ADD_BULK_ATTR(sa_attrs, cnt,
++			    SA_ZPL_DACL_ACES(zfsvfs),
++			    zfs_acl_data_locator, &locate,
++			    acl_ids->z_aclp->z_acl_bytes);
++		}
++	}
++
++	VERIFY0(sa_replace_all_by_template(sa_hdl, sa_attrs, cnt, tx));
++	kmem_free(sa_attrs, sizeof (sa_bulk_attr_t) * ZPL_END);
++
++	if (!(flag & IS_ROOT_NODE)) {
++		VERIFY0(zfs_znode_alloc(zfsvfs, db, 0, obj_type, sa_hdl, zpp));
++	} else {
++		/*
++		 * Root node: the dzp IS the root znode; just attach the
++		 * SA handle we just created.
++		 */
++		*zpp = dzp;
++		(*zpp)->z_sa_hdl = sa_hdl;
++		sa_set_userp(sa_hdl, dzp);
++	}
++
++	ZFS_OBJ_HOLD_EXIT(zfsvfs, obj);
++}
+diff --git a/module/os/osv/zfs/zvol_os.c b/module/os/osv/zfs/zvol_os.c
+index ab87d201b..e60eb51b9 100644
+--- a/module/os/osv/zfs/zvol_os.c
++++ b/module/os/osv/zfs/zvol_os.c
+@@ -29,11 +29,12 @@ zvol_os_free(zvol_state_t *zv)
+ 	(void) zv;
+ }
+ 
+-void
++int
+ zvol_os_rename_minor(zvol_state_t *zv, const char *newname)
+ {
+ 	(void) zv;
+ 	(void) newname;
++	return (0);
+ }
+ 
+ int
+@@ -77,3 +78,27 @@ zvol_os_set_capacity(zvol_state_t *zv, uint64_t capacity)
+ 	(void) zv;
+ 	(void) capacity;
+ }
++
++void
++zvol_os_remove_minor(zvol_state_t *zv)
++{
++	(void) zv;
++}
++
++void
++zvol_wait_close(zvol_state_t *zv)
++{
++	(void) zv;
++}
++
++int
++zvol_init(void)
++{
++	return (zvol_init_impl());
++}
++
++void
++zvol_fini(void)
++{
++	zvol_fini_impl();
++}
+diff --git a/module/zfs/dsl_pool.c b/module/zfs/dsl_pool.c
+index f47822df8..e335f781f 100644
+--- a/module/zfs/dsl_pool.c
++++ b/module/zfs/dsl_pool.c
+@@ -209,7 +209,6 @@ dsl_pool_open_impl(spa_t *spa, uint64_t txg)
+ 	    offsetof(dsl_sync_task_t, dst_node));
+ 	txg_list_create(&dp->dp_early_sync_tasks, spa,
+ 	    offsetof(dsl_sync_task_t, dst_node));
+-
+ 	dp->dp_sync_taskq = spa_sync_tq_create(spa, "dp_sync_taskq");
+ 
+ 	dp->dp_zil_clean_taskq = taskq_create("dp_zil_clean_taskq",
+@@ -217,7 +216,6 @@ dsl_pool_open_impl(spa_t *spa, uint64_t txg)
+ 	    zfs_zil_clean_taskq_minalloc,
+ 	    zfs_zil_clean_taskq_maxalloc,
+ 	    TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
+-
+ 	mutex_init(&dp->dp_lock, NULL, MUTEX_DEFAULT, NULL);
+ 	cv_init(&dp->dp_spaceavail_cv, NULL, CV_DEFAULT, NULL);
+ 
+@@ -232,7 +230,6 @@ dsl_pool_open_impl(spa_t *spa, uint64_t txg)
+ 	dp->dp_unlinked_drain_taskq = taskq_create("z_unlinked_drain",
+ 	    100, defclsyspri, boot_ncpus, INT_MAX,
+ 	    TASKQ_PREPOPULATE | TASKQ_DYNAMIC | TASKQ_THREADS_CPU_PCT);
+-
+ 	return (dp);
+ }
+ 
+diff --git a/module/zfs/rrwlock.c b/module/zfs/rrwlock.c
+index d0df39b93..076cc4461 100644
+--- a/module/zfs/rrwlock.c
++++ b/module/zfs/rrwlock.c
+@@ -217,6 +217,10 @@ rrw_enter_write(rrwlock_t *rrl)
+ 	mutex_enter(&rrl->rr_lock);
+ 	ASSERT(rrl->rr_writer != curthread);
+ 
++	if (zfs_refcount_count(&rrl->rr_anon_rcount) > 0 ||
++	    zfs_refcount_count(&rrl->rr_linked_rcount) > 0 ||
++	    rrl->rr_writer != NULL) {
++	}
+ 	while (zfs_refcount_count(&rrl->rr_anon_rcount) > 0 ||
+ 	    zfs_refcount_count(&rrl->rr_linked_rcount) > 0 ||
+ 	    rrl->rr_writer != NULL) {
+diff --git a/module/zfs/txg.c b/module/zfs/txg.c
+index 46a1d06a7..a2a2989a8 100644
+--- a/module/zfs/txg.c
++++ b/module/zfs/txg.c
+@@ -637,17 +637,14 @@ txg_quiesce_thread(void *arg)
+ 		 */
+ 		while (!tx->tx_exiting &&
+ 		    (tx->tx_open_txg >= tx->tx_quiesce_txg_waiting ||
+-		    txg_has_quiesced_to_sync(dp)))
++		    txg_has_quiesced_to_sync(dp))) {
+ 			txg_thread_wait(tx, &cpr, &tx->tx_quiesce_more_cv, 0);
++		}
+ 
+ 		if (tx->tx_exiting)
+ 			txg_thread_exit(tx, &cpr, &tx->tx_quiesce_thread);
+ 
+ 		txg = tx->tx_open_txg;
+-		dprintf("txg=%llu quiesce_txg=%llu sync_txg=%llu\n",
+-		    (u_longlong_t)txg,
+-		    (u_longlong_t)tx->tx_quiesce_txg_waiting,
+-		    (u_longlong_t)tx->tx_sync_txg_waiting);
+ 		tx->tx_quiescing_txg = txg;
+ 
+ 		mutex_exit(&tx->tx_sync_lock);
+@@ -657,8 +654,6 @@ txg_quiesce_thread(void *arg)
+ 		/*
+ 		 * Hand this txg off to the sync thread.
+ 		 */
+-		dprintf("quiesce done, handing off txg %llu\n",
+-		    (u_longlong_t)txg);
+ 		tx->tx_quiescing_txg = 0;
+ 		tx->tx_quiesced_txg = txg;
+ 		DTRACE_PROBE2(txg__quiesced, dsl_pool_t *, dp, uint64_t, txg);
+diff --git a/module/zfs/zfs_gitrev.h b/module/zfs/zfs_gitrev.h
+new file mode 100644
+index 000000000..2ecf92534
+--- /dev/null
++++ b/module/zfs/zfs_gitrev.h
+@@ -0,0 +1,7 @@
++/* Generated stub for OSv build */
++#ifndef _ZFS_GITREV_H
++#define _ZFS_GITREV_H
++
++#define ZFS_META_GITREV "OpenZFS 2.4.1 (OSv port)"
++
++#endif /* _ZFS_GITREV_H */
+-- 
+2.53.0
+

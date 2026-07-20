@@ -1,0 +1,50 @@
+From 9b22d78fe21a764cf205ba968485d129099c76d2 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Tue, 12 May 2026 10:02:45 -0400
+Subject: [PATCH 12/19] zfs: fix vdev_disk_bio_done to map BIO_DISCARD errors
+ to ENOTSUP
+
+When virtio-blk does not negotiate VIRTIO_BLK_F_DISCARD it calls
+biodone(bio, false), which sets BIO_ERROR but leaves bio_error == 0.
+The previous code mapped any BIO_ERROR to EIO, causing the ZFS trim
+layer to see an I/O error and potentially fault the vdev rather than
+silently marking trim as unsupported.
+
+Fix: check bio_error first (for specific errnos from biofinish());
+for BIO_DISCARD with no specific error code map to ENOTSUP so that
+vdev_trim_cb() treats the vdev as trim-incapable; preserve EIO for
+all other commands.
+
+(cherry picked from commit 73468f38b8e58b0d7948dac59ea3d88549367d6e)
+---
+ module/os/osv/zfs/vdev_disk.c | 14 +++++++++++++-
+ 1 file changed, 13 insertions(+), 1 deletion(-)
+
+diff --git a/module/os/osv/zfs/vdev_disk.c b/module/os/osv/zfs/vdev_disk.c
+index e8ad02af2..82d996046 100644
+--- a/module/os/osv/zfs/vdev_disk.c
++++ b/module/os/osv/zfs/vdev_disk.c
+@@ -112,7 +112,19 @@ vdev_disk_bio_done(struct bio *bio)
+ 	zio_t *zio = bio->bio_caller1;
+ 
+ 	if (bio->bio_flags & BIO_ERROR) {
+-		zio->io_error = EIO;
++		/*
++		 * Preserve specific errno if set (e.g. via biofinish()).
++		 * For BIO_DISCARD without a specific error, the device does
++		 * not support DISCARD — report ENOTSUP so the ZFS trim layer
++		 * marks trim as unsupported rather than faulting the vdev.
++		 * For all other commands, fall back to EIO.
++		 */
++		if (bio->bio_error)
++			zio->io_error = bio->bio_error;
++		else if (bio->bio_cmd == BIO_DISCARD)
++			zio->io_error = ENOTSUP;
++		else
++			zio->io_error = EIO;
+ 	} else
+ 		zio->io_error = 0;
+ 
+-- 
+2.53.0
+

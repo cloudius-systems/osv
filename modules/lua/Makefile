@@ -28,16 +28,37 @@ module: $(LUA_MODULES)
 	echo "/usr/lib/liblua53.so: $(SRC)/modules/lua/$(LUA_DIR)/liblua53.so" > usr.manifest
 
 # Download lua interpreter from lua binaries
+# OR use system lua if available (e.g., from Nix)
 $(LUA_DIR)/lua53:
-	mkdir -p $(LUA_DIR)
-	cd upstream && wget -c "https://sourceforge.net/projects/luabinaries/files/5.3.6/Tools%20Executables/lua-5.3.6_Linux54_64_bin.tar.gz"
-	cd $(LUA_DIR) && tar xf ../lua-5.3.6_Linux54_64_bin.tar.gz
+	@if command -v lua >/dev/null 2>&1; then \
+		echo "Using system lua from $$(which lua)"; \
+		mkdir -p $(LUA_DIR); \
+		ln -sf $$(which lua) $(LUA_DIR)/lua53; \
+	else \
+		echo "Downloading pre-built lua binaries"; \
+		mkdir -p $(LUA_DIR); \
+		cd upstream && wget -c "https://sourceforge.net/projects/luabinaries/files/5.3.6/Tools%20Executables/lua-5.3.6_Linux54_64_bin.tar.gz"; \
+		cd $(LUA_DIR) && tar xf ../lua-5.3.6_Linux54_64_bin.tar.gz; \
+	fi
 
 # Download lua shared library and header files from lua binaries
+# OR use system lua library if available
 $(LUA_DIR)/liblua53.so:
-	mkdir -p $(LUA_DIR)
-	cd upstream && wget -c "https://sourceforge.net/projects/luabinaries/files/5.3.6/Linux%20Libraries/lua-5.3.6_Linux54_64_lib.tar.gz"
-	cd $(LUA_DIR) && tar xf ../lua-5.3.6_Linux54_64_lib.tar.gz
+	@if command -v lua >/dev/null 2>&1 && [ -n "$$(find $$(dirname $$(dirname $$(which lua)))/lib -name 'liblua*.so*' 2>/dev/null | head -1)" ]; then \
+		echo "Using system lua library"; \
+		mkdir -p $(LUA_DIR); \
+		LUA_LIB=$$(find $$(dirname $$(dirname $$(which lua)))/lib -name 'liblua*.so*' 2>/dev/null | head -1); \
+		ln -sf $$LUA_LIB $(LUA_DIR)/liblua53.so; \
+		mkdir -p $(LUA_DIR)/include; \
+		if [ -d "$$(dirname $$(dirname $$(which lua)))/include" ]; then \
+			find $$(dirname $$(dirname $$(which lua)))/include -name 'lua*.h' -exec ln -sf {} $(LUA_DIR)/include/ \; 2>/dev/null || true; \
+		fi; \
+	else \
+		echo "Downloading pre-built lua library"; \
+		mkdir -p $(LUA_DIR); \
+		cd upstream && wget -c "https://sourceforge.net/projects/luabinaries/files/5.3.6/Linux%20Libraries/lua-5.3.6_Linux54_64_lib.tar.gz"; \
+		cd $(LUA_DIR) && tar xf ../lua-5.3.6_Linux54_64_lib.tar.gz; \
+	fi
 
 # In order for luarocks to use the downloaded version of lua in upstream, we need to create a config file below
 upstream/config.lua:
@@ -47,10 +68,17 @@ upstream/config.lua:
 	echo "}" >> upstream/config.lua
 
 $(LUA_ROCKS): $(LUA_DIR)/lua53 $(LUA_DIR)/liblua53.so upstream/config.lua
-	mkdir -p upstream
-	cd upstream && wget -c "https://luarocks.github.io/luarocks/releases/luarocks-3.1.1-linux-x86_64.zip"
-	cd upstream && unzip luarocks-3.1.1-linux-x86_64.zip
-	touch $(LUA_ROCKS) #To prevent re-running the rule in case $(LUA_ROCKS) is older than $(LUA_DIR)/liblua53.so and/or $(LUA_DIR)/lua53
+	@if command -v luarocks >/dev/null 2>&1; then \
+		echo "Using system luarocks from $$(which luarocks)"; \
+		mkdir -p $$(dirname $(LUA_ROCKS)); \
+		ln -sf $$(which luarocks) $(LUA_ROCKS); \
+	else \
+		echo "Downloading pre-built luarocks"; \
+		mkdir -p upstream; \
+		cd upstream && wget -c "https://luarocks.github.io/luarocks/releases/luarocks-3.1.1-linux-x86_64.zip"; \
+		cd upstream && unzip luarocks-3.1.1-linux-x86_64.zip; \
+		touch $(LUA_ROCKS); \
+	fi
 
 # == LuaSocket ==
 LuaSocket: $(LDIR)/socket/core.so

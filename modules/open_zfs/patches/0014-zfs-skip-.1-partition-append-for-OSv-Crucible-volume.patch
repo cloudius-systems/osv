@@ -1,0 +1,73 @@
+From a1937f0c12f0193c12ac747c99250377cac20445 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Fri, 29 May 2026 15:32:43 -0400
+Subject: [PATCH 14/19] zfs: skip ".1" partition append for OSv Crucible
+ volumes
+
+Crucible network block devices (/dev/crucibleN) appear as raw,
+unpartitioned block devices.  zfs_dev_is_whole_disk() previously
+returned B_TRUE for them, causing libzfs and zpool to append ".1"
+to the path looking for a partition that does not exist.
+
+Also short-circuit zfs_append_partition() for crucibleN basenames
+so the rare path that bypasses the whole-disk check does not stomp
+on the path either.
+
+(cherry picked from commit d28ede36803fff9421d2f0ee995dc2886980ac0c)
+---
+ lib/libzutil/os/osv/zutil_device_path_os.c | 20 ++++++++++++++++++--
+ 1 file changed, 18 insertions(+), 2 deletions(-)
+
+diff --git a/lib/libzutil/os/osv/zutil_device_path_os.c b/lib/libzutil/os/osv/zutil_device_path_os.c
+index 9b4b4b159..8918d513a 100644
+--- a/lib/libzutil/os/osv/zutil_device_path_os.c
++++ b/lib/libzutil/os/osv/zutil_device_path_os.c
+@@ -35,13 +35,21 @@ zpool_default_search_paths(size_t *count)
+ 
+ /*
+  * zfs_append_partition: OSv VirtIO block devices use the naming
+- * convention /dev/vblk0.1 for partition 1 of disk 0.
+- * For a path like /dev/vblk0 append ".1".
++ * convention /dev/vblk0.1 for partition 1 of disk 0.  Crucible
++ * volumes (/dev/crucibleN) are presented as raw, unpartitioned block
++ * devices and must NOT have a ".1" suffix appended.
+  */
+ int
+ zfs_append_partition(char *path, size_t max_len)
+ {
+ 	int len = strlen(path);
++	const char *base = strrchr(path, '/');
++	base = base ? base + 1 : path;
++
++	/* Raw, unpartitioned devices: do not append ".1". */
++	if (strncmp(base, "crucible", 8) == 0) {
++		return (len);
++	}
+ 
+ 	/* VirtIO block device: /dev/vblkN -> /dev/vblkN.1 */
+ 	if (len + 2 >= (int)max_len)
+@@ -155,6 +163,10 @@ zfs_get_underlying_path(const char *dev_name)
+  * A path with a '.' in the basename is already a partition, not a whole disk.
+  * This prevents zfs_append_partition() from appending a second ".1" suffix
+  * when zpool create/import is given a partition path like /dev/vblk0.1.
++ *
++ * Crucible volumes (/dev/crucibleN) are raw, unpartitioned network block
++ * devices.  Treat them as already-partition (B_FALSE) so the libzfs caller
++ * does not try to append ".1".
+  */
+ boolean_t
+ zfs_dev_is_whole_disk(const char *dev_name)
+@@ -162,6 +174,10 @@ zfs_dev_is_whole_disk(const char *dev_name)
+ 	const char *last_slash = strrchr(dev_name, '/');
+ 	const char *base = (last_slash != NULL) ? last_slash + 1 : dev_name;
+ 
++	/* Crucible: never partitioned, present as raw block device. */
++	if (strncmp(base, "crucible", 8) == 0)
++		return (B_FALSE);
++
+ 	/* If the basename contains '.', it is already a partition. */
+ 	return (strchr(base, '.') == NULL ? B_TRUE : B_FALSE);
+ }
+-- 
+2.53.0
+

@@ -499,7 +499,7 @@ static int load_zfs_library_and_mount_zfs_root(bool pivot_when_error = false)
     return load_fs_library(libsolaris_path, [pivot_when_error]() {
         zfsdev::zfsdev_init();
 
-        auto error = mount_rootfs("/zfs", "/dev/vblk0.1", "zfs", 0, (void *)"osv/zfs", opt_pivot);
+        auto error = mount_rootfs("/zfs", "/dev/vblk0.1", "zfs", 0, (void *)"osv", opt_pivot);
         if (!error && opt_pivot && opt_extra_zfs_pools) {
             import_extra_zfs_pools();
         }

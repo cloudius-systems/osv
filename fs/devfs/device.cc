@@ -140,6 +140,7 @@ void read_partition_table(struct device *dev)
 		new_dev->offset = (off_t)entry->rela_sector << 9;
 		new_dev->size = (off_t)entry->total_sectors << 9;
 		new_dev->max_io_size = dev->max_io_size;
+		new_dev->block_size = dev->block_size;
 		new_dev->private_data = dev->private_data;
 		device_set_softc(new_dev, device_get_softc(dev));
 
@@ -218,6 +219,7 @@ device_create(struct driver *drv, const char *name, int flags)
 		sys_panic("device_create");
 
     dev->driver = drv;
+    dev->block_size = 512;
     device_register(dev, name, flags);
 	return dev;
 }
