@@ -1087,7 +1087,7 @@ index 000000000..6a216f685
 +#ifdef MNTTAB
 +#undef MNTTAB
 +#endif
-+#define	MNTTAB		"/osv/mnttab"   /* does not exist; triggers ENOENT */
++#define	MNTTAB		"/etc/mnttab"	/* openable; getmntent reads osv::current_mounts() */
 +#define	MNT_LINE_MAX	4108
 +
 +#define	MNT_TOOLONG	1
