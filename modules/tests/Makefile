@@ -115,7 +115,7 @@ ext-only-tests := tst-readdir.so tst-concurrent-read.so tst-fs-link.so
 
 specific-fs-tests := $($(fs_type)-only-tests)
 
-tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-smoke.so tst-bsd-evh.so \
+tests := tst-ext-readlink.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-smoke.so tst-bsd-evh.so \
 	misc-bsd-callout.so tst-bsd-kthread.so tst-bsd-taskqueue.so \
 	tst-fpu.so tst-preempt.so tst-tracepoint.so tst-hub.so \
 	misc-console.so misc-leak.so misc-readbench.so misc-mmap-anon-perf.so \
