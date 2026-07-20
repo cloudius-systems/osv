@@ -1,0 +1,63 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Mon, 20 Jul 2026 19:05:00 +0000
+Subject: [PATCH 23/23] zfs: use whole raw disk on OSv when no .1 partition
+ exists (Bug 2)
+
+OSv read_partition_table() names MBR partition slots 0-based, so the
+first slot is /dev/vblkN.0, and a raw disk with no partition table is
+exposed directly as /dev/vblkN with no child node.  zfs_append_partition()
+unconditionally appended ".1", so "zpool create test /dev/vblk1" on a
+raw wiped NVMe looked for /dev/vblk1.1 and failed with
+"cannot open /dev/vblk1.1: No such file or directory".
+
+Linux/FreeBSD GPT-label a whole disk and use partition 1; OSv does no
+such labeling and ZFS writes its labels to the whole raw device.  Only
+append ".1" when that partition node actually exists; otherwise use the
+base device as a whole raw disk, matching Linux/FreeBSD whole-disk
+behavior.  This also side-steps OSv\x27s 0-based first-slot naming.
+
+Verified: zpool create -f -o ashift=12 test /dev/vblk0 (raw disk) now
+succeeds and the pool comes up ONLINE.
+
+Signed-off-by: Greg Burd <greg@burd.me>
+---
+--- a/lib/libzutil/os/osv/zutil_device_path_os.c
++++ b/lib/libzutil/os/osv/zutil_device_path_os.c
+@@ -14,6 +14,7 @@
+ #include <stdio.h>
+ #include <stdlib.h>
+ #include <string.h>
++#include <sys/param.h>
+ #include <sys/stat.h>
+ #include <unistd.h>
+ 
+@@ -51,10 +52,27 @@
+ 		return (len);
+ 	}
+ 
+-	/* VirtIO block device: /dev/vblkN -> /dev/vblkN.1 */
++	/*
++	 * OSv exposes a partitioned disk as /dev/vblkN.M children (created by
++	 * read_partition_table() only when a valid MBR is present) and a raw,
++	 * unpartitioned disk directly as /dev/vblkN with no child node.  Note
++	 * OSv names MBR slots 0-based, so the first partition is /dev/vblkN.0,
++	 * not vblkN.1.  Linux/FreeBSD GPT-label a whole disk and use partition
++	 * 1; OSv does no such labeling -- ZFS writes its labels to the whole
++	 * raw device.  So only append ".1" when that partition node actually
++	 * exists; otherwise the base path is a whole raw disk and must be used
++	 * as-is (e.g. 'zpool create test /dev/vblk1' on a wiped NVMe).
++	 */
+ 	if (len + 2 >= (int)max_len)
+ 		return (-1);
+ 
++	char candidate[MAXPATHLEN];
++	(void) snprintf(candidate, sizeof (candidate), "%s.1", path);
++	if (access(candidate, F_OK) != 0) {
++		/* No ".1" partition node: whole raw disk, leave path as-is. */
++		return (len);
++	}
++
+ 	strcat(path, ".1");
+ 	return (len + 2);
+ }
