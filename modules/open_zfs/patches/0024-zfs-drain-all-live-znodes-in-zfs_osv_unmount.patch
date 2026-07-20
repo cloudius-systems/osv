@@ -1,0 +1,70 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Mon, 20 Jul 2026 19:45:00 +0000
+Subject: [PATCH 24/24] zfs: drain all live znodes in zfs_osv_unmount (Bug 1
+ child-dataset export hang)
+
+Patch 0017 reclaims only the mount-root znode before dmu_objset_disown.
+That is not enough: any other znode OSv kept live -- notably those of a
+child dataset such as pool/fs that was mounted -- still holds its
+object bonus buffer.  Each such hold pins a dnode, so dnode_destroy
+never runs, the objset os_dnodes list never empties, and the following
+spa_export() blocks forever in spa_evicting_os_wait() (spa_misc.c).
+Reproduced by: zpool create; zfs create pool/fs; zpool export -> hang.
+
+FreeBSD/Linux reclaim every vnode via vop_inactive before VFS_UNMOUNT;
+OSv only force-drops the mount root.  Walk z_all_znodes and inactivate
+every remaining znode here, exactly as vop_inactive would on the last
+reference, dropping the SA-handle bonus holds so the objset can drain.
+
+Verified: create+child-fs+export+import+destroy now completes with no
+spa_evicting_os_wait hang.
+
+Signed-off-by: Greg Burd <greg@burd.me>
+---
+--- a/module/os/osv/zfs/zfs_vfsops.c
++++ b/module/os/osv/zfs/zfs_vfsops.c
+@@ -697,6 +697,43 @@
+ 			zfs_znode_free(rzp);
+ 	}
+ 
++	/*
++	 * Drain every other live znode before disowning the objset.
++	 *
++	 * The mount root is not the only znode OSv keeps live: any directory
++	 * or file touched during the mount lifetime (e.g. the root ZAP
++	 * directory walked while writing files, or cached leaf vnodes) gets a
++	 * znode whose SA handle holds the object's bonus buffer.  This is
++	 * especially visible for a child dataset such as pool/fs, whose own
++	 * objset accumulates such znodes.  FreeBSD/Linux reclaim every vnode
++	 * via vop_inactive before VFS_UNMOUNT; OSv's VFS only force-drops the
++	 * mount root above, leaving the rest live.  Each surviving bonus hold
++	 * pins its dnode, so dnode_destroy never runs, the objset's os_dnodes
++	 * list never empties, and the subsequent spa_export's
++	 * spa_evicting_os_wait() blocks forever.  Inactivate them all here,
++	 * exactly as vop_inactive would on the last reference.
++	 */
++	mutex_enter(&zfsvfs->z_znodes_lock);
++	for (znode_t *zp = list_head(&zfsvfs->z_all_znodes);
++	    zp != NULL; zp = list_head(&zfsvfs->z_all_znodes)) {
++		struct vnode *zvp = zp->z_vnode;
++		if (zvp != NULL)
++			zvp->v_data = NULL;
++		zp->z_vnode = NULL;
++		/*
++		 * zfs_zinactive()/zfs_znode_free() remove zp from
++		 * z_all_znodes, so drop the lock across the call and reload
++		 * the list head each iteration.
++		 */
++		mutex_exit(&zfsvfs->z_znodes_lock);
++		if (zp->z_sa_hdl != NULL)
++			zfs_zinactive(zp);
++		else
++			zfs_znode_free(zp);
++		mutex_enter(&zfsvfs->z_znodes_lock);
++	}
++	mutex_exit(&zfsvfs->z_znodes_lock);
++
+ 	dmu_objset_disown(zfsvfs->z_os, B_TRUE, zfsvfs);
+ 
+ 	zfs_exit(zfsvfs, FTAG);
