@@ -1,5 +1,9 @@
 [manifest]
 /libuutil.so: libuutil.so
+/libzutil.so: libzutil.so
+/libshare.so: libshare.so
+/libzfs_core.so: libzfs_core.so
+/libtpool.so: libtpool.so
 /zpool.so: zpool.so
 /usr/lib/fs/libsolaris.so: libsolaris.so
 /libzfs.so: libzfs.so

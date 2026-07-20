@@ -383,7 +383,7 @@ create_zfs_filesystem() {
 			console='--console=serial'
 			zfs_builder_name='zfs_builder-stripped.elf'
 		fi
-		"$SRC"/scripts/run.py -k --kernel-path $zfs_builder_name --arch=$qemu_arch --vnc none -m 512 -c1 -i ${image_path} --block-device-cache unsafe \
+		"$SRC"/scripts/run.py -k --kernel-path $zfs_builder_name --arch=$qemu_arch --vnc none -m 512 -c1 -i ${image_path} --block-device-cache writeback \
 			-s -e "${console} --norandom --nomount --noinit --preload-zfs-library /tools/mkfs.so ${device_path}; /zfs.so set compression=off osv"
 	fi
 }

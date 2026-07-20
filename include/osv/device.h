@@ -128,6 +128,7 @@ struct device {
 	off_t		size;		/* device size */
 	off_t		offset; /* 0 for the main drive, if we have a partition, this is the start address */
 	size_t		max_io_size;
+	u_int		block_size;	/* logical block (sector) size in bytes */
 	void		*private_data;	/* private storage */
 
 	void *softc;

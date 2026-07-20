@@ -33,7 +33,7 @@ kthread_add(void (*func)(void *), void *arg, struct proc *p,
     vsnprintf(name_buf, sizeof(name_buf), fmt, va);
     va_end(va);
     sched::thread* t = sched::thread::make([=] { func(arg); },
-            sched::thread::attr().detached().name(name_buf).stack(16 << 10));
+            sched::thread::attr().detached().name(name_buf).stack(256 << 10));
     t->start();
 
     *newtdp = reinterpret_cast<struct thread *>(t);
@@ -50,7 +50,7 @@ int kproc_create(void (*func)(void *), void *arg, struct proc **p,
     vsnprintf(name_buf, sizeof(name_buf), str, va);
     va_end(va);
     sched::thread* t = sched::thread::make([=] { func(arg); },
-            sched::thread::attr().detached().name(name_buf).stack(16 << 10));
+            sched::thread::attr().detached().name(name_buf).stack(256 << 10));
     t->start();
 
     if (p) {
