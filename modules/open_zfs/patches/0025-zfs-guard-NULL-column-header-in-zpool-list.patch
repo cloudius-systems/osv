@@ -1,0 +1,32 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Mon, 20 Jul 2026 20:05:00 +0000
+Subject: [PATCH 25/25] zfs: guard NULL column header in zpool list (OSv crash)
+
+On OSv zpool list faulted with strlen(NULL) in print_line() because
+zpool_prop_column_name() returned NULL for a default list column, and
+fputs()/printf %s dereferenced it.  The pool data row is correct; only
+the header label resolves NULL (an OSv prop-table colname quirk).  Guard
+the header against NULL and fall back to the ZFS missing-value glyph so
+the command cannot crash.
+
+Signed-off-by: Greg Burd <greg@burd.me>
+---
+--- a/cmd/zpool/zpool_main.c
++++ b/cmd/zpool/zpool_main.c
+@@ -6809,6 +6809,15 @@
+ 			}
+ 		}
+ 
++		/*
++		 * A property with no registered column name yields a NULL
++		 * header here; fputs()/printf("%s") would strlen(NULL) and
++		 * fault.  Fall back to "-" (ZFS's own missing-value glyph)
++		 * so 'zpool list' cannot crash on such a property.
++		 */
++		if (header == NULL)
++			header = "-";
++
+ 		if (pl->pl_next == NULL && !right_justify)
+ 			(void) fputs(header, stdout);
+ 		else if (right_justify)
