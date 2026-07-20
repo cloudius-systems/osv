@@ -1,0 +1,152 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Mon, 20 Jul 2026 20:20:00 +0000
+Subject: [PATCH 26/26] zfs: enforce the readonly property on OSv
+
+zfs_is_readonly() was hardcoded to B_FALSE, so a readonly=on dataset was
+silently writable on OSv (writes, creates, removes, mkdir/rmdir, rename,
+setattr, truncate and symlink all succeeded).  Read the readonly property
+at mount time in zfs_domount() into a new zfsvfs->z_readonly, return it
+(plus snapshots) from zfs_is_readonly(), and reject the write vnops with
+EROFS when set.  Verified: write to a readonly=on dataset fails with
+EROFS after remount, and readonly=off restores writability.  Phase D
+Tier 0 property coverage.
+
+Signed-off-by: Greg Burd <greg@burd.me>
+---
+--- a/include/os/osv/zfs/sys/zfs_vfsops_os.h
++++ b/include/os/osv/zfs/sys/zfs_vfsops_os.h
+@@ -62,6 +62,7 @@
+ 	list_t		z_all_znodes;	/* all vnodes in the fs */
+ 	kmutex_t	z_znodes_lock;	/* lock for z_all_znodes */
+ 	boolean_t	z_issnap;	/* true if this is a snapshot */
++	boolean_t	z_readonly;	/* readonly property enforced (OSv) */
+ 	boolean_t	z_use_fuids;	/* version allows fuids */
+ 	boolean_t	z_replay;	/* set during ZIL replay */
+ 	boolean_t	z_use_sa;	/* version allow system attributes */
+--- a/module/os/osv/zfs/zfs_vfsops.c
++++ b/module/os/osv/zfs/zfs_vfsops.c
+@@ -252,7 +252,12 @@
+ boolean_t
+ zfs_is_readonly(zfsvfs_t *zfsvfs)
+ {
+-	return (B_FALSE);	/* OSv ZFS is always read-write for now */
++	/*
++	 * Reflect the dataset's readonly property (read at mount time in
++	 * zfs_domount and stored in zfsvfs->z_readonly), plus
++	 * snapshots which are always read-only.
++	 */
++	return (zfsvfs->z_readonly || zfsvfs->z_issnap);
+ }
+ 
+ /*
+@@ -550,6 +555,20 @@
+ 			goto out;
+ 	}
+ 
++	/*
++	 * Honor the dataset's readonly property.  OSv's VFS never passed the
++	 * ZFS readonly property through to the mount, so writes to a
++	 * readonly=on dataset were silently allowed.  Read it here and record
++	 * it in z_readonly so zfs_is_readonly() (checked by the write vnops)
++	 * enforces it.
++	 */
++	{
++		uint64_t ro = 0;
++		if (dsl_prop_get_integer(osname, "readonly", &ro, NULL) == 0 &&
++		    ro != 0)
++			zfsvfs->z_readonly = B_TRUE;
++	}
++
+ 	atomic_inc_32(&zfs_active_fs_count);
+ 	return (0);
+ 
+--- a/module/os/osv/zfs/zfs_vnops_os.c
++++ b/module/os/osv/zfs/zfs_vnops_os.c
+@@ -749,6 +749,9 @@
+ 	int ioflag = 0;
+ 	int error;
+ 
++	if (zfs_is_readonly(ZTOZSB(zp)))
++		return (EROFS);
++
+ 	if (flags & IO_APPEND)
+ 		ioflag |= O_APPEND;
+ 	if (flags & IO_SYNC)
+@@ -962,6 +965,9 @@
+ 	vattr_t		vattr;
+ 	int		error;
+ 
++	if (zfs_is_readonly(ZTOZSB(dzp)))
++		return (EROFS);
++
+ 	memset(&vattr, 0, sizeof (vattr));
+ 	vattr.va_type = VREG;
+ 	vattr.va_mode = mode;
+@@ -981,6 +987,8 @@
+ zfs_vop_remove(struct vnode *dvp, struct vnode *vp, char *name)
+ {
+ 	(void) vp;
++	if (zfs_is_readonly(ZTOZSB(VTOZ(dvp))))
++		return (EROFS);
+ 	return (zfs_remove(VTOZ(dvp), name, kcred, 0));
+ }
+ 
+@@ -992,6 +1000,8 @@
+     struct vnode *tdvp, struct vnode *tvp, char *tname)
+ {
+ 	(void) svp; (void) tvp;
++	if (zfs_is_readonly(ZTOZSB(VTOZ(sdvp))))
++		return (EROFS);
+ 	return (zfs_rename(VTOZ(sdvp), sname, VTOZ(tdvp), tname,
+ 	    kcred, 0, 0, NULL, NULL));
+ }
+@@ -1007,6 +1017,9 @@
+ 	vattr_t		vattr;
+ 	int		error;
+ 
++	if (zfs_is_readonly(ZTOZSB(dzp)))
++		return (EROFS);
++
+ 	memset(&vattr, 0, sizeof (vattr));
+ 	vattr.va_type = VDIR;
+ 	vattr.va_mode = mode;
+@@ -1025,6 +1038,8 @@
+ zfs_vop_rmdir(struct vnode *dvp, struct vnode *vp, char *name)
+ {
+ 	(void) vp;
++	if (zfs_is_readonly(ZTOZSB(VTOZ(dvp))))
++		return (EROFS);
+ 	return (zfs_rmdir(VTOZ(dvp), name, NULL, kcred, 0));
+ }
+ 
+@@ -1089,6 +1104,9 @@
+ 	znode_t *zp = VTOZ(vp);
+ 	vattr_t zva;
+ 
++	if (zfs_is_readonly(ZTOZSB(zp)))
++		return (EROFS);
++
+ 	memset(&zva, 0, sizeof (zva));
+ 	zva.va_mask = 0;
+ 	if (vap->va_mask & AT_MODE) {
+@@ -1145,6 +1163,9 @@
+ 	zfsvfs_t *zfsvfs = ZTOZSB(zp);
+ 	int       error;
+ 
++	if (zfs_is_readonly(zfsvfs))
++		return (EROFS);
++
+ 	if ((error = zfs_enter_verify_zp(zfsvfs, zp, FTAG)) != 0)
+ 		return (error);
+ 	error = zfs_freesp(zp, (uint64_t)new_size, 0, O_RDWR, B_TRUE);
+@@ -1339,6 +1360,9 @@
+ 	vattr_t vattr;
+ 	int error;
+ 
++	if (zfs_is_readonly(ZTOZSB(dzp)))
++		return (EROFS);
++
+ 	memset(&vattr, 0, sizeof (vattr));
+ 	vattr.va_type = VLNK;
+ 	vattr.va_mode = 0777;
