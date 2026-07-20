@@ -61,3 +61,35 @@ use the whole raw disk as-is (matches Linux/FreeBSD whole-disk behavior).
 ## Phase D feature matrix
 
 (populated below as features are exercised)
+
+### Tier 0 (must work)
+
+| Feature | Result |
+|---|---|
+| pool create / status / destroy | worked (status/destroy); zpool list crashed on NULL column header -> fixed-by patch 0025 |
+| dataset create/destroy/mount | worked |
+| file write/read/sync + verify | worked (zfsio.so byte-verify, up to 64 MiB) |
+| scrub integrity | worked (0 errors on clean data) |
+| props recordsize/relatime/canmount | worked (set + get reflect) |
+| prop readonly | was NOT enforced (zfs_is_readonly hardcoded false) -> fixed-by patch 0026 (write vnops now EROFS; verified round-trip) |
+| compression off + lz4 | worked |
+| checksum fletcher4 + sha256 | worked (scrub clean) |
+
+### Tier 1
+
+| Feature | Result |
+|---|---|
+| mirror (2) | worked (create/io/scrub) |
+| raidz1 (3) | worked |
+| raidz2 (5) | worked |
+| raidz3 (7) | worked |
+| offline / online | worked (DEGRADED then ONLINE) |
+| replace + resilver | worked (resilver ran to completion) |
+| SLOG + L2ARC | worked (log + cache vdevs online, io ok) |
+| scrub repairs corruption | worked (corrupted a mirror leg on the host; scrub found CKSUM errors and self-healed 44.5M from the good leg, 0 residual errors) |
+
+Test harness: zfs_builder.elf booted with --nomount --noinit --preload-zfs-library
+/zfsinit.so (inits /dev/zfs + /etc/mnttab), then /zpool.so + /zfs.so command
+sequences against raw virtio-blk disks (vblkN).  File I/O + byte-verify via a
+small /zfsio.so helper.  Corruption-repair by dd over a raw disk file between
+export and re-import.
