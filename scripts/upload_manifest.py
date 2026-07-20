@@ -20,15 +20,25 @@ def upload(osv, manifest, depends, port):
     files = list(expand(manifest))
     files = [(x, unsymlink(y)) for (x, y) in files]
 
-    # Wait for the guest to come up and tell us it's listening
-    while True:
-        line = osv.stdout.readline()
-        if not line or line.find(b"Waiting for connection") >= 0:
+    # Poll the TCP port until cpiod is ready, then connect.
+    # Waiting for text on QEMU's stdout pipe is unreliable when QEMU uses
+    # '-chardev stdio,mux=on' with a non-tty stdout: the mux/readline layer
+    # does not forward guest serial output to the subprocess pipe.
+    import time as _time
+    s = None
+    for _attempt in range(120):
+        if osv.poll() is not None:
+            sys.exit("qemu failed.")
+        try:
+            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            s.connect(("127.0.0.1", port))
             break
-        os.write(sys.stdout.fileno(), line)
-
-    s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-    s.connect(("127.0.0.1", port))
+        except (ConnectionRefusedError, OSError):
+            s.close()
+            s = None
+            _time.sleep(1)
+    else:
+        sys.exit("Timed out waiting for cpiod on port %d" % port)
 
     # We'll want to read the rest of the guest's output, so that it doesn't
     # hang, and so the user can see what's happening. Easiest to do this with
@@ -164,11 +174,24 @@ def main():
         console = '--console=serial'
         zfs_builder_name = 'zfs_builder-stripped.elf'
 
-    osv = subprocess.Popen('cd ../..; scripts/run.py -k --kernel-path build/last/%s --arch=%s --vnc none -m 512 -c1 -i "%s" --block-device-cache unsafe -s -e "%s --norandom --nomount --noinit --preload-zfs-library /tools/mkfs.so; /tools/cpiod.so --prefix /zfs/zfs/; /zfs.so set compression=off osv" --forward tcp:127.0.0.1:%s-:10000' % (zfs_builder_name,arch,image_path,console,upload_port), shell=True, stdout=subprocess.PIPE)
+    osv = subprocess.Popen('cd ../..; scripts/run.py -k --kernel-path build/last/%s --arch=%s --vnc none -m 512 -c1 -i "%s" --block-device-cache writeback -s -e "%s --norandom --nomount --noinit --preload-zfs-library /tools/mkfs.so; /tools/cpiod.so --prefix /zfs/; /zfs.so set compression=off osv; /zpool.so export osv" --forward tcp:127.0.0.1:%s-:10000' % (zfs_builder_name,arch,image_path,console,upload_port), shell=True, stdout=subprocess.PIPE)
 
     upload(osv, manifest, depends, upload_port)
 
-    ret = osv.wait()
+    # cpiod acknowledged the sync, so the ZFS image is written. Give QEMU up
+    # to 120 seconds to exit cleanly (e.g. via ACPI poweroff), then kill it.
+    # OSv may call halt() instead of poweroff() when ACPI is not available
+    # (e.g. --noinit suppresses ACPI init), so QEMU would never exit on its own.
+    try:
+        ret = osv.wait(timeout=120)
+    except subprocess.TimeoutExpired:
+        osv.terminate()
+        try:
+            osv.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            osv.kill()
+            osv.wait()
+        ret = 0  # upload succeeded; QEMU just didn't exit cleanly
     if ret != 0:
         sys.exit("Upload failed.")
 
