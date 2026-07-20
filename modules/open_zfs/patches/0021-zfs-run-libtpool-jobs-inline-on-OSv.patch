@@ -1,0 +1,57 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Mon, 20 Jul 2026 18:35:00 +0000
+Subject: [PATCH 21/22] zfs: run libtpool jobs inline on OSv to avoid condvar
+ wait-morphing teardown race
+
+tpool_dispatch() handed jobs to worker pthreads that block in
+pthread_cond_wait() on a shared tp_mutex.  On OSv a pthread mutex and
+condvar are the kernel lockfree::mutex + condvar, whose wait-morphing
+protocol transfers mutex ownership from the signalling thread to a
+waiter.  During tpool_destroy() teardown that handoff races: a worker
+returns from pthread_cond_wait() and re-enters it, unlocking a tp_mutex
+it no longer owns, which trips the OSv lfmutex owner assertion
+(core/lfmutex.cc unlock: owner == current).  It is intermittent and
+reproducible on zpool import, whose device-scan (zutil_import.c) and
+mount (libzfs_mount.c) thread pools default to hundreds of workers
+(mount_tp_nthr = 512).
+
+Run the job synchronously on OSv instead.  OSv threads are cheap and
+these jobs are short, so serial execution removes the worker/teardown
+machinery -- and the race -- at no practical cost (no import/mount
+parallelism, which OSv does not need).
+
+Signed-off-by: Greg Burd <greg@burd.me>
+---
+diff --git a/lib/libtpool/thread_pool.c b/lib/libtpool/thread_pool.c
+index 39b92ae81..51ab5eec9 100644
+--- a/lib/libtpool/thread_pool.c
++++ b/lib/libtpool/thread_pool.c
+@@ -416,6 +416,27 @@ tpool_dispatch(tpool_t *tpool, void (*func)(void *), void *arg)
+ 
+ 	ASSERT(!(tpool->tp_flags & (TP_DESTROY | TP_ABANDON)));
+ 
++#ifdef __OSV__
++	/*
++	 * Run the job inline on OSv rather than handing it to a worker
++	 * pthread.  The worker main loop blocks in pthread_cond_wait() on a
++	 * shared tp_mutex; on OSv pthread mutex+condvar are the kernel
++	 * lockfree::mutex+condvar whose wait-morphing hands mutex ownership
++	 * between signaller and waiter.  During tpool teardown that handoff
++	 * races and a worker unlocks a tp_mutex it no longer owns, tripping
++	 * the lfmutex owner assertion (core/lfmutex.cc unlock: owner ==
++	 * current).  It is intermittent and reproducible on zpool import,
++	 * where the device-scan (zutil_import.c) and mount (libzfs_mount.c)
++	 * tpools default to hundreds of workers.  OSv threads are cheap and
++	 * these jobs are short; running them synchronously here removes the
++	 * thread-pool worker/teardown entirely and with it the race, at the
++	 * cost of no import/mount parallelism (not needed on OSv).
++	 */
++	(void) tpool;
++	func(arg);
++	return (0);
++#endif
++
+ 	if ((job = calloc(1, sizeof (*job))) == NULL)
+ 		return (-1);
+ 	job->tpj_next = NULL;
