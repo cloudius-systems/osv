@@ -7,6 +7,7 @@
 
 #include "libc.hh"
 #include <osv/sched.hh>
+#include <osv/mutex.h>
 #include <stdio.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -54,51 +55,70 @@ extern "C" int* ___errno_location()
     return &errno;
 }
 
+// OSv is a single process, so resource limits are process-wide.  We keep a
+// stored table so setrlimit()/getrlimit() are consistent (an app that raises
+// RLIMIT_NOFILE and reads it back sees the new value) and, importantly, so we
+// never abort() on a resource we do not special-case.  The limits are advisory:
+// OSv does not actually enforce most of them.
+static mutex rlimit_mutex;
+static struct rlimit rlimits[RLIMIT_NLIMITS];
+static bool rlimits_initialized = false;
+
+static rlim_t default_stack_limit()
+{
+    pthread_attr_t attr;
+    pthread_attr_init(&attr);
+    size_t stacksize = 0;
+    pthread_attr_getstacksize(&attr, &stacksize);
+    pthread_attr_destroy(&attr);
+    return stacksize;
+}
+
+// Caller must hold rlimit_mutex.
+static void init_rlimits_locked()
+{
+    if (rlimits_initialized) {
+        return;
+    }
+    for (int i = 0; i < RLIMIT_NLIMITS; i++) {
+        rlimits[i].rlim_cur = rlimits[i].rlim_max = RLIM_INFINITY;
+    }
+    rlimits[RLIMIT_STACK].rlim_cur = rlimits[RLIMIT_STACK].rlim_max =
+        default_stack_limit();
+    rlimits[RLIMIT_NOFILE].rlim_cur = rlimits[RLIMIT_NOFILE].rlim_max = 1024 * 10;
+    rlimits[RLIMIT_NICE].rlim_cur = rlimits[RLIMIT_NICE].rlim_max = 0;
+    rlimits_initialized = true;
+}
+
 int getrlimit(int resource, struct rlimit *rlim)
 {
-    auto set = [=] (rlim_t r) { rlim->rlim_cur = rlim->rlim_max = r; };
-    switch (resource) {
-    case RLIMIT_STACK: {
-        pthread_attr_t attr;
-        pthread_attr_init(&attr);
-        size_t stacksize;
-        pthread_attr_getstacksize(&attr, &stacksize);
-        set(stacksize);
-        pthread_attr_destroy(&attr);
-        break;
+    if (resource < 0 || resource >= RLIMIT_NLIMITS || !rlim) {
+        errno = EINVAL;
+        return -1;
     }
-    case RLIMIT_NOFILE:
-        set(1024*10); // FIXME: larger?
-        break;
-    case RLIMIT_CORE:
-        set(RLIM_INFINITY);
-        break;
-    case RLIMIT_NPROC:
-        set(RLIM_INFINITY);
-        break;
-    case RLIMIT_AS:
-    case RLIMIT_DATA:
-    case RLIMIT_RSS:
-        set(RLIM_INFINITY);
-        break;
-    case RLIMIT_CPU:
-    case RLIMIT_FSIZE:
-    case RLIMIT_MEMLOCK:
-    case RLIMIT_MSGQUEUE:
-        set(RLIM_INFINITY);
-        break;
-    case RLIMIT_NICE:
-        set(0);
-        break;
-    default:
-        abort("getrlimit(): resource %d not supported. aborting.\n", resource);
+    WITH_LOCK(rlimit_mutex) {
+        init_rlimits_locked();
+        *rlim = rlimits[resource];
     }
     return 0;
 }
 
 int setrlimit(int resource, const struct rlimit *rlim)
 {
-    // osv - no limits
+    if (resource < 0 || resource >= RLIMIT_NLIMITS || !rlim) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (rlim->rlim_cur > rlim->rlim_max) {
+        errno = EINVAL;
+        return -1;
+    }
+    // OSv does not enforce the limits, but we store them so getrlimit() is
+    // consistent with what the application set.
+    WITH_LOCK(rlimit_mutex) {
+        init_rlimits_locked();
+        rlimits[resource] = *rlim;
+    }
     return 0;
 }
 
