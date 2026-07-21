@@ -19,6 +19,18 @@
 //The libext does not implement journal (we can integrate it later and make it optional)
 //nor xattr which is not even supported by OSv VFS layer.
 
+// The libext module is built with -fno-rtti, but <osv/pagecache.hh> pulls in
+// <osv/mmu.hh> -> <osv/trace.hh> which uses typeid.  We only need a couple of
+// symbols from the page cache to warm it in ext_map_cached_page(), so declare
+// them minimally here instead of including the heavy headers.  The uio carries
+// the pagecache hashkey opaquely, so we never need its layout.
+#include <osv/pagealloc.hh>   // memory::alloc_page / free_page (light header)
+namespace pagecache {
+    struct hashkey;
+    void map_read_cached_page(hashkey *key, void *page);
+}
+static const unsigned long EXT_PAGE_SIZE = 4096;
+
 extern "C" {
 #define USE_C_INTERFACE 1
 #include <osv/device.h>
@@ -28,6 +40,7 @@ extern "C" {
 #include <osv/debug.h>
 #include <osv/file.h>
 #include <osv/vnode_attr.h>
+#include <osv/mutex.h>
 
 void* alloc_contiguous_aligned(size_t size, size_t align);
 void free_contiguous_aligned(void* p);
@@ -37,6 +50,7 @@ void free_contiguous_aligned(void* p);
 #include <ext4_dir.h>
 #include <ext4_inode.h>
 #include <ext4_fs.h>
+#include <ext4_blockdev.h>
 #include <ext4_dir_idx.h>
 #include <ext4_trans.h>
 
@@ -44,6 +58,7 @@ void free_contiguous_aligned(void* p);
 #include <time.h>
 #include <cstddef>
 #include <cassert>
+#include <pthread.h>
 
 #include <algorithm>
 #include <set>
@@ -54,6 +69,16 @@ void free_contiguous_aligned(void* p);
 #else
 #define ext_debug(...)
 #endif
+
+// Mark an inode as deleted with a non-zero deletion time before it is freed, so
+// Linux e2fsck does not flag "deleted inode has zero dtime".  lwext4's own
+// delete path uses ext4_inode_set_del_time(inode, -1L), but that symbol is not
+// exported from liblwext4.so, so set the field directly.  0xffffffff is
+// byte-order invariant, so no to_le32() is needed.
+static inline void ext_mark_inode_deleted(struct ext4_inode *inode)
+{
+    inode->deletion_time = 0xffffffff;
+}
 
 //Simple RAII struct to automate release of i-node reference
 //when it goes out of scope.
@@ -71,13 +96,138 @@ struct auto_inode_ref {
     }
 };
 
+// DEEP multi-window ASYNC sequential read-ahead.
+//
+// lwext4's read path issues one synchronous bio per read() (ext_internal_read
+// -> ext4_blocks_get_direct -> blockdev_bread -> one bio + bio_wait). With a
+// single window ahead the NVMe queue only ever sees depth ~1-2, so a single
+// sequential stream never fills the device queue the way Linux does with its
+// multi-request readahead. The measured result was ~1.25 GB/s vs Linux ~2.3.
+//
+// Design: a ring of RA_WINDOWS windows of RA_WINDOW bytes each. A pool of
+// RA_WORKERS worker pthreads pull fill jobs off a queue and each calls
+// ext_internal_read() synchronously -- so up to RA_WORKERS bios are in flight
+// at the device at once (queue depth ~RA_WORKERS). Because we keep RA_WINDOWS
+// windows armed ahead of the consumer, as soon as the app drains one window we
+// re-arm it for the window RA_WINDOWS ahead, keeping the pipeline full.
+//
+// Each ring slot maps to file offset (base + i*RA_WINDOW). "base" is the
+// window-aligned start of the current sequential run; head is the slot the
+// consumer is reading from. Slot state: EMPTY (needs a fill), FILLING (a
+// worker owns the buffer -- do not touch), READY (bytes valid, len set).
+//
+// All ring state is under ra_lock (an OSv mutex). The worker job queue and
+// completion use a separate pthread mutex/cond (ra_cvmtx) so a worker never
+// blocks on ra_lock and the read path never blocks on a worker while holding
+// ra_lock. A slot in FILLING is never freed/reused until its worker completes;
+// invalidate/seek/teardown all drain in-flight fills first (no use-after-free).
+//
+// Memory: RA_WINDOW * RA_WINDOWS per open file (256K * 4 = 1 MiB by default).
+// Buffers are
+// allocated lazily as slots are first armed, so a file shorter than the ring
+// only allocates the windows it actually uses.
+static const size_t   RA_WINDOW  = 256 * 1024; // per-window bytes
+// N (ring depth) and M (worker count = device queue depth) are the two tuning
+// knobs; override at build time with -DRA_WINDOWS_N=<n> -DRA_WORKERS_M=<m> for
+// the sweep. Defaults from the m5d.metal EC2 sweep: throughput climbs from
+// ~0.69 GB/s at N=1/M=1 to a ~1.28 GB/s plateau at N=4/M=4; going deeper
+// (N=8/M=8, N=16/M=16) yields no further gain because OSv's virtio-blk
+// make_request() serialises submission under a single _lock/virtqueue, capping
+// the effective device queue depth at ~2-4. N=4/M=4 sits at the knee and uses
+// only 1 MiB of prefetch memory per open file (4 x 256 KiB).
+#ifndef RA_WINDOWS_N
+#define RA_WINDOWS_N 4
+#endif
+#ifndef RA_WORKERS_M
+#define RA_WORKERS_M 4
+#endif
+static const unsigned RA_WINDOWS = RA_WINDOWS_N; // ring depth (windows ahead)
+static const unsigned RA_WORKERS = RA_WORKERS_M; // concurrent fill threads => QD
+
+enum ra_slot_state { RA_EMPTY = 0, RA_FILLING, RA_READY };
+
+struct ra_job {
+    unsigned slot;      // ring slot this job fills
+    uint64_t off;       // file offset to read
+    size_t   len;       // bytes to read
+    uint64_t gen;       // ring generation; stale jobs (gen mismatch) are dropped
+};
+
 struct ext_vdata {
     int ref_count;
     bool delete_on_last_close;
 
+    mutex_t ra_lock;                 // protects all ring fields below
+    char    *win_buf[RA_WINDOWS];    // owned; lazily allocated
+    uint8_t  win_state[RA_WINDOWS];  // ra_slot_state
+    size_t   win_len[RA_WINDOWS];    // valid bytes when READY
+    uint64_t base;                   // file offset of ring slot 0's stream
+    unsigned head;                   // slot currently being consumed
+    bool     ring_active;            // ring is armed for a sequential run
+    uint64_t ra_next;                // expected offset of next sequential read
+    uint64_t gen;                    // bumped on seek/invalidate; stale jobs die
+    unsigned inflight;               // slots currently FILLING (workers busy)
+    uint32_t inode_no;
+    struct ext4_fs *fs;
+
+    // Worker pool + job queue (pthread primitives; module is -fno-rtti so no
+    // sched::thread).
+    pthread_t workers[RA_WORKERS];
+    unsigned  nworkers;
+    bool      workers_started;
+    pthread_mutex_t ra_cvmtx;
+    pthread_cond_t  ra_job_cv;       // signalled when a job is queued
+    pthread_cond_t  ra_done_cv;      // signalled when a fill completes
+    ra_job    jobq[RA_WINDOWS];      // at most one pending job per slot
+    unsigned  jobq_n;
+    bool      shutdown;
+
     ext_vdata() {
         ref_count = 0;
         delete_on_last_close = false;
+        mutex_init(&ra_lock);
+        for (unsigned i = 0; i < RA_WINDOWS; i++) {
+            win_buf[i] = nullptr;
+            win_state[i] = RA_EMPTY;
+            win_len[i] = 0;
+        }
+        base = 0;
+        head = 0;
+        ring_active = false;
+        ra_next = 0;
+        gen = 0;
+        inflight = 0;
+        inode_no = 0;
+        fs = nullptr;
+        nworkers = 0;
+        workers_started = false;
+        pthread_mutex_init(&ra_cvmtx, nullptr);
+        pthread_cond_init(&ra_job_cv, nullptr);
+        pthread_cond_init(&ra_done_cv, nullptr);
+        jobq_n = 0;
+        shutdown = false;
+    }
+
+    ~ext_vdata() {
+        // Tell the workers to exit and wait for them, so nothing touches the
+        // buffers after we free them.
+        if (workers_started) {
+            pthread_mutex_lock(&ra_cvmtx);
+            shutdown = true;
+            pthread_cond_broadcast(&ra_job_cv);
+            pthread_mutex_unlock(&ra_cvmtx);
+            for (unsigned i = 0; i < nworkers; i++) {
+                pthread_join(workers[i], nullptr);
+            }
+        }
+        pthread_cond_destroy(&ra_job_cv);
+        pthread_cond_destroy(&ra_done_cv);
+        pthread_mutex_destroy(&ra_cvmtx);
+        for (unsigned i = 0; i < RA_WINDOWS; i++) {
+            if (win_buf[i]) {
+                free_contiguous_aligned(win_buf[i]);
+            }
+        }
     }
 };
 
@@ -155,6 +305,10 @@ void ext_delete_outstanding_inodes(struct ext4_fs *fs)
         if (inode._r != EOK) {
             continue;
         }
+        // Set a non-zero deletion time before freeing so Linux e2fsck does not
+        // flag "deleted inode has zero dtime" (lwext4's own delete path does the
+        // same with -1L).
+        ext_mark_inode_deleted(inode._ref.inode);
         ext4_fs_free_inode(&inode._ref);
         ext_debug("delete: i-node=%ld when unmounting\n", inode_no);
     }
@@ -182,6 +336,7 @@ ext_close(vnode_t *vp, file_t *fp)
         if (inode._r != EOK) {
             return inode._r;
         }
+        ext_mark_inode_deleted(inode._ref.inode);
         ext4_fs_free_inode(&inode._ref);
 
         remove_inode_from_being_deleted(vp->v_ino);
@@ -306,6 +461,190 @@ Finish:
     return r;
 }
 
+// Worker pool: each thread pulls a fill job off the queue and calls
+// ext_internal_read() synchronously into the job's ring slot buffer, using its
+// own inode_ref (concurrent reads of the same inode are safe: lwext4 locks its
+// block cache internally and inode refs are per-caller). Each blocked worker
+// holds one bio at the device, so RA_WORKERS threads give queue depth
+// ~RA_WORKERS. Jobs carry the ring generation; if it no longer matches when
+// the fill finishes, a seek/invalidate happened and the result is discarded
+// (the slot may have been re-armed for a different offset), so we never publish
+// stale bytes.
+static void *ext_prefetch_worker(void *arg)
+{
+    ext_vdata *vdata = (ext_vdata *)arg;
+    pthread_mutex_lock(&vdata->ra_cvmtx);
+    for (;;) {
+        while (vdata->jobq_n == 0 && !vdata->shutdown) {
+            pthread_cond_wait(&vdata->ra_job_cv, &vdata->ra_cvmtx);
+        }
+        if (vdata->shutdown) {
+            break;
+        }
+        // Pop a job (LIFO is fine; order within the armed set does not matter
+        // for correctness, only that each gets filled).
+        ra_job job = vdata->jobq[--vdata->jobq_n];
+        pthread_mutex_unlock(&vdata->ra_cvmtx);
+
+        size_t got = 0;
+        int err = EIO;
+        struct ext4_fs *fs = vdata->fs;
+        char *buf = vdata->win_buf[job.slot];
+        if (fs && buf) {
+            auto_inode_ref ref(fs, vdata->inode_no);
+            if (ref._r == EOK) {
+                err = ext_internal_read(fs, &ref._ref, job.off, buf, job.len, &got);
+            } else {
+                err = ref._r;
+            }
+        }
+
+        pthread_mutex_lock(&vdata->ra_cvmtx);
+        vdata->inflight--;
+        // Publish only if the ring generation still matches; otherwise a
+        // seek/invalidate reclaimed this slot and its buffer content is now
+        // meaningless -- leave whatever state the invalidate set.
+        if (job.gen == vdata->gen && vdata->win_state[job.slot] == RA_FILLING) {
+            if (err == EOK) {
+                vdata->win_len[job.slot] = got;
+                vdata->win_state[job.slot] = RA_READY;
+            } else {
+                vdata->win_len[job.slot] = 0;
+                vdata->win_state[job.slot] = RA_EMPTY;
+            }
+        }
+        pthread_cond_broadcast(&vdata->ra_done_cv);
+    }
+    pthread_mutex_unlock(&vdata->ra_cvmtx);
+    return nullptr;
+}
+
+// Ensure the worker pool exists. Called with ra_lock held.
+static bool ext_ensure_workers(ext_vdata *vdata, struct ext4_fs *fs,
+                               uint32_t inode_no)
+{
+    if (vdata->workers_started) {
+        return true;
+    }
+    vdata->fs = fs;
+    vdata->inode_no = inode_no;
+    for (unsigned i = 0; i < RA_WORKERS; i++) {
+        if (pthread_create(&vdata->workers[i], nullptr,
+                           ext_prefetch_worker, vdata) == 0) {
+            vdata->nworkers++;
+        }
+    }
+    vdata->workers_started = (vdata->nworkers > 0);
+    return vdata->workers_started;
+}
+
+// Arm ring slot `slot` (which must currently be EMPTY) to be filled for file
+// offset `off`. Allocates the buffer lazily. Called with ra_lock AND ra_cvmtx
+// held; queues a job and signals a worker. off must be < fsize.
+static void ext_arm_slot(ext_vdata *vdata, unsigned slot, uint64_t off,
+                         uint64_t fsize)
+{
+    if (off >= fsize) {
+        return;
+    }
+    if (!vdata->win_buf[slot]) {
+        vdata->win_buf[slot] = (char *)alloc_contiguous_aligned(
+            RA_WINDOW, alignof(std::max_align_t));
+        if (!vdata->win_buf[slot]) {
+            return;
+        }
+    }
+    size_t len = (size_t)std::min((uint64_t)RA_WINDOW, fsize - off);
+    vdata->win_state[slot] = RA_FILLING;
+    vdata->win_len[slot] = 0;
+    vdata->inflight++;
+    ra_job &j = vdata->jobq[vdata->jobq_n++];
+    j.slot = slot;
+    j.off = off;
+    j.len = len;
+    j.gen = vdata->gen;
+    pthread_cond_signal(&vdata->ra_job_cv);
+}
+
+// Drop the whole ring and cancel in-flight fills. Called with ra_lock held on
+// write/truncate invalidation and on a seek. Bumps the generation so any
+// worker result that lands after this is discarded, drains the workers that are
+// mid-read (so their buffers are not being written when reused), then marks all
+// slots EMPTY.
+static void ext_ra_invalidate(ext_vdata *vdata)
+{
+    pthread_mutex_lock(&vdata->ra_cvmtx);
+    vdata->gen++;
+    while (vdata->inflight > 0) {
+        pthread_cond_wait(&vdata->ra_done_cv, &vdata->ra_cvmtx);
+    }
+    for (unsigned i = 0; i < RA_WINDOWS; i++) {
+        vdata->win_state[i] = RA_EMPTY;
+        vdata->win_len[i] = 0;
+    }
+    pthread_mutex_unlock(&vdata->ra_cvmtx);
+    vdata->head = 0;
+    vdata->base = 0;
+    vdata->ring_active = false;
+    vdata->ra_next = 0;
+}
+
+// Copy read_amt bytes from ring slot `slot` at slot-relative `rel` into the
+// uio's single iovec and advance it.
+static void ext_serve_from_slot(ext_vdata *vdata, uio_t *uio, unsigned slot,
+                                size_t rel, uint64_t read_amt, uint64_t off)
+{
+    memcpy(uio->uio_iov[0].iov_base, vdata->win_buf[slot] + rel, read_amt);
+    uio->uio_iov[0].iov_base = (char *)uio->uio_iov[0].iov_base + read_amt;
+    uio->uio_iov[0].iov_len -= read_amt;
+    uio->uio_resid -= read_amt;
+    uio->uio_offset += read_amt;
+    vdata->ra_next = off + read_amt;
+}
+
+// Advance the ring so slot 0 corresponds to the window containing `off`,
+// re-arming freed trailing slots for the windows now furthest ahead. Called
+// with ra_lock held. Keeps up to RA_WINDOWS windows armed ahead of `off`.
+// win_state/win_len/inflight/jobq are worker-shared, so hold ra_cvmtx while
+// touching them (workers only ever hold ra_cvmtx, never ra_lock -> no deadlock).
+static void ext_ring_refill(ext_vdata *vdata, uint64_t off, uint64_t fsize,
+                            struct ext4_fs *fs, uint32_t inode_no)
+{
+    if (!ext_ensure_workers(vdata, fs, inode_no)) {
+        return;
+    }
+    pthread_mutex_lock(&vdata->ra_cvmtx);
+    // Which window (relative to base) does off fall in?
+    uint64_t rel_win = (off - vdata->base) / RA_WINDOW;
+    // Slide head forward by rel_win, re-arming each slot we pass for the window
+    // RA_WINDOWS ahead of where it was, keeping the pipeline full.
+    while (rel_win > 0) {
+        unsigned slot = vdata->head;
+        // Only reclaim a slot the consumer has passed; it must not be FILLING
+        // (a worker owns the buffer). If it is still filling, stop advancing
+        // and let a later read retry -- correctness first.
+        if (vdata->win_state[slot] == RA_FILLING) {
+            break;
+        }
+        uint64_t next_off = vdata->base + (uint64_t)RA_WINDOWS * RA_WINDOW;
+        vdata->win_state[slot] = RA_EMPTY;
+        vdata->win_len[slot] = 0;
+        vdata->head = (vdata->head + 1) % RA_WINDOWS;
+        vdata->base += RA_WINDOW;
+        ext_arm_slot(vdata, slot, next_off, fsize);
+        rel_win--;
+    }
+    // Arm any EMPTY slots within the window ahead (initial fill / catch-up).
+    for (unsigned i = 0; i < RA_WINDOWS; i++) {
+        unsigned slot = (vdata->head + i) % RA_WINDOWS;
+        if (vdata->win_state[slot] == RA_EMPTY) {
+            uint64_t slot_off = vdata->base + (uint64_t)i * RA_WINDOW;
+            ext_arm_slot(vdata, slot, slot_off, fsize);
+        }
+    }
+    pthread_mutex_unlock(&vdata->ra_cvmtx);
+}
+
 static int
 ext_read(vnode_t *vp, struct file *fp, uio_t *uio, int ioflag)
 {
@@ -335,14 +674,102 @@ ext_read(vnode_t *vp, struct file *fp, uio_t *uio, int ioflag)
 
     // Total read amount is what they requested, or what is left
     uint64_t fsize = ext4_inode_get_size(&fs->sb, inode_ref._ref.inode);
+    if ((uint64_t)uio->uio_offset >= fsize) {
+        return 0;
+    }
     uint64_t read_amt = std::min(fsize - uio->uio_offset, (uint64_t)uio->uio_resid);
+
+    // DEEP async sequential read-ahead. For a single-iovec read that fits
+    // inside one prefetch window, serve it from the ring (a memcpy) and keep
+    // RA_WINDOWS windows armed ahead via the worker pool, so the NVMe queue
+    // stays deep (~RA_WORKERS bios in flight). Only sequential access uses the
+    // ring; a seek resets it. Reads spanning two windows fall through to the
+    // direct path (rare: only for reads not aligned within a window).
+    ext_vdata *vdata = (ext_vdata *)vp->v_data;
+    if (vdata && uio->uio_iovcnt == 1 && read_amt <= RA_WINDOW &&
+        (uio->uio_offset / RA_WINDOW) ==
+            ((uio->uio_offset + read_amt - 1) / RA_WINDOW)) {
+        uint64_t off = uio->uio_offset;
+        mutex_lock(&vdata->ra_lock);
+
+        bool sequential = (off == vdata->ra_next) || !vdata->ring_active;
+        bool in_ring = false;
+        if (sequential && vdata->ring_active && off >= vdata->base &&
+            off < vdata->base + (uint64_t)RA_WINDOWS * RA_WINDOW) {
+            in_ring = true;
+        }
+
+        if (!in_ring) {
+            // Cold start or seek: reset the ring to a window-aligned base at
+            // `off` and arm the pipeline. Drain first so no worker writes a
+            // buffer we are about to repoint.
+            ext_ra_invalidate(vdata);
+            vdata->base = off - (off % RA_WINDOW);
+            vdata->head = 0;
+            vdata->ring_active = true;
+            ext_ring_refill(vdata, off, fsize, fs, vp->v_ino);
+        }
+
+        // Locate the slot holding `off`.
+        uint64_t rel_win = (off - vdata->base) / RA_WINDOW;
+        if (rel_win < RA_WINDOWS) {
+            unsigned slot = (vdata->head + rel_win) % RA_WINDOWS;
+            // Snapshot the slot's worker-shared state/len under ra_cvmtx,
+            // waiting for an in-flight fill to complete first.
+            pthread_mutex_lock(&vdata->ra_cvmtx);
+            while (vdata->win_state[slot] == RA_FILLING) {
+                pthread_cond_wait(&vdata->ra_done_cv, &vdata->ra_cvmtx);
+            }
+            uint8_t st = vdata->win_state[slot];
+            size_t wlen = vdata->win_len[slot];
+            pthread_mutex_unlock(&vdata->ra_cvmtx);
+
+            uint64_t win_start = vdata->base + rel_win * RA_WINDOW;
+            if (st == RA_READY && vdata->win_buf[slot] &&
+                off >= win_start &&
+                off + read_amt <= win_start + wlen) {
+                size_t rel = (size_t)(off - win_start);
+                ext_serve_from_slot(vdata, uio, slot, rel, read_amt, off);
+                // Slide the ring forward and top up windows ahead.
+                ext_ring_refill(vdata, off + read_amt, fsize, fs, vp->v_ino);
+                mutex_unlock(&vdata->ra_lock);
+                return 0;
+            }
+        }
+        // Ring miss (fill failed / short file / race): fall through to the
+        // direct read below, but keep ra_next in sync so the next read is seen
+        // as sequential.
+        vdata->ra_next = off + read_amt;
+        mutex_unlock(&vdata->ra_lock);
+    }
+
+    // Fast path: a single contiguous user iovec lets lwext4 read straight into
+    // the caller's buffer, avoiding a full-size bounce allocation and the
+    // extra uiomove() copy that dominated the old read path.
+    if (uio->uio_iovcnt == 1 && uio->uio_iov[0].iov_len >= read_amt) {
+        size_t read_count = 0;
+        int ret = ext_internal_read(fs, &inode_ref._ref, uio->uio_offset,
+                                    uio->uio_iov[0].iov_base, read_amt, &read_count);
+        if (ret) {
+            kprintf("[ext_read] Error reading data\n");
+            return ret;
+        }
+        // Advance the uio to reflect what we consumed (mirrors uiomove).
+        uio->uio_iov[0].iov_base = (char *)uio->uio_iov[0].iov_base + read_count;
+        uio->uio_iov[0].iov_len -= read_count;
+        uio->uio_resid -= read_count;
+        uio->uio_offset += read_count;
+        return 0;
+    }
+
+    // Slow path (scatter/gather or short iovec): bounce through a temp buffer.
     void *buf = alloc_contiguous_aligned(read_amt, alignof(std::max_align_t));
 
     size_t read_count = 0;
     int ret = ext_internal_read(fs, &inode_ref._ref, uio->uio_offset, buf, read_amt, &read_count);
     if (ret) {
         kprintf("[ext_read] Error reading data\n");
-        free(buf);
+        free_contiguous_aligned(buf);
         return ret;
     }
 
@@ -563,18 +990,45 @@ ext_write(vnode_t *vp, uio_t *uio, int ioflag)
         return inode_ref._r;
     }
 
+    // A write invalidates any cached read-ahead window for this file, and must
+    // cancel any in-flight prefetch before it can free/reuse those buffers.
+    {
+        ext_vdata *vdata = (ext_vdata *)vp->v_data;
+        if (vdata) {
+            mutex_lock(&vdata->ra_lock);
+            ext_ra_invalidate(vdata);
+            mutex_unlock(&vdata->ra_lock);
+        }
+    }
+
     if (ioflag & IO_APPEND) {
         uio->uio_offset = ext4_inode_get_size(&fs->sb, inode_ref._ref.inode);
     }
 
     ext_debug("write: %ld bytes at offset:%ld to file i-node=%ld\n", uio->uio_resid, uio->uio_offset, vp->v_ino);
 
+    // Fast path: a single contiguous user iovec lets lwext4 write straight from
+    // the caller's buffer, avoiding a full-size bounce allocation and the extra
+    // uiomove() copy.
+    if (uio->uio_iovcnt == 1 && (size_t)uio->uio_iov[0].iov_len >= (size_t)uio->uio_resid) {
+        size_t want = uio->uio_resid;
+        size_t write_count = 0;
+        int ret = ext_internal_write(fs, &inode_ref._ref, uio->uio_offset,
+                                     uio->uio_iov[0].iov_base, want, &write_count);
+        uio->uio_iov[0].iov_base = (char *)uio->uio_iov[0].iov_base + write_count;
+        uio->uio_iov[0].iov_len -= write_count;
+        uio->uio_resid -= write_count;
+        uio->uio_offset += write_count;
+        vp->v_size = ext4_inode_get_size(&fs->sb, inode_ref._ref.inode);
+        return ret;
+    }
+
     uio_t uio_copy = *uio;
     void *buf = alloc_contiguous_aligned(uio->uio_resid, alignof(std::max_align_t));
     int ret = uiomove(buf, uio->uio_resid, &uio_copy);
     if (ret) {
         kprintf("[ext_write] Error copying data\n");
-        free(buf);
+        free_contiguous_aligned(buf);
         return ret;
     }
 
@@ -596,7 +1050,21 @@ ext_ioctl(vnode_t *vp, file_t *fp, u_long com, void *data)
     return (EINVAL);
 }
 
-#define ext_fsync     ((vnop_fsync_t)vop_nullop)
+static int
+ext_fsync(struct vnode *vp, struct file *fp)
+{
+    // lwext4 mounts with block-cache write-back enabled (ext_vfsops.cc), so a
+    // write only reaches the disk when the block cache is flushed.  fsync(2)/
+    // fdatasync(2) must make the file's data durable, so flush the device's
+    // block cache here (the cache is shared per device, so this persists this
+    // file's dirty buffers along with any others -- correct, if slightly more
+    // than the minimum a per-inode flush would do).
+    struct ext4_fs *fs = (struct ext4_fs *)vp->v_mount->m_data;
+    fs->bcache_lock();
+    int r = ext4_block_cache_flush(fs->bdev);
+    fs->bcache_unlock();
+    return r;
+}
 
 static int
 ext_readdir(struct vnode *dvp, struct file *fp, struct dirent *dir)
@@ -858,6 +1326,7 @@ ext_dir_link(struct vnode *dvp, char *name, int file_type, mode_t mode, uint32_t
         ext_debug("dir_link: created %s under i-node=%li with filetype:%d\n", name, dvp->v_ino, file_type);
     } else {
         if (!inode_no) {
+            ext_mark_inode_deleted(child_ref.inode);
             ext4_fs_free_inode(&child_ref);
         }
         //We do not want to write new inode. But block has to be released.
@@ -1038,6 +1507,7 @@ ext_dir_remove_entry(struct vnode *dvp, struct vnode *vp, char *name)
 
             if (links_cnt == 1) {//Zero now
                 if (vdata->ref_count == 0) {
+                    ext_mark_inode_deleted(child._ref.inode);
                     ext4_fs_free_inode(&child._ref);
                 } else {
                     ext_debug("dir_remove_entry: should remove i-node=%ld of %s on last close\n", vp->v_ino, name);
@@ -1048,6 +1518,7 @@ ext_dir_remove_entry(struct vnode *dvp, struct vnode *vp, char *name)
         }
     } else {
         if (vdata->ref_count == 0) {
+            ext_mark_inode_deleted(child._ref.inode);
             ext4_fs_free_inode(&child._ref);
         } else {
             ext_debug("dir_remove_entry: should remove i-node=%ld of %s on last close\n", vp->v_ino, name);
@@ -1275,6 +1746,16 @@ ext_truncate(struct vnode *vp, off_t new_size)
 {
     ext_debug("truncate i-node=%ld, new_size:%ld\n", vp->v_ino, new_size);
     struct ext4_fs *fs = (struct ext4_fs *)vp->v_mount->m_data;
+    // Truncation changes the file's block layout; drop any read-ahead windows
+    // and cancel in-flight prefetch first.
+    {
+        ext_vdata *vdata = (ext_vdata *)vp->v_data;
+        if (vdata) {
+            mutex_lock(&vdata->ra_lock);
+            ext_ra_invalidate(vdata);
+            mutex_unlock(&vdata->ra_lock);
+        }
+    }
     bool update_cmtimed = false;
     int r = ext_trunc_inode(fs, vp->v_ino, new_size, &update_cmtimed);
     if (update_cmtimed) {
@@ -1425,7 +1906,63 @@ ext_inactive(vnode_t *vp)
     return EOK;
 }
 
-#define ext_arc         ((vnop_cache_t)nullptr)
+// vop_cache: warm the shared page cache with one page of file data so mmap
+// faults (and readahead) on ext files can be served from the page cache like
+// ROFS and ZFS, rather than each fault re-reading through the block layer.
+//
+// The uio's iov_base carries the pagecache hashkey; we read exactly one
+// page-sized, page-aligned chunk at uio_offset into a freshly allocated page
+// and hand it to pagecache::map_read_cached_page(), which takes ownership.
+//
+// ponytail: allocate-and-copy from lwext4, not a zero-copy borrow-and-pin.
+// lwext4's block cache buffers are not page-aligned/shareable the way ROFS's
+// read-around cache is, so copying is the correct first step; a borrow-and-pin
+// bridge like the ZFS ARC one can come later if it shows up hot.
+static int
+ext_map_cached_page(struct vnode *vp, struct file *fp, struct uio *uio)
+{
+    if (vp->v_type == VDIR)
+        return EISDIR;
+    if (vp->v_type != VREG)
+        return EINVAL;
+    if (uio->uio_offset < 0)
+        return EINVAL;
+    if (uio->uio_offset >= (off_t)vp->v_size)
+        return 0;
+    if (uio->uio_resid != EXT_PAGE_SIZE)
+        return EINVAL;
+    if (uio->uio_offset % EXT_PAGE_SIZE)
+        return EINVAL;
+
+    struct ext4_fs *fs = (struct ext4_fs *)vp->v_mount->m_data;
+    auto_inode_ref inode_ref(fs, vp->v_ino);
+    if (inode_ref._r != EOK) {
+        return inode_ref._r;
+    }
+
+    void *page = memory::alloc_page();
+    if (!page) {
+        return ENOMEM;
+    }
+    // Read up to a page; if the file's last page is short, the tail stays zero
+    // (alloc_page does not zero, so zero it first to avoid leaking stale data).
+    memset(page, 0, EXT_PAGE_SIZE);
+    uint64_t fsize = ext4_inode_get_size(&fs->sb, inode_ref._ref.inode);
+    size_t want = std::min((uint64_t)EXT_PAGE_SIZE,
+                           fsize - (uint64_t)uio->uio_offset);
+    size_t got = 0;
+    int ret = ext_internal_read(fs, &inode_ref._ref, uio->uio_offset, page,
+                                want, &got);
+    if (ret) {
+        memory::free_page(page);
+        return ret;
+    }
+    pagecache::map_read_cached_page((pagecache::hashkey *)uio->uio_iov->iov_base,
+                                    page);
+    uio->uio_resid = 0;
+    return 0;
+}
+
 #define ext_seek        ((vnop_seek_t)vop_nullop)
 
 struct vnops ext_vnops = {
@@ -1448,7 +1985,7 @@ struct vnops ext_vnops = {
     ext_inactive,   /* inactive */
     ext_truncate,   /* truncate */
     ext_link,       /* link */
-    ext_arc,        /* arc */
+    ext_map_cached_page, /* cache (vop_cache) */
     ext_fallocate,  /* fallocate */
     ext_readlink,   /* read link */
     ext_symlink,    /* symbolic link */
