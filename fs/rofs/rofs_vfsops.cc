@@ -110,7 +110,24 @@ rofs_mount(struct mount *mp, const char *dev, int flags, const void *data)
     memcpy(sb, buf.get(), ROFS_SUPERBLOCK_SIZE);
     //
     // Read structure_info_blocks_count to construct array of directory enries, symlinks and i-nodes
-    buf.reset(alloc_phys_contiguous_aligned(BSIZE * sb->structure_info_blocks_count, PAGE_SIZE));
+    //
+    // All the counts/sizes below come straight from the (potentially crafted)
+    // on-disk superblock, so validate them: guard the allocation size against
+    // integer overflow, null-check it, and bound every walk of @data_ptr
+    // against the end of the buffer we actually read.
+    uint64_t struct_bytes = (uint64_t)BSIZE * sb->structure_info_blocks_count;
+    if (sb->structure_info_blocks_count == 0 ||
+        struct_bytes / BSIZE != sb->structure_info_blocks_count ||
+        struct_bytes > (SIZE_MAX)) {
+        kprintf("[rofs] bad structure_info_blocks_count\n");
+        device_close(device);
+        return EINVAL;
+    }
+    buf.reset(alloc_phys_contiguous_aligned(struct_bytes, PAGE_SIZE));
+    if (!buf.get()) {
+        device_close(device);
+        return ENOMEM;
+    }
     error = rofs_read_blocks(device, sb->structure_info_first_block, sb->structure_info_blocks_count, buf.get());
     if (error) {
         kprintf("[rofs] Error reading rofs structure info blocks\n");
@@ -120,20 +137,46 @@ rofs_mount(struct mount *mp, const char *dev, int flags, const void *data)
 
     rofs = new struct rofs_info;
     rofs->sb = sb;
-    rofs->dir_entries = (struct rofs_dir_entry *) malloc(sizeof(struct rofs_dir_entry) * sb->directory_entries_count);
+    // Checked allocation helper: reject count*elem overflow.
+    auto checked_alloc = [](size_t count, size_t elem) -> void* {
+        if (elem && count > SIZE_MAX / elem) return nullptr;
+        return malloc(count * elem);
+    };
+    rofs->dir_entries = (struct rofs_dir_entry *) checked_alloc(sb->directory_entries_count, sizeof(struct rofs_dir_entry));
+    if (sb->directory_entries_count && !rofs->dir_entries) {
+        device_close(device);
+        return ENOMEM;
+    }
 
     void *data_ptr = buf.get();
+    const uint8_t *data_end = (const uint8_t *)buf.get() + struct_bytes;
+    // Bounds helper: is [data_ptr, data_ptr+n) within the structure buffer?
+    auto in_bounds = [&](const void *p, size_t n) -> bool {
+        const uint8_t *q = (const uint8_t *)p;
+        return q >= (const uint8_t *)buf.get() && n <= (size_t)(data_end - q);
+    };
     //
     // Read directory entries
     for (unsigned int idx = 0; idx < sb->directory_entries_count; idx++) {
         struct rofs_dir_entry *dir_entry = &(rofs->dir_entries[idx]);
+        if (!in_bounds(data_ptr, sizeof(uint64_t) + sizeof(unsigned short))) {
+            kprintf("[rofs] directory entry table truncated\n");
+            device_close(device);
+            return EINVAL;
+        }
         dir_entry->inode_no = *((uint64_t *) data_ptr);
         data_ptr += sizeof(uint64_t);
 
         unsigned short *filename_size = (unsigned short *) data_ptr;
         data_ptr += sizeof(unsigned short);
 
+        if (!in_bounds(data_ptr, *filename_size)) {
+            kprintf("[rofs] directory entry name out of bounds\n");
+            device_close(device);
+            return EINVAL;
+        }
         dir_entry->filename = (char *) malloc(*filename_size + 1);
+        if (!dir_entry->filename) { device_close(device); return ENOMEM; }
         strncpy(dir_entry->filename, (char *) data_ptr, *filename_size);
         dir_entry->filename[*filename_size] = 0;
         print("[rofs] i-node: %d -> directory entry: %s\n", dir_entry->inode_no, dir_entry->filename);
@@ -141,13 +184,28 @@ rofs_mount(struct mount *mp, const char *dev, int flags, const void *data)
     }
     //
     // Read symbolic links
-    rofs->symlinks = (char **) malloc(sizeof(char *) * sb->symlinks_count);
+    rofs->symlinks = (char **) checked_alloc(sb->symlinks_count, sizeof(char *));
+    if (sb->symlinks_count && !rofs->symlinks) {
+        device_close(device);
+        return ENOMEM;
+    }
 
     for (unsigned int idx = 0; idx < sb->symlinks_count; idx++) {
+        if (!in_bounds(data_ptr, sizeof(unsigned short))) {
+            kprintf("[rofs] symlink table truncated\n");
+            device_close(device);
+            return EINVAL;
+        }
         unsigned short *symlink_path_size = (unsigned short *) data_ptr;
         data_ptr += sizeof(unsigned short);
 
+        if (!in_bounds(data_ptr, *symlink_path_size)) {
+            kprintf("[rofs] symlink path out of bounds\n");
+            device_close(device);
+            return EINVAL;
+        }
         rofs->symlinks[idx] = (char *) malloc(*symlink_path_size + 1);
+        if (!rofs->symlinks[idx]) { device_close(device); return ENOMEM; }
         strncpy(rofs->symlinks[idx], (char *) data_ptr, *symlink_path_size);
         rofs->symlinks[idx][*symlink_path_size] = 0;
         print("[rofs] symlink: %s\n", rofs->symlinks[idx]);
@@ -155,7 +213,16 @@ rofs_mount(struct mount *mp, const char *dev, int flags, const void *data)
     }
     //
     // Read i-nodes
-    rofs->inodes = (struct rofs_inode *) malloc(sizeof(struct rofs_inode) * sb->inodes_count);
+    rofs->inodes = (struct rofs_inode *) checked_alloc(sb->inodes_count, sizeof(struct rofs_inode));
+    if (sb->inodes_count && !rofs->inodes) {
+        device_close(device);
+        return ENOMEM;
+    }
+    if (!in_bounds(data_ptr, (size_t)sb->inodes_count * sizeof(struct rofs_inode))) {
+        kprintf("[rofs] inode table out of bounds\n");
+        device_close(device);
+        return EINVAL;
+    }
     memcpy(rofs->inodes, data_ptr, sb->inodes_count * sizeof(struct rofs_inode));
 
     for (unsigned int idx = 0; idx < sb->inodes_count; idx++) {

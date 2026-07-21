@@ -94,7 +94,12 @@ static int rofs_readlink(struct vnode *vnode, struct uio *uio)
         return EINVAL; //This node is not a symbolic link
     }
 
-    assert(inode->data_offset >= 0 && inode->data_offset < rofs->sb->symlinks_count);
+    // data_offset indexes the symlinks[] table; it comes from the on-disk
+    // inode, so validate it against the parsed count (assert is compiled out in
+    // release, so it is not a real guard).
+    if (inode->data_offset >= rofs->sb->symlinks_count) {
+        return EIO;
+    }
 
     char *link_path = rofs->symlinks[inode->data_offset];
 
@@ -190,11 +195,20 @@ static int rofs_readdir(struct vnode *vnode, struct file *fp, struct dirent *dir
 
         dir->d_fileno = fp->f_offset;
 
-        // Set the name
-        struct rofs_dir_entry *directory_entry = rofs->dir_entries + (inode->data_offset + index);
+        // data_offset + index indexes dir_entries[]; both come from the
+        // on-disk inode, so bound the combined index against the table size.
+        uint64_t de_idx = (uint64_t)inode->data_offset + index;
+        if (de_idx >= rofs->sb->directory_entries_count) {
+            return ENOENT;
+        }
+        struct rofs_dir_entry *directory_entry = rofs->dir_entries + de_idx;
         strlcpy((char *) &dir->d_name, directory_entry->filename, sizeof(dir->d_name));
         dir->d_ino = directory_entry->inode_no;
 
+        // inode_no is 1-based into inodes[]; validate before indexing.
+        if (dir->d_ino == 0 || dir->d_ino > rofs->sb->inodes_count) {
+            return EIO;
+        }
         struct rofs_inode *directory_entry_inode = rofs->inodes + (dir->d_ino - 1);
         if (S_ISDIR(directory_entry_inode->mode))
             dir->d_type = DT_DIR;
@@ -229,8 +243,12 @@ static int rofs_lookup(struct vnode *vnode, char *name, struct vnode **vpp)
     }
 
     for (unsigned int idx = 0; idx < inode->dir_children_count; idx++) {
-        if (strcmp(name, rofs->dir_entries[inode->data_offset + idx].filename) == 0) {
-            int inode_no = rofs->dir_entries[inode->data_offset + idx].inode_no;
+        uint64_t de_idx = (uint64_t)inode->data_offset + idx;
+        if (de_idx >= rofs->sb->directory_entries_count) {
+            break;   // directory metadata is inconsistent; stop rather than OOB
+        }
+        if (strcmp(name, rofs->dir_entries[de_idx].filename) == 0) {
+            int inode_no = rofs->dir_entries[de_idx].inode_no;
 
             if (vget(vnode->v_mount, inode_no, &vp)) { //TODO: Will it ever work? Revisit
                 print("[rofs] found vp in cache!\n");
@@ -238,7 +256,11 @@ static int rofs_lookup(struct vnode *vnode, char *name, struct vnode **vpp)
                 return 0;
             }
 
-            struct rofs_inode *found_inode = rofs->inodes + (inode_no - 1); //Check if exists
+            // inode_no is 1-based into inodes[]; validate before indexing.
+            if (inode_no <= 0 || (unsigned)inode_no > rofs->sb->inodes_count) {
+                return EIO;
+            }
+            struct rofs_inode *found_inode = rofs->inodes + (inode_no - 1);
             rofs_set_vnode(vp, found_inode);
 
             print("[rofs] found the directory entry [%s] at at inode %d -> %d!\n", name, inode->inode_no,
