@@ -124,6 +124,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-smoke.so tst-bsd-evh.
 	tst-pthread-timedlock.so \
 	tst-signal-fills.so \
 	tst-epoll-pwait2.so \
+	tst-fs-syscalls.so \
 	tst-prctl.so \
 	tst-mmap-file-cow.so \
 	tst-elf-permissions.so misc-mutex.so misc-sockets.so tst-condvar.so \

@@ -501,6 +501,57 @@ ssize_t readv(int fd, const struct iovec *iov, int iovcnt)
     return preadv(fd, iov, iovcnt, -1);
 }
 
+// RWF_* flags for preadv2/pwritev2 (musl 1.2.1 does not define them).
+#include <osv/fs_flags.h>
+// Flags valid for the write path.  RWF_APPEND is deliberately NOT here: a
+// correct one-shot append must resolve the offset atomically under the file
+// lock at write time (the mechanism O_APPEND uses), which needs a per-write
+// append ioflag plumbed through the fops write path.  Rather than ship a racy
+// fstat()+pwritev() (two concurrent one-shot appenders would both write at the
+// same previous EOF and clobber each other - worse than an honest error), we
+// reject RWF_APPEND with EOPNOTSUPP; callers that need append can open the fd
+// with O_APPEND, which OSv supports atomically.
+#define RWF_WRITE_SUPPORTED (RWF_HIPRI | RWF_DSYNC | RWF_SYNC)
+// Flags valid for the read path.  DSYNC/SYNC/APPEND are write-only per Linux;
+// NOWAIT we cannot honor (OSv's read path can block) so it is rejected rather
+// than faked with EAGAIN, which would make a retrying caller spin forever.
+#define RWF_READ_SUPPORTED (RWF_HIPRI)
+
+extern "C" OSV_LIBC_API
+ssize_t preadv2(int fd, const struct iovec *iov, int iovcnt, off_t offset,
+                int flags)
+{
+    // Reject any flag not valid for reads (this also rejects RWF_NOWAIT, which
+    // we cannot satisfy, and the write-only RWF_DSYNC/SYNC/APPEND).
+    if (flags & ~RWF_READ_SUPPORTED) {
+        errno = EOPNOTSUPP;
+        return -1;
+    }
+    // RWF_HIPRI is a scheduling hint we can ignore; the read itself is the same.
+    return preadv(fd, iov, iovcnt, offset);
+}
+
+extern "C" OSV_LIBC_API
+ssize_t pwritev2(int fd, const struct iovec *iov, int iovcnt, off_t offset,
+                 int flags)
+{
+    if (flags & ~RWF_WRITE_SUPPORTED) {
+        errno = EOPNOTSUPP;
+        return -1;
+    }
+    ssize_t ret = pwritev(fd, iov, iovcnt, offset);
+    // RWF_DSYNC / RWF_SYNC: durably flush this write before returning.  If the
+    // durability operation fails, report it - a caller that asked for SYNC must
+    // not be told the write succeeded durably when it did not.
+    if (ret >= 0 && (flags & (RWF_DSYNC | RWF_SYNC))) {
+        int sret = (flags & RWF_SYNC) ? fsync(fd) : fdatasync(fd);
+        if (sret != 0) {
+            return -1;   // errno set by fsync/fdatasync
+        }
+    }
+    return ret;
+}
+
 TRACEPOINT(trace_vfs_pwritev, "%d %p 0x%x 0x%x", int, const struct iovec*, int, off_t);
 TRACEPOINT(trace_vfs_pwritev_ret, "0x%x", ssize_t);
 TRACEPOINT(trace_vfs_pwritev_err, "%d", int);
@@ -1121,13 +1172,32 @@ int renameat(int olddirfd, const char *oldpath,
     }
 }
 
+// RENAME_* flags (musl 1.2.1 does not define them).
 extern "C" OSV_LIBC_API
 int renameat2(int olddirfd, const char *oldpath,
               int newdirfd, const char *newpath, unsigned int flags)
 {
-    if (flags) {
+    // Only RENAME_NOREPLACE is supported.  RENAME_EXCHANGE (atomic swap) and
+    // RENAME_WHITEOUT need filesystem-level support OSv's VFS does not provide,
+    // so reject anything other than RENAME_NOREPLACE with EINVAL in one check.
+    if (flags & ~(unsigned int)RENAME_NOREPLACE) {
         errno = EINVAL;
         return -1;
+    }
+    if (flags & RENAME_NOREPLACE) {
+        // FIXME: this is a best-effort, NON-ATOMIC RENAME_NOREPLACE.  The whole
+        // point of RENAME_NOREPLACE is an atomic "rename only if the target does
+        // not exist" for callers who need that guarantee (a single-threaded
+        // caller could already do fstatat-then-rename themselves).  This
+        // fstatat()+renameat() has a TOCTOU window: a concurrent create between
+        // the check and the rename can clobber the destination.  A correct
+        // implementation needs VFS/filesystem-level atomic support and should
+        // replace this.  It is offered meanwhile for the common non-racing case.
+        struct stat st;
+        if (fstatat(newdirfd, newpath, &st, AT_SYMLINK_NOFOLLOW) == 0) {
+            errno = EEXIST;
+            return -1;
+        }
     }
     return renameat(olddirfd, oldpath, newdirfd, newpath);
 }

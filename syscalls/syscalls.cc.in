@@ -93,6 +93,9 @@
     SYSCALL3(symlinkat, const char *, int, const char *);
     SYSCALL3(sys_getdents64, int, void *, size_t);
     SYSCALL4(renameat, int, const char *, int, const char *);
+    SYSCALL5(renameat2, int, const char *, int, const char *, unsigned int);
+    SYSCALL5(preadv2, int, const struct iovec *, int, off_t, int);
+    SYSCALL5(pwritev2, int, const struct iovec *, int, off_t, int);
     SYSCALL1(sys_brk, void *);
     SYSCALL4(clock_nanosleep, clockid_t, int, const struct timespec *, struct timespec *);
     SYSCALL4(mknodat, int, const char *, mode_t, dev_t);

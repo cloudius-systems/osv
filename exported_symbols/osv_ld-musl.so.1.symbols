@@ -739,6 +739,7 @@ prctl
 pread
 pread64
 preadv
+preadv2
 preadv64
 printf
 prlimit
@@ -842,6 +843,7 @@ putwc_unlocked
 pwrite
 pwrite64
 pwritev
+pwritev2
 pwritev64
 qsort
 raise
@@ -875,6 +877,7 @@ remquof
 remquol
 rename
 renameat
+renameat2
 res_init
 res_mkquery
 rewind

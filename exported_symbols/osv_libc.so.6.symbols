@@ -611,6 +611,7 @@ pread
 pread64
 __pread64_chk
 preadv
+preadv2
 preadv64
 printf
 prlimit
@@ -665,6 +666,7 @@ putwc_unlocked
 pwrite
 pwrite64
 pwritev
+pwritev2
 pwritev64
 qsort
 qsort_r
@@ -704,6 +706,7 @@ register_printf_type
 remove
 rename
 renameat
+renameat2
 __res_init
 rewind
 rewinddir
