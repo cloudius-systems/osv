@@ -648,6 +648,7 @@
 #define SYS_io_uring_enter			426
 #define SYS_io_uring_register			427
 #define SYS_epoll_pwait2			441
+#define SYS_close_range				436
 
 #undef SYS_fstatat
 #undef SYS_pread
@@ -663,6 +664,7 @@
 #define __NR_io_uring_enter 426
 #define __NR_io_uring_register 427
 #define __NR_epoll_pwait2 441
+#define __NR_close_range 436
 #define __NR_sys_io_uring_setup __NR_io_uring_setup
 #define __NR_sys_io_uring_enter __NR_io_uring_enter
 #define __NR_sys_io_uring_register __NR_io_uring_register
