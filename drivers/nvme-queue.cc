@@ -342,10 +342,23 @@ void io_queue_pair::req_done()
                 }
             }
             //
-            // Read cid and release it
+            // Read cid and release it.  cqe.cid is device-supplied; a malicious
+            // or buggy controller can return a cid whose row (cid / _qsize)
+            // exceeds max_pending_levels, which would index _pending_bios[] out
+            // of bounds.  Validate before use (assert() is compiled out in
+            // release builds, so it is not a real guard here).
             u16 cid = cqe.cid;
+            if (cid_to_row(cid) >= max_pending_levels) {
+                // Bogus completion id from the device; the CQ head was already
+                // advanced above, so just skip this entry.
+                continue;
+            }
             auto pending_bio = _pending_bios[cid_to_row(cid)][cid_to_col(cid)].exchange(nullptr);
-            assert(pending_bio);
+            if (!pending_bio) {
+                // No bio outstanding for this cid (duplicate / spurious
+                // completion); ignore rather than dereference a null.
+                continue;
+            }
             //
             // Save for future re-use or free PRP list saved under bio_private if any
             if (pending_bio->bio_private) {
