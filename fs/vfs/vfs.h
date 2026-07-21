@@ -113,6 +113,9 @@ int	 sys_link(char *oldpath, char *newpath);
 int	 sys_unlink(char *path);
 int	 sys_symlink(const char *oldpath, const char *newpath);
 int	 sys_access(char *path, int mode);
+
+/* inotify VFS notification hook (libc/inotify.cc). */
+void osv_inotify_notify(const char *path, uint32_t mask, int is_dir);
 int	 sys_stat(char *path, struct stat *st);
 int	 sys_lstat(char *path, struct stat *st);
 int	 sys_statfs(char *path, struct statfs *buf);
