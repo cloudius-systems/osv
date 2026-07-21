@@ -10,6 +10,8 @@
 
 #include <osv/debug.hh>
 #include <osv/sched.hh>
+#include <osv/numa.hh>
+#include <osv/mmu.hh>
 #include <osv/mutex.h>
 #include <osv/waitqueue.hh>
 #include <osv/stubbing.hh>
@@ -179,23 +181,44 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
 static long get_mempolicy(int *policy, unsigned long *nmask,
         unsigned long maxnode, void *addr, int flags)
 {
-    // As OSv has no support for NUMA nodes, we do here the minimum possible,
-    // which is basically to return the same policy (MPOL_DEFAULT) and list
-    // of nodes (just node 0) no matter if the caller asked for the default
-    // policy, the allowed policy, or the policy for a specific address.
+    // Report the topology discovered from ACPI SRAT/SLIT (numa::).  When NUMA is
+    // not available (no SRAT, the common single-node VM) this degrades to the
+    // old single-node-0 behavior.  We still apply MPOL_DEFAULT everywhere: the
+    // allocator is not yet node-aware, so we cannot honor a real policy, but we
+    // can at least answer topology queries truthfully.
     if ((flags & MPOL_F_NODE)) {
-        *policy = 0; // in this case, store a node id, not a policy
+        // Store a node id in *policy, not a policy value.
+        if (!policy) {
+            errno = EINVAL;
+            return -1;
+        }
+        if (flags & MPOL_F_ADDR) {
+            // The node backing the given address, if we can resolve it.
+            int node = -1;
+            if (numa::available() && addr) {
+                auto phys = mmu::virt_to_phys_pt(addr);
+                node = numa::node_of_phys(phys);
+            }
+            *policy = node < 0 ? 0 : node;
+        } else {
+            // The node the calling CPU runs on.
+            *policy = numa::node_of_cpu(sched::cpu::current()->id);
+        }
         return 0;
     }
     if (policy) {
         *policy = MPOL_DEFAULT;
     }
     if (nmask) {
-        if (maxnode < 1) {
+        if (maxnode < numa::nr_nodes()) {
             errno = EINVAL;
             return -1;
         }
-        nmask[0] |= 1;
+        // Set a bit for every node that exists.
+        for (unsigned n = 0; n < numa::nr_nodes(); n++) {
+            nmask[n / (8 * sizeof(unsigned long))] |=
+                1UL << (n % (8 * sizeof(unsigned long)));
+        }
     }
     return 0;
 }
@@ -205,9 +228,11 @@ static long get_mempolicy(int *policy, unsigned long *nmask,
 static long set_mempolicy(int policy, unsigned long *nmask,
         unsigned long maxnode)
 {
-    // OSv has very minimal support for NUMA - merely exposes
-    // all cpus as a single node0 and cannot really apply any meaningful policy
-    // Therefore we implement this as noop, ignore all arguments and return success
+    // The topology is now discovered (numa::), but the physical allocator is
+    // not yet node-aware, so we cannot actually enforce a placement policy.
+    // Accept the call as a no-op (ignoring the requested policy) rather than
+    // failing, so NUMA-aware programs run unmodified.  Enforcement will come
+    // when the allocator learns about nodes.
     return 0;
 }
 #endif
@@ -447,12 +472,13 @@ static long sys_getcwd(char *buf, unsigned long size)
 #define __NR_sys_getcpu __NR_getcpu
 static long sys_getcpu(unsigned int *cpu, unsigned int *node, void *tcache)
 {
+    auto *c = sched::cpu::current();
     if (cpu) {
-        *cpu = sched::cpu::current()->id;
+        *cpu = c->id;
     }
 
     if (node) {
-       *node = 0;
+       *node = numa::node_of_cpu(c->id);
     }
 
     return 0;
