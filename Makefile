@@ -361,7 +361,7 @@ COMMON = $(autodepend) -g -Wall -Wno-pointer-arith $(CFLAGS_WERROR) -Wformat=0 -
 	-fno-omit-frame-pointer $(compiler-specific) \
 	-include compiler/include/intrinsics.hh \
 	$(conf_compiler_cflags) $(conf_compiler_opt) $(acpi-defines) $(tracing-flags) $(gcc-sysroot) \
-	-D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207" -DARCH_STRING=$(ARCH_STR) $(EXTRA_FLAGS)
+	$(configuration) -D__OSV__ -D__XEN_INTERFACE_VERSION__="0x00030207" -DARCH_STRING=$(ARCH_STR) $(EXTRA_FLAGS)
 COMMON += $(standard-includes-flag)
 
 tracing-flags-0 =
@@ -397,6 +397,11 @@ $(out)/bsd/%.o: INCLUDES += -isystem bsd/sys
 $(out)/bsd/%.o: INCLUDES += -isystem bsd/
 # for machine/
 $(out)/bsd/%.o: INCLUDES += -isystem bsd/$(arch)
+
+configuration-defines = conf-INET6
+
+configuration = $(foreach cf,$(configuration-defines), \
+                      -D$(cf:conf-%=CONF_%)=$($(cf)))
 
 makedir = $(call very-quiet, mkdir -p $(dir $@))
 build-so = $(CC) $(CFLAGS) -o $@ $^ $(EXTRA_LIBS)
@@ -688,6 +693,41 @@ bsd += bsd/sys/netinet/cc/cc_cubic.o
 bsd += bsd/sys/netinet/cc/cc_htcp.o
 bsd += bsd/sys/netinet/cc/cc_newreno.o
 bsd += bsd/sys/netinet/arpcache.o
+ifeq ($(conf-INET6), 1)
+ifeq ($(conf_networking_dhcp6),1)
+bsd += bsd/porting/dhcp6.o
+endif
+bsd += bsd/sys/netinet6/dest6.o
+bsd += bsd/sys/netinet6/frag6.o
+bsd += bsd/sys/netinet6/icmp6.o
+$(out)/bsd/sys/netinet6/icmp6.o: COMMON+=-Wno-address-of-packed-member
+bsd += bsd/sys/netinet6/in6.o
+$(out)/bsd/sys/netinet6/in6.o: COMMON+=-fno-strict-aliasing
+bsd += bsd/sys/netinet6/in6_cksum.o
+bsd += bsd/sys/netinet6/in6_ifattach.o
+bsd += bsd/sys/netinet6/in6_mcast.o
+bsd += bsd/sys/netinet6/in6_pcb.o
+bsd += bsd/sys/netinet6/in6_proto.o
+bsd += bsd/sys/netinet6/in6_rmx.o
+$(out)/bsd/sys/netinet6/in6_rmx.o: COMMON+=-fno-strict-aliasing
+bsd += bsd/sys/netinet6/in6_src.o
+bsd += bsd/sys/netinet6/ip6_forward.o
+bsd += bsd/sys/netinet6/ip6_id.o
+bsd += bsd/sys/netinet6/ip6_input.o
+bsd += bsd/sys/netinet6/ip6_output.o
+bsd += bsd/sys/netinet6/mld6.o
+$(out)/bsd/sys/netinet6/mld6.o: COMMON+=-Wno-address-of-packed-member
+bsd += bsd/sys/netinet6/nd6.o
+$(out)/bsd/sys/netinet6/nd6.o: COMMON+=-fno-strict-aliasing
+bsd += bsd/sys/netinet6/nd6_nbr.o
+bsd += bsd/sys/netinet6/nd6_rtr.o
+$(out)/bsd/sys/netinet6/nd6_rtr.o: COMMON+=-fno-strict-aliasing
+bsd += bsd/sys/netinet6/raw_ip6.o
+$(out)/bsd/sys/netinet6/raw_ip6.o: COMMON+=-Wno-address-of-packed-member
+bsd += bsd/sys/netinet6/route6.o
+bsd += bsd/sys/netinet6/scope6.o
+bsd += bsd/sys/netinet6/udp6_usrreq.o
+endif
 endif
 ifeq ($(conf_drivers_xen),1)
 bsd += bsd/sys/xen/evtchn.o
@@ -1157,6 +1197,11 @@ objects += core/per-cpu-counter.o
 objects += core/percpu-worker.o
 ifeq ($(conf_networking_dhcp),1)
 objects += core/dhcp.o
+endif
+ifeq ($(conf-INET6),1)
+ifeq ($(conf_networking_dhcp6),1)
+# bsd/porting/dhcp6.o is added to the bsd list (needs BSD-internal headers)
+endif
 endif
 objects += core/run.o
 objects += core/shutdown.o

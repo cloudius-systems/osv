@@ -56,6 +56,23 @@ namespace osv {
 		}
 		return result;
 	}
+
+	// C-linkage helper for the DHCPv6 client. That code lives in a BSD-header
+	// translation unit which cannot include boost::asio (BSD's struct in6_addr
+	// clashes with the glibc/musl layout boost expects), so it hands us the
+	// learned nameservers in presentation form and we parse + install them.
+	extern "C" void osv_set_dns_config_str(const char* const* servers, int n)
+	{
+		vector<address> ns;
+		for (int i = 0; i < n; i++) {
+			boost::system::error_code ec;
+			auto a = boost::asio::ip::make_address(servers[i], ec);
+			if (!ec)
+				ns.push_back(a);
+		}
+		if (!ns.empty())
+			set_dns_config(ns, vector<string>());
+	}
 }
 
 static void cleanup(void *p)

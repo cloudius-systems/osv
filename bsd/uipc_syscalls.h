@@ -56,10 +56,10 @@ int linux_listen(int s, int backlog);
 int linux_accept(int s, struct bsd_sockaddr* name, socklen_t* namelen, int *out_fd);
 int linux_accept4(int s, struct bsd_sockaddr * name, socklen_t * namelen, int *out_fd, int flags);
 int linux_connect(int s, void *name, int namelen);
-int linux_sendmsg(int s, struct msghdr* msg, int flags, ssize_t* bytes);
+int linux_sendmsg(int s, struct l_msghdr* msg, int flags, ssize_t* bytes);
 int linux_sendto(int s, void* buf, int len, int flags, void* to, int tolen, ssize_t *bytes);
 int linux_send(int s, caddr_t buf, size_t len, int flags, ssize_t* bytes);
-int linux_recvmsg(int s, struct msghdr *msg, int flags, ssize_t* bytes);
+int linux_recvmsg(int s, struct l_msghdr *msg, int flags, ssize_t* bytes);
 int linux_recv(int s, caddr_t buf, int len, int flags, ssize_t* bytes);
 int linux_recvfrom(int s, void* buf, size_t len, int flags,
 	struct bsd_sockaddr * from, socklen_t * fromlen, ssize_t* bytes);
