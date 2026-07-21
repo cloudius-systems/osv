@@ -15,6 +15,7 @@
 #include <osv/mutex.h>
 #include <osv/condvar.h>
 #include <osv/power.hh>
+#include <osv/signal.hh>
 #include <osv/clock.hh>
 #include <api/setjmp.h>
 #include <osv/stubbing.hh>
@@ -412,6 +413,11 @@ int kill(pid_t pid, int sig)
         return -1;
     }
     unsigned sigidx = sig - 1;
+    // If a signalfd is watching this signal, deliver it to the fd and consume
+    // the signal (do not run the default action or a handler).
+    if (osv_signalfd_deliver(sig)) {
+        return 0;
+    }
     if (is_sig_dfl(signal_actions[sigidx])) {
         // Our default is to power off.
         debugf("Uncaught signal %d (\"%s\"). Powering off.\n",
@@ -743,14 +749,6 @@ int sigaltstack(const stack_t *ss, stack_t *oss)
         signal_stack_size = ss->ss_size;
     }
     return 0;
-}
-
-extern "C" OSV_LIBC_API
-int signalfd(int fd, const sigset_t *mask, int flags)
-{
-    WARN_STUBBED();
-    errno = ENOSYS;
-    return -1;
 }
 
 extern "C" OSV_LIBC_API
