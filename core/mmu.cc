@@ -19,6 +19,7 @@
 #include <safe-ptr.hh>
 #include "fs/vfs/vfs.h"
 #include <osv/error.h>
+#include <sys/mman.h>
 #include <osv/trace.hh>
 #include <stack>
 #include <fs/fs.hh>
@@ -1405,6 +1406,175 @@ void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
         }
     }
     return v;
+}
+
+// Is the whole [start, end) range free of any vma?  Caller must hold
+// vma_list_mutex for read or write.
+static bool range_is_free(uintptr_t start, uintptr_t end)
+{
+    auto range = find_intersecting_vmas(addr_range(start, end));
+    return range.first == range.second;
+}
+
+// Snapshot of the source mapping taken under the vma lock so the rest of
+// mremap() can operate through the public (self-locking) primitives without
+// holding vma_list_mutex across nested locking calls.
+struct mremap_src {
+    bool ok;          // false => source is not a single, fully-mapped vma
+    unsigned perm;
+    unsigned flags;
+    bool is_file;
+    bool tail_free;   // region immediately after the source is unmapped
+    fileref file;
+    f_offset offset;
+};
+
+static mremap_src inspect_mremap_src(uintptr_t start, size_t size, size_t grow)
+{
+    mremap_src s{};
+    PREVENT_STACK_PAGE_FAULT
+    SCOPE_LOCK(vma_list_mutex.for_read());
+    auto i = find_intersecting_vma(start);
+    if (i == vma_list.end() ||
+        i->start() > start || i->end() < start + size) {
+        s.ok = false;
+        return s;
+    }
+    s.ok = true;
+    s.perm = i->perm();
+    s.flags = i->flags();
+    auto* fvma = dynamic_cast<file_vma*>(&*i);
+    s.is_file = fvma != nullptr;
+    if (fvma) {
+        s.file = fvma->file();
+        s.offset = fvma->offset();
+    }
+    uintptr_t end = start + size;
+    s.tail_free = (i->end() == end) && range_is_free(end, end + grow);
+    return s;
+}
+
+// mremap(2): resize (and possibly move) an existing mapping.  Returns the new
+// address on success, or MAP_FAILED with errno set.  Only a single, wholly
+// mapped source vma is supported (Linux requires the old range to fall in one
+// mapping too); a range spanning several vmas or a hole yields EFAULT.
+//
+// ponytail: anon and file-backed mappings are handled; the move path preserves
+// the mapping type/perm/flags (file offset for file vmas).  MREMAP_FIXED is not
+// supported yet (returns EINVAL) -- add when a real caller needs it.
+void* mremap(void* old_addr, size_t old_size, size_t new_size, unsigned flags)
+{
+    auto old_start = reinterpret_cast<uintptr_t>(old_addr);
+    // Reject sizes that overflow when page-aligned, or an address range that
+    // wraps, before any arithmetic uses them (align_up can wrap near SIZE_MAX,
+    // which would make later range checks misjudge the source as mapped).
+    if (old_size > SIZE_MAX - page_size || new_size > SIZE_MAX - page_size) {
+        errno = EINVAL;
+        return MAP_FAILED;
+    }
+    old_size = align_up(old_size, page_size);
+    new_size = align_up(new_size, page_size);
+    if (old_start > SIZE_MAX - old_size || old_start > SIZE_MAX - new_size) {
+        errno = EINVAL;
+        return MAP_FAILED;
+    }
+
+    if (new_size == 0 || (flags & MREMAP_FIXED)) {
+        errno = EINVAL;
+        return MAP_FAILED;
+    }
+
+    size_t grow = new_size > old_size ? new_size - old_size : 0;
+    auto src = inspect_mremap_src(old_start, old_size, grow);
+    if (!src.ok) {
+        errno = EFAULT;
+        return MAP_FAILED;
+    }
+
+    // Shrink or no-op: drop the tail in place, address is unchanged.
+    if (new_size <= old_size) {
+        if (new_size < old_size) {
+            munmap(reinterpret_cast<void*>(old_start + new_size),
+                   old_size - new_size);
+        }
+        return old_addr;
+    }
+
+    // Grow.  Try to extend in place if the following region is free.
+    uintptr_t old_end = old_start + old_size;
+    if (src.tail_free) {
+        unsigned f = (src.flags | mmap_fixed) & ~mmap_populate;
+        // The tail_free result from inspect_mremap_src() was computed under a
+        // read lock that has since been released; a concurrent mmap/stack
+        // allocation could have taken [old_end, old_end+grow) since then.  A
+        // plain mmap_fixed map would *evacuate* (destroy) whatever is now
+        // there.  So re-verify the range is free while holding the write lock,
+        // and only then insert the tail vma - atomically, so nothing can slip
+        // in between the check and the map.  If it is no longer free, fall
+        // through to the move path.
+        bool grew = false;
+        {
+            PREVENT_STACK_PAGE_FAULT
+            WITH_LOCK(vma_list_mutex.for_write()) {
+                if (range_is_free(old_end, old_end + grow)) {
+                    addr_range tr(old_end, old_end + grow);
+                    // Build the vma exactly as map_file()/map_anon() do (via
+                    // the file's own mmap() for file-backed, so the correct
+                    // page-ops are installed), then allocate() with
+                    // search=false.  The range was verified free under this
+                    // same write lock, so allocate evacuates nothing and no
+                    // concurrent mapping can be clobbered.
+                    mmu::vma* vma = src.is_file
+                        ? src.file->mmap(tr, f | mmap_file, src.perm,
+                                         src.offset + old_size).release()
+                        : (mmu::vma*) new mmu::anon_vma(tr, src.perm, f);
+                    allocate(vma, old_end, grow, false);
+                    grew = true;
+                }
+            }
+        }
+        if (grew) {
+            return old_addr;
+        }
+    }
+
+    if (!(flags & MREMAP_MAYMOVE)) {
+        errno = ENOMEM;
+        return MAP_FAILED;
+    }
+
+    // Move: allocate a fresh region of the new size, migrate the contents,
+    // then unmap the old one.  Both mappings coexist briefly during the copy.
+    unsigned f = src.flags & ~mmap_populate;
+    if (src.is_file) {
+        // File-backed move: remap the file at the new address with the same
+        // offset; the fault path re-attaches pages from the (shared) page
+        // cache and serves the grown tail from the file / zero past EOF.
+        //
+        // FIXME: for a MAP_PRIVATE file mapping this loses COW-dirtied pages
+        // (modifications that live only in this mapping's private copies) - the
+        // move re-derives from the file.  A correct fix must copy the private
+        // dirty pages across, but doing that safely against the page-cache COW
+        // machinery is non-trivial; a naive populate+memcpy faults.  Documented
+        // as a known data-loss limitation of moving a MAP_PRIVATE file mapping
+        // rather than shipped with a crashing copy path.
+        void* n = map_file(nullptr, new_size, f, src.perm, src.file, src.offset);
+        if (!n || n == MAP_FAILED) {
+            errno = ENOMEM;
+            return MAP_FAILED;
+        }
+        munmap(old_addr, old_size);
+        return n;
+    }
+
+    void* n = map_anon(nullptr, new_size, f | mmap_populate, src.perm);
+    if (!n || n == MAP_FAILED) {
+        errno = ENOMEM;
+        return MAP_FAILED;
+    }
+    memcpy(n, old_addr, old_size);
+    munmap(old_addr, old_size);
+    return n;
 }
 
 bool is_linear_mapped(const void *addr, size_t size)

@@ -126,6 +126,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-smoke.so tst-bsd-evh.
 	tst-epoll-pwait2.so \
 	tst-prctl.so \
 	tst-mmap-file-cow.so \
+	tst-mremap.so \
 	tst-elf-permissions.so misc-mutex.so misc-sockets.so tst-condvar.so \
 	tst-queue-mpsc.so tst-af-local.so tst-pipe.so tst-yield.so \
 	misc-ctxsw.so tst-read.so tst-symlink.so tst-openat.so \
