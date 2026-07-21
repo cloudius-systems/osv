@@ -42,9 +42,10 @@
 #ifdef _KERNEL
 #include <bsd/sys/sys/sockopt.h>
 #endif
-#include <osv/net_channel.hh>
 
 struct vnet;
+
+class net_channel;
 
 /*
  * Kernel structure per socket.

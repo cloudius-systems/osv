@@ -443,7 +443,7 @@ sys_socketpair(int domain, int type, int protocol, int *rsv)
 static int
 sendit(int s, struct msghdr* mp, int flags, ssize_t* bytes)
 {
-	struct mbuf *control;
+	struct mbuf *control = NULL;
 	struct bsd_sockaddr *to;
 	int error;
 
@@ -480,7 +480,7 @@ kern_sendit(int s,
             struct mbuf *control,
             ssize_t *bytes)
 {
-	struct file *fp;
+	struct file *fp = NULL;
 	struct uio auio = {};
 	struct iovec *iov;
 	struct socket *so;
@@ -488,15 +488,16 @@ kern_sendit(int s,
 	int i, error;
 	ssize_t len;
 
-	error = getsock_cap(s, &fp, NULL);
-	if (error)
-		return (error);
-	so = (struct socket *)file_data(fp);
 
 	// Create a local copy of the user's iovec - sosend() is going to change it!
 	assert(mp->msg_iovlen <= UIO_MAXIOV);
 	struct iovec uio_iov[mp->msg_iovlen];
 	memcpy(uio_iov, mp->msg_iov, sizeof(uio_iov));
+
+	error = getsock_cap(s, &fp, NULL);
+	if (error) goto bad;
+
+	so = (struct socket *)file_data(fp);
 
 	auio.uio_iov = uio_iov;
 	auio.uio_iovcnt = mp->msg_iovlen;;
@@ -513,6 +514,7 @@ kern_sendit(int s,
 	len = auio.uio_resid;
 	from = (struct bsd_sockaddr*)mp->msg_name;
 	error = sosend(so, from, &auio, 0, control, flags, 0);
+	control = NULL; /* transfered ownership of control mbuf */
 	if (error) {
 		if (auio.uio_resid != len && (error == ERESTART ||
 		    error == EINTR || error == EWOULDBLOCK))
@@ -531,7 +533,10 @@ kern_sendit(int s,
 	if (error == 0)
 	    *bytes = len - auio.uio_resid;
 bad:
-	fdrop(fp);
+	if (fp)
+		fdrop(fp);
+	if (control)
+		m_freem(control);
 	return (error);
 }
 
