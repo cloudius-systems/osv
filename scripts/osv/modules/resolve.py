@@ -128,7 +128,7 @@ def require_if_other_module_present(module_name,other_module_name):
 def resolve_required_modules_if_other_is_present():
     required_module_names = set()
     for module_name in _modules_to_be_added_if_other_module_present.keys():
-        # If module is present then add modules that should be required implictly
+        # If module is present then add modules that should be required implicitly
         if( _modules.get(module_name)):
             modules_to_be_added = _modules_to_be_added_if_other_module_present[module_name]
             for required_module_name in modules_to_be_added:
