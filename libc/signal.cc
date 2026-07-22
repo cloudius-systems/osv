@@ -413,6 +413,15 @@ int kill(pid_t pid, int sig)
     }
     unsigned sigidx = sig - 1;
     if (is_sig_dfl(signal_actions[sigidx])) {
+        // Per POSIX, the default disposition of SIGCHLD, SIGURG and SIGWINCH is
+        // to IGNORE (not to terminate the process).  OSv treats an unhandled
+        // SIG_DFL signal as fatal and powers the VM off, which is wrong for
+        // these three: e.g. delivering SIGCHLD to a process with no handler
+        // installed must be silently ignored, not fatal.  Honor the ignore
+        // default for them instead of powering off.
+        if (sig == SIGCHLD || sig == SIGURG || sig == SIGWINCH) {
+            return 0;
+        }
         // Our default is to power off.
         debugf("Uncaught signal %d (\"%s\"). Powering off.\n",
                 sig, strsignal(sig));
