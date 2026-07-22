@@ -184,14 +184,22 @@ pid_t fork(void)
     // ahead of the parent's bookkeeping.
     fork::register_child(cpid, parent);
 
-    // Single cleanup: free the copied user stack and, if the child fell off the
-    // end without exit(), record a default status.  Real exit codes are
-    // recorded by exit()/execve() via fork::child_exited() before this runs.
-    child->set_cleanup([cpid, stack_to_free] {
+    // Single cleanup, run by the thread reaper once the (detached) child has
+    // fully terminated: free the copied user stack, record a default status if
+    // the child fell off the end without exit() (real codes are recorded by
+    // exit()/execve() via fork::child_exited() before this runs), and finally
+    // dispose the child thread object itself.  Disposing is essential: the
+    // child thread holds a shared_ptr to its application_runtime (set at thread
+    // construction), and only destroying the thread releases that reference.
+    // Without it the top-level application's runtime never drops to zero, its
+    // ~application_runtime never fires, application::join() blocks forever on
+    // _terminated, and OSv hangs at shutdown instead of powering off.
+    child->set_cleanup([cpid, stack_to_free, child] {
         fork::child_exited(cpid, 0);
         if (stack_to_free) {
             free(stack_to_free);
         }
+        sched::thread::dispose(child);
     });
 
     child->start();
