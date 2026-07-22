@@ -6,6 +6,19 @@ config lazy_stack
   prompt "Use lazy stack"
   def_bool $(shell,grep -q ^conf_lazy_stack=1 conf/base.mk && echo y || echo n)
 
+config fork
+  prompt "Include fork()/vfork() support (per-child address space, off by default)"
+  bool
+  default n
+  help
+    Enable OSv's thread-backed fork()/vfork()/execve()/waitpid() emulation,
+    including the per-child address space with copy-on-write needed to give a
+    forked child private memory.  This changes OSv's usual single-address-space
+    model (address-space switches on context switch between fork children), so
+    it is OFF by default: with this disabled, none of the fork code is compiled
+    in and OSv behaves exactly as before (fork() returns ENOSYS).  Enable it
+    only for workloads that require fork() (e.g. multi-process programs).
+
 config lazy_stack_invariant
   prompt "Check lazy stack invariant"
   def_bool $(shell,grep -q ^conf_lazy_stack_invariant=1 conf/base.mk && echo y || echo n)
