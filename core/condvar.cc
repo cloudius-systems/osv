@@ -13,6 +13,7 @@
 #include <osv/export.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_fork.h>
 
 TRACEPOINT(trace_condvar_wait, "%p", condvar *);
 TRACEPOINT(trace_condvar_wake_one, "%p", condvar *);
@@ -22,7 +23,15 @@ int condvar::wait(mutex* user_mutex, sched::timer* tmr)
 {
     trace_condvar_wait(this);
     int ret = 0;
+#if CONF_fork
+    // A fork child (non-AS0) heap-allocates its wait_record so it stays
+    // coherent when the parent (different address space) walks this shared
+    // condvar's queue.  AS0 keeps the on-stack fast path.
+    coherent_wait_record wr_holder(sched::thread::current());
+    wait_record &wr = wr_holder.get();
+#else
     wait_record wr(sched::thread::current());
+#endif
 
     _m.lock();
     if (!_waiters_fifo.oldest) {
