@@ -26,6 +26,8 @@ int execve(const char *path, char *const argv[], char *const envp[])
 #include <osv/stubbing.hh>
 #include "../libc.hh"
 #include <osv/fork.hh>
+#include <osv/mmu.hh>
+#include <osv/sched.hh>
 
 // execve() on OSv.
 //
@@ -73,6 +75,21 @@ int execve(const char *path, char *const argv[], char *const envp[])
     }
 
     osv::shared_app_t child;
+    // execve() replaces the address space entirely: the forked child's COW
+    // private memory is discarded.  Move this thread back to the kernel (global)
+    // address space BEFORE launching the new program, so the new program's
+    // mappings go into the global vma_list + page table (consistent with
+    // get_root_pt) rather than the now-defunct child COW address space.  The
+    // freshly created app threads inherit this thread's (now global) AS.
+    {
+        auto self = sched::thread::current();
+        auto old_as = self->address_space();
+        if (old_as != mmu::kernel_address_space()) {
+            self->set_address_space(mmu::kernel_address_space());
+            mmu::switch_to_runtime_page_tables();  // reload CR3 = global root
+            mmu::destroy_address_space(old_as);
+        }
+    }
     try {
         // new_program=true => fresh ELF namespace, so the exec'd program gets
         // its own globals rather than colliding with the caller's.
