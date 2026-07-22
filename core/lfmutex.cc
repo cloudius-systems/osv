@@ -16,11 +16,27 @@
 #endif
 
 #if CONF_fork
-// See wait_record.hh: true iff the current thread runs in a forked-child
-// (non-AS0) address space, in which case a wait_record queued on a shared
-// kernel object must be heap-allocated to stay coherent cross-address-space.
+namespace mmu {
+    // Live fork-child address-space count (defined in core/mmu.cc).  When > 0,
+    // more than one address space exists and a stack-resident wait_record on a
+    // shared kernel object can be dereferenced cross-AS.
+    extern std::atomic<int> live_child_address_spaces;
+}
+
+// See wait_record.hh: with per-child same-VA private stacks, a wait_record
+// queued on a SHARED kernel condvar/mutex must live in the identity-mapped
+// kernel heap (same VA->phys in every address space) whenever a cross-address-
+// space wake is possible.  That is true when EITHER the current thread runs in
+// a forked-child (non-AS0) address space (a child woken by the parent), OR any
+// child address space is currently live (the parent, in AS0, woken by a child
+// -- the child dereferences the parent's stack-resident wait_record through
+// its own page tables and would read a stale private stack copy).  Default OSv
+// (no fork, single AS) always takes the zero-overhead on-stack fast path.
 bool fork_child_needs_heap_wait_record()
 {
+    if (mmu::live_child_address_spaces.load(std::memory_order_relaxed) > 0) {
+        return true;
+    }
     auto t = sched::thread::current();
     return t && t->address_space() &&
            t->address_space() != mmu::kernel_address_space();
