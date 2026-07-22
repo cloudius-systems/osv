@@ -63,6 +63,7 @@
 #include <osv/kernel_config_core_epoll.h>
 #include <osv/kernel_config_networking_stack.h>
 #include <osv/kernel_config_core_syscall.h>
+#include <osv/kernel_config_fork.h>
 
 #include <osv/syscalls_config.h>
 
@@ -483,6 +484,7 @@ static long sys_set_tid_address(int *tidptr)
 #define CLONE_CHILD_CLEARTID   0x00200000
 
 extern sched::thread *clone_thread(unsigned long flags, void *child_stack, unsigned long newtls);
+extern "C" pid_t fork(void); // thread-backed fork() emulation (libc/process/fork.cc)
 
 #define __NR_sys_clone __NR_clone
 #ifdef __x86_64__
@@ -492,11 +494,27 @@ int sys_clone(unsigned long flags, void *child_stack, int *ptid, int *ctid, unsi
 int sys_clone(unsigned long flags, void *child_stack, int *ptid, unsigned long newtls, int *ctid)
 #endif
 {   //
-    //We only support "cloning" of threads so fork() would fail but pthread_create() should
-    //succeed
+    // Threads use sys_clone (CLONE_THREAD).  Without CLONE_THREAD this is a
+    // fork()-style clone (a new "process"); on OSv we route that through the
+    // thread-backed fork() emulation (see libc/process/fork.cc).
     if (!(flags & CLONE_THREAD)) {
+#if CONF_fork
+       // fork()/vfork() land here (glibc/musl implement them via clone with an
+       // exit signal and no CLONE_THREAD).  Route to the thread-backed fork().
+       // Namespace-unshare clones (CLONE_NEWNS 0x00020000 etc.) are not
+       // supported on a single-address-space kernel.
+       const unsigned long CLONE_NEW_MASK = 0x7c020000UL; // NEWNS/UTS/IPC/USER/PID/NET/CGROUP
+       if (flags & CLONE_NEW_MASK) {
+           errno = ENOSYS;
+           return -1;
+       }
+       return fork();
+#else
+       // fork() support not compiled in (CONFIG_fork=n): preserve OSv's
+       // historical behavior of only supporting thread clones.
        errno = ENOSYS;
        return -1;
+#endif
     }
     //
     //Validate we have non-empty stack
