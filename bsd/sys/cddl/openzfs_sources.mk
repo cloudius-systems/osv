@@ -3,13 +3,13 @@
 # This file defines the source objects for building libsolaris.so
 # from OpenZFS 2.4.1 instead of the old illumos/FreeBSD ZFS port.
 #
-# Generated from the actual source files in external/openzfs/module/.
+# Generated from the actual source files in modules/open_zfs/openzfs/module/.
 # Paths are relative to the repository root.
 #
 # Usage in Makefile:
 #   include bsd/sys/cddl/openzfs_sources.mk
 
-OPENZFS := external/openzfs
+OPENZFS := modules/open_zfs/openzfs
 
 # ============================================================
 # Platform-independent ZFS code (from module/zfs/)
