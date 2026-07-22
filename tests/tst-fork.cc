@@ -49,27 +49,28 @@ static void test_fork_return()
           "parent's stack local intact after child mutated its own copy");
 }
 
-// 2. fork() + execve(): child execs a trivial program; parent waits.
+// 2. fork() + execve(): the child really execs a program in a fresh ELF
+// namespace and the parent reaps it.  The payload (/tests/payload-exit7.so,
+// built by modules/tests) prints a marker and exit(7)s; the child never
+// returns from a successful execve(), so a return means exec failed and we
+// signal that with a distinct code (99) that the parent flags as a failure.
 static void test_fork_exec()
 {
     pid_t pid = fork();
     if (pid == 0) {
-        // Exec /libtrue.so or fall back to a program that exits 7.  On OSv the
-        // test image includes a simple echo/true-like helper; if none exists
-        // execve returns and we _exit a sentinel the parent recognizes.
         char *const argv[] = { (char*)"/tests/payload-exit7.so", nullptr };
         char *const envp[] = { nullptr };
         execve(argv[0], argv, envp);
-        // execve failed (no such payload in this image) -> sentinel
-        _exit(7);
+        _exit(99);   // only reached if execve() FAILED to launch the payload
     }
     CHECK(pid > 0, "fork() before execve returns child pid");
     int status = 0;
     pid_t w = waitpid(pid, &status, 0);
     CHECK(w == pid, "waitpid() reaps the fork+exec child");
-    // Whether the exec payload ran or the sentinel fired, exit status is 7.
+    // 7 means the exec'd payload actually ran and exited; 99 means execve()
+    // returned (failed to launch) -- that is now a real failure.
     CHECK(WIFEXITED(status) && WEXITSTATUS(status) == 7,
-          "fork+exec child exit status observed (7)");
+          "fork+exec: exec'd payload ran and its exit code (7) was reaped");
 }
 
 // 3. vfork() maps to fork(); same contract.
