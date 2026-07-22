@@ -413,6 +413,13 @@ int kill(pid_t pid, int sig)
     }
     unsigned sigidx = sig - 1;
     if (is_sig_dfl(signal_actions[sigidx])) {
+        // Per POSIX, the default disposition of SIGCHLD, SIGURG and SIGWINCH is
+        // to IGNORE, not to terminate.  OSv's fork() emulation raises SIGCHLD to
+        // the parent when a child exits; treating an unhandled SIGCHLD as an
+        // uncaught fatal signal (and powering off) would kill the whole VM.
+        if (sig == SIGCHLD || sig == SIGURG || sig == SIGWINCH) {
+            return 0;
+        }
         // Our default is to power off.
         debugf("Uncaught signal %d (\"%s\"). Powering off.\n",
                 sig, strsignal(sig));
