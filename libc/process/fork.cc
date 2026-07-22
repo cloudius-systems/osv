@@ -6,16 +6,19 @@
  */
 
 #include <osv/fork.hh>
+#include <osv/kernel_config_fork.h>
 #include <errno.h>
 #include <signal.h>
 #include <sys/wait.h>
 #include <unordered_map>
 #include <memory>
 #include <osv/sched.hh>
+#include <osv/mmu.hh>
 #include <osv/mutex.h>
 #include <osv/condvar.h>
 #include <osv/app.hh>
 #include "../libc.hh"
+
 
 // Arch hook (arch/<arch>/fork.cc): create a child thread that resumes in
 // fork()'s CALLER (at caller_ret, with caller_sp) on a private copy of the
@@ -30,7 +33,6 @@ extern sched::thread *fork_thread(void *caller_ret, void *caller_sp,
 extern "C" void __osv_run_atfork_prepare();
 extern "C" void __osv_run_atfork_parent();
 extern "C" void __osv_run_atfork_child();
-
 namespace osv {
 namespace fork {
 
@@ -180,24 +182,39 @@ pid_t fork(void)
     }
     pid_t cpid = child->id();
 
+    // Stage 2 fork: give the child its OWN address space, a COW clone of the
+    // parent's.  Private writable mappings become copy-on-write in both parent
+    // and child; the kernel half of the page table is shared.  The child
+    // thread runs in this address space (its CR3 is loaded on context switch).
+    mmu::address_space *child_as =
+        mmu::clone_address_space(sched::thread::current()->address_space());
+    child->set_address_space(child_as);
+
     // Register the child BEFORE starting it so a fast child->exit cannot race
     // ahead of the parent's bookkeeping.
     fork::register_child(cpid, parent);
 
     // Single cleanup, run by the thread reaper once the (detached) child has
-    // fully terminated: free the copied user stack, record a default status if
+    // fully terminated: free the copied user stack; record a default status if
     // the child fell off the end without exit() (real codes are recorded by
-    // exit()/execve() via fork::child_exited() before this runs), and finally
-    // dispose the child thread object itself.  Disposing is essential: the
-    // child thread holds a shared_ptr to its application_runtime (set at thread
-    // construction), and only destroying the thread releases that reference.
-    // Without it the top-level application's runtime never drops to zero, its
+    // exit()/execve() via fork::child_exited() before this runs); destroy the
+    // child's copy-on-write address space; and dispose the child thread object.
+    // Disposing is essential: the child thread holds a shared_ptr to its
+    // application_runtime (set at thread construction), and only destroying the
+    // thread releases it; without it the app runtime never drops to zero,
     // ~application_runtime never fires, application::join() blocks forever on
     // _terminated, and OSv hangs at shutdown instead of powering off.
-    child->set_cleanup([cpid, stack_to_free, child] {
+    child->set_cleanup([cpid, stack_to_free, child, child_as] {
         fork::child_exited(cpid, 0);
         if (stack_to_free) {
             free(stack_to_free);
+        }
+        // Only destroy the child address space if the child still owns it.
+        // execve() replaces the child AS with the global (kernel) AS and
+        // destroys child_as itself; destroying it again here is a double-free
+        // (GP fault / ~rwlock assert when the reaper tears down freed vmas).
+        if (child->address_space() == child_as) {
+            mmu::destroy_address_space(child_as);
         }
         sched::thread::dispose(child);
     });

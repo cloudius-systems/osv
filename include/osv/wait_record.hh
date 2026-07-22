@@ -9,6 +9,10 @@
 #define INCLUDED_OSV_WAIT_RECORD
 
 #include <osv/sched.hh>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/aligned_new.hh>
+#endif
 
 // A "waiter" is simple synchronization object, with which one thread calling
 // waiter->wait() goes to sleep, and a second thread, which finds this waiter
@@ -91,5 +95,54 @@ struct wait_record : public waiter {
     using mutex = lockfree::mutex;
     void wake_lock(mutex* mtx) { t.load(std::memory_order_relaxed)->wake_lock(mtx, this); }
 };
+
+#if CONF_fork
+// fork() Stage 2 kernel-stack coherence.
+//
+// OSv has no separate kernel stack: kernel code runs on the app thread stack.
+// A wait_record queued on a SHARED kernel mutex/condvar is a LOCAL on the
+// waiter's stack.  With per-child COW address spaces, a fork child's stack VA
+// maps to a DIFFERENT physical page than the parent sees at that same VA, so a
+// parent (running in AS0) that dereferences the child's queued wait_record
+// through its own page tables reads the wrong physical page -> owner-assert /
+// corruption in mutex::unlock().
+//
+// Fix (Option A): when the current thread runs in a non-AS0 (fork-child)
+// address space, allocate the wait_record from the KERNEL HEAP, which is
+// identity-mapped identically in every address space, so its VA is coherent
+// cross-AS.  AS0 (default OSv + the parent) keeps the on-stack fast path with
+// zero overhead.  Returns true iff the current thread is in a forked child AS.
+bool fork_child_needs_heap_wait_record();
+
+// RAII holder giving a wait_record& that lives on the caller's stack for AS0
+// threads (fast path, no allocation) or on the kernel heap for fork-child
+// threads (AS-coherent).  Frees the heap copy on destruction; the stack copy
+// is destroyed by the placement-new'd object's explicit dtor.
+class coherent_wait_record {
+    alignas(wait_record) char _stack[sizeof(wait_record)];
+    wait_record *_wr;
+    bool _heap;
+public:
+    explicit coherent_wait_record(sched::thread *t) {
+        _heap = fork_child_needs_heap_wait_record();
+        // wait_record is CACHELINE_ALIGNED (over-aligned); aligned_new honors
+        // it, and the stack buffer is alignas(wait_record).
+        _wr = _heap ? aligned_new<wait_record>(t)
+                    : new (_stack) wait_record(t);
+    }
+    ~coherent_wait_record() {
+        if (_heap) {
+            _wr->~wait_record();
+            free(_wr);
+        } else {
+            _wr->~wait_record();
+        }
+    }
+    wait_record &get() { return *_wr; }
+    wait_record *ptr() { return _wr; }
+    coherent_wait_record(const coherent_wait_record &) = delete;
+    coherent_wait_record &operator=(const coherent_wait_record &) = delete;
+};
+#endif // CONF_fork
 
 #endif /* INCLUDED_OSV_WAIT_RECORD */
