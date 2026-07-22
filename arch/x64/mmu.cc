@@ -120,14 +120,39 @@ void flush_tlb_all()
 
 static pt_element<4> page_table_root __attribute__((init_priority((int)init_prio::pt_root)));
 
+#if CONF_fork
+// Virtual pointer to the current thread's PML4 (child AS's private PML4 when
+// running in a forked child, else the kernel PML4).  Defined in core/mmu.cc.
+pt_element<4> *current_pt_root();
+
+pt_element<4> *get_root_pt(uintptr_t virt __attribute__((unused))) {
+    return current_pt_root();
+}
+
+// Virtual pointer to the kernel (AS0) PML4.
+pt_element<4> *kernel_pml4() {
+    return &page_table_root;
+}
+#else
 pt_element<4> *get_root_pt(uintptr_t virt __attribute__((unused))) {
     return &page_table_root;
 }
+#endif // CONF_fork
 
 void switch_to_runtime_page_tables()
 {
     processor::write_cr3(page_table_root.next_pt_addr());
 }
+
+#if CONF_fork
+// Physical address of the kernel (AS0) PML4 -- the CR3 value that maps OSv
+// text/data + the identity/phys ranges.  Used as the shared base for cloned
+// child address spaces and as AS0's pt_root.
+phys kernel_pt_root_phys()
+{
+    return page_table_root.next_pt_addr();
+}
+#endif // CONF_fork
 
 enum {
     page_fault_prot  = 1ul << 0,
