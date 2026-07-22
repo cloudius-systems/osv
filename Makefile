@@ -1057,6 +1057,9 @@ objects += arch/$(arch)/firmware.o
 objects += arch/$(arch)/hypervisor.o
 objects += arch/$(arch)/interrupt.o
 objects += arch/$(arch)/clone.o
+ifeq ($(conf_fork),1)
+objects += arch/$(arch)/fork.o
+endif
 ifeq ($(conf_drivers_pci),1)
 objects += arch/$(arch)/pci.o
 objects += arch/$(arch)/msi.o
@@ -1660,11 +1663,20 @@ musl += prng/srand48.o
 libc += random.o
 
 libc += process/execve.o
+ifeq ($(conf_fork),1)
+libc += process/fork.o
+endif
 musl += process/execle.o
 musl += process/execv.o
 musl += process/execl.o
 libc += process/waitpid.o
+# When fork() is enabled, our waitpid.cc provides wait()/waitpid()/wait4()
+# backed by the fork() child registry, superseding musl's process/wait.o.
+# When fork() is disabled, waitpid.cc provides only the ECHILD waitpid() stub,
+# so keep musl's wait.o for wait()/wait4().
+ifneq ($(conf_fork),1)
 musl += process/wait.o
+endif
 
 musl += setjmp/$(musl_arch)/setjmp.o
 musl += setjmp/$(musl_arch)/longjmp.o
