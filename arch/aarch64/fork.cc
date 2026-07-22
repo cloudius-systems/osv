@@ -69,7 +69,15 @@ sched::thread *fork_thread(void *caller_ret, void *caller_sp,
            "br %1 \n\t"         // resume in fork()'s caller
            : : "r"(resume_sp), "r"(resume_pc) : "x0", "memory");
     }, sched::thread::attr().
-        stack(4096 * 4),
+        stack(4096 * 4).
+        // Detached: nobody join()s the fork child (the parent reaps it via the
+        // pid registry / waitpid, not sched::thread::join).  A detached thread
+        // is handed to the reaper on completion, which runs our set_cleanup()
+        // (freeing the copied stack and disposing the thread object, releasing
+        // its application_runtime reference).  Without this the thread object
+        // (and its app_runtime shared_ptr) would leak and OSv would hang at
+        // shutdown -- see the cleanup comment in libc/process/fork.cc.
+        detached(),
         false,
         true);
     t->set_app_tcb(parent->get_app_tcb());
