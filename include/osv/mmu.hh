@@ -22,6 +22,7 @@
 #include <osv/trace.hh>
 #include <osv/kernel_config_memory_debug.h>
 #include <osv/kernel_config_memory_jvm_balloon.h>
+#include <osv/kernel_config_fork.h>
 
 struct exception_frame;
 #if CONF_memory_jvm_balloon
@@ -371,6 +372,40 @@ void vcleanup(void* addr, size_t size);
 error  advise(void* addr, size_t size, int advice);
 
 void vm_fault(uintptr_t addr, exception_frame* ef);
+
+#if CONF_fork
+// -----------------------------------------------------------------------------
+// Per-process address space (Stage 2 fork COW).
+//
+// An address_space bundles a page-table root (the PML4 whose physical address
+// is loaded into CR3) with its own set of VMAs.  Historically OSv had a single
+// global address space shared by all threads; that global is now "address
+// space 0" (the kernel + the initial application), returned by
+// kernel_address_space().  fork() creates a child address_space whose kernel
+// half (PML4 entries for OSv text/data + the identity/phys maps) is shared
+// with AS0, while the application half is a COW clone of the parent's.
+//
+// The concrete type is defined in core/mmu.cc (it owns the internal vma_list
+// container); here it is opaque.  Each thread carries a pointer to its current
+// address_space; the arch context switch loads its page-table root.
+struct address_space;
+
+// The kernel / initial-application address space ("AS0").  Always valid.
+address_space *kernel_address_space();
+
+// Physical address of an address_space's page-table root (value for CR3).
+phys pt_root_phys(address_space *as);
+
+// Create a child address_space that COW-clones "parent" for fork().  Private
+// writable VMAs are write-protected in both parent and child and marked COW;
+// MAP_SHARED / shm VMAs are mapped to the same physical pages (truly shared).
+// The kernel half of the page table is shared with the parent.
+address_space *clone_address_space(address_space *parent);
+
+// Tear down a child address_space (frees its private page tables + VMAs).
+// Never call on the kernel address space.
+void destroy_address_space(address_space *as);
+#endif // CONF_fork
 
 std::string procfs_maps();
 std::string sysfs_linear_maps();
