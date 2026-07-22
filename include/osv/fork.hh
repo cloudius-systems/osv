@@ -66,4 +66,21 @@ bool exit_current_child(int status);
 extern "C" pid_t fork(void);
 extern "C" pid_t vfork(void);
 
+#ifdef __x86_64__
+namespace osv {
+// x86-64 machine context a forked child must resume with so it continues in
+// fork()'s caller EXACTLY as a normal `ret` from fork() would -- restoring all
+// callee-saved registers (rbx, rbp, r12-r15) the caller relies on across the
+// call, plus rsp and the return address.  fork() jmps past its own epilogue
+// (the child is a different thread), so unless these are restored the caller
+// resumes with fork()'s internal register values -> a deep call chain that
+// keeps live values in callee-saved regs across fork() (e.g. an accumulator)
+// computes garbage.  Captured at fork() entry, where the regs still hold the
+// caller's values; restored by the child trampoline (arch/x64/fork.cc).
+struct fork_resume_ctx {
+    unsigned long rbx, rbp, r12, r13, r14, r15, rsp, rip;
+};
+} // namespace osv
+#endif
+
 #endif // OSV_FORK_HH

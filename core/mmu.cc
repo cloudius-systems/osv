@@ -222,6 +222,17 @@ pt_element<4> *current_pt_root()
 
 // --- fork COW page-table clone --------------------------------------------
 //
+// Number of live fork-child address spaces.  A wait_record placed on a SHARED
+// kernel condvar/mutex is a stack local; with per-child same-VA private stacks,
+// that stack VA resolves to DIFFERENT physical pages in different address
+// spaces, so a thread in one AS that walks the queue and dereferences another
+// thread's stack-resident wait_record reads the wrong page.  When any child AS
+// is live, ANY thread's wait_record can be dereferenced cross-AS (the parent's
+// by a child, a child's by the parent), so wait_records must come from the
+// identity-mapped kernel heap (same VA->phys in every AS) -- see
+// fork_child_needs_heap_wait_record() and include/osv/wait_record.hh.
+std::atomic<int> live_child_address_spaces{0};
+
 // Recursively clone the child's copy of an application-range subtree of the
 // parent's page table, level by level, marking most private 4K leaf pages
 // copy-on-write.
@@ -237,11 +248,28 @@ pt_element<4> *current_pt_root()
 // These "share, don't COW" address ranges are passed in via cow_share_ranges.
 struct cow_range { uintptr_t start, end; };
 static const std::vector<cow_range> *cow_share_ranges;
+// Ranges (the FORKING thread's live stack) that must be PRIVATIZED into the
+// child: fresh private physical pages that byte-copy the parent's page, mapped
+// at the SAME VA in the child, writable and NOT COW (OSv runs kernel code with
+// irqs off on the app stack, so a COW write-fault there is illegal) and NOT
+// shared (so the child owns its stack and frees it on teardown).  This is what
+// lets the child resume on the parent's exact rsp/rbp (same-VA stack) while
+// having private stack memory -- see arch/x64/fork.cc.
+static const std::vector<cow_range> *cow_privatize_ranges;
 
 static bool addr_is_shared(uintptr_t va)
 {
     if (!cow_share_ranges) return false;
     for (auto &r : *cow_share_ranges) {
+        if (va >= r.start && va < r.end) return true;
+    }
+    return false;
+}
+
+static bool addr_is_privatize(uintptr_t va)
+{
+    if (!cow_privatize_ranges) return false;
+    for (auto &r : *cow_privatize_ranges) {
         if (va >= r.start && va < r.end) return true;
     }
     return false;
@@ -259,7 +287,23 @@ static void clone_pt_level0(pt_element<0> *parent_pt, pt_element<0> *child_pt,
             continue;
         }
         uintptr_t va = base_virt + (uintptr_t)i * page_size;
-        if (addr_is_shared(va)) {
+        if (addr_is_privatize(va)) {
+            // Forking thread's live stack: give the child its OWN physical
+            // page (byte-copy of the parent's), mapped at the SAME VA, plain
+            // writable (no COW bit, no shared bit).  The parent's PTE is left
+            // untouched -- only the child diverges -- so the parent keeps
+            // writing its own stack with irqs off and never faults, and the
+            // child owns/frees this page on address-space teardown.
+            void *child_page = memory::alloc_page();
+            memcpy(child_page, phys_to_virt(ppte.addr()), page_size);
+            pt_element<0> pv = ppte;
+            if (pte_is_cow(pv)) {
+                pv = pte_mark_cow(pv, false);
+            }
+            pv.set_writable(true);
+            pv.set_addr(virt_to_phys(child_page), false);
+            child_pt[i] = pv;
+        } else if (addr_is_shared(va)) {
             // Stack / MAP_SHARED page: must stay genuinely shared + writable in
             // both parent and child (never COW).  Clear any COW bit and grant
             // write so both sides see each other's writes to the same phys
@@ -366,10 +410,16 @@ address_space *clone_address_space(address_space *parent)
         // Always share the forking thread's live stack: OSv runs kernel code
         // (incl. the context switch, with irqs off) on it, so it must never be
         // write-protected.  get_stack_info() gives the current thread's stack.
+        std::vector<cow_range> privatize_ranges;
         {
+            // The FORKING thread's live stack is PRIVATIZED (not shared): the
+            // child gets private byte-copies at the same VA so it can resume on
+            // the parent's exact rsp/rbp with independent stack memory.  It
+            // must stay plain-writable (no COW) since OSv runs kernel code with
+            // irqs off on it -- a COW fault there is illegal.
             auto si = sched::thread::current()->get_stack_info();
             uintptr_t s = reinterpret_cast<uintptr_t>(si.begin);
-            share_ranges.push_back({s, s + si.size});
+            privatize_ranges.push_back({s, s + si.size});
         }
         // Likewise every OTHER live thread's stack: those threads keep running
         // in the PARENT address space and perform context switches (irqs off) on
@@ -384,6 +434,7 @@ address_space *clone_address_space(address_space *parent)
             }
         });
         cow_share_ranges = &share_ranges;
+        cow_privatize_ranges = &privatize_ranges;
 
         for (unsigned slot = 0; slot < pte_per_page; slot++) {
             if (slot >= pml4_app_first && slot <= pml4_app_last) {
@@ -409,6 +460,8 @@ address_space *clone_address_space(address_space *parent)
             }
         }
         cow_share_ranges = nullptr;
+        cow_privatize_ranges = nullptr;
+        live_child_address_spaces.fetch_add(1, std::memory_order_relaxed);
 
         // Any write-protection we applied to the parent's page tables above
         // must be made visible on all CPUs before the parent continues.
@@ -499,6 +552,7 @@ void destroy_address_space(address_space *as)
         memory::free_page(phys_to_virt(pml4_phys));
     }
     delete as;
+    live_child_address_spaces.fetch_sub(1, std::memory_order_relaxed);
 }
 #endif // CONF_fork
 
