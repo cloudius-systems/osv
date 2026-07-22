@@ -96,6 +96,10 @@ enum {
 
 enum {
     pte_cow = 0,
+    // Software PTE bit tagging a page as SHARED across a fork (stack /
+    // MAP_SHARED / shm): such a page's physical frame is owned jointly, so a
+    // child address space must NOT free it on teardown.
+    pte_shared = 1,
 };
 
 /* flush tlb for the current processor */

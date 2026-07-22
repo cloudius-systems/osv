@@ -10,6 +10,22 @@
 #include <osv/sched.hh>
 #include <osv/wait_record.hh>
 #include <osv/export.h>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/mmu.hh>
+#endif
+
+#if CONF_fork
+// See wait_record.hh: true iff the current thread runs in a forked-child
+// (non-AS0) address space, in which case a wait_record queued on a shared
+// kernel object must be heap-allocated to stay coherent cross-address-space.
+bool fork_child_needs_heap_wait_record()
+{
+    auto t = sched::thread::current();
+    return t && t->address_space() &&
+           t->address_space() != mmu::kernel_address_space();
+}
+#endif
 
 namespace lockfree {
 
@@ -51,7 +67,15 @@ void mutex::lock()
     // when another thread releases the lock.
     // Note "waiter" is on the stack, so we must not return before making sure
     // it was popped from waitqueue (by another thread or by us.)
+#if CONF_fork
+    // A fork child (non-AS0) gets a heap-allocated wait_record so it stays
+    // coherent when the parent, in a different address space, dereferences it
+    // off this shared kernel mutex.  AS0 keeps the on-stack fast path.
+    coherent_wait_record waiter_holder(current);
+    wait_record &waiter = waiter_holder.get();
+#else
     wait_record waiter(current);
+#endif
     waitqueue.push(&waiter);
 
     // The "Responsibility Hand-Off" protocol where a lock() picks from
