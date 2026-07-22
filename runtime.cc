@@ -7,6 +7,8 @@
 
 #include <osv/drivers_config.h>
 #include <osv/sched.hh>
+#include <osv/fork.hh>
+#include <osv/kernel_config_fork.h>
 #include <osv/elf.hh>
 #include <stdlib.h>
 #include <cstring>
@@ -66,6 +68,17 @@
 #include <osv/pid.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
+
+#if !CONF_fork
+// When fork() is not compiled in (CONFIG_fork=n, the default), restore the
+// historical fork/vfork/wait4 stubs.  With fork enabled these live in
+// libc/process/fork.cc and libc/process/waitpid.cc instead.
+extern "C" OSV_LIBC_API int vfork() { WARN_STUBBED(); errno = ENOSYS; return -1; }
+extern "C" OSV_LIBC_API int fork()  { WARN_STUBBED(); errno = ENOSYS; return -1; }
+extern "C" OSV_LIBC_API pid_t wait4(pid_t, int *, int, struct rusage *) {
+    WARN_STUBBED(); errno = ECHILD; return -1;
+}
+#endif
 
 // cxxabi.h from gcc 10 and earlier used to say that __cxa_finalize returns
 // an int, while it should return void (and does so on gcc 11). To allow us
@@ -206,20 +219,6 @@ OSV_LIBC_API
 int getpagesize()
 {
     return 4096;
-}
-
-OSV_LIBC_API
-int vfork()
-{
-    WARN_STUBBED();
-    return -1;
-}
-
-OSV_LIBC_API
-int fork()
-{
-    WARN_STUBBED();
-    return -1;
 }
 
 OSV_LIBC_API
@@ -464,6 +463,18 @@ int pclose(FILE *stream)
 
 void exit(int status)
 {
+#if CONF_fork
+    // On OSv exit() historically shuts down the whole unikernel.  But a fork()
+    // child (or an exec'd child app) is a "process" that must exit on its own
+    // without taking the machine down.  If the current thread is a registered
+    // fork child, record its status for the parent's waitpid() and end just
+    // this thread; only the top-level application's exit() shuts OSv down.
+    if (osv::fork::exit_current_child(status)) {
+        // recorded + notified parent; terminate only this child thread
+        sched::thread::exit(); // noreturn: ends only this child thread
+        // not reached
+    }
+#endif
     debugf("program exited with status %ld\n", status);
     osv::shutdown();
 }
@@ -686,14 +697,6 @@ char *tmpnam_r(char *s)
 
 OSV_LIBC_API
 pid_t wait3(int *status, int options, struct rusage *usage)
-{
-    WARN_STUBBED();
-    errno = ECHILD;
-    return -1;
-}
-
-OSV_LIBC_API
-pid_t wait4(pid_t pid, int *status, int options, struct rusage *usage)
 {
     WARN_STUBBED();
     errno = ECHILD;
