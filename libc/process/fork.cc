@@ -25,7 +25,7 @@
 // parent's user stack, returning 0 in the child.  Hands back the copied stack
 // via out_stack_to_free so fork() can release it when the child is reaped.
 extern sched::thread *fork_thread(void *caller_ret, void *caller_sp,
-                                  void **out_stack_to_free);
+                                  void *resume_ctx, void **out_stack_to_free);
 
 // atfork handler chains (defined in libc/pthread.cc).  glibc/musl register
 // these internally; fork() must run prepare() in the parent before forking,
@@ -163,18 +163,35 @@ extern "C"
 __attribute__((noinline))
 pid_t fork(void)
 {
+    // Capture the caller's full callee-saved register context FIRST, before
+    // fork()'s body clobbers rbx/r12-r15.  At this point (right after fork's
+    // prologue) those registers still hold the caller's values, and fork's rbp
+    // frame gives us the caller's saved rbp ([rbp]), return address ([rbp+8]),
+    // and post-return rsp (rbp+16).  The child resumes with exactly this
+    // context so it continues in fork()'s caller as a normal `ret` would --
+    // essential for deep call chains (see osv::fork_resume_ctx, tst-fork-deep).
+    fork_resume_ctx ctx;
+    void **fp = static_cast<void**>(__builtin_frame_address(0));
+    asm volatile("movq %%rbx, %0\n\t"
+                 "movq %%r12, %1\n\t"
+                 "movq %%r13, %2\n\t"
+                 "movq %%r14, %3\n\t"
+                 "movq %%r15, %4\n\t"
+                 : "=m"(ctx.rbx), "=m"(ctx.r12), "=m"(ctx.r13),
+                   "=m"(ctx.r14), "=m"(ctx.r15));
+    ctx.rbp = reinterpret_cast<unsigned long>(fp[0]);          // caller's rbp
+    ctx.rip = reinterpret_cast<unsigned long>(__builtin_return_address(0));
+    ctx.rsp = reinterpret_cast<unsigned long>(fp + 2);         // fork rbp + 16
+
     pid_t parent = getpid();
 
-    // Capture the point fork() will return to in its caller, and the caller's
-    // stack pointer (fork()'s own frame base == caller SP at the return).  The
-    // child thread resumes exactly there, on a private copy of the stack.
-    void *caller_ret = __builtin_return_address(0);
-    void *caller_sp  = __builtin_frame_address(0);
+    void *caller_ret = reinterpret_cast<void*>(ctx.rip);
+    void *caller_sp  = reinterpret_cast<void*>(ctx.rsp);
 
     void *stack_to_free = nullptr;
     // POSIX: run pthread_atfork prepare handlers in the parent before forking.
     __osv_run_atfork_prepare();
-    sched::thread *child = fork_thread(caller_ret, caller_sp, &stack_to_free);
+    sched::thread *child = fork_thread(caller_ret, caller_sp, &ctx, &stack_to_free);
     if (!child) {
         __osv_run_atfork_parent();  // undo prepare-side locking
         errno = ENOMEM;
