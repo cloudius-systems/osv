@@ -735,22 +735,24 @@ address_space *clone_address_space(address_space *parent)
         }
         cow_share_ranges = nullptr;
         cow_privatize_ranges = nullptr;
-        live_child_address_spaces.fetch_add(1, std::memory_order_relaxed);
-
-        // Any write-protection we applied to the parent's page tables above
-        // must be made visible on all CPUs before the parent continues.
-        mmu::flush_tlb_all();
 
         // The child AS was pre-reserved above.  Snapshot the parent's private
-        // VMAs into `snap` here (no malloc: capacity was reserved before the
-        // lock).  Capture each vma's file identity (a fileref + offset for a
+        // VMAs into `snap` while still under the lock (reads only; the
+        // pre-reserved vector storage is identity-mapped so its push_back never
+        // faults).  Capture each vma's file identity (a fileref + offset for a
         // file_vma, null for an anon_vma) so the child's copies -- built AFTER
         // the lock below -- can preserve each vma's DYNAMIC TYPE.  A file_vma
         // (e.g. the ELF loader's file-backed .text) must clone as a file_vma
         // bound to the SAME file + offset, else the child's demand faults
         // zero-fill over its own .text (#1456's fork COW-clone wild-branch
-        // fix).  The allocating file()->mmap() rebuild cannot run here (under
-        // vmas_mutex, with the arena active, it could deadlock), so we defer it.
+        // fix).  The allocating file()->mmap() rebuild cannot run here, so we
+        // defer it.  We must NOT do any write that can COW-fault (e.g. to a
+        // kernel .bss global we just write-protected) while holding vmas_mutex
+        // for write: the COW fault handler re-acquires vmas_mutex, which
+        // self-deadlocks.  So the live_child_address_spaces bump is deferred
+        // until after the lock.  The TLB flush is not: it runs before the lock
+        // is released (see below) and touches only kernel .bss and the
+        // identity heap, which are never COW.
         for (auto &v : *parent->vmas) {
             if (v.size() == 0) {
                 continue;
@@ -764,20 +766,32 @@ address_space *clone_address_space(address_space *parent)
                                 nullptr, 0});
             }
         }
+        // Flush the write-protection out of every CPU's TLB BEFORE releasing
+        // the lock.  Once it is released another thread can COW-fault one of
+        // these pages and give the parent a new frame for it; a CPU still
+        // holding a pre-fork writable TLB entry would then keep writing the
+        // OLD frame, which only the child maps now, and the parent loses those
+        // writes.  (That is how the vma tree lost a relink and a later fork
+        // walked into an erased node.)  It must reach CPUs that are running
+        // kernel threads too: those write this memory as well (the reaper
+        // drops references held in a dead child's thread object).  The
+        // TLB-flush state is kernel .bss and identity heap, never COW, so
+        // this cannot fault under the lock.
+        mmu::flush_tlb_all_cpus();
     } // release vmas_mutex
 
-    // Build the child's vma_list from the snapshot, now that vmas_mutex is
-    // released -- these allocations are free to hit the malloc pool refill path
-    // without risking a fork-time deadlock.  Preserve each vma's dynamic type:
-    // a file-backed snap entry is rebuilt via the file's own mmap() (the SAME
-    // call map_file/file_vma::split use, giving the correct page_allocator so
-    // the child's demand faults read the file instead of zero-filling); the new
-    // file_vma holds its OWN fileref, released by ~file_vma in
-    // destroy_address_space.  Each vma also goes into the child's OWN range set
-    // (S1 AS-aware allocation): its edge markers were inserted by the child's
-    // vma_list ctor, and find_hole/allocate/evacuate consult child->ranges, so
-    // the child's post-fork mmap resolves a hole from -- and inserts into --
-    // its OWN address space, not the global vma_range_set.
+    live_child_address_spaces.fetch_add(1, std::memory_order_relaxed);
+
+    // Build the child's vma_list from the snapshot -- these allocations are free
+    // to hit the malloc pool refill path without risking a fork-time deadlock.
+    // Preserve each vma's dynamic type: a file-backed snap entry is rebuilt via
+    // the file's own mmap() (the SAME call map_file/file_vma::split use, giving
+    // the correct page_allocator so the child's demand faults read the file
+    // instead of zero-filling); the new file_vma holds its OWN fileref, released
+    // by ~file_vma in destroy_address_space.  Each vma also goes into the
+    // child's OWN range set (S1 AS-aware allocation): find_hole/allocate/
+    // evacuate consult child->ranges, so the child's post-fork mmap resolves a
+    // hole from -- and inserts into -- its OWN address space.
     for (auto &s : snap) {
         vma *nv;
         if (s.file) {
