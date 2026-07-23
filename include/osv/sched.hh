@@ -87,6 +87,12 @@ namespace sched {
 
 class thread;
 class thread_handle;
+
+// Allocate raw storage for a thread object.  Forces the identity-mapped kernel
+// heap (never the fork arena) so the object's VA is coherent across every
+// address space -- the scheduler dereferences thread objects cross-AS.  Freed
+// with the ordinary free() (address-range dispatch handles the kernel heap).
+void *alloc_thread_storage(size_t align, size_t size);
 struct cpu;
 class timer;
 class timer_list;
@@ -474,7 +480,14 @@ public:
         // Note that avoiding new() is is not *really* important because
         // sizeof(thread) very large (over 20 KB) and would get a 4096-byte
         // alignment anyway, even if we allocated it with normal new.
-        void *p = aligned_alloc(alignof(thread), sizeof(thread));
+        //
+        // The thread object MUST live in the identity-mapped kernel heap, not
+        // the fork arena: the scheduler dereferences it from every address
+        // space (a fork child's AS and the parent's AS0), so its VA must resolve
+        // to the same physical page everywhere.  An arena (COW, app-slot)
+        // allocation would give each address space a private copy -- corrupting
+        // cross-AS scheduling.  alloc_thread_storage() forces the kernel heap.
+        void *p = alloc_thread_storage(alignof(thread), sizeof(thread));
         if (!p) {
             return nullptr;
         }

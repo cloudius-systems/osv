@@ -17,6 +17,9 @@
 #include <osv/mutex.h>
 #include <osv/condvar.h>
 #include <osv/app.hh>
+#include <osv/debug.hh>
+#include <osv/kernel_config_fork.h>
+#include <osv/fork_arena.hh>
 #include "../libc.hh"
 
 
@@ -68,6 +71,10 @@ void adopt_execed_app(shared_app_t app)
 
 void register_child(pid_t child_pid, pid_t parent_pid)
 {
+    // The child registry is kernel-global bookkeeping shared across address
+    // spaces (parent, child, reaper); keep its nodes in the identity heap, not
+    // the COW fork arena.
+    fork_arena::kernel_heap_scope kh;
     SCOPE_LOCK(g_lock);
     auto st = std::make_shared<child_state>();
     st->parent_pid = parent_pid;
@@ -211,6 +218,10 @@ pid_t fork(void)
     // ahead of the parent's bookkeeping.
     fork::register_child(cpid, parent);
 
+    // The cleanup closure (a std::function, heap-allocated) is stored in the
+    // thread object and invoked by the reaper (a kernel thread, AS0); keep it
+    // in the identity heap, not the parent's COW arena.
+    fork_arena::kernel_heap_scope kh_cleanup;
     // Single cleanup, run by the thread reaper once the (detached) child has
     // fully terminated: free the copied user stack; record a default status if
     // the child fell off the end without exit() (real codes are recorded by

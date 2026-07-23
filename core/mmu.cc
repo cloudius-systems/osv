@@ -36,6 +36,10 @@
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
 #include <osv/kernel_config_memory_jvm_balloon.h>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 
 // FIXME: Without this pragma, we get a lot of warnings that I don't know
 // how to explain or fix. For now, let's just ignore them :-(
@@ -396,6 +400,13 @@ void clone_pt_level<2>(pt_element<2> *parent_pt, pt_element<2> *child_pt,
 
 address_space *clone_address_space(address_space *parent)
 {
+    // Force every allocation done while cloning (the child's anon_vma copies,
+    // any std::vector growth) onto the identity kernel heap.  We hold the
+    // parent's vmas_mutex for_write below; an arena allocation that faulted a
+    // fresh arena page would re-enter the vma fault path and deadlock on that
+    // same mutex (and give the child a COW-private copy of kernel vma
+    // bookkeeping).  This is the malloc-during-fork recursion trap.
+    fork_arena::kernel_heap_scope kh;
     // The parent's actual PML4 page (array of 512 level-3 entries).
     phys parent_pml4_phys = parent->top ? parent->top->next_pt_addr()
                                         : kernel_pt_root_phys();
@@ -406,6 +417,37 @@ address_space *clone_address_space(address_space *parent)
     memset(child_pml4_page, 0, page_size);
     auto child_pml4 = static_cast<pt_element<3>*>(child_pml4_page);
 
+    // Pre-reserve the child address_space object BEFORE taking vmas_mutex.
+    // Allocating under the write-locked vmas_mutex is unsafe once the fork
+    // arena is active: the identity malloc pool may need a refill that wants
+    // to schedule the page-pool fill thread, but nothing can make progress
+    // while this thread holds vmas_mutex for write -- a fork-time malloc
+    // deadlock.  Doing every kernel allocation up front (pre-reserve) is the
+    // documented cure for the malloc-during-fork trap.
+    auto child = new address_space(virt_to_phys(child_pml4_page));
+
+    // Snapshot of the parent's private VMAs, filled under the lock and turned
+    // into the child's anon_vma copies AFTER the lock is released (so no malloc
+    // runs under vmas_mutex).  Reserve generous capacity up front so the vector
+    // never reallocates (mallocs) while the lock is held.
+    struct vma_snap { uintptr_t start, end; unsigned perm, flags; };
+    std::vector<vma_snap> snap;
+    // Pre-grown share/privatize range vectors: filled under the lock but never
+    // reallocated there (all growth malloc happens up front, before the lock).
+    std::vector<cow_range> share_ranges;
+    std::vector<cow_range> privatize_ranges;
+    {
+        size_t threads = sched::thread::numthreads();
+        SCOPE_LOCK(parent->vmas_mutex->for_read());
+        size_t n = 0;
+        for (auto &v : *parent->vmas) { if (v.size()) n++; }
+        snap.reserve(n + 8);
+        // share_ranges holds MAP_SHARED/stack vmas + every live thread's stack;
+        // reserve room for all vmas plus all threads so it never reallocates.
+        share_ranges.reserve(n + threads + 16);
+        privatize_ranges.reserve(4);
+    }
+
     // Share every kernel PML4 slot (0 and 128..511) by copying the parent's
     // entry verbatim (points at the same lower-level tables).  Clone only the
     // application slots (1..127) so their PTEs can diverge under COW.
@@ -414,7 +456,6 @@ address_space *clone_address_space(address_space *parent)
         // Build the "share, don't COW" ranges: stack VMAs (OSv runs kernel code
         // on the app stack, so its pages must stay writable -- see the note on
         // clone_pt_level0) and MAP_SHARED VMAs (sharing must be preserved).
-        std::vector<cow_range> share_ranges;
         for (auto &v : *parent->vmas) {
             if (v.size() == 0) continue;
             if ((v.flags() & mmap_stack) || (v.flags() & mmap_shared)) {
@@ -424,7 +465,6 @@ address_space *clone_address_space(address_space *parent)
         // Always share the forking thread's live stack: OSv runs kernel code
         // (incl. the context switch, with irqs off) on it, so it must never be
         // write-protected.  get_stack_info() gives the current thread's stack.
-        std::vector<cow_range> privatize_ranges;
         {
             // The FORKING thread's live stack is PRIVATIZED (not shared): the
             // child gets private byte-copies at the same VA so it can resume on
@@ -481,23 +521,26 @@ address_space *clone_address_space(address_space *parent)
         // must be made visible on all CPUs before the parent continues.
         mmu::flush_tlb_all();
 
-        // Create the child AS with its private PML4 page and vma_list.
-        auto child = new address_space(virt_to_phys(child_pml4_page));
-
-        // Structurally clone the parent's VMAs into the child's vma_list so
-        // the fault path can resolve child faults (permissions, backing).  The
-        // physical pages are already wired via the cloned page tables above.
+        // The child AS was pre-reserved above; snapshot the parent's private
+        // VMAs into `snap` here (no malloc: capacity was reserved before the
+        // lock).  The child's anon_vma copies are built AFTER the lock below,
+        // so no allocation runs under vmas_mutex.
         for (auto &v : *parent->vmas) {
-            // Skip the edge marker VMAs (size 0); the child's vma_list_type
-            // constructor already inserted its own edge markers.
             if (v.size() == 0) {
                 continue;
             }
-            auto *nv = new anon_vma(addr_range(v.start(), v.end()), v.perm(), v.flags());
-            child->vmas->insert(*nv);
+            snap.push_back({v.start(), v.end(), v.perm(), v.flags()});
         }
-        return child;
+    } // release vmas_mutex
+
+    // Build the child's vma_list from the snapshot, now that vmas_mutex is
+    // released -- these new anon_vma allocations are free to hit the malloc
+    // pool refill path without risking a fork-time deadlock.
+    for (auto &s : snap) {
+        auto *nv = new anon_vma(addr_range(s.start, s.end), s.perm, s.flags);
+        child->vmas->insert(*nv);
     }
+    return child;
 }
 
 // --- fork COW page-table teardown ------------------------------------------
