@@ -162,7 +162,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 	tst-sig-dfl-ignore.so \
 	tst-fork-child-mmap.so \
 	tst-fork.so tst-execve.so payload-exit7.so \
-	tst-fork-cow.so tst-fork-deep.so tst-pgfork.so \
+	tst-fork-cow.so tst-fork-deep.so tst-pgfork.so tst-fork-preempt.so \
 	tst-fork-cow-lost-write.so \
 	misc-fsx.so tst-sleep.so tst-resolve.so tst-except.so \
 	misc-tcp-sendonly.so tst-tcp-nbwrite.so misc-tcp-hash-srv.so \
