@@ -158,7 +158,11 @@ public:
     void add_zombie(thread* z);
 private:
     mutex _mtx;
-    std::list<thread*> _zombies;
+    // Intrusive zombie list (no node allocation on add_zombie -- see the
+    // _zombie_link comment in sched.hh).
+    bi::list<thread,
+             bi::member_hook<thread, bi::list_member_hook<>, &thread::_zombie_link>,
+             bi::constant_time_size<false>> _zombies;
     thread_unique_ptr _thread;
 };
 
@@ -1883,7 +1887,7 @@ void thread::reaper::reap()
         WITH_LOCK(_mtx) {
             wait_until(_mtx, [=] { return !_zombies.empty(); });
             while (!_zombies.empty()) {
-                auto z = _zombies.front();
+                auto z = &_zombies.front();
                 _zombies.pop_front();
                 z->join();
                 z->_cleanup();
@@ -1896,7 +1900,11 @@ void thread::reaper::add_zombie(thread* z)
 {
     assert(z->_attr._detached);
     WITH_LOCK(_mtx) {
-        _zombies.push_back(z);
+        // Intrusive push -- no allocation, so this is safe from a
+        // preemption-disabled thread-termination context and coherent across
+        // address spaces even when the terminating thread is a fork child
+        // running in its COW address space (see _zombie_link in sched.hh).
+        _zombies.push_back(*z);
         _thread->wake();
     }
 }

@@ -906,6 +906,14 @@ private:
 public:
     std::atomic<thread *> _joiner;
     bi::set_member_hook<> _runqueue_link;
+    // Intrusive link for the detached-thread reaper's zombie list.  Intrusive
+    // (no node allocation) is REQUIRED: add_zombie() runs from thread
+    // termination paths that may have preemption disabled, and -- with the fork
+    // arena -- from an application thread whose malloc would route a std::list
+    // node into the child's COW-private arena page (incoherent to the reaper in
+    // AS0).  A hook inside the thread object (identity kernel heap) sidesteps
+    // both: no allocation, coherent cross-address-space.
+    bi::list_member_hook<> _zombie_link;
     // see cpu class
     lockless_queue_link<thread> _wakeup_link;
     static unsigned long _s_idgen;
