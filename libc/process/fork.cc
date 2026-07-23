@@ -205,11 +205,6 @@ pid_t fork(void)
         return -1;
     }
     pid_t cpid = child->id();
-
-    // Stage 2 fork: give the child its OWN address space, a COW clone of the
-    // parent's.  Private writable mappings become copy-on-write in both parent
-    // and child; the kernel half of the page table is shared.  The child
-    // thread runs in this address space (its CR3 is loaded on context switch).
     mmu::address_space *child_as =
         mmu::clone_address_space(sched::thread::current()->address_space());
     child->set_address_space(child_as);

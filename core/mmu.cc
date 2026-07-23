@@ -515,16 +515,15 @@ address_space *clone_address_space(address_space *parent)
         }
         cow_share_ranges = nullptr;
         cow_privatize_ranges = nullptr;
-        live_child_address_spaces.fetch_add(1, std::memory_order_relaxed);
 
-        // Any write-protection we applied to the parent's page tables above
-        // must be made visible on all CPUs before the parent continues.
-        mmu::flush_tlb_all();
-
-        // The child AS was pre-reserved above; snapshot the parent's private
-        // VMAs into `snap` here (no malloc: capacity was reserved before the
-        // lock).  The child's anon_vma copies are built AFTER the lock below,
-        // so no allocation runs under vmas_mutex.
+        // Snapshot the parent's private VMAs into `snap` while still under the
+        // lock (reads only; the pre-reserved vector storage is identity-mapped
+        // so its push_back never faults).  The child's anon_vma copies are
+        // built AFTER the lock is released.  We must NOT do any write that can
+        // COW-fault (e.g. to a kernel .bss global we just write-protected)
+        // while holding vmas_mutex for write: the COW fault handler re-acquires
+        // vmas_mutex, which self-deadlocks.  So flush_tlb_all() and the
+        // live_child_address_spaces bump are deferred until after the lock.
         for (auto &v : *parent->vmas) {
             if (v.size() == 0) {
                 continue;
@@ -533,9 +532,18 @@ address_space *clone_address_space(address_space *parent)
         }
     } // release vmas_mutex
 
-    // Build the child's vma_list from the snapshot, now that vmas_mutex is
-    // released -- these new anon_vma allocations are free to hit the malloc
-    // pool refill path without risking a fork-time deadlock.
+    // Now that vmas_mutex is released, writes that may hit a copy-on-write
+    // kernel .bss page (the atomic bump; the TLB-flush bookkeeping globals) can
+    // fault and be serviced normally.  Doing them under the write lock would
+    // deadlock (COW fault -> vm_fault -> vmas_mutex for_write, already held).
+    live_child_address_spaces.fetch_add(1, std::memory_order_relaxed);
+    // Make the write-protection we applied to the parent's page tables visible
+    // on all CPUs before the parent continues.
+    mmu::flush_tlb_all();
+
+    // Build the child's vma_list from the snapshot -- these new anon_vma
+    // allocations are free to hit the malloc pool refill path without risking a
+    // fork-time deadlock.
     for (auto &s : snap) {
         auto *nv = new anon_vma(addr_range(s.start, s.end), s.perm, s.flags);
         child->vmas->insert(*nv);
