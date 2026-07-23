@@ -14,6 +14,9 @@
 #include <osv/kernel_config_threads_default_kernel_stack_size.h>
 #include <osv/kernel_config_syscall_stack_size.h>
 #include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 #include <string.h>
 #include "tls-switch.hh"
 
@@ -230,8 +233,15 @@ void thread::init_stack()
 
     if (is_app()) {
         //
-        // Allocate TINY syscall call stack
-        void* tiny_syscall_stack_begin = malloc(TINY_SYSCALL_STACK_SIZE);
+        // Allocate TINY syscall call stack (identity heap, not the fork arena:
+        // the kernel runs syscalls on it and must not COW-fault it).
+        void* tiny_syscall_stack_begin;
+        {
+#if CONF_fork
+            fork_arena::kernel_heap_scope kh;
+#endif
+            tiny_syscall_stack_begin = malloc(TINY_SYSCALL_STACK_SIZE);
+        }
         assert(tiny_syscall_stack_begin);
         //
         // The top of the stack needs to be 16 bytes lower to make space for
@@ -311,7 +321,18 @@ void thread::setup_tcb()
     assert(align_check(user_tls_size, (size_t)64));
 
     auto total_tls_size = kernel_tls_size + user_tls_size;
-    void* p = aligned_alloc(64, total_tls_size + sizeof(*_tcb));
+    // The TLS block must live in the identity kernel heap, never the fork
+    // arena: it holds __thread variables accessed from every context including
+    // preemption/interrupt-disabled ones, so it must be plain-writable in every
+    // address space and must never become a copy-on-write page (a COW fault
+    // with preemption off is illegal).  Force the kernel heap for this alloc.
+    void* p;
+    {
+#if CONF_fork
+        fork_arena::kernel_heap_scope kh;
+#endif
+        p = aligned_alloc(64, total_tls_size + sizeof(*_tcb));
+    }
     // First goes user TLS data
     if (user_tls_size) {
         memcpy(p, user_tls_data, user_tls_size);
@@ -345,8 +366,15 @@ void thread::setup_large_syscall_stack()
     assert(is_app());
     assert(GET_SYSCALL_STACK_TYPE_INDICATOR() == TINY_SYSCALL_STACK_INDICATOR);
     //
-    // Allocate LARGE syscall stack
-    void* large_syscall_stack_begin = malloc(LARGE_SYSCALL_STACK_SIZE);
+    // Allocate LARGE syscall stack (identity heap, not the fork arena: the
+    // kernel runs syscalls on it and must never COW-fault it).
+    void* large_syscall_stack_begin;
+    {
+#if CONF_fork
+        fork_arena::kernel_heap_scope kh;
+#endif
+        large_syscall_stack_begin = malloc(LARGE_SYSCALL_STACK_SIZE);
+    }
     void* large_syscall_stack_top = large_syscall_stack_begin + LARGE_SYSCALL_STACK_DEPTH;
     //
     // Copy all of the tiny stack to the are of last 1024 bytes of large stack.
