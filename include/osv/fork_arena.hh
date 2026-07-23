@@ -60,7 +60,19 @@ bool ready();
 // at the same VA in every address space (thread objects, wait_records, ...)
 // wrap those allocations in a kernel_heap_scope so a forked child does not get
 // a COW-private copy of a globally-shared kernel object.
-extern __thread unsigned force_kernel_heap;
+//
+// VOLATILE is load-bearing, not decoration.  GCC models the C library
+// allocators (malloc/aligned_alloc/...) as builtins that neither read nor
+// write global memory.  Around such a call a non-volatile ++force_kernel_heap /
+// --force_kernel_heap pair is dead (no observer between them) and GCC ELIDES
+// it -- turning a kernel_heap_scope that wraps only an aligned_alloc() into a
+// no-op.  That is exactly how the app main thread's TLS block leaked into the
+// COW fork arena: setup_tcb()'s scope vanished, the TLS landed in the arena,
+// clone_address_space() COW-write-protected it, and the forking parent
+// triple-faulted on its next ++preempt_counter (a %fs TLS write).  volatile
+// forces every read and write to be real memory accesses, so the guard
+// survives even around a builtin-modeled allocator.
+extern volatile __thread unsigned force_kernel_heap;
 
 struct kernel_heap_scope {
     kernel_heap_scope()  { ++force_kernel_heap; }
