@@ -7,7 +7,7 @@
 # Paths are relative to the repository root.
 #
 # Usage in Makefile:
-#   include bsd/sys/cddl/openzfs_sources.mk
+#   include modules/open_zfs/open_zfs_sources.mk (for conf_zfs=openzfs)
 
 OPENZFS := modules/open_zfs/openzfs
 
@@ -390,3 +390,62 @@ OPENZFS_CFLAGS := \
 OPENZFS_LUA_CFLAGS := \
 	-include $(OPENZFS)/include/os/osv/zfs/sys/zfs_lua_fix.h \
 	-Wno-infinite-recursion
+
+# ============================================================
+# conf_zfs=openzfs object/flag selection for libsolaris.so
+# ============================================================
+# Owned by the `open_zfs` module (modules/open_zfs/module.py `provides` the
+# `zfs` capability for conf_zfs=openzfs).  The top-level Makefile includes this
+# file only for conf_zfs=openzfs, AFTER modules/bsd_zfs/bsd_zfs_sources.mk has
+# defined the `solaris` compat-object list.  It swaps the BSD ZFS core out for
+# the OpenZFS 2.4.x objects defined above ($(openzfs-all)).
+
+solaris += $(openzfs-all)
+# OpenZFS provides its own kstat_t layout (modules/open_zfs/openzfs/include/os/osv/
+# spl/sys/kstat.h, ~64 bytes) and OSv-native kstat_create/install/delete in
+# openzfs_osv_compat.c.  Drop the legacy BSD-ZFS kstat stub whose 16-byte
+# kstat_t is ABI-incompatible with the OpenZFS callers (heap overflow at boot).
+solaris := $(filter-out bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kstat.o,$(solaris))
+
+# OpenZFS-specific CFLAGS (for openzfs-all objects)
+$(openzfs-all:%=$(out)/%): CFLAGS+= \
+	-fPIC \
+	$(OPENZFS_CFLAGS) \
+	-DBUILDING_ZFS \
+	-Wno-array-bounds \
+	-Ibsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs \
+	-Ibsd/sys/cddl/contrib/opensolaris/common/zfs
+
+# zfs_initialize_osv.c accesses zfs_driver_initialized from loader.elf; needs
+# -fPIC to generate a GOT-indirect reference instead of a PC32 reloc (which
+# the linker rejects when building a shared object).
+$(out)/$(OPENZFS)/module/os/osv/zfs/zfs_initialize_osv.o: CFLAGS+= -fPIC
+
+# Lua files: #undef panic (conflicts with Lua struct member) and add setjmp.h
+$(openzfs-lua:%=$(out)/%): CFLAGS+= $(OPENZFS_LUA_CFLAGS)
+
+# ZSTD files need lib/ directory in include path
+$(openzfs-zstd:%=$(out)/%): CFLAGS+= -I$(OPENZFS)/module/zstd/lib
+
+# Solaris compat layer CFLAGS (for non-ZFS solaris objects)
+# -fPIC is required since all solaris objects are linked into libsolaris.so
+$(solaris:%=$(out)/%): CFLAGS+= \
+	-fPIC \
+	-fno-strict-aliasing \
+	-Wno-unknown-pragmas \
+	-Wno-unused-variable \
+	-Wno-switch \
+	-Wno-maybe-uninitialized \
+	-Ibsd/sys/cddl/compat/opensolaris \
+	-Ibsd/sys/cddl/contrib/opensolaris/common \
+	-Ibsd/sys/cddl/contrib/opensolaris/uts/common \
+	-Ibsd/sys
+
+$(solaris:%=$(out)/%): ASFLAGS+= \
+	-Ibsd/sys/cddl/contrib/opensolaris/uts/common
+
+# OpenZFS assembly files define _ASM themselves. Use = (not +=) so that
+# OPENZFS_INCLUDES comes first; the solaris ASFLAGS += rule adds
+# -Ibsd/sys/cddl/contrib/opensolaris/uts/common which would otherwise shadow
+# the OpenZFS sys/asm_linkage.h with the older BSD-compat version.
+$(openzfs-icp-asm:%=$(out)/%): ASFLAGS = -g $(autodepend) -D__ASSEMBLY__ $(OPENZFS_INCLUDES)
