@@ -135,8 +135,20 @@ int execve(const char *path, char *const argv[], char *const envp[])
         static thread_local std::unordered_map<std::string,std::string> s_env;
         static thread_local bool s_have_env;
         static thread_local mmu::address_space *s_old_as;
-        s_path = spath; s_args = args; s_env = env; s_have_env = (envp != nullptr);
-        s_old_as = old_as;
+        // The continuation args must OUTLIVE the child address-space teardown
+        // below.  A std::string / vector / map keeps its ELEMENT storage on the
+        // heap; assigned here (in the forked child, an app thread) that storage
+        // routes to the COW fork arena -- which lives in the child AS we are
+        // about to destroy_address_space().  After the teardown s_path's char
+        // buffer would be unmapped, so execve_run_and_exit() would read a zeroed
+        // path ("executable too short /") and the exec would spuriously fail.
+        // Force the identity kernel heap for these so they survive the teardown.
+        {
+            fork_arena::kernel_heap_scope kh;
+            s_path = spath; s_args = args; s_env = env;
+            s_have_env = (envp != nullptr);
+            s_old_as = old_as;
+        }
         // Switch to AS0 and tear down the child AS -- but do it from the kernel
         // stack, so freeing the child's app-stack pages cannot pull the rug.
         // We accomplish the ordering with an rsp switch: move to the kernel
