@@ -59,7 +59,9 @@ openzfs_patch_stamp := modules/open_zfs/openzfs/.osv-patches-applied
 $(shell if [ -d modules/open_zfs/openzfs/module ] && [ ! -f $(openzfs_patch_stamp) ]; then \
 	git -C modules/open_zfs/openzfs apply --whitespace=nowarn $(addprefix ../patches/,$(notdir $(wildcard modules/open_zfs/patches/*.patch))) 2>/dev/null \
 	&& touch $(openzfs_patch_stamp); fi)
-include bsd/sys/cddl/openzfs_sources.mk
+# The OpenZFS object lists + conf_zfs=openzfs flags are included further
+# below (after bsd_zfs defines the shared `solaris` list), from
+# modules/open_zfs/open_zfs_sources.mk.
 # CONF_ZFS_OPENZFS selects the OpenZFS conventions in the few shared sources
 # that differ between the two ZFS implementations (scoped per-object rather
 # than global so it cannot perturb the rest of the kernel build).
@@ -763,213 +765,19 @@ xdr += bsd/sys/xdr/xdr.o
 xdr += bsd/sys/xdr/xdr_array.o
 xdr += bsd/sys/xdr/xdr_mem.o
 
-solaris :=
-solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris.o
-solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_atomic.o
-solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_cmn_err.o
-solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kmem.o
-solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kobj.o
-solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kstat.o
-solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_policy.o
-solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_sunddi.o
-solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_string.o
-solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_sysevent.o
-solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_taskq.o
-solaris += bsd/sys/cddl/compat/opensolaris/kern/opensolaris_uio.o
-solaris += bsd/sys/cddl/contrib/opensolaris/common/acl/acl_common.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/callb.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/adler32.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/deflate.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/inffast.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/inflate.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/inftrees.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/opensolaris_crc32.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/trees.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/zmod.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/zmod_subr.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/zmod/zutil.o
-
-zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfeature_common.o
-zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_comutil.o
-zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_deleg.o
-zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_fletcher.o
-zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_ioctl_compat.o
-zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_namecheck.o
-zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zfs_prop.o
-zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zpool_prop.o
-zfs += bsd/sys/cddl/contrib/opensolaris/common/zfs/zprop_common.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/arc.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/bplist.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/bpobj.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/bptree.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dbuf.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/ddt.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/ddt_zap.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dmu.o
-#zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dmu_diff.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dmu_object.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dmu_objset.o
-#zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dmu_send.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dmu_traverse.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dmu_tx.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dmu_zfetch.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dnode.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dnode_sync.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dsl_dataset.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dsl_deadlist.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dsl_deleg.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dsl_dir.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dsl_pool.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dsl_prop.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dsl_scan.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/dsl_synctask.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/gzip.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/lzjb.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/metaslab.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/refcount.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/rrwlock.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/sa.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/sha256.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/spa.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/space_map.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/spa_config.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/spa_errlog.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/spa_history.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/spa_misc.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/txg.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/uberblock.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/unique.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/vdev.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/vdev_cache.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/vdev_disk.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/vdev_file.o
-#zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/vdev_geom.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/vdev_label.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/vdev_mirror.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/vdev_missing.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/vdev_queue.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/vdev_raidz.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/vdev_root.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zap.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zap_leaf.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zap_micro.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfeature.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_acl.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_byteswap.o
-#zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_ctldir.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_debug.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_dir.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_fm.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_fuid.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_ioctl.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_init.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_log.o
-#zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_onexit.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_replay.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_rlock.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_sa.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_vfsops.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_vnops.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zfs_znode.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zil.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zio.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zio_checksum.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zio_compress.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zio_inject.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zle.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zrlock.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/zvol.o
-zfs += bsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs/lz4.o
-
-# Old BSD-ZFS objects replaced by OpenZFS 2.4.x via openzfs_sources.mk
+# ---------------------------------------------------------------------------
+# In-kernel ZFS objects for libsolaris.so.
+#
+# The BSD/Illumos ZFS build rules (the `solaris` compat list + `zfs` core
+# list, and the conf_zfs=bsd object/flag selection) are owned by the
+# `bsd_zfs` module.  For conf_zfs=openzfs we additionally pull in the OpenZFS
+# 2.4.x objects + flags owned by the `open_zfs` module, which swap the BSD ZFS
+# core out for $(openzfs-all).  Both modules `provide` the `zfs` capability;
+# the `zfs` placeholder module selects between them (see modules/zfs).
+include modules/bsd_zfs/bsd_zfs_sources.mk
 ifeq ($(conf_zfs),openzfs)
-solaris += $(openzfs-all)
-# OpenZFS provides its own kstat_t layout (modules/open_zfs/openzfs/include/os/osv/
-# spl/sys/kstat.h, ~64 bytes) and OSv-native kstat_create/install/delete in
-# openzfs_osv_compat.c.  Drop the legacy BSD-ZFS kstat stub whose 16-byte
-# kstat_t is ABI-incompatible with the OpenZFS callers (heap overflow at boot).
-solaris := $(filter-out bsd/sys/cddl/compat/opensolaris/kern/opensolaris_kstat.o,$(solaris))
-
-# OpenZFS-specific CFLAGS (for openzfs-all objects)
-$(openzfs-all:%=$(out)/%): CFLAGS+= \
-	-fPIC \
-	$(OPENZFS_CFLAGS) \
-	-DBUILDING_ZFS \
-	-Wno-array-bounds \
-	-Ibsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs \
-	-Ibsd/sys/cddl/contrib/opensolaris/common/zfs
-
-# zfs_initialize_osv.c accesses zfs_driver_initialized from loader.elf; needs
-# -fPIC to generate a GOT-indirect reference instead of a PC32 reloc (which
-# the linker rejects when building a shared object).
-$(out)/$(OPENZFS)/module/os/osv/zfs/zfs_initialize_osv.o: CFLAGS+= -fPIC
-
-# Lua files: #undef panic (conflicts with Lua struct member) and add setjmp.h
-$(openzfs-lua:%=$(out)/%): CFLAGS+= $(OPENZFS_LUA_CFLAGS)
-
-# ZSTD files need lib/ directory in include path
-$(openzfs-zstd:%=$(out)/%): CFLAGS+= -I$(OPENZFS)/module/zstd/lib
-
-# Solaris compat layer CFLAGS (for non-ZFS solaris objects)
-# -fPIC is required since all solaris objects are linked into libsolaris.so
-$(solaris:%=$(out)/%): CFLAGS+= \
-	-fPIC \
-	-fno-strict-aliasing \
-	-Wno-unknown-pragmas \
-	-Wno-unused-variable \
-	-Wno-switch \
-	-Wno-maybe-uninitialized \
-	-Ibsd/sys/cddl/compat/opensolaris \
-	-Ibsd/sys/cddl/contrib/opensolaris/common \
-	-Ibsd/sys/cddl/contrib/opensolaris/uts/common \
-	-Ibsd/sys
-
-$(solaris:%=$(out)/%): ASFLAGS+= \
-	-Ibsd/sys/cddl/contrib/opensolaris/uts/common
-
-# OpenZFS assembly files define _ASM themselves. Use = (not +=) so that
-# OPENZFS_INCLUDES comes first; the solaris ASFLAGS += rule adds
-# -Ibsd/sys/cddl/contrib/opensolaris/uts/common which would otherwise shadow
-# the OpenZFS sys/asm_linkage.h with the older BSD-compat version.
-$(openzfs-icp-asm:%=$(out)/%): ASFLAGS = -g $(autodepend) -D__ASSEMBLY__ $(OPENZFS_INCLUDES)
-
-else
-# conf_zfs=bsd: legacy in-tree BSD/Illumos ZFS.
-solaris += $(zfs)
-
-# Common objects that OpenZFS otherwise provides (openzfs-avl/nvpair/unicode/
-# fm/list); BSD ZFS needs its own copies.
-solaris += bsd/sys/cddl/contrib/opensolaris/common/avl/avl.o
-solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/fnvpair.o
-solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair.o
-$(out)/bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair.o: CFLAGS += -Wno-stringop-overread
-solaris += bsd/sys/cddl/contrib/opensolaris/common/nvpair/nvpair_alloc_fixed.o
-solaris += bsd/sys/cddl/contrib/opensolaris/common/unicode/u8_textprep.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/fm.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/list.o
-solaris += bsd/sys/cddl/contrib/opensolaris/uts/common/os/nvpair_alloc_system.o
-
-$(zfs:%=$(out)/%): CFLAGS+= \
-	-DBUILDING_ZFS \
-	-Wno-array-bounds \
-	-Ibsd/sys/cddl/contrib/opensolaris/uts/common/fs/zfs \
-	-Ibsd/sys/cddl/contrib/opensolaris/common/zfs
-
-$(solaris:%=$(out)/%): CFLAGS+= \
-	-fno-strict-aliasing \
-	-Wno-unknown-pragmas \
-	-Wno-unused-variable \
-	-Wno-switch \
-	-Wno-maybe-uninitialized \
-	-Ibsd/sys/cddl/compat/opensolaris \
-	-Ibsd/sys/cddl/contrib/opensolaris/common \
-	-Ibsd/sys/cddl/contrib/opensolaris/uts/common \
-	-Ibsd/sys
-
-$(solaris:%=$(out)/%): ASFLAGS+= \
-	-Ibsd/sys/cddl/contrib/opensolaris/uts/common
+include modules/open_zfs/open_zfs_sources.mk
 endif
-
 
 libtsm :=
 libtsm += drivers/libtsm/tsm_render.o
