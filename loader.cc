@@ -26,6 +26,9 @@
 #endif /* __x86_64__ */
 
 #include <osv/sched.hh>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 #include <osv/barrier.hh>
 #include "arch.hh"
 #include "arch-setup.hh"
@@ -746,6 +749,15 @@ void* do_main_thread(void *_main_args)
         commands.insert(commands.begin(),
                  init_commands.begin(), init_commands.end());
     }
+
+#if CONF_fork
+    // Reserve the fork heap arena before launching the application, so app
+    // allocations route to an app-slot COW-able region (see core/fork_arena.cc)
+    // and a forked child's private address space isolates its whole heap.  Done
+    // here (a kernel thread, irqs on, heap up) so the arena's own map_anon()
+    // cannot recurse through an app malloc.
+    fork_arena::init();
+#endif
 
     // run each payload in order
     // Our parse_command_line() leaves at the end of each command a delimiter,

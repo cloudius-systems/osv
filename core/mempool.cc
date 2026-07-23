@@ -36,6 +36,10 @@
 #include <osv/dbg-alloc.hh>
 #include <osv/migration-lock.hh>
 #include <osv/export.h>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
@@ -1880,6 +1884,29 @@ static inline void* std_malloc(size_t size, size_t alignment)
     if ((ssize_t)size < 0)
         return libc_error_ptr<void *>(ENOMEM);
     void *ret;
+#if CONF_fork
+    // Fork isolation: route APPLICATION allocations to the app-slot fork arena
+    // (an ordinary COW-able anonymous mapping) instead of the identity-mapped
+    // mempool heap, so a forked child's private address space isolates the
+    // whole app heap.  Only app threads route here (kernel allocations keep
+    // using the identity heap); the decision is by caller (is_app) at malloc
+    // time, while free()/realloc() decide purely by address, so a buffer
+    // allocated by an app thread and freed by a kernel thread (or vice versa)
+    // is always handled by the allocator that owns its address range.
+    if (smp_allocator && fork_arena::ready() && sched::cpu::current()->app_thread.load(std::memory_order_relaxed)) {
+        ret = fork_arena::alloc(size, alignment);
+        if (ret) {
+#if CONF_memory_tracker
+            memory::tracker_remember(ret, size);
+#endif
+            return ret;
+        }
+        // Arena could not serve it (too large / exhausted): fall through to the
+        // normal heap.  Such an allocation is not COW-isolated, but huge
+        // allocations already go to app-slot mmap, and exhaustion is a
+        // correctness-preserving fallback, not corruption.
+    }
+#endif
     size_t minimum_size = std::max(size, memory::pool::min_object_size);
     if (smp_allocator && size <= memory::pool::max_object_size && alignment <= minimum_size) {
         unsigned n = ilog2_roundup(minimum_size);
@@ -1926,6 +1953,11 @@ void* calloc(size_t nmemb, size_t size)
 
 static size_t object_size(void *object)
 {
+#if CONF_fork
+    if (fork_arena::contains(object)) {
+        return fork_arena::usable_size(object);
+    }
+#endif
     if (!mmu::is_linear_mapped(object, 0)) {
         size_t offset = memory::large_object_offset(object);
         size_t* ret_header = static_cast<size_t*>(object);
@@ -1982,6 +2014,15 @@ void free(void* object)
     }
 #if CONF_memory_tracker
     memory::tracker_forget(object);
+#endif
+
+#if CONF_fork
+    // Fork-arena allocations live below phys_mem (so is_linear_mapped() is
+    // false for them); dispatch them by address range BEFORE the linear-map
+    // check so they never fall into the large/mmap free path.
+    if (fork_arena::contains(object)) {
+        return fork_arena::free(object);
+    }
 #endif
 
     if (!mmu::is_linear_mapped(object, 0)) {
