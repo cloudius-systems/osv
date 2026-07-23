@@ -12,6 +12,7 @@
 #include <osv/kernel_config_fork.h>
 #if CONF_fork
 #include <osv/aligned_new.hh>
+#include <osv/fork_arena.hh>
 #endif
 
 // A "waiter" is simple synchronization object, with which one thread calling
@@ -127,8 +128,15 @@ public:
         _heap = fork_child_needs_heap_wait_record();
         // wait_record is CACHELINE_ALIGNED (over-aligned); aligned_new honors
         // it, and the stack buffer is alignas(wait_record).
-        _wr = _heap ? aligned_new<wait_record>(t)
-                    : new (_stack) wait_record(t);
+        if (_heap) {
+            // Force the identity kernel heap: this heap wait_record exists
+            // precisely so its VA is coherent across address spaces, which the
+            // COW fork arena would break (private per-AS copy).
+            fork_arena::kernel_heap_scope kh;
+            _wr = aligned_new<wait_record>(t);
+        } else {
+            _wr = new (_stack) wait_record(t);
+        }
     }
     ~coherent_wait_record() {
         if (_heap) {

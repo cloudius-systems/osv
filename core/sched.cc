@@ -25,6 +25,10 @@
 #include <unordered_map>
 #include <osv/wait_record.hh>
 #include <osv/preempt-lock.hh>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 #include <osv/app.hh>
 #include <osv/symbols.hh>
 #include <osv/stubbing.hh>
@@ -133,6 +137,19 @@ std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority
 #include "arch-switch.hh"
 
 namespace sched {
+
+void *alloc_thread_storage(size_t align, size_t size)
+{
+#if CONF_fork
+    // Force the identity kernel heap: a thread object is dereferenced by the
+    // scheduler from every address space, so it must not land in the COW fork
+    // arena (which would give each address space a private copy).
+    fork_arena::kernel_heap_scope kh;
+    return aligned_alloc(align, size);
+#else
+    return aligned_alloc(align, size);
+#endif
+}
 
 class thread::reaper {
 public:
