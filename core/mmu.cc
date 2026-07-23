@@ -334,6 +334,8 @@ static void clone_pt_level0(pt_element<0> *parent_pt, pt_element<0> *child_pt,
 // clone_pt_level<N> for N in 1..2, carrying base_virt so leaf pages can be
 // tested against the share-ranges.  (gnu++14: no if constexpr, so explicit
 // specialization.)
+template<int N> void split_large_page(hw_ptep<N> ptep); // defined below
+template<> void split_large_page(hw_ptep<1> ptep);      // defined below
 template<int N>
 static void clone_pt_level(pt_element<N> *parent_pt, pt_element<N> *child_pt,
                            uintptr_t base_virt);
@@ -347,7 +349,19 @@ void clone_pt_level<1>(pt_element<1> *parent_pt, pt_element<1> *child_pt,
     for (unsigned i = 0; i < pte_per_page; i++) {
         pt_element<1> ppte = parent_pt[i];
         if (ppte.empty()) { child_pt[i] = make_empty_pte<1>(); continue; }
-        if (ppte.large()) { child_pt[i] = ppte; continue; } // 2MB: share as-is
+        if (ppte.large()) {
+            // A read-only 2 MB page can never diverge, so share it verbatim.
+            // A WRITABLE 2 MB large page (large malloc, MAP_SHARED, large anon)
+            // must NOT be shared as-is -- that lets a forked child's writes
+            // leak into the parent.  Split it to 4 K in the PARENT in place,
+            // then fall through to the normal 4 K clone path, which makes the
+            // correct per-page decision (private-writable -> COW, MAP_SHARED ->
+            // stays shared, read-only -> shared as-is).  Reuses the whole 4 K
+            // COW machinery; cost is one 4 K page table per split large page.
+            if (!ppte.writable()) { child_pt[i] = ppte; continue; }
+            split_large_page(hw_ptep<1>::force(&parent_pt[i]));
+            ppte = parent_pt[i]; // re-read: now a non-large intermediate pte
+        }
         void *child_sub = memory::alloc_page();
         memset(child_sub, 0, page_size);
         auto parent_sub = phys_cast<pt_element<0>>(ppte.next_pt_addr());
