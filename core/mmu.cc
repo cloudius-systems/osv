@@ -2036,6 +2036,18 @@ static bool handle_cow_write_fault(uintptr_t addr)
 
 void vm_fault(uintptr_t addr, exception_frame* ef)
 {
+#if CONF_fork
+    // Page-fault servicing is KERNEL work: the pagecache pages, cached_page
+    // bookkeeping and filesystem (e.g. ROFS) demand-paging buffers it allocates
+    // are shared kernel infrastructure that must be identity-mapped and must
+    // never be a COW fork-arena page.  Critically, this handler runs while
+    // holding vma_list_mutex and may already be nested one exception deep;
+    // touching a fresh (not-yet-faulted) arena page here would take ANOTHER
+    // page fault, exceeding exception_depth and asserting.  Force the identity
+    // kernel heap for the whole fault path so no arena page is ever allocated
+    // or first-touched while servicing a fault.
+    fork_arena::kernel_heap_scope kh;
+#endif
     trace_mmu_vm_fault(addr, ef->get_error());
     if (fast_sigsegv_check(addr, ef)) {
         vm_sigsegv(addr, ef);
