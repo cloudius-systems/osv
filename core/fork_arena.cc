@@ -12,7 +12,7 @@
 #include <osv/fork_arena.hh>
 #include <osv/mmu.hh>
 #include <osv/mmu-defs.hh>
-#include <osv/mutex.h>
+#include <osv/spinlock.h>
 #include <osv/align.hh>
 #include <osv/debug.hh>
 #include <atomic>
@@ -31,6 +31,8 @@
 // -----------------------------------------------------------------------------
 
 namespace fork_arena {
+
+__thread unsigned force_kernel_heap = 0;
 
 namespace {
 
@@ -52,7 +54,14 @@ constexpr uint32_t chunk_magic = 0x464b4152;   // "FKAR"
 constexpr size_t header_size = 32;             // >= sizeof(chunk_header), keeps 16/32-align
 
 // --- all state below is kernel BSS, never in arena pages ---
-mutex g_lock;
+// A spinlock (disables preemption) guards ONLY the free-list heads and the
+// bump pointer -- all in kernel BSS, so no page fault ever happens while it is
+// held.  The header write that touches a (possibly not-yet-faulted) arena page
+// is done AFTER releasing the lock, when preemption is on again, so a fresh-
+// page fault there is legal.  (A sleeping mutex would be wrong: std_malloc can
+// be called with preemption disabled, and a mutex would try to context-switch
+// there -- the original arena crash.)
+spinlock_t g_lock;
 std::atomic<bool> g_ready{false};
 uintptr_t g_bump = 0;         // next never-yet-carved VA
 uintptr_t g_end = 0;          // arena_base + arena_size
@@ -73,21 +82,20 @@ unsigned class_for(size_t total)
 
 void init()
 {
-    SCOPE_LOCK(g_lock);
-    if (g_ready.load(std::memory_order_relaxed)) {
+    if (g_ready.load(std::memory_order_acquire)) {
         return;
     }
     // Reserve the arena VA as a fixed anonymous app-slot mapping.  Pages fault
     // in lazily (anon vma fault path, irqs on) on first touch; clone_address_
-    // space() COW-clones the whole vma per child.  Not populated eagerly: 4 GiB
-    // of VA costs no physical memory until touched.
+    // space() COW-clones the whole vma per child (splitting any 2 MB pages to
+    // 4 K as it goes).  Not populated eagerly: VA costs no RAM until touched.
     void *v = mmu::map_anon(reinterpret_cast<void*>(arena_base), arena_size,
                             mmu::mmap_fixed, mmu::perm_rw);
     if (reinterpret_cast<uintptr_t>(v) != arena_base) {
         // Could not pin the arena at its fixed VA: leave routing off (falls
         // back to the normal identity heap; fork isolation just won't apply).
-        debug("fork_arena: failed to reserve arena at %p (got %p)\n",
-              reinterpret_cast<void*>(arena_base), v);
+        debugf("fork_arena: failed to reserve arena at %p (got %p)\n",
+               reinterpret_cast<void*>(arena_base), v);
         return;
     }
     g_bump = arena_base;
@@ -123,39 +131,39 @@ void *alloc(size_t size, size_t alignment)
     size_t class_size = size_t(1) << s;
 
     void *chunk = nullptr;
-    WITH_LOCK(g_lock) {
-        if (g_freelist[idx]) {
-            free_node *n = g_freelist[idx];
-            g_freelist[idx] = n->next;
-            chunk = n;
-        } else {
-            // Carve a fresh class_size chunk off the bump pointer.
-            uintptr_t c = g_bump;
-            if (c + class_size > g_end) {
-                return nullptr;   // arena exhausted
-            }
-            g_bump = c + class_size;
-            chunk = reinterpret_cast<void*>(c);
+    // Under the spinlock: touch ONLY BSS metadata (free-list, bump).  No arena
+    // page is written here, so preemption-disabled == no illegal fault.
+    spin_lock(&g_lock);
+    if (g_freelist[idx]) {
+        free_node *n = g_freelist[idx];
+        g_freelist[idx] = n->next;
+        chunk = n;
+    } else {
+        uintptr_t c = g_bump;
+        if (c + class_size > g_end) {
+            spin_unlock(&g_lock);
+            return nullptr;   // arena exhausted
         }
+        g_bump = c + class_size;
+        chunk = reinterpret_cast<void*>(c);
     }
+    spin_unlock(&g_lock);
 
+    // Lock released: now safe to touch the chunk (a fresh bump chunk faults its
+    // page in here, with preemption on).  The chunk is uniquely ours, so these
+    // writes race with nobody.  Reading g_freelist[idx]->next above touched an
+    // already-populated page (the node was a live allocation once), also safe.
+    //
     // Place the header at the chunk start, return an aligned pointer after it.
     uintptr_t base = reinterpret_cast<uintptr_t>(chunk);
     uintptr_t user = align_up(base + header_size, alignment);
-    // Header lives immediately before `user` so free() can find it from the
-    // user pointer alone.
     auto *h = reinterpret_cast<chunk_header*>(user - sizeof(chunk_header));
-    // Stash the chunk base so free() can reconstruct it regardless of the
-    // alignment padding we applied.
-    // We keep it simple: encode class_shift + magic; the chunk base is
-    // recoverable by rounding the user pointer down to class_size (chunks are
-    // class_size-aligned only when class_size <= alignment of the bump start).
-    // To be robust for any alignment, store the base offset too.
     h->class_shift = s;
     h->magic = chunk_magic;
-    // Store the chunk base in the 16 bytes preceding the header word pair.
-    // header_size (32) >= sizeof(chunk_header)(8) + sizeof(uintptr_t)(8), and
-    // user - header_size == base, so [base .. user) is ours to use.
+    // Store the chunk base so free() can reconstruct it regardless of the
+    // alignment padding.  header_size (32) >= sizeof(chunk_header)(8) +
+    // sizeof(uintptr_t)(8), and user - header_size == base, so [base .. user)
+    // is ours.
     *reinterpret_cast<uintptr_t*>(user - 16) = base;
     return reinterpret_cast<void*>(user);
 }
@@ -175,13 +183,20 @@ void free(void *p)
 {
     uintptr_t base;
     unsigned s;
-    recover(p, base, s);
+    recover(p, base, s);   // reads header (populated page), no lock, no fault
     unsigned idx = s - min_class_shift;
     auto *n = reinterpret_cast<free_node*>(base);
-    WITH_LOCK(g_lock) {
-        n->next = g_freelist[idx];
-        g_freelist[idx] = n;
-    }
+    // Pre-fault the chunk's first word BEFORE disabling preemption: after fork
+    // this chunk may be a copy-on-write page, and the freelist-link write below
+    // must not trigger a COW page fault while the arena spinlock holds
+    // preemption off (OSv forbids faulting non-preemptable -- assert in
+    // page_fault).  Touching it here, preemption on, resolves the COW copy
+    // first; the spinlocked write then hits a private writable page.
+    n->next = nullptr;
+    spin_lock(&g_lock);
+    n->next = g_freelist[idx];
+    g_freelist[idx] = n;
+    spin_unlock(&g_lock);
 }
 
 size_t usable_size(void *p)

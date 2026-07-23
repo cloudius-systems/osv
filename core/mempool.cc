@@ -1893,7 +1893,8 @@ static inline void* std_malloc(size_t size, size_t alignment)
     // time, while free()/realloc() decide purely by address, so a buffer
     // allocated by an app thread and freed by a kernel thread (or vice versa)
     // is always handled by the allocator that owns its address range.
-    if (smp_allocator && fork_arena::ready() && sched::cpu::current()->app_thread.load(std::memory_order_relaxed)) {
+    if (smp_allocator && fork_arena::ready() && !fork_arena::force_kernel_heap &&
+        sched::cpu::current()->app_thread.load(std::memory_order_relaxed)) {
         ret = fork_arena::alloc(size, alignment);
         if (ret) {
 #if CONF_memory_tracker
