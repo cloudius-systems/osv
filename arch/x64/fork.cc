@@ -33,6 +33,7 @@
 #include <cstdlib>
 #include <osv/sched.hh>
 #include <osv/fork.hh>
+#include <osv/debug.hh>
 
 // pthread_atfork child-handler chain (defined in libc/pthread.cc), run in the
 // child's context before it resumes user code.
