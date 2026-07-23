@@ -84,12 +84,20 @@ void init()
     if (g_ready.load(std::memory_order_acquire)) {
         return;
     }
-    // Reserve the arena VA as a fixed anonymous app-slot mapping.  Pages fault
-    // in lazily (anon vma fault path, irqs on) on first touch; clone_address_
-    // space() COW-clones the whole vma per child (splitting any 2 MB pages to
-    // 4 K as it goes).  Not populated eagerly: VA costs no RAM until touched.
+    // Reserve the arena VA as a fixed anonymous app-slot mapping, EAGERLY
+    // POPULATED (mmap_populate): every arena page is backed with real RAM at
+    // init, so fork_arena::alloc() NEVER demand-faults on a bump-carved page.
+    // That is load-bearing for correctness, not just latency: malloc ->
+    // fork_arena::alloc can be entered from an IRQs-off / preemption-off
+    // context (e.g. under concurrent PG load, mid-exception), where a demand
+    // fault would trip page_fault's assert(preemptable && irq_if) and abort.
+    // With the whole 512 MiB pre-faulted, alloc's first write hits an already-
+    // present page and cannot fault -- safe from any context.
+    // clone_address_space() still COW-clones the whole vma per child; the child
+    // only faults on WRITE (COW break), which happens from app context with
+    // irqs/preemption on, so that path keeps the original invariant.
     void *v = mmu::map_anon(reinterpret_cast<void*>(arena_base), arena_size,
-                            mmu::mmap_fixed, mmu::perm_rw);
+                            mmu::mmap_fixed | mmu::mmap_populate, mmu::perm_rw);
     if (reinterpret_cast<uintptr_t>(v) != arena_base) {
         // Could not pin the arena at its fixed VA: leave routing off (falls
         // back to the normal identity heap; fork isolation just won't apply).
