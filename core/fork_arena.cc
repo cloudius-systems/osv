@@ -31,7 +31,7 @@
 
 namespace fork_arena {
 
-__thread unsigned force_kernel_heap = 0;
+volatile __thread unsigned force_kernel_heap = 0;
 
 namespace {
 

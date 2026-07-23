@@ -30,6 +30,9 @@
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
 #include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 #include <string.h>
 
 typedef float runtime_t;
@@ -487,6 +490,18 @@ public:
         // to the same physical page everywhere.  An arena (COW, app-slot)
         // allocation would give each address space a private copy -- corrupting
         // cross-AS scheduling.  alloc_thread_storage() forces the kernel heap.
+        //
+        // The SAME is true of every allocation the thread CONSTRUCTOR makes:
+        // _detached_state (scheduler status/cpu), _wakeup_link's
+        // lockless_queue_helper (touched by wake_impl with preemption off), the
+        // _tls vector, etc.  All are dereferenced by the scheduler cross-AS
+        // with preemption disabled, where a COW page fault is illegal.  So run
+        // the whole construction under a kernel_heap_scope, not just the object
+        // storage -- one guard covers alloc_thread_storage() and every
+        // sub-allocation the constructor performs.
+#if CONF_fork
+        fork_arena::kernel_heap_scope kh;
+#endif
         void *p = alloc_thread_storage(alignof(thread), sizeof(thread));
         if (!p) {
             return nullptr;
