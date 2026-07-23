@@ -45,7 +45,7 @@ namespace fork_arena {
 // (96 << 39) is clear of the ELF load slot (32) and the default mmap hole
 // (which grows up from slot 64).
 constexpr uintptr_t arena_base = 96ull << 39;   // 0x300000000000
-constexpr size_t    arena_size = 4ull << 30;    // 4 GiB of VA (lazily faulted)
+constexpr size_t    arena_size = 512ull << 20;  // 512 MiB of VA (lazily faulted)
 
 // One-time setup: reserve the arena VA as an anonymous app-slot mapping.  Call
 // once, after the SMP allocator is up, before the application runs.  Idempotent.
@@ -53,6 +53,19 @@ void init();
 
 // True once init() has reserved the arena and routing is live.
 bool ready();
+
+// Per-thread "force kernel heap" depth.  While > 0, an app thread's
+// allocations are routed to the normal identity kernel heap instead of the
+// arena.  Kernel entry points that allocate structures which MUST be visible
+// at the same VA in every address space (thread objects, wait_records, ...)
+// wrap those allocations in a kernel_heap_scope so a forked child does not get
+// a COW-private copy of a globally-shared kernel object.
+extern __thread unsigned force_kernel_heap;
+
+struct kernel_heap_scope {
+    kernel_heap_scope()  { ++force_kernel_heap; }
+    ~kernel_heap_scope() { --force_kernel_heap; }
+};
 
 // True if `p` points inside the arena (an arena allocation).  Cheap range test.
 static inline bool contains(const void *p)
