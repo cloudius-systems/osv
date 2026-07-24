@@ -64,8 +64,11 @@ $(shell if [ -d modules/open_zfs/openzfs/module ] && [ ! -f $(openzfs_patch_stam
 # modules/open_zfs/open_zfs_sources.mk.
 # CONF_ZFS_OPENZFS selects the OpenZFS conventions in the few shared sources
 # that differ between the two ZFS implementations (scoped per-object rather
-# than global so it cannot perturb the rest of the kernel build).
-$(out)/tools/mkfs/mkfs.o: CXXFLAGS += -DCONF_ZFS_OPENZFS
+# than global so it cannot perturb the rest of the kernel build).  The
+# per-object flag itself is attached below, after $(out) is defined (a
+# target-specific variable using $(out) here would bind to an empty prefix
+# because `out` is still unset at this point in the makefile).
+conf_zfs_openzfs := 1
 endif
 
 # The build mode defaults to "release" (optimized build), the other option
@@ -131,6 +134,13 @@ OBJCOPY=$(CROSS_PREFIX)objcopy
 out = build/$(mode).$(arch)
 outlink = build/$(mode)
 outlink2 = build/last
+
+# mkfs.cc selects the OpenZFS-vs-BSD pool-root mountpoint convention at compile
+# time via CONF_ZFS_OPENZFS.  Attach the define here, where $(out) resolves to
+# the real build directory (see the conf_zfs=openzfs block near the top).
+ifdef conf_zfs_openzfs
+$(out)/tools/mkfs/mkfs.o: CXXFLAGS += -DCONF_ZFS_OPENZFS
+endif
 
 ifneq ($(MAKECMDGOALS),menuconfig)
 # Include the kernel configuration file if present, otherwise generate a default one
