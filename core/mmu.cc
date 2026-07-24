@@ -68,8 +68,9 @@ struct vma_range_compare {
 };
 
 //Set of all vma ranges - both linear and non-linear ones
+typedef std::set<vma_range, vma_range_compare> vma_range_set_type;
 __attribute__((init_priority((int)init_prio::vma_range_set)))
-std::set<vma_range, vma_range_compare> vma_range_set;
+vma_range_set_type vma_range_set;
 rwlock_t vma_range_set_mutex;
 
 struct linear_vma_compare {
@@ -103,7 +104,12 @@ typedef boost::intrusive::set<vma,
                               > vma_list_base;
 
 struct vma_list_type : vma_list_base {
-    vma_list_type() {
+    // The edge markers are inserted into `into` (defaults to the global
+    // vma_range_set / mutex).  A fork child's private vma_list points `into`
+    // at the child's OWN range set so the child's edges never pollute the
+    // global set (see clone_address_space / address_space child ctor).
+    vma_list_type(vma_range_set_type *into = &vma_range_set,
+                  rwlock_t *into_mutex = &vma_range_set_mutex) {
         // insert markers for the edges of allocatable area
         // simplifies searches
         auto lower_edge = new anon_vma(addr_range(lower_vma_limit, lower_vma_limit), 0, 0);
@@ -111,9 +117,9 @@ struct vma_list_type : vma_list_base {
         auto upper_edge = new anon_vma(addr_range(upper_vma_limit, upper_vma_limit), 0, 0);
         insert(*upper_edge);
 
-        WITH_LOCK(vma_range_set_mutex.for_write()) {
-            vma_range_set.insert(vma_range(lower_edge));
-            vma_range_set.insert(vma_range(upper_edge));
+        WITH_LOCK(into_mutex->for_write()) {
+            into->insert(vma_range(lower_edge));
+            into->insert(vma_range(upper_edge));
         }
     }
 };
@@ -153,6 +159,12 @@ constexpr unsigned pml4_app_last = 127;   // inclusive
 struct address_space {
     vma_list_type *vmas;      // AS0: aliases global vma_list; child: owns_vmas
     rwlock_t *vmas_mutex;     // AS0: aliases global vma_list_mutex
+    // Per-AS set of vma ranges used by the allocation path (find_hole etc.).
+    // AS0 aliases the global vma_range_set / mutex; a child owns private ones
+    // (owned_ranges/owned_ranges_mutex) so its post-fork mmap picks a hole from
+    // -- and inserts into -- its OWN address space, not the global set.
+    vma_range_set_type *ranges;   // AS0: aliases global vma_range_set
+    rwlock_t *ranges_mutex;       // AS0: aliases global vma_range_set_mutex
     // Synthetic top-level entry (mirrors the arch page_table_root): its
     // next_pt_addr() is the physical address of this AS's PML4 page.  The page
     // table walk starts here via get_root_pt() (see map_range).  Null for AS0
@@ -165,17 +177,29 @@ struct address_space {
     // Storage owned by a child AS.
     std::unique_ptr<vma_list_type> owned_vmas;
     std::unique_ptr<rwlock_t> owned_mutex;
+    std::unique_ptr<vma_range_set_type> owned_ranges;
+    std::unique_ptr<rwlock_t> owned_ranges_mutex;
 
     // AS0 constructor: alias the globals.
     address_space(vma_list_type *l, rwlock_t *m, phys root, bool kernel)
-        : vmas(l), vmas_mutex(m), top(nullptr), pt_root(root), is_kernel(kernel) {}
+        : vmas(l), vmas_mutex(m), ranges(&vma_range_set),
+          ranges_mutex(&vma_range_set_mutex), top(nullptr), pt_root(root),
+          is_kernel(kernel) {}
 
     // Child constructor: owns a fresh vma_list, mutex and PML4 page.  The
     // synthetic top entry points at the child PML4 (phys pml4_page_phys).
     address_space(phys pml4_page_phys)
         : pt_root(pml4_page_phys), is_kernel(false)
-        , owned_vmas(new vma_list_type()), owned_mutex(new rwlock_t())
+        , owned_mutex(new rwlock_t())
+        , owned_ranges(new vma_range_set_type())
+        , owned_ranges_mutex(new rwlock_t())
     {
+        // The child's private vma_list must insert its edge markers into the
+        // child's OWN range set, not the global one -- so build owned_ranges
+        // first and hand it to the vma_list ctor.
+        ranges = owned_ranges.get();
+        ranges_mutex = owned_ranges_mutex.get();
+        owned_vmas.reset(new vma_list_type(ranges, ranges_mutex));
         _top = make_intermediate_pte(hw_ptep<4>::force(&_top), pml4_page_phys);
         top = &_top;
         vmas = owned_vmas.get();
@@ -191,6 +215,44 @@ address_space kernel_as{&vma_list, &vma_list_mutex, 0, true};
 address_space *kernel_address_space()
 {
     return &kernel_as;
+}
+
+// The address space the current thread runs in: a fork child's private AS, or
+// AS0 (kernel_as) for the kernel and the non-fork initial application.  The
+// allocation/query path (find_hole, allocate, evacuate, protect, ...) resolves
+// its vma_list / vma_range_set through this, so a fork child's post-fork mmap
+// lands in -- and its later faults resolve against -- the child's OWN address
+// space.  For AS0 the accessors below alias the global vma_list / vma_range_set,
+// so the heavily-tested non-fork path is unchanged.
+address_space *current_address_space()
+{
+    auto t = sched::thread::current();
+    if (t) {
+        auto as = t->address_space();
+        if (as) {
+            return as;
+        }
+    }
+    return &kernel_as;
+}
+
+// Per-AS accessors used by the allocation/query path.  In a CONF_fork build
+// they resolve to the current thread's address space; AS0 aliases the globals.
+static inline vma_list_type &cur_vma_list()
+{
+    return *current_address_space()->vmas;
+}
+static inline rwlock_t &cur_vma_list_mutex()
+{
+    return *current_address_space()->vmas_mutex;
+}
+static inline vma_range_set_type &cur_vma_range_set()
+{
+    return *current_address_space()->ranges;
+}
+static inline rwlock_t &cur_vma_range_set_mutex()
+{
+    return *current_address_space()->ranges_mutex;
 }
 
 // Arch hook: physical address of the kernel PML4 (CR3 value for AS0).
@@ -670,6 +732,18 @@ address_space *clone_address_space(address_space *parent)
                 nv = new anon_vma(addr_range(v.start(), v.end()), v.perm(), v.flags());
             }
             child->vmas->insert(*nv);
+            // S1 (AS-aware allocation): the cloned vma also goes into the
+            // child's OWN range set so its post-fork mmap resolves a hole from
+            // -- and inserts into -- the child's address space, not the global
+            // vma_range_set.  Its edge markers were inserted by the child's
+            // vma_list ctor; find_hole/allocate/evacuate consult child->ranges.
+            // (#1456 preserves the vma's dynamic type above via file()->mmap;
+            // this preserves the child's per-AS allocation view.)  Done under
+            // the parent vmas_mutex: there is no fork arena yet (it enters with
+            // S2), so #1456's under-lock clone has no malloc-during-fork trap.
+            WITH_LOCK(child->ranges_mutex->for_write()) {
+                child->ranges->insert(vma_range(nv));
+            }
         }
     }
     // The walk copied the parent's page-cache PTEs: register the child's
@@ -760,6 +834,15 @@ void destroy_address_space(address_space *as)
     delete as;
     live_child_address_spaces.fetch_sub(1, std::memory_order_relaxed);
 }
+#else // !CONF_fork
+// Non-fork build: the allocation/query path uses the single global vma_list /
+// vma_range_set directly.  These accessors make the shared code below identical
+// in shape to the CONF_fork build while compiling to the exact same global
+// references (byte-identical non-fork behaviour).
+static inline vma_list_type &cur_vma_list() { return vma_list; }
+static inline rwlock_t &cur_vma_list_mutex() { return vma_list_mutex; }
+static inline vma_range_set_type &cur_vma_range_set() { return vma_range_set; }
+static inline rwlock_t &cur_vma_range_set_mutex() { return vma_range_set_mutex; }
 #endif // CONF_fork
 
 // A mutex serializing modifications to the high part of the page table
@@ -1593,7 +1676,7 @@ find_intersecting_vma_in(vma_list_type &vmas, uintptr_t addr) {
 
 static inline vma_list_type::iterator
 find_intersecting_vma(uintptr_t addr) {
-    return find_intersecting_vma_in(vma_list, addr);
+    return find_intersecting_vma_in(cur_vma_list(), addr);
 }
 
 // Find the list of vmas which intersect a given address range. Because the
@@ -1604,10 +1687,11 @@ find_intersecting_vma(uintptr_t addr) {
 static inline std::pair<vma_list_type::iterator, vma_list_type::iterator>
 find_intersecting_vmas(const addr_range& r)
 {
+    vma_list_type &vmas = cur_vma_list();
     if (r.end() <= r.start()) { // empty range, so nothing matches
-        return {vma_list.end(), vma_list.end()};
+        return {vmas.end(), vmas.end()};
     }
-    auto start = vma_list.lower_bound(r.start(), addr_compare());
+    auto start = vmas.lower_bound(r.start(), addr_compare());
     if (start->start() > r.start()) {
         // The previous vma might also intersect with our range if it ends
         // after our range's start.
@@ -1619,11 +1703,11 @@ find_intersecting_vmas(const addr_range& r)
     // If the start vma is actually beyond the end of the search range,
     // there is no intersection.
     if (start->start() >= r.end()) {
-        return {vma_list.end(), vma_list.end()};
+        return {vmas.end(), vmas.end()};
     }
     // end is the first vma starting >= r.end(), so any previous vma (after
     // start) surely started < r.end() so is part of the intersection.
-    auto end = vma_list.lower_bound(r.end(), addr_compare());
+    auto end = vmas.lower_bound(r.end(), addr_compare());
     return {start, end};
 }
 
@@ -1669,10 +1753,11 @@ uintptr_t find_hole(uintptr_t start, uintptr_t size)
     bool small = size < huge_page_size;
     uintptr_t good_enough = 0;
 
-    SCOPE_LOCK(vma_range_set_mutex.for_read());
+    vma_range_set_type &ranges = cur_vma_range_set();
+    SCOPE_LOCK(cur_vma_range_set_mutex().for_read());
     //Find first vma range which starts before the start parameter or is the 1st one
-    auto p = std::lower_bound(vma_range_set.begin(), vma_range_set.end(), start, vma_range_addr_compare());
-    if (p != vma_range_set.begin()) {
+    auto p = std::lower_bound(ranges.begin(), ranges.end(), start, vma_range_addr_compare());
+    if (p != ranges.begin()) {
         --p;
     }
     auto n = std::next(p);
@@ -1718,9 +1803,10 @@ ulong evacuate(uintptr_t start, uintptr_t end)
                 memory::stats::on_jvm_heap_free(size);
             }
 #endif
-            vma_list.erase(dead);
-            WITH_LOCK(vma_range_set_mutex.for_write()) {
-                vma_range_set.erase(vma_range(&dead));
+            vma_list_type &vmas = cur_vma_list();
+            vmas.erase(dead);
+            WITH_LOCK(cur_vma_range_set_mutex().for_write()) {
+                cur_vma_range_set().erase(vma_range(&dead));
             }
             delete &dead;
         }
@@ -1877,9 +1963,9 @@ uintptr_t allocate(vma *v, uintptr_t start, size_t size, bool search)
     }
     v->set(start, start+size);
 
-    vma_list.insert(*v);
-    WITH_LOCK(vma_range_set_mutex.for_write()) {
-        vma_range_set.insert(vma_range(v));
+    cur_vma_list().insert(*v);
+    WITH_LOCK(cur_vma_range_set_mutex().for_write()) {
+        cur_vma_range_set().insert(vma_range(v));
     }
 
     return start;
@@ -1964,7 +2050,7 @@ static void hugepage(void* addr, size_t length)
 error advise(void* addr, size_t size, int advice)
 {
     PREVENT_STACK_PAGE_FAULT
-    WITH_LOCK(vma_list_mutex.for_write()) {
+    WITH_LOCK(cur_vma_list_mutex().for_write()) {
         if (!ismapped(addr, size)) {
             return make_error(ENOMEM);
         }
@@ -2007,7 +2093,7 @@ void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
     auto start = reinterpret_cast<uintptr_t>(addr);
     auto* vma = new mmu::anon_vma(addr_range(start, start + size), perm, flags);
     PREVENT_STACK_PAGE_FAULT
-    SCOPE_LOCK(vma_list_mutex.for_write());
+    SCOPE_LOCK(cur_vma_list_mutex().for_write());
     auto v = (void*) allocate(vma, start, size, search);
     if (flags & mmap_populate) {
         auto mapped = populate_vma<account_opt::yes>(vma, v, size);
@@ -2043,7 +2129,7 @@ void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
     auto *vma = f->mmap(addr_range(start, start + size), flags | mmap_file, perm, offset).release();
     void *v;
     PREVENT_STACK_PAGE_FAULT
-    WITH_LOCK(vma_list_mutex.for_write()) {
+    WITH_LOCK(cur_vma_list_mutex().for_write()) {
         v = (void*) allocate(vma, start, size, search);
         if (flags & mmap_populate) {
             populate_vma(vma, v, std::min(size, align_up(::size(f), page_size)));
@@ -2489,13 +2575,13 @@ unsigned vma::flags() const
 
 void vma::update_flags(unsigned flag)
 {
-    assert(vma_list_mutex.wowned());
+    assert(cur_vma_list_mutex().wowned());
     _flags |= flag;
 }
 
 void vma::clear_flags(unsigned flag)
 {
-    assert(vma_list_mutex.wowned());
+    assert(cur_vma_list_mutex().wowned());
     _flags &= ~flag;
 }
 
@@ -2573,9 +2659,9 @@ void anon_vma::split(uintptr_t edge)
     }
     vma* n = new anon_vma(addr_range(edge, _range.end()), _perm, _flags);
     set(_range.start(), edge);
-    vma_list.insert(*n);
-    WITH_LOCK(vma_range_set_mutex.for_write()) {
-        vma_range_set.insert(vma_range(n));
+    cur_vma_list().insert(*n);
+    WITH_LOCK(cur_vma_range_set_mutex().for_write()) {
+        cur_vma_range_set().insert(vma_range(n));
     }
 }
 
@@ -2854,9 +2940,9 @@ void file_vma::split(uintptr_t edge)
     auto off = offset(edge);
     vma *n = _file->mmap(addr_range(edge, _range.end()), _flags, _perm, off).release();
     set(_range.start(), edge);
-    vma_list.insert(*n);
-    WITH_LOCK(vma_range_set_mutex.for_write()) {
-        vma_range_set.insert(vma_range(n));
+    cur_vma_list().insert(*n);
+    WITH_LOCK(cur_vma_range_set_mutex().for_write()) {
+        cur_vma_range_set().insert(vma_range(n));
     }
 }
 
@@ -3051,7 +3137,7 @@ void free_initial_memory_range(uintptr_t addr, size_t size)
 error mprotect(const void *addr, size_t len, unsigned perm)
 {
     PREVENT_STACK_PAGE_FAULT
-    SCOPE_LOCK(vma_list_mutex.for_write());
+    SCOPE_LOCK(cur_vma_list_mutex().for_write());
 
     if (!ismapped(addr, len)) {
         return make_error(ENOMEM);
@@ -3063,7 +3149,7 @@ error mprotect(const void *addr, size_t len, unsigned perm)
 error munmap(const void *addr, size_t length)
 {
     PREVENT_STACK_PAGE_FAULT
-    SCOPE_LOCK(vma_list_mutex.for_write());
+    SCOPE_LOCK(cur_vma_list_mutex().for_write());
 
     length = align_up(length, mmu::page_size);
     if (!ismapped(addr, length)) {
@@ -3076,7 +3162,7 @@ error munmap(const void *addr, size_t length)
 
 error msync(const void* addr, size_t length, int flags)
 {
-    SCOPE_LOCK(vma_list_mutex.for_read());
+    SCOPE_LOCK(cur_vma_list_mutex().for_read());
 
     if (!ismapped(addr, length)) {
         return make_error(ENOMEM);
@@ -3088,7 +3174,7 @@ error mincore(const void *addr, size_t length, unsigned char *vec)
 {
     char *end = align_up((char *)addr + length, page_size);
     char tmp;
-    SCOPE_LOCK(vma_list_mutex.for_read());
+    SCOPE_LOCK(cur_vma_list_mutex().for_read());
     if (!is_linear_mapped(addr, length) && !ismapped(addr, length)) {
         return make_error(ENOMEM);
     }
