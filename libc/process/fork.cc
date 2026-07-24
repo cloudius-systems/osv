@@ -11,6 +11,7 @@
 #include <signal.h>
 #include <sys/wait.h>
 #include <unordered_map>
+#include <unordered_set>
 #include <memory>
 #include <osv/sched.hh>
 #include <osv/mmu.hh>
@@ -18,6 +19,7 @@
 #include <osv/condvar.h>
 #include <osv/app.hh>
 #include <osv/debug.hh>
+#include <osv/file.h>
 #include <osv/kernel_config_fork.h>
 #include <osv/fork_arena.hh>
 #include "../libc.hh"
@@ -36,6 +38,13 @@ extern sched::thread *fork_thread(void *caller_ret, void *caller_sp,
 extern "C" void __osv_run_atfork_prepare();
 extern "C" void __osv_run_atfork_parent();
 extern "C" void __osv_run_atfork_child();
+
+// Provided by fs/vfs/kern_descrip.cc: snapshot the open fds and fhold each,
+// emitting (fd, file*) pairs.  Used to give a fork child its own inherited-fd
+// references over OSv's single shared global fd table.
+extern "C" void fork_snapshot_open_fds(
+    void (*emit)(void *ctx, int fd, struct file *fp), void *ctx);
+
 namespace osv {
 namespace fork {
 
@@ -53,12 +62,108 @@ condvar g_cv;
 // child pid -> state
 std::unordered_map<pid_t, std::shared_ptr<child_state>> g_children;
 
+// ---- fork fd-inheritance -------------------------------------------------
+//
+// OSv has ONE GLOBAL fd table (fs/vfs/kern_descrip.cc gfdt[]) shared by a fork
+// parent and child.  A POSIX child gets its own fd table; here we approximate
+// that by giving the child its OWN reference (fhold) on every open file it
+// inherited at fork time, and tracking WHICH fds it inherited (keyed by the
+// child's address_space, which uniquely identifies a fork child).  The child's
+// close() of an inherited fd then drops only the child's reference and leaves
+// the shared gfdt slot intact for the parent; fds the child opens itself after
+// fork are NOT in this set and close normally.  On child teardown any still-
+// held inherited references are dropped.  All of this lives on the identity
+// kernel heap (kernel-global bookkeeping shared across parent/child/reaper).
+mutex g_fd_lock;
+// child address_space -> { inherited fd -> file* we hold a ref on }
+std::unordered_map<mmu::address_space *,
+                   std::unordered_map<int, struct file *>> g_inherited_fds;
+
 pid_t current_pid()
 {
     return sched::thread::current()->id();
 }
 
+// The current thread's fork-child address space, or nullptr if this is the
+// kernel / top-level (non-fork) application (which owns the fds outright and
+// must close them the normal way).
+mmu::address_space *current_child_as()
+{
+    auto *as = mmu::current_address_space();
+    if (!as || as == mmu::kernel_address_space()) {
+        return nullptr;
+    }
+    return as;
+}
+
 } // anonymous namespace
+
+// Snapshot callback: record the inherited fd and the ref taken on its file.
+static void inherit_one_fd(void *ctx, int fd, struct file *fp)
+{
+    auto *m = static_cast<std::unordered_map<int, struct file *> *>(ctx);
+    (*m)[fd] = fp;
+}
+
+// Take the child's own reference on every fd currently open in the (shared)
+// global fd table.  Called from fork() with @child_as, on the identity heap.
+static void inherit_open_fds(mmu::address_space *child_as)
+{
+    fork_arena::kernel_heap_scope kh;
+    std::unordered_map<int, struct file *> held;
+    fork_snapshot_open_fds(&inherit_one_fd, &held);
+    SCOPE_LOCK(g_fd_lock);
+    g_inherited_fds[child_as] = std::move(held);
+}
+
+// Drop every remaining inherited reference held by @child_as.  Called on child
+// teardown (from the reaper) and after execve() replaces the child image.
+static void release_inherited_fds(mmu::address_space *child_as)
+{
+    std::unordered_map<int, struct file *> held;
+    {
+        SCOPE_LOCK(g_fd_lock);
+        auto it = g_inherited_fds.find(child_as);
+        if (it == g_inherited_fds.end()) {
+            return;
+        }
+        held = std::move(it->second);
+        g_inherited_fds.erase(it);
+    }
+    for (auto &kv : held) {
+        fdrop(kv.second);
+    }
+}
+
+// Called by fdclose() (fs/vfs/kern_descrip.cc) for every close().  If the
+// current thread is a fork child and @fd is one it inherited, drop only the
+// child's inherited reference (leaving the shared gfdt slot and the parent's
+// reference intact) and report the close handled.  Otherwise return false so
+// the normal fdclose() path runs (top-level app, or a child closing an fd it
+// opened itself after fork).
+extern "C" bool fork_child_close_inherited_fd(int fd)
+{
+    mmu::address_space *child_as = current_child_as();
+    if (!child_as) {
+        return false;   // kernel / top-level app: normal close
+    }
+    struct file *fp = nullptr;
+    {
+        SCOPE_LOCK(g_fd_lock);
+        auto it = g_inherited_fds.find(child_as);
+        if (it == g_inherited_fds.end()) {
+            return false;
+        }
+        auto fit = it->second.find(fd);
+        if (fit == it->second.end()) {
+            return false;   // fd the child opened itself after fork: normal close
+        }
+        fp = fit->second;
+        it->second.erase(fit);
+    }
+    fdrop(fp);   // drop only the child's inherited reference
+    return true;
+}
 
 void adopt_execed_app(shared_app_t app)
 {
@@ -209,6 +314,12 @@ pid_t fork(void)
         mmu::clone_address_space(sched::thread::current()->address_space());
     child->set_address_space(child_as);
 
+    // Give the child its OWN reference on every fd it inherited from us (the
+    // parent).  OSv shares one global fd table, so without this the child's
+    // close() (e.g. PostgreSQL's ClosePostmasterPorts) would tear down a
+    // socket/file the parent still holds.  Keyed by the child address space.
+    fork::inherit_open_fds(child_as);
+
     // Register the child BEFORE starting it so a fast child->exit cannot race
     // ahead of the parent's bookkeeping.
     fork::register_child(cpid, parent);
@@ -232,6 +343,10 @@ pid_t fork(void)
         if (stack_to_free) {
             free(stack_to_free);
         }
+        // Drop any inherited-fd references the child still held (its close()s
+        // dropped the ones it explicitly closed; this releases the rest, so
+        // the parent's fd refcounts return to just the parent's own).
+        fork::release_inherited_fds(child_as);
         // Only destroy the child address space if the child still owns it.
         // execve() replaces the child AS with the global (kernel) AS and
         // destroys child_as itself; destroying it again here is a double-free

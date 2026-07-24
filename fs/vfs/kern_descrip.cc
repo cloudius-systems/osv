@@ -18,6 +18,7 @@
 #include <boost/range/algorithm/find.hpp>
 
 #include <bsd/sys/sys/queue.h>
+#include <osv/kernel_config_fork.h>
 
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
@@ -82,9 +83,29 @@ int fdalloc(struct file *fp, int *newfd)
     return (_fdalloc(fp, newfd, 0));
 }
 
+#if CONF_fork
+// fork() fd-inheritance hook (libc/process/fork.cc).  OSv keeps a SINGLE global
+// fd table shared by a fork parent and child, so a child's close() would
+// otherwise clear the shared gfdt slot and drop the only file reference --
+// tearing down a socket/file the parent still holds.  For an fd the current
+// fork child INHERITED from its parent, this drops only the child's inherited
+// reference and leaves the shared slot intact; it returns true when it handled
+// the close so fdclose() must not touch gfdt[].  Returns false (normal close)
+// for the top-level app and for fds the child opened itself after fork.
+extern "C" bool fork_child_close_inherited_fd(int fd);
+#endif
+
 int fdclose(int fd)
 {
     struct file* fp;
+
+#if CONF_fork
+    // A fork child closing an fd it inherited only drops its own reference; the
+    // shared gfdt slot and the underlying file stay alive for the parent.
+    if (fork_child_close_inherited_fd(fd)) {
+        return 0;
+    }
+#endif
 
     WITH_LOCK(gfdt_lock) {
 
@@ -100,6 +121,28 @@ int fdclose(int fd)
 
     return 0;
 }
+
+#if CONF_fork
+// Snapshot the currently-open fds and take one reference (fhold) on each open
+// file, storing the fd->file pairs via the supplied callback.  Used by fork()
+// to give the child its OWN reference on every inherited open file, so the
+// child's later close()/exit drops only the child's ref rather than tearing
+// down a file the parent still uses.  Runs under gfdt_lock so the snapshot is
+// consistent against concurrent fdalloc/fdclose.
+extern "C" void fork_snapshot_open_fds(void (*emit)(void *ctx, int fd, struct file *fp),
+                                       void *ctx)
+{
+    WITH_LOCK(gfdt_lock) {
+        for (int fd = 0; fd < FDMAX; fd++) {
+            struct file *fp = gfdt[fd].read_by_owner();
+            if (fp) {
+                fhold(fp);
+                emit(ctx, fd, fp);
+            }
+        }
+    }
+}
+#endif
 
 /*
  * Assigns a file pointer to a specific file descriptor.
