@@ -25,6 +25,7 @@
 #include <osv/kernel_config_fork.h>
 #if CONF_fork
 #include <osv/fork_arena.hh>
+#include <osv/mmu.hh>
 #endif
 
 using namespace osv::clock::literals;
@@ -41,7 +42,64 @@ __thread __attribute__((aligned(sizeof(sigset))))
 // pending signal changes: returning any one is fine
 __thread int thread_pending_signal;
 
+// Bitmask (indexed by signal-1) of signals the current thread is ACTIVELY
+// blocked on inside sigwait()/sigtimedwait() right now.  This distinguishes a
+// thread that is CONSUMING a signal via sigwait (delivery goes to it, not to a
+// handler) from a thread that merely BLOCKED the signal with sigprocmask (the
+// signal's handler must still run, e.g. PostgreSQL's SIGCHLD reaper).  A thread
+// can only be in one sigwait at a time, so a plain per-thread mask suffices.
+__thread unsigned long thread_sigwaiting[(nsignals + 63) / 64];
+
+static inline void set_sigwaiting(unsigned sigidx, bool on)
+{
+    unsigned long bit = 1UL << (sigidx & 63);
+    if (on) {
+        thread_sigwaiting[sigidx >> 6] |= bit;
+    } else {
+        thread_sigwaiting[sigidx >> 6] &= ~bit;
+    }
+}
+
 struct sigaction signal_actions[nsignals];
+
+#if CONF_fork
+// Signal dispositions are per-PROCESS in POSIX, but OSv keeps a single global
+// signal_actions[] and collapses every fork "process" onto one pid (OSV_PID).
+// A fork child that calls sigaction() (e.g. PostgreSQL's startup process
+// resetting its inherited handlers) would therefore CLOBBER the parent
+// postmaster's handlers in the shared table -- most damagingly the SIGCHLD
+// reaper the postmaster relies on to reap children and advance to PM_RUN.
+//
+// To model per-process dispositions we give each fork-child address space its
+// own copy of signal_actions[], initialized from the parent's at fork time and
+// only mutated by that child's own sigaction() calls.  The top-level
+// application (AS0 / kernel address space) keeps using the global array, so the
+// heavily-tested non-fork path is byte-identical.
+//
+// Synchronous signals to the current thread (generate_signal: SIGSEGV/SIGFPE)
+// and sigaction() use the CURRENT context's table.  Asynchronous kill() to the
+// process (getpid()) uses the TOP-LEVEL (global) table: the fork-synthesized
+// SIGCHLD that a child raises to the postmaster on exit must run the
+// postmaster's handler, not the exiting child's (which has been reset).
+extern "C" struct sigaction *fork_child_signal_actions();  // this child's table or nullptr
+extern "C" void fork_init_child_signal_actions(mmu::address_space *child_as,
+                                    const struct sigaction *parent_table);
+extern "C" void fork_release_child_signal_actions(mmu::address_space *child_as);
+// Table for sigaction()/generate_signal(): the current fork child's private
+// copy if we are in one, else the global array.
+static inline struct sigaction *current_signal_actions()
+{
+    if (auto *t = fork_child_signal_actions()) {
+        return t;
+    }
+    return signal_actions;
+}
+#else
+static inline struct sigaction *current_signal_actions()
+{
+    return signal_actions;
+}
+#endif
 
 sigset* from_libc(sigset_t* s)
 {
@@ -84,15 +142,25 @@ mutex waiters_mutex;
 int wake_up_signal_waiters(int signo)
 {
     SCOPE_LOCK(waiters_mutex);
-    int woken = 0;
+    int consumers = 0;
 
     unsigned sigidx = signo - 1;
     for (auto& t: waiters[sigidx]) {
-        woken++;
+        // Wake every thread blocked on this signal (unchanged), so a thread in
+        // sigwait()/sigtimedwait() sees thread_pending_signal and returns.
         t->remote_thread_local_var<int>(thread_pending_signal) = signo;
         t->wake();
+        // Only a thread ACTIVELY inside sigwait()/sigtimedwait() for this
+        // signal is CONSUMING it; a thread that merely sigprocmask()-blocked it
+        // is not.  Return a nonzero "consumed" count only for the former, so
+        // kill() runs the handler when nobody is actually sigwaiting (the
+        // PostgreSQL SIGCHLD case).
+        unsigned long bit = 1UL << (sigidx & 63);
+        if (t->remote_thread_local_ptr<unsigned long>(&thread_sigwaiting)[sigidx >> 6] & bit) {
+            consumers++;
+        }
     }
-    return woken;
+    return consumers;
 }
 
 void wait_for_signal(unsigned int sigidx)
@@ -155,11 +223,11 @@ void generate_signal(siginfo_t &siginfo, exception_frame* ef)
         // needs to be running to generate them. So definitely not waiting.
         abort();
     }
-    if (is_sig_dfl(signal_actions[sigidx])) {
+    if (is_sig_dfl(current_signal_actions()[sigidx])) {
         // Our default is to abort the process
         abort();
-    } else if(!is_sig_ign(signal_actions[sigidx])) {
-        arch::build_signal_frame(ef, siginfo, signal_actions[sigidx]);
+    } else if(!is_sig_ign(current_signal_actions()[sigidx])) {
+        arch::build_signal_frame(ef, siginfo, current_signal_actions()[sigidx]);
     }
 }
 
@@ -277,11 +345,12 @@ int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
         return -1;
     }
     unsigned sigidx = signum - 1;
+    struct sigaction *table = current_signal_actions();
     if (oldact) {
-        *oldact = signal_actions[sigidx];
+        *oldact = table[sigidx];
     }
     if (act) {
-        signal_actions[sigidx] = *act;
+        table[sigidx] = *act;
     }
     return 0;
 }
@@ -338,8 +407,25 @@ int sigignore(int signum)
 OSV_LIBC_API
 int sigwait(const sigset_t *set, int *sig)
 {
+    // Mark the signals in @set as actively being CONSUMED via sigwait, so a
+    // concurrent kill() delivers to us (and skips the handler) rather than
+    // running the installed handler.  Cleared on return.
+    if (set) {
+        for (unsigned i = 0; i < nsignals; ++i) {
+            if (sigismember(set, i + 1)) {
+                set_sigwaiting(i, true);
+            }
+        }
+    }
     sched::thread::wait_until([sig] { return *sig = thread_pending_signal; });
     thread_pending_signal = 0;
+    if (set) {
+        for (unsigned i = 0; i < nsignals; ++i) {
+            if (sigismember(set, i + 1)) {
+                set_sigwaiting(i, false);
+            }
+        }
+    }
     return 0;
 }
 
@@ -365,6 +451,17 @@ int osv_sigtimedwait(const sigset_t *set, siginfo_t *si,
             std::chrono::seconds(timeout->tv_sec) +
             std::chrono::nanoseconds(timeout->tv_nsec));
 
+    // Mark the @set signals as actively consumed via sigtimedwait (see sigwait
+    // and wake_up_signal_waiters): while we are here a concurrent kill()
+    // delivers to us rather than running the handler.
+    if (set) {
+        for (unsigned i = 0; i < nsignals; ++i) {
+            if (sigismember(set, i + 1)) {
+                set_sigwaiting(i, true);
+            }
+        }
+    }
+
     // Only accept a delivered signal that is a member of @set (rt_sigtimedwait
     // waits for a specific set); a signal outside the set is not what the
     // caller asked for, so keep waiting for it (or the timeout).
@@ -377,6 +474,14 @@ int osv_sigtimedwait(const sigset_t *set, siginfo_t *si,
         }
         return tmr.expired();
     });
+
+    if (set) {
+        for (unsigned i = 0; i < nsignals; ++i) {
+            if (sigismember(set, i + 1)) {
+                set_sigwaiting(i, false);
+            }
+        }
+    }
 
     if (signo == 0) {
         // Timed out (or polled with {0,0}) with no matching signal.
@@ -452,6 +557,16 @@ int kill(pid_t pid, int sig)
             // The thread does not expect the signal handler to still be delivered,
             // so if we wake up some folks (usually just the one waiter), we should
             // not continue processing.
+            //
+            // wake_up_signal_waiters() returns nonzero only if a thread is
+            // actively CONSUMING this signal via sigwait()/sigtimedwait() (see
+            // that function): such a thread takes delivery itself, so the
+            // handler must NOT also run.  A thread that merely BLOCKED the
+            // signal with sigprocmask (e.g. PostgreSQL's postmaster around its
+            // epoll ServerLoop) is not consuming it -- for that case
+            // wake_up_signal_waiters() returns 0 and we fall through to run the
+            // installed handler (which is what pokes the latch/self-pipe that
+            // wakes the postmaster on SIGCHLD).
             if (wake_up_signal_waiters(sig)) {
                 return 0;
             }
@@ -478,6 +593,25 @@ int kill(pid_t pid, int sig)
             }
         }, sched::thread::attr().detached().stack(65536).name("signal_handler"),
                 false, true);
+#if CONF_fork
+        // A newly created thread inherits the CREATING thread's address space
+        // (sched::thread ctor copies s_current->_current_as).  Under fork() a
+        // child raises signals to the parent process from the CHILD's context
+        // -- most importantly the SIGCHLD that fork() synthesizes to the parent
+        // when a child exits (osv::fork::child_exited -> kill(getpid(),
+        // SIGCHLD), run in the exiting child's thread).  If the handler thread
+        // inherited the child's private COW address space, the process-level
+        // handler (installed by the top-level app, e.g. PostgreSQL's postmaster
+        // reaper) would run against the child's dying address space instead of
+        // the app's: its writes to app globals (a latch flag, a self-pipe) land
+        // in the wrong AS and the postmaster never wakes.  A process-level
+        // signal handler belongs to the top-level application, which runs in
+        // the kernel/global address space (AS0), so run it there.  Only fork
+        // child contexts are affected; the top-level app and kernel already
+        // have _current_as == kernel_address_space(), so this is a no-op for
+        // them and the non-fork path is unchanged.
+        t->set_address_space(mmu::kernel_address_space());
+#endif
         t->start();
     }
     return 0;

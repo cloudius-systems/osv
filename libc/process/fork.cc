@@ -23,6 +23,7 @@
 #include <osv/kernel_config_fork.h>
 #include <osv/fork_arena.hh>
 #include "../libc.hh"
+#include "../signal.hh"   // nsignals, signal_actions (per-child sig table)
 
 
 // Arch hook (arch/<arch>/fork.cc): create a child thread that resumes in
@@ -78,6 +79,21 @@ mutex g_fd_lock;
 // child address_space -> { inherited fd -> file* we hold a ref on }
 std::unordered_map<mmu::address_space *,
                    std::unordered_map<int, struct file *>> g_inherited_fds;
+
+// ---- fork per-child signal dispositions ----------------------------------
+//
+// POSIX signal dispositions are per-process, but OSv keeps a single global
+// signal_actions[] (libc/signal.cc).  A fork child that resets its inherited
+// handlers (e.g. PostgreSQL's startup process) would clobber the parent
+// postmaster's handlers -- notably the SIGCHLD reaper the postmaster needs to
+// reap children and reach PM_RUN.  Give each fork-child address space its own
+// copy of the table, initialized from the parent's at fork time.  Kept on the
+// identity kernel heap like the other cross-AS fork bookkeeping.
+mutex g_sig_lock;
+struct child_sigtable {
+    struct sigaction actions[nsignals];
+};
+std::unordered_map<mmu::address_space *, child_sigtable *> g_child_sigtables;
 
 pid_t current_pid()
 {
@@ -163,6 +179,60 @@ extern "C" bool fork_child_close_inherited_fd(int fd)
     }
     fdrop(fp);   // drop only the child's inherited reference
     return true;
+}
+
+// ---- fork per-child signal dispositions (see g_child_sigtables) -----------
+
+// The current fork child's private signal_actions[], or nullptr for the
+// top-level app / kernel (which uses the global table).  Called by
+// libc/signal.cc's current_signal_actions().
+extern "C" struct sigaction *fork_child_signal_actions()
+{
+    mmu::address_space *child_as = current_child_as();
+    if (!child_as) {
+        return nullptr;
+    }
+    SCOPE_LOCK(g_sig_lock);
+    auto it = g_child_sigtables.find(child_as);
+    if (it == g_child_sigtables.end()) {
+        return nullptr;
+    }
+    return it->second->actions;
+}
+
+// Give @child_as its own copy of the signal dispositions, seeded from the
+// parent's table so the child inherits them (POSIX).  Called from fork().
+extern "C" void fork_init_child_signal_actions(mmu::address_space *child_as,
+                                    const struct sigaction *parent_table)
+{
+    fork_arena::kernel_heap_scope kh;
+    auto *tbl = new child_sigtable();
+    for (unsigned i = 0; i < nsignals; ++i) {
+        tbl->actions[i] = parent_table[i];
+    }
+    SCOPE_LOCK(g_sig_lock);
+    auto &slot = g_child_sigtables[child_as];
+    if (slot) {
+        delete slot;   // shouldn't happen, but never leak
+    }
+    slot = tbl;
+}
+
+// Drop @child_as's private signal table on child teardown / execve.
+extern "C" void fork_release_child_signal_actions(mmu::address_space *child_as)
+{
+    child_sigtable *tbl = nullptr;
+    {
+        SCOPE_LOCK(g_sig_lock);
+        auto it = g_child_sigtables.find(child_as);
+        if (it == g_child_sigtables.end()) {
+            return;
+        }
+        tbl = it->second;
+        g_child_sigtables.erase(it);
+    }
+    fork_arena::kernel_heap_scope kh;
+    delete tbl;
 }
 
 void adopt_execed_app(shared_app_t app)
@@ -320,6 +390,11 @@ pid_t fork(void)
     // socket/file the parent still holds.  Keyed by the child address space.
     fork::inherit_open_fds(child_as);
 
+    // Give the child its OWN copy of the process signal dispositions, seeded
+    // from ours.  Without this the child's sigaction() (e.g. PostgreSQL's
+    // startup process resetting SIGCHLD to SIG_DFL) would clobber our shared
+    // handler table and the postmaster would never be notified of child exits.
+    osv::fork::fork_init_child_signal_actions(child_as, osv::signal_actions);
     // Register the child BEFORE starting it so a fast child->exit cannot race
     // ahead of the parent's bookkeeping.
     fork::register_child(cpid, parent);
@@ -347,6 +422,8 @@ pid_t fork(void)
         // dropped the ones it explicitly closed; this releases the rest, so
         // the parent's fd refcounts return to just the parent's own).
         fork::release_inherited_fds(child_as);
+        // Drop the child's private signal-disposition table.
+        osv::fork::fork_release_child_signal_actions(child_as);
         // Only destroy the child address space if the child still owns it.
         // execve() replaces the child AS with the global (kernel) AS and
         // destroys child_as itself; destroying it again here is a double-free
