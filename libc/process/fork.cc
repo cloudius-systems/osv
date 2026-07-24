@@ -46,6 +46,11 @@ extern "C" void __osv_run_atfork_child();
 extern "C" void fork_snapshot_open_fds(
     void (*emit)(void *ctx, int fd, struct file *fp), void *ctx);
 
+// Provided by fs/vfs/kern_descrip.cc: null gfdt[fd] iff it currently holds @fp
+// (under gfdt_lock).  Used to release a shared fd slot once its last inheriting
+// fork child is done with it, so the fd can be reused.
+extern "C" void fork_clear_gfdt_slot_if(int fd, struct file *fp);
+
 namespace osv {
 namespace fork {
 
@@ -79,6 +84,13 @@ mutex g_fd_lock;
 // child address_space -> { inherited fd -> file* we hold a ref on }
 std::unordered_map<mmu::address_space *,
                    std::unordered_map<int, struct file *>> g_inherited_fds;
+// (fd, file*) pairs the top-level OWNER has close()d while a live child still
+// inherited them: the owner relinquished the shared gfdt slot to the child(ren)
+// but left it pointing at the file (OSv single fd table -- the child looks it
+// up via gfdt[fd]).  The LAST inheriting child to close/teardown such an fd
+// clears the slot.  A slot NOT in this set is still owned by the top-level app,
+// so a child closing its inherited copy must never clear it.
+std::unordered_map<int, struct file *> g_owner_released_fds;
 
 // ---- fork per-child signal dispositions ----------------------------------
 //
@@ -137,6 +149,7 @@ static void inherit_open_fds(mmu::address_space *child_as)
 static void release_inherited_fds(mmu::address_space *child_as)
 {
     std::unordered_map<int, struct file *> held;
+    std::unordered_map<int, struct file *> to_clear;
     {
         SCOPE_LOCK(g_fd_lock);
         auto it = g_inherited_fds.find(child_as);
@@ -145,6 +158,32 @@ static void release_inherited_fds(mmu::address_space *child_as)
         }
         held = std::move(it->second);
         g_inherited_fds.erase(it);
+        // For any fd this child was the LAST live inheritor of AND that the
+        // top-level owner already relinquished (g_owner_released_fds), collect
+        // it to clear the slot AFTER releasing g_fd_lock (gfdt_lock must not
+        // nest inside g_fd_lock).  A slot the owner still holds is left intact.
+        // Evaluated against the REMAINING children.
+        for (auto &kv : held) {
+            auto orel = g_owner_released_fds.find(kv.first);
+            if (orel == g_owner_released_fds.end() || orel->second != kv.second) {
+                continue;   // owner still holds this slot: leave it
+            }
+            bool other_holds = false;
+            for (auto &c : g_inherited_fds) {
+                auto o = c.second.find(kv.first);
+                if (o != c.second.end() && o->second == kv.second) {
+                    other_holds = true;
+                    break;
+                }
+            }
+            if (!other_holds) {
+                to_clear[kv.first] = kv.second;
+                g_owner_released_fds.erase(orel);
+            }
+        }
+    }
+    for (auto &kv : to_clear) {
+        fork_clear_gfdt_slot_if(kv.first, kv.second);
     }
     for (auto &kv : held) {
         fdrop(kv.second);
@@ -164,6 +203,7 @@ extern "C" bool fork_child_close_inherited_fd(int fd)
         return false;   // kernel / top-level app: normal close
     }
     struct file *fp = nullptr;
+    bool clear_slot = false;
     {
         SCOPE_LOCK(g_fd_lock);
         auto it = g_inherited_fds.find(child_as);
@@ -176,9 +216,75 @@ extern "C" bool fork_child_close_inherited_fd(int fd)
         }
         fp = fit->second;
         it->second.erase(fit);
+        // Clear the shared gfdt slot only if (1) the top-level OWNER already
+        // relinquished this fd to the children (fork_owner_close_inherited_fd
+        // recorded it), and (2) NO OTHER live child still inherits this exact
+        // fd->file.  Otherwise the parent (or another child) still needs the
+        // slot, so leave it.  Cleared below, after releasing g_fd_lock
+        // (gfdt_lock must not nest inside g_fd_lock: fdclose() takes gfdt_lock
+        // then g_fd_lock).
+        auto orel = g_owner_released_fds.find(fd);
+        bool owner_released = (orel != g_owner_released_fds.end() &&
+                               orel->second == fp);
+        if (owner_released) {
+            clear_slot = true;
+            for (auto &kv : g_inherited_fds) {
+                if (kv.first == child_as) {
+                    continue;
+                }
+                auto o = kv.second.find(fd);
+                if (o != kv.second.end() && o->second == fp) {
+                    clear_slot = false;
+                    break;
+                }
+            }
+            if (clear_slot) {
+                g_owner_released_fds.erase(orel);
+            }
+        }
+    }
+    if (clear_slot) {
+        fork_clear_gfdt_slot_if(fd, fp);
     }
     fdrop(fp);   // drop only the child's inherited reference
     return true;
+}
+
+// Called by fdclose() (fs/vfs/kern_descrip.cc) from a NON-child context (the
+// top-level app / postmaster / kernel) when it closes an fd.  If some LIVE fork
+// child currently inherits THIS fd holding THIS same file, the shared gfdt slot
+// must stay pointing at that file: OSv has a single shared fd table, so the
+// child looks the connection up via gfdt[fd] -- nulling the slot (or letting it
+// be reused by a later fdalloc) is exactly what makes the child's getsockname()
+// fail (ENOTSOCK when the slot got a vnode, EBADF when still null).  This is
+// PostgreSQL's postmaster->backend handoff: accept() -> gfdt[N]=socket, fork()
+// (child inherits N), then the postmaster closesocket(N).  Returns true to tell
+// fdclose() to LEAVE gfdt[fd] intact (it still fdrop()s the owner's reference);
+// the inheriting child keeps its own ref and, on its own close/teardown,
+// releases it and clears the slot.  Returns false (normal close: null the slot
+// + fdrop) when no live child inherits @fd.
+extern "C" bool fork_owner_close_inherited_fd(int fd, struct file *fp)
+{
+    // Only the top-level owner (not a fork child) hands its slot to a child
+    // this way; a child closing its own inherited fd goes through
+    // fork_child_close_inherited_fd above.
+    if (current_child_as()) {
+        return false;
+    }
+    SCOPE_LOCK(g_fd_lock);
+    for (auto &kv : g_inherited_fds) {
+        auto fit = kv.second.find(fd);
+        if (fit != kv.second.end() && fit->second == fp) {
+            // A live child inherits this exact fd->file: keep the shared slot
+            // and record that the owner has relinquished it, so the last
+            // inheriting child to go clears the slot.  Kernel-global
+            // bookkeeping shared across parent/child/reaper -> identity heap.
+            fork_arena::kernel_heap_scope kh;
+            g_owner_released_fds[fd] = fp;
+            return true;
+        }
+    }
+    return false;
 }
 
 // ---- fork per-child signal dispositions (see g_child_sigtables) -----------
