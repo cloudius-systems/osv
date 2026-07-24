@@ -22,6 +22,10 @@
 #include <osv/export.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 
 using namespace osv::clock::literals;
 
@@ -94,12 +98,28 @@ int wake_up_signal_waiters(int signo)
 void wait_for_signal(unsigned int sigidx)
 {
     SCOPE_LOCK(waiters_mutex);
+#if CONF_fork
+    // `waiters` is a GLOBAL kernel structure manipulated cross-address-space:
+    // a fork child and its parent both push/remove on the same list.  Its
+    // std::list nodes must therefore live in the identity-mapped kernel heap,
+    // never the copy-on-write fork arena -- a COW-private node would corrupt
+    // the shared list's next/prev pointers as seen from the other address
+    // space, and a later traversal (unwait_for_signal -> list::remove) would
+    // follow a dangling link and fault (see /tmp/pg-preempt-fix.txt).  This is
+    // the same rule already applied to thread objects and wait_records.
+    fork_arena::kernel_heap_scope kh;
+#endif
     waiters[sigidx].push_front(sched::thread::current());
 }
 
 void unwait_for_signal(sched::thread *t, unsigned int sigidx)
 {
     SCOPE_LOCK(waiters_mutex);
+#if CONF_fork
+    // Match wait_for_signal(): keep list-node churn on the identity heap so the
+    // shared cross-AS list is never a COW arena page.
+    fork_arena::kernel_heap_scope kh;
+#endif
     waiters[sigidx].remove(t);
 }
 
