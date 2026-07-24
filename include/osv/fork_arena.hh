@@ -93,6 +93,11 @@ void *alloc(size_t size, size_t alignment);
 // Free an arena allocation (p must satisfy contains(p)).
 void free(void *p);
 
+// Reclaim the per-address-space free-list slot for a dying fork child address
+// space.  Called from mmu::destroy_address_space so a later process can reuse
+// the slot.  @as is the opaque mmu::address_space* being destroyed.
+void release_as(void *as);
+
 // Usable size of an arena allocation (p must satisfy contains(p)).
 size_t usable_size(void *p);
 
