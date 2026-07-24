@@ -93,6 +93,11 @@ int fdalloc(struct file *fp, int *newfd)
 // the close so fdclose() must not touch gfdt[].  Returns false (normal close)
 // for the top-level app and for fds the child opened itself after fork.
 extern "C" bool fork_child_close_inherited_fd(int fd);
+// A non-child (top-level app / postmaster) closing an fd that a LIVE fork child
+// inherited: drop the owner's reference but leave the shared gfdt slot intact
+// for the child (which finds the file via gfdt[fd] on OSv's single fd table).
+// Returns true when it handled the close (slot kept), false for a normal close.
+extern "C" bool fork_owner_close_inherited_fd(int fd, struct file *fp);
 #endif
 
 int fdclose(int fd)
@@ -101,12 +106,16 @@ int fdclose(int fd)
 
 #if CONF_fork
     // A fork child closing an fd it inherited only drops its own reference; the
-    // shared gfdt slot and the underlying file stay alive for the parent.
+    // shared gfdt slot and the underlying file stay alive for the parent (or,
+    // if the parent already closed it, until the last inheriting child goes).
     if (fork_child_close_inherited_fd(fd)) {
         return 0;
     }
 #endif
 
+#if CONF_fork
+    bool owner_keep_slot = false;
+#endif
     WITH_LOCK(gfdt_lock) {
 
         fp = gfdt[fd].read_by_owner();
@@ -114,13 +123,44 @@ int fdclose(int fd)
             return EBADF;
         }
 
+#if CONF_fork
+        // The top-level owner (postmaster) closing a connection fd that a live
+        // forked child still inherits: keep the shared gfdt slot pointing at
+        // the socket so the child's getsockname()/recv() on the inherited fd
+        // still resolves it (nulling the slot -> child sees EBADF, or a reused
+        // vnode -> ENOTSOCK).  Leave the slot; only the owner's reference is
+        // dropped (below, outside gfdt_lock).
+        owner_keep_slot = fork_owner_close_inherited_fd(fd, fp);
+        if (!owner_keep_slot) {
+            gfdt[fd].assign(nullptr);
+        }
+#else
         gfdt[fd].assign(nullptr);
+#endif
     }
 
     fdrop(fp);
 
     return 0;
 }
+
+#if CONF_fork
+// Null gfdt[fd] iff it currently holds @fp.  Used by fork's inherited-fd
+// bookkeeping (libc/process/fork.cc) to release a shared fd slot once its last
+// live inheriting child is done with it, without disturbing a slot that has
+// since been reassigned to a different file.
+extern "C" void fork_clear_gfdt_slot_if(int fd, struct file *fp)
+{
+    if (fd < 0 || fd >= FDMAX) {
+        return;
+    }
+    WITH_LOCK(gfdt_lock) {
+        if (gfdt[fd].read_by_owner() == fp) {
+            gfdt[fd].assign(nullptr);
+        }
+    }
+}
+#endif
 
 #if CONF_fork
 // Snapshot the currently-open fds and take one reference (fhold) on each open
