@@ -48,6 +48,8 @@ typedef enum {
 #define cv_broadcast(cv)		condvar_wake_all(cv)
 #define cv_wait(cv, mutex)		condvar_wait(cv, mutex, 0)
 int cv_timedwait(kcondvar_t *cv, mutex_t *mutex, clock_t tmo);
+// OpenZFS variant: absolute deadline (see bsd/porting/netport1.cc).
+int openzfs_cv_timedwait(kcondvar_t *cv, mutex_t *mutex, clock_t abstime);
 
 #ifdef __cplusplus
 }

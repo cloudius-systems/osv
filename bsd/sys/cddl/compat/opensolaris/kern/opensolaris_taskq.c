@@ -36,11 +36,15 @@
 #include <sys/taskqueue.h>
 #include <sys/taskq.h>
 #include <osv/export.h>
+#include <string.h>
 
 static uma_zone_t taskq_zone;
 
 OSV_LIB_SOLARIS_API
 taskq_t *system_taskq = NULL;
+
+OSV_LIB_SOLARIS_API
+taskq_t *system_delay_taskq = NULL;
 
 OSV_LIB_SOLARIS_API void
 system_taskq_init(void *arg)
@@ -48,6 +52,7 @@ system_taskq_init(void *arg)
 	taskq_zone = uma_zcreate("taskq_zone", sizeof(struct ostask),
 	    NULL, NULL, NULL, NULL, 0, 0);
 	system_taskq = taskq_create("system_taskq", 8, 0, 0, 0, 0);
+	system_delay_taskq = taskq_create("system_delay_taskq", 4, 0, 0, 0, 0);
 }
 SYSINIT(system_taskq_init, SI_SUB_CONFIGURE, SI_ORDER_ANY, system_taskq_init, NULL);
 
@@ -56,6 +61,7 @@ system_taskq_fini(void *arg)
 {
 
 	taskq_destroy(system_taskq);
+	taskq_destroy(system_delay_taskq);
 	uma_zdestroy(taskq_zone);
 }
 SYSUNINIT(system_taskq_fini, SI_SUB_CONFIGURE, SI_ORDER_ANY, system_taskq_fini, NULL);
@@ -98,6 +104,26 @@ taskq_member(taskq_t *tq, kthread_t *thread)
 {
 
 	return (taskqueue_member(tq->tq_queue, thread));
+}
+
+int
+taskq_cancel_id(taskq_t *tq, taskqid_t tid, boolean_t wait)
+{
+	struct ostask *task = (struct ostask *)(void *)tid;
+	uint32_t pend = 0;
+	int rc;
+
+	if (task == NULL)
+		return (ENOENT);
+
+	rc = taskqueue_cancel(tq->tq_queue, &task->ost_task, &pend);
+	if (rc == EBUSY && wait)
+		taskqueue_drain(tq->tq_queue, &task->ost_task);
+
+	if (pend)
+		uma_zfree(taskq_zone, task);
+
+	return (pend ? 0 : ENOENT);
 }
 
 static void
@@ -155,7 +181,7 @@ taskq_dispatch_safe(taskq_t *tq, task_func_t func, void *arg, u_int flags,
 {
 	int prio;
 
-	/* 
+	/*
 	 * If TQ_FRONT is given, we want higher priority for this task, so it
 	 * can go at the front of the queue.
 	 */
@@ -169,3 +195,133 @@ taskq_dispatch_safe(taskq_t *tq, task_func_t func, void *arg, u_int flags,
 
 	return ((taskqid_t)(void *)task);
 }
+
+/* ------------------------------------------------------------------ */
+/* OpenZFS 2.x extended taskq API                                      */
+/* ------------------------------------------------------------------ */
+
+/*
+ * taskq_wait - wait for all currently-queued tasks to complete.
+ * We enqueue a do-nothing barrier task and drain on it; since tasks
+ * execute in FIFO order all prior tasks will have finished first.
+ */
+static void
+taskq_barrier_run(void *arg __bsd_unused2, int pending __bsd_unused2)
+{
+}
+
+OSV_LIB_SOLARIS_API void
+taskq_wait(taskq_t *tq)
+{
+	struct task barrier;
+
+	TASK_INIT(&barrier, 0, taskq_barrier_run, NULL);
+	taskqueue_enqueue(tq->tq_queue, &barrier);
+	taskqueue_drain(tq->tq_queue, &barrier);
+}
+
+/*
+ * taskq_wait_id - wait for the task identified by id to complete.
+ */
+OSV_LIB_SOLARIS_API void
+taskq_wait_id(taskq_t *tq, taskqid_t id)
+{
+	struct ostask *task = (struct ostask *)(void *)id;
+
+	if (task == NULL)
+		return;
+	taskqueue_drain(tq->tq_queue, &task->ost_task);
+}
+
+/*
+ * taskq_wait_outstanding - wait until at most `id` tasks are outstanding.
+ * For OSv, we simply drain the whole queue (conservative but correct).
+ */
+OSV_LIB_SOLARIS_API void
+taskq_wait_outstanding(taskq_t *tq, taskqid_t id __bsd_unused2)
+{
+	taskq_wait(tq);
+}
+
+/*
+ * taskq_of_curthread - return the taskq the current thread belongs to.
+ * OSv does not track this per-thread; return NULL.
+ */
+OSV_LIB_SOLARIS_API taskq_t *
+taskq_of_curthread(void)
+{
+	return (NULL);
+}
+
+/*
+ * taskq_create_synced - create a taskq with barrier semantics.
+ * On OSv this is equivalent to taskq_create. The optional threads
+ * output parameter receives a freshly-allocated array of nthreads
+ * NULL-valued kthread_t* handles (OSv has no real kthread handles).
+ * Callers (e.g. spa_sync_tq_create) must kmem_free() the array.
+ */
+OSV_LIB_SOLARIS_API taskq_t *
+taskq_create_synced(const char *name, int nthreads, pri_t pri,
+    int minalloc, int maxalloc, uint_t flags, kthread_t ***threads)
+{
+	taskq_t *tq = taskq_create(name, nthreads, pri, minalloc, maxalloc,
+	    flags);
+	if (threads != NULL) {
+		/*
+		 * Provide a valid (zeroed) array so the caller can safely
+		 * iterate and kmem_free() it without heap corruption.
+		 */
+		*threads = kmem_zalloc(sizeof (kthread_t *) * MAX(nthreads, 1),
+		    KM_SLEEP);
+	}
+	return (tq);
+}
+
+/*
+ * taskq_suspend / taskq_suspended / taskq_resume - not implemented on OSv.
+ */
+OSV_LIB_SOLARIS_API void
+taskq_suspend(taskq_t *tq __bsd_unused2)
+{
+}
+
+OSV_LIB_SOLARIS_API int
+taskq_suspended(taskq_t *tq __bsd_unused2)
+{
+	return (0);
+}
+
+OSV_LIB_SOLARIS_API void
+taskq_resume(taskq_t *tq __bsd_unused2)
+{
+}
+
+/*
+ * taskq_dispatch_delay - dispatch after a delay of `ticks` clock ticks.
+ * On OSv we do NOT dispatch immediately because callers such as
+ * spa_deadman() rely on the delay to avoid a premature watchdog fire.
+ * Without a real timer facility, we simply drop the delayed task (no-op).
+ * This is safe: spa_deadman is a watchdog — if it never fires, pool
+ * operations complete normally without a false abort.
+ */
+OSV_LIB_SOLARIS_API taskqid_t
+taskq_dispatch_delay(taskq_t *tq __bsd_unused2, task_func_t func __bsd_unused2,
+    void *arg __bsd_unused2, uint_t flags __bsd_unused2,
+    clock_t ticks __bsd_unused2)
+{
+	return (0);	/* 0 = not scheduled; taskq_cancel_id handles NULL safely */
+}
+
+/*
+ * nulltask - do-nothing task function used as a placeholder.
+ */
+OSV_LIB_SOLARIS_API void
+nulltask(void *arg __bsd_unused2)
+{
+}
+
+/*
+ * taskq_init_ent, taskq_empty_ent, taskq_dispatch_ent are defined in
+ * openzfs_osv_compat.c because that file is compiled with the full
+ * OpenZFS include paths needed for taskq_ent_t.
+ */

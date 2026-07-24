@@ -1,0 +1,49 @@
+impl	topo	workload	metric	value
+openzfs	single	seqwrite	seqwrite_MBps	669.1 (sd 336.3)
+openzfs	single	seqread_cold	seqread_cold_MBps	4660.4 (sd 399.2)
+openzfs	single	seqread_warm	seqread_warm_MBps	3446.5 (sd 14.1)
+openzfs	single	mmapread	mmapread_MBps	1443.9 (sd 112.6)
+openzfs	single	mmapread	mmapread_freedelta	501.0 (sd 16.5)
+bsd	single	seqwrite	seqwrite_MBps	499.0 (sd 310.4)
+bsd	single	seqread_cold	seqread_cold_MBps	849.7 (sd 1742.3)
+bsd	single	seqread_warm	seqread_warm_MBps	8510.1 (sd 11.1)
+bsd	single	mmapread	mmapread_MBps	1258.4 (sd 32.9)
+bsd	single	mmapread	mmapread_freedelta	5.0 (sd 17.8)
+openzfs	single	odirect	odirect_write_MBps	1150.4
+openzfs	single	odirect	odirect_read_MBps	1540.7
+host	raw	baseline	seqwrite_1M_QD32_MiBps	838
+host	raw	baseline	seqread_1M_QD32_MiBps	1790
+host	raw	baseline	randread_4k_QD32x4_IOPS	378000
+host	raw	baseline	randwrite_4k_QD32x4_IOPS	188000
+openzfs	single	randread	randread_IOPS	35338.0 (sd 78.8)
+openzfs	single	randread	randread_p99	42.5 (sd 0.6)
+openzfs	single	randwrite	randwrite_IOPS	6453.1 (sd 27.9)
+openzfs	single	randwrite	randwrite_p99	399.1 (sd 7.3)
+openzfs	single	fsync	fsync_persec	3311.7 (sd 54.5)
+openzfs	single	meta	meta_opspers	87810.5 (sd 0.0)
+openzfs	single	scrub	scrub_MBps	292.5
+bsd	single	randread	randread_IOPS	230326.1 (sd 23591.6)
+bsd	single	randread	randread_p99	30.3 (sd 15.6)
+bsd	single	randwrite	randwrite_IOPS	7538.9 (sd 669.2)
+bsd	single	randwrite	randwrite_p99	1038.9 (sd 6.0)
+bsd	single	fsync	fsync_persec	2973.4 (sd 24.6)
+bsd	single	meta	meta_opspers	53881.2 (sd 0.0)
+bsd	single	scrub	scrub_MBps	292.6
+openzfs	single	compress	compress_lz4_MBps	3551.3
+openzfs	single	compress	compress_off_MBps	1232.5
+bsd	single	compress	compress_lz4_MBps	2281.8
+bsd	single	compress	compress_off_MBps	1012.7
+openzfs	raidz	seqwrite	seqwrite_MBps	457.8 (sd 147.5)
+openzfs	raidz	seqread_cold	seqread_cold_MBps	3986.0 (sd 124.2)
+openzfs	raidz	seqread_warm	seqread_warm_MBps	3484.9 (sd 72.2)
+openzfs	raidz	mmapread	mmapread_MBps	1341.6 (sd 44.1)
+openzfs	raidz	mmapread	mmapread_freedelta	502.0 (sd 18.3)
+openzfs	raidz	randread	randread_IOPS	35345.5 (sd 216.3)
+openzfs	raidz	randread	randread_p99	43.8 (sd 0.4)
+bsd	raidz	seqwrite	seqwrite_MBps	396.7 (sd 235.0)
+bsd	raidz	seqread_cold	seqread_cold_MBps	463.6 (sd 1324.0)
+bsd	raidz	seqread_warm	seqread_warm_MBps	8314.3 (sd 8.6)
+bsd	raidz	mmapread	mmapread_MBps	1236.9 (sd 48.7)
+bsd	raidz	mmapread	mmapread_freedelta	5.0 (sd 13.3)
+bsd	raidz	randread	randread_IOPS	227699.9 (sd 22706.4)
+bsd	raidz	randread	randread_p99	31.3 (sd 16.1)

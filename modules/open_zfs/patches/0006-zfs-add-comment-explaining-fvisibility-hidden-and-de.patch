@@ -1,0 +1,27 @@
+From 4891e3e3bd5cb7089747f86fc153ecc6853fab1f Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Sat, 9 May 2026 15:23:13 -0400
+Subject: [PATCH 06/19] zfs: add comment explaining -fvisibility=hidden and
+ default visibility attribute
+
+(cherry picked from commit 5c9e06134be477fd9609be9b320d3d10b077281b)
+---
+ module/os/osv/zfs/zfs_vnops_os.c | 2 ++
+ 1 file changed, 2 insertions(+)
+
+diff --git a/module/os/osv/zfs/zfs_vnops_os.c b/module/os/osv/zfs/zfs_vnops_os.c
+index 7a0895877..389ea52b0 100644
+--- a/module/os/osv/zfs/zfs_vnops_os.c
++++ b/module/os/osv/zfs/zfs_vnops_os.c
+@@ -1166,6 +1166,8 @@ zfs_vop_link(struct vnode *tdvp, struct vnode *svp, char *name)
+  * C-linkage helpers from core/pagecache.cc.
+  * Used below by zfs_vop_cache() to register pages in OSv's read_cache.
+  */
++/* libsolaris.so is compiled with -fvisibility=hidden.  Without "default"
++ * visibility the dynamic linker cannot resolve these symbols from loader.elf. */
+ extern __attribute__((visibility("default"))) void osv_pagecache_map_page(void *key, void *page);
+ extern __attribute__((visibility("default"))) void *osv_alloc_page(void);
+ extern __attribute__((visibility("default"))) void osv_free_page(void *p);
+-- 
+2.53.0
+

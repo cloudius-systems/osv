@@ -2611,7 +2611,7 @@ static void mount_fs(mntent *m)
     }
 
     if (zfs) {
-        m->mnt_opts = "osv/zfs";
+        m->mnt_opts = "osv";
     } else {
         if ((m->mnt_opts != nullptr) && strcmp(m->mnt_opts, MNTOPT_DEFAULTS)) {
             printf("Warning: opts %s, ignored for fs %s\n", m->mnt_opts, m->mnt_type);

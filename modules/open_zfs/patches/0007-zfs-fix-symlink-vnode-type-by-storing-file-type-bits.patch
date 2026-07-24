@@ -1,0 +1,49 @@
+From 4be9967a46b799771e748297451e89edb34569b9 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Mon, 11 May 2026 12:49:49 -0400
+Subject: [PATCH 07/19] zfs: fix symlink vnode type by storing file type bits
+ in z_mode
+
+OSv's sys_symlink() calls VOP_SYMLINK with va_type=VLNK and va_mode=0777
+but does NOT pre-set S_IFLNK in va_mode (unlike sys_open/sys_mkdir which
+do set S_IFREG/S_IFDIR).  zfs_acl_ids_create stored only the permission
+bits, so the on-disk z_mode was 0777 (no file type bits).  When the znode
+was later loaded, IFTOVT(0777) returned VNON instead of VLNK, causing:
+  - namei to skip symlink following (needs v_type == VLNK)
+  - vn_stat to return EBADF (default branch hit for VNON)
+
+Fix: use MAKEIMODE(vap->va_type, perms) so the correct POSIX file type bits
+(S_IFLNK, S_IFREG, S_IFDIR, etc.) are always written to z_mode.  Regular
+files and directories were unaffected because their callers pre-set the type
+bits before calling VOP_CREATE/VOP_MKDIR; symlinks were the only broken case.
+
+Fixes: "can't read elf header: Bad file descriptor" for /libhttpserver-api.so
+(cherry picked from commit fad153c5a1bee1fa8ef08579fc1c8fed165962ad)
+---
+ module/os/osv/zfs/zfs_acl.c | 10 +++++++++-
+ 1 file changed, 9 insertions(+), 1 deletion(-)
+
+diff --git a/module/os/osv/zfs/zfs_acl.c b/module/os/osv/zfs/zfs_acl.c
+index 886c1643c..598ea17a8 100644
+--- a/module/os/osv/zfs/zfs_acl.c
++++ b/module/os/osv/zfs/zfs_acl.c
+@@ -164,7 +164,15 @@ zfs_acl_ids_create(znode_t *dzp, int flag, vattr_t *vap, cred_t *cr,
+ 	(void) dzp; (void) flag; (void) cr; (void) vsecp; (void) mnt_ns;
+ 
+ 	memset(acl_ids, 0, sizeof (zfs_acl_ids_t));
+-	acl_ids->z_mode = (vap->va_mask & AT_MODE) ? vap->va_mode : 0755;
++	/*
++	 * Include the file type bits from va_type.  OSv's sys_open() ORs
++	 * in S_IFREG and sys_mkdir() ORs in S_IFDIR before calling VOP_CREATE/
++	 * VOP_MKDIR, but sys_symlink() does not add S_IFLNK to va_mode.
++	 * Using MAKEIMODE ensures the type bits are always present so that
++	 * IFTOVT(z_mode) returns the correct vtype when the znode is loaded.
++	 */
++	acl_ids->z_mode = MAKEIMODE(vap->va_type,
++	    (vap->va_mask & AT_MODE) ? vap->va_mode : 0755);
+ 	acl_ids->z_fuid = 0;
+ 	acl_ids->z_fgid = 0;
+ 	acl_ids->z_aclp = zfs_acl_alloc(ZFS_ACL_VERSION_FUID);
+-- 
+2.53.0
+

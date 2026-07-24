@@ -1,0 +1,41 @@
+From f97b25e07a4306b5164b83f2eae825943e76ac0a Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Thu, 21 May 2026 19:59:37 -0400
+Subject: [PATCH 13/19] zfs: add zfs_mount_setattr() stub for OSv (required by
+ 2.4.2)
+
+OpenZFS 2.4.2 moved namespace property remounting from a full
+zfs_mount(REMOUNT) to a new zfs_mount_setattr() function that uses
+mount_setattr(2) on Linux.  OSv has no mount_setattr syscall, so
+fall back to a full remount like FreeBSD does.
+
+(cherry picked from commit b5dfb14986a925d8efe457381dbac39de4ab20dc)
+---
+ lib/libzfs/os/osv/libzfs_mount_os.c | 11 +++++++++++
+ 1 file changed, 11 insertions(+)
+
+diff --git a/lib/libzfs/os/osv/libzfs_mount_os.c b/lib/libzfs/os/osv/libzfs_mount_os.c
+index c062f2a82..e169bad47 100644
+--- a/lib/libzfs/os/osv/libzfs_mount_os.c
++++ b/lib/libzfs/os/osv/libzfs_mount_os.c
+@@ -107,6 +107,17 @@ zfs_parse_mount_options(const char *mntopts, unsigned long *mntflags,
+ 	return (0);
+ }
+ 
++/*
++ * zfs_mount_setattr: OSv has no mount_setattr(2).  Fall back to a full
++ * remount, like FreeBSD does.
++ */
++int
++zfs_mount_setattr(zfs_handle_t *zhp, uint32_t nspflags)
++{
++	(void) nspflags;
++	return (zfs_mount(zhp, MNTOPT_REMOUNT, 0));
++}
++
+ /* Called from the tail end of zpool_disable_datasets() */
+ void
+ zpool_disable_datasets_os(zpool_handle_t *zhp, boolean_t force)
+-- 
+2.53.0
+
