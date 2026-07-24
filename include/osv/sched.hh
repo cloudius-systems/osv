@@ -212,6 +212,17 @@ public:
         virtual void timer_fired() = 0;
         void suspend_timers();
         void resume_timers();
+#if CONF_fork
+        // Fork timer-park (see thread::_parked_deadline / cpu::park_timers).
+        // These manipulate the per-CPU timer list directly and are INDEPENDENT
+        // of the migration suspend/resume above (they use a separate flag), so
+        // parking never collides with a concurrent migration of the same
+        // thread.  MUST be called with this client's address space loaded (its
+        // _active_timers nodes live on its private stack).
+        osv::clock::uptime::time_point earliest_active_deadline() const;
+        bool has_active_timers() const { return !_active_timers.empty(); }
+        bool timers_suspended() const { return _timers_need_reload; }
+#endif
     private:
         bool _timers_need_reload = false;
         client_list_t _active_timers;
@@ -875,6 +886,20 @@ private:
     // thread's.  Defaults to the kernel address space (AS0); a forked child's
     // thread is moved into its private child address space.
     mmu::address_space *_current_as;
+    // Fork timer-park support.  A thread's sched::timer objects live on its
+    // (per-address-space private) user stack, but the per-CPU timer_set list
+    // they link into is shared identity memory walked from IRQ context in
+    // WHATEVER address space the CPU currently holds.  After fork, a timer node
+    // at a child stack VA is garbage when walked from another AS (parent/idle)
+    // -> a COW/wild page fault in non-preemptable IRQ context.  So on an
+    // AS-crossing context switch we SUSPEND the outgoing thread's timers off the
+    // per-CPU list (done in the outgoing AS, where its stack timers are valid)
+    // and RESUME the incoming thread's (in the incoming AS).  A suspended
+    // (blocked) thread's earliest deadline is parked in identity memory here so
+    // a per-CPU identity kernel timer can still wake it on time.
+    osv::clock::uptime::time_point _parked_deadline;
+    bi::list_member_hook<> _parked_link;
+    bool _timers_parked = false;
 #endif
 public:
     void destroy();
@@ -1064,6 +1089,29 @@ struct cpu : private timer_base::client {
     thread* terminating_thread;
     osv::clock::uptime::time_point running_since;
     char* percpu_base;
+#if CONF_fork
+    // Fork timer-park (see thread::_parked_deadline).  A per-CPU identity kernel
+    // timer that fires at the earliest parked (suspended, blocked) thread's
+    // deadline and wakes every due parked thread, so a blocked fork-child thread
+    // whose real timer we removed from the per-CPU list still wakes on time.
+    // The parked list + the wakeup timer all live in identity (cpu/thread
+    // objects), never COW arena, so this handler never faults from IRQ context.
+    struct park_client : timer_base::client {
+        cpu *_cpu;
+        explicit park_client(cpu *c) : _cpu(c) {}
+        void timer_fired() override;
+    } park_timer_client{this};
+    timer_base park_wakeup_timer{park_timer_client};
+    bi::list<thread, bi::member_hook<thread, bi::list_member_hook<>, &thread::_parked_link>> parked_threads;
+    // Park an outgoing thread's timers (called with its AS still loaded).
+    void park_timers(thread& t);
+    // Unpark an incoming thread's timers (called with its AS loaded).
+    void unpark_timers(thread& t);
+    // Re-arm park_wakeup_timer to the earliest parked deadline.
+    void rearm_park_timer();
+    // park_wakeup_timer callback: wake all due parked threads.
+    void park_timer_fired();
+#endif
     static cpu* current();
     void init_on_cpu();
     static void schedule();
