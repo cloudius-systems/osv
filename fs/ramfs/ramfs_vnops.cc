@@ -366,6 +366,18 @@ ramfs_remove(struct vnode *dvp, struct vnode *vp, char *name)
 static int
 ramfs_enlarge_data_buffer(struct ramfs_node *np, size_t desired_length)
 {
+#if CONF_fork
+    // The segment data buffer and the segment-map node inserted below are
+    // SHARED filesystem state: a fork parent (postmaster) and its children
+    // (backends) read and write the SAME ramfs file.  If the buffer or the map
+    // node lived in the COW fork arena, a backend reading a file the postmaster
+    // (or another process) enlarged would see a divergent/empty segment map ->
+    // ramfs_read_or_write_file_data's lower_bound lands off the end and the
+    // uio_offset bounds assertion fails (the PG-on-OSv ramfs read crash).  Keep
+    // both on the identity kernel heap so every address space shares one file
+    // image, exactly like the ramfs node itself (ramfs_allocate_node).
+    fork_arena::kernel_heap_scope kh;
+#endif
     // New total size has to be at least greater by the ENLARGE_FACTOR
     auto new_total_segment_size = round_page(std::max<size_t>(np->rn_total_segments_size * ENLARGE_FACTOR, desired_length));
     assert(new_total_segment_size >= desired_length);
