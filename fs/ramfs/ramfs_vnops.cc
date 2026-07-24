@@ -45,6 +45,7 @@
 #include <osv/file.h>
 #include <osv/mount.h>
 #include <osv/vnode_attr.h>
+#include <osv/fork_arena.hh>
 
 #include "ramfs.h"
 
@@ -72,6 +73,14 @@ ramfs_allocate_node(const char *name, int type)
 {
     struct ramfs_node *np;
 
+    // A ramfs node is the in-memory inode: shared filesystem state inherited
+    // across fork().  Keep it (and its name + segment map) on the identity
+    // kernel heap, not the COW fork arena -- otherwise the child's first write
+    // to it (e.g. the rn_atime update set_times_to_now() does on every read)
+    // takes a COW write fault nested inside the page-fault handler (fatal).
+#if CONF_fork
+    fork_arena::kernel_heap_scope kh;
+#endif
     np = (ramfs_node *) malloc(sizeof(struct ramfs_node));
     if (np == NULL)
         return NULL;

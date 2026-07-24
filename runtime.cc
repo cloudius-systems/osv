@@ -224,8 +224,12 @@ int getpagesize()
 OSV_LIBC_API
 pid_t setsid(void)
 {
-    WARN_STUBBED();
-    return -1;
+    // OSv has no process groups / sessions (one unikernel process tree), so
+    // there is nothing to detach.  Returning -1 makes callers like PostgreSQL
+    // treat session creation as FATAL and abort; report success with a
+    // plausible non-negative session id instead so single-"session" apps
+    // proceed.
+    return 1;
 }
 
 NO_SYS(OSV_LIBC_API int execvp(const char *, char *const []));

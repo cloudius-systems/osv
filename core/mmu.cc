@@ -489,10 +489,20 @@ address_space *clone_address_space(address_space *parent)
     auto child = new address_space(virt_to_phys(child_pml4_page));
 
     // Snapshot of the parent's private VMAs, filled under the lock and turned
-    // into the child's anon_vma copies AFTER the lock is released (so no malloc
+    // into the child's vma copies AFTER the lock is released (so no malloc
     // runs under vmas_mutex).  Reserve generous capacity up front so the vector
     // never reallocates (mallocs) while the lock is held.
-    struct vma_snap { uintptr_t start, end; unsigned perm, flags; };
+    //
+    // We must preserve each parent vma's DYNAMIC TYPE.  A file_vma (e.g. the
+    // ELF loader's file-backed .text, created via map_file) must clone as a
+    // file_vma bound to the SAME file + offset, or the child's demand faults
+    // dispatch to the base zero-fill path and it executes zeros over its own
+    // .text (the fork COW-clone wild-branch bug).  So the snapshot captures,
+    // for file-backed vmas, a fileref (a refcount bump taken here under the
+    // lock, kept alive into the rebuild) and the file offset.  `file` is a
+    // null fileref for anon vmas.
+    struct vma_snap { uintptr_t start, end; unsigned perm, flags;
+                      fileref file; f_offset foffset; };
     std::vector<vma_snap> snap;
     // Pre-grown share/privatize range vectors: filled under the lock but never
     // reallocated there (all growth malloc happens up front, before the lock).
@@ -590,7 +600,19 @@ address_space *clone_address_space(address_space *parent)
             if (v.size() == 0) {
                 continue;
             }
-            snap.push_back({v.start(), v.end(), v.perm(), v.flags()});
+            // Preserve the dynamic type: for a file_vma, copy its fileref
+            // (bumps refcount under the lock -> stays alive into the rebuild)
+            // and file offset.  The intrusive_ptr copy is the only allocation
+            // here and it targets the pre-reserved snap storage, so it never
+            // faults under the lock.  Anon vmas store a null fileref.
+            auto *fv = dynamic_cast<file_vma *>(&v);
+            if (fv) {
+                snap.push_back({v.start(), v.end(), v.perm(), v.flags(),
+                                fv->file(), fv->offset()});
+            } else {
+                snap.push_back({v.start(), v.end(), v.perm(), v.flags(),
+                                fileref(), 0});
+            }
         }
     } // release vmas_mutex
 
@@ -603,13 +625,28 @@ address_space *clone_address_space(address_space *parent)
     // on all CPUs before the parent continues.
     mmu::flush_tlb_all();
 
-    // Build the child's vma_list from the snapshot -- these new anon_vma
+    // Build the child's vma_list from the snapshot -- these new vma
     // allocations are free to hit the malloc pool refill path without risking a
     // fork-time deadlock.  Each vma also goes into the child's OWN range set
     // (its edge markers were inserted by the child's vma_list ctor); the
     // allocation path (find_hole/allocate/evacuate) consults child->ranges.
+    //
+    // File-backed vmas clone as file_vma via the file's own mmap() -- the SAME
+    // call map_file and file_vma::split use -- so the child gets the correct
+    // page_allocator (map_file_page_read for MAP_PRIVATE, map_file_page_mmap
+    // for a cached/shared mapping) and its demand faults read the file instead
+    // of zero-filling.  The new file_vma holds its own fileref; the snapshot's
+    // fileref is released when `snap` is destroyed.  These file_vma allocations
+    // (and any page-cache reads they trigger later) run on the identity kernel
+    // heap via the `kh` scope above, keeping them off the COW arena.
     for (auto &s : snap) {
-        auto *nv = new anon_vma(addr_range(s.start, s.end), s.perm, s.flags);
+        vma *nv;
+        if (s.file) {
+            nv = s.file->mmap(addr_range(s.start, s.end), s.flags, s.perm,
+                              s.foffset).release();
+        } else {
+            nv = new anon_vma(addr_range(s.start, s.end), s.perm, s.flags);
+        }
         child->vmas->insert(*nv);
         WITH_LOCK(child->ranges_mutex->for_write()) {
             child->ranges->insert(vma_range(nv));
@@ -682,6 +719,14 @@ void destroy_address_space(address_space *as)
             free_child_pt_level<2>(phys_cast<pt_element<2>>(e3.next_pt_addr()));
         }
         memory::free_page(phys_to_virt(pml4_phys));
+    }
+    // Dispose the child's own vma objects (the snapshot copies built in
+    // clone_address_space, plus the vma_list edge markers).  ~vma is a no-op
+    // for the base/anon case; for a file_vma it deletes the page_allocator and
+    // releases the fileref this child took -- so the file-backed clone doesn't
+    // leak its file reference.  ~vma touches no global list, so this is safe.
+    if (as->owned_vmas) {
+        as->owned_vmas->clear_and_dispose([](vma *v) { delete v; });
     }
     delete as;
     live_child_address_spaces.fetch_sub(1, std::memory_order_relaxed);

@@ -40,6 +40,7 @@
 
 #include <osv/dentry.h>
 #include <osv/vnode.h>
+#include <osv/fork_arena.hh>
 #include "vfs.h"
 
 #define DENTRY_BUCKETS 32
@@ -70,6 +71,12 @@ struct dentry *
 dentry_alloc(struct dentry *parent_dp, struct vnode *vp, const char *path)
 {
     struct mount *mp = vp->v_mount;
+    // A dentry is shared filesystem cache infrastructure inherited across
+    // fork(); keep it off the COW fork arena (see the note in vget) so the
+    // child never COW-faults on it while servicing a demand fault.
+#if CONF_fork
+    fork_arena::kernel_heap_scope kh;
+#endif
     struct dentry *dp = (dentry*)calloc(sizeof(*dp), 1);
 
     if (!dp) {
