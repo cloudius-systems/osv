@@ -728,6 +728,10 @@ void destroy_address_space(address_space *as)
     if (as->owned_vmas) {
         as->owned_vmas->clear_and_dispose([](vma *v) { delete v; });
     }
+    // Reclaim this child's per-AS fork-arena free-list slot before the AS
+    // object is freed, so the slot (keyed by this address_space*) can be reused
+    // by a later fork child.
+    fork_arena::release_as(as);
     delete as;
     live_child_address_spaces.fetch_sub(1, std::memory_order_relaxed);
 }

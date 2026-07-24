@@ -14,6 +14,7 @@
 #include <osv/mmu-defs.hh>
 #include <osv/align.hh>
 #include <osv/debug.hh>
+#include <osv/spinlock.h>
 #include <atomic>
 #include <cstring>
 
@@ -53,18 +54,81 @@ constexpr uint32_t chunk_magic = 0x464b4152;   // "FKAR"
 constexpr size_t header_size = 32;             // >= sizeof(chunk_header), keeps 16/32-align
 
 // --- all state below is kernel BSS, never in arena pages ---
-// Lock-free (no preemption disabled, no sleeping lock): the arena's freelist
-// heads are Treiber stacks and the bump pointer is an atomic.  This is the
-// crucial correctness property for fork: an arena chunk may be a copy-on-write
-// page after fork, so writing its freelist link (in free()) can trigger a COW
-// page fault -- which OSv only permits when preemption AND interrupts are
-// enabled.  A spinlock (preemption off) or a caller that already holds
-// preempt_lock would make that fault illegal (assert in page_fault).  With no
-// lock held here, the COW fault is always serviced legally.
-std::atomic<free_node*> g_freelist[num_classes];
+//
+// The bump pointer is a single GLOBAL atomic: it carves each fresh chunk a VA
+// that is unique across EVERY address space, so a bump-allocated chunk is never
+// double-owned.  That is correct to share.
+//
+// The free-lists are PER-ADDRESS-SPACE, NOT global.  This is load-bearing for
+// fork correctness.  An arena chunk is COW-PRIVATE per child after fork: the
+// same VA holds a different physical page in the parent and in each child.  A
+// free-list whose HEAD lives in shared kernel BSS but whose `next` LINKS live
+// inside those COW-private chunks is incoherent across the fork boundary: two
+// address spaces sharing one head pop the same chunk and read its `next` from
+// their OWN divergent copy, so one side recycles (and overwrites with fresh
+// application data) a chunk the other still holds live.  PostgreSQL hit this
+// as a memory-context block list whose `next` had been clobbered with a path
+// string ("...pid...") by another process, then SIGSEGV'd walking it in
+// AllocSetReset.  Keying the free-list on the current address_space keeps each
+// process's recycling inside its own COW domain: a chunk freed by one process
+// is only ever re-handed to that same process, whose links stay self-coherent.
+//
+// Each per-AS free-list head is still a lock-free Treiber stack, so the COW
+// page fault that writing a chunk's link may trigger is serviced with no lock
+// held and preemption on (the original correctness property is preserved).
 std::atomic<bool> g_ready{false};
-std::atomic<uintptr_t> g_bump{0};   // next never-yet-carved VA
+std::atomic<uintptr_t> g_bump{0};   // next never-yet-carved VA (GLOBAL: unique VA)
 uintptr_t g_end = 0;                // arena_base + arena_size
+
+// Per-address-space free-list state.  Keyed by the opaque address_space* the
+// current thread runs in (mmu::current_address_space()).  A small fixed table
+// with linear probing: the concurrent-process count is modest (postmaster +
+// its backends/aux), and if it ever fills, that address space simply runs
+// bump-only (no recycling) -- correct, just less space-efficient.  Slot
+// acquisition takes a brief spinlock; the per-AS freelist ops themselves stay
+// lock-free.  A slot is reclaimed when its address space is destroyed
+// (release_as(), called from mmu::destroy_address_space).
+struct as_freelist {
+    std::atomic<void*>      owner{nullptr};   // address_space* key, null == free slot
+    std::atomic<free_node*> heads[num_classes];
+};
+constexpr unsigned max_as_slots = 256;
+as_freelist g_as_freelists[max_as_slots];
+spinlock g_slot_lock;   // guards slot acquisition only (rare: once per AS)
+
+// Find (or create) the free-list slot for address space @as.  Returns nullptr
+// only if the table is full (caller then runs bump-only).
+as_freelist *slot_for(void *as)
+{
+    // ponytail: O(max_as_slots) linear scan per alloc/free; owners pack from
+    // index 0 so the common case is a short scan. Swap for a hash keyed on
+    // (address_space*) if the process count ever makes this measurable.
+    // Fast path: already-claimed slot, no lock.
+    for (unsigned i = 0; i < max_as_slots; i++) {
+        if (g_as_freelists[i].owner.load(std::memory_order_acquire) == as) {
+            return &g_as_freelists[i];
+        }
+    }
+    // Slow path: claim a free slot under the spinlock.  Re-scan under the lock
+    // (another thread may have just claimed one for the same AS).
+    SCOPE_LOCK(g_slot_lock);
+    for (unsigned i = 0; i < max_as_slots; i++) {
+        if (g_as_freelists[i].owner.load(std::memory_order_relaxed) == as) {
+            return &g_as_freelists[i];
+        }
+    }
+    for (unsigned i = 0; i < max_as_slots; i++) {
+        void *expect = nullptr;
+        if (g_as_freelists[i].owner.compare_exchange_strong(
+                expect, as, std::memory_order_acq_rel)) {
+            for (unsigned c = 0; c < num_classes; c++) {
+                g_as_freelists[i].heads[c].store(nullptr, std::memory_order_relaxed);
+            }
+            return &g_as_freelists[i];
+        }
+    }
+    return nullptr;   // table full: bump-only for this AS
+}
 
 unsigned class_for(size_t total)
 {
@@ -137,18 +201,25 @@ void *alloc(size_t size, size_t alignment)
     unsigned idx = s - min_class_shift;
     size_t class_size = size_t(1) << s;
 
+    // Per-address-space free-list: recycle only within this process's own COW
+    // domain (see the note on as_freelist).  If the slot table is full, this AS
+    // runs bump-only.
+    as_freelist *fl = slot_for(mmu::current_address_space());
+
     void *chunk = nullptr;
-    // Lock-free pop from the size class's Treiber stack.  Reading head->next
-    // touches an arena page (a previously-freed chunk); that page is already
-    // faulted in (it was allocated once), and we hold no lock, so a COW read is
-    // fine.  Preemption stays on throughout: no illegal fault window.
-    free_node *head = g_freelist[idx].load(std::memory_order_acquire);
-    while (head) {
-        free_node *next = head->next;
-        if (g_freelist[idx].compare_exchange_weak(head, next,
-                std::memory_order_acq_rel, std::memory_order_acquire)) {
-            chunk = head;
-            break;
+    // Lock-free pop from THIS AS's size-class Treiber stack.  Reading
+    // head->next touches an arena page (a previously-freed chunk of THIS AS);
+    // that page is already faulted in and COW-private to this AS, we hold no
+    // lock, so a COW read is fine.  Preemption stays on: no illegal fault.
+    if (fl) {
+        free_node *head = fl->heads[idx].load(std::memory_order_acquire);
+        while (head) {
+            free_node *next = head->next;
+            if (fl->heads[idx].compare_exchange_weak(head, next,
+                    std::memory_order_acq_rel, std::memory_order_acquire)) {
+                chunk = head;
+                break;
+            }
         }
     }
     if (!chunk) {
@@ -196,13 +267,21 @@ void free(void *p)
     recover(p, base, s);   // reads header (populated page), no lock, no fault
     unsigned idx = s - min_class_shift;
     auto *n = reinterpret_cast<free_node*>(base);
+    // Push onto THIS address space's free-list.  If the slot table is full,
+    // drop the chunk (it leaks arena VA but is never mis-recycled across the
+    // COW boundary -- correctness over the space of a full table).
+    as_freelist *fl = slot_for(mmu::current_address_space());
+    if (!fl) {
+        return;
+    }
     // Lock-free Treiber push.  Writing n->next touches the chunk page, which
-    // after fork may be copy-on-write: with no lock held and preemption on, the
-    // resulting COW page fault is legal (OSv forbids faulting non-preemptable).
-    free_node *head = g_freelist[idx].load(std::memory_order_relaxed);
+    // after fork is copy-on-write and COW-private to THIS AS: with no lock held
+    // and preemption on, the resulting COW page fault is legal (OSv forbids
+    // faulting non-preemptable).
+    free_node *head = fl->heads[idx].load(std::memory_order_relaxed);
     do {
         n->next = head;
-    } while (!g_freelist[idx].compare_exchange_weak(head, n,
+    } while (!fl->heads[idx].compare_exchange_weak(head, n,
                  std::memory_order_release, std::memory_order_relaxed));
 }
 
@@ -215,6 +294,29 @@ size_t usable_size(void *p)
     uintptr_t user = reinterpret_cast<uintptr_t>(p);
     // Usable bytes = from user pointer to end of the chunk.
     return class_size - (user - base);
+}
+
+void release_as(void *as)
+{
+    // Called from mmu::destroy_address_space when a fork child's address space
+    // is torn down.  Drop the child's free-list slot so it can be reused by a
+    // later process, and drop its recycled chunks (their VA is COW-private to
+    // the dying AS and its physical pages are freed with the page tables, so
+    // nothing here dereferences the child's now-gone memory -- we only clear
+    // the shared BSS slot).  No teardown needed for the shared bump pointer.
+    if (!g_ready.load(std::memory_order_acquire)) {
+        return;
+    }
+    SCOPE_LOCK(g_slot_lock);
+    for (unsigned i = 0; i < max_as_slots; i++) {
+        if (g_as_freelists[i].owner.load(std::memory_order_relaxed) == as) {
+            for (unsigned c = 0; c < num_classes; c++) {
+                g_as_freelists[i].heads[c].store(nullptr, std::memory_order_relaxed);
+            }
+            g_as_freelists[i].owner.store(nullptr, std::memory_order_release);
+            return;
+        }
+    }
 }
 
 } // namespace fork_arena
