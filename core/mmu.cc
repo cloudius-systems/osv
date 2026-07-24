@@ -1992,6 +1992,18 @@ void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
     bool search = !(flags & mmap_fixed);
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
+#if CONF_fork
+    // The vma object is inserted into THIS address space's owned_vmas and later
+    // disposed by destroy_address_space() -- which runs on the REAPER thread in
+    // AS0, not in this child's AS.  If the vma lived in the child's COW fork
+    // arena (arena_base 0x3000..), its VA is not mapped in the reaper's AS, so
+    // the reaper's intrusive-list walk (clear_and_dispose) dereferences an
+    // unmapped/garbage pointer -> null-deref fault in destroy_address_space.
+    // Force the vma onto the shared identity kernel heap, exactly like the
+    // clone-path vmas built in clone_address_space (which are already under a
+    // kernel_heap_scope for the same reason).
+    fork_arena::kernel_heap_scope kh;
+#endif
     auto* vma = new mmu::anon_vma(addr_range(start, start + size), perm, flags);
     PREVENT_STACK_PAGE_FAULT
     SCOPE_LOCK(cur_vma_list_mutex().for_write());
@@ -2027,6 +2039,12 @@ void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
     bool search = !(flags & mmu::mmap_fixed);
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
+#if CONF_fork
+    // Same rule as map_anon: the file_vma (and its map_file_page_* allocator)
+    // is disposed cross-AS by destroy_address_space() on the reaper thread, so
+    // it must live on the shared identity heap, not the child's COW arena.
+    fork_arena::kernel_heap_scope kh;
+#endif
     auto *vma = f->mmap(addr_range(start, start + size), flags | mmap_file, perm, offset).release();
     void *v;
     PREVENT_STACK_PAGE_FAULT
@@ -2736,6 +2754,17 @@ void* shm_file::page(uintptr_t hp_off)
         if (!addr)
             throw make_error(ENOMEM);
         memset(addr, 0, huge_page_size);
+#if CONF_fork
+        // _pages tracks the physical huge pages backing this shared segment.
+        // The shm_file itself is on the identity heap (make_file), but this map
+        // node is allocated here on the FAULTING app thread -- which would land
+        // in the COW fork arena, giving each process a private _pages copy.  A
+        // second process faulting the SAME MAP_SHARED offset would then miss the
+        // existing page and allocate a DIFFERENT physical page, breaking the
+        // cross-fork coherence MAP_SHARED (and PG's DSM) requires.  Force the
+        // node onto the identity heap so all address spaces share one _pages.
+        fork_arena::kernel_heap_scope kh;
+#endif
         _pages.emplace(hp_off, addr);
     } else {
         addr = p->second;

@@ -213,6 +213,18 @@ void thread::init_stack()
         stack.size = CONF_threads_default_kernel_stack_size;
     }
     if (!stack.begin) {
+#if CONF_fork
+        // The kernel thread stack must live in the identity kernel heap, never
+        // the COW fork arena: OSv runs kernel code (incl. context switches with
+        // preemption/irqs off) on it, where a COW write fault is illegal, and
+        // the thread REAPER frees it from AS0 in ~thread -> stack.deleter ->
+        // free(begin).  An arena-resident stack has a VA that is COW-private to
+        // the forked child and unmapped/divergent in the reaper's AS, so the
+        // reaper's free() faults on an arena address (0x3000..) -> page fault in
+        // ~thread.  Force it onto the shared identity heap, like the TCB/TLS and
+        // syscall stacks below.
+        fork_arena::kernel_heap_scope kh;
+#endif
         stack.begin = malloc(stack.size);
         stack.deleter = stack.default_deleter;
     } else {
