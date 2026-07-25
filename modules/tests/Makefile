@@ -271,6 +271,7 @@ tests += tst-execve.so
 tests += payload-exit7.so
 tests += tst-fork-cow.so
 tests += tst-fork-deep.so
+tests += tst-fork-file-mmap.so
 internal-api-tests += tst-random-flush.so
 tests += tst-umount-release.so
 internal-api-tests += tst-umount-release.so
