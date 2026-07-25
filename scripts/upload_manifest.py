@@ -174,7 +174,24 @@ def main():
         console = '--console=serial'
         zfs_builder_name = 'zfs_builder-stripped.elf'
 
-    osv = subprocess.Popen('cd ../..; scripts/run.py -k --kernel-path build/last/%s --arch=%s --vnc none -m 512 -c1 -i "%s" --block-device-cache writeback -s -e "%s --norandom --nomount --noinit --preload-zfs-library /tools/mkfs.so; /tools/cpiod.so --prefix /zfs/; /zfs.so set compression=off osv; /zpool.so export osv" --forward tcp:127.0.0.1:%s-:10000' % (zfs_builder_name,arch,image_path,console,upload_port), shell=True, stdout=subprocess.PIPE)
+    # Drain the pool before exporting it.  The zfs_builder's libzfs keeps an
+    # empty /etc/mnttab (OSv's mount shim never populates it), so
+    # "zpool export"'s own zpool_disable_datasets() finds no mounts to unmount
+    # and the kernel then refuses the export with EBUSY ("pool is busy")
+    # because the auto-mounted datasets still hold the objsets.  Unmount the
+    # datasets explicitly by mountpoint (children first) with the OSv-native
+    # /tools/umount.so, which calls umount(2) -> VFS_UNMOUNT -> the real
+    # zfs_umount -> dmu_objset_disown, dropping the spa refcount to zero so the
+    # export succeeds cleanly.  (We cannot use "zfs unmount" here: the bsd
+    # zfs.so command needs statfs2mnttab, which the builder image does not
+    # provide.)  Commands are ';'-separated and run independently, so a
+    # spurious unmount does not abort the chain.
+    zfs_builder_cmd = ('%s --norandom --nomount --noinit --preload-zfs-library '
+        '/tools/mkfs.so; /tools/cpiod.so --prefix /zfs/; '
+        '/zfs.so set compression=off osv; '
+        '/tools/umount.so /zfs/zfs; /tools/umount.so /zfs; '
+        '/zpool.so export osv') % console
+    osv = subprocess.Popen('cd ../..; scripts/run.py -k --kernel-path build/last/%s --arch=%s --vnc none -m 512 -c1 -i "%s" --block-device-cache writeback -s -e "%s" --forward tcp:127.0.0.1:%s-:10000' % (zfs_builder_name,arch,image_path,zfs_builder_cmd,upload_port), shell=True, stdout=subprocess.PIPE)
 
     upload(osv, manifest, depends, upload_port)
 
