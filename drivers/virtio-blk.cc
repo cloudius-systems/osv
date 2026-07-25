@@ -47,6 +47,10 @@ TRACEPOINT(trace_virtio_blk_make_request_readonly, "write on readonly device");
 TRACEPOINT(trace_virtio_blk_wake, "");
 TRACEPOINT(trace_virtio_blk_strategy, "write=%u, offset=%lu, bcount=%lu", bool, off_t, size_t);
 TRACEPOINT(trace_virtio_blk_strategy_ret, "%d", int);
+volatile unsigned long g_blk_submitted = 0;
+volatile unsigned long g_blk_completed = 0;
+volatile unsigned long g_blk_wr_submitted = 0;
+volatile unsigned long g_blk_wr_completed = 0;
 TRACEPOINT(trace_virtio_blk_req_ok, "bio=%p, sector=%lu, len=%lu, type=%x", struct bio*, u64, size_t, u32);
 TRACEPOINT(trace_virtio_blk_req_unsupp, "bio=%p, sector=%lu, len=%lu, type=%x", struct bio*, u64, size_t, u32);
 TRACEPOINT(trace_virtio_blk_req_err, "bio=%p, sector=%lu, len=%lu, type=%x", struct bio*, u64, size_t, u32);
@@ -303,6 +307,8 @@ int blk::drain_queue(vring* queue)
     blk_req* req;
 
     while ((req = static_cast<blk_req*>(queue->get_buf_elem(&len))) != nullptr) {
+        g_blk_completed++;
+        if (req->hdr.type == VIRTIO_BLK_T_OUT) g_blk_wr_completed++;
         if (req->bio) {
             switch (req->res.status) {
             case VIRTIO_BLK_S_OK:
@@ -490,6 +496,8 @@ int blk::make_request(struct bio* bio)
         queue->add_in_sg(&req->res, sizeof (struct blk_res));
 
         queue->add_buf_wait(req);
+        g_blk_submitted++;
+        if (type == VIRTIO_BLK_T_OUT) g_blk_wr_submitted++;
 
         queue->kick();
 
