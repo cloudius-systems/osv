@@ -16,6 +16,10 @@
 
 #include <osv/mempool.hh>
 #include <osv/mmu.hh>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 
 #include <string>
 #include <string.h>
@@ -454,7 +458,14 @@ int blk::make_request(struct bio* bio)
             }
         }
 
+#if CONF_fork
+        // Freed cross-AS by the blk completion thread (req_done/drain_queue in
+        // AS0); keep it on the identity kernel heap so free() works from any AS.
+        blk_req* req;
+        { fork_arena::kernel_heap_scope _blk_kh; req = new blk_req(bio); }
+#else
         auto* req = new blk_req(bio);
+#endif
         blk_outhdr* hdr = &req->hdr;
         hdr->type = type;
         hdr->ioprio = 0;
