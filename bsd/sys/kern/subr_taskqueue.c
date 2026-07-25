@@ -40,6 +40,32 @@
 
 #include <osv/export.h>
 
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+/*
+ * [fork-stack / CONF_fork] A ZFS taskqueue (struct taskqueue + its tq_mutex,
+ * tq_queue list heads and tq_threads array) is SHARED kernel infrastructure:
+ * the AS0 txg_sync / zio pipeline threads take tq_mutex and splice tasks onto
+ * tq_queue while forked application backends (PostgreSQL) enqueue onto the
+ * SAME taskqueue.  If the taskqueue is allocated from the default fork COW
+ * arena (std_malloc routes app-context allocations there), the page is
+ * write-protected COW in AS0 after the first fork(); an AS0 sync thread's
+ * mtx_lock(&tq->tq_mutex) then takes a COW WRITE fault that must grab the
+ * kernel vma_list_mutex for write -- deadlocking against a forked backend that
+ * holds it for read across a demand fault.  Route taskqueue allocations onto
+ * the identity kernel heap so they are one physical object shared by every
+ * address space (never COW).  Single-process OpenZFS is unaffected (no fork,
+ * no COW), so this is purely a fork-coherence fix.
+ */
+extern void fork_kernel_heap_push(void);
+extern void fork_kernel_heap_pop(void);
+#define TQ_KHEAP_PUSH() fork_kernel_heap_push()
+#define TQ_KHEAP_POP()  fork_kernel_heap_pop()
+#else
+#define TQ_KHEAP_PUSH() do {} while (0)
+#define TQ_KHEAP_POP()  do {} while (0)
+#endif
+
 struct taskqueue_busy {
 	struct task	*tb_running;
 	TAILQ_ENTRY(taskqueue_busy) tb_link;
@@ -100,7 +126,9 @@ _taskqueue_create(const char *name, int mflags,
 {
 	struct taskqueue *queue;
 
+	TQ_KHEAP_PUSH();
 	queue = calloc(1, sizeof(struct taskqueue));
+	TQ_KHEAP_POP();
 	if (!queue)
 		return NULL;
 
@@ -417,7 +445,9 @@ taskqueue_start_threads(struct taskqueue **tqp, int count, int pri,
 	vsnprintf(ktname, sizeof(ktname), name, ap);
 	va_end(ap);
 
+	TQ_KHEAP_PUSH();
 	tq->tq_threads = calloc(count, sizeof(struct thread *));
+	TQ_KHEAP_POP();
 	if (tq->tq_threads == NULL) {
 		printf("%s: no memory for %s threads\n", __func__, ktname);
 		return (ENOMEM);
