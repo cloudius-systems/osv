@@ -900,6 +900,16 @@ private:
     osv::clock::uptime::time_point _parked_deadline;
     bi::list_member_hook<> _parked_link;
     bool _timers_parked = false;
+    // The cpu whose parked_threads list currently holds _parked_link (nullptr
+    // when not linked).  The per-CPU parked list is NOT migration-coherent by
+    // itself: a parked (blocked/preempted) thread can be migrated to another
+    // cpu (load_balance, thread::pin) while still linked on its SOURCE cpu's
+    // list.  Recording the owning cpu lets every erase (unpark/complete) target
+    // the RIGHT list, and every migration point (all of which run ON the source
+    // cpu) unlink it there before the thread can run/park elsewhere -- so
+    // park_timers never push_back()s a still-linked node (the intrusive-list
+    // safe-link double-insert assert) and no erase touches a foreign cpu's list.
+    cpu *_parked_cpu = nullptr;
 #endif
 public:
     void destroy();
@@ -1107,6 +1117,12 @@ struct cpu : private timer_base::client {
     void park_timers(thread& t);
     // Unpark an incoming thread's timers (called with its AS loaded).
     void unpark_timers(thread& t);
+    // Drop a thread from ITS parked list (t._parked_cpu->parked_threads) without
+    // resuming its timers -- for the migration paths, which run on the source
+    // cpu (== t._parked_cpu) and re-wake the thread themselves.  Keeps
+    // _timers_parked set so the AS-local resume still happens on switch-in.
+    // No-op if the thread is not currently linked on any parked list.
+    static void unlink_parked(thread& t);
     // Re-arm park_wakeup_timer to the earliest parked deadline.
     void rearm_park_timer();
     // park_wakeup_timer callback: wake all due parked threads.
