@@ -22,6 +22,7 @@
 #include <osv/file.h>
 #include <osv/kernel_config_fork.h>
 #include <osv/fork_arena.hh>
+#include <osv/pid.h>
 #include "../libc.hh"
 #include "../signal.hh"   // nsignals, signal_actions (per-child sig table)
 
@@ -67,6 +68,25 @@ mutex g_lock;
 condvar g_cv;
 // child pid -> state
 std::unordered_map<pid_t, std::shared_ptr<child_state>> g_children;
+
+// ---- fork per-process pid identity ---------------------------------------
+//
+// OSv normally reports one pid (OSV_PID) for the whole unikernel.  That breaks
+// any forking app that identifies its "processes" by pid -- most importantly
+// PostgreSQL's latch layer: every backend sets MyProcPid = getpid(), and
+// SetLatch(other_backend_latch) compares the latch's owner_pid to MyProcPid to
+// decide LOCAL wakeup (own self-pipe) vs CROSS-process wakeup
+// (kill(owner_pid, SIGURG) -> the target's SIGURG handler pokes ITS self-pipe).
+// With one shared pid every backend sees owner_pid == MyProcPid, so a
+// cross-backend SetLatch takes the LOCAL path and pokes the caller's own pipe
+// -- the waiting backend is never woken and a lock wait wedges forever (0 tps,
+// no failure).  So each fork child gets a DISTINCT pid (its child thread id,
+// exactly what fork() returned to the parent), keyed by its address space; the
+// top-level app keeps OSV_PID.  Kept on the identity kernel heap (cross-AS
+// bookkeeping walked by the parent, children and the SIGURG kill router).
+mutex g_pid_lock;
+std::unordered_map<mmu::address_space *, pid_t> g_as_pid;   // child AS  -> pid
+std::unordered_map<pid_t, mmu::address_space *> g_pid_as;   // child pid -> AS
 
 // ---- fork fd-inheritance -------------------------------------------------
 //
@@ -306,6 +326,23 @@ extern "C" struct sigaction *fork_child_signal_actions()
     return it->second->actions;
 }
 
+// The signal_actions[] table of a SPECIFIC fork-child address space (nullptr
+// if @child_as has none / is the top-level app).  Used by kill() to read the
+// TARGET backend's handler when routing a cross-backend signal (the SIGURG
+// that wakes another backend's latch) into that backend's context.
+extern "C" struct sigaction *fork_child_signal_actions_for(mmu::address_space *child_as)
+{
+    if (!child_as || child_as == mmu::kernel_address_space()) {
+        return nullptr;
+    }
+    SCOPE_LOCK(g_sig_lock);
+    auto it = g_child_sigtables.find(child_as);
+    if (it == g_child_sigtables.end()) {
+        return nullptr;
+    }
+    return it->second->actions;
+}
+
 // Give @child_as its own copy of the signal dispositions, seeded from the
 // parent's table so the child inherits them (POSIX).  Called from fork().
 extern "C" void fork_init_child_signal_actions(mmu::address_space *child_as,
@@ -360,6 +397,46 @@ void register_child(pid_t child_pid, pid_t parent_pid)
     auto st = std::make_shared<child_state>();
     st->parent_pid = parent_pid;
     g_children[child_pid] = st;
+}
+
+void register_pid(pid_t pid, mmu::address_space *as)
+{
+    fork_arena::kernel_heap_scope kh;
+    SCOPE_LOCK(g_pid_lock);
+    g_as_pid[as] = pid;
+    g_pid_as[pid] = as;
+}
+
+void unregister_pid(pid_t pid, mmu::address_space *as)
+{
+    fork_arena::kernel_heap_scope kh;
+    SCOPE_LOCK(g_pid_lock);
+    g_as_pid.erase(as);
+    g_pid_as.erase(pid);
+}
+
+// The pid of the "process" the current thread belongs to: a fork child's
+// distinct pid, or OSV_PID for the top-level app / kernel (AS0).  getpid()
+// routes here so a forked PostgreSQL backend reports a stable, unique pid
+// (its MyProcPid) that other backends can target with kill(pid, SIGURG).
+pid_t pid_for_current()
+{
+    auto *as = mmu::current_address_space();
+    if (!as || as == mmu::kernel_address_space()) {
+        return OSV_PID;
+    }
+    SCOPE_LOCK(g_pid_lock);
+    auto it = g_as_pid.find(as);
+    return it != g_as_pid.end() ? it->second : OSV_PID;
+}
+
+// The address space of the live fork child with pid @pid, or nullptr if @pid is
+// not a live fork child (unknown pid, or the top-level app).
+mmu::address_space *as_for_pid(pid_t pid)
+{
+    SCOPE_LOCK(g_pid_lock);
+    auto it = g_pid_as.find(pid);
+    return it != g_pid_as.end() ? it->second : nullptr;
 }
 
 void child_exited(pid_t child_pid, int status)
@@ -504,6 +581,11 @@ pid_t fork(void)
     // Register the child BEFORE starting it so a fast child->exit cannot race
     // ahead of the parent's bookkeeping.
     fork::register_child(cpid, parent);
+    // Map the child's pid <-> its address space so getpid() reports this
+    // child's distinct pid, and so kill(cpid, SIGURG) can route the latch
+    // -wakeup handler into THIS child's address space (where its self-pipe fd
+    // resolves).
+    fork::register_pid(cpid, child_as);
 
     // The cleanup closure (a std::function, heap-allocated) is stored in the
     // thread object and invoked by the reaper (a kernel thread, AS0); keep it
@@ -521,6 +603,7 @@ pid_t fork(void)
     // _terminated, and OSv hangs at shutdown instead of powering off.
     child->set_cleanup([cpid, stack_to_free, child, child_as] {
         fork::child_exited(cpid, 0);
+        fork::unregister_pid(cpid, child_as);
         if (stack_to_free) {
             free(stack_to_free);
         }

@@ -312,7 +312,21 @@ LFS64(posix_fallocate) __attribute__((nothrow));
 OSV_LIBC_API
 int getpid()
 {
+#if CONF_fork
+    // Under fork(), each child "process" reports its own distinct pid (the
+    // child pid fork() returned to the parent), so pid-keyed IPC works -- most
+    // importantly PostgreSQL's cross-backend latch wakeup, which compares a
+    // latch's owner_pid to getpid() to choose local (own self-pipe) vs
+    // cross-process wakeup (kill(owner_pid, SIGURG) -> the target's SIGURG
+    // handler pokes ITS self-pipe).  With one shared pid every backend sees
+    // owner_pid == MyProcPid, so a cross-backend SetLatch takes the LOCAL path
+    // and pokes the caller's own pipe -- the waiting backend is never woken and
+    // a heavyweight-lock wait wedges forever (0 tps, no failure).  The
+    // top-level app / kernel (AS0) still reports OSV_PID.
+    return osv::fork::pid_for_current();
+#else
     return OSV_PID;
+#endif
 }
 
 //    WCTDEF(alnum), WCTDEF(alpha), WCTDEF(blank), WCTDEF(cntrl),

@@ -24,6 +24,7 @@
 
 #include <osv/debug.hh>
 #include <osv/export.h>
+#include <osv/fork_arena.hh>
 #include <unordered_map>
 #include <boost/range/algorithm/find.hpp>
 #include <algorithm>
@@ -58,6 +59,26 @@ inline uint32_t events_poll_to_epoll(uint32_t e)
     assert (!(e & ~POLL_OUTPUTS));
     return e;
 }
+
+#if CONF_fork
+// An epoll_file is shared kernel infrastructure created on the identity heap
+// (make_file wraps its ctor, incl. the 512-slot _activity_ring, in a
+// kernel_heap_scope).  Its RUNTIME containers -- `map` (the registered fds) and
+// `_activity` (ready fds) -- however grow their nodes on whichever thread runs
+// epoll_ctl/epoll_wait/a poll waker.  Under fork that thread may be a child
+// backend whose allocations land in the COW fork arena, giving each address
+// space a PRIVATE copy of the node.  The file is RCU-reclaimed by the quiescent
+// -state thread in AS0, whose ~epoll_file() then frees those child-arena nodes
+// -- but an arena chunk written by a child is garbage in AS0's view, so
+// fork_arena::free() trips its chunk-magic assert and aborts the whole VM
+// (seen under sustained concurrent epoll load).  Force every `map`/`_activity`
+// node allocation onto the identity kernel heap so all address spaces share ONE
+// coherent set of nodes, freeable from AS0 -- the same rule as struct file,
+// f_epolls and thread objects.  KH() is a no-op in a non-fork build.
+#define EPOLL_KH() fork_arena::kernel_heap_scope _epoll_kh
+#else
+#define EPOLL_KH() do {} while (0)
+#endif
 
 class epoll_file final : public special_file {
 
@@ -95,6 +116,7 @@ public:
             if (map.count(key)) {
                 return EEXIST;
             }
+            EPOLL_KH();
             map.emplace(key, *event);
             fp->epoll_add({ this, key});
         }
@@ -155,12 +177,17 @@ public:
                 flush_activity_ring();
                 // We need to drop _activity_lock and take f_lock in process_activity(),
                 // so move _activity to local storage for processing.
-                auto activity = std::move(_activity);
+                std::unordered_set<epoll_key> activity;
+                {
+                    EPOLL_KH();
+                    activity = std::move(_activity);
+                }
                 assert(_activity.empty());
                 DROP_LOCK(_activity_lock) {
                     nr = process_activity(activity, events, maxevents);
                 }
                 // move back !EPOLLET back to main storage
+                EPOLL_KH();
                 if (_activity.empty()) {
                     // nothing happened, move entire set back in
                     _activity = std::move(activity);
@@ -216,6 +243,7 @@ public:
         return nr;
     }
     void flush_activity_ring() {
+        EPOLL_KH();
         epoll_key ep;
         while (_activity_ring.pop(ep)) {
             _activity.insert(ep);
@@ -237,6 +265,7 @@ public:
             return;
         }
         WITH_LOCK(_activity_lock) {
+            EPOLL_KH();
             auto ins = _activity.insert(key);
             if (ins.second) {
                 _waiters.wake_all(_activity_lock);

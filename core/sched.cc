@@ -769,6 +769,12 @@ void thread::pin(thread *t, cpu *target_cpu)
             case status::waking:
                 trace_sched_migrate(t, target_cpu->id);
                 t->stat_migrations.incr();
+#if CONF_fork
+                // Migrating a possibly-parked thread: unlink it from its
+                // (source == this) cpu's parked list first, so it never stays
+                // linked on a foreign cpu's list after the move.
+                cpu::unlink_parked(*t);
+#endif
                 t->suspend_timers();
                 t->_runtime.export_runtime();
                 t->_detached_state->_cpu = target_cpu;
@@ -785,6 +791,9 @@ void thread::pin(thread *t, cpu *target_cpu)
                 current_cpu->runqueue.erase(current_cpu->runqueue.iterator_to(*t));
                 trace_sched_migrate(t, target_cpu->id);
                 t->stat_migrations.incr();
+#if CONF_fork
+                cpu::unlink_parked(*t);
+#endif
                 t->suspend_timers();
                 t->_runtime.export_runtime();
                 t->_detached_state->_cpu = target_cpu;
@@ -885,6 +894,13 @@ void cpu::load_balance()
             // we won't race with wake(), since we're not thread::waiting
             assert(mig._detached_state->st.load() == thread::status::queued);
             mig._detached_state->st.store(thread::status::waking);
+#if CONF_fork
+            // A preempted (queued) app thread may be parked on THIS cpu's list
+            // (park_timers runs on every app-thread switch-out).  Unlink it
+            // here, on its owning (source) cpu, before it migrates to `min`, so
+            // it is never left linked on a foreign cpu's parked list.
+            cpu::unlink_parked(mig);
+#endif
             mig.suspend_timers();
             mig._detached_state->_cpu = min;
             // Convert the CPU-local runtime measure to a globally meaningful
@@ -1521,16 +1537,22 @@ void thread::complete()
     run_exit_notifiers();
 #if CONF_fork
     // If this thread was parked (its app-stack timers removed from the per-CPU
-    // list and it is linked on cpu::parked_threads), drop it from the parked
-    // list now -- while it still runs on its own cpu in its own address space.
-    // Otherwise the reaper would later destroy it with a live _parked_link, and
-    // the next rearm_park_timer() walk would dereference a freed thread.  Its
-    // timers are all being torn down anyway, so no wakeup is lost.
-    if (_timers_parked) {
-        auto *c = _detached_state->_cpu;
+    // list and it is linked on some cpu::parked_threads), drop it from the
+    // parked list now -- while it still runs on its own cpu in its own address
+    // space.  Otherwise the reaper would later destroy it with a live
+    // _parked_link, and the next rearm_park_timer() walk would dereference a
+    // freed thread.  Erase from the OWNING cpu's list (t._parked_cpu), which
+    // migration keeps in sync; it is this cpu in the common case.  Its timers
+    // are all being torn down anyway, so no wakeup is lost.
+    if (_parked_link.is_linked()) {
+        auto *c = _parked_cpu;
+        assert(c);
         c->parked_threads.erase(c->parked_threads.iterator_to(*this));
+        _parked_cpu = nullptr;
         _timers_parked = false;
         c->rearm_park_timer();
+    } else {
+        _timers_parked = false;
     }
 #endif
 
@@ -1662,7 +1684,13 @@ void cpu::park_timers(thread& t)
     }
     t._parked_deadline = t.earliest_active_deadline();
     t.suspend_timers();
+    // Never push_back a node that is already linked (would trip the intrusive
+    // -list safe-link double-insert assert).  A migration may have left the
+    // thread linked on ANOTHER cpu's list; the migration paths call
+    // unlink_parked() to prevent that, but assert-guard here regardless.
+    assert(!t._parked_link.is_linked());
     parked_threads.push_back(t);
+    t._parked_cpu = this;
     t._timers_parked = true;
     rearm_park_timer();
 }
@@ -1674,10 +1702,39 @@ void cpu::unpark_timers(thread& t)
     if (!t._timers_parked) {
         return;
     }
-    parked_threads.erase(parked_threads.iterator_to(t));
+    // If the thread is still linked on a parked list, it must be THIS cpu's:
+    // a migration would have unlinked it from its source cpu (unlink_parked)
+    // before it could run here.  Erase from the owning cpu's list.
+    if (t._parked_link.is_linked()) {
+        assert(t._parked_cpu);
+        t._parked_cpu->parked_threads.erase(
+            t._parked_cpu->parked_threads.iterator_to(t));
+        cpu *owner = t._parked_cpu;
+        t._parked_cpu = nullptr;
+        owner->rearm_park_timer();
+    }
     t._timers_parked = false;
     t.resume_timers();
-    rearm_park_timer();
+}
+
+// Migration helper: unlink a (migrating) parked thread from its owning cpu's
+// parked list, WITHOUT resuming its timers.  Called on the source cpu (which is
+// the owning cpu) by load_balance / thread::pin while migrating a parked thread
+// to another cpu.  Its timers stay suspended (migration also calls
+// suspend_timers, a no-op here) and _timers_parked stays set, so the AS-local
+// resume still fires when the thread is next switched in on the target cpu.
+// The migration path re-wakes the thread, so it does not need the parked list's
+// deadline wakeup anymore.
+void cpu::unlink_parked(thread& t)
+{
+    if (!t._parked_link.is_linked()) {
+        return;
+    }
+    cpu *owner = t._parked_cpu;
+    assert(owner);
+    owner->parked_threads.erase(owner->parked_threads.iterator_to(t));
+    t._parked_cpu = nullptr;
+    owner->rearm_park_timer();
 }
 
 void cpu::rearm_park_timer()

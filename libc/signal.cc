@@ -26,6 +26,7 @@
 #if CONF_fork
 #include <osv/fork_arena.hh>
 #include <osv/mmu.hh>
+#include <osv/fork.hh>
 #endif
 
 using namespace osv::clock::literals;
@@ -82,6 +83,7 @@ struct sigaction signal_actions[nsignals];
 // SIGCHLD that a child raises to the postmaster on exit must run the
 // postmaster's handler, not the exiting child's (which has been reset).
 extern "C" struct sigaction *fork_child_signal_actions();  // this child's table or nullptr
+extern "C" struct sigaction *fork_child_signal_actions_for(mmu::address_space *child_as);  // a specific child's table
 extern "C" void fork_init_child_signal_actions(mmu::address_space *child_as,
                                     const struct sigaction *parent_table);
 extern "C" void fork_release_child_signal_actions(mmu::address_space *child_as);
@@ -520,6 +522,23 @@ int osv_sigtimedwait(const sigset_t *set, siginfo_t *si,
 OSV_LIBC_API
 int kill(pid_t pid, int sig)
 {
+#if CONF_fork
+    // Under fork() each backend has a distinct pid (getpid()) and its own
+    // address space + signal table.  A cross-backend kill (PostgreSQL's
+    // WakeupOtherProc -> kill(other_backend_pid, SIGURG) to wake its latch)
+    // must run the TARGET backend's handler in the TARGET's address space --
+    // otherwise latch_sigurg_handler pokes the wrong self-pipe and the waiting
+    // backend never wakes (a lock wait wedges: 0 tps, no failure).  Detect a
+    // live-fork-child target and route accordingly.
+    mmu::address_space *target_as = nullptr;
+    if (pid != getpid() && pid != 0 && pid != -1) {
+        target_as = osv::fork::as_for_pid(pid);
+        if (!target_as) {
+            errno = ESRCH;
+            return -1;
+        }
+    }
+#else
     // OSv only implements one process, whose pid is getpid().
     // Sending a signal to pid 0 or -1 is also fine, as it will also send a
     // signal to the same single process.
@@ -527,6 +546,7 @@ int kill(pid_t pid, int sig)
         errno = ESRCH;
         return -1;
     }
+#endif
     if (sig == 0) {
         // kill() with signal 0 doesn't cause an actual signal 0, just
         // testing the pid.
@@ -537,7 +557,20 @@ int kill(pid_t pid, int sig)
         return -1;
     }
     unsigned sigidx = sig - 1;
-    if (is_sig_dfl(signal_actions[sigidx])) {
+#if CONF_fork
+    // A targeted live fork child uses THAT child's signal table (it installed
+    // its own handler); everything else uses the global/top-level table.
+    struct sigaction *actions = signal_actions;
+    if (target_as) {
+        struct sigaction *tt = fork_child_signal_actions_for(target_as);
+        if (tt) {
+            actions = tt;
+        }
+    }
+#else
+    struct sigaction *actions = signal_actions;
+#endif
+    if (is_sig_dfl(actions[sigidx])) {
         // Per POSIX, the default disposition of SIGCHLD, SIGURG and SIGWINCH is
         // to IGNORE, not to terminate.  OSv's fork() emulation raises SIGCHLD to
         // the parent when a child exits; treating an unhandled SIGCHLD as an
@@ -549,7 +582,7 @@ int kill(pid_t pid, int sig)
         debugf("Uncaught signal %d (\"%s\"). Powering off.\n",
                 sig, strsignal(sig));
         osv::poweroff();
-    } else if(!is_sig_ign(signal_actions[sigidx])) {
+    } else if(!is_sig_ign(actions[sigidx])) {
         if ((pid == OSV_PID) || (pid == 0) || (pid == -1)) {
             // This semantically means signalling everybody. So we will signal
             // every thread that is waiting for this.
@@ -579,11 +612,11 @@ int kill(pid_t pid, int sig)
         // The newly created thread is tagged as an application one
         // to make sure that user provided signal handler code has access to all
         // the features like syscall stack which matters for Golang apps
-        const auto sa = signal_actions[sigidx];
+        const auto sa = actions[sigidx];
         auto t = sched::thread::make([=] {
             if (sa.sa_flags & SA_RESETHAND) {
-                signal_actions[sigidx].sa_flags = 0;
-                signal_actions[sigidx].sa_handler = SIG_DFL;
+                actions[sigidx].sa_flags = 0;
+                actions[sigidx].sa_handler = SIG_DFL;
             }
             if (sa.sa_flags & SA_SIGINFO) {
                 // FIXME: proper second (siginfo) and third (context) arguments (See example in call_signal_handler)
@@ -594,23 +627,20 @@ int kill(pid_t pid, int sig)
         }, sched::thread::attr().detached().stack(65536).name("signal_handler"),
                 false, true);
 #if CONF_fork
-        // A newly created thread inherits the CREATING thread's address space
-        // (sched::thread ctor copies s_current->_current_as).  Under fork() a
-        // child raises signals to the parent process from the CHILD's context
-        // -- most importantly the SIGCHLD that fork() synthesizes to the parent
-        // when a child exits (osv::fork::child_exited -> kill(getpid(),
-        // SIGCHLD), run in the exiting child's thread).  If the handler thread
-        // inherited the child's private COW address space, the process-level
-        // handler (installed by the top-level app, e.g. PostgreSQL's postmaster
-        // reaper) would run against the child's dying address space instead of
-        // the app's: its writes to app globals (a latch flag, a self-pipe) land
-        // in the wrong AS and the postmaster never wakes.  A process-level
-        // signal handler belongs to the top-level application, which runs in
-        // the kernel/global address space (AS0), so run it there.  Only fork
-        // child contexts are affected; the top-level app and kernel already
-        // have _current_as == kernel_address_space(), so this is a no-op for
-        // them and the non-fork path is unchanged.
-        t->set_address_space(mmu::kernel_address_space());
+        // Where does the handler thread run?
+        //  * Targeted at a live fork child (target_as != nullptr): run it in
+        //    THAT child's address space, so its handler (PostgreSQL's
+        //    latch_sigurg_handler) touches the TARGET backend's globals/fds
+        //    (its self-pipe) -- the cross-backend latch wakeup.
+        //  * Otherwise (process-level notify, e.g. the fork-synthesized SIGCHLD
+        //    a child raises to the postmaster on exit): run it in AS0.  A newly
+        //    created thread inherits the CREATING thread's address space; under
+        //    fork a child raises SIGCHLD from its own dying COW address space,
+        //    and the postmaster's process-level handler must run against the
+        //    top-level app's globals (its latch/self-pipe), not the child's.
+        //    The top-level app and kernel already have _current_as == AS0, so
+        //    this is a no-op for them and the non-fork path is unchanged.
+        t->set_address_space(target_as ? target_as : mmu::kernel_address_space());
 #endif
         t->start();
     }
