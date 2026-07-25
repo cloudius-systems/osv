@@ -108,13 +108,32 @@ $(out)/tests/tst-commands.so: $(out)/tests/tst-commands.o $(out)/tests/commands.
 rofs-only-tests := rofs/tst-chdir.so rofs/tst-symlink.so rofs/tst-readdir.so \
 	rofs/tst-concurrent-read.so
 
-zfs-only-tests := tst-readdir.so tst-fallocate.so tst-fs-link.so \
-	tst-concurrent-read.so tst-solaris-taskq.so tst-zfs-recordsize.so tst-zfs-direct-io.so \
-	tst-zfs-encryption.so tst-zfs-crucible-stress.so tst-zfs-db-sim.so tst-zfs-trim.so
+# conf_zfs selects the in-kernel ZFS implementation (see top-level Makefile).
+# It reaches this Makefile via the environment (scripts/build exports every
+# name=value build argument).  Default to bsd to match the top-level Makefile
+# when this module Makefile is invoked directly.
+conf_zfs ?= bsd
 
-# OpenZFS user-space libraries needed by misc-zfs-mmap-bench.so's dlopen("libzfs.so").
+zfs-only-tests := tst-readdir.so tst-fallocate.so tst-fs-link.so \
+	tst-concurrent-read.so tst-solaris-taskq.so tst-zfs-crucible-stress.so
+
+# ZFS tests that drive the OpenZFS userspace C API (libzfs / libzfs_core) via
+# dlopen("libzfs.so").  Those libraries are only built in conf_zfs=openzfs; in
+# conf_zfs=bsd they do not exist, so on bsd these tests would only ever print
+# "SKIP: cannot load libzfs.so".  They are therefore built and added to the
+# manifests only for conf_zfs=openzfs (appended to zfs-only-tests and tests
+# below), so a conf_zfs=bsd test run does not include them.
+zfs-openzfs-only-tests := tst-zfs-recordsize.so tst-zfs-direct-io.so \
+	tst-zfs-encryption.so tst-zfs-db-sim.so tst-zfs-trim.so misc-zfs-mmap-bench.so
+
+# OpenZFS user-space libraries needed by the dlopen("libzfs.so") tests above.
 # libsolaris.so is already resident as the mounted fs driver, so only these six.
+# Built only in conf_zfs=openzfs (see the manifest rule below).
 zfs-user-libs := libzfs.so libzfs_core.so libzutil.so libuutil.so libshare.so libtpool.so
+
+ifeq ($(conf_zfs),openzfs)
+zfs-only-tests += $(zfs-openzfs-only-tests)
+endif
 
 ext-only-tests := tst-readdir.so tst-concurrent-read.so tst-fs-link.so
 
@@ -167,12 +186,18 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-smoke.so tst-bsd-evh.
 	libtls.so libtls_gold.so lib-misc-tls.so tst-tls.so \
 	tst-tls-gold.so tst-tls-pie.so tst-tls-pie-dlopen.so \
 	tst-sigaction.so tst-syscall.so tst-ifaddrs.so tst-getdents.so \
-	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-zfs-recordsize.so tst-zfs-direct-io.so \
-	tst-zfs-encryption.so tst-zfs-crucible-stress.so tst-zfs-db-sim.so tst-zfs-trim.so misc-zfs-mmap-bench.so tst-fs-bench.so tst-pthread-create.so \
+	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-zfs-crucible-stress.so \
+	tst-fs-bench.so tst-pthread-create.so \
 	misc-futex-perf.so misc-syscall-perf.so tst-brk.so tst-reloc.so \
 	misc-vdso-perf.so tst-string-utils.so tst-elf-circular-reloc.so \
 	lib-circular-reloc1.so lib-circular-reloc2.so tst-rwlock.so
 #	tst-f128.so \
+
+# The OpenZFS-userspace-API tests only build/run under conf_zfs=openzfs (they
+# dlopen libzfs.so / libzfs_core.so, which conf_zfs=bsd does not build).
+ifeq ($(conf_zfs),openzfs)
+tests += $(zfs-openzfs-only-tests)
+endif
 
 
 #This is a list of the tests that interact with the internal C++ or C
@@ -358,7 +383,7 @@ usr.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FOR
 	esac
 	@echo $(all_tests) | tr ' ' '\n' | grep -v "tests/rofs/tst-.*.so" | awk '{print "/" $$0 ": ./" $$0}' >> $@
 	@echo $(all_tests) | tr ' ' '\n' | grep "tests/rofs/tst-.*.so" | sed 's/\.so//' | awk 'BEGIN { FS = "/" } ; { print "/tests/" $$3 "-rofs.so: ./tests/" $$2 "/" $$3 ".so"}' >> $@
-	$(if $(filter zfs,$(fs_type)),@for l in $(zfs-user-libs); do echo "/usr/lib/$$l: ./$$l" >> $@; done)
+	$(if $(filter openzfs,$(conf_zfs)),@for l in $(zfs-user-libs); do echo "/usr/lib/$$l: ./$$l" >> $@; done)
 	$(call very-quiet, ./create_static.sh $(out) usr.manifest $(fs_type))
 .PHONY: FORCE
 FORCE:
