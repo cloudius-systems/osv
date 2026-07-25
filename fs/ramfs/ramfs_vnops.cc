@@ -46,6 +46,8 @@
 #include <osv/mount.h>
 #include <osv/vnode_attr.h>
 #include <osv/fork_arena.hh>
+#include <osv/contiguous_alloc.hh>
+#include <osv/mmu-defs.hh>
 
 #include "ramfs.h"
 
@@ -366,26 +368,42 @@ ramfs_remove(struct vnode *dvp, struct vnode *vp, char *name)
 static int
 ramfs_enlarge_data_buffer(struct ramfs_node *np, size_t desired_length)
 {
-#if CONF_fork
-    // The segment data buffer and the segment-map node inserted below are
-    // SHARED filesystem state: a fork parent (postmaster) and its children
-    // (backends) read and write the SAME ramfs file.  If the buffer or the map
-    // node lived in the COW fork arena, a backend reading a file the postmaster
-    // (or another process) enlarged would see a divergent/empty segment map ->
-    // ramfs_read_or_write_file_data's lower_bound lands off the end and the
-    // uio_offset bounds assertion fails (the PG-on-OSv ramfs read crash).  Keep
-    // both on the identity kernel heap so every address space shares one file
-    // image, exactly like the ramfs node itself (ramfs_allocate_node).
-    fork_arena::kernel_heap_scope kh;
-#endif
     // New total size has to be at least greater by the ENLARGE_FACTOR
     auto new_total_segment_size = round_page(std::max<size_t>(np->rn_total_segments_size * ENLARGE_FACTOR, desired_length));
     assert(new_total_segment_size >= desired_length);
 
     auto new_segment_size = np->rn_owns_buf ? new_total_segment_size - np->rn_total_segments_size : new_total_segment_size;
+#if CONF_fork
+    // The segment data buffer is SHARED filesystem state: a fork parent
+    // (postmaster) and its children (backends) read and write the SAME ramfs
+    // file, and one backend enlarges a file another then read()s.  It MUST be
+    // reachable at the same VA in every address space.  A plain malloc() of a
+    // large (>= 2 MiB) segment falls through the fork arena to malloc_large's
+    // map_anon() path -- an APP-SLOT (VA < 0x400000000000) anonymous mapping
+    // that lives ONLY in the enlarging backend's private COW address space.  A
+    // sibling backend has no VMA/PTE there, so its read()'s uiomove memcpy
+    // faults on an unmapped app-slot source page (the PG-on-OSv bulk-load
+    // "page fault outside application" in ramfs read/write).  A kernel_heap_
+    // scope does NOT help: it only skips the fork arena; malloc_large still
+    // uses app-slot map_anon for huge non-contiguous requests.  So allocate the
+    // buffer as physically-contiguous IDENTITY-mapped memory (VA >=
+    // 0x400000000000, in the kernel PML4 slots clone_address_space() shares
+    // verbatim across every AS).  Plain free() on it dispatches by address to
+    // free_large (identity path), so the existing free(data) sites are correct
+    // from any address space.
+    char *seg_data = np->rn_owns_buf || np->rn_total_segments_size == 0
+        ? (char*) memory::alloc_phys_contiguous_aligned(new_segment_size, mmu::page_size)
+        : (char*) malloc(new_segment_size);
+    // Also keep the segment-map node (inserted below) on the identity kernel
+    // heap so every AS shares one file segment map -- same rule as the ramfs
+    // node itself (ramfs_allocate_node).
+    fork_arena::kernel_heap_scope kh;
+#else
+    char *seg_data = (char*) malloc(new_segment_size);
+#endif
     ramfs_file_segment new_segment = {
         .size = new_segment_size,
-        .data = (char*) malloc(new_segment_size)
+        .data = seg_data
     };
     if (!new_segment.data)
         return EIO;

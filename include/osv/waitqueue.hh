@@ -94,6 +94,28 @@ namespace sched {
 template <>
 class wait_object<waitqueue> {
 public:
+#if CONF_fork
+    // The wait_record links this waiter onto the waitqueue's _waiters_fifo,
+    // which a waker in a DIFFERENT (forked-child) address space walks and
+    // dereferences.  A stack-resident record sits at an app-slot VA that is
+    // private (COW) per address space -- every forked backend's stack is a
+    // same-VA private copy -- so a cross-AS waker would read the wrong physical
+    // page (a lost/misdirected wakeup: e.g. the RX/poll thread failing to wake
+    // an epoll-waiting PG backend, hanging concurrent connections).  Route the
+    // record through coherent_wait_record so it lands on the identity kernel
+    // heap whenever a cross-AS wake is possible, exactly like lockfree::mutex
+    // and condvar; AS0 with no live children keeps the on-stack fast path.
+    wait_object(waitqueue& wq, mutex* mtx)
+        : _wq(wq), _mtx(*mtx), _holder(sched::thread::current()) {}
+    bool poll() const { return _holder.get().woken(); }
+    void arm();
+    void disarm();
+private:
+    waitqueue& _wq;
+    mutex& _mtx;
+    coherent_wait_record _holder;
+    wait_record &record() { return _holder.get(); }
+#else
     wait_object(waitqueue& wq, mutex* mtx)
         : _wq(wq), _mtx(*mtx), _wr(sched::thread::current()) {}
     bool poll() const { return _wr.woken(); }
@@ -103,6 +125,8 @@ private:
     waitqueue& _wq;
     mutex& _mtx;
     wait_record _wr;
+    wait_record &record() { return _wr; }
+#endif
 };
 
 }
