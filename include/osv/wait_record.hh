@@ -147,6 +147,7 @@ public:
         }
     }
     wait_record &get() { return *_wr; }
+    const wait_record &get() const { return *_wr; }
     wait_record *ptr() { return _wr; }
     coherent_wait_record(const coherent_wait_record &) = delete;
     coherent_wait_record &operator=(const coherent_wait_record &) = delete;

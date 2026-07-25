@@ -19,6 +19,9 @@
 
 #include <bsd/sys/sys/queue.h>
 #include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
@@ -332,6 +335,21 @@ void file::epoll_add(epoll_ptr ep)
 {
 #if CONF_core_epoll
     WITH_LOCK(f_lock) {
+#if CONF_fork
+        // f_epolls records which epoll instances are watching this file.  The
+        // struct file is SHARED across forked processes (identity heap), and
+        // the WAKE side runs cross-AS: when data arrives, the RX/netisr thread
+        // (or another backend) walks so->fp->f_epolls and calls epoll_wake for
+        // each watcher (see tcp_input.cc, tcp_usrreq.cc).  If the vector (and
+        // its element storage) lived in the registering backend's COW fork
+        // arena, the waking thread's address space would see a divergent/empty
+        // f_epolls -> it never wakes the epoll -> the watching PG backend hangs
+        // in epoll_wait forever (concurrent connections stall).  Keep the
+        // vector and its growth on the identity kernel heap so every address
+        // space sees the same watcher list -- same rule as the struct file it
+        // hangs off.
+        fork_arena::kernel_heap_scope _fkh;
+#endif
         if (!f_epolls) {
             f_epolls.reset(new std::vector<epoll_ptr>);
         }
