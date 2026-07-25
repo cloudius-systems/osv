@@ -905,6 +905,23 @@ static void* mapped_malloc_large(size_t size, size_t offset)
     void* obj = mmu::map_anon(nullptr, size, mmu::mmap_populate, mmu::perm_read | mmu::perm_write);
     size_t* ret_header = static_cast<size_t*>(obj);
     *ret_header = size;
+#if CONF_fork
+    // A large allocation made under fork_arena::kernel_heap_scope (force_kernel_heap)
+    // must be coherent across every fork address space, just like the small-object
+    // identity heap.  But map_anon() lands in the COW-cloned app mmap slot, so a
+    // forked child would get a private copy.  The prime case is ZFS's 8 MB ARC
+    // buf_hash_table / dbuf hash arrays (vmem_zalloc at module init): a forked
+    // PostgreSQL process inserting an arc_buf_hdr writes its COW copy while the
+    // AS0 txg_sync / dp_sync_taskq threads read the original (empty) array and
+    // NULL-deref in buf_hash_remove.  Register the range as fork-shared so
+    // clone_address_space maps it verbatim (never COW) in every child.  Such ZFS
+    // allocations live for the life of the pool; a stale range entry after free
+    // is harmless (clone only shares present PTEs).
+    if (fork_arena::force_kernel_heap) {
+        mmu::add_fork_shared_module_range(reinterpret_cast<uintptr_t>(obj),
+                                          reinterpret_cast<uintptr_t>(obj) + size);
+    }
+#endif
     return obj + offset;
 }
 

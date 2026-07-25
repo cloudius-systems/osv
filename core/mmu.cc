@@ -323,6 +323,26 @@ static const std::vector<cow_range> *cow_share_ranges;
 // having private stack memory -- see arch/x64/fork.cc.
 static const std::vector<cow_range> *cow_privatize_ranges;
 
+// ---- fork: writable segments of in-app-slot kernel modules -----------------
+//
+// libsolaris.so (the OpenZFS kernel module) is loaded into the COW-cloned
+// application VA slot (slot 32), not the shared kernel slots.  Its writable
+// .data/.bss therefore diverge per fork child under COW -- but they hold GLOBAL
+// ZFS state that BOTH a forked app thread (calling into ZFS) and AS0 ZFS kernel
+// threads (txg_sync, dp_sync_taskq, block completion) must see identically:
+// buf_hash_table (the ARC hash table pointer + mask), arc_anon / arc_mru /
+// arc_mfu state, the dbuf hash, arc_stats, etc.  A child inserting an
+// arc_buf_hdr into buf_hash_table.ht_table[] writes its private COW copy; the
+// AS0 sync thread then reads an empty table and NULL-derefs in buf_hash_remove.
+// So these ranges must be SHARED (mapped verbatim, never COW) across every fork
+// address space, exactly like the kernel .data.  The ELF loader records each
+// such writable module segment here (see elf.cc load_segment).  Fixed after
+// load (libsolaris.so is mlocked and never unloaded), so this list is
+// append-only and read lock-free during clone_address_space.
+static std::vector<cow_range> fork_shared_module_ranges;
+static mutex fork_shared_module_lock;
+
+
 static bool addr_is_shared(uintptr_t va)
 {
     if (!cow_share_ranges) return false;
@@ -460,6 +480,14 @@ void clone_pt_level<2>(pt_element<2> *parent_pt, pt_element<2> *child_pt,
     }
 }
 
+// Register a writable segment of an in-app-slot kernel module (libsolaris.so)
+// to be SHARED (not COW) across fork children -- see fork_shared_module_ranges.
+void add_fork_shared_module_range(uintptr_t start, uintptr_t end)
+{
+    SCOPE_LOCK(fork_shared_module_lock);
+    fork_shared_module_ranges.push_back({start, end});
+}
+
 address_space *clone_address_space(address_space *parent)
 {
     // Force every allocation done while cloning (the child's anon_vma copies,
@@ -516,7 +544,7 @@ address_space *clone_address_space(address_space *parent)
         snap.reserve(n + 8);
         // share_ranges holds MAP_SHARED/stack vmas + every live thread's stack;
         // reserve room for all vmas plus all threads so it never reallocates.
-        share_ranges.reserve(n + threads + 16);
+        share_ranges.reserve(n + threads + 16 + fork_shared_module_ranges.size());
         privatize_ranges.reserve(4);
     }
 
@@ -532,6 +560,16 @@ address_space *clone_address_space(address_space *parent)
             if (v.size() == 0) continue;
             if ((v.flags() & mmap_stack) || (v.flags() & mmap_shared)) {
                 share_ranges.push_back({v.start(), v.end()});
+            }
+        }
+        // Share libsolaris.so writable .data/.bss verbatim (never COW): its
+        // global ZFS state (buf_hash_table, arc_anon/mru/mfu, dbuf hash, ...)
+        // must be coherent in every fork address space, or an AS0 ZFS sync
+        // thread sees a stale/empty copy of what a forked child wrote.
+        {
+            SCOPE_LOCK(fork_shared_module_lock);
+            for (auto &r : fork_shared_module_ranges) {
+                share_ranges.push_back({r.start, r.end});
             }
         }
         // Always share the forking thread's live stack: OSv runs kernel code

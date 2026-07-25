@@ -428,6 +428,24 @@ void file::load_segment(const Elf64_Phdr& phdr)
             mmu::map_anon(_base + vstart + filesz, memsz - filesz, flag, perm);
         }
     }
+#if CONF_fork
+    // libsolaris.so (the OpenZFS kernel module) is loaded into the COW-cloned
+    // application VA slot, but its writable .data/.bss hold GLOBAL ZFS state
+    // (buf_hash_table, arc_anon/mru/mfu, the dbuf hash, arc_stats, ...) that
+    // both AS0 ZFS kernel threads and forked app threads must see identically.
+    // Register its writable segments so clone_address_space shares them verbatim
+    // (never COW) across every fork child -- otherwise a forked PostgreSQL
+    // process and the AS0 txg_sync / dp_sync_taskq threads diverge and ZFS
+    // corrupts (e.g. NULL-deref in buf_hash_remove).  libsolaris.so is mlocked
+    // and never unloaded, so its VA range is fixed for the life of the system.
+    if ((perm & mmu::perm_write) &&
+        _pathname.size() >= 13 &&
+        _pathname.compare(_pathname.size() - 13, 13, "libsolaris.so") == 0) {
+        uintptr_t rstart = reinterpret_cast<uintptr_t>(_base) + vstart;
+        uintptr_t rend = reinterpret_cast<uintptr_t>(_base) + vstart + memsz;
+        mmu::add_fork_shared_module_range(rstart, rend);
+    }
+#endif
     elf_debug("Loaded and mapped PT_LOAD segment at: %018p of size: 0x%x\n", _base + vstart, filesz);
 }
 

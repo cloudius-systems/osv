@@ -321,4 +321,17 @@ void release_as(void *as)
 
 } // namespace fork_arena
 
+// -----------------------------------------------------------------------------
+// C-linkage accessors for the per-thread force_kernel_heap depth, exported to
+// kernel modules (libsolaris.so / OpenZFS) via exported_symbols.  A module that
+// allocates a kernel object which MUST be coherent across every fork address
+// space -- e.g. a zio_t, whose embedded io_cv/io_lock a forked waiter blocks on
+// while the AS0 block-completion thread signals it, and which that same AS0
+// thread dereferences via bio->bio_caller1 in vdev_disk_bio_done -- brackets
+// that allocation with fork_kernel_heap_push()/pop() so the object lands on the
+// identity heap (shared verbatim in every AS) instead of the COW fork arena.
+// Mirrors the C++ fork_arena::kernel_heap_scope used in-kernel.
+extern "C" void fork_kernel_heap_push(void) { ++fork_arena::force_kernel_heap; }
+extern "C" void fork_kernel_heap_pop(void)  { --fork_arena::force_kernel_heap; }
+
 #endif // CONF_fork
