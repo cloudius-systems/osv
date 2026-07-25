@@ -18,6 +18,22 @@
 
 static mutex shm_lock;
 
+// True iff `shmid` (an fd) refers to a live SysV shm segment.  Used to reject
+// stale/foreign fds in shmctl()/shmat() so a shmid that no longer names a
+// shm_file (e.g. after a reboot) is reported ENOENT rather than spuriously
+// treated as an existing segment.
+static bool shm_fd_is_segment(int shmid)
+{
+    if (shmid < 0) {
+        return false;
+    }
+    fileref f(fileref_from_fd(shmid));
+    if (!f) {
+        return false;
+    }
+    return dynamic_cast<mmu::shm_file*>(f.get()) != nullptr;
+}
+
 #if CONF_fork
 // The POSIX/SysV shm registries below are GLOBAL kernel structures shared
 // across every address space: one process (a PG backend or the postmaster)
@@ -47,6 +63,13 @@ static std::unordered_map<const void*, int> shmmap;
 
 void *shmat(int shmid, const void *shmaddr, int shmflg)
 {
+    // Reject a shmid that does not name a live shm segment (POSIX EINVAL).
+    // This makes a stale id (e.g. from a crashed process's lock file, reused as
+    // some other fd) fail cleanly instead of mapping an unrelated file.
+    if (!shm_fd_is_segment(shmid)) {
+        errno = EINVAL;
+        return MAP_FAILED;
+    }
     // dup() the segment's file descriptor, to create another reference to
     // the underlying shared memory segment, so that after an IPC_RMID the
     // segment will survive until the last attachment is detached.
@@ -75,12 +98,18 @@ void *shmat(int shmid, const void *shmaddr, int shmflg)
 int shmctl(int shmid, int cmd, struct shmid_ds *buf)
 {
     if (cmd == IPC_RMID) {
+        if (!shm_fd_is_segment(shmid)) {
+            return libc_error(EINVAL);
+        }
         close(shmid);
         return 0;
     }
     if (cmd == IPC_STAT) {
         if (!buf) {
             return libc_error(EFAULT);
+        }
+        if (!shm_fd_is_segment(shmid)) {
+            return libc_error(EINVAL);
         }
         memset(buf, 0, sizeof(*buf));
         // Count active attachments (shmmap entries whose fd matches shmid).
