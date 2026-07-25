@@ -39,6 +39,8 @@ void inherit_mappings(dev_t dev, ino_t ino, const off_t *offsets,
                       mmu::hw_ptep<0> *pteps, unsigned n);
 void release_mappings(dev_t dev, ino_t ino, const off_t *offsets,
                       mmu::hw_ptep<0> *pteps, unsigned n);
+void privatize_mapping(dev_t dev, ino_t ino, off_t offset, mmu::hw_ptep<0> ptep,
+                       bool writable);
 
 /*
  * sync() — flush all dirty pages in [start, end) for the file described by fp.
