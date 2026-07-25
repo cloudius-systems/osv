@@ -17,6 +17,22 @@
 
 static mutex shm_lock;
 
+// True if `shmid` (a file descriptor) is a live SysV shared memory segment.
+// A shmid is just an fd here, so a stale id can name some other open file;
+// shmat() and shmctl() must reject it with EINVAL rather than map or close
+// that file.
+static bool shm_fd_is_segment(int shmid)
+{
+    if (shmid < 0) {
+        return false;
+    }
+    fileref f(fileref_from_fd(shmid));
+    if (!f) {
+        return false;
+    }
+    return dynamic_cast<mmu::shm_file*>(f.get()) != nullptr;
+}
+
 // POSIX named shared memory objects (shm_open/shm_unlink).
 // Each name maps to a fileref; the underlying shm_file lives as long as
 // any open file descriptor or name registration holds a reference.
@@ -29,6 +45,11 @@ static std::unordered_map<const void*, int> shmmap;
 
 void *shmat(int shmid, const void *shmaddr, int shmflg)
 {
+    // A shmid that is not a live segment is EINVAL (POSIX), not a file to map.
+    if (!shm_fd_is_segment(shmid)) {
+        errno = EINVAL;
+        return MAP_FAILED;
+    }
     // dup() the segment's file descriptor, to create another reference to
     // the underlying shared memory segment, so that after an IPC_RMID the
     // segment will survive until the last attachment is detached.
@@ -56,12 +77,18 @@ void *shmat(int shmid, const void *shmaddr, int shmflg)
 int shmctl(int shmid, int cmd, struct shmid_ds *buf)
 {
     if (cmd == IPC_RMID) {
+        if (!shm_fd_is_segment(shmid)) {
+            return libc_error(EINVAL);
+        }
         close(shmid);
         return 0;
     }
     if (cmd == IPC_STAT) {
         if (!buf) {
             return libc_error(EFAULT);
+        }
+        if (!shm_fd_is_segment(shmid)) {
+            return libc_error(EINVAL);
         }
         memset(buf, 0, sizeof(*buf));
         // Count active attachments (shmmap entries whose fd matches shmid).
