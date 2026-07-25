@@ -1080,6 +1080,46 @@ void inherit_mappings(dev_t dev, ino_t ino, const off_t *offsets,
     }
 }
 
+// Give the PTE at @ptep, which maps the cached page of (@dev, @ino, @offset),
+// a private copy of that page instead (writable if @writable), and stop
+// recording the slot.  Used by fork for a page that must be shared verbatim
+// with the child (a fork-shared range of a private file mapping): it has to
+// be private memory first, or each address space would copy it on its first
+// write and the two would diverge.  Caller holds the vma lock for write.
+void privatize_mapping(dev_t dev, ino_t ino, off_t offset, mmu::hw_ptep<0> ptep,
+                       bool writable)
+{
+    SCOPE_LOCK(write_lock);
+    auto pte = ptep.read();
+    if (pte.empty() || !pte.sw_bit(mmu::pte_pagecache)) {
+        return;
+    }
+    void *page = mmu::phys_to_virt(pte.addr());
+    void *priv = memory::alloc_page();
+    memcpy(priv, page, mmu::page_size);
+    hashkey key {dev, ino, offset};
+    auto wcp = find_in_cache(write_cache, key);
+    if (wcp && wcp->has_slot(ptep)) {
+        wcp->unmap(ptep);
+    }
+    WITH_LOCK(read_lock) {
+        auto rcp = find_in_cache(read_cache, key);
+        if (rcp && rcp->has_slot(ptep)) {
+            remove_read_mapping(read_cache, rcp, ptep);
+        }
+    }
+    WITH_LOCK(arc_read_lock) {
+        auto acp = find_in_cache(arc_read_cache, key);
+        if (acp && acp->has_slot(ptep)) {
+            remove_arc_read_mapping(acp, ptep);
+        }
+    }
+    auto npte = private_pte(mmu::pte_mark_cow(pte, false));
+    npte.set_writable(writable);
+    npte.set_addr(mmu::virt_to_phys(priv), false);
+    ptep.write(npte);
+}
+
 // A dying fork child's page-cache PTEs: unregister and clear each slot before
 // the child's page tables are freed.  Never frees the page (the cache owns
 // it), but drops the cache entry if this was its last mapping, as release()
