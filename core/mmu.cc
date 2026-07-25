@@ -487,13 +487,36 @@ address_space *clone_address_space(address_space *parent)
         // Structurally clone the parent's VMAs into the child's vma_list so
         // the fault path can resolve child faults (permissions, backing).  The
         // physical pages are already wired via the cloned page tables above.
+        //
+        // Preserve each parent vma's DYNAMIC TYPE.  A file_vma (e.g. the ELF
+        // loader's file-backed .text, created via map_file) must clone as a
+        // file_vma bound to the SAME file + offset -- otherwise the child's
+        // demand faults dispatch to the base zero-fill path and it executes
+        // zeros over its own .text (the fork COW-clone wild-branch bug).  A
+        // file-backed vma is rebuilt via the file's own mmap() -- the SAME
+        // call map_file and file_vma::split use -- so the child gets the
+        // correct page_allocator (map_file_page_read for MAP_PRIVATE,
+        // map_file_page_mmap for a cached/shared mapping) and its demand
+        // faults read the file instead of zero-filling.  The new file_vma
+        // holds its OWN fileref; ~file_vma in destroy_address_space releases
+        // it.  file::mmap()/default_file_mmap()/map_file_mmap() are pure
+        // allocation (no locks, no I/O), so calling them here under
+        // vmas_mutex is safe -- the same as the anon_vma allocation this loop
+        // already does under the lock.
         for (auto &v : *parent->vmas) {
             // Skip the edge marker VMAs (size 0); the child's vma_list_type
             // constructor already inserted its own edge markers.
             if (v.size() == 0) {
                 continue;
             }
-            auto *nv = new anon_vma(addr_range(v.start(), v.end()), v.perm(), v.flags());
+            vma *nv;
+            auto *fv = dynamic_cast<file_vma *>(&v);
+            if (fv) {
+                nv = fv->file()->mmap(addr_range(v.start(), v.end()),
+                                      v.flags(), v.perm(), fv->offset()).release();
+            } else {
+                nv = new anon_vma(addr_range(v.start(), v.end()), v.perm(), v.flags());
+            }
             child->vmas->insert(*nv);
         }
         return child;
@@ -564,6 +587,16 @@ void destroy_address_space(address_space *as)
             free_child_pt_level<2>(phys_cast<pt_element<2>>(e3.next_pt_addr()));
         }
         memory::free_page(phys_to_virt(pml4_phys));
+    }
+    // Dispose the child's own vma objects (the clones built in
+    // clone_address_space, plus the vma_list edge markers).  ~vma is a no-op
+    // for the base/anon case; for a file_vma it deletes the page_allocator and
+    // releases the fileref this child took in clone_address_space -- so the
+    // file-backed clone does not leak its file reference.  (This also closes
+    // the pre-existing anon_vma + edge-marker leak.)  ~vma touches no global
+    // list, so disposing here is safe.
+    if (as->owned_vmas) {
+        as->owned_vmas->clear_and_dispose([](vma *v) { delete v; });
     }
     delete as;
     live_child_address_spaces.fetch_sub(1, std::memory_order_relaxed);
