@@ -164,8 +164,20 @@ dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path)
         dentry_children_remove(dp);
         // Remove dp with outdated hash info from the hashtable.
         LIST_REMOVE(dp, d_link);
-        // Update dp.
+        // Update dp.  Like dentry_alloc, d_path is shared dentry-cache
+        // infrastructure inherited across fork(); keep it off the COW fork
+        // arena so it stays freeable from any address space -- a rename from
+        // a forked backend (e.g. PG WAL-segment recycling during a checkpoint)
+        // must not leave d_path in that backend's COW-private arena, or a
+        // later drele() from AS0/another backend faults on the diverged header.
+#if CONF_fork
+        {
+            fork_arena::kernel_heap_scope kh;
+            dp->d_path = strdup(path);
+        }
+#else
         dp->d_path = strdup(path);
+#endif
         dp->d_parent = parent_dp;
         // Insert dp updated hash info into the hashtable.
         LIST_INSERT_HEAD(&dentry_hash_table[dentry_hash(dp->d_mount, path)],
