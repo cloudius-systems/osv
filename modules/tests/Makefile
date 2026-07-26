@@ -185,6 +185,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 	tst-fork-fdleak.so \
 	tst-fork-posix-shm.so \
 	tst-fork-shared-write.so \
+	tst-fork-shared-catalog.so \
 	tst-fork-serial.so \
 	tst-fork-sigchld-latch.so \
 	tst-fork-arena-freelist.so \
