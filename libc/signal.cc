@@ -530,8 +530,20 @@ int kill(pid_t pid, int sig)
     // otherwise latch_sigurg_handler pokes the wrong self-pipe and the waiting
     // backend never wakes (a lock wait wedges: 0 tps, no failure).  Detect a
     // live-fork-child target and route accordingly.
+    //
+    // OSV_PID names the top-level app / kernel (AS0) -- e.g. the PostgreSQL
+    // postmaster, whose getpid() is OSV_PID.  A forked backend signalling the
+    // postmaster (a parallel-query leader's RegisterDynamicBackgroundWorker ->
+    // kill(PostmasterPid==OSV_PID, SIGUSR1) to make the postmaster fork the
+    // parallel workers; or pg_reload_conf() -> kill(PostmasterPid, SIGHUP))
+    // must run the postmaster's handler in AS0, NOT be rejected.  AS0 is never
+    // registered in g_pid_as, so as_for_pid(OSV_PID) returns nullptr; treat
+    // OSV_PID like the self/broadcast case (target_as stays nullptr -> AS0)
+    // instead of ESRCH -- otherwise the postmaster never launches the workers
+    // and the parallel Gather hangs (leader waits forever for workers that
+    // were never forked).
     mmu::address_space *target_as = nullptr;
-    if (pid != getpid() && pid != 0 && pid != -1) {
+    if (pid != getpid() && pid != 0 && pid != -1 && pid != OSV_PID) {
         target_as = osv::fork::as_for_pid(pid);
         if (!target_as) {
             errno = ESRCH;
