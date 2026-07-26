@@ -132,6 +132,13 @@ public:
     anon_vma(addr_range range, unsigned perm, unsigned flags);
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
+#if CONF_fork
+    ~anon_vma();
+    // Re-key the shared-anon page provider to this vma's current start VA
+    // (needed after allocate() relocates a searched mapping).  No-op unless
+    // this is an anonymous MAP_SHARED vma.
+    void update_shared_base();
+#endif
 };
 
 class file_vma : public vma {
