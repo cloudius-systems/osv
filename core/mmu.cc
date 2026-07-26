@@ -1825,6 +1825,151 @@ private:
     }
 };
 
+#if CONF_fork
+// --- shared-anonymous page provider (fork MAP_SHARED coherence) ------------
+//
+// [W-catalog-read] Anonymous MAP_SHARED (PG shared_buffers with the default
+// shared_memory_type=mmap) must resolve a given page to the SAME physical
+// frame in EVERY address space -- parent and all fork children.  The plain
+// initialized_anonymous_page_provider allocates a FRESH page per map() call,
+// so a page first-faulted by one forked backend is a private zero page in a
+// sibling backend that faults the same VA post-fork -> the sibling reads zeros
+// ("pg_authid_rolname_index contains unexpected zero page").
+//
+// The parent (postmaster) creates the segment before forking, and only a few
+// of its pages are touched pre-fork; the rest are first-touched by individual
+// backends AFTER their fork, when the parent's page table (and thus every
+// child's clone) still has an EMPTY PTE for them.  clone_pt_level0 can only
+// share what is already present, so those pages are NOT covered by the fork
+// share path -- they must be resolved coherently AT FAULT TIME.
+//
+// This provider backs such a mapping with a process-global registry keyed by
+// the absolute page VA (an anon MAP_SHARED region lives at the SAME VA in every
+// fork address space -- clone_address_space keeps identical VAs -- so the VA
+// uniquely identifies the shared page).  The first AS to fault a page allocates
+// and records it; every later AS (sibling backend or parent) that faults the
+// same VA maps THAT recorded physical page.  All siblings converge -- exactly
+// what MAP_SHARED means.  The registry map lives on the identity kernel heap so
+// it is one shared table across all address spaces, mirroring shm_file::_pages.
+struct shared_anon_registry {
+    mutex lock;
+    std::unordered_map<uintptr_t, void*> pages;   // abs page VA -> kernel page
+};
+static shared_anon_registry *shared_anon_reg;
+static std::atomic<bool> shared_anon_reg_inited{false};
+
+static shared_anon_registry *get_shared_anon_registry()
+{
+    // Allocate the singleton registry on the identity kernel heap so it (and
+    // the nodes emplaced into it below) are visible in every fork AS.
+    if (!shared_anon_reg_inited.load(std::memory_order_acquire)) {
+        fork_arena::kernel_heap_scope kh;
+        static mutex init_lock;
+        WITH_LOCK(init_lock) {
+            if (!shared_anon_reg) {
+                shared_anon_reg = new shared_anon_registry();
+                shared_anon_reg_inited.store(true, std::memory_order_release);
+            }
+        }
+    }
+    return shared_anon_reg;
+}
+
+// Per-vma provider: stores the vma's start VA so map()'s vma-relative offset
+// can be turned into the absolute VA used as the registry key.  Owned + freed
+// by the anon_vma (see ~anon_vma).  Cheap: one object per shared-anon mapping.
+class shared_anon_page_provider : public page_allocator {
+private:
+    uintptr_t _base;   // vma start VA (same in every fork AS for MAP_SHARED)
+public:
+    explicit shared_anon_page_provider(uintptr_t base) : _base(base) {}
+    void set_base(uintptr_t base) { _base = base; }
+
+    // Resolve (or allocate-and-record) the ONE shared physical page for the
+    // absolute VA = _base + offset.  Returns the kernel virtual address of the
+    // backing page (identity-mapped, so valid in every AS).
+    void *shared_page(uintptr_t offset) {
+        uintptr_t va = _base + offset;
+        auto *reg = get_shared_anon_registry();
+        // Fast path: already recorded.
+        WITH_LOCK(reg->lock) {
+            auto it = reg->pages.find(va);
+            if (it != reg->pages.end()) {
+                return it->second;
+            }
+        }
+        // Allocate the backing page OUTSIDE the registry lock (alloc_page may
+        // schedule / refill the page pool -- never hold a mutex across that).
+        // Force it onto the identity kernel heap so it is valid in every AS.
+        void *page;
+        {
+            fork_arena::kernel_heap_scope kh;
+            page = memory::alloc_page();
+            memset(page, 0, page_size);
+        }
+        WITH_LOCK(reg->lock) {
+            auto it = reg->pages.find(va);
+            if (it != reg->pages.end()) {
+                // Lost the race: another AS recorded it first -- use theirs.
+                fork_arena::kernel_heap_scope kh;
+                memory::free_page(page);
+                return it->second;
+            }
+            fork_arena::kernel_heap_scope kh;   // map node on the identity heap
+            reg->pages.emplace(va, page);
+            return page;
+        }
+    }
+
+    virtual bool map(uintptr_t offset, hw_ptep<0> ptep, pt_element<0> pte, bool write) override {
+        void *page = shared_page(offset);
+        // Tag the PTE pte_shared so per-AS teardown (free_child_pt_level0) does
+        // NOT free this frame: it is a jointly-owned shared-anon page in the
+        // global registry, not this AS's private COW copy.  Without this, the
+        // first backend to exit frees the shared frame and later siblings read
+        // freed/zeroed memory.
+        pte = pte_mark_cow(pte, false);
+        pte.set_writable(true);
+        pte.set_sw_bit(pte_shared, true);
+        return write_pte(page, ptep, pte);
+    }
+    virtual bool map(uintptr_t offset, hw_ptep<1> ptep, pt_element<1> pte, bool write) override {
+        // Force 4K granularity for shared-anon so the registry stays 4K-keyed
+        // and coherent; reject the 2M large-page fill and let the walker fall
+        // to level 0 (the 4K map() above).
+        return false;
+    }
+    virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<0> ptep) override {
+        // The shared frame is owned by the registry, not by this AS's PTE --
+        // clearing one AS's mapping must NOT free a page other ASes still use
+        // (mirrors shm_file::put_page).  Only the creating AS (AS0, which owns
+        // the segment lifetime like the PG postmaster) reclaims the frame from
+        // the registry on a genuine munmap.
+        clear_pte(ptep);
+        auto t = sched::thread::current();
+        if (t && t->address_space() && t->address_space() != kernel_address_space()) {
+            return false;   // a fork child: never free the shared frame
+        }
+        uintptr_t va = _base + offset;
+        auto *reg = get_shared_anon_registry();
+        void *page = nullptr;
+        WITH_LOCK(reg->lock) {
+            auto it = reg->pages.find(va);
+            if (it != reg->pages.end()) { page = it->second; reg->pages.erase(it); }
+        }
+        if (page) {
+            fork_arena::kernel_heap_scope kh;
+            memory::free_page(page);
+        }
+        return false;   // we already handled the frame; don't double-free
+    }
+    virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<1> ptep) override {
+        clear_pte(ptep);
+        return false;
+    }
+};
+#endif // CONF_fork
+
 // Page provider for MAP_HUGETLB strict mode: refuses 4KB small-page fallback.
 // When alloc_huge_page() fails, the level-1 map() throws (existing behaviour).
 // The page walker then falls to level 0; our override returns false so
@@ -2046,6 +2191,15 @@ void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
     PREVENT_STACK_PAGE_FAULT
     SCOPE_LOCK(cur_vma_list_mutex().for_write());
     auto v = (void*) allocate(vma, start, size, search);
+#if CONF_fork
+    // allocate() may have RELOCATED a searched (addr==NULL) mapping to a hole,
+    // so the vma's real start VA is only known now.  A shared-anon provider
+    // keys the global registry on the absolute page VA (start + offset), so it
+    // must be told the final base -- otherwise every AS keys off base 0 and
+    // the parent vs. the fork children disagree.  (split/clone construct with
+    // an explicit range, so only this searched path needs the fixup.)
+    vma->update_shared_base();
+#endif
     if (flags & mmap_populate) {
         auto mapped = populate_vma<account_opt::yes>(vma, v, size);
         if ((flags & mmap_huge) && mapped < size) {
@@ -2425,7 +2579,37 @@ anon_vma::anon_vma(addr_range range, unsigned perm, unsigned flags)
           (flags & mmap_uninitialized) ? page_allocator_noinitp    :
                                          page_allocator_initp)
 {
+#if CONF_fork
+    // Anonymous MAP_SHARED must be coherent across fork (PG shared_buffers).
+    // Back it with a per-vma shared_anon_page_provider keyed on the vma's start
+    // VA -> a process-global registry, so every fork AS resolves a given page
+    // to the SAME physical frame.  (Huge / uninitialized anon are not on the
+    // shared_buffers path and keep their existing providers.)  The provider is
+    // owned by this vma and freed in ~anon_vma.  _range is already aligned by
+    // the base ctor, so start() is the correct base.
+    if ((flags & mmap_shared) && !(flags & mmap_huge) && !(flags & mmap_uninitialized)) {
+        _page_ops = new shared_anon_page_provider(start());
+    }
+#endif
 }
+
+anon_vma::~anon_vma()
+{
+#if CONF_fork
+    if ((_flags & mmap_shared) && !(_flags & mmap_huge) && !(_flags & mmap_uninitialized)) {
+        delete static_cast<shared_anon_page_provider*>(_page_ops);
+    }
+#endif
+}
+
+#if CONF_fork
+void anon_vma::update_shared_base()
+{
+    if ((_flags & mmap_shared) && !(_flags & mmap_huge) && !(_flags & mmap_uninitialized)) {
+        static_cast<shared_anon_page_provider*>(_page_ops)->set_base(start());
+    }
+}
+#endif
 
 void anon_vma::split(uintptr_t edge)
 {
