@@ -8,7 +8,7 @@ Postgres / HammerDB — this isolates the filesystem layer.
 
 - **BSD-ZFS** (`conf_zfs=bsd`): legacy in-tree BSD/Illumos ZFS (c. 2014), which
   on OSv has a *unified* ARC ⇄ page-cache bridge (mmap/read share ARC pages).
-- **OpenZFS** (`conf_zfs=openzfs`): vendored OpenZFS 2.4.2 (`external/openzfs`),
+- **OpenZFS** (`conf_zfs=openzfs`): vendored OpenZFS 2.4.3 (`external/openzfs`),
   which keeps its own ARC and *borrows* pages into the page cache for mmap.
 
 Both built from `pr/openzfs-draft` (1a298e1b), same commit, separate clones.
@@ -114,7 +114,7 @@ being served from the ARC (RAM), not the disk — expected for warm working sets
 
 - **Sequential write (+34% single, +15% raidz2)**, **lz4 compression
   throughput (+56%)**, **metadata ops (+63%)**, **fsync/s (+11%)**, and
-  **rand-write p99 (399 µs vs 1039 µs)**. OpenZFS 2.4.2's modern write pipeline
+  **rand-write p99 (399 µs vs 1039 µs)**. OpenZFS 2.4.3's modern write pipeline
   (better pipelining, faster lz4, more efficient dnode/ZIL paths) beats the
   decade-old BSD port on everything that is CPU- or write-pipeline-bound rather
   than cache-read-bound.
