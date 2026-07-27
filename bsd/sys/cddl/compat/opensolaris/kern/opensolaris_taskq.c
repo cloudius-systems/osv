@@ -205,19 +205,21 @@ taskq_dispatch_safe(taskq_t *tq, task_func_t func, void *arg, u_int flags,
  * We enqueue a do-nothing barrier task and drain on it; since tasks
  * execute in FIFO order all prior tasks will have finished first.
  */
-static void
-taskq_barrier_run(void *arg __bsd_unused2, int pending __bsd_unused2)
-{
-}
-
 OSV_LIB_SOLARIS_API void
 taskq_wait(taskq_t *tq)
 {
-	struct task barrier;
-
-	TASK_INIT(&barrier, 0, taskq_barrier_run, NULL);
-	taskqueue_enqueue(tq->tq_queue, &barrier);
-	taskqueue_drain(tq->tq_queue, &barrier);
+	/*
+	 * ZFS requires taskq_wait() to block until the taskq is fully idle:
+	 * no task queued AND no task active (illumos semantics; see the PORTING
+	 * note in dmu_objset.c).  A system_taskq has 8 worker threads, so the
+	 * old "enqueue one barrier, drain that barrier" trick was WRONG: a free
+	 * worker runs the barrier while the other 7 are still mid dnode_sync /
+	 * dbuf_sync, so taskq_wait returned early and the syncing thread raced
+	 * the still-running workers -> dbuf/dirty-record corruption
+	 * (VERIFY3U(db_level==level) / db_buf==NULL panics in the sync taskq).
+	 * Wait for the whole queue to quiesce instead.
+	 */
+	taskqueue_drain_all(tq->tq_queue);
 }
 
 /*
