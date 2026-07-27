@@ -39,6 +39,7 @@
 #include <osv/kernel_config_fork.h>
 #if CONF_fork
 #include <osv/fork_arena.hh>
+#include <osv/wait_record.hh>
 #endif
 
 #include <osv/kernel_config_lazy_stack.h>
@@ -944,9 +945,38 @@ static void* malloc_large(size_t size, size_t alignment, bool block = true, bool
     size += offset;
     size = align_up(size, page_size);
 
+#if CONF_fork
+    // Fork COW-coherence for LARGE kernel allocations.  A large allocation made
+    // under fork_arena::kernel_heap_scope (force_kernel_heap) -- e.g. a ZFS
+    // zio_buf / ARC buffer / vmem block -- must be coherent across EVERY fork
+    // address space, exactly like the small-object identity heap.  The two
+    // map_anon()-based paths below (the huge-and-non-contiguous shortcut and the
+    // non-contiguous fallback) land the buffer in the CURRENT thread's COW-cloned
+    // app mmap slot (VA 0x2000..).  When a forked PostgreSQL backend makes that
+    // allocation, the VA exists only in that child's page tables; the AS0
+    // txg_sync / zio-completion threads and sibling backends that later touch
+    // db_data fault "outside application" (the sustained-write WALL-3 crashes:
+    // arc_release NULL-deref, dbuf UAF, range-tree corruption, and the
+    // memcpy-into-db_data fault this was root-caused from).  The free_page_ranges
+    // path below returns memory from the linear map (phys_mem 0x4000.., a shared
+    // kernel PML4 slot mapped verbatim in every AS, coherent regardless of
+    // physical contiguity), so force that path and never fall back to map_anon.
+    // We keep contiguous==false so a fragmented heap still satisfies the request
+    // out of the linear map (the returned VA is coherent either way); we only
+    // suppress the app-slot map_anon fallback.
+    bool force_identity = fork_arena::force_kernel_heap;
+    if (force_identity) {
+        block = true;   // wait for linear-map memory rather than map_anon
+    }
+#endif
+
     // Use mmap if requested memory greater than "huge page" size
     // and does not need to be contiguous
-    if (size >= mmu::huge_page_size && !contiguous) {
+    if (size >= mmu::huge_page_size && !contiguous
+#if CONF_fork
+        && !force_identity
+#endif
+        ) {
         void* obj = mapped_malloc_large(size, offset);
         trace_memory_malloc_large(obj, requested_size, size, alignment);
         return obj;
@@ -967,7 +997,11 @@ static void* malloc_large(size_t size, size_t alignment, bool block = true, bool
                 obj += offset;
                 trace_memory_malloc_large(obj, requested_size, size, alignment);
                 return obj;
-            } else if (!contiguous) {
+            } else if (!contiguous
+#if CONF_fork
+                       && !force_identity
+#endif
+                       ) {
                 // If we failed to get contiguous memory allocation and
                 // the caller does not require one let us use map-based allocation
                 // which we do after the loop below
@@ -1079,6 +1113,42 @@ void reclaimer_waiters::wait(size_t bytes)
     if (curr == reclaimer_thread._thread.get()) {
         oom();
      }
+
+#if CONF_fork
+    // Fork COW-coherence for the reclaimer waiter node.  wait_node is normally a
+    // stack local pushed into _waiters and later dereferenced (and its owner
+    // woken / owner-field cleared) by the AS0 reclaimer thread in wake_waiters().
+    // When the waiting thread is a forked PostgreSQL backend, its stack lives at
+    // a same-VA-but-COW-private address; the AS0 reclaimer walking _waiters reads
+    // its OWN physical copy of that stack VA -> stale/garbage wait_node ->
+    // general-protection fault in wake_waiters().  This is the same cross-AS
+    // stack-resident-list-node hazard already handled for condvar/mutex
+    // wait_records (see coherent_wait_record).  For a fork-child waiter, place
+    // the wait_node on the identity kernel heap (coherent VA in every AS); AS0
+    // and the non-fork initial process keep the zero-overhead stack fast path.
+    // (Forked backends started blocking here once large ZFS kmem allocations
+    // were routed to the linear map under memory pressure.)
+    if (fork_child_needs_heap_wait_record()) {
+        wait_node *wr;
+        {
+            fork_arena::kernel_heap_scope kh;
+            wr = new wait_node();
+        }
+        wr->owner = curr;
+        wr->bytes = bytes;
+        _waiters.push_back(*wr);
+        reclaimer_thread.wake();
+        sched::thread::wait_until(&free_page_ranges_lock, [&] { return !wr->owner; });
+        // wr->owner was cleared by the waker under free_page_ranges_lock (held
+        // here), and erase() in wake_waiters() already removed it from _waiters,
+        // so the node is no longer referenced -- safe to free.
+        {
+            fork_arena::kernel_heap_scope kh;
+            delete wr;
+        }
+        return;
+    }
+#endif
 
     wait_node wr;
     wr.owner = curr;
