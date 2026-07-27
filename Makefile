@@ -51,7 +51,7 @@ include conf/base.mk
 conf_zfs ?= bsd
 ifeq ($(conf_zfs),openzfs)
 # The modules/open_zfs/openzfs submodule is pinned to a PUBLISHED upstream OpenZFS tag
-# (github.com/openzfs/zfs, zfs-2.4.2).  Our OSv platform-layer changes live as a
+# (github.com/openzfs/zfs, zfs-2.4.3).  Our OSv platform-layer changes live as a
 # git patch series in modules/open_zfs/patches/ and are applied here before the
 # OpenZFS sources are compiled, so we never maintain an OpenZFS fork.  The stamp
 # file makes this idempotent.
