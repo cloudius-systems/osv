@@ -1,0 +1,121 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Mon, 27 Jul 2026 18:00:00 +0000
+Subject: [PATCH 30/30] zfs: force single-threaded inline ARC eviction on OSv
+
+Parallel ARC eviction (zfs_arc_evict_threads > 1) dispatches arc_evict_task()
+to the arc_evict taskq (AS0 worker threads).  When a forked PostgreSQL backend
+triggers eviction under memory pressure it kmem_allocs the evict_arg_t array
+and dispatches &eva[i] to those AS0 workers, then taskq_waits.  On OSv fork
+model the worker running arc_evict_task races the dispatcher / touches state
+whose VA is not coherent in the worker address space and faults on eva->eva_ml
+(arc.c:4088, reached via handle_mmap_fault under the ZFS taskqueue).
+
+Force zfs_arc_evict_threads = 1 so eviction runs inline in the caller context
+via arc_evict_state_impl(), removing the taskq hand-off and the race.  This is
+the same OSv serialization applied to libtpool dispatch (patch 0021) and
+dataset mounting (patch 0022); parallel eviction is a throughput optimization
+OSv does not require.
+
+Signed-off-by: Greg Burd <greg@burd.me>
+---
+diff --git a/module/zfs/arc.c b/module/zfs/arc.c
+index 9912eb818..e0afb1f35 100644
+--- a/module/zfs/arc.c
++++ b/module/zfs/arc.c
+@@ -4096,6 +4096,24 @@ arc_evict_task(void *arg)
+ static void
+ arc_evict_thread_init(void)
+ {
++#ifdef __OSV__
++	/*
++	 * Force single-threaded, inline ARC eviction on OSv.  Parallel eviction
++	 * dispatches arc_evict_task() to the arc_evict taskq (AS0 worker
++	 * threads).  When a forked PostgreSQL backend triggers eviction under
++	 * memory pressure it kmem_allocs the evict_arg_t array and dispatches
++	 * &eva[i] to those AS0 workers, then taskq_waits.  On OSv's fork model
++	 * the worker running arc_evict_task races the dispatcher's teardown /
++	 * touches state whose VA is not coherent in the worker's address space,
++	 * faulting on eva->eva_ml.  Inline eviction (zfs_arc_evict_threads == 1)
++	 * takes the direct arc_evict_state_impl() path in the caller's context,
++	 * removing the taskq hand-off and the race -- the same OSv serialization
++	 * applied to libtpool dispatch and dataset mounting (patches 0021/0022).
++	 * Parallel eviction is a throughput optimization OSv does not require.
++	 */
++	zfs_arc_evict_threads = 1;
++	return;
++#endif
+ 	if (zfs_arc_evict_threads == 0) {
+ 		/*
+ 		 * Compute number of threads we want to use for eviction.
+@@ -4756,6 +4774,49 @@ arc_reduce_target_size(uint64_t to_free)
+ 	return (to_free);
+ }
+ 
++/*
++ * OSv-specific ARC shrink helper: reduce arc_c and wake the eviction thread.
++ *
++ * Unlike arc_reduce_target_size(), this function does NOT call
++ * dbuf_cache_reduce_target_size().  That helper carries a use-after-free
++ * risk in the dbuf eviction path during TXG sync (noted in the upstream
++ * comment above arc_reduce_target_size()).  We omit it intentionally.
++ *
++ * We DO call zthr_wakeup(arc_evict_zthr) when the ARC is still over target
++ * so that physical pages are freed quickly, before the OSv memory reclaimer
++ * calls wake_waiters() and finds no free pages.  Without the wakeup the
++ * eviction thread would not run for up to 1 second (its natural timer), and
++ * the heavy ZFS I/O paths (dataset create/destroy, TXG commit) would trigger
++ * the shrinker hundreds of times with a long sleep each time, adding many
++ * minutes of overhead.
++ *
++ * Safety: arc_evict_thread() skips buffers held by concurrent TXG sync
++ * (they have elevated refcounts from dmu_buf_add_ref).  The link-count
++ * corruption seen in earlier testing was caused by ENOSPC in the ZFS pool
++ * leaving a partially-written dataset, not by this wakeup.  With a correctly
++ * sized pool (fs_size_mb >= 2048) all dataset operations complete cleanly.
++ */
++uint64_t
++arc_reduce_target_size_noshrink(uint64_t to_free)
++{
++	uint64_t c = arc_c;
++	if (c > arc_c_min) {
++		uint64_t asize = aggsum_value(&arc_sums.arcstat_size);
++		c = MIN(c, MAX(asize, arc_c_min));
++		to_free = MIN(to_free, c - arc_c_min);
++		arc_c = c - to_free;
++		if (asize > arc_c) {
++			mutex_enter(&arc_evict_lock);
++			arc_evict_needed = B_TRUE;
++			mutex_exit(&arc_evict_lock);
++			zthr_wakeup(arc_evict_zthr);
++		}
++	} else {
++		to_free = 0;
++	}
++	return (to_free);
++}
++
+ /*
+  * Determine if the system is under memory pressure and is asking
+  * to reclaim memory. A return value of B_TRUE indicates that the system
+@@ -7980,6 +8041,18 @@ arc_set_limits(uint64_t allmem)
+ 	/* Set min cache to 1/32 of all memory, or 32MB, whichever is more. */
+ 	arc_c_min = MAX(allmem / 32, 2ULL << SPA_MAXBLOCKSHIFT);
+ 
++#ifdef __OSV__
++	/*
++	 * On OSv VMs with less than 256 MiB of RAM the default arc_c_min of
++	 * 2*SPA_MAXBLOCKSIZE (32 MiB) can equal or exceed arc_c_max, leaving
++	 * no headroom for the ARC shrinker to reduce memory usage.  Cap it at
++	 * 1/16 of RAM (8 MiB at 128 MiB) so that arc_reduce_target_size_*()
++	 * can always reclaim a meaningful amount of memory under pressure.
++	 */
++	if (allmem < (256ULL << 20))
++		arc_c_min = MIN(arc_c_min, allmem / 16);
++#endif
++
+ 	/* How to set default max varies by platform. */
+ 	arc_c_max = arc_default_max(arc_c_min, allmem);
+ }
+--
+2.43.0
