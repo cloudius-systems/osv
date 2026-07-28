@@ -266,13 +266,21 @@ openzfs-icp += $(OPENZFS)/module/icp/algs/sha2/sha512_impl.o
 openzfs-icp += $(OPENZFS)/module/icp/algs/skein/skein.o
 openzfs-icp += $(OPENZFS)/module/icp/algs/skein/skein_block.o
 openzfs-icp += $(OPENZFS)/module/icp/algs/skein/skein_iv.o
+ifeq ($(arch),x64)
 openzfs-icp += $(OPENZFS)/module/icp/asm-x86_64/aes/aeskey.o
+endif
 # Note: generic_impl.c is a template included by other .c files, not compiled directly
 
 # ============================================================
-# ICP Assembly routines (x86_64 SIMD crypto implementations)
+# ICP Assembly routines (arch-specific SIMD crypto implementations)
+# The x86_64 aes_*.S / aeskey.c files have no top-level __x86_64__ guard and
+# contain raw x86 instructions, so they are listed only for the x64 build. The
+# aarch64 sha2 .S files are #if defined(__aarch64__) guarded, and the aarch64
+# blake3 .S files are native ARMv8 assembly, so both are safe to list for
+# aarch64 only.
 # ============================================================
 openzfs-icp-asm :=
+ifeq ($(arch),x64)
 openzfs-icp-asm += $(OPENZFS)/module/icp/asm-x86_64/aes/aes_amd64.o
 openzfs-icp-asm += $(OPENZFS)/module/icp/asm-x86_64/aes/aes_aesni.o
 # openzfs-icp-asm += $(OPENZFS)/module/icp/asm-x86_64/modes/gcm_pclmulqdq.o
@@ -280,6 +288,13 @@ openzfs-icp-asm += $(OPENZFS)/module/icp/asm-x86_64/aes/aes_aesni.o
 # openzfs-icp-asm += $(OPENZFS)/module/icp/asm-x86_64/modes/ghash-x86_64.o
 openzfs-icp-asm += $(OPENZFS)/module/icp/asm-x86_64/sha2/sha256-x86_64.o
 openzfs-icp-asm += $(OPENZFS)/module/icp/asm-x86_64/sha2/sha512-x86_64.o
+endif
+ifeq ($(arch),aarch64)
+openzfs-icp-asm += $(OPENZFS)/module/icp/asm-aarch64/sha2/sha256-armv8.o
+openzfs-icp-asm += $(OPENZFS)/module/icp/asm-aarch64/sha2/sha512-armv8.o
+openzfs-icp-asm += $(OPENZFS)/module/icp/asm-aarch64/blake3/b3_aarch64_sse2.o
+openzfs-icp-asm += $(OPENZFS)/module/icp/asm-aarch64/blake3/b3_aarch64_sse41.o
+endif
 
 # ============================================================
 # ZSTD compression module (from module/zstd/)
