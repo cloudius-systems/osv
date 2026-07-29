@@ -26,6 +26,7 @@ TRACEPOINT(trace_syscall_connect, "%d <= %d 0x%x %d", int, int, struct sockaddr 
 TRACEPOINT(trace_syscall_get_mempolicy, "%lu <= %p %p %lu %p %d", long, int *, unsigned long *, unsigned long, void *, int);
 TRACEPOINT(trace_syscall_sys_sched_getaffinity, "%d <= %d %u %p", int, pid_t, unsigned, unsigned long *);
 TRACEPOINT(trace_syscall_long_mmap, "0x%x <= 0x%x %lu %d %d %d %lu", long, void *, size_t, int, int, int, off_t);
+TRACEPOINT(trace_syscall_long_mremap, "0x%x <= 0x%x %lu %lu %d", long, void *, size_t, size_t, int);
 TRACEPOINT(trace_syscall_munmap, "%d <= 0x%x %lu", int, void *, size_t);
 TRACEPOINT(trace_syscall_rt_sigaction, "%d <= %d %p %p %lu", int, int, const struct k_sigaction *, struct k_sigaction *, size_t);
 TRACEPOINT(trace_syscall_rt_sigprocmask, "%d <= %d %p %p %lu", int, int, sigset_t *, sigset_t *, size_t);

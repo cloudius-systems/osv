@@ -557,6 +557,8 @@ modff
 modfl
 mount
 mprotect
+mremap
+__mremap
 mrand48
 msync
 munlock

@@ -257,6 +257,37 @@ int madvise(void *addr, size_t length, int advice)
     return err.to_libc();
 }
 
+// mremap(2).  The variadic tail carries new_address only when MREMAP_FIXED is
+// set (not supported yet -- mmu::mremap rejects it with EINVAL), so it is
+// ignored here.
+OSV_LIBC_API
+void *mremap(void *old_addr, size_t old_size, size_t new_size, int flags, ...)
+{
+    if (!mmu::is_page_aligned(old_addr)) {
+        errno = EINVAL;
+        return MAP_FAILED;
+    }
+    if (flags & ~(MREMAP_MAYMOVE | MREMAP_FIXED)) {
+        errno = EINVAL;
+        return MAP_FAILED;
+    }
+    void *ret;
+    try {
+        ret = mmu::mremap(old_addr, old_size, new_size, flags);
+    } catch (error& err) {
+        err.to_libc();
+        return MAP_FAILED;
+    }
+    return ret;
+}
+
+// musl's realloc() calls the internal __mremap() for mmap-backed chunks.
+extern "C" OSV_LIBC_API
+void *__mremap(void *old_addr, size_t old_size, size_t new_size, int flags, ...)
+{
+    return mremap(old_addr, old_size, new_size, flags);
+}
+
 // The brk/sbrk/program break implementation is quite simple
 // and is based on mmap().
 // In essence, on the very 1st call to brk() or sbr(), we call
