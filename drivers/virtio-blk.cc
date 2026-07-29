@@ -362,11 +362,25 @@ void blk::req_done()
         trace_virtio_blk_wake();
 
         for (int q = 0; q < _num_queues; q++) {
-            WITH_LOCK(_queue_locks[q]) {
-                auto* q_ring = get_virt_queue(q);
-                drain_queue(q_ring);
-                q_ring->wakeup_waiter();
-            }
+            // Do NOT take _queue_locks[q] here.  make_request() holds that lock
+            // across vring::add_buf_wait(), which SLEEPS when the ring is full
+            // waiting for this completion thread to advance _used_ring_host_head
+            // (via get_buf_finalize) so the producer can GC descriptors and make
+            // room.  If we grabbed the same lock we would block on the sleeping
+            // producer while it waits on us -> permanent deadlock (seen ~1-in-3
+            // under heavy ZFS checkpoint write load at -smp1: z_wr_iss stuck in
+            // add_buf_wait holding the queue lock, virtio-blk req_done stuck on
+            // that lock, disk progress = 0 forever).  The
+            // completion drain is a single-consumer path (only this one req_done
+            // thread runs it) and races the producer's get_buf_gc only on the
+            // u16 _used_ring_host_head counter -- the same lock-free
+            // producer/consumer split the original single-queue driver used
+            // before per-queue submission locks were added.  The per-queue lock
+            // still serialises concurrent make_request producers; it must not
+            // gate completions.
+            auto* q_ring = get_virt_queue(q);
+            drain_queue(q_ring);
+            q_ring->wakeup_waiter();
         }
     }
 }
