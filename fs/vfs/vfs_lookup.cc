@@ -69,7 +69,11 @@ namei_follow_link(struct dentry *dp, char *node, char *name, char *fp, size_t mo
     int     c;
 
     lp    = link.get();
-    error = read_link(dp->d_vnode, lp, PATH_MAX, &sz);
+    // Read at most PATH_MAX-1 bytes so the NUL terminator written below stays
+    // inside the PATH_MAX buffer; read_link may otherwise fill all PATH_MAX
+    // bytes (a symlink target of on-disk size >= PATH_MAX) and lp[sz] would be
+    // a 1-byte out-of-bounds write.
+    error = read_link(dp->d_vnode, lp, PATH_MAX - 1, &sz);
     if (error != 0) {
         return (error);
     }
