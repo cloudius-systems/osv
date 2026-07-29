@@ -8,6 +8,7 @@
     SYSCALL2(clock_gettime, clockid_t, struct timespec *);
     SYSCALL2(clock_getres, clockid_t, struct timespec *);
     SYSCALL1(close, int);
+    SYSCALL3(close_range, unsigned int, unsigned int, unsigned int);
     SYSCALL2(pipe2, int *, int);
 #if CONF_core_epoll
     SYSCALL1(epoll_create1, int);

@@ -299,6 +299,46 @@ int close(int fd)
     return -1;
 }
 
+// close_range(2): close (or set close-on-exec on) every open fd in the inclusive
+// range [first, last].  CLOSE_RANGE_UNSHARE is a no-op in a single-process
+// unikernel (there is nothing to unshare).  CLOSE_RANGE_CLOEXEC sets O_CLOEXEC
+// instead of closing.
+#ifndef CLOSE_RANGE_UNSHARE
+#define CLOSE_RANGE_UNSHARE (1U << 1)
+#endif
+#ifndef CLOSE_RANGE_CLOEXEC
+#define CLOSE_RANGE_CLOEXEC (1U << 2)
+#endif
+extern "C" OSV_LIBC_API
+int close_range(unsigned int first, unsigned int last, unsigned int flags)
+{
+    if (first > last || (flags & ~(CLOSE_RANGE_UNSHARE | CLOSE_RANGE_CLOEXEC))) {
+        errno = EINVAL;
+        return -1;
+    }
+
+    unsigned int end = last;
+    if (end >= (unsigned int)FDMAX) {
+        end = FDMAX - 1;
+    }
+    for (unsigned int fd = first; fd <= end; fd++) {
+        if (flags & CLOSE_RANGE_CLOEXEC) {
+            // Set close-on-exec on the open fds in the range, leave them open.
+            struct file *fp;
+            if (fget(fd, &fp) == 0) {
+                FD_LOCK(fp);
+                fp->f_flags |= O_CLOEXEC;
+                FD_UNLOCK(fp);
+                fdrop(fp);
+            }
+        } else {
+            // Close each fd, ignoring ones that are not open (as Linux does).
+            fdclose(fd);
+        }
+    }
+    return 0;
+}
+
 TRACEPOINT(trace_vfs_mknod, "\"%s\" 0%0o 0x%x", const char*, mode_t, dev_t);
 TRACEPOINT(trace_vfs_mknod_ret, "");
 TRACEPOINT(trace_vfs_mknod_err, "%d", int);
