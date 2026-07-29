@@ -26,6 +26,7 @@
     SYSCALL5(get_mempolicy, int *, unsigned long *, unsigned long, void *, int);
     SYSCALL3(sys_sched_getaffinity, pid_t, unsigned, unsigned long *);
     SYSCALL6(long_mmap, void *, size_t, int, int, int, off_t);
+    SYSCALL4(long_mremap, void *, size_t, size_t, int);
     SYSCALL2(munmap, void *, size_t);
     SYSCALL4(rt_sigaction, int, const struct k_sigaction *, struct k_sigaction *, size_t);
     SYSCALL4(rt_sigprocmask, int, sigset_t *, sigset_t *, size_t);
