@@ -39,13 +39,25 @@
 #include <osv/device.h>
 #include <osv/uio.h>
 #include <osv/debug.hh>
+#include <osv/clock.hh>
+#include <atomic>
+#include <osv/kernel_config_core_reseed_on_resume.h>
 
 #include <dev/random/randomdev.h>
 #include <dev/random/randomdev_soft.h>
 #include <dev/random/random_adaptors.h>
+#include <dev/random/random_harvestq.h>
 #include <dev/random/live_entropy_sources.h>
 
+#ifdef __x86_64__
+#include "processor.hh"
+#endif
+
 namespace randomdev {
+
+#if CONF_core_reseed_on_resume
+void reseed_on_resume();
+#endif
 
 struct random_device_priv {
     random_device* drv;
@@ -56,11 +68,59 @@ static random_device_priv *to_priv(device *dev)
     return reinterpret_cast<random_device_priv*>(dev->private_data);
 }
 
+#if CONF_core_reseed_on_resume
+// Low-latency, read-path half of the hypervisor-resume CSPRNG reseed described
+// at reseed_on_resume() below. The problem it solves: a full-VM snapshot
+// captures the entropy pool and CSPRNG state, so two guests restored from the
+// same snapshot would replay an identical OS random stream (duplicate session
+// keys, TCP sequence numbers, UUIDs) until something forces a re-key.
+//
+// Resume is detected in two independent places:
+//   1. drivers/kvmclock.cc, in the 1Hz "kvm_wall_clock_sync" thread: a proactive
+//      detector that fires within ~1.5s of resume even if nothing ever reads
+//      /dev/random. This is the one that covers in-kernel CSPRNG consumers
+//      (arc4random()/read_random() for TCP ISNs etc.) which never enter this
+//      read path.
+//   2. here, in random_read(): a reactive detector that fires immediately on
+//      the first /dev/random or getrandom() read after resume, closing the up
+//      to ~1.5s window in which detector 1 has not fired yet.
+//
+// We compare the monotonic uptime clock against the value seen at the previous
+// read. Between two back-to-back reads uptime advances by microseconds; a jump
+// far larger than any plausible gap between reads (>1.5s, matching the kvmclock
+// detector's threshold: this code exists to detect the same event sooner, not
+// at a lower threshold) means the guest was paused across a snapshot and
+// resumed, so we re-key before serving. Reseeding is skipped on the hot read
+// path (back-to-back reads never exceed the threshold) and, in the rare case it
+// does fire after a long idle with no resume, an extra re-key is harmless.
+static std::atomic<u64> _last_read_uptime{0};
+// Set true once randomdev_init() has brought the device (and the harvest ring)
+// up, so reseed_on_resume() is a true no-op if a resume is somehow detected
+// before that (e.g. with --norandom).
+static std::atomic<bool> _reseed_ready{false};
+
+static void reseed_if_resumed()
+{
+    u64 now = (u64)::clock::get()->uptime();
+    u64 prev = _last_read_uptime.exchange(now, std::memory_order_relaxed);
+    // Skip the very first read (prev == 0) and only act on a large forward jump.
+    // 1.5s matches the kvmclock detector; the purpose of this read-path check is
+    // faster detection of the same resume event, not a lower threshold.
+    if (prev != 0 && now > prev && (now - prev) > 1500000000ULL) {
+        reseed_on_resume();
+    }
+}
+#endif
+
 static int
 random_read(struct device *dev, struct uio *uio, int ioflags)
 {
     int c, error = 0;
     char random_buf[PAGE_SIZE];
+
+#if CONF_core_reseed_on_resume
+    reseed_if_resumed();
+#endif
 
     // Blocking logic
     if (!random_adaptor->seeded) {
@@ -206,6 +266,74 @@ void randomdev_init()
 {
     new random_device();
     debugf("random: <%s> initialized\n", random_adaptor->ident);
+#if CONF_core_reseed_on_resume
+    _reseed_ready.store(true, std::memory_order_release);
+#endif
 }
+
+#if CONF_core_reseed_on_resume
+// Force the CSPRNG to re-key after a hypervisor resume so that two guests
+// restored from the SAME snapshot do not keep producing identical OS random
+// output. A full-VM snapshot captures the entire entropy pool and CSPRNG state,
+// so without an explicit reseed every clone would replay the exact same random
+// stream. This is a real correctness and security problem for a cloned fleet
+// (duplicated session keys, TCP sequence numbers, UUIDs, and so on).
+//
+// We mix in values that are guaranteed to differ between two clones even when
+// there is no live hardware entropy source (no RDRAND, no virtio-rng): the
+// wall-clock time the hypervisor handed us on resume differs per clone because
+// each clone is resumed at a distinct host wall-clock instant, and the TSC on
+// resume differs as well. We feed that unique material into the harvest queue
+// as DIVERGENCE material only (bits == 0), so it is hashed into the pool to
+// force the two clones apart but is NOT credited as entropy - it must never be
+// able to advance Yarrow's counters or unblock /dev/random on its own, since it
+// is predictable low-quality data, not real entropy. RDRAND/RDSEED and any
+// virtio-rng source continue to feed the pool as before. After mixing we
+// command an explicit reseed so the re-key takes effect immediately rather than
+// only after the next periodic harvest round.
+//
+// This runs ONLY when a resume has actually been detected (see the two callers:
+// the 1Hz "kvm_wall_clock_sync" thread in drivers/kvmclock.cc, and
+// reseed_if_resumed() on the /dev/random read path above), so a normally-
+// running or freshly-booted guest that is never resumed follows exactly the
+// same code path as before.
+void reseed_on_resume()
+{
+    // No-op until the random device has actually been initialized. random_adaptor
+    // is always non-null (it points at the static soft CSPRNG context), so that
+    // alone is not enough: with --norandom, or if a resume were somehow detected
+    // before randomdev_init() ran, the harvest ring would not exist yet and
+    // random_harvestq_internal() would dereference it. _reseed_ready is set true
+    // only at the end of randomdev_init(), after random_harvestq_init().
+    if (!random_adaptor || !_reseed_ready.load(std::memory_order_acquire)) {
+        return;
+    }
+
+    // Per-resume unique material. Each field differs between two clones that
+    // were resumed from the same snapshot at different host wall-clock instants.
+    struct {
+        u64 wall_ns;
+        u64 tsc;
+        u64 uptime_ns;
+    } seed;
+    seed.wall_ns = (u64)::clock::get()->time();
+    seed.uptime_ns = (u64)::clock::get()->uptime();
+#ifdef __x86_64__
+    seed.tsc = processor::rdtsc();
+#else
+    seed.tsc = seed.uptime_ns;
+#endif
+
+    // Mix the unique material in with a zero entropy-bit credit (divergence, not
+    // entropy), then force an explicit reseed so the re-key is effective before
+    // the next read. Any live hardware source (RDRAND / virtio-rng) is drained
+    // by the reseed itself.
+    random_harvestq_internal(seed.tsc, &seed, sizeof(seed),
+                             0, RANDOM_PURE_RDRAND);
+    if (random_adaptor->reseed) {
+        (random_adaptor->reseed)();
+    }
+}
+#endif
 
 }

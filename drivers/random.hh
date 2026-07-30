@@ -37,6 +37,12 @@ public:
 
 void randomdev_init();
 
+// Re-key the CSPRNG after a hypervisor resume so that guests restored from the
+// same full-VM snapshot diverge instead of replaying an identical random
+// stream. Safe no-op if the random device is not yet initialized. Only called
+// when a resume has actually been detected.
+void reseed_on_resume();
+
 }
 
 #endif
