@@ -43,8 +43,8 @@ private:
 arm_clock::arm_clock() {
     asm volatile ("mrs %0, cntfrq_el0; isb; " : "=r"(freq_hz) :: "memory");
     /* spec documents a typical range of 1-50 MHZ, but real cores run higher:
-     * the ampere-1a runs at 1GHz and AWS Graviton3 (Neoverse-V1) passes a
-     * 1.05GHz generic-timer frequency through to the guest, so the previous
+     * some server ARM cores run at 1GHz and up (one Neoverse-V1 part passes a
+     * 1.05GHz generic-timer frequency through to the guest), so the previous
      * 1GHz ceiling aborted the boot.  Allow up to 2GHz to cover current server
      * ARM cores with headroom while still catching a garbage read. */
     if (freq_hz < 1 * MHZ || freq_hz > 2000 * MHZ) {

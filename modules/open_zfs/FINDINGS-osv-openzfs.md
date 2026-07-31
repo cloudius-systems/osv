@@ -1,7 +1,7 @@
 <!-- Copyright (C) 2026 Greg Burd -->
 # OpenZFS-on-OSv: debugging findings
 
-Hands-on debugging on EC2 m5d.metal, fedora:39 build container, KVM guests.
+Debugging notes from bringing OpenZFS up on OSv under KVM.
 
 ## Bug 1 - zpool export/import lfmutex owner assertion (FIXED)
 
