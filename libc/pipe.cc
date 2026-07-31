@@ -6,6 +6,8 @@
  */
 
 #include "pipe_buffer.hh"
+#include <osv/fork_arena.hh>
+#include <osv/kernel_config_fork.h>
 
 #include <fs/fs.hh>
 #include <osv/fcntl.h>
@@ -92,6 +94,14 @@ int pipe2(int pipefd[2], int flags) {
         return libc_error(EINVAL);
     }
 
+#if CONF_fork
+    // Allocate the pipe_buffer + pipe_file on the identity kernel heap so the
+    // self-pipe backing a PostgreSQL latch is coherent across every fork
+    // address space: a cross-backend SetLatch delivers SIGURG whose handler
+    // writes the self-pipe from another AS, and the waiting backend polls the
+    // same pipe.  Same rule as the epoll_file / struct file containers.
+    fork_arena::kernel_heap_scope _pipe_kh;
+#endif
     auto b = new pipe_buffer;
     std::unique_ptr<pipe_reader> s1{new pipe_reader(b)};
     std::unique_ptr<pipe_writer> s2{new pipe_writer(b)};
