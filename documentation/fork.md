@@ -87,7 +87,7 @@ fork() to those who require it.
   etc.) returns `ENOSYS` — there are no namespaces to unshare.
 
 - **aarch64.** Implemented and validated: the stack-copy + `br` resume
-  trampoline works on aarch64 (Graviton) as well as x86-64. `tst-fork` passes
+  trampoline works on aarch64 as well as x86-64. `tst-fork` passes
   10/10 on both architectures.
 
 ## Implementation

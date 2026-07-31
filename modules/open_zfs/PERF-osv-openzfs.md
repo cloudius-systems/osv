@@ -15,7 +15,7 @@ Both built from `pr/openzfs-draft` (1a298e1b), same commit, separate clones.
 
 ## Test bed
 
-- Host: AWS `m5d.metal` (96 vCPU, 377 GiB RAM, local NVMe instance store).
+- Host: a 2-socket x86-64 bare-metal host (96 vCPU, ~377 GiB RAM) with local NVMe.
 - Guest: OSv `zfs_builder.elf` booted directly (`--nomount --noinit
   --preload-zfs-library /zfs-bench.so <wl>`), **8 GiB RAM, 4 vCPU, KVM**.
 - Backing:

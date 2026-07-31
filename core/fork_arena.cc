@@ -100,7 +100,7 @@ spinlock g_slot_lock;   // guards slot acquisition only (rare: once per AS)
 // only if the table is full (caller then runs bump-only).
 as_freelist *slot_for(void *as)
 {
-    // ponytail: O(max_as_slots) linear scan per alloc/free; owners pack from
+    // note: O(max_as_slots) linear scan per alloc/free; owners pack from
     // index 0 so the common case is a short scan. Swap for a hash keyed on
     // (address_space*) if the process count ever makes this measurable.
     // Fast path: already-claimed slot, no lock.
