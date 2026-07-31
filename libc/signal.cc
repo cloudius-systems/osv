@@ -549,6 +549,24 @@ int kill(pid_t pid, int sig)
             errno = ESRCH;
             return -1;
         }
+    } else if (pid == getpid() && (sig == SIGURG || sig == SIGUSR1)) {
+        // A LIVE fork-backend's OWN latch/barrier self-signal must run its
+        // handler in the caller's own COW address space, so the handler sets
+        // the flag / pokes the self-pipe in the copy the backend actually
+        // reads.  Two PostgreSQL self-signals need this:
+        //   * WakeupMyProc() -> kill(MyProcPid, SIGURG): latch_sigurg_handler
+        //     writes selfpipe_writefd to wake the backend's own WaitEventSet.
+        //   * EmitProcSignalBarrier() -> kill(MyProcPid, SIGUSR1):
+        //     HandleProcSignalBarrierInterrupt sets ProcSignalBarrierPending so
+        //     the backend absorbs its OWN barrier (DROP DATABASE / DROP
+        //     TABLESPACE otherwise wait for their own PID forever).
+        // Restrict to SIGURG/SIGUSR1 so the child-exit SIGCHLD that fork
+        // emulation raises with kill(getpid(), SIGCHLD) from a dying child
+        // (fork.cc child_exited) is NOT diverted -- its reaper must run the
+        // postmaster's handler in AS0, not in the child's torn-down COW AS.
+        // as_for_pid() also gates this to a live REGISTERED child: a child
+        // mid-teardown (unregister_pid already ran) returns nullptr -> AS0.
+        target_as = osv::fork::as_for_pid(pid);
     }
 #else
     // OSv only implements one process, whose pid is getpid().
