@@ -1,0 +1,84 @@
+From d08da4b0d2913d05c2647187c575cfa03b8f3db4 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Sat, 30 May 2026 10:57:29 -0400
+Subject: [PATCH 15/19] zfs: fix zfs_uioskip to advance the iov pointer
+
+OSv's zfs_uioskip() was only advancing uio_offset and uio_resid; the
+caller's iov[].iov_base / .iov_len were left unchanged.  Subsequent
+zfs_uiomove() / zfs_uio_fault_move() calls then read from the wrong
+source bytes -- the address held in iov[0].iov_base before the skip --
+which silently corrupted any write spanning more than one ZFS record.
+
+Reproducer: a single write() of 256 KiB to a fresh file followed by
+a read+memcmp.  The second 128 KiB record came back populated from
+the first record's source bytes, byte-for-byte.  Smaller writes that
+fit in one recordsize (default 128 KiB) were unaffected, which is
+why no existing test caught it -- tst-fs-bench and tst-zfs-recordsize
+don't verify data after read.
+
+The fix mirrors FreeBSD's zfs_uioskip(), which routes through
+zfs_uiomove(NULL, ...) / UIO_NOCOPY so the iov is advanced exactly
+the way uiomove() advances it for a real copy.  Here we open-code the
+iov walk because OSv's struct uio has no segflg field.
+
+Verified end-to-end: the new tst-zfs-multirec passes; tst-zfs-direct-io,
+tst-zfs-trim, tst-zfs-encryption, tst-zfs-db-sim all continue to pass;
+tst-crucible-zfs now succeeds at the 256 KiB write+read+verify step
+that previously failed.
+
+(cherry picked from commit 1f725caf2e2d0203e6f7331e6ea3da7068f41f91)
+---
+ module/os/osv/zfs/spl_uio.c | 34 ++++++++++++++++++++++++++++------
+ 1 file changed, 28 insertions(+), 6 deletions(-)
+
+diff --git a/module/os/osv/zfs/spl_uio.c b/module/os/osv/zfs/spl_uio.c
+index d9a635b9d..60b42d2c7 100644
+--- a/module/os/osv/zfs/spl_uio.c
++++ b/module/os/osv/zfs/spl_uio.c
+@@ -40,15 +40,37 @@ zfs_uiocopy(void *p, size_t n, zfs_uio_rw_t rw, zfs_uio_t *uio,
+ void
+ zfs_uioskip(zfs_uio_t *uio, size_t n)
+ {
++	/*
++	 * Skip n bytes in the uio without copying any data.  Advances
++	 * uio_offset, uio_resid, AND the iov pointer/length for each
++	 * iovec the skipped range crosses.  Failing to advance the iov
++	 * causes subsequent zfs_uiomove() / zfs_uio_fault_move() calls
++	 * to copy from the wrong source byte (the address held in
++	 * iov[0].iov_base before the skip), which manifests as the
++	 * second ZFS record of a single multi-record write being
++	 * populated from the first record's source data.
++	 */
+ 	if (n > zfs_uio_resid(uio))
+ 		return;
+ 
+-	/*
+-	 * OSv: uio doesn't have segflg field. Just advance the offset
+-	 * and decrease resid to skip data.
+-	 */
+-	zfs_uio_offset(uio) += n;
+-	zfs_uio_resid(uio) -= n;
++	struct uio *suio = GET_UIO_STRUCT(uio);
++	size_t remaining = n;
++	while (remaining > 0 && suio->uio_resid > 0) {
++		struct iovec *iov = suio->uio_iov;
++		if (iov->iov_len == 0) {
++			suio->uio_iov++;
++			suio->uio_iovcnt--;
++			continue;
++		}
++		size_t cnt = iov->iov_len;
++		if (cnt > remaining)
++			cnt = remaining;
++		iov->iov_base = (char *)iov->iov_base + cnt;
++		iov->iov_len -= cnt;
++		suio->uio_offset += cnt;
++		suio->uio_resid -= cnt;
++		remaining -= cnt;
++	}
+ }
+ 
+ int
+-- 
+2.53.0
+

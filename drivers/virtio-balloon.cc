@@ -219,7 +219,7 @@ void balloon::worker()
     // target on a modest interval instead: ballooning is not latency-critical,
     // and a sub-second reaction to memory pressure is fine.
     //
-    // ponytail: polling because config-change IRQ is unwired in virtio core;
+    // TODO: polling because config-change IRQ is unwired in virtio core;
     // drop the timer and wake purely on the config-change vector once that is
     // plumbed (VIRTIO_MSI_CONFIG_VECTOR).
     using namespace std::chrono;

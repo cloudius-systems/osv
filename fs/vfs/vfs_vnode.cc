@@ -42,6 +42,7 @@
 #include <osv/prex.h>
 #include <osv/vnode.h>
 #include <osv/export.h>
+#include <osv/fork_arena.hh>
 #include "vfs.h"
 
 OSV_LIBSOLARIS_API
@@ -187,6 +188,15 @@ vget(struct mount *mp, uint64_t ino, struct vnode **vpp)
 		return 1;
 	}
 
+	// A vnode is shared filesystem cache infrastructure inherited across
+	// fork().  If it lived in the COW fork arena, the child's first write to
+	// it -- e.g. locking v_lock during a file read done while servicing a
+	// demand fault -- would take a COW write fault nested inside the page-fault
+	// handler (fatal).  Allocate it (and its fs-private v_data via VFS_VGET) on
+	// the identity kernel heap so it is shared verbatim across address spaces.
+#if CONF_fork
+	fork_arena::kernel_heap_scope kh;
+#endif
 	if (!(vp = new vnode())) {
 		VNODE_UNLOCK();
 		return 0;

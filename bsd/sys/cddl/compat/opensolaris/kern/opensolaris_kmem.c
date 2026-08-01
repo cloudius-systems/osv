@@ -37,10 +37,56 @@
 
 #include <osv/export.h>
 
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+/*
+ * Fork COW-coherence for the ZFS (SPL) heap.
+ *
+ * OSv gives a forked child its own copy-on-write address space; APPLICATION
+ * heap allocations made on an app thread land in the per-AS COW "fork arena"
+ * (VA 0x3000..), which diverges physically per child.  ZFS, however, is a
+ * KERNEL subsystem whose objects are touched from BOTH sides of the fork COW
+ * boundary: an app thread calling in from a fork child's AS (e.g. PostgreSQL's
+ * forked startup process running recovery/checkpoint) AND ZFS's own kernel
+ * threads / I/O-completion paths in AS0 (the block-completion thread,
+ * txg_sync_thread, dp_sync_taskq, zil lwb writer).  A great many of those
+ * objects embed a synchronization primitive on which one side BLOCKS and the
+ * other SIGNALS across the AS boundary, or are simply dereferenced by an AS0
+ * thread: zio_t.io_cv, zil_commit_waiter_t.zcw_cv, dmu_tx / dbuf / dnode /
+ * objset / arc_buf_hdr and their embedded locks and condvars.
+ *
+ * If such an object sits in the COW fork arena, the two address spaces touch
+ * DIFFERENT physical copies -- a lost wakeup (every vCPU idles, PostgreSQL
+ * never reaches "ready to accept connections") or an AS0 fault on a stale
+ * pointer.  (The wait_record is already made cross-AS coherent by
+ * coherent_wait_record in condvar::wait; the block-I/O bio by alloc_bio(); the
+ * remaining divergence is the ZFS objects these primitives are embedded in.)
+ *
+ * Fix: route ALL SPL/ZFS heap allocations onto the identity kernel heap
+ * (mapped verbatim in every address space) so every ZFS object is coherent in
+ * every fork address space.  ZFS objects are shared kernel state, not
+ * per-process app state, so this is their correct home; it only forgoes COW
+ * isolation for the ZFS heap (which must be AS-coherent anyway) and is a no-op
+ * for allocations already made on AS0 kernel threads (those never route to the
+ * arena).  Mirrors the fork_arena::kernel_heap_scope used in-kernel for thread
+ * objects, wait_records, epoll containers, the block bio, etc.  free()
+ * dispatches purely by address, so identity-heap ZFS objects free correctly
+ * from any address space.
+ */
+extern void fork_kernel_heap_push(void);
+extern void fork_kernel_heap_pop(void);
+#endif
+
 void *
 zfs_kmem_alloc(size_t size, int kmflags)
 {
+#if CONF_fork
+	fork_kernel_heap_push();
+#endif
 	void *ptr = malloc(size);
+#if CONF_fork
+	fork_kernel_heap_pop();
+#endif
 	if (ptr && (kmflags & M_ZERO))
 		memset(ptr, 0, size);
 	return ptr;
@@ -98,6 +144,9 @@ void *
 kmem_cache_alloc(kmem_cache_t *cache, int flags)
 {
 	void *p;
+#if CONF_fork
+	fork_kernel_heap_push();
+#endif
 	if (cache->kc_align) {
 		int error = posix_memalign(&p, cache->kc_align, cache->kc_size);
 		if (error)
@@ -108,6 +157,9 @@ kmem_cache_alloc(kmem_cache_t *cache, int flags)
 		memset(p, 0, cache->kc_size);
 	if (p != NULL && cache->kc_constructor != NULL)
 		kmem_std_constructor(p, cache->kc_size, cache, flags);
+#if CONF_fork
+	fork_kernel_heap_pop();
+#endif
 	return (p);
 }
 

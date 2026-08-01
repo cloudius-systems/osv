@@ -6,6 +6,7 @@
  */
 
 #include <osv/sched.hh>
+#include <osv/mmu.hh>
 #include <list>
 #include <osv/mutex.h>
 #include <osv/rwlock.h>
@@ -24,6 +25,10 @@
 #include <unordered_map>
 #include <osv/wait_record.hh>
 #include <osv/preempt-lock.hh>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 #include <osv/app.hh>
 #include <osv/symbols.hh>
 #include <osv/stubbing.hh>
@@ -133,6 +138,19 @@ std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority
 
 namespace sched {
 
+void *alloc_thread_storage(size_t align, size_t size)
+{
+#if CONF_fork
+    // Force the identity kernel heap: a thread object is dereferenced by the
+    // scheduler from every address space, so it must not land in the COW fork
+    // arena (which would give each address space a private copy).
+    fork_arena::kernel_heap_scope kh;
+    return aligned_alloc(align, size);
+#else
+    return aligned_alloc(align, size);
+#endif
+}
+
 class thread::reaper {
 public:
     reaper();
@@ -140,7 +158,11 @@ public:
     void add_zombie(thread* z);
 private:
     mutex _mtx;
-    std::list<thread*> _zombies;
+    // Intrusive zombie list (no node allocation on add_zombie -- see the
+    // _zombie_link comment in sched.hh).
+    bi::list<thread,
+             bi::member_hook<thread, bi::list_member_hook<>, &thread::_zombie_link>,
+             bi::constant_time_size<false>> _zombies;
     thread_unique_ptr _thread;
 };
 
@@ -408,7 +430,31 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
     return switch_data;
 }
 #else
+#if CONF_fork
+    // Fork timer-park: remove the OUTGOING app thread's app-stack timers from
+    // THIS cpu's per-CPU timer list before we switch (its address space is
+    // still loaded, so its on-stack timer nodes are valid to walk here).  We
+    // park on EVERY app-thread switch-out, not just AS-crossing ones: the
+    // per-CPU timer list is walked from IRQ context in whatever AS the CPU
+    // holds, so it must only ever contain the CURRENTLY-running app thread's
+    // app-stack timers (plus kernel/identity timers, which are valid in every
+    // AS).  An app thread's timers left in the list after it stops running
+    // would be dereferenced through a foreign AS on the next timer IRQ -> a
+    // wild page fault in non-preemptable context (arch/x64/mmu.cc:38).  Kernel
+    // threads (!is_app) keep identity-memory timers, so they are never parked.
+    // See cpu::park_timers.
+    if (p->is_app()) {
+        park_timers(*p);
+    }
+#endif
     n->switch_to();
+#if CONF_fork
+    // We are now running as the thread that this reschedule scheduled OUT
+    // earlier and is now resuming; its own address space is loaded.  Re-insert
+    // its parked app-stack timers (safe -- its AS is current).  cpu::current()
+    // because 'this' is stale after switch_to.
+    cpu::current()->unpark_timers(*thread::current());
+#endif
 #endif
 
     // Note: after the call to n->switch_to(), we should no longer use any of
@@ -549,7 +595,19 @@ void cpu::handle_incoming_wakeups()
                     // perform renormalizations which we missed while sleeping.
                     t._runtime.update_after_sleep();
                     enqueue(t);
+#if CONF_fork
+                    // A parked fork thread's timers must be resumed in ITS OWN
+                    // address space (on switch-in, via cpu::unpark_timers), not
+                    // here -- this runs in whatever AS the waking CPU holds, and
+                    // resume_timers() would walk the thread's on-stack timer
+                    // nodes through a foreign AS and fault.  Skip the resume for
+                    // a parked thread; unpark_timers does it when it runs.
+                    if (!t._timers_parked) {
+                        t.resume_timers();
+                    }
+#else
                     t.resume_timers();
+#endif
                 }
             }
         }
@@ -711,6 +769,12 @@ void thread::pin(thread *t, cpu *target_cpu)
             case status::waking:
                 trace_sched_migrate(t, target_cpu->id);
                 t->stat_migrations.incr();
+#if CONF_fork
+                // Migrating a possibly-parked thread: unlink it from its
+                // (source == this) cpu's parked list first, so it never stays
+                // linked on a foreign cpu's list after the move.
+                cpu::unlink_parked(*t);
+#endif
                 t->suspend_timers();
                 t->_runtime.export_runtime();
                 t->_detached_state->_cpu = target_cpu;
@@ -727,6 +791,9 @@ void thread::pin(thread *t, cpu *target_cpu)
                 current_cpu->runqueue.erase(current_cpu->runqueue.iterator_to(*t));
                 trace_sched_migrate(t, target_cpu->id);
                 t->stat_migrations.incr();
+#if CONF_fork
+                cpu::unlink_parked(*t);
+#endif
                 t->suspend_timers();
                 t->_runtime.export_runtime();
                 t->_detached_state->_cpu = target_cpu;
@@ -827,6 +894,13 @@ void cpu::load_balance()
             // we won't race with wake(), since we're not thread::waiting
             assert(mig._detached_state->st.load() == thread::status::queued);
             mig._detached_state->st.store(thread::status::waking);
+#if CONF_fork
+            // A preempted (queued) app thread may be parked on THIS cpu's list
+            // (park_timers runs on every app-thread switch-out).  Unlink it
+            // here, on its owning (source) cpu, before it migrates to `min`, so
+            // it is never left linked on a foreign cpu's parked list.
+            cpu::unlink_parked(mig);
+#endif
             mig.suspend_timers();
             mig._detached_state->_cpu = min;
             // Convert the CPU-local runtime measure to a globally meaningful
@@ -1087,6 +1161,12 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
     , _joiner(nullptr)
 {
     trace_thread_create(this);
+#if CONF_fork
+    // Inherit the creating thread's address space (AS0 for the very first
+    // threads).  fork() reassigns the child thread to its private child AS.
+    _current_as = sched::s_current ? sched::s_current->_current_as
+                                   : mmu::kernel_address_space();
+#endif
 
     if (!main && sched::s_current) {
         auto app = application::get_current().get();
@@ -1455,6 +1535,26 @@ void thread::stop_wait()
 void thread::complete()
 {
     run_exit_notifiers();
+#if CONF_fork
+    // If this thread was parked (its app-stack timers removed from the per-CPU
+    // list and it is linked on some cpu::parked_threads), drop it from the
+    // parked list now -- while it still runs on its own cpu in its own address
+    // space.  Otherwise the reaper would later destroy it with a live
+    // _parked_link, and the next rearm_park_timer() walk would dereference a
+    // freed thread.  Erase from the OWNING cpu's list (t._parked_cpu), which
+    // migration keeps in sync; it is this cpu in the common case.  Its timers
+    // are all being torn down anyway, so no wakeup is lost.
+    if (_parked_link.is_linked()) {
+        auto *c = _parked_cpu;
+        assert(c);
+        c->parked_threads.erase(c->parked_threads.iterator_to(*this));
+        _parked_cpu = nullptr;
+        _timers_parked = false;
+        c->rearm_park_timer();
+    } else {
+        _timers_parked = false;
+    }
+#endif
 
     //The logic below only applies when running statically
     //linked executables or dynamically linked ones launched by the
@@ -1547,6 +1647,141 @@ void timer_base::client::resume_timers()
     _timers_need_reload = false;
     cpu::current()->timers.resume(_active_timers);
 }
+
+#if CONF_fork
+osv::clock::uptime::time_point timer_base::client::earliest_active_deadline() const
+{
+    auto best = osv::clock::uptime::time_point::max();
+    for (auto& t : _active_timers) {
+        if (t._time < best) {
+            best = t._time;
+        }
+    }
+    return best;
+}
+
+// --- Fork timer-park -------------------------------------------------------
+//
+// Called from the context switch (core/sched.cc) on every APP-thread switch-out
+// / switch-in.  It only ever does real work once a fork has created a second
+// address space (before that all app threads share AS0 and the per-CPU timer
+// list is always walked in the one-and-only AS); the guards below make it a
+// cheap no-op otherwise.  The invariant it maintains: the per-CPU timer list
+// must only ever contain the currently-running app thread's app-stack timers
+// (plus kernel/identity timers, valid in every AS), so an IRQ-context walk in
+// any address space never dereferences a foreign-AS stack timer node.
+
+void cpu::park_timers(thread& t)
+{
+    // Outgoing thread's AS is still loaded, so its on-stack _active_timers are
+    // valid to walk.  Snapshot its earliest deadline, drop all its timers from
+    // THIS cpu's per-CPU list (suspend_timers -- sets _timers_need_reload so a
+    // concurrent migration suspend/resume of the same thread is a coherent
+    // no-op), and park it so a foreign-AS timer IRQ never dereferences its
+    // stack timer nodes.
+    if (t._timers_parked || t.timers_suspended() || !t.has_active_timers()) {
+        return;
+    }
+    t._parked_deadline = t.earliest_active_deadline();
+    t.suspend_timers();
+    // Never push_back a node that is already linked (would trip the intrusive
+    // -list safe-link double-insert assert).  A migration may have left the
+    // thread linked on ANOTHER cpu's list; the migration paths call
+    // unlink_parked() to prevent that, but assert-guard here regardless.
+    assert(!t._parked_link.is_linked());
+    parked_threads.push_back(t);
+    t._parked_cpu = this;
+    t._timers_parked = true;
+    rearm_park_timer();
+}
+
+void cpu::unpark_timers(thread& t)
+{
+    // Incoming thread's AS is loaded, so re-inserting its on-stack timers into
+    // the per-CPU list is safe.
+    if (!t._timers_parked) {
+        return;
+    }
+    // If the thread is still linked on a parked list, it must be THIS cpu's:
+    // a migration would have unlinked it from its source cpu (unlink_parked)
+    // before it could run here.  Erase from the owning cpu's list.
+    if (t._parked_link.is_linked()) {
+        assert(t._parked_cpu);
+        t._parked_cpu->parked_threads.erase(
+            t._parked_cpu->parked_threads.iterator_to(t));
+        cpu *owner = t._parked_cpu;
+        t._parked_cpu = nullptr;
+        owner->rearm_park_timer();
+    }
+    t._timers_parked = false;
+    t.resume_timers();
+}
+
+// Migration helper: unlink a (migrating) parked thread from its owning cpu's
+// parked list, WITHOUT resuming its timers.  Called on the source cpu (which is
+// the owning cpu) by load_balance / thread::pin while migrating a parked thread
+// to another cpu.  Its timers stay suspended (migration also calls
+// suspend_timers, a no-op here) and _timers_parked stays set, so the AS-local
+// resume still fires when the thread is next switched in on the target cpu.
+// The migration path re-wakes the thread, so it does not need the parked list's
+// deadline wakeup anymore.
+void cpu::unlink_parked(thread& t)
+{
+    if (!t._parked_link.is_linked()) {
+        return;
+    }
+    cpu *owner = t._parked_cpu;
+    assert(owner);
+    owner->parked_threads.erase(owner->parked_threads.iterator_to(t));
+    t._parked_cpu = nullptr;
+    owner->rearm_park_timer();
+}
+
+void cpu::rearm_park_timer()
+{
+    auto best = osv::clock::uptime::time_point::max();
+    for (auto& t : parked_threads) {
+        if (t._parked_deadline < best) {
+            best = t._parked_deadline;
+        }
+    }
+    if (best == osv::clock::uptime::time_point::max()) {
+        park_wakeup_timer.cancel();
+    } else {
+        // Cancel first: park_wakeup_timer may already be armed (re-arm on every
+        // park/unpark/fire).  set_with_irq_disabled unconditionally links the
+        // timer, so double-arming a still-linked timer trips the intrusive-list
+        // safe-link assert.  cancel() is a no-op when already free.
+        park_wakeup_timer.cancel();
+        park_wakeup_timer.set_with_irq_disabled(best);
+    }
+}
+
+void cpu::park_timer_fired()
+{
+    // Fired from the timer IRQ.  We may be in ANY address space, so we must NOT
+    // touch a parked thread's on-stack timer nodes.  Only wake the due threads
+    // (that touches solely their identity thread objects).  A woken thread is
+    // scheduled in via the normal path, and on switch-in unpark_timers() (in
+    // ITS address space) re-inserts its now-expired real timer, which fires
+    // there and completes the wait.  We leave the thread on the parked list
+    // with _timers_parked set (unpark_timers removes it) but bump its parked
+    // deadline to 'max' so we do not re-fire on it before it runs.
+    auto now = osv::clock::uptime::now();
+    for (auto& t : parked_threads) {
+        if (t._parked_deadline <= now) {
+            t._parked_deadline = osv::clock::uptime::time_point::max();
+            t.wake_with_irq_disabled();
+        }
+    }
+    rearm_park_timer();
+}
+
+void cpu::park_client::timer_fired()
+{
+    _cpu->park_timer_fired();
+}
+#endif
 
 void thread::join()
 {
@@ -1859,7 +2094,7 @@ void thread::reaper::reap()
         WITH_LOCK(_mtx) {
             wait_until(_mtx, [=] { return !_zombies.empty(); });
             while (!_zombies.empty()) {
-                auto z = _zombies.front();
+                auto z = &_zombies.front();
                 _zombies.pop_front();
                 z->join();
                 z->_cleanup();
@@ -1872,7 +2107,11 @@ void thread::reaper::add_zombie(thread* z)
 {
     assert(z->_attr._detached);
     WITH_LOCK(_mtx) {
-        _zombies.push_back(z);
+        // Intrusive push -- no allocation, so this is safe from a
+        // preemption-disabled thread-termination context and coherent across
+        // address spaces even when the terminating thread is a fork child
+        // running in its COW address space (see _zombie_link in sched.hh).
+        _zombies.push_back(*z);
         _thread->wake();
     }
 }

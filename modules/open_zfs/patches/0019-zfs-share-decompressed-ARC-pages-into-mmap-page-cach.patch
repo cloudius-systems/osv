@@ -1,0 +1,152 @@
+From 85f2823fa3adbb360778fb4c27e6547fe63b35e9 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Sat, 11 Jul 2026 08:05:21 -0400
+Subject: [PATCH 19/19] zfs: share decompressed ARC pages into mmap page cache
+
+zfs_vop_cache() copied each faulted page out of the ARC into a freshly
+allocated page. When the block is a whole number of pages the ARC dbuf's
+db_data is already page-aligned (zio_init), so the decompressed page can
+be handed to the page cache directly with no memcpy.
+
+Pin the covering dbuf, and if db_data is page-aligned and the target page
+is fully backed, map db_data + intra-record offset straight into the page
+cache. Ownership of the hold transfers to the cached_page_arc, whose
+destructor releases it via the registered osv_arc_dbuf_rele callback.
+Sub-page records and the file tail fall back to the copy path.
+
+Measured on a 256 MiB mmap read-fault bench (2 runs): compression=lz4
+cold sequential fault drops ~30% (4.8 -> 3.2-3.7 us/page) by eliminating
+the decompress-then-copy step; compression=off is flat within noise.
+RSS after mapping the whole file drops on both since pages are shared
+rather than duplicated. Checksums match the copy path.
+
+(cherry picked from commit b51aa1c77bcce3bab14377ef59fc587df54b29a6)
+---
+ module/os/osv/zfs/zfs_initialize_osv.c | 15 +++++++
+ module/os/osv/zfs/zfs_vnops_os.c       | 61 +++++++++++++++++++++++---
+ 2 files changed, 71 insertions(+), 5 deletions(-)
+
+diff --git a/module/os/osv/zfs/zfs_initialize_osv.c b/module/os/osv/zfs/zfs_initialize_osv.c
+index 5ca5c378e..800c24d39 100644
+--- a/module/os/osv/zfs/zfs_initialize_osv.c
++++ b/module/os/osv/zfs/zfs_initialize_osv.c
+@@ -82,6 +82,15 @@ extern void register_shrinker_arc_funs(
+     size_t (*)(void *, int),
+     size_t (*)(int64_t));
+ 
++/*
++ * osv_arc_dbuf_rele() is defined in zfs_vnops_os.c; osv_pagecache_register_arc_rele()
++ * lives in loader.elf (core/pagecache.cc).  Registering the former with the
++ * latter lets the page cache release a borrowed ARC dbuf hold when a shared
++ * mmap page (installed by zfs_vop_cache()'s page-sharing path) is dropped.
++ */
++extern void osv_arc_dbuf_rele(void *db);
++extern void osv_pagecache_register_arc_rele(void (*rele)(void *db));
++
+ /*
+  * The real ZFS VFS operations, defined in zfs_vfsops.c.
+  */
+@@ -321,6 +330,12 @@ zfs_initialize(void)
+ 	 */
+ 	register_shrinker_arc_funs(osv_arc_lowmem, osv_arc_sized_adjust);
+ 
++	/*
++	 * Register the ARC dbuf rele callback so the page cache can release
++	 * holds taken by zfs_vop_cache()'s mmap page-sharing path.
++	 */
++	osv_pagecache_register_arc_rele(osv_arc_dbuf_rele);
++
+ 	zfs_znode_init();
+ 
+ 	dmu_objset_register_type(DMU_OST_ZFS, zpl_get_file_info);
+diff --git a/module/os/osv/zfs/zfs_vnops_os.c b/module/os/osv/zfs/zfs_vnops_os.c
+index 33fe9ec71..bcea0cb97 100644
+--- a/module/os/osv/zfs/zfs_vnops_os.c
++++ b/module/os/osv/zfs/zfs_vnops_os.c
+@@ -1171,6 +1171,24 @@ zfs_vop_link(struct vnode *tdvp, struct vnode *svp, char *name)
+ extern __attribute__((visibility("default"))) void osv_pagecache_map_page(void *key, void *page);
+ extern __attribute__((visibility("default"))) void *osv_alloc_page(void);
+ extern __attribute__((visibility("default"))) void osv_free_page(void *p);
++extern __attribute__((visibility("default"))) void osv_pagecache_map_arc_page(void *key, void *db, void *page);
++extern __attribute__((visibility("default"))) void osv_pagecache_register_arc_rele(void (*rele)(void *db));
++
++/* Tag identifying dbuf holds taken by the mmap ARC page-sharing bridge. */
++static const char arc_page_tag[] = "osv_mmap_arc";
++
++/*
++ * osv_arc_dbuf_rele — release a dbuf hold taken by zfs_vop_cache()'s share
++ * path.  Registered with the page cache (osv_pagecache_register_arc_rele) so
++ * the cached_page_arc destructor can drop the hold when the page is evicted or
++ * unmapped.  Runs in loader.elf context, so it must be C-linkage + default
++ * visibility.
++ */
++__attribute__((visibility("default"))) void
++osv_arc_dbuf_rele(void *db)
++{
++	dmu_buf_rele((dmu_buf_t *)db, arc_page_tag);
++}
+ 
+ /*
+  * zfs_vop_cache — populate one page of a ZFS file into OSv's pagecache.
+@@ -1211,9 +1229,46 @@ zfs_vop_cache(struct vnode *vp, struct file *fp, struct uio *uio)
+ 	if (uio->uio_resid != PAGE_SIZE || uio->uio_offset % PAGE_SIZE)
+ 		return (EINVAL);
+ 
++	if ((error = zfs_enter_verify_zp(zfsvfs, zp, FTAG)) != 0)
++		return (error);
++
++	/*
++	 * Fast path: borrow the decompressed ARC page directly instead of
++	 * copying it.  Pin the dbuf covering this offset; if the record is a
++	 * whole number of pages, its db_data is page-aligned (see zio_init in
++	 * module/zfs/zio.c) and the target page is fully backed, we can hand
++	 * db_data + intra-record offset straight to the page cache with no
++	 * memcpy.  The dbuf hold keeps that page resident; ownership of the
++	 * hold transfers to the cached_page_arc, whose destructor releases it.
++	 */
++	dmu_buf_t *db = NULL;
++	dmu_object_info_t doi;
++	if (dmu_object_info(zfsvfs->z_os, zp->z_id, &doi) == 0 &&
++	    (doi.doi_data_block_size % PAGE_SIZE) == 0 &&
++	    dmu_buf_hold(zfsvfs->z_os, zp->z_id, uio->uio_offset,
++	    arc_page_tag, &db, DMU_READ_PREFETCH) == 0) {
++		if (IS_P2ALIGNED((uintptr_t)db->db_data, PAGE_SIZE) &&
++		    uio->uio_offset + PAGE_SIZE <=
++		    (off_t)(db->db_offset + db->db_size)) {
++			void *shared = (char *)db->db_data +
++			    (uio->uio_offset - db->db_offset);
++			zfs_exit(zfsvfs, FTAG);
++			/* Transfers the hold to the page cache; no rele here. */
++			osv_pagecache_map_arc_page(uio->uio_iov->iov_base,
++			    db, shared);
++			uio->uio_resid = 0;
++			return (0);
++		}
++		/* Not shareable (sub-page record or file tail): drop the hold. */
++		dmu_buf_rele(db, arc_page_tag);
++	}
++
++	/* Slow path: copy the page out of the ARC into a fresh page. */
+ 	page = osv_alloc_page();
+-	if (!page)
++	if (!page) {
++		zfs_exit(zfsvfs, FTAG);
+ 		return (ENOMEM);
++	}
+ 	memset(page, 0, PAGE_SIZE);
+ 
+ 	iov.iov_base = page;
+@@ -1224,10 +1279,6 @@ zfs_vop_cache(struct vnode *vp, struct file *fp, struct uio *uio)
+ 	read_uio.uio_resid  = PAGE_SIZE;
+ 	read_uio.uio_rw     = UIO_READ;
+ 
+-	if ((error = zfs_enter_verify_zp(zfsvfs, zp, FTAG)) != 0) {
+-		osv_free_page(page);
+-		return (error);
+-	}
+ 	zfs_uio_init(&zuio, &read_uio);
+ 	error = zfs_read(zp, &zuio, 0, kcred);
+ 	zfs_exit(zfsvfs, FTAG);
+-- 
+2.53.0
+

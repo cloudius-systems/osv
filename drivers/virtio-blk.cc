@@ -16,6 +16,10 @@
 
 #include <osv/mempool.hh>
 #include <osv/mmu.hh>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 
 #include <string>
 #include <string.h>
@@ -43,6 +47,10 @@ TRACEPOINT(trace_virtio_blk_make_request_readonly, "write on readonly device");
 TRACEPOINT(trace_virtio_blk_wake, "");
 TRACEPOINT(trace_virtio_blk_strategy, "write=%u, offset=%lu, bcount=%lu", bool, off_t, size_t);
 TRACEPOINT(trace_virtio_blk_strategy_ret, "%d", int);
+volatile unsigned long g_blk_submitted = 0;
+volatile unsigned long g_blk_completed = 0;
+volatile unsigned long g_blk_wr_submitted = 0;
+volatile unsigned long g_blk_wr_completed = 0;
 TRACEPOINT(trace_virtio_blk_req_ok, "bio=%p, sector=%lu, len=%lu, type=%x", struct bio*, u64, size_t, u32);
 TRACEPOINT(trace_virtio_blk_req_unsupp, "bio=%p, sector=%lu, len=%lu, type=%x", struct bio*, u64, size_t, u32);
 TRACEPOINT(trace_virtio_blk_req_err, "bio=%p, sector=%lu, len=%lu, type=%x", struct bio*, u64, size_t, u32);
@@ -149,9 +157,13 @@ blk::blk(virtio_device& virtio_dev)
 
     // One completion thread services all virtqueues: it wakes when any queue's
     // MSI-X vector fires, then drains every queue.
+    // 256 KB stack (matches the ZFS kthread convention in
+    // bsd/porting/kthread.cc): bio completion runs the filesystem's bio_done
+    // callback inline, and the ZFS path (vdev_disk_bio_done) overruns the
+    // default kernel stack.
     sched::thread* t = sched::thread::make(
         [this] { this->req_done(); },
-        sched::thread::attr().name("virtio-blk"));
+        sched::thread::attr().name("virtio-blk").stack(256 << 10));
     t->start();
 
     // With VIRTIO_BLK_F_MQ, setup_queue() maps queue index i -> MSI-X entry i
@@ -295,6 +307,8 @@ int blk::drain_queue(vring* queue)
     blk_req* req;
 
     while ((req = static_cast<blk_req*>(queue->get_buf_elem(&len))) != nullptr) {
+        g_blk_completed++;
+        if (req->hdr.type == VIRTIO_BLK_T_OUT) g_blk_wr_completed++;
         if (req->bio) {
             switch (req->res.status) {
             case VIRTIO_BLK_S_OK:
@@ -464,7 +478,14 @@ int blk::make_request(struct bio* bio)
             }
         }
 
+#if CONF_fork
+        // Freed cross-AS by the blk completion thread (req_done/drain_queue in
+        // AS0); keep it on the identity kernel heap so free() works from any AS.
+        blk_req* req;
+        { fork_arena::kernel_heap_scope _blk_kh; req = new blk_req(bio); }
+#else
         auto* req = new blk_req(bio);
+#endif
         blk_outhdr* hdr = &req->hdr;
         hdr->type = type;
         hdr->ioprio = 0;
@@ -489,6 +510,8 @@ int blk::make_request(struct bio* bio)
         queue->add_in_sg(&req->res, sizeof (struct blk_res));
 
         queue->add_buf_wait(req);
+        g_blk_submitted++;
+        if (type == VIRTIO_BLK_T_OUT) g_blk_wr_submitted++;
 
         queue->kick();
 

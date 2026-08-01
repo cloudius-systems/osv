@@ -21,3 +21,8 @@
 [submodule "kbuild"]
 	path = kbuild
 	url = https://github.com/osvunikernel/kbuild-standalone.git
+[submodule "open_zfs"]
+	path = modules/open_zfs/openzfs
+	url = https://github.com/openzfs/zfs.git
+	branch = zfs-2.4.2
+	ignore = dirty

@@ -22,6 +22,7 @@
 #include <osv/trace.hh>
 #include <osv/kernel_config_memory_debug.h>
 #include <osv/kernel_config_memory_jvm_balloon.h>
+#include <osv/kernel_config_fork.h>
 
 struct exception_frame;
 #if CONF_memory_jvm_balloon
@@ -131,6 +132,13 @@ public:
     anon_vma(addr_range range, unsigned perm, unsigned flags);
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
+#if CONF_fork
+    ~anon_vma();
+    // Re-key the shared-anon page provider to this vma's current start VA
+    // (needed after allocate() relocates a searched mapping).  No-op unless
+    // this is an anonymous MAP_SHARED vma.
+    void update_shared_base();
+#endif
 };
 
 class file_vma : public vma {
@@ -371,6 +379,52 @@ void vcleanup(void* addr, size_t size);
 error  advise(void* addr, size_t size, int advice);
 
 void vm_fault(uintptr_t addr, exception_frame* ef);
+
+#if CONF_fork
+// -----------------------------------------------------------------------------
+// Per-process address space (Stage 2 fork COW).
+//
+// An address_space bundles a page-table root (the PML4 whose physical address
+// is loaded into CR3) with its own set of VMAs.  Historically OSv had a single
+// global address space shared by all threads; that global is now "address
+// space 0" (the kernel + the initial application), returned by
+// kernel_address_space().  fork() creates a child address_space whose kernel
+// half (PML4 entries for OSv text/data + the identity/phys maps) is shared
+// with AS0, while the application half is a COW clone of the parent's.
+//
+// The concrete type is defined in core/mmu.cc (it owns the internal vma_list
+// container); here it is opaque.  Each thread carries a pointer to its current
+// address_space; the arch context switch loads its page-table root.
+struct address_space;
+
+// The kernel / initial-application address space ("AS0").  Always valid.
+address_space *kernel_address_space();
+
+// The address space the current thread runs in (a fork child's private AS, or
+// AS0 for the kernel and the non-fork application).  The mmu allocation/query
+// path resolves its vma_list / vma_range_set through this.
+address_space *current_address_space();
+
+// Physical address of an address_space's page-table root (value for CR3).
+phys pt_root_phys(address_space *as);
+
+// Create a child address_space that COW-clones "parent" for fork().  Private
+// writable VMAs are write-protected in both parent and child and marked COW;
+// MAP_SHARED / shm VMAs are mapped to the same physical pages (truly shared).
+// The kernel half of the page table is shared with the parent.
+address_space *clone_address_space(address_space *parent);
+
+// Register a writable segment of an in-app-slot kernel module (e.g.
+// libsolaris.so / OpenZFS) so it is SHARED verbatim -- never COW -- across every
+// fork child address space.  Such modules live in the COW-cloned app slot but
+// hold global kernel state that AS0 kernel threads and forked app threads must
+// see identically.  Called by the ELF loader for each writable PT_LOAD segment.
+void add_fork_shared_module_range(uintptr_t start, uintptr_t end);
+
+// Tear down a child address_space (frees its private page tables + VMAs).
+// Never call on the kernel address space.
+void destroy_address_space(address_space *as);
+#endif // CONF_fork
 
 std::string procfs_maps();
 std::string sysfs_linear_maps();
