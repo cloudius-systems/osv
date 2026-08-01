@@ -186,7 +186,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-smoke.so tst-bsd-evh.
 	libtls.so libtls_gold.so lib-misc-tls.so tst-tls.so \
 	tst-tls-gold.so tst-tls-pie.so tst-tls-pie-dlopen.so \
 	tst-sigaction.so tst-syscall.so tst-ifaddrs.so tst-getdents.so \
-	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-zfs-crucible-stress.so \
+	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so \
 	tst-fs-bench.so tst-pthread-create.so \
 	misc-futex-perf.so misc-syscall-perf.so tst-brk.so tst-reloc.so \
 	misc-vdso-perf.so tst-string-utils.so tst-elf-circular-reloc.so \
@@ -194,10 +194,10 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-smoke.so tst-bsd-evh.
 #	tst-f128.so \
 
 # The OpenZFS-userspace-API tests only build/run under conf_zfs=openzfs (they
-# dlopen libzfs.so / libzfs_core.so, which conf_zfs=bsd does not build).
-ifeq ($(conf_zfs),openzfs)
-tests += $(zfs-openzfs-only-tests)
-endif
+# dlopen libzfs.so / libzfs_core.so, which conf_zfs=bsd does not build).  They
+# are already appended to zfs-only-tests (hence to specific-fs-tests for
+# fs_type=zfs) under the same conf_zfs=openzfs guard above, so they must NOT be
+# added to the unconditional tests list here as well or they build and run twice.
 
 
 #This is a list of the tests that interact with the internal C++ or C

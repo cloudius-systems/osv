@@ -361,7 +361,8 @@ int main(void)
     printf("  -> zio_trim() [ZIO_TYPE_TRIM] -> vdev_disk_io_start()\n");
     printf("  -> bio(BIO_DISCARD) -> virtio-blk VIRTIO_BLK_T_DISCARD\n\n");
     printf("NOTE: SKIP means virtio-blk discard is not enabled in the hypervisor;\n");
-    printf("      lzc_trim() returning EOPNOTSUPP/ENOTSUP is a SKIP, not a FAIL.\n\n");
+    printf("      lzc_trim() returning EOPNOTSUPP/ENOTSUP is a SKIP (an\n");
+    printf("      expected, non-error outcome), not a test failure.\n\n");
 
     if (!load_libzfs())
         return 1;
