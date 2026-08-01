@@ -2593,14 +2593,14 @@ anon_vma::anon_vma(addr_range range, unsigned perm, unsigned flags)
 #endif
 }
 
+#if CONF_fork
 anon_vma::~anon_vma()
 {
-#if CONF_fork
     if ((_flags & mmap_shared) && !(_flags & mmap_huge) && !(_flags & mmap_uninitialized)) {
         delete static_cast<shared_anon_page_provider*>(_page_ops);
     }
-#endif
 }
+#endif
 
 #if CONF_fork
 void anon_vma::update_shared_base()
