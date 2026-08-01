@@ -157,6 +157,7 @@ tests := tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-smoke.so tst-bsd-evh.
 	tst-eventfd.so tst-remove.so misc-wake.so tst-epoll.so misc-lfring.so \
 	tst-fork.so tst-execve.so payload-exit7.so \
 	tst-fork-cow.so tst-fork-deep.so tst-pgfork.so tst-fork-preempt.so \
+	tst-fork-pltgot.so \
 	tst-fork-child-mmap.so \
 	tst-fork-file-mmap.so \
 	tst-fork-socket.so \

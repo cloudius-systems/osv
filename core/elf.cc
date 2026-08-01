@@ -8,6 +8,10 @@
 #include <osv/elf.hh>
 #include <osv/app.hh>
 #include <osv/mmu.hh>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 #include <osv/kernel_config_elf_debug.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
@@ -419,7 +423,25 @@ void file::load_segment(const Elf64_Phdr& phdr)
 
     unsigned perm = get_segment_mmap_permissions(phdr);
 
-    auto flag = mmu::mmap_fixed | (mlocked() ? mmu::mmap_populate : 0);
+    // Under CONF_fork, eagerly POPULATE writable file-backed segments.  Such a
+    // segment holds .data/.got/.got.plt, which the dynamic linker RELOCATES in
+    // memory at load (object::relocate / relocate_pltgot rewrite the GOT with
+    // this object's base, the resolver trampoline pointer and jump-slot
+    // targets).  Those writes diverge the page from its on-disk contents.  If a
+    // relocated page is demand-paged (not resident) when fork() clones the
+    // address space, the child inherits an EMPTY leaf PTE and its first access
+    // re-reads the ORIGINAL, unrelocated bytes from the file (pltgot[1]=0, raw
+    // jump slots) -- so the child's lazy PLT resolver dereferences a NULL
+    // elf::object and faults (the resolve_pltgot fork-coherence bug).  Pinning
+    // the whole writable segment resident at load makes clone_address_space
+    // COW-share the RELOCATED pages, so every fork child reads the correct GOT.
+    unsigned populate = 0;
+#if CONF_fork
+    if (perm & mmu::perm_write) {
+        populate = mmu::mmap_populate;
+    }
+#endif
+    auto flag = mmu::mmap_fixed | (mlocked() ? mmu::mmap_populate : populate);
     mmu::map_file(_base + vstart, filesz, flag, perm, _f, align_down(phdr.p_offset, mmu::page_size));
     if (phdr.p_filesz != phdr.p_memsz) {
         assert(perm & mmu::perm_write);
@@ -911,6 +933,19 @@ void* object::resolve_pltgot(unsigned index)
 
     if (sm.obj != this) {
         WITH_LOCK(_used_by_resolve_plt_got_mutex) {
+#if CONF_fork
+            // A lazily-resolved PLT slot may first be hit by a FORKED CHILD,
+            // running in its own COW address space.  Without this scope the set
+            // node std::unordered_set::insert allocates would land in the
+            // child's private COW arena, while the set itself lives in the
+            // shared elf::object (identity heap).  A sibling or AS0 later walking
+            // this shared set (e.g. at module unload, or its own resolve) would
+            // dereference a node mapped only in that child's -- possibly already
+            // reclaimed -- address space: the NULL/COW-stale fault in the elf
+            // resolver.  Forcing the node onto the identity heap keeps the set
+            // coherent across every fork address space.
+            fork_arena::kernel_heap_scope kh;
+#endif
             _used_by_resolve_plt_got.insert(sm.obj->shared_from_this());
         }
     }
