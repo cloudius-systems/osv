@@ -72,6 +72,14 @@ $(out)/tests/tst-reloc.so: $(src)/tests/tst-reloc.c
 
 $(out)/tests/lib-circular-reloc1.so: $(src)/tests/lib-circular-reloc1.cc
 $(out)/tests/lib-circular-reloc2.so: $(src)/tests/lib-circular-reloc2.cc
+
+# tst-fork-vislookup is LINKED against libforksym.so so its forksym_fn_* calls
+# go through the executable PLT (lazy resolve in a forked child).
+$(out)/tests/tst-fork-vislookup.so: \
+		$(out)/tests/tst-fork-vislookup.o \
+		$(out)/tests/libforksym.so
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ tests/tst-fork-vislookup.o $(LIBS) tests/libforksym.so, LD tests/tst-fork-vislookup.so)
+
 $(out)/tests/tst-elf-circular-reloc.so: \
 		$(out)/tests/tst-elf-circular-reloc.o \
 		$(out)/tests/lib-circular-reloc1.so \
@@ -165,6 +173,9 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 	tst-fork-cow.so tst-fork-deep.so tst-pgfork.so tst-fork-preempt.so \
 	tst-fork-cow-lost-write.so \
 	tst-fork-pltgot.so \
+	tst-fork-symlookup.so \
+	tst-fork-vislookup.so \
+	libforksym.so \
 	tst-fork-child-mmap.so \
 	tst-fork-file-mmap.so \
 	tst-fork-socket.so \
