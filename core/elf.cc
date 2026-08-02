@@ -882,6 +882,31 @@ void object::relocate_pltgot()
         (dynamic_exists(DT_FLAGS) && (dynamic_val(DT_FLAGS) & DF_BIND_NOW)) ||
         (dynamic_exists(DT_FLAGS_1) && (dynamic_val(DT_FLAGS_1) & DF_1_NOW)) || mlocked();
 
+#if CONF_fork
+    // Under CONF_fork, EAGERLY bind every PLT jump slot at load time (in AS0,
+    // before any fork).  Lazy PLT binding is not fork-coherent: a forked child
+    // running in its own COW address space that is the FIRST to hit an
+    // unresolved slot must run the resolver (elf::object::resolve_pltgot ->
+    // object::symbol -> program::lookup) in that child.  Two facets bite there:
+    //   (1) GOT-slot: a demand-paged, relocation-dirtied GOT page not resident
+    //       at fork is re-read UNRELOCATED from the file in the child (the
+    //       resolve_pltgot NULL-deref fixed in 8d775cc01), and
+    //   (2) SYMBOL-LOOKUP: the child's resolver walks the shared object list /
+    //       symbol tables and can fail to FIND a symbol the parent resolves
+    //       fine (the "sem_wait/preadv/pwritev not found" wall under heavy PG
+    //       fork load).
+    // Resolving all slots up front in AS0 removes BOTH: no forked child ever
+    // runs the resolver, and the resolution WRITES each GOT slot so its page is
+    // anonymous + resident and clone_address_space() COW-shares the RELOCATED
+    // contents.  This runs before fix_permissions() write-protects RELRO, so
+    // the slot writes never hit a read-only page.  It supersedes the
+    // mmap_populate-of-writable-segments half of 8d775cc01 (the writes here
+    // already pin the GOT resident) while remaining complementary to its
+    // identity-heap _used_by_resolve_plt_got insert (which now only matters for
+    // objects dlopen'd AFTER the first fork).
+    bind_now = true;
+#endif
+
     auto rel = dynamic_ptr<Elf64_Rela>(DT_JMPREL);
     auto nrel = dynamic_val(DT_PLTRELSZ) / sizeof(*rel);
     for (auto p = rel; p < rel + nrel; ++p) {
