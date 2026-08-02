@@ -6,6 +6,8 @@
  */
 
 #include <string.h>
+#include <atomic>
+#include <algorithm>
 
 #include "drivers/virtio.hh"
 #include "virtio-vring.hh"
@@ -18,6 +20,38 @@ TRACEPOINT(trace_virtio_wait_for_queue, "queue(%p) have_elements=%d", void*, int
 namespace virtio {
 
 int virtio_driver::_disk_idx = 0;
+
+// Process-wide MSI-X vector budget shared by all virtio devices.  The x86-64
+// IDT exposes 224 usable vectors (32..255); GSI/legacy IRQs, the APIC timer
+// and a few IPIs also consume some, so we hand out at most a conservative
+// fraction to per-queue MSI-X and leave headroom.  Each multiqueue device caps
+// its interrupt-bearing queue count against what remains here so that a
+// high-vCPU guest with several such devices still boots.  This is a soft cap:
+// it only limits how many queues a device arms with a distinct interrupt, not
+// how many virtqueues exist.
+static std::atomic<int> msix_vector_budget{192};
+
+unsigned virtio_driver::reserve_msix_vectors(unsigned want)
+{
+    if (want == 0) {
+        return 0;
+    }
+    int remaining = msix_vector_budget.load(std::memory_order_relaxed);
+    while (true) {
+        if (remaining <= 0) {
+            // Pool empty: still allow a single vector so the device is usable
+            // (it will run single-queue / shared-interrupt).
+            return 1;
+        }
+        unsigned grant = std::min<unsigned>(want, (unsigned)remaining);
+        if (msix_vector_budget.compare_exchange_weak(
+                remaining, remaining - (int)grant,
+                std::memory_order_relaxed)) {
+            return grant;
+        }
+        // remaining reloaded by compare_exchange_weak; retry.
+    }
+}
 
 virtio_driver::virtio_driver(virtio_device& dev)
     : hw_driver()
