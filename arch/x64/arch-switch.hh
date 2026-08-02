@@ -13,6 +13,7 @@
 #include <osv/kernel_config_preempt.h>
 #include <osv/kernel_config_threads_default_kernel_stack_size.h>
 #include <osv/kernel_config_syscall_stack_size.h>
+#include <osv/kernel_config_fork.h>
 #include <string.h>
 #include "tls-switch.hh"
 
@@ -93,6 +94,26 @@ void thread::switch_to()
     barrier();
     set_fsbase(reinterpret_cast<u64>(_tcb));
     barrier();
+#if CONF_fork
+    // Address-space (CR3) switch for fork COW.  Only switch when the target
+    // thread lives in a different address space than the outgoing one, so the
+    // common single-address-space case pays nothing (and no TLB flush).
+    //
+    // CRITICAL (same-VA fork stacks): the CR3 write must happen EXACTLY at the
+    // rsp/rbp swap below, NOT here.  OSv runs kernel code (this switch, the
+    // fpu-cw/mxcsr scratch saves, the register-save asm) on the app thread's
+    // stack.  A forked child resumes on the parent's EXACT stack VAs, so parent
+    // and child alias the same stack virtual addresses (backed by different
+    // physical pages per address space).  If we loaded the incoming thread's
+    // CR3 here, the subsequent scratch writes to the OUTGOING thread's stack
+    // (fnstcw/stmxcsr at -0x34(%rbp), etc., with rsp/rbp still the old thread's)
+    // would resolve through the WRONG address space and clobber the incoming
+    // thread's physical page at that shared VA -- corrupting a blocked thread's
+    // live stack.  So we defer the CR3 load into the asm, coincident with the
+    // rsp/rbp swap: old-stack writes use the old AS, new-stack writes the new.
+    bool switch_as = (_current_as != old->_current_as);
+    u64 new_cr3 = switch_as ? mmu::pt_root_phys(_current_as) : 0;
+#endif
     auto c = _detached_state->_cpu;
     old->_state.exception_stack = c->arch.get_exception_stack();
     // save the old thread SYSCALL caller stack pointer in the syscall stack descriptor
@@ -108,6 +129,34 @@ void thread::switch_to()
     c->arch._current_thread_kernel_tcb = reinterpret_cast<u64>(_tcb);
     auto fpucw = processor::fnstcw();
     auto mxcsr = processor::stmxcsr();
+#if CONF_fork
+    if (switch_as) {
+        // Same-VA-safe switch: swap rsp/rbp to the incoming thread, THEN load
+        // its CR3 (mov %rax,%cr3), THEN jump.  All old-stack writes above ran
+        // under the old AS; every access after the rsp/rbp swap is to the new
+        // thread's stack, now resolved through the new AS -- so a shared stack
+        // VA never resolves through the wrong address space.  Kernel .text and
+        // the thread_state (heap) are identically mapped in every AS, so the
+        // instruction fetch across the mov-to-cr3 and the %c[rip] load are
+        // valid before and after the CR3 write.
+        asm volatile
+            ("mov %%rbp, %c[rbp](%0) \n\t"
+             "movq $1f, %c[rip](%0) \n\t"
+             "mov %%rsp, %c[rsp](%0) \n\t"
+             "mov %c[rsp](%1), %%rsp \n\t"
+             "mov %c[rbp](%1), %%rbp \n\t"
+             "mov %2, %%cr3 \n\t"
+             "jmpq *%c[rip](%1) \n\t"
+             "1: \n\t"
+             :
+             : "a"(&old->_state), "c"(&this->_state), "d"(new_cr3),
+               [rsp]"i"(offsetof(thread_state, rsp)),
+               [rbp]"i"(offsetof(thread_state, rbp)),
+               [rip]"i"(offsetof(thread_state, rip))
+             : "rbx", "rsi", "rdi", "r8", "r9",
+               "r10", "r11", "r12", "r13", "r14", "r15", "memory");
+    } else
+#endif
     asm volatile
         ("mov %%rbp, %c[rbp](%0) \n\t"
          "movq $1f, %c[rip](%0) \n\t"
