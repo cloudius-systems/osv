@@ -1274,6 +1274,21 @@ public:
             if (_page_provider->map(offset, ptep, pte, _write)) {
                 this->account(pt_level_traits<N>::size::value);
             }
+#if CONF_fork
+            // [W1] A provider may REJECT a large (2M) fill by returning false
+            // at a large-capable level to force 4K granularity (e.g. the
+            // fork-coherent shared_anon_page_provider, whose registry is 4K
+            // keyed).  In that case the walker MUST descend to level 0 and map
+            // the 4K pages; returning true here would tell the walker "handled"
+            // and leave the 2M range with an EMPTY pte -> the fault re-fires on
+            // the same address forever (the PG shared_buffers mmap-populate spin
+            // loop).  Returning false at a large-capable level makes the walker
+            // descend.  At the 4K leaf there is nothing below to descend to, so
+            // a false there is harmless (return value ignored at level 0).
+            else if (pt_level_traits<N>::large_capable::value) {
+                return false;
+            }
+#endif
         } catch(std::exception&) {
             return false;
         }
