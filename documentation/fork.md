@@ -84,7 +84,24 @@ fork() to those who require it.
   fix up such pointers.
 
 - **`clone()` with namespace-unshare flags** (`CLONE_NEWNS`, `CLONE_NEWPID`,
-  etc.) returns `ENOSYS` — there are no namespaces to unshare.
+  etc.) returns `ENOSYS` - there are no namespaces to unshare.
+
+- **`fork()` issued as a raw `clone` syscall** (a statically linked program, or a
+  dynamic loader that invokes the `clone` syscall directly rather than going
+  through libc's `fork()`). The supported and tested path is the libc
+  `fork()`/`vfork()` entry point: it captures the caller's return address and
+  stack (`__builtin_return_address`/`__builtin_frame_address`) so the child
+  resumes exactly at the application's `fork()` call site on its private stack.
+  A `syscall(SYS_clone, ...)` with fork semantics (no `CLONE_THREAD`) is routed
+  through `sys_clone()` to the same `fork()`, but the child then resumes inside
+  the syscall trampoline rather than at the application's own `syscall`
+  instruction, and the full user-register/`sp` state is not restored the way
+  the thread `clone` path does it (`clone_thread()` carries extra assembly for
+  exactly this). So a direct-`clone` fork is currently **untested and
+  unsupported**; a program that expects it should be built against OSv's musl
+  libc so its `fork()` takes the supported libc path. Supporting the raw-syscall
+  fork properly (teaching the arch `clone`/`fork` trampoline to restore the
+  caller's registers for the fork flavor) is a planned follow-up.
 
 - **aarch64.** Implemented and validated: the stack-copy + `br` resume
   trampoline works on aarch64 as well as x86-64. `tst-fork` passes
@@ -92,16 +109,16 @@ fork() to those who require it.
 
 ## Implementation
 
-- `libc/process/fork.cc` — `fork()`/`vfork()`, the child registry, and the
+- `libc/process/fork.cc` - `fork()`/`vfork()`, the child registry, and the
   `waitpid()` backend + `SIGCHLD` notification.
-- `arch/x64/fork.cc` — `fork_thread()`: allocates a fresh stack, copies the
+- `arch/x64/fork.cc` - `fork_thread()`: allocates a fresh stack, copies the
   parent's current user stack into it, and returns a child thread that installs
   the copied stack and returns `0` from `fork()`. Reuses the register/
   continuation approach of `clone_thread()` (used by `pthread_create`).
-- `libc/process/execve.cc` — `execve()` via `osv::application::run()`.
-- `libc/process/waitpid.cc` — `wait`/`waitpid`/`wait4`.
-- `runtime.cc` — `exit()` ends a child rather than shutting down OSv.
-- `linux.cc` — `sys_clone()` routes the non-`CLONE_THREAD` (fork) case here.
+- `libc/process/execve.cc` - `execve()` via `osv::application::run()`.
+- `libc/process/waitpid.cc` - `wait`/`waitpid`/`wait4`.
+- `runtime.cc` - `exit()` ends a child rather than shutting down OSv.
+- `linux.cc` - `sys_clone()` routes the non-`CLONE_THREAD` (fork) case here.
 
 ## Guidance
 
