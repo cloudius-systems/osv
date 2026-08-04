@@ -40,7 +40,10 @@ struct child_state {
     pid_t parent_pid;
     bool exited = false;
     int status = 0;              // encoded: (exit_code & 0xff) << 8, or signal
-    shared_app_t execed_app;     // set if the child execve()'d a program
+    // Set if the child execve()'d a program. Retained (not read again) to keep
+    // the exec-replaced application object alive until waitpid() reaps the
+    // child; otherwise its last reference could drop while the child still runs.
+    shared_app_t execed_app;
 };
 
 mutex g_lock;
