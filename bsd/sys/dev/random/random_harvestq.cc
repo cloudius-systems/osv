@@ -63,6 +63,9 @@ __FBSDID("$FreeBSD$");
 #include <stddef.h>
 #include <sys/bus.h>
 #include <lockfree/unordered_ring_mpsc.hh>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 #endif
 
 /* <0 to end the kthread, 0 to let it run, 1 to flush the harvest queues */
@@ -125,7 +128,27 @@ random_kthread(void *arg)
 void
 random_harvestq_init(event_proc_f cb)
 {
+#if CONF_fork
+	// [fork-stack] The interrupt entropy ring is written on EVERY interrupt via
+	// harvest_interrupt_randomness() -> random_harvestq_internal() (interrupt(),
+	// irq-off, preempt-off).  A plain `new ring_t()` (~40 KB, a large alloc)
+	// lands in the COW-cloned app mmap slot (VA 0x2000..).  After PostgreSQL
+	// forks, clone_address_space() COW-write-protects that page in AS0; the next
+	// interrupt-context write to the ring takes a COW write-fault in a
+	// non-preemptable IRQ context -> assert(sched::preemptable()) (mmu.cc).
+	// Deterministic at high vCPU count (more concurrent interrupts hit the
+	// COW-protected page during the shared_buffers populate window).  Allocate
+	// on the identity kernel heap (kernel_heap_scope) so mapped_malloc_large()
+	// registers the range fork-shared -> clone_address_space maps it verbatim
+	// (never COW), coherent + writable from every address space and every idle
+	// CPU's interrupt path.
+	{
+		fork_arena::kernel_heap_scope _kh;
+		ring = new ring_t();
+	}
+#else
 	ring = new ring_t();
+#endif
 
 	live_entropy_sources_init(NULL);
 
