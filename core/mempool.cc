@@ -1978,8 +1978,68 @@ static inline void untracked_free_page(void *v)
     page_pool::l1::free_page(v);
 }
 
+#if CONF_fork
+// [fork-stack / CONF_fork] Bounded per-CPU page-reclaim quarantine.
+//
+// Corruptor #2 is the page-path sibling of corruptor #1.  The small-object
+// pool's lock-free MPSC cross-CPU garbage queue
+// (lockfree::unordered_queue_mpsc) links freed objects through an intrusive
+// free_object::next stored INSIDE the object's backing page:
+//   push(): item->next = _head; CAS(_head, item)      // 8-byte 0x500-alias store
+//   pop():  _poll_list = r->next                       // consumer look-ahead
+// A pool backing page can be returned to page_pool (via pool::flush_empty_pages
+// -> untracked_free_page, or after the page is recycled and re-grabbed by
+// pool::add_page) while a push()/pop() from the drain window still touches an
+// object in it.  The 8-byte next-link store then lands in a page that page_pool
+// has already recycled into a live object (a ZFS abd chunk, a range_tree btree
+// leaf, a thread TCB/TLS block -- all 4096B alloc_page pages), corrupting it:
+// the observed wild writes (offset 64 / 1128, value = page's own mem_area::page
+// alias) into range_tree metadata, ARC read buffers (EIO), and the s_current TLS
+// slot.  Corruptor #1's fix deferred the pool's own page release to a drained
+// point, but a producer's concurrent push (and the consumer's _poll_list
+// look-ahead) leaves a residual window this closes.
+//
+// Fix: never hand a freed page straight back to page_pool for immediate reuse.
+// Park it in a bounded per-CPU ring for PGQUAR_DEPTH subsequent frees, so any
+// in-flight MPSC next-link store drains harmlessly onto a page that is not yet a
+// live object before the page is recycled.  Bounded (PGQUAR_DEPTH pages per CPU),
+// so a bursty free storm cannot pin unbounded memory (which a naive
+// never-reclaim would turn into OOM-then-fault).  Gated under CONF_fork; with
+// conf_fork=0 free_page is byte-identical to stock OSv.
+static constexpr unsigned PGQUAR_DEPTH = 512;   // 512 pages * 4K = 2 MiB per CPU
+struct pgquar { void* ring[PGQUAR_DEPTH] = {}; unsigned head = 0; unsigned filled = 0; };
+static PERCPU(pgquar, percpu_pgquar);
+static inline void free_page_quarantined(void* v)
+{
+    void* evict = nullptr;
+    WITH_LOCK(preempt_lock) {
+        auto* q = &*percpu_pgquar;
+        if (q->filled == PGQUAR_DEPTH) {
+            evict = q->ring[q->head];   // oldest parked page; safe to recycle now
+        }
+        q->ring[q->head] = v;
+        q->head = (q->head + 1) % PGQUAR_DEPTH;
+        if (q->filled < PGQUAR_DEPTH) {
+            q->filled++;
+        }
+    }
+    if (evict) {
+        untracked_free_page(evict);
+    }
+}
+#endif
+
 void free_page(void* v)
 {
+#if CONF_fork
+    if (fork_arena::ready()) {
+        free_page_quarantined(v);
+#if CONF_memory_tracker
+        tracker_forget(v);
+#endif
+        return;
+    }
+#endif
     untracked_free_page(v);
 #if CONF_memory_tracker
     tracker_forget(v);
