@@ -18,6 +18,7 @@
 
 #include <string>
 #include <string.h>
+#include <stdlib.h>
 #include <map>
 #include <errno.h>
 #include <osv/debug.h>
@@ -459,6 +460,16 @@ bool net::bad_rx_csum(struct mbuf* m, struct net_hdr* hdr)
     return false;
 }
 
+bool net::batch_wakes_enabled()
+{
+    // Cached: cannot change after boot; the receiver reads it once.
+    static const bool enabled = [] {
+        const char* v = getenv("OSV_NET_BATCH_WAKE");
+        return !(v && v[0] == '0');
+    }();
+    return enabled;
+}
+
 void net::receiver()
 {
     vring* vq = _rxq.vqueue;
@@ -466,6 +477,17 @@ void net::receiver()
     u64 rx_drops = 0, rx_packets = 0, csum_ok = 0;
     u64 csum_err = 0, rx_bytes = 0;
     static const u16 refill_thresh = 16;
+    // Coalesce the per-packet channel wakes issued while draining one RX pass
+    // into one wake per channel, flushed together at the end of the pass, so
+    // the scheduler's per-target-CPU IPI coalescing collapses the wakeup IPIs.
+    // Runtime toggle for A/B; default on.
+    net_channel_wake_batch wake_batch;
+    const bool batch_wakes = net::batch_wakes_enabled();
+    // Slow-path (non-classified) packets are deferred to after the drain's
+    // rcu_read_lock is released: if_input() runs the full BSD stack (tcp_input
+    // etc.) which may demand-fault a page, and page_fault asserts preemptable()
+    // -- illegal under the rcu_read_lock the batch path holds across the drain.
+    std::vector<mbuf*> slow_path;
 
     while (1) {
 
@@ -484,6 +506,15 @@ void net::receiver()
         // use local header that we copy out of the mbuf since we're
         // truncating it.
         net_hdr_mrg_rxbuf* mhdr;
+
+        // When batching wakes we hold one rcu_read_lock across the whole drain
+        // pass and the wake flush, because the net_channel pointers we record
+        // are rcu_dispose()d on connection teardown and must stay valid until
+        // flushed.  When not batching, post_packet() takes its own lock per
+        // packet as before.
+        if (batch_wakes) {
+            osv::rcu_read_lock.lock();
+        }
 
         while (void* buffer = vq->get_buf_elem(&len)) {
 
@@ -539,9 +570,17 @@ void net::receiver()
             rx_packets++;
             rx_bytes += m_head->M_dat.MH.MH_pkthdr.len;
 
-            bool fast_path = _ifn->if_classifier.post_packet(m_head);
+            bool fast_path = batch_wakes
+                ? _ifn->if_classifier.post_packet(m_head, wake_batch)
+                : _ifn->if_classifier.post_packet(m_head);
             if (!fast_path) {
-                (*_ifn->if_input)(_ifn, m_head);
+                if (batch_wakes) {
+                    // Cannot call if_input() here: we hold rcu_read_lock and the
+                    // BSD input path may fault.  Defer to after unlock (below).
+                    slow_path.push_back(m_head);
+                } else {
+                    (*_ifn->if_input)(_ifn, m_head);
+                }
             }
 
             trace_virtio_net_rx_packet(_ifn->if_index, rx_bytes);
@@ -550,6 +589,20 @@ void net::receiver()
             // passing the packet up the network stack.
             if ((_ifn->if_drv_flags & IFF_DRV_RUNNING) == 0)
                 break;
+        }
+
+        if (batch_wakes) {
+            // One wake per distinct connection touched this pass; the flushed
+            // wakes run back-to-back so wake_impl() coalesces the wakeup IPIs
+            // per destination CPU.  Still under the drain's rcu_read_lock.
+            wake_batch.flush();
+            osv::rcu_read_lock.unlock();
+            // Now preemptable again: run the deferred slow-path packets up the
+            // stack (tcp_input may fault, which is fine outside the rcu lock).
+            for (mbuf* m : slow_path) {
+                (*_ifn->if_input)(_ifn, m);
+            }
+            slow_path.clear();
         }
 
         // Update the stats
