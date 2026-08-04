@@ -223,8 +223,9 @@ public:
     void receiver();
     void fill_rx_ring();
     mbuf* packet_to_mbuf(const std::vector<iovec>& iovec);
-    static void free_buffer_and_refcnt(void* buffer, void* refcnt);
-    static void free_large_buffer_and_refcnt(void* buffer, void* refcnt);
+    unsigned* rx_buffer_refcnt(void* frame);
+    static void free_rx_buffer(void* buffer, void* refcnt);
+    static void free_large_rx_buffer(void* buffer, void* refcnt);
     static void free_buffer(iovec iov) { do_free_buffer(iov.iov_base); }
     static void do_free_buffer(void* buffer);
     static void do_free_large_buffer(void* buffer);
