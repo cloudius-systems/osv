@@ -171,6 +171,17 @@ void pool::collect_garbage()
             memory::pool::from_object(obj)->free_same_cpu(obj, cpu_id);
         }
     }
+#if CONF_fork
+    // Every incoming garbage sink for this CPU is now drained: no lock-free
+    // cross-CPU queue link references any pool object.  This is the ONLY safe
+    // point to hand emptied pool pages back to page_pool -- do it now for every
+    // malloc pool, releasing each pool's surplus retained-empty pages.  (Only
+    // the malloc_pools are cross-CPU-freed through the garbage sinks; other
+    // pools, if any, retain their empties until they too are collected here.)
+    if (fork_arena::ready()) {
+        pool::flush_all_empty_pages(cpu_id);
+    }
+#endif
 }
 
 static void garbage_collector_fn()
@@ -258,6 +269,14 @@ void* pool::alloc()
         auto it = _free->begin();
         page_header *header = &(*it);
         free_object* obj = header->local_free;
+#if CONF_fork
+        // CONF_fork: keep the retained-empty count honest.  A page leaving the
+        // fully-free state (nalloc 0 -> 1) is no longer an empty page, so the
+        // per-CPU empty tally must drop with it (see flush_empty_pages).
+        if (fork_arena::ready() && header->nalloc == 0 && *_nr_empty) {
+            --(*_nr_empty);
+        }
+#endif
         ++header->nalloc;
         header->local_free = obj->next;
         if (!header->local_free) {
@@ -321,6 +340,36 @@ void pool::free_same_cpu(free_object* obj, unsigned cpu_id)
     trace_pool_free_same_cpu(this, object);
 
     page_header* header = to_header(obj);
+#if CONF_fork
+    // CONF_fork: never return a pool page to page_pool from here.  Returning it
+    // inline can recycle a page whose objects the lock-free cross-CPU garbage
+    // queue still links into (a producer's in-flight free_object::next store,
+    // or the consumer's _poll_list look-ahead) -- an 8-byte stale pointer store
+    // into the recycled page: the page-level UAF that corrupts ZFS metadata /
+    // the page_range_allocator free-list.  Instead we complete the free onto
+    // local_free so the page stays fully-free on _free, and count it as an
+    // empty page.  collect_garbage() flushes the excess back to page_pool only
+    // after draining every incoming sink, when no queue link can reference it.
+    if (fork_arena::ready()) {
+        bool was_empty = (header->nalloc == 0);
+        --header->nalloc;
+        if (!header->local_free) {
+            // Page had no free object (it was fully allocated and off _free):
+            // return it to _free.  nalloc>0 -> front (partial), ==0 -> back.
+            if (header->nalloc) {
+                _free->push_front(*header);
+            } else {
+                _free->push_back(*header);
+            }
+        }
+        obj->next = header->local_free;
+        header->local_free = obj;
+        if (header->nalloc == 0 && !was_empty) {
+            ++(*_nr_empty);
+        }
+        return;
+    }
+#endif
     if (!--header->nalloc && have_full_pages()) {
         if (header->local_free) {
             _free->erase(_free->iterator_to(*header));
@@ -342,6 +391,35 @@ void pool::free_same_cpu(free_object* obj, unsigned cpu_id)
         header->local_free = obj;
     }
 }
+
+#if CONF_fork
+// CONF_fork: release excess fully-free pages retained on this CPU's _free list
+// back to page_pool.  Called from collect_garbage() with preempt_lock held,
+// AFTER every incoming garbage sink for this CPU has been drained -- so no
+// lock-free cross-CPU queue link references any pool object, and freeing a page
+// here cannot leave a dangling intrusive pointer.  We keep max_retained_empty
+// empty pages per CPU per pool for fast reuse and free only the surplus.
+void pool::flush_empty_pages(unsigned cpu_id)
+{
+    while (*_nr_empty > max_retained_empty) {
+        // A fully-free page has nalloc == 0 and sits at the back of _free (empties
+        // are pushed to the back).  Find one and evict it.
+        if (_free->empty()) {
+            break;
+        }
+        page_header* header = &_free->back();
+        if (header->nalloc != 0) {
+            // Back is not empty (all retained empties already gone): nothing to do.
+            break;
+        }
+        _free->erase(_free->iterator_to(*header));
+        --(*_nr_empty);
+        DROP_LOCK(preempt_lock) {
+            untracked_free_page(header);
+        }
+    }
+}
+#endif
 
 void pool::free_different_cpu(free_object* obj, unsigned obj_cpu, unsigned cur_cpu)
 {
@@ -394,6 +472,17 @@ private:
 
 malloc_pool malloc_pools[ilog2_roundup_constexpr(page_size) + 1]
     __attribute__((init_priority((int)init_prio::malloc_pools)));
+
+#if CONF_fork
+// Defined here, where malloc_pool is a complete type, so collect_garbage() can
+// release every malloc pool's surplus retained-empty pages back to page_pool.
+void pool::flush_all_empty_pages(unsigned cpu_id)
+{
+    for (auto& p : malloc_pools) {
+        p.flush_empty_pages(cpu_id);
+    }
+}
+#endif
 
 struct mark_smp_allocator_intialized {
     mark_smp_allocator_intialized() {
