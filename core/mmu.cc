@@ -1867,8 +1867,26 @@ private:
 // what MAP_SHARED means.  The registry map lives on the identity kernel heap so
 // it is one shared table across all address spaces, mirroring shm_file::_pages.
 struct shared_anon_registry {
-    mutex lock;
-    std::unordered_map<uintptr_t, void*> pages;   // abs page VA -> kernel page
+    // Sharded to remove the single-global-lock serialization: every shared-anon
+    // page fault (PG shared_buffers) resolves a page here, and one mutex+map for
+    // the whole process makes all fork-backend faults serialize on it (the RO
+    // scaling ceiling -- backends block here, ~99.9% idle, tps=concurrency/latency).
+    // Shard by page VA so faults on distinct pages take distinct locks and run
+    // in parallel.  Correctness is unchanged: a given VA always maps to the same
+    // shard, so the "one shared physical page per VA" invariant holds per shard.
+    // NR_SHARDS is fixed at 256; bump it if more than 256-way concurrent fault contention is ever observed.
+    static constexpr unsigned NR_SHARDS = 256;
+    struct shard {
+        mutex lock;
+        std::unordered_map<uintptr_t, void*> pages;   // abs page VA -> kernel page
+    };
+    shard shards[NR_SHARDS];
+    shard& shard_for(uintptr_t va) {
+        // va is page-aligned; use page-index bits, spread with a cheap mix.
+        uintptr_t k = va >> page_size_shift;
+        k ^= k >> 16;
+        return shards[k & (NR_SHARDS - 1)];
+    }
 };
 static shared_anon_registry *shared_anon_reg;
 static std::atomic<bool> shared_anon_reg_inited{false};
@@ -1906,10 +1924,11 @@ public:
     void *shared_page(uintptr_t offset) {
         uintptr_t va = _base + offset;
         auto *reg = get_shared_anon_registry();
+        auto &sh = reg->shard_for(va);
         // Fast path: already recorded.
-        WITH_LOCK(reg->lock) {
-            auto it = reg->pages.find(va);
-            if (it != reg->pages.end()) {
+        WITH_LOCK(sh.lock) {
+            auto it = sh.pages.find(va);
+            if (it != sh.pages.end()) {
                 return it->second;
             }
         }
@@ -1922,16 +1941,16 @@ public:
             page = memory::alloc_page();
             memset(page, 0, page_size);
         }
-        WITH_LOCK(reg->lock) {
-            auto it = reg->pages.find(va);
-            if (it != reg->pages.end()) {
+        WITH_LOCK(sh.lock) {
+            auto it = sh.pages.find(va);
+            if (it != sh.pages.end()) {
                 // Lost the race: another AS recorded it first -- use theirs.
                 fork_arena::kernel_heap_scope kh;
                 memory::free_page(page);
                 return it->second;
             }
             fork_arena::kernel_heap_scope kh;   // map node on the identity heap
-            reg->pages.emplace(va, page);
+            sh.pages.emplace(va, page);
             return page;
         }
     }
@@ -1967,10 +1986,11 @@ public:
         }
         uintptr_t va = _base + offset;
         auto *reg = get_shared_anon_registry();
+        auto &sh = reg->shard_for(va);
         void *page = nullptr;
-        WITH_LOCK(reg->lock) {
-            auto it = reg->pages.find(va);
-            if (it != reg->pages.end()) { page = it->second; reg->pages.erase(it); }
+        WITH_LOCK(sh.lock) {
+            auto it = sh.pages.find(va);
+            if (it != sh.pages.end()) { page = it->second; sh.pages.erase(it); }
         }
         if (page) {
             fork_arena::kernel_heap_scope kh;
