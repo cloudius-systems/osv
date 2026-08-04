@@ -234,6 +234,11 @@ public:
     // thread on its own CPU, instead of all inbound traffic funnelling through
     // one queue and one thread.
     void receiver(struct rxq* rxq);
+    // Whether the receiver coalesces per-packet channel wakes into one wake per
+    // channel per drain pass.  Read once from the OSV_NET_BATCH_WAKE env var
+    // ("0" disables); default enabled.  Runtime toggle so the change can be
+    // A/B-measured on a single image.
+    static bool batch_wakes_enabled();
     void fill_rx_ring(struct rxq* rxq);
     mbuf* packet_to_mbuf(const std::vector<iovec>& iovec);
     unsigned* rx_buffer_refcnt(void* frame);
