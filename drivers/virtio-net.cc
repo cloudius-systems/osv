@@ -561,13 +561,18 @@ void net::receiver()
     }
 }
 
+// The mbuf external-storage reference count lives inside the receive buffer
+// itself: fill_rx_ring() reserves sizeof(unsigned) bytes at the tail of each
+// buffer (see rx_buffer_refcnt()) and never advertises them to the device, so
+// they are private scratch that is freed together with the buffer.  This keeps
+// the receive fast path free of a per-packet heap allocation for the refcount.
 mbuf* net::packet_to_mbuf(const std::vector<iovec>& packet)
 {
     auto m = m_gethdr(M_DONTWAIT, MT_DATA);
-    auto refcnt = new unsigned;
+    auto refcnt = rx_buffer_refcnt(packet[0].iov_base);
     m->M_dat.MH.MH_dat.MH_ext.ref_cnt = refcnt;
     m_extadd(m, static_cast<char*>(packet[0].iov_base), packet[0].iov_len,
-            _use_large_buffers ? &net::free_large_buffer_and_refcnt : &net::free_buffer_and_refcnt,
+            _use_large_buffers ? &net::free_large_rx_buffer : &net::free_rx_buffer,
             packet[0].iov_base, refcnt, M_PKTHDR, EXT_EXTREF);
     m->M_dat.MH.MH_pkthdr.len = packet[0].iov_len;
     m->M_dat.MH.MH_pkthdr.rcvif = _ifn;
@@ -580,10 +585,10 @@ mbuf* net::packet_to_mbuf(const std::vector<iovec>& packet)
     for (size_t idx = 1; idx != packet.size(); ++idx) {
         auto&& iov = packet[idx];
         auto m = m_get(M_DONTWAIT, MT_DATA);
-        refcnt = new unsigned;
+        refcnt = rx_buffer_refcnt(iov.iov_base);
         m->M_dat.MH.MH_dat.MH_ext.ref_cnt = refcnt;
         m_extadd(m, static_cast<char*>(iov.iov_base), iov.iov_len,
-                _use_large_buffers ? &net::free_large_buffer_and_refcnt : &net::free_buffer_and_refcnt,
+                _use_large_buffers ? &net::free_large_rx_buffer : &net::free_rx_buffer,
                 iov.iov_base, refcnt, 0, EXT_EXTREF);
         m->m_hdr.mh_len = iov.iov_len;
         m->m_hdr.mh_next = nullptr;
@@ -594,17 +599,17 @@ mbuf* net::packet_to_mbuf(const std::vector<iovec>& packet)
     return m_head;
 }
 
-// hook for EXT_EXTREF mbuf cleanup
-void net::free_buffer_and_refcnt(void* buffer, void* refcnt)
+// hook for EXT_EXTREF mbuf cleanup.  The refcount lives inside the buffer (see
+// rx_buffer_refcnt / fill_rx_ring), so freeing the buffer frees it too; the
+// refcnt argument m_extadd stored is ignored here.
+void net::free_rx_buffer(void* buffer, void* refcnt)
 {
     do_free_buffer(buffer);
-    delete static_cast<unsigned*>(refcnt);
 }
 
-void net::free_large_buffer_and_refcnt(void* buffer, void* refcnt)
+void net::free_large_rx_buffer(void* buffer, void* refcnt)
 {
     do_free_large_buffer(buffer);
-    delete static_cast<unsigned*>(refcnt);
 }
 
 void net::do_free_buffer(void* buffer)
@@ -619,6 +624,19 @@ void net::do_free_large_buffer(void* buffer)
     memory::free_phys_contiguous_aligned(buffer);
 }
 
+// The refcount for a receive buffer lives in the sizeof(unsigned) bytes
+// reserved at the buffer's tail by fill_rx_ring().  frame points at packet
+// data inside the buffer (base + header for the head fragment, base for a
+// continuation fragment); the buffer base is the page it sits in, and the
+// total buffer size depends on whether large buffers are in use.
+unsigned* net::rx_buffer_refcnt(void* frame)
+{
+    auto base = static_cast<char*>(align_down(frame, page_size));
+    size_t buf_bytes = (_use_large_buffers ? LARGE_BUFFER_SIZE_IN_PAGES : 1)
+                       * memory::page_size;
+    return reinterpret_cast<unsigned*>(base + buf_bytes - sizeof(unsigned));
+}
+
 void net::fill_rx_ring()
 {
     trace_virtio_net_fill_rx_ring(_ifn->if_index);
@@ -626,16 +644,22 @@ void net::fill_rx_ring()
     vring* vq = _rxq.vqueue;
 
     int size_in_pages = _use_large_buffers ? LARGE_BUFFER_SIZE_IN_PAGES : 1;
+    // Reserve sizeof(unsigned) at the tail of every buffer for that buffer's
+    // mbuf external-storage refcount (see rx_buffer_refcnt).  The reserved
+    // bytes are never advertised to the device, so the device never writes
+    // over the refcount.
+    size_t buf_bytes = size_in_pages * memory::page_size;
+    size_t dev_bytes = buf_bytes - sizeof(unsigned);
     while (vq->avail_ring_not_empty()) {
         void *buffer;
         if (_use_large_buffers) {
-            buffer = memory::alloc_phys_contiguous_aligned(size_in_pages * memory::page_size, memory::page_size);
+            buffer = memory::alloc_phys_contiguous_aligned(buf_bytes, memory::page_size);
         } else {
             buffer = memory::alloc_page();
         }
 
         vq->init_sg();
-        vq->add_in_sg(buffer, size_in_pages * memory::page_size);
+        vq->add_in_sg(buffer, dev_bytes);
         if (!vq->add_buf(buffer)) {
             free_buffer(buffer);
             break;
