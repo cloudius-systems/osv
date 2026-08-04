@@ -543,6 +543,18 @@ int kill(pid_t pid, int sig)
     // and the parallel Gather hangs (leader waits forever for workers that
     // were never forked).
     mmu::address_space *target_as = nullptr;
+    // A LIVE fork-backend's OWN latch/barrier self-signal (SIGURG/SIGUSR1)
+    // must run its handler in the CALLER's own COW address space.  The base
+    // kill() spawns a NEW detached thread and set_address_space()es it into
+    // that COW AS -- but that fresh handler thread, running PG barrier code
+    // (HandleProcSignalBarrierInterrupt / latch_sigurg_handler) against a
+    // COW-lazy mmap page (0x2000..), faults and the fault NESTS fatally
+    // ("exception nested too deeply", ~1-in-3 DROP DATABASE runs).  For a
+    // self-signal the caller is ALREADY that backend, already in the right
+    // COW AS, on a real faultable stack -- exactly where a real Unix signal
+    // handler would run.  So run those two short async-signal-safe handlers
+    // INLINE in the caller and skip the thread spawn entirely (self_inline).
+    bool self_inline = false;
     if (pid != getpid() && pid != 0 && pid != -1 && pid != OSV_PID) {
         target_as = osv::fork::as_for_pid(pid);
         if (!target_as) {
@@ -567,6 +579,17 @@ int kill(pid_t pid, int sig)
         // as_for_pid() also gates this to a live REGISTERED child: a child
         // mid-teardown (unregister_pid already ran) returns nullptr -> AS0.
         target_as = osv::fork::as_for_pid(pid);
+        // Only run inline when this is a live registered backend in its own
+        // COW AS; if as_for_pid() returned nullptr (mid-teardown, or the
+        // top-level app whose AS is AS0) fall through to the normal path.
+        // Also require the signal to be UNBLOCKED in the calling thread: if PG
+        // has it masked (a critical section), POSIX defers delivery -- keep the
+        // base deferred (thread-spawn) behavior rather than run it inline and
+        // re-enter PG at a point it masked the signal to protect.
+        if (target_as && target_as == mmu::current_address_space() &&
+            !osv::thread_signals()->mask.test(sig - 1)) {
+            self_inline = true;
+        }
     }
 #else
     // OSv only implements one process, whose pid is getpid().
@@ -643,6 +666,28 @@ int kill(pid_t pid, int sig)
         // to make sure that user provided signal handler code has access to all
         // the features like syscall stack which matters for Golang apps
         const auto sa = actions[sigidx];
+#if CONF_fork
+        // Self-signal SIGURG/SIGUSR1 to our own live backend: run the handler
+        // INLINE in the caller instead of spawning a thread + retargeting its
+        // AS.  The caller is already in this backend's COW AS on a faultable
+        // stack, so the COW-lazy mmap fault the spawned handler thread took
+        // (and nested "exception nested too deeply") is handled normally here.
+        // PG's latch_sigurg_handler / HandleProcSignalBarrierInterrupt are
+        // short async-signal-safe routines (poke a pipe / set a flag), safe
+        // to run synchronously in the calling thread.
+        if (self_inline) {
+            if (sa.sa_flags & SA_RESETHAND) {
+                actions[sigidx].sa_flags = 0;
+                actions[sigidx].sa_handler = SIG_DFL;
+            }
+            if (sa.sa_flags & SA_SIGINFO) {
+                sa.sa_sigaction(sig, nullptr, nullptr);
+            } else {
+                sa.sa_handler(sig);
+            }
+            return 0;
+        }
+#endif
         auto t = sched::thread::make([=] {
             if (sa.sa_flags & SA_RESETHAND) {
                 actions[sigidx].sa_flags = 0;
