@@ -91,13 +91,13 @@ void virtio_driver::setup_features()
     //notify the host about the features in used according
     //to the virtio spec
     for (int i = 0; i < 64; i++)
-        if (subset & (1 << i))
+        if (subset & (1ULL << i))
             virtio_d("%s: found feature intersec of bit %d\n", __FUNCTION__,  i);
 
-    if (subset & (1 << VIRTIO_RING_F_INDIRECT_DESC))
+    if (subset & (1ULL << VIRTIO_RING_F_INDIRECT_DESC))
         set_indirect_buf_cap(true);
 
-    if (subset & (1 << VIRTIO_RING_F_EVENT_IDX))
+    if (subset & (1ULL << VIRTIO_RING_F_EVENT_IDX))
         set_event_idx_cap(true);
 
     set_guest_features(subset);
@@ -121,7 +121,7 @@ void virtio_driver::dump_config()
     virtio_d("    virtio features: ");
 
     for (int i = 0; i < 64; i++) {
-        virtio_d(" %d ", 0 != (device_features & (1 << i)));
+        virtio_d(" %d ", 0 != (device_features & (1ULL << i)));
     }
 #endif
 }
@@ -225,7 +225,7 @@ void virtio_driver::set_guest_features(u64 features)
 
 bool virtio_driver::get_guest_feature_bit(int bit)
 {
-    return (_enabled_features & (1 << bit)) != 0;
+    return (_enabled_features & (1ULL << bit)) != 0;
 }
 
 u8 virtio_driver::get_dev_status()
