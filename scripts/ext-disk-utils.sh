@@ -39,7 +39,7 @@ create_disk() {
 		exit 1
 	fi
 	dd if=/dev/zero of=$DISK_PATH bs=1M count=$DISK_SIZE_IN_MB 2>1 1>/dev/null
-	sudo -p "password for %p to run mkfs.ext4:" mkfs.ext4 $DISK_PATH 1>/dev/null
+	sudo -p "password for %p to run mkfs.ext4:" mkfs.ext4 -b 4096 -O ^64bit,^metadata_csum $DISK_PATH 1>/dev/null
 	echo "Created empty ext4 disk at $DISK_PATH of the size $DISK_SIZE_IN_MB mb"
 }
 
