@@ -2387,26 +2387,73 @@ static void vm_sigbus(uintptr_t addr, exception_frame* ef)
 // into it, and install it writable in this AS only -- so the faulting side
 // (parent or child) gets its own private copy.  Returns true if it handled a
 // COW fault.
-static bool handle_cow_write_fault(uintptr_t addr)
+// Lock-free walk of the CURRENT address space's page tables to the 4K leaf
+// for `addr`, returning a pointer to the leaf pt_element table + the index, or
+// nullptr if there is no present 4K leaf (empty entry or a large page).  The
+// walk only READS the current AS's own tables; no AS-wide mutex is needed to
+// inspect the resident PTE state.  Both handle_cow_write_fault and the fast
+// write-fault classifier share this so the walk is written once.
+static pt_element<0> *walk_to_leaf(uintptr_t addr, unsigned &i0_out)
 {
     // current_pt_root() returns the synthetic top (level-4) entry; follow it to
     // the PML4 page (level-3 entries) and walk down to the 4K leaf (level 0).
     pt_element<4> *top = current_pt_root();
-    if (top->empty()) return false;
+    if (top->empty()) return nullptr;
     auto pml4 = phys_cast<pt_element<3>>(top->next_pt_addr());
     unsigned i3 = pt_index(reinterpret_cast<void*>(addr), 3); // PML4 index
     pt_element<3> e3 = pml4[i3];
-    if (e3.empty() || e3.large()) return false;
+    if (e3.empty() || e3.large()) return nullptr;
     auto pdpt = phys_cast<pt_element<2>>(e3.next_pt_addr());
     unsigned i2 = pt_index(reinterpret_cast<void*>(addr), 2);
     pt_element<2> e2 = pdpt[i2];
-    if (e2.empty() || e2.large()) return false;
+    if (e2.empty() || e2.large()) return nullptr;
     auto pd = phys_cast<pt_element<1>>(e2.next_pt_addr());
     unsigned i1 = pt_index(reinterpret_cast<void*>(addr), 1);
     pt_element<1> e1 = pd[i1];
-    if (e1.empty() || e1.large()) return false;   // 2 MB pages are not COW here
+    if (e1.empty() || e1.large()) return nullptr; // 2 MB pages are not COW here
     auto pt = phys_cast<pt_element<0>>(e1.next_pt_addr());
-    unsigned i0 = pt_index(reinterpret_cast<void*>(addr), 0);
+    i0_out = pt_index(reinterpret_cast<void*>(addr), 0);
+    return pt;
+}
+
+// Fast, lock-free classifier for a write fault: does the current AS already
+// hold a resident, private copy-on-write leaf at `addr` that needs the
+// AS-wide write lock to copy?  A shared-anon page (present + pte_shared,
+// installed writable through the lock-free registry) is NOT a COW page and
+// never needs the AS-wide write lock -- neither does a not-yet-resident
+// first-touch fault (the for_read fault path installs it).  Only a genuine
+// private-COW leaf answers true here.  Generic: this holds for ANY
+// MAP_SHARED|MAP_ANONYMOUS-across-fork mapping, no workload awareness.
+static bool write_fault_needs_cow_lock(uintptr_t addr)
+{
+    unsigned i0;
+    pt_element<0> *pt = walk_to_leaf(addr, i0);
+    if (!pt) return false;
+    pt_element<0> e0 = pt[i0];
+    if (e0.empty()) return false;
+    return pte_is_cow(e0);
+}
+
+// Toggle the write-fault peek (skip the AS-wide write lock for non-COW write
+// faults) via env so a single image supports a clean A/B.  Default ON.  Read
+// once, lazily.
+static bool cow_peek_enabled()
+{
+    static std::atomic<int> cached{-1};
+    int v = cached.load(std::memory_order_relaxed);
+    if (v < 0) {
+        const char *e = getenv("OSV_MMU_COW_PEEK");
+        v = (e && e[0] == '0') ? 0 : 1;
+        cached.store(v, std::memory_order_relaxed);
+    }
+    return v != 0;
+}
+
+static bool handle_cow_write_fault(uintptr_t addr)
+{
+    unsigned i0;
+    pt_element<0> *pt = walk_to_leaf(addr, i0);
+    if (!pt) return false;
     pt_element<0> e0 = pt[i0];
     if (e0.empty()) return false;
     if (!pte_is_cow(e0)) return false;
@@ -2470,7 +2517,17 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
 
     // First handle a copy-on-write write fault (fork private mappings): the
     // page is present but write-protected with the cow bit -- copy it.
-    if (mmu::is_page_fault_write(ef->get_error())) {
+    //
+    // Only a genuine PRIVATE-COW leaf needs the AS-wide write lock (to make the
+    // private copy).  A shared-anon write fault (MAP_SHARED|ANON across fork)
+    // resolves its ONE shared physical page lock-free through the registry and
+    // installs a writable pte_shared PTE under the for_read fault path -- it
+    // never needs the AS-wide write lock.  A not-yet-resident first-touch fault
+    // is likewise handled by for_read.  Peek the leaf PTE lock-free and skip
+    // the exclusive lock unless the leaf is really COW, so shared-anon faults
+    // no longer serialize behind the AS-wide writer.
+    if (mmu::is_page_fault_write(ef->get_error()) &&
+            (!cow_peek_enabled() || write_fault_needs_cow_lock(addr))) {
         PREVENT_STACK_PAGE_FAULT
         WITH_LOCK(as->vmas_mutex->for_write()) {
             if (handle_cow_write_fault(addr)) {
