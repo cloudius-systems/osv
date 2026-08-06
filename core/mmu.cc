@@ -26,6 +26,9 @@
 #include <osv/file.h>
 #include "dump.hh"
 #include <osv/rcu.hh>
+#if CONF_fork
+#include <osv/rcu-hashtable.hh>
+#endif
 #include <osv/rwlock.h>
 #include <algorithm>
 #include <numeric>
@@ -1866,27 +1869,37 @@ private:
 // same VA maps THAT recorded physical page.  All siblings converge -- exactly
 // what MAP_SHARED means.  The registry map lives on the identity kernel heap so
 // it is one shared table across all address spaces, mirroring shm_file::_pages.
-struct shared_anon_registry {
-    // Sharded to remove the single-global-lock serialization: every shared-anon
-    // page fault (PG shared_buffers) resolves a page here, and one mutex+map for
-    // the whole process makes all fork-backend faults serialize on it (the RO
-    // scaling ceiling -- backends block here, ~99.9% idle, tps=concurrency/latency).
-    // Shard by page VA so faults on distinct pages take distinct locks and run
-    // in parallel.  Correctness is unchanged: a given VA always maps to the same
-    // shard, so the "one shared physical page per VA" invariant holds per shard.
-    // NR_SHARDS is fixed at 256; bump it if more than 256-way concurrent fault contention is ever observed.
-    static constexpr unsigned NR_SHARDS = 256;
-    struct shard {
-        mutex lock;
-        std::unordered_map<uintptr_t, void*> pages;   // abs page VA -> kernel page
-    };
-    shard shards[NR_SHARDS];
-    shard& shard_for(uintptr_t va) {
-        // va is page-aligned; use page-index bits, spread with a cheap mix.
+// The registry is populated ONCE per VA (the first backend to fault a given
+// shared-anon page allocates and records it) and then READ on every later
+// fault of that VA by every fork address space.  For a big shared-anon segment
+// exercised by many forked workers that is a handful of inserts and then a
+// flood of read-only lookups -- a textbook read-mostly VA-keyed table.  Back it
+// with osv::rcu_hashtable (the same structure the net-channel classifier uses
+// for its read-mostly flow-keyed lookups) so the hit path takes NO mutex: it
+// runs inside an rcu_read_lock, does a lock-free reader_find(va), and returns
+// the recorded page.  Only the rare first-fault INSERT takes a lock (a single
+// process-global insert mutex), which is where the "one shared physical page
+// per VA" invariant is preserved by a double-checked re-lookup under that lock.
+// This removes the per-shard mutex that every fault previously contended.
+struct shared_anon_node {
+    uintptr_t va;      // abs page VA (the key)
+    void *page;        // recorded kernel page for that VA
+};
+struct shared_anon_node_hash {
+    size_t operator()(const shared_anon_node &n) const { return hash_va(n.va); }
+    static size_t hash_va(uintptr_t va) {
+        // va is page-aligned; spread the page-index bits.
         uintptr_t k = va >> page_size_shift;
         k ^= k >> 16;
-        return shards[k & (NR_SHARDS - 1)];
+        return k;
     }
+};
+struct shared_anon_registry {
+    osv::rcu_hashtable<shared_anon_node, shared_anon_node_hash> pages;
+    // Serializes only the first-fault INSERT for a VA (and the double-checked
+    // re-lookup that preserves the one-page-per-VA invariant).  The READ path
+    // never takes this: it is rcu_read_lock only.
+    mutex insert_lock;
 };
 static shared_anon_registry *shared_anon_reg;
 static std::atomic<bool> shared_anon_reg_inited{false};
@@ -1924,33 +1937,40 @@ public:
     void *shared_page(uintptr_t offset) {
         uintptr_t va = _base + offset;
         auto *reg = get_shared_anon_registry();
-        auto &sh = reg->shard_for(va);
-        // Fast path: already recorded.
-        WITH_LOCK(sh.lock) {
-            auto it = sh.pages.find(va);
-            if (it != sh.pages.end()) {
-                return it->second;
+        // Fast path: already recorded -- LOCK-FREE read under RCU.  This is the
+        // flood-of-faults hot path; it takes no mutex.
+        WITH_LOCK(osv::rcu_read_lock) {
+            auto it = reg->pages.reader_find(va, shared_anon_node_hash::hash_va,
+                [](uintptr_t k, const shared_anon_node &n) { return n.va == k; });
+            if (it) {
+                return it->page;
             }
         }
-        // Allocate the backing page OUTSIDE the registry lock (alloc_page may
-        // schedule / refill the page pool -- never hold a mutex across that).
-        // Force it onto the identity kernel heap so it is valid in every AS.
+        // Slow path (first fault of this VA): allocate the backing page OUTSIDE
+        // any lock (alloc_page may schedule / refill the page pool -- never hold
+        // a mutex across that).  Force it onto the identity kernel heap so it is
+        // valid in every AS.
         void *page;
         {
             fork_arena::kernel_heap_scope kh;
             page = memory::alloc_page();
             memset(page, 0, page_size);
         }
-        WITH_LOCK(sh.lock) {
-            auto it = sh.pages.find(va);
-            if (it != sh.pages.end()) {
+        WITH_LOCK(reg->insert_lock) {
+            // Double-checked re-lookup under the insert lock: preserves the
+            // "one shared physical page per VA" invariant if another AS raced us.
+            auto it = reg->pages.owner_find(va, shared_anon_node_hash::hash_va,
+                [](uintptr_t k, const shared_anon_node &n) { return n.va == k; });
+            if (it) {
                 // Lost the race: another AS recorded it first -- use theirs.
                 fork_arena::kernel_heap_scope kh;
                 memory::free_page(page);
-                return it->second;
+                return it->page;
             }
-            fork_arena::kernel_heap_scope kh;   // map node on the identity heap
-            sh.pages.emplace(va, page);
+            // Publish on the identity heap so the node (and any bucket regrow)
+            // are visible in every fork AS, exactly like the old emplace.
+            fork_arena::kernel_heap_scope kh;
+            reg->pages.emplace(shared_anon_node{va, page});
             return page;
         }
     }
@@ -1986,11 +2006,11 @@ public:
         }
         uintptr_t va = _base + offset;
         auto *reg = get_shared_anon_registry();
-        auto &sh = reg->shard_for(va);
         void *page = nullptr;
-        WITH_LOCK(sh.lock) {
-            auto it = sh.pages.find(va);
-            if (it != sh.pages.end()) { page = it->second; sh.pages.erase(it); }
+        WITH_LOCK(reg->insert_lock) {
+            auto it = reg->pages.owner_find(va, shared_anon_node_hash::hash_va,
+                [](uintptr_t k, const shared_anon_node &n) { return n.va == k; });
+            if (it) { page = it->page; reg->pages.erase(it); }
         }
         if (page) {
             fork_arena::kernel_heap_scope kh;
