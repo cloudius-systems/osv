@@ -233,11 +233,23 @@ namespace virtio {
                 elem = _used->_used_elements[used_ptr];
                 int idx = elem._id;
 
+                // elem._id comes straight from the device/backend; a malicious
+                // or buggy backend can return an id outside [0, _num), which
+                // would index _desc[] out of bounds here (and again below when
+                // walking the chain).  Stop draining on a bogus id rather than
+                // read/write past the descriptor table.
+                if ((unsigned)idx >= (unsigned)_num) {
+                    break;
+                }
+
                 if (_desc[idx]._flags & vring_desc::VRING_DESC_F_INDIRECT) {
                     free_phys_contiguous_aligned(mmu::phys_to_virt(_desc[idx]._paddr));
                 } else
                     while (_desc[idx]._flags & vring_desc::VRING_DESC_F_NEXT) {
                         idx = _desc[idx]._next;
+                        if ((unsigned)idx >= (unsigned)_num) {
+                            break;
+                        }
                         i++;
                     }
 
@@ -257,24 +269,41 @@ namespace virtio {
             vring_used_elem elem;
             void* cookie = nullptr;
 
-            // need to trim the free running counter w/ the array size
-            int used_ptr = _used_ring_host_head & (_num - 1);
-            u16 used_idx = _used->_idx.load(std::memory_order_acquire);
+            // Skip past any bogus completions the device/backend may have
+            // written, so a malicious id neither indexes _cookie[] out of
+            // bounds nor wedges the drain loop forever on the same bad entry.
+            for (;;) {
+                // need to trim the free running counter w/ the array size
+                int used_ptr = _used_ring_host_head & (_num - 1);
+                u16 used_idx = _used->_idx.load(std::memory_order_acquire);
 
-            trace_vring_get_buf_elem(this, _used_ring_host_head,
-                                     used_idx);
+                trace_vring_get_buf_elem(this, _used_ring_host_head,
+                                         used_idx);
 
-            if (_used_ring_host_head == used_idx) {
-                return nullptr;
+                if (_used_ring_host_head == used_idx) {
+                    return nullptr;
+                }
+
+                elem = _used->_used_elements[used_ptr];
+
+                // elem._id is written by the device/backend; a malicious or
+                // buggy backend can return an id outside [0, _num), which would
+                // index _cookie[] out of bounds (OOB read of a bogus cookie
+                // pointer that is then dereferenced/freed, plus an OOB NULL
+                // write).  Advance past the bad entry instead of returning it
+                // (returning nullptr here would stop the caller's drain loop
+                // without advancing the head, stalling the queue on the same
+                // bogus entry forever).
+                if (elem._id >= _num) {
+                    _used_ring_host_head++;
+                    continue;
+                }
+
+                *len = elem._len;
+                cookie = _cookie[elem._id];
+                _cookie[elem._id] = nullptr; //maybe use this array for the full size hdrs?
+                return cookie;
             }
-
-            elem = _used->_used_elements[used_ptr];
-            *len = elem._len;
-
-            cookie = _cookie[elem._id];
-            _cookie[elem._id] = nullptr; //maybe use this array for the full size hdrs?
-
-            return cookie;
     }
 
     bool vring::avail_ring_not_empty()
