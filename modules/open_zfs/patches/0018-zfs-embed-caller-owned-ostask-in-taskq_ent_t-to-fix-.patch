@@ -1,0 +1,104 @@
+From 0c3b48e89ea4b21768be2247a7a0b8d8a695664a Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Sat, 6 Jun 2026 11:39:14 -0400
+Subject: [PATCH 18/19] zfs: embed caller-owned ostask in taskq_ent_t to fix
+ dispatch UAF
+
+taskq_ent_t previously carried no storage of its own; the OSv shim's
+taskq_dispatch_ent() heap-allocated a throwaway ostask inside
+taskq_dispatch() and stashed its pointer in tqent_id, which taskq_run()
+then freed once the task ran -- leaving tqent_id dangling. The freed
+48-byte chunk was reissued by the allocator as an _Rb_tree_node for the
+synch _evlist, where the residual ostask function-pointer bytes
+masqueraded as tree links and wedged equal_range in a self-loop,
+stranding the dbu_evict barrier wakeup at pool teardown.
+
+Embed the ostask in the entry so dispatch can route through the
+non-freeing taskq_dispatch_safe(), matching the FreeBSD spl where the
+entry is caller-owned. Pull in the real 32-byte <sys/_task.h> struct
+task rather than the prior 8-byte fake, so taskq_dispatch_safe's
+TASK_INIT/taskqueue_enqueue writes stay within the embedded entry
+instead of overflowing the enclosing zio_t/dbuf_t.
+
+(cherry picked from commit 1e42eea6ba0b8958d336f275bf51ee003d097bba)
+---
+ include/os/osv/spl/sys/taskq.h | 46 +++++++++++++++++++++++-----------
+ 1 file changed, 32 insertions(+), 14 deletions(-)
+
+diff --git a/include/os/osv/spl/sys/taskq.h b/include/os/osv/spl/sys/taskq.h
+index 629f80da4..b0687c418 100644
+--- a/include/os/osv/spl/sys/taskq.h
++++ b/include/os/osv/spl/sys/taskq.h
+@@ -11,6 +11,16 @@
+ 
+ #include <sys/types.h>
+ #include <sys/proc.h>
++/*
++ * Pull in the real BSD "struct task" (32 bytes) rather than faking it.
++ * taskq_ent_t embeds an ostask that taskq_dispatch_safe() initializes with
++ * TASK_INIT() and hands to taskqueue_enqueue(); both are compiled against
++ * this same layout in opensolaris_taskq.c.  A mismatched (smaller) struct
++ * task here would let those writes overflow the embedded entry and corrupt
++ * the enclosing zio_t/dbuf_t.  _task.h only drags in <sys/queue.h>, so it
++ * avoids the __printflike chain that <sys/taskqueue.h> would impose.
++ */
++#include <sys/_task.h>
+ 
+ #ifdef __cplusplus
+ extern "C" {
+@@ -83,11 +93,29 @@ extern int	taskq_cancel_id(taskq_t *, taskqid_t, boolean_t);
+ extern taskq_t	*taskq_of_curthread(void);
+ 
+ /*
+- * taskq_ent_t - task queue entry (simplified for OSv).
+- * The FreeBSD version has union with task/timeout_task, but OSv
+- * just needs a minimal struct for the extern declarations.
++ * ostask - the unit of work the OSv taskqueue glue actually enqueues.
++ * Must match the definition in <opensolaris/sys/taskq.h> used by
++ * opensolaris_taskq.c (taskq_dispatch_safe / taskq_run_safe).
++ */
++struct ostask {
++	struct task	 ost_task;
++	task_func_t	*ost_func;
++	void		*ost_arg;
++};
++
++/*
++ * taskq_ent_t - caller-owned task queue entry.
++ *
++ * The entry embeds its own ostask so taskq_dispatch_ent() can route through
++ * taskq_dispatch_safe() (no auto-free; matches the FreeBSD spl behaviour where
++ * the entry is owned by the caller).  The previous OSv shim heap-allocated a
++ * throwaway ostask inside taskq_dispatch() and stashed its pointer in
++ * tqent_id, which taskq_run() then freed -- leaving tqent_id dangling for the
++ * next taskq_empty_ent()/taskq_wait_id() to dereference.  Embedding the ostask
++ * removes that use-after-free entirely.
+  */
+ typedef struct taskq_ent {
++	struct ostask	 tqent_ostask;
+ 	task_func_t	*tqent_func;
+ 	void		*tqent_arg;
+ 	taskqid_t	 tqent_id;
+@@ -101,18 +129,8 @@ extern int taskq_empty_ent(taskq_ent_t *);
+ extern void taskq_init_ent(taskq_ent_t *);
+ 
+ /*
+- * OSv compat extension: taskq_dispatch_safe with pre-allocated ostask.
++ * OSv compat extension: taskq_dispatch_safe with caller-provided ostask.
+  */
+-struct task {
+-	void	*ta_data;
+-};
+-
+-struct ostask {
+-	struct task	 ost_task;
+-	task_func_t	*ost_func;
+-	void		*ost_arg;
+-};
+-
+ taskqid_t taskq_dispatch_safe(taskq_t *tq, task_func_t func, void *arg,
+     u_int flags, struct ostask *task);
+ 
+-- 
+2.53.0
+

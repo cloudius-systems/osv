@@ -53,3 +53,4 @@ modules/dl_tests/usr.manifest
 compile_commands.json
 downloaded_packages
 .firecracker
+!modules/open_zfs/patches/*.patch

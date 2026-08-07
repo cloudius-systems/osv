@@ -1,0 +1,60 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Mon, 27 Jul 2026 18:00:00 +0000
+Subject: [PATCH 30/30] zfs: force single-threaded inline ARC eviction on OSv
+
+Parallel ARC eviction (zfs_arc_evict_threads > 1) dispatches arc_evict_task()
+to the arc_evict taskq (AS0 worker threads).  When a forked PostgreSQL backend
+triggers eviction under memory pressure it kmem_allocs the evict_arg_t array
+and dispatches &eva[i] to those AS0 workers, then taskq_waits.  On OSv fork
+model the worker running arc_evict_task races the dispatcher / touches state
+whose VA is not coherent in the worker address space and faults on eva->eva_ml
+(arc.c:4088, reached via handle_mmap_fault under the ZFS taskqueue).
+
+Force zfs_arc_evict_threads = 1 in arc_evict_thread_init() so eviction runs
+inline in the caller context via arc_evict_state_impl(), removing the taskq
+hand-off and the race.  This is the same OSv serialization applied to libtpool
+dispatch (patch 0021) and dataset mounting (patch 0022); parallel eviction is
+a throughput optimization OSv does not require.
+
+This patch touches only arc_evict_thread_init().  The ARC-sizing helper
+arc_reduce_target_size_noshrink() and the small-RAM arc_c_min cap live in
+patch 0009 (zfs: fix ARC sizing, memory pressure and OSv platform ...); they
+are not repeated here.
+
+Signed-off-by: Greg Burd <greg@burd.me>
+---
+ module/zfs/arc.c | 18 ++++++++++++++++++
+ 1 file changed, 18 insertions(+)
+
+diff --git a/module/zfs/arc.c b/module/zfs/arc.c
+index 9912eb818..e0afb1f35 100644
+--- a/module/zfs/arc.c
++++ b/module/zfs/arc.c
+@@ -4096,6 +4096,24 @@ arc_evict_task(void *arg)
+ static void
+ arc_evict_thread_init(void)
+ {
++#ifdef __OSV__
++	/*
++	 * Force single-threaded, inline ARC eviction on OSv.  Parallel eviction
++	 * dispatches arc_evict_task() to the arc_evict taskq (AS0 worker
++	 * threads).  When a forked PostgreSQL backend triggers eviction under
++	 * memory pressure it kmem_allocs the evict_arg_t array and dispatches
++	 * &eva[i] to those AS0 workers, then taskq_waits.  On OSv's fork model
++	 * the worker running arc_evict_task races the dispatcher's teardown /
++	 * touches state whose VA is not coherent in the worker's address space,
++	 * faulting on eva->eva_ml.  Inline eviction (zfs_arc_evict_threads == 1)
++	 * takes the direct arc_evict_state_impl() path in the caller's context,
++	 * removing the taskq hand-off and the race -- the same OSv serialization
++	 * applied to libtpool dispatch and dataset mounting (patches 0021/0022).
++	 * Parallel eviction is a throughput optimization OSv does not require.
++	 */
++	zfs_arc_evict_threads = 1;
++	return;
++#endif
+ 	if (zfs_arc_evict_threads == 0) {
+ 		/*
+ 		 * Compute number of threads we want to use for eviction.
+--
+2.43.0

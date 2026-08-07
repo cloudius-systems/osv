@@ -1,0 +1,75 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Mon, 27 Jul 2026 18:30:00 +0000
+Subject: [PATCH 31/31] zfs: enable aarch64 SPL isa_defs and sha512 SIMD
+ fallback
+
+The OSv SPL platform layer (patch 0001) only recognized x86_64: isa_defs.h
+#errored out on any other ISA, and simd.h's non-x86 feature-detection stub
+block was missing zfs_sha512_available().  On x86_64 OpenZFS pulls SHA-512
+availability from the sha512-x86_64.S asm path, so the stub was never needed;
+aarch64 has no such asm hook wired into the SPL, so icp/algs/sha2 calls
+zfs_sha512_available() and fails to link/compile without the fallback.
+
+Teach the SPL layer about aarch64:
+
+  - isa_defs.h: add an __aarch64__ ISA branch (LP64, _SUNOS_VTOC_16), matching
+    the existing x86_64 branch.  Endianness is still derived from __BYTE_ORDER
+    below, so no arch-specific endian define is needed.
+  - simd.h: add zfs_sha512_available() to the non-x86 B_FALSE stub block so the
+    SHA-512 impl selector resolves to the generic C path on aarch64.
+
+x86_64 is unaffected: both hunks add new code guarded by __aarch64__ / the
+existing non-x86 #else block, leaving the x86_64 preprocessor paths byte for
+byte identical.
+
+Signed-off-by: Greg Burd <greg@burd.me>
+---
+ include/os/osv/spl/sys/isa_defs.h | 11 +++++++++--
+ include/os/osv/spl/sys/simd.h     |  1 +
+ 2 files changed, 10 insertions(+), 2 deletions(-)
+
+diff --git a/include/os/osv/spl/sys/isa_defs.h b/include/os/osv/spl/sys/isa_defs.h
+index 7991a2e47..94e088a8d 100644
+--- a/include/os/osv/spl/sys/isa_defs.h
++++ b/include/os/osv/spl/sys/isa_defs.h
+@@ -1,7 +1,7 @@
+ // SPDX-License-Identifier: CDDL-1.0
+ /*
+  * OSv SPL isa_defs.h - ISA definitions for OpenZFS.
+- * Based on the FreeBSD version. OSv only supports x86_64.
++ * Based on the FreeBSD version. OSv supports x86_64 and aarch64.
+  */
+ #ifndef	_SPL_OSV_ISA_DEFS_H
+ #define	_SPL_OSV_ISA_DEFS_H
+@@ -27,8 +27,15 @@ extern "C" {
+ #endif
+ #define	_SUNOS_VTOC_16
+ 
++#elif defined(__aarch64__)
++
++#if !defined(_LP64)
++#error "_LP64 not defined"
++#endif
++#define	_SUNOS_VTOC_16
++
+ #else
+-#error "ISA not supported - OSv only supports x86_64"
++#error "ISA not supported - OSv supports x86_64 and aarch64"
+ #endif
+ 
+ #if __BYTE_ORDER == __BIG_ENDIAN
+diff --git a/include/os/osv/spl/sys/simd.h b/include/os/osv/spl/sys/simd.h
+index 7167b1e13..8bfb9ad4c 100644
+--- a/include/os/osv/spl/sys/simd.h
++++ b/include/os/osv/spl/sys/simd.h
+@@ -170,6 +170,7 @@ zfs_movbe_available(void)
+ #define	zfs_aes_available()		B_FALSE
+ #define	zfs_pclmulqdq_available()	B_FALSE
+ #define	zfs_sha256_available()		B_FALSE
++#define	zfs_sha512_available()		B_FALSE
+ #define	zfs_movbe_available()		B_FALSE
+ 
+ #endif /* __x86_64__ || __i386__ */
+-- 
+2.43.0

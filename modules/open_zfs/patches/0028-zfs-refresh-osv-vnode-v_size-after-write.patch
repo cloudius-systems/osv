@@ -1,0 +1,57 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Sat, 25 Jul 2026 20:30:00 +0000
+Subject: [PATCH 28/28] zfs: refresh OSv vnode v_size after write so
+ read-after-write is coherent
+
+[#1423 / OpenZFS]  zfs_vop_write() (the OSv vop_write bridge) calls
+zfs_write(), which updates the ZFS logical file size (zp->z_size) but
+NOT the OSv vnode's cached size (vp->v_size).  Both zfs_vop_read() and
+zfs_vop_cache() bound reads with vp->v_size:
+
+	if (uio->uio_offset < 0 || uio->uio_offset >= (off_t)vp->v_size)
+		return (0);   / EOF
+
+so a file-extending write followed by a read of the newly written region
+returns end-of-file even though the bytes are present in the ARC and on
+disk.  PostgreSQL hits this immediately: a backend extends a relation
+(writes block 0) and a subsequent read of that block fails with
+"unexpected data beyond EOF in block 0 of relation ...", so no committed
+row is ever visible and no workload can run.
+
+Refresh vp->v_size from zp->z_size after every successful regular-file
+write so the OSv VFS read bound tracks the real file size.  This is a
+single-process correctness bug (it does not depend on fork/COW); it was
+latent because the earlier OSv ZFS bring-up exercised write-then-close-
+reopen (fresh vnode picks up z_size at alloc time via zfs_vfsops.c) or
+reads within the initial size, never a write-extend-then-read on the
+same live vnode.
+
+Verified: create table + insert + checkpoint + select round-trips (rows
+visible), and the data survives a guest crash + reboot + pool re-import.
+
+Signed-off-by: Greg Burd <greg@burd.me>
+---
+--- a/module/os/osv/zfs/zfs_vnops_os.c
++++ b/module/os/osv/zfs/zfs_vnops_os.c
+@@ -762,8 +762,17 @@ zfs_vop_write(struct vnode *vp, struct uio *uio, int flags)
+ 	zfs_uio_init(&zuio, uio);
+ 	error = zfs_write(zp, &zuio, ioflag, NULL);
+ 
+ 	if (zuio.uio_extflg & UIO_DIRECT)
+ 		zfs_uio_free_dio_pages(&zuio, UIO_WRITE);
+ 
++	/*
++	 * zfs_write() updates the ZFS logical size (zp->z_size) but not the OSv
++	 * vnode's cached size (vp->v_size), which zfs_vop_read/zfs_vop_cache use
++	 * to bound reads.  Without this refresh a read of a region just written
++	 * (file-extending write) is rejected as beyond-EOF.  Keep them in sync.
++	 */
++	if (error == 0 && vp->v_type == VREG)
++		vp->v_size = (off_t)zp->z_size;
++
+ 	return (error);
+ }
+ 
+-- 
+2.43.0

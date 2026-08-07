@@ -1,0 +1,64 @@
+From fa02b1a2066a6f1a2d7e3a89b8b04b9bfeccea33 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Tue, 12 May 2026 09:44:25 -0400
+Subject: [PATCH 11/19] zfs: implement ZIO_TYPE_TRIM in vdev_disk_io_start for
+ OSv
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Route ZFS TRIM I/Os to the virtio-blk BIO_DISCARD path.  OpenZFS's
+vdev_trim.c and zio_trim() generate ZIO_TYPE_TRIM zios when a 'zpool trim'
+is issued or when auto-trim is enabled; previously vdev_disk_io_start()
+would hit the ASSERT(READ||WRITE) and panic.
+
+The BIO_DISCARD bio carries io_offset and io_size; virtio-blk translates
+it to a VIRTIO_BLK_T_DISCARD descriptor when VIRTIO_BLK_F_DISCARD is
+negotiated.  On devices that do not advertise DISCARD support the strategy
+callback completes with ENOTSUP, which propagates back through
+vdev_disk_bio_done() → zio_interrupt() → vdev_trim_cb() and marks the
+vdev trim as unsupported — matching the expected behaviour of
+tst-zfs-trim.cc (SKIP when ENOTSUP/EOPNOTSUPP).
+
+(cherry picked from commit eaa180cd19c9645129404965037e47018c80a2e3)
+---
+ module/os/osv/zfs/vdev_disk.c | 23 +++++++++++++++++++++++
+ 1 file changed, 23 insertions(+)
+
+diff --git a/module/os/osv/zfs/vdev_disk.c b/module/os/osv/zfs/vdev_disk.c
+index 6264de33b..e8ad02af2 100644
+--- a/module/os/osv/zfs/vdev_disk.c
++++ b/module/os/osv/zfs/vdev_disk.c
+@@ -169,6 +169,29 @@ vdev_disk_io_start(zio_t *zio)
+ 		return;
+ 	}
+ 
++	if (zio->io_type == ZIO_TYPE_TRIM) {
++		/*
++		 * ZFS space reclamation (TRIM/DISCARD).  Issue a BIO_DISCARD
++		 * for the range [io_offset, io_offset + io_size).  The
++		 * virtio-blk driver translates this to a VIRTIO_BLK_T_DISCARD
++		 * descriptor when VIRTIO_BLK_F_DISCARD is negotiated.  On
++		 * devices that do not support DISCARD the strategy callback
++		 * completes the bio with ENOTSUP, which we propagate via
++		 * vdev_disk_bio_done() → zio_interrupt() → vdev_trim_cb().
++		 */
++		bio = alloc_bio();
++		bio->bio_cmd = BIO_DISCARD;
++		bio->bio_dev = dvd->device;
++		bio->bio_data = NULL;
++		bio->bio_offset = zio->io_offset;
++		bio->bio_bcount = zio->io_size;
++		bio->bio_caller1 = zio;
++		bio->bio_done = vdev_disk_bio_done;
++
++		bio->bio_dev->driver->devops->strategy(bio);
++		return;
++	}
++
+ 	ASSERT(zio->io_type == ZIO_TYPE_READ ||
+ 	    zio->io_type == ZIO_TYPE_WRITE);
+ 
+-- 
+2.53.0
+
