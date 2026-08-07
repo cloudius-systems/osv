@@ -13,6 +13,10 @@
 namespace memory {
 
 void* alloc_page();
+// Allocate one page preferring memory local to NUMA node `node`, falling back
+// to a node-agnostic allocation when the node has no free memory or NUMA is
+// unavailable.
+void* alloc_page_on_node(int node);
 void free_page(void* page);
 void* alloc_huge_page(size_t bytes);
 void free_huge_page(void *page, size_t bytes);
