@@ -112,6 +112,8 @@ zfs-only-tests := tst-readdir.so tst-fallocate.so tst-fs-link.so \
 	tst-concurrent-read.so tst-solaris-taskq.so
 
 ext-only-tests := tst-readdir.so tst-concurrent-read.so tst-fs-link.so
+ext-only-tests += tst-ext4-rw.so
+ext-only-tests += tst-ext4-bench.so
 
 specific-fs-tests := $($(fs_type)-only-tests)
 
