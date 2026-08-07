@@ -1,0 +1,76 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Wed, 29 Jul 2026 03:10:00 +0000
+Subject: [PATCH 31/31] zfs: guard vnode_pager_setsize against a NULL vnode on OSv (ZIL-replay mount crash)
+
+A znode loaded via zfs_zget() outside the OSv VFS vget() path has no attached
+vnode: zfs_znode_alloc() (module/os/osv/zfs/zfs_znode_os.c) kmem_zalloc's the
+znode and sets up the SA handle and locks but never sets zp->z_vnode, so
+ZTOV(zp) == NULL.  This is a known OSv-ZFS invariant already handled elsewhere
+(e.g. zfs_dir.c uses S_ISDIR(z_mode) instead of ZTOV(zp)->v_type, with a
+comment naming the z_vnode == NULL case).
+
+ZIL replay at pool import/mount is exactly this path: zfs_replay_truncate()
+loads the znode with zfs_zget() (no vnode) and calls zfs_space() ->
+zfs_freesp() -> zfs_trunc()/zfs_free_range()/zfs_extend(), each of which calls
+
+    vnode_pager_setsize(ZTOV(zp), ...)
+
+On OSv vnode_pager_setsize() is `static inline { vp->v_size = size; }`
+(include/osv/vnode.h).  With ZTOV(zp) == NULL this writes through a NULL vnode
+(NULL->v_size) and page-faults during mount, aborting the guest before
+PostgreSQL even starts.  It is intermittent: it only fires when the ZIL has an
+un-synced TX_TRUNCATE record to replay at import.  This path became reachable
+when patch 0029 implemented zfs_space for ZIL replay (previously an ENOTSUP
+stub that silently dropped the record).
+
+Fix: guard each vnode_pager_setsize() call with a NULL-vnode check in
+zfs_extend / zfs_free_range / zfs_trunc.  vnode_pager_setsize only updates the
+page-cache size hint; a replay znode has no vnode/page cache to size, and
+z_size + the SA update are already authoritative.  With the guard, the
+combined fork+ZFS image reaches "ready to accept connections" on every boot
+(25/25 consecutive clean serving boots at -smp 8, -m 32G, KVM, recordsize=8k
+lz4), where before it aborted at mount on ~2/3 of boots.
+
+Signed-off-by: Greg Burd <greg@burd.me>
+--- a/module/os/osv/zfs/zfs_znode_os.c	2026-07-29 02:41:34.742384333 +0000
++++ b/module/os/osv/zfs/zfs_znode_os.c	2026-07-29 03:03:25.420493540 +0000
+@@ -570,7 +570,15 @@
+ 	zp->z_size = end;
+ 	VERIFY0(sa_update(zp->z_sa_hdl, SA_ZPL_SIZE(zp->z_zfsvfs),
+ 	    &zp->z_size, sizeof (zp->z_size), tx));
+-	vnode_pager_setsize(ZTOV(zp), end);
++	/*
++	 * A znode loaded via zfs_zget() outside the VFS vget() path (e.g. during
++	 * ZIL replay at mount, before any vnode is attached) has z_vnode == NULL,
++	 * so ZTOV(zp) is NULL.  vnode_pager_setsize() only updates the page-cache
++	 * size hint (vp->v_size); there is no vnode/page cache to size for a
++	 * replay znode, so skip it (z_size + SA are already authoritative).
++	 */
++	if (ZTOV(zp) != NULL)
++		vnode_pager_setsize(ZTOV(zp), end);
+ 
+ 	zfs_rangelock_exit(lr);
+ 	dmu_tx_commit(tx);
+@@ -598,7 +606,8 @@
+ 		len = zp->z_size - off;
+ 
+ 	error = dmu_free_long_range(zfsvfs->z_os, zp->z_id, off, len);
+-	if (error == 0)
++	/* z_vnode may be NULL for a replay-loaded znode; see zfs_extend(). */
++	if (error == 0 && ZTOV(zp) != NULL)
+ 		vnode_pager_setsize(ZTOV(zp), off);
+ 
+ 	zfs_rangelock_exit(lr);
+@@ -655,7 +664,9 @@
+ 	VERIFY0(sa_bulk_update(zp->z_sa_hdl, bulk, count, tx));
+ 	dmu_tx_commit(tx);
+ 
+-	vnode_pager_setsize(vp, end);
++	/* z_vnode may be NULL for a replay-loaded znode; see zfs_extend(). */
++	if (vp != NULL)
++		vnode_pager_setsize(vp, end);
+ 	zfs_rangelock_exit(lr);
+ 	return (0);
+ }
+--

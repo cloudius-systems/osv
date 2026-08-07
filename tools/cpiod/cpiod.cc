@@ -189,7 +189,15 @@ int main(int ac, char** av)
     sync();
 
     // File systems mounted while running mkfs.so will be unmounted here.
-    if (prefix == "/zfs/zfs") {
+    // upload_manifest.py passes the prefix with a trailing slash
+    // ("/zfs/zfs/"), so normalize before comparing: without this unmount the
+    // dirty ARC data written above is never flushed to the pool vdev
+    // (zfs_osv_unmount runs txg_wait_synced + dmu_objset_disown), and the
+    // image boots with an empty root dataset.
+    std::string norm_prefix = prefix;
+    while (norm_prefix.size() > 1 && norm_prefix.back() == '/')
+        norm_prefix.pop_back();
+    if (norm_prefix == "/zfs/zfs") {
         int ret;
 
         ret = umount("/zfs/zfs");
