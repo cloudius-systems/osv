@@ -635,6 +635,13 @@ ext_readdir(struct vnode *dvp, struct file *fp, struct dirent *dir)
         if (ext4_dir_en_get_inode(it.curr) != 0) {
             memset(dir->d_name, 0, sizeof(dir->d_name));
             uint16_t name_length = ext4_dir_en_get_name_len(&fs->sb, it.curr);
+            // On an old-rev (rev0, minor<5) image ext4_dir_en_get_name_len can
+            // fold in name_length_high and return up to block_size-8 (~4 KiB),
+            // while d_name is only sizeof(dir->d_name) (256).  Clamp so a
+            // crafted directory entry cannot overflow the fixed d_name buffer.
+            if (name_length >= sizeof(dir->d_name)) {
+                name_length = sizeof(dir->d_name) - 1;
+            }
             memcpy(dir->d_name, it.curr->name, name_length);
             ext_debug("readdir directory with i-node=%ld at offset:%ld => entry name:%s\n", dvp->v_ino, file_offset(fp), dir->d_name);
 
@@ -1341,7 +1348,24 @@ ext_readlink(vnode_t *vp, uio_t *uio)
         return uiomove(content, fsize, uio);
     } else {
         uint32_t block_size = ext4_sb_get_block_size(&fs->sb);
+        // A symlink target is stored in at most one block (and is bounded by
+        // PATH_MAX); a slow symlink never spans more.  The inode size is read
+        // straight off disk and is fully attacker-controlled for a crafted
+        // image, so clamp it to block_size before reading into the block_size
+        // buffer -- otherwise ext_internal_read() would write @fsize bytes
+        // (up to 2^64-1) into a block_size heap allocation (heap overflow).
+        if (fsize > block_size) {
+            return EINVAL;   // malformed symlink inode
+        }
+        // Also guard the read start: ext_internal_read subtracts offset from
+        // fsize, so an offset past EOF would underflow the read length.
+        if ((uint64_t)uio->uio_offset >= fsize) {
+            return 0;
+        }
         void *buf = malloc(block_size);
+        if (!buf) {
+            return ENOMEM;
+        }
         size_t read_count = 0;
         int ret = ext_internal_read(fs, &inode_ref._ref, uio->uio_offset, buf, fsize, &read_count);
         if (ret) {
