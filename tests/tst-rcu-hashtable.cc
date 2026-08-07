@@ -174,10 +174,13 @@ BOOST_AUTO_TEST_CASE(test_rcu_hashtable) {
             std::default_random_engine generator;
             std::uniform_int_distribution<unsigned> gen_action(0, 1);
             std::uniform_int_distribution<unsigned> gen_value(0, range - 1);
+            //unsigned action = 1, value = 0;
             size_t size = 0;
             for (size_t i = 0; i < iterations; ++i) {
                 auto action = gen_action(generator);
                 auto value = gen_value(generator);
+                //action = action ? 0: 1;
+                //value = (value + 1) % range;
                 if (size > max_size) {
                     action = 1;
                 }
