@@ -1,0 +1,7 @@
+# The tests module Makefile is an append-only list that many independent
+# feature branches extend (each adds its own test). Union-merge it so those
+# additions never conflict: git keeps both sides instead of raising a conflict
+# that would otherwise need a manual resolution (and an extra merge commit) for
+# every concurrent PR. Pair with one-line "tests += tst-foo.so" additions so the
+# merged result stays valid.
+modules/tests/Makefile merge=union
