@@ -16,7 +16,13 @@
 #include <bsd/sys/net/netisr.h>
 
 #include <osv/net_trace.hh>
+#include <osv/percpu.hh>
+#include <lockfree/ring.hh>
 #include <algorithm>
+#include <atomic>
+#include <cstdio>
+#include <cstdlib>
+#include <vector>
 
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
@@ -152,6 +158,16 @@ void classifier::remove(ipv4_tcp_conn_id id)
 
 bool classifier::post_packet(mbuf* m)
 {
+    if (auto nc = classify_and_push(m)) {
+        // FIXME: find a way to batch wakes
+        nc->wake();
+        return true;
+    }
+    return false;
+}
+
+net_channel* classifier::classify_and_push(mbuf* m)
+{
 #if CONF_lazy_stack_invariant
     assert(!sched::thread::current()->is_app());
 #endif
@@ -159,14 +175,12 @@ bool classifier::post_packet(mbuf* m)
         if (auto nc = classify_ipv4_tcp(m)) {
             log_packet_in(m, NETISR_ETHER);
             if (!nc->push(m)) {
-                return false;
+                return nullptr;
             }
-            // FIXME: find a way to batch wakes
-            nc->wake();
-            return true;
+            return nc;
         }
     }
-    return false;
+    return nullptr;
 }
 
 // must be called with rcu lock held
@@ -208,4 +222,114 @@ net_channel* classifier::classify_ipv4_tcp(mbuf* m)
         return nullptr;
     }
     return i->chan;
+}
+
+// ---------------------------------------------------------------------------
+// RX wake fan-out: per-CPU wake-worker threads (net_wake_dispatch).
+//
+// Each CPU runs one wake-worker thread with a single-producer/single-consumer
+// ring of net_channel*.  The RX receiver is the sole producer into every
+// ring, and each worker is the sole consumer of its own ring, so the rings
+// stay SPSC.  defer_wake() round-robins channels across the workers (skipping
+// the receiver's own CPU so the receiver keeps draining); flush() wakes the
+// workers that were fed this pass; each worker calls net_channel::wake() from
+// its own CPU, spreading the cross-CPU IPIs and the woken-backend scheduling
+// across the idle cores instead of serializing on the receiver CPU.
+// ---------------------------------------------------------------------------
+namespace net_wake_dispatch {
+
+// Bounded per-CPU handoff ring.  512 entries is well above the RX burst of
+// distinct connections a single drain pass produces; on overflow the caller
+// wakes inline, so a full ring only costs a little serialization, never loss.
+static const unsigned RING_SIZE = 512;
+
+struct worker {
+    ring_spsc<net_channel*, unsigned, RING_SIZE> ring;
+    sched::thread* thread = nullptr;
+    std::atomic<bool> fed{false};
+};
+
+static std::vector<worker*> workers;   // index == cpu id
+static bool _enabled = false;
+static std::atomic<unsigned> _rr{0};   // round-robin cursor
+
+bool enabled()
+{
+    return _enabled;
+}
+
+static void worker_loop(worker* w)
+{
+    while (true) {
+        sched::thread::wait_until([w] {
+            return !w->ring.empty();
+        });
+        w->fed.store(false, std::memory_order_relaxed);
+        net_channel* nc;
+        while (w->ring.pop(nc)) {
+            nc->wake();
+        }
+    }
+}
+
+void init()
+{
+    if (const char* e = getenv("OSV_NET_DISPATCH_FANOUT")) {
+        if (e[0] != '0') {
+            _enabled = true;
+        }
+    }
+    if (!_enabled) {
+        return;
+    }
+    unsigned n = sched::cpus.size();
+    workers.resize(n, nullptr);
+    for (unsigned i = 0; i < n; i++) {
+        auto w = new worker();
+        w->thread = sched::thread::make([w] { worker_loop(w); },
+                sched::thread::attr().pin(sched::cpus[i])
+                    .name(std::string("net-wake") + std::to_string(i)));
+        workers[i] = w;
+        w->thread->start();
+    }
+    printf("net_wake_dispatch ARMED (%u per-CPU wake workers)\n", n);
+}
+
+bool defer_wake(net_channel* nc)
+{
+    if (!_enabled) {
+        return false;
+    }
+    unsigned n = workers.size();
+    if (n < 2) {
+        return false;   // nothing to fan out to
+    }
+    unsigned self = sched::cpu::current()->id;
+    // Pick the next CPU round-robin, skipping the receiver's own CPU so it
+    // keeps draining the RX ring while the wakes run elsewhere.
+    unsigned idx = _rr.fetch_add(1, std::memory_order_relaxed) % n;
+    if (idx == self) {
+        idx = (idx + 1) % n;
+    }
+    worker* w = workers[idx];
+    if (!w || !w->ring.push(nc)) {
+        return false;   // ring full -> caller wakes inline
+    }
+    w->fed.store(true, std::memory_order_relaxed);
+    return true;
+}
+
+void flush()
+{
+    if (!_enabled) {
+        return;
+    }
+    for (worker* w : workers) {
+        if (w && w->fed.load(std::memory_order_relaxed)) {
+            w->fed.store(false, std::memory_order_relaxed);
+            w->thread->wake();
+        }
+    }
+}
+
 }

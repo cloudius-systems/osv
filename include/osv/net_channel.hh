@@ -122,6 +122,13 @@ public:
     void remove(ipv4_tcp_conn_id id);
     // producer side operations
     bool post_packet(mbuf* m);
+    // Classify and enqueue a packet on its net_channel, but do NOT wake the
+    // consumer.  Returns the net_channel the packet was queued on (which the
+    // caller must wake once, after draining a batch), or nullptr if the packet
+    // could not be classified (slow path) or the queue push failed.  The
+    // single receiver stays the sole producer to each net_channel ring, so
+    // this keeps the ring single-producer even though the wake is deferred.
+    net_channel* classify_and_push(mbuf* m);
 private:
     net_channel* classify_ipv4_tcp(mbuf* m);
 private:
@@ -142,5 +149,36 @@ private:
     mutex _mtx;
     ipv4_tcp_channels _ipv4_tcp_channels;
 };
+
+// RX wake fan-out (net dispatch de-serialization).
+//
+// The single virtio-net receiver classifies and enqueues every packet inline
+// (SPSC-safe: it is the sole producer to each net_channel ring).  Waking the
+// consumer for each touched channel is the serial cost: the wake sends a
+// cross-CPU IPI and schedules the woken backend, all attributed to the one
+// receiver CPU, so the per-connection dispatch cannot use the idle cores.
+//
+// net_wake_dispatch fans those wakes across per-CPU worker threads.  The
+// receiver collects the distinct channels it queued during a drain pass and
+// hands them to workers on other CPUs; each worker calls net_channel::wake()
+// on its own CPU, so the IPI send and the woken-backend scheduling run in
+// parallel instead of serializing behind the receiver.  Enabled at boot from
+// the OSV_NET_DISPATCH_FANOUT environment variable; when off, callers wake
+// inline exactly as before.
+namespace net_wake_dispatch {
+
+// Armed once at boot from OSV_NET_DISPATCH_FANOUT.
+bool enabled();
+void init();
+
+// Queue a wake for net_channel nc on a worker CPU chosen round-robin.  Returns
+// false if the target ring was full (caller should wake inline as a fallback).
+bool defer_wake(net_channel* nc);
+
+// Signal the fed workers to drain their rings.  Called once per receiver
+// drain pass, after all defer_wake() calls.
+void flush();
+
+}
 
 #endif /* NETCHANNEL_HH_ */

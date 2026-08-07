@@ -38,6 +38,7 @@
 #include <osv/rcu.hh>
 #include <osv/mempool.hh>
 #include <bsd/porting/networking.hh>
+#include <osv/net_channel.hh>
 #include <bsd/porting/shrinker.h>
 #include <bsd/porting/route.h>
 #include <osv/dhcp.hh>
@@ -872,6 +873,7 @@ void main_cont(int loader_argc, char** loader_argv)
 
 #if CONF_networking_stack
     net_init();
+    net_wake_dispatch::init();
     boot_time.event("Network initialized");
 #endif
 

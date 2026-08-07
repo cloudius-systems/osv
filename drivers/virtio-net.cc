@@ -543,9 +543,26 @@ void net::receiver()
             rx_packets++;
             rx_bytes += m_head->M_dat.MH.MH_pkthdr.len;
 
-            bool fast_path = _ifn->if_classifier.post_packet(m_head);
-            if (!fast_path) {
-                (*_ifn->if_input)(_ifn, m_head);
+            if (net_wake_dispatch::enabled()) {
+                // De-serialized dispatch: classify + enqueue here (we are the
+                // sole producer to each net_channel ring), but hand the wake
+                // to a per-CPU worker so the IPI + woken-backend scheduling
+                // run off this receiver CPU.  Fall back to an inline wake if
+                // the handoff ring is full, and to the slow path when the
+                // packet does not classify.
+                net_channel* nc = _ifn->if_classifier.classify_and_push(m_head);
+                if (nc) {
+                    if (!net_wake_dispatch::defer_wake(nc)) {
+                        nc->wake();
+                    }
+                } else {
+                    (*_ifn->if_input)(_ifn, m_head);
+                }
+            } else {
+                bool fast_path = _ifn->if_classifier.post_packet(m_head);
+                if (!fast_path) {
+                    (*_ifn->if_input)(_ifn, m_head);
+                }
             }
 
             trace_virtio_net_rx_packet(_ifn->if_index, rx_bytes);
@@ -562,6 +579,12 @@ void net::receiver()
         _rxq.stats.rx_csum       += csum_ok;
         _rxq.stats.rx_csum_err   += csum_err;
         _rxq.stats.rx_bytes      += rx_bytes;
+
+        // Signal the per-CPU wake workers fed during this drain pass so they
+        // wake their backends in parallel while we go back to the RX ring.
+        if (net_wake_dispatch::enabled()) {
+            net_wake_dispatch::flush();
+        }
     }
 }
 
