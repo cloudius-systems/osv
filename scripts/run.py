@@ -699,11 +699,8 @@ if __name__ == "__main__":
     else:
         cmdargs.virtio_device_suffix = ""
 
-    # Add multiqueue support for virtio-blk if specified
-    if cmdargs.virtio_blk_queues > 1:
-        cmdargs.virtio_blk_queue_suffix = ",num-queues=%d" % cmdargs.virtio_blk_queues
-    else:
-        cmdargs.virtio_blk_queue_suffix = ""
+    # Add multiqueue support for virtio-blk
+    cmdargs.virtio_blk_queue_suffix = ",num-queues=%d" % cmdargs.virtio_blk_queues
 
     if cmdargs.networking and cmdargs.tap and (cmdargs.execute == None or '--ip=' not in cmdargs.execute):
         process = subprocess.run(["ip", "address", "show", cmdargs.tap], stdout=subprocess.PIPE)
