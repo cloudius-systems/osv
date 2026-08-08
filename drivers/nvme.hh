@@ -62,6 +62,12 @@ private:
     void register_admin_interrupt();
 
     void create_io_queues();
+    // Number of per-CPU IO queues actually created: one per CPU, but capped so
+    // that (IO queues + 1 admin) never exceeds the device's MSI-X vector table.
+    // Without this cap a many-vCPU guest asks for one vector per CPU and a
+    // controller with a smaller MSI-X table (e.g. AWS Nitro EBS on larger
+    // instances) would fail MSI-X setup and panic at boot.
+    unsigned int io_queues_count();
     int create_io_queue(int qid, int qsize = NVME_IO_QUEUE_SIZE,
         sched::cpu* cpu = nullptr, int qprio = NVME_IO_QUEUE_PRIORITY_HIGH);
     bool register_io_interrupt(unsigned int iv, unsigned int qid,
