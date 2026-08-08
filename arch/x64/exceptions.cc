@@ -118,7 +118,12 @@ unsigned interrupt_descriptor_table::register_interrupt_handler(
             }
         }
     }
-    abort();
+    // No free IDT vector.  Vectors 0..31 are CPU exceptions and are never
+    // returned here, so 0 is an unambiguous "exhausted" sentinel.  Returning it
+    // rather than aborting lets MSI-X allocation (msix_vector) fail gracefully
+    // and lets a device fall back to fewer queues instead of crashing the boot
+    // when many multiqueue devices exhaust the 224 usable vectors.
+    return 0;
 }
 
 void interrupt_descriptor_table::unregister_handler(unsigned vector)
