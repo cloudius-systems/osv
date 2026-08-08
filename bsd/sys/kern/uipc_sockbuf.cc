@@ -34,6 +34,7 @@
 #include <osv/poll.h>
 #include <osv/clock.hh>
 #include <osv/signal.hh>
+#include <osv/net_channel.hh>
 
 #include <bsd/porting/netport.h>
 #include <bsd/porting/rwlock.h>
