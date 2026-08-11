@@ -10,6 +10,21 @@ config lazy_stack_invariant
   prompt "Check lazy stack invariant"
   def_bool $(shell,grep -q ^conf_lazy_stack_invariant=1 conf/base.mk && echo y || echo n)
 
+config sched_wake_pull
+  prompt "Idle-CPU pull work-stealing"
+  def_bool y
+  help
+    Let an idle CPU pull one runnable thread from the busiest CPU (via an IPI
+    that the busiest CPU services in its own context) instead of waiting for
+    the 100ms timer-driven load balancer to notice the imbalance.  This
+    disperses a single-waker fan-out -- e.g. one network RX thread waking a
+    worker per request -- across idle CPUs immediately, which the timer
+    balancer cannot do for a wake/run/block cycle that never accumulates a
+    visible runqueue.  Self-throttling: only idle CPUs ask, one outstanding
+    request per victim, so the IPI rate is bounded by the idle-CPU count, not
+    the wake rate.  Compiling it in costs nothing: it is a runtime no-op
+    unless the OSV_WAKE_PULL=1 environment toggle is set at boot.
+
 config threads_default_kernel_stack_size
   prompt "Kernel thread default stack size"
   int
