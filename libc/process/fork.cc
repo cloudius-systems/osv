@@ -104,6 +104,16 @@ mutex g_fd_lock;
 // child address_space -> { inherited fd -> file* we hold a ref on }
 std::unordered_map<mmu::address_space *,
                    std::unordered_map<int, struct file *>> g_inherited_fds;
+// child address_space -> set of fds this child allocated ITSELF after fork.
+// OSv has one shared global fd table, so a child fdclose() must be able to tell
+// "an fd I opened after fork" (close it normally, null the slot) from "a fd the
+// parent owns that I merely have a numeric handle to" (must NOT null the shared
+// slot -- that would tear the fd out from under the parent).  PostgreSQL's
+// ClosePostmasterPorts() close()s the postmaster's death-watch pipe fd in every
+// backend; that fd is the PARENT's, was created after this child's fork
+// snapshot, and closing it the normal way nulled gfdt[fd] and corrupted the
+// postmaster.  Tracking child-opened fds lets a child's close of a
+// not-inherited, not-child-opened fd be a harmless no-op on the shared slot.
 // (fd, file*) pairs the top-level OWNER has close()d while a live child still
 // inherited them: the owner relinquished the shared gfdt slot to the child(ren)
 // but left it pointing at the file (OSv single fd table -- the child looks it
@@ -111,6 +121,7 @@ std::unordered_map<mmu::address_space *,
 // clears the slot.  A slot NOT in this set is still owned by the top-level app,
 // so a child closing its inherited copy must never clear it.
 std::unordered_map<int, struct file *> g_owner_released_fds;
+std::unordered_map<mmu::address_space *, std::unordered_map<int, char>> g_child_opened_fds;
 
 // ---- fork per-child signal dispositions ----------------------------------
 //
@@ -178,6 +189,7 @@ static void release_inherited_fds(mmu::address_space *child_as)
         }
         held = std::move(it->second);
         g_inherited_fds.erase(it);
+        g_child_opened_fds.erase(child_as);
         // For any fd this child was the LAST live inheritor of AND that the
         // top-level owner already relinquished (g_owner_released_fds), collect
         // it to clear the slot AFTER releasing g_fd_lock (gfdt_lock must not
@@ -216,6 +228,46 @@ static void release_inherited_fds(mmu::address_space *child_as)
 // reference intact) and report the close handled.  Otherwise return false so
 // the normal fdclose() path runs (top-level app, or a child closing an fd it
 // opened itself after fork).
+// Called by _fdalloc() (fs/vfs/kern_descrip.cc) after a fork child allocates a
+// new fd for itself.  Records it so the child's later close() of it nulls the
+// shared slot normally (it is the child's own fd), distinct from a numeric
+// handle to one of the parent's fds.
+extern "C" void fork_child_opened_fd(int fd)
+{
+    mmu::address_space *child_as = current_child_as();
+    if (!child_as) {
+        return;
+    }
+    fork_arena::kernel_heap_scope kh;
+    SCOPE_LOCK(g_fd_lock);
+    g_child_opened_fds[child_as][fd] = 1;
+}
+
+// Called by fdclose() (fs/vfs/kern_descrip.cc) for a fork child closing an fd
+// that is NOT one it inherited.  Returns true iff the child opened this fd
+// ITSELF after fork (so fdclose should proceed to null the shared slot);
+// returns false if the fd belongs to the parent (single shared table) and the
+// child must NOT touch the shared slot -- fdclose then treats the close as a
+// harmless no-op instead of tearing the parent's fd out of gfdt[].
+extern "C" bool fork_child_owns_fd(int fd)
+{
+    mmu::address_space *child_as = current_child_as();
+    if (!child_as) {
+        return true;   // not a child: normal close
+    }
+    SCOPE_LOCK(g_fd_lock);
+    auto it = g_child_opened_fds.find(child_as);
+    if (it == g_child_opened_fds.end()) {
+        return false;
+    }
+    auto fit = it->second.find(fd);
+    if (fit == it->second.end()) {
+        return false;
+    }
+    it->second.erase(fit);
+    return true;
+}
+
 extern "C" bool fork_child_close_inherited_fd(int fd)
 {
     mmu::address_space *child_as = current_child_as();

@@ -29,6 +29,14 @@
 
 using namespace osv;
 
+#if CONF_fork
+// fork() fd-inheritance hooks (libc/process/fork.cc): record a child's own
+// post-fork fd allocation, and query whether a child owns @fd.  Declared here
+// (before _fdalloc/fdclose) so both can call them.
+extern "C" void fork_child_opened_fd(int fd);
+extern "C" bool fork_child_owns_fd(int fd);
+#endif
+
 /*
  * Global file descriptors table - in OSv we have a single process so file
  * descriptors are maintained globally.
@@ -63,6 +71,13 @@ int _fdalloc(struct file *fp, int *newfd, int min_fd)
             *newfd = fd;
         }
 
+#if CONF_fork
+        // If a fork child allocated this fd, record it so the child's later
+        // close() of it nulls the shared slot normally (its own fd), as opposed
+        // to a numeric handle onto one of the parent's fds (which the child
+        // must not null on OSv's single shared fd table).
+        fork_child_opened_fd(fd);
+#endif
         return 0;
     }
 
@@ -118,7 +133,18 @@ int fdclose(int fd)
 
 #if CONF_fork
     bool owner_keep_slot = false;
+    // A fork child closing an fd it did NOT inherit and did NOT open itself is
+    // holding only a numeric handle onto one of the PARENT's fds (OSv has one
+    // shared global fd table).  Nulling gfdt[fd] here would tear that fd out
+    // from under the parent -- exactly what corrupted PostgreSQL's postmaster
+    // when a backend's ClosePostmasterPorts() closed the postmaster-owned
+    // death-watch pipe fd.  Treat it as a harmless no-op on the shared slot
+    // (POSIX: the fd is "closed" in the child's process view).
+    if (!fork_child_owns_fd(fd)) {
+        return 0;
+    }
 #endif
+
     WITH_LOCK(gfdt_lock) {
 
         fp = gfdt[fd].read_by_owner();
