@@ -15,6 +15,7 @@
 
 #include <osv/percpu_xmit.hh>
 #include <osv/contiguous_alloc.hh>
+#include <osv/aligned_new.hh>
 
 #include "drivers/virtio.hh"
 #include "drivers/pci-device.hh"
@@ -26,6 +27,14 @@ namespace virtio {
  * virtio net device class
  */
 class net : public virtio_driver {
+public:
+
+    // Forward declarations of the per-queue structs (defined in the private
+    // section below) so member functions can be declared with rxq*/txq*.
+    // Declared private to match the access of their definitions.
+private:
+    struct rxq;
+    struct txq;
 public:
 
     // The feature bitmap for virtio net
@@ -51,6 +60,7 @@ public:
         VIRTIO_NET_F_GUEST_ANNOUNCE = 21,  /* Guest can announce device on the network */
         VIRTIO_NET_F_MQ = 22,      /* Device supports Receive Flow Steering */
         VIRTIO_NET_F_CTRL_MAC_ADDR = 23,   /* Set MAC address */
+        VIRTIO_NET_F_RSS = 60,     /* Device supports RSS (Toeplitz) flow steering */
     };
 
     enum {
@@ -103,8 +113,17 @@ public:
 
         VIRTIO_NET_CTRL_MQ = 4,
         VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET = 0,
+        VIRTIO_NET_CTRL_MQ_RSS_CONFIG = 1,
         VIRTIO_NET_CTRL_MQ_VQ_PAIRS_MIN = 1,
         VIRTIO_NET_CTRL_MQ_VQ_PAIRS_MAX = 0x8000,
+
+        /* RSS hash types (virtio spec 5.1.6.5.6.4). */
+        VIRTIO_NET_RSS_HASH_TYPE_IPv4  = (1 << 0),
+        VIRTIO_NET_RSS_HASH_TYPE_TCPv4 = (1 << 1),
+        VIRTIO_NET_RSS_HASH_TYPE_UDPv4 = (1 << 2),
+        VIRTIO_NET_RSS_HASH_TYPE_IPv6  = (1 << 3),
+        VIRTIO_NET_RSS_HASH_TYPE_TCPv6 = (1 << 4),
+        VIRTIO_NET_RSS_HASH_TYPE_UDPv6 = (1 << 5),
 
         ETH_ALEN = 14,
         VIRTIO_NET_CSUM_OFFLOAD = CSUM_TCP | CSUM_UDP,
@@ -125,6 +144,11 @@ public:
          * Legal values are between 1 and 0x8000
          */
         u16 max_virtqueue_pairs;
+        /* The following three fields are only valid (and only present in the
+         * device config space) when VIRTIO_NET_F_RSS is negotiated. */
+        u8  rss_max_key_size;
+        u16 rss_max_indirection_table_length;
+        u32 supported_hash_types;
     } __attribute__((packed));
 
     /* This is the first element of the scatter-gather list.  If you don't
@@ -209,6 +233,23 @@ public:
             u16 virtqueue_pairs;
     };
 
+    /*
+     * RSS configuration (VIRTIO_NET_CTRL_MQ_RSS_CONFIG).  The command payload
+     * is variable-length (the indirection table and hash key are inline), so
+     * this fixed prefix is followed on the wire by:
+     *   le16 indirection_table[indirection_table_mask + 1];
+     *   le16 max_tx_vq;
+     *   u8   hash_key_length;
+     *   u8   hash_key_data[hash_key_length];
+     * We therefore serialize the whole thing into a byte buffer in
+     * set_rss_config() rather than using a single struct.
+     */
+    struct net_ctrl_rss_hdr {
+            u32 hash_types;
+            u16 indirection_table_mask;
+            u16 unclassified_queue;
+    } __attribute__((packed));
+
     explicit net(virtio_device& dev);
     virtual ~net();
     void init();
@@ -220,8 +261,12 @@ public:
 
     void wait_for_queue(vring* queue);
     bool bad_rx_csum(struct mbuf* m, struct net_hdr* hdr);
-    void receiver();
-    void fill_rx_ring();
+    // receiver()/fill_rx_ring() operate on a specific Rx queue so that with
+    // multiqueue (VIRTIO_NET_F_MQ) each Rx queue is drained by its own poll
+    // thread on its own CPU, instead of all inbound traffic funnelling through
+    // one queue and one thread.
+    void receiver(struct rxq* rxq);
+    void fill_rx_ring(struct rxq* rxq);
     mbuf* packet_to_mbuf(const std::vector<iovec>& iovec);
     unsigned* rx_buffer_refcnt(void* frame);
     static void free_rx_buffer(void* buffer, void* refcnt);
@@ -313,7 +358,8 @@ private:
         }
     } _pre_init;
 
-    /* Single Rx queue object */
+    /* An Rx queue object. With VIRTIO_NET_F_MQ there is one per queue pair,
+     * each drained by its own poll thread. */
     struct rxq {
         rxq(vring* vq, std::function<void ()> poll_func)
             : vqueue(vq), poll_task(sched::thread::make(poll_func, sched::thread::attr().
@@ -497,9 +543,29 @@ private:
         }
     }
 
-    /* We currently support only a single Rx+Tx queue */
-    struct rxq _rxq;
-    struct txq _txq;
+    /* Rx+Tx queue pairs. Without VIRTIO_NET_F_MQ there is exactly one pair,
+     * preserving the original single-queue behaviour.  txq is over-aligned
+     * (its percpu xmitter is cacheline aligned), so it is allocated with
+     * aligned_new and freed with the matching deleter. */
+    std::vector<std::unique_ptr<rxq>> _rxqs;
+    std::vector<std::unique_ptr<txq, aligned_new_deleter<txq>>> _txqs;
+    /* Number of active queue pairs (1 when multiqueue is not negotiated). */
+    unsigned _nqp = 1;
+    /* Control virtqueue index (2*_nqp) when VIRTIO_NET_F_CTRL_VQ is present. */
+    int _ctrl_vq_idx = -1;
+    /* True when VIRTIO_NET_F_RSS was negotiated and RSS was programmed so the
+     * device hashes each inbound flow onto one of the _nqp Rx queues. */
+    bool _rss = false;
+
+    /* Tell the device how many queue pairs the guest will use, per the
+     * VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET command.  Returns true on device ACK. */
+    bool set_vq_pairs(u16 pairs);
+
+    /* Program the device's RSS indirection table (round-robin across the _nqp
+     * Rx queues), Toeplitz hash key and hash types via
+     * VIRTIO_NET_CTRL_MQ_RSS_CONFIG so inbound flows are hashed across all Rx
+     * queues instead of piling onto queue 0.  Returns true on device ACK. */
+    bool set_rss_config();
 
     //maintains the virtio instance number for multiple drives
     static int _instance;
