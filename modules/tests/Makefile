@@ -151,6 +151,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 	tst-epoll-pwait2.so \
 	tst-splice.so \
 	tst-fs-syscalls.so \
+	tst-signalfd.so \
 	tst-prctl.so \
 	tst-mmap-file-cow.so \
 	tst-membarrier.so \
