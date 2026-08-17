@@ -9,3 +9,9 @@ config networking_dhcp
   bool
   default y
 
+config networking_dhcp6
+  prompt "Include DHCPv6 client support (requires IPv6, conf-INET6=1)"
+  depends on networking_stack
+  bool
+  default y
+
