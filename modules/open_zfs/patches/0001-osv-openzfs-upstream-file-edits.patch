@@ -1,0 +1,407 @@
+diff --git a/cmd/zpool/zpool_main.c b/cmd/zpool/zpool_main.c
+index cd1b61f..d006083 100644
+--- a/cmd/zpool/zpool_main.c
++++ b/cmd/zpool/zpool_main.c
+@@ -6809,6 +6809,15 @@ print_line(list_cbdata_t *cb, const char *vdev_name)
+ 			}
+ 		}
+ 
++		/*
++		 * A property with no registered column name yields a NULL
++		 * header here; fputs()/printf("%s") would strlen(NULL) and
++		 * fault.  Fall back to "-" (ZFS's own missing-value glyph)
++		 * so 'zpool list' cannot crash on such a property.
++		 */
++		if (header == NULL)
++			header = "-";
++
+ 		if (pl->pl_next == NULL && !right_justify)
+ 			(void) fputs(header, stdout);
+ 		else if (right_justify)
+diff --git a/include/sys/mntent.h b/include/sys/mntent.h
+index e67c05e..9450b58 100644
+--- a/include/sys/mntent.h
++++ b/include/sys/mntent.h
+@@ -77,7 +77,7 @@
+ #ifdef __linux__
+ #define	MNTOPT_SETUID	"suid"		/* Both setuid and devices allowed */
+ #define	MNTOPT_NOSETUID	"nosuid"	/* Neither setuid nor devices allowed */
+-#elif defined(__FreeBSD__)
++#elif defined(__FreeBSD__) || defined(__OSV__)
+ #define	MNTOPT_SETUID	"setuid"	/* Set uid allowed */
+ #define	MNTOPT_NOSETUID	"nosetuid"	/* Set uid not allowed */
+ #else
+diff --git a/include/sys/zfs_file.h b/include/sys/zfs_file.h
+index 67abe99..807cf0d 100644
+--- a/include/sys/zfs_file.h
++++ b/include/sys/zfs_file.h
+@@ -30,7 +30,7 @@ typedef struct zfs_file {
+ 	int f_fd;
+ 	int f_dump_fd;
+ } zfs_file_t;
+-#elif defined(__linux__) || defined(__FreeBSD__)
++#elif defined(__linux__) || defined(__FreeBSD__) || defined(__OSV__)
+ typedef struct file zfs_file_t;
+ #else
+ #error "unknown OS"
+diff --git a/lib/libspl/include/zone.h b/lib/libspl/include/zone.h
+index f946c0f..2fe55df 100644
+--- a/lib/libspl/include/zone.h
++++ b/lib/libspl/include/zone.h
+@@ -34,9 +34,9 @@
+ extern "C" {
+ #endif
+ 
+-#ifdef __FreeBSD__
++#if defined(__FreeBSD__) || defined(__OSV__)
+ #define	GLOBAL_ZONEID	0
+-#else
++#elif defined(__linux__)
+ /*
+  * Hardcoded in the kernel's root user namespace.  A "better" way to get
+  * this would be by using ioctl_ns(2), but this would need to be performed
+@@ -44,6 +44,8 @@ extern "C" {
+  * supported since Linux 4.9.
+  */
+ #define	GLOBAL_ZONEID	4026531837U
++#else
++#define	GLOBAL_ZONEID	0
+ #endif
+ 
+ extern zoneid_t		getzoneid(void);
+diff --git a/lib/libtpool/thread_pool.c b/lib/libtpool/thread_pool.c
+index 39b92ae..51ab5ee 100644
+--- a/lib/libtpool/thread_pool.c
++++ b/lib/libtpool/thread_pool.c
+@@ -416,6 +416,27 @@ tpool_dispatch(tpool_t *tpool, void (*func)(void *), void *arg)
+ 
+ 	ASSERT(!(tpool->tp_flags & (TP_DESTROY | TP_ABANDON)));
+ 
++#ifdef __OSV__
++	/*
++	 * Run the job inline on OSv rather than handing it to a worker
++	 * pthread.  The worker main loop blocks in pthread_cond_wait() on a
++	 * shared tp_mutex; on OSv pthread mutex+condvar are the kernel
++	 * lockfree::mutex+condvar whose wait-morphing hands mutex ownership
++	 * between signaller and waiter.  During tpool teardown that handoff
++	 * races and a worker unlocks a tp_mutex it no longer owns, tripping
++	 * the lfmutex owner assertion (core/lfmutex.cc unlock: owner ==
++	 * current).  It is intermittent and reproducible on zpool import,
++	 * where the device-scan (zutil_import.c) and mount (libzfs_mount.c)
++	 * tpools default to hundreds of workers.  OSv threads are cheap and
++	 * these jobs are short; running them synchronously here removes the
++	 * thread-pool worker/teardown entirely and with it the race, at the
++	 * cost of no import/mount parallelism (not needed on OSv).
++	 */
++	(void) tpool;
++	func(arg);
++	return (0);
++#endif
++
+ 	if ((job = calloc(1, sizeof (*job))) == NULL)
+ 		return (-1);
+ 	job->tpj_next = NULL;
+diff --git a/lib/libzfs/libzfs_dataset.c b/lib/libzfs/libzfs_dataset.c
+index 98f396e..09b9f34 100644
+--- a/lib/libzfs/libzfs_dataset.c
++++ b/lib/libzfs/libzfs_dataset.c
+@@ -839,7 +839,7 @@ libzfs_mnttab_update(libzfs_handle_t *hdl)
+ 	struct mnttab entry;
+ 
+ 	if ((mnttab = fopen(MNTTAB, "re")) == NULL)
+-		return (ENOENT);
++		return (0);  /* Treat missing mount table as empty (OSv: no /proc/mounts) */
+ 
+ 	while (getmntent(mnttab, &entry) == 0) {
+ 		mnttab_node_t *mtn;
+@@ -947,7 +947,8 @@ libzfs_mnttab_add(libzfs_handle_t *hdl, const char *special,
+ 	mnttab_node_t *mtn;
+ 
+ 	pthread_mutex_lock(&hdl->libzfs_mnttab_cache_lock);
+-	if (avl_numnodes(&hdl->libzfs_mnttab_cache) != 0) {
++	if (hdl->libzfs_mnttab_enable ||
++	    avl_numnodes(&hdl->libzfs_mnttab_cache) != 0) {
+ 		mtn = zfs_alloc(hdl, sizeof (mnttab_node_t));
+ 		mtn->mtn_mt.mnt_special = zfs_strdup(hdl, special);
+ 		mtn->mtn_mt.mnt_mountp = zfs_strdup(hdl, mountp);
+@@ -3707,8 +3708,9 @@ zfs_create(libzfs_handle_t *hdl, const char *path, zfs_type_t type,
+ 	}
+ 
+ 	/* validate parents exist */
+-	if (check_parents(hdl, path, &zoned, B_FALSE, NULL) != 0)
++	if (check_parents(hdl, path, &zoned, B_FALSE, NULL) != 0) {
+ 		return (-1);
++	}
+ 
+ 	/*
+ 	 * The failure modes when creating a dataset of a different type over
+@@ -3737,8 +3739,9 @@ zfs_create(libzfs_handle_t *hdl, const char *path, zfs_type_t type,
+ 	if (p != NULL)
+ 		*p = '\0';
+ 
+-	if ((zpool_handle = zpool_open(hdl, pool_path)) == NULL)
++	if ((zpool_handle = zpool_open(hdl, pool_path)) == NULL) {
+ 		return (-1);
++	}
+ 
+ 	if (props && (props = zfs_valid_proplist(hdl, type, props,
+ 	    zoned, NULL, zpool_handle, B_TRUE, errbuf)) == 0) {
+diff --git a/lib/libzfs/libzfs_mount.c b/lib/libzfs/libzfs_mount.c
+index e68b0db..459d234 100644
+--- a/lib/libzfs/libzfs_mount.c
++++ b/lib/libzfs/libzfs_mount.c
+@@ -1270,6 +1270,25 @@ zfs_foreach_mountpoint(libzfs_handle_t *hdl, zfs_handle_t **handles,
+ 	boolean_t serial_mount = nthr <= 1 ||
+ 	    (getenv("ZFS_SERIAL_MOUNT") != NULL);
+ 
++#ifdef __OSV__
++	/*
++	 * Force serial mounting on OSv.
++	 *
++	 * The parallel path below drives libtpool worker pthreads that block
++	 * in pthread_cond_wait() on a shared tp_mutex.  On OSv pthread mutex +
++	 * condvar are the kernel lockfree::mutex + condvar, whose wait-morphing
++	 * protocol hands mutex ownership between the signalling thread and a
++	 * waiter.  During tpool_destroy()'s teardown that handoff races: a
++	 * worker returns from pthread_cond_wait() and re-enters it to unlock a
++	 * tp_mutex it no longer owns, tripping the lfmutex owner assertion
++	 * (core/lfmutex.cc unlock: owner == current).  It is intermittent and
++	 * shows up notably on zpool import (mount_tp_nthr defaults to 512).
++	 * OSv threads are cheap and datasets mount fast; serial mounting side-
++	 * steps the whole thread-pool teardown race with no practical cost.
++	 */
++	serial_mount = B_TRUE;
++#endif
++
+ 	/*
+ 	 * Sort the datasets by mountpoint. See mountpoint_cmp for details
+ 	 * of how these are sorted.
+diff --git a/module/icp/illumos-crypto.c b/module/icp/illumos-crypto.c
+index bff9780..813202d 100644
+--- a/module/icp/illumos-crypto.c
++++ b/module/icp/illumos-crypto.c
+@@ -24,7 +24,7 @@
+  * Copyright (c) 2017, Datto, Inc. All rights reserved.
+  */
+ 
+-#ifdef _KERNEL
++#if defined(_KERNEL) && defined(__linux__)
+ #include <linux/module.h>
+ #include <linux/kernel.h>
+ #include <linux/init.h>
+diff --git a/module/zcommon/zfs_fletcher.c b/module/zcommon/zfs_fletcher.c
+index 133217f..72d60cd 100644
+--- a/module/zcommon/zfs_fletcher.c
++++ b/module/zcommon/zfs_fletcher.c
+@@ -914,7 +914,7 @@ zio_abd_checksum_func_t fletcher_4_abd_ops = {
+ 
+ #define	IMPL_FMT(impl, i)	(((impl) == (i)) ? "[%s] " : "%s ")
+ 
+-#if defined(__linux__)
++#if defined(__linux__) || defined(__OSV__)
+ 
+ static int
+ fletcher_4_param_get(char *buffer, zfs_kernel_param_t *unused)
+diff --git a/module/zfs/arc.c b/module/zfs/arc.c
+index 22f9be7..29044e1 100644
+--- a/module/zfs/arc.c
++++ b/module/zfs/arc.c
+@@ -4097,6 +4097,24 @@ arc_evict_task(void *arg)
+ static void
+ arc_evict_thread_init(void)
+ {
++#ifdef __OSV__
++	/*
++	 * Force single-threaded, inline ARC eviction on OSv.  Parallel eviction
++	 * dispatches arc_evict_task() to the arc_evict taskq (AS0 worker
++	 * threads).  When a forked PostgreSQL backend triggers eviction under
++	 * memory pressure it kmem_allocs the evict_arg_t array and dispatches
++	 * &eva[i] to those AS0 workers, then taskq_waits.  On OSv's fork model
++	 * the worker running arc_evict_task races the dispatcher's teardown /
++	 * touches state whose VA is not coherent in the worker's address space,
++	 * faulting on eva->eva_ml.  Inline eviction (zfs_arc_evict_threads == 1)
++	 * takes the direct arc_evict_state_impl() path in the caller's context,
++	 * removing the taskq hand-off and the race -- the same OSv serialization
++	 * applied to libtpool dispatch and dataset mounting (patches 0021/0022).
++	 * Parallel eviction is a throughput optimization OSv does not require.
++	 */
++	zfs_arc_evict_threads = 1;
++	return;
++#endif
+ 	if (zfs_arc_evict_threads == 0) {
+ 		/*
+ 		 * Compute number of threads we want to use for eviction.
+@@ -4757,6 +4775,49 @@ arc_reduce_target_size(uint64_t to_free)
+ 	return (to_free);
+ }
+ 
++/*
++ * OSv-specific ARC shrink helper: reduce arc_c and wake the eviction thread.
++ *
++ * Unlike arc_reduce_target_size(), this function does NOT call
++ * dbuf_cache_reduce_target_size().  That helper carries a use-after-free
++ * risk in the dbuf eviction path during TXG sync (noted in the upstream
++ * comment above arc_reduce_target_size()).  We omit it intentionally.
++ *
++ * We DO call zthr_wakeup(arc_evict_zthr) when the ARC is still over target
++ * so that physical pages are freed quickly, before the OSv memory reclaimer
++ * calls wake_waiters() and finds no free pages.  Without the wakeup the
++ * eviction thread would not run for up to 1 second (its natural timer), and
++ * the heavy ZFS I/O paths (dataset create/destroy, TXG commit) would trigger
++ * the shrinker hundreds of times with a long sleep each time, adding many
++ * minutes of overhead.
++ *
++ * Safety: arc_evict_thread() skips buffers held by concurrent TXG sync
++ * (they have elevated refcounts from dmu_buf_add_ref).  The link-count
++ * corruption seen in earlier testing was caused by ENOSPC in the ZFS pool
++ * leaving a partially-written dataset, not by this wakeup.  With a correctly
++ * sized pool (fs_size_mb >= 2048) all dataset operations complete cleanly.
++ */
++uint64_t
++arc_reduce_target_size_noshrink(uint64_t to_free)
++{
++	uint64_t c = arc_c;
++	if (c > arc_c_min) {
++		uint64_t asize = aggsum_value(&arc_sums.arcstat_size);
++		c = MIN(c, MAX(asize, arc_c_min));
++		to_free = MIN(to_free, c - arc_c_min);
++		arc_c = c - to_free;
++		if (asize > arc_c) {
++			mutex_enter(&arc_evict_lock);
++			arc_evict_needed = B_TRUE;
++			mutex_exit(&arc_evict_lock);
++			zthr_wakeup(arc_evict_zthr);
++		}
++	} else {
++		to_free = 0;
++	}
++	return (to_free);
++}
++
+ /*
+  * Determine if the system is under memory pressure and is asking
+  * to reclaim memory. A return value of B_TRUE indicates that the system
+@@ -7982,6 +8043,18 @@ arc_set_limits(uint64_t allmem)
+ 	/* Set min cache to 1/32 of all memory, or 32MB, whichever is more. */
+ 	arc_c_min = MAX(allmem / 32, 2ULL << SPA_MAXBLOCKSHIFT);
+ 
++#ifdef __OSV__
++	/*
++	 * On OSv VMs with less than 256 MiB of RAM the default arc_c_min of
++	 * 2*SPA_MAXBLOCKSIZE (32 MiB) can equal or exceed arc_c_max, leaving
++	 * no headroom for the ARC shrinker to reduce memory usage.  Cap it at
++	 * 1/16 of RAM (8 MiB at 128 MiB) so that arc_reduce_target_size_*()
++	 * can always reclaim a meaningful amount of memory under pressure.
++	 */
++	if (allmem < (256ULL << 20))
++		arc_c_min = MIN(arc_c_min, allmem / 16);
++#endif
++
+ 	/* How to set default max varies by platform. */
+ 	arc_c_max = arc_default_max(arc_c_min, allmem);
+ }
+diff --git a/module/zfs/dsl_pool.c b/module/zfs/dsl_pool.c
+index f47822d..e335f78 100644
+--- a/module/zfs/dsl_pool.c
++++ b/module/zfs/dsl_pool.c
+@@ -209,7 +209,6 @@ dsl_pool_open_impl(spa_t *spa, uint64_t txg)
+ 	    offsetof(dsl_sync_task_t, dst_node));
+ 	txg_list_create(&dp->dp_early_sync_tasks, spa,
+ 	    offsetof(dsl_sync_task_t, dst_node));
+-
+ 	dp->dp_sync_taskq = spa_sync_tq_create(spa, "dp_sync_taskq");
+ 
+ 	dp->dp_zil_clean_taskq = taskq_create("dp_zil_clean_taskq",
+@@ -217,7 +216,6 @@ dsl_pool_open_impl(spa_t *spa, uint64_t txg)
+ 	    zfs_zil_clean_taskq_minalloc,
+ 	    zfs_zil_clean_taskq_maxalloc,
+ 	    TASKQ_PREPOPULATE | TASKQ_THREADS_CPU_PCT);
+-
+ 	mutex_init(&dp->dp_lock, NULL, MUTEX_DEFAULT, NULL);
+ 	cv_init(&dp->dp_spaceavail_cv, NULL, CV_DEFAULT, NULL);
+ 
+@@ -232,7 +230,6 @@ dsl_pool_open_impl(spa_t *spa, uint64_t txg)
+ 	dp->dp_unlinked_drain_taskq = taskq_create("z_unlinked_drain",
+ 	    100, defclsyspri, boot_ncpus, INT_MAX,
+ 	    TASKQ_PREPOPULATE | TASKQ_DYNAMIC | TASKQ_THREADS_CPU_PCT);
+-
+ 	return (dp);
+ }
+ 
+diff --git a/module/zfs/rrwlock.c b/module/zfs/rrwlock.c
+index d0df39b..076cc44 100644
+--- a/module/zfs/rrwlock.c
++++ b/module/zfs/rrwlock.c
+@@ -217,6 +217,10 @@ rrw_enter_write(rrwlock_t *rrl)
+ 	mutex_enter(&rrl->rr_lock);
+ 	ASSERT(rrl->rr_writer != curthread);
+ 
++	if (zfs_refcount_count(&rrl->rr_anon_rcount) > 0 ||
++	    zfs_refcount_count(&rrl->rr_linked_rcount) > 0 ||
++	    rrl->rr_writer != NULL) {
++	}
+ 	while (zfs_refcount_count(&rrl->rr_anon_rcount) > 0 ||
+ 	    zfs_refcount_count(&rrl->rr_linked_rcount) > 0 ||
+ 	    rrl->rr_writer != NULL) {
+diff --git a/module/zfs/txg.c b/module/zfs/txg.c
+index 46a1d06..a2a2989 100644
+--- a/module/zfs/txg.c
++++ b/module/zfs/txg.c
+@@ -637,17 +637,14 @@ txg_quiesce_thread(void *arg)
+ 		 */
+ 		while (!tx->tx_exiting &&
+ 		    (tx->tx_open_txg >= tx->tx_quiesce_txg_waiting ||
+-		    txg_has_quiesced_to_sync(dp)))
++		    txg_has_quiesced_to_sync(dp))) {
+ 			txg_thread_wait(tx, &cpr, &tx->tx_quiesce_more_cv, 0);
++		}
+ 
+ 		if (tx->tx_exiting)
+ 			txg_thread_exit(tx, &cpr, &tx->tx_quiesce_thread);
+ 
+ 		txg = tx->tx_open_txg;
+-		dprintf("txg=%llu quiesce_txg=%llu sync_txg=%llu\n",
+-		    (u_longlong_t)txg,
+-		    (u_longlong_t)tx->tx_quiesce_txg_waiting,
+-		    (u_longlong_t)tx->tx_sync_txg_waiting);
+ 		tx->tx_quiescing_txg = txg;
+ 
+ 		mutex_exit(&tx->tx_sync_lock);
+@@ -657,8 +654,6 @@ txg_quiesce_thread(void *arg)
+ 		/*
+ 		 * Hand this txg off to the sync thread.
+ 		 */
+-		dprintf("quiesce done, handing off txg %llu\n",
+-		    (u_longlong_t)txg);
+ 		tx->tx_quiescing_txg = 0;
+ 		tx->tx_quiesced_txg = txg;
+ 		DTRACE_PROBE2(txg__quiesced, dsl_pool_t *, dp, uint64_t, txg);
+diff --git a/module/zfs/zfs_fuid.c b/module/zfs/zfs_fuid.c
+index 7f786c0..0f56ab8 100644
+--- a/module/zfs/zfs_fuid.c
++++ b/module/zfs/zfs_fuid.c
+@@ -384,7 +384,7 @@ zfs_fuid_map_ids(znode_t *zp, cred_t *cr, uid_t *uidp, uid_t *gidp)
+ 	    cr, ZFS_GROUP);
+ }
+ 
+-#ifdef __FreeBSD__
++#if defined(__FreeBSD__) || defined(__OSV__)
+ uid_t
+ zfs_fuid_map_id(zfsvfs_t *zfsvfs, uint64_t fuid,
+     cred_t *cr, zfs_fuid_type_t type)
+diff --git a/module/zstd/zstd-in.c b/module/zstd/zstd-in.c
+index fb56b19..efb0ab4 100644
+--- a/module/zstd/zstd-in.c
++++ b/module/zstd/zstd-in.c
+@@ -42,8 +42,10 @@
+ #define	ZSTD_LIB_DICTBUILDER 0
+ #define	ZSTD_LIB_DEPRECATED 0
+ #define	ZSTD_NOBENCH
++#define	DEBUGLEVEL 0
+ 
+-#include "common/debug.c"
++/* debug.c is not needed when DEBUGLEVEL=0 */
++/* #include "common/debug.c" */
+ #include "common/entropy_common.c"
+ #include "common/error_private.c"
+ #include "common/fse_decompress.c"
