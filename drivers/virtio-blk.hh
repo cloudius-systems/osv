@@ -150,7 +150,7 @@ public:
 
     int make_request(struct bio*);
 
-    void req_done();
+    void req_done(int qid);
     int64_t size();
 
     void set_readonly() {_ro = true;}
@@ -159,14 +159,7 @@ public:
     bool ack_irq();
 
     static hw_driver* probe(hw_device* dev);
-
-    /* Pull all completed requests off one virtqueue ring. */
-    static int drain_queue(vring* queue);
 private:
-
-    /* Wake predicate for the completion thread: true if any queue's used
-     * ring has completions pending. */
-    bool any_queue_not_empty();
 
     struct blk_req {
         blk_req(struct bio* b) :bio(b) {};

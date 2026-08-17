@@ -3,13 +3,13 @@
 ## Overview
 
 The virtio-blk driver can negotiate `VIRTIO_BLK_F_MQ` with the host and
-operate multiple virtqueues, one selected per submitting CPU.  This lets
+operate multiple virtqueues, one selected per submitting CPU. This lets
 several vCPUs submit block I/O in parallel against independent rings
 instead of serialising on a single queue lock.
 
 The implementation lives entirely in `drivers/virtio-blk.cc` and
 `drivers/virtio-blk.hh`; there is no separate generic block-multiqueue
-framework.  Each queue is an ordinary virtio virtqueue guarded by its own
+framework. Each queue is an ordinary virtio virtqueue guarded by its own
 mutex.
 
 ## Queue assignment
@@ -28,13 +28,13 @@ on the common path.
 
 When the host offers `VIRTIO_BLK_F_MQ`, the driver reads `num_queues`
 from the device config and `probe_virt_queues()` sets up that many
-virtqueues.  The probed count is authoritative: a per-queue lock vector
-(`_queue_locks`) is sized to match, and a single completion thread services
-all of them.
+virtqueues. The probed count is authoritative: a per-queue lock vector
+(`_queue_locks`) is sized to match, and each queue is serviced by its
+dedicated completion thread.
 
 ```c
 probe_virt_queues();
-_num_queues = virtio_driver::_num_queues;
+_num_queues = std::min(virtio_driver::_num_queues, sched::cpus.size());
 ...
 _queue_locks = std::vector<mutex>(_num_queues);
 ```
@@ -59,42 +59,34 @@ mapped to the same queue (more vCPUs than queues) share that queue's lock.
 
 With MSI-X the transport assigns one interrupt vector per virtqueue
 (`setup_queue()` maps queue index i to MSI-X entry i), so a completion on any
-queue raises that queue's own vector.  We register a per-queue ISR for every
-vector; each ISR disables its own queue's interrupts and wakes a single shared
-completion thread.  That thread sleeps until any queue's used ring has pending
-completions (re-arming interrupts on every queue and re-checking before it
+queue raises that queue's own vector. We register a per-queue ISR for every
+vector; each ISR disables its own queue's interrupts and wakes its dedicated
+completion thread. That thread sleeps until its queue's used ring has pending
+completions (re-arming interrupts on thus queue and re-checking before it
 sleeps, so a completion arriving during the check is never missed), and when
-woken it drains every queue, taking each queue's lock so it cannot race with
-that queue's owner:
+woken it drains this queue, without having to take the queue's lock because
+it races only on a lock-less `_used_ring_host_head` counter:
 
 ```c
-for (int q = 0; q < _num_queues; q++) {
-    WITH_LOCK(_queue_locks[q]) {
-        drain_queue(get_virt_queue(q));
-        get_virt_queue(q)->wakeup_waiter();
+void blk::req_done(int qid)
+{
+    auto* queue = get_virt_queue(qid);
+    blk_req* req;
+
+    while (1) {
+        virtio_driver::wait_for_queue(queue, &vring::used_ring_not_empty);
+
+        ..
+        // wake up the requesting thread in case the ring was full before
+        queue->wakeup_waiter();
     }
 }
 ```
 
-So all queues (vrings) and their MSI-X vectors are fully used; the single
-consumer thread is only the *completion-side* fan-in, not a per-queue
-bottleneck (submission is lock-per-queue and runs on the owning CPU).  On the
-non-MSI-X / MMIO path a single shared IRQ line fans into the same all-queue
-drain.
-
-The wake predicate checks every queue's used ring and re-arms interrupts on
-all queues when none have work, so a completion landing on any queue wakes
-the single thread.
-
-### Known limitation
-
-Because only one MSI/legacy interrupt vector is wired, completions for all
-queues are processed from the CPU that takes the interrupt (typically
-CPU 0), which then reaches across queues on the owners' behalf.  A future
-change can register a per-queue interrupt (as the NVMe driver does via
-`driver::register_io_interrupt()`), so each queue's completions land on
-its owning CPU and the cross-queue drain loop can be dropped.  The
-submission path already scales; only completion handling is centralised.
+So all queues (vrings) and their MSI-X vectors are fully used; each queue
+is serviced by its dedicated consumer thread, submission is lock-per-queue
+and runs on the owning CPU). On the non-MSI-X / MMIO path a single shared
+IRQ line fans into the same single-queue drain.
 
 ## Configuration
 
@@ -111,7 +103,7 @@ qemu-system-x86_64 \
 
 `scripts/run.py` exposes this through the `--virtio-blk-queues` option so
 test images can request multiple queues without hand-editing the QEMU
-command line.  With one vCPU or one queue the driver behaves exactly as the
+command line. With one vCPU or one queue the driver behaves exactly as the
 original single-queue path.
 
 ## Testing
