@@ -19,6 +19,10 @@
 #include <osv/sched.hh>
 #include <mutex>
 #include <atomic>
+#include <osv/kernel_config_core_reseed_on_resume.h>
+#if CONF_core_reseed_on_resume
+#include "drivers/random.hh"
+#endif
 
 using namespace osv::clock;
 
@@ -65,9 +69,51 @@ kvmclock::kvmclock()
     //
     // Start a thread that will synchronize the wall clock with the host
     auto t = sched::thread::make([this] {
+#if CONF_core_reseed_on_resume
+        // Track the guest system_time across each 1 second sleep. When the
+        // guest is paused and later resumed from a hypervisor snapshot, the
+        // system clock advances by far more than the second we slept. That
+        // large forward discontinuity is our resume signal: on resume we
+        // force the CSPRNG to re-key so that two guests restored from the
+        // same snapshot do not keep emitting identical OS random output.
+        // A normal (never-resumed) guest only ever sees ~1 second here and
+        // so never triggers the reseed, leaving its behavior unchanged.
+        //
+        // This 1Hz thread is the PROACTIVE resume detector: it fires within
+        // ~1.5s of a resume even if nothing ever reads /dev/random, which is
+        // what covers in-kernel CSPRNG consumers (arc4random()/read_random()
+        // for TCP initial sequence numbers, etc.) that never touch the
+        // /dev/random read path. A second, low-latency detector on that read
+        // path (reseed_if_resumed() in drivers/random.cc) closes the up-to-
+        // ~1.5s window for a program that reads /dev/random immediately after
+        // resume, before this thread's next tick.
+        //
+        // Both detectors are heuristics based on a clock discontinuity. The
+        // robust mechanism used by Linux/Firecracker is the VMGenID device
+        // (an ACPI-exposed generation counter the hypervisor bumps on clone),
+        // which detects a clone with no timing guess and covers sub-second
+        // clones this heuristic could miss. Adding a VMGenID driver is a
+        // worthwhile future enhancement; until then this clock-jump heuristic
+        // is a pragmatic first step that is much better than never reseeding.
+        u64 prev_system_time = this->system_time();
+#endif
         while (true) {
             sched::thread::sleep(std::chrono::seconds(1));
+#if CONF_core_reseed_on_resume
+            u64 now_system_time = this->system_time();
+            // We slept 1 second. Allow slack for scheduling delay, but treat
+            // a jump well beyond that (more than 1.5 seconds) as a hypervisor
+            // resume: the guest was paused across the snapshot and the system
+            // clock kept advancing while it was suspended.
+            if (now_system_time > prev_system_time &&
+                (now_system_time - prev_system_time) > 1500000000ULL) {
+                randomdev::reseed_on_resume();
+            }
+#endif
             this->sync_wall_clock();
+#if CONF_core_reseed_on_resume
+            prev_system_time = this->system_time();
+#endif
         }
     }, sched::thread::attr().name("kvm_wall_clock_sync"));
     t->start();
