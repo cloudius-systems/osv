@@ -2011,7 +2011,26 @@ static bool handle_cow_write_fault(uintptr_t addr)
     npte = pte_mark_cow(npte, false);
     npte.set_writable(true);
     pt[i0] = npte;
-    mmu::flush_tlb_all();
+    // TLB invalidation for the just-installed private COW page.  The normal
+    // path does a global cross-CPU flush (flush_tlb_all), which BLOCKS: it
+    // takes tlb_flush_mutex and wait_until()s every other CPU -- i.e. it
+    // RESCHEDULES.  A reschedule is legal at exception_depth <= 1 (a single,
+    // non-nested page fault) but NOT when this COW fault is itself NESTED
+    // inside another exception (depth >= 2): the per-CPU nested-exception
+    // stacks are finite, so rescheduling off one corrupts it --
+    // reschedule_from_interrupt asserts(exception_depth <= 1).  A GLOBAL flush
+    // is not needed for correctness here: the page was just made PRIVATE to
+    // THIS address space (a fresh phys page in this AS's own tables); only the
+    // faulting CPU can hold a stale write-protected TLB entry for addr in this
+    // AS, and other CPUs run a different CR3 and reload the full context on
+    // switch-in.  So when nested do the non-blocking LOCAL flush; otherwise
+    // keep the conservative global flush (depth<=1 path byte-for-byte
+    // unchanged).
+    if (sched::exception_depth >= 2) {
+        mmu::flush_tlb_local();
+    } else {
+        mmu::flush_tlb_all();
+    }
     return true;
 }
 #endif // CONF_fork
@@ -2047,12 +2066,34 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
 
     // First handle a copy-on-write write fault (fork private mappings): the
     // page is present but write-protected with the cow bit -- copy it.
+    //
+    // NESTED-FAULT SAFETY: this fault may itself be NESTED inside another
+    // in-flight exception (a real IRQ landing a fault while a fault is already
+    // being serviced during a COW fork), driving this handler to
+    // sched::exception_depth >= 2.  At that depth NO reschedule is allowed --
+    // reschedule_from_interrupt asserts(exception_depth <= 1).  But the AS-wide
+    // vmas_mutex->for_write() acquisition (a contended rwlock BLOCKS -> wait ->
+    // reschedule) trips exactly that assert deep in the fork path.  When nested
+    // that deep, resolve the COW fault LOCK-FREE: handle_cow_write_fault walks
+    // only THIS AS's own tables, installs the private page with a single PTE
+    // write to this AS, and (per the change above) does a LOCAL TLB flush.
+    // Nothing blocks, so no reschedule can happen at depth >= 2.  A concurrent
+    // COW copy of the same page by another CPU at most duplicates a private
+    // page (loser leaks one page -- rare, only in this nested race, and
+    // correctness-preserving).  The non-nested (depth <= 1) path is UNCHANGED.
     if (mmu::is_page_fault_write(ef->get_error())) {
-        PREVENT_STACK_PAGE_FAULT
-        WITH_LOCK(as->vmas_mutex->for_write()) {
+        if (sched::exception_depth >= 2) {
             if (handle_cow_write_fault(addr)) {
                 trace_mmu_vm_fault_ret(addr, ef->get_error());
                 return;
+            }
+        } else {
+            PREVENT_STACK_PAGE_FAULT
+            WITH_LOCK(as->vmas_mutex->for_write()) {
+                if (handle_cow_write_fault(addr)) {
+                    trace_mmu_vm_fault_ret(addr, ef->get_error());
+                    return;
+                }
             }
         }
     }
