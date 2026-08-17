@@ -35,17 +35,22 @@
 char hw_serial[11] = "0";
 
 struct opensolaris_utsname utsname = {
-	.machine = "amd64"
+	.machine  = "amd64",
+	.sysname  = "OSv",
+	.nodename = "osv",	/* SYSINIT is a no-op in OSv; provide static default */
+	.release  = "0",
 };
 
 static void
 opensolaris_utsname_init(void *arg)
 {
-
-	utsname.sysname = ostype;
-	utsname.nodename = prison0.pr_hostname;
-	utsname.release = osrelease;
-	snprintf(utsname.version, sizeof(utsname.version), "%d", osreldate);
+	/*
+	 * On FreeBSD, SYSINIT calls this to set utsname from kernel globals
+	 * and prison0.pr_hostname.  In OSv, SYSINIT is a no-op
+	 * (bsd/porting/netport.h), so the static defaults above are used.
+	 * nodename must be non-NULL for fnvlist_add_string() in
+	 * spa_config_generate().
+	 */
 }
 SYSINIT(opensolaris_utsname_init, SI_SUB_TUNABLES, SI_ORDER_ANY,
     opensolaris_utsname_init, NULL);

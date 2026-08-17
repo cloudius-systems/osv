@@ -303,6 +303,39 @@ taskqueue_run_locked(struct taskqueue *queue)
 		wakeup(task);
 	}
 	TAILQ_REMOVE(&queue->tq_active, &tb, tb_link);
+	/*
+	 * A worker just stopped draining.  If the queue is now fully quiesced
+	 * (nothing pending, no other worker active), wake any taskqueue_drain_all
+	 * waiter.  ZFS's taskq_wait() relies on being woken when the taskq goes
+	 * idle (illumos semantics: wait until no task is queued OR active).
+	 */
+	if (STAILQ_EMPTY(&queue->tq_queue) && TAILQ_EMPTY(&queue->tq_active))
+		wakeup(&queue->tq_active);
+}
+
+/*
+ * taskqueue_drain_all - wait until the taskqueue is fully quiesced: no task
+ * pending on tq_queue AND no worker running a task (tq_active empty).
+ *
+ * Unlike taskqueue_drain(queue, one_task) -- which returns as soon as ONE
+ * specific task finishes -- this waits for the WHOLE queue to go idle, which
+ * is what ZFS's taskq_wait() contract requires: on a multi-threaded taskq a
+ * lone barrier task can be run by a free worker while other workers are still
+ * mid-task, so draining one barrier is NOT a full wait.  ZFS also recursively
+ * enqueues new tasks from within running tasks (see dmu_objset.c PORTING note);
+ * because the enqueuing task is itself still "active", tq_active never empties
+ * until the entire recursion completes, so this loop reliably waits for it.
+ */
+void
+taskqueue_drain_all(struct taskqueue *queue)
+{
+	TQ_LOCK(queue);
+	while (!STAILQ_EMPTY(&queue->tq_queue) ||
+	    !TAILQ_EMPTY(&queue->tq_active)) {
+		TQ_SLEEP(queue, &queue->tq_active, &queue->tq_mutex,
+		    PWAIT, "tqdrain", 0);
+	}
+	TQ_UNLOCK(queue);
 }
 
 void
