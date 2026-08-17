@@ -54,6 +54,7 @@ enum ipi_id {
     IPI_SAMPLER_START,
     IPI_SAMPLER_STOP,
     IPI_SMP_STOP,
+    IPI_SCHED_PULL,
 };
 
 #include "arch-interrupt.hh"
