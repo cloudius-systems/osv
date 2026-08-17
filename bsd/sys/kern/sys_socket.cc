@@ -39,6 +39,7 @@
 #include <osv/socket.hh>
 #include <osv/initialize.hh>
 #include <osv/poll.h>
+#include <osv/net_channel.hh>
 
 #include <bsd/sys/sys/libkern.h>
 #include <bsd/sys/sys/param.h>
