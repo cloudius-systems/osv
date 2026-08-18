@@ -431,26 +431,33 @@ vn_access(struct vnode *vp, int flags)
 {
 	int error = 0;
 
+	/*
+	 * Filesystems that implement vop_access do their own permission check;
+	 * only the read-only mount guard applies here.
+	 */
 	if (vp->v_op->vop_access) {
 		if ((flags & VWRITE) && (vp->v_mount->m_flags & MNT_RDONLY))
 			return EROFS;
 		return vp->v_op->vop_access(vp, flags);
 	}
+	/*
+	 * Fallback for filesystems without vop_access.
+	 * OSv is a single-address-space unikernel: every thread runs with the
+	 * kernel credential (the ZFS platform layer hardwires crgetuid()==0).
+	 * POSIX grants the superuser discretionary access regardless of a
+	 * file's permission bits, so enforcing the read/write mode bits here
+	 * only denies the sole user OSv has -- observed as EACCES when a
+	 * process reopens its own 0600 files on OpenZFS, whose create path can
+	 * report a write-clear mode. VEXEC still requires at least one execute
+	 * bit (matching the superuser rule), and MNT_RDONLY still yields EROFS.
+	 */
 	if ((flags & VEXEC) && (vp->v_mode & 0111) == 0) {
-		error = EACCES;
-		goto out;
-	}
-	if ((flags & VREAD) && (vp->v_mode & 0444) == 0) {
 		error = EACCES;
 		goto out;
 	}
 	if (flags & VWRITE) {
 		if (vp->v_mount->m_flags & MNT_RDONLY) {
 			error = EROFS;
-			goto out;
-		}
-		if ((vp->v_mode & 0222) == 0) {
-			error = EACCES;
 			goto out;
 		}
 	}
