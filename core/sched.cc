@@ -467,13 +467,35 @@ void cpu::send_wakeup_ipi()
     }
 }
 
+// Idle spin-before-halt count.  A CPU with no runnable thread spins polling
+// incoming_wakeups before halting via arch::wait_for_interrupt (a VM-exit under
+// KVM).  For a request/reply server (e.g. one OS process per connection) each
+// blocked worker is, on average, re-woken by the next request a short time
+// later; if the spin is long enough to catch that wake, the halt and its
+// wake-IPI round-trip -- several VM-exits per request -- are avoided entirely,
+// which raises throughput at the guest's exit-rate ceiling.  A longer spin,
+// however, burns cycles on a genuinely idle system, so this is opt-in: the
+// default preserves the historical 10000-iteration behavior byte-for-byte and
+// a server image raises it via the OSV_IDLE_SPIN environment variable.
+static unsigned idle_spin_count()
+{
+    static unsigned n = []{
+        const char* e = getenv("OSV_IDLE_SPIN");
+        unsigned v = e ? (unsigned)strtoul(e, nullptr, 10) : 10000;
+        return v ? v : 10000;
+    }();
+    return n;
+}
+
 void cpu::do_idle()
 {
+    unsigned spin_count = idle_spin_count();
     do {
         idle_poll_lock_type idle_poll_lock{*this};
         WITH_LOCK(idle_poll_lock) {
-            // spin for a bit before halting
-            for (unsigned ctr = 0; ctr < 10000; ++ctr) {
+            // spin for a bit before halting; catching a wake here avoids the
+            // halt/wake VM-exit round-trip (see idle_spin_count above).
+            for (unsigned ctr = 0; ctr < spin_count; ++ctr) {
                 // FIXME: can we pull threads from loaded cpus?
                 handle_incoming_wakeups();
                 if (!runqueue.empty()) {
