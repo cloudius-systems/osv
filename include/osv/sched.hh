@@ -1561,6 +1561,8 @@ void with_all_threads(std::function<void(sched::thread &)>);
 // should return quickly.
 void with_thread_by_id(unsigned id, std::function<void(sched::thread *)>);
 
+thread *find_first_app_thread(std::function<bool(thread &)> f);
+
 }
 
 #endif /* SCHED_HH_ */
