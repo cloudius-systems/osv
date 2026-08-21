@@ -196,7 +196,8 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 	tst-fs-bench.so tst-pthread-create.so \
 	misc-futex-perf.so misc-syscall-perf.so tst-brk.so tst-reloc.so \
 	misc-vdso-perf.so tst-string-utils.so tst-elf-circular-reloc.so \
-	lib-circular-reloc1.so lib-circular-reloc2.so tst-rwlock.so
+	lib-circular-reloc1.so lib-circular-reloc2.so tst-rwlock.so \
+	tst-thread-realtime.so
 #	tst-f128.so \
 
 # The OpenZFS-userspace-API tests only build/run under conf_zfs=openzfs (they
