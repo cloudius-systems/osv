@@ -93,12 +93,28 @@ static void test_no_children()
     int status = 0;
     errno = 0;
     pid_t w = waitpid(-1, &status, 0);
-    CHECK(w == -1, "waitpid with no children returns -1");
+    CHECK(w == -1 && errno == ECHILD,
+          "waitpid with no children returns -1/ECHILD");
 }
 
 int main()
 {
     printf("=== tst-fork ===\n");
+    // fork() is opt-in (CONFIG_fork). When it is off it returns -1/ENOSYS;
+    // skip cleanly so the default test suite (fork disabled) stays green.
+    errno = 0;
+    pid_t probe = fork();
+    if (probe == -1 && errno == ENOSYS) {
+        printf("SKIP: fork() not enabled (CONFIG_fork off)\n");
+        printf("=== tst-fork done: 0 failures ===\n");
+        return 0;
+    }
+    if (probe == 0) {
+        _exit(0);   // the probe fork's child: exit immediately
+    }
+    if (probe > 0) {
+        int st = 0; waitpid(probe, &st, 0);   // reap the probe child
+    }
     test_fork_return();
     test_fork_exec();
     test_vfork();

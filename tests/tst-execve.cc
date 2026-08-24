@@ -28,6 +28,21 @@ int main()
 {
     printf("=== tst-execve ===\n"); fflush(stdout);
 
+    // fork()/execve() are opt-in (CONFIG_fork). When off, fork() returns
+    // -1/ENOSYS; skip cleanly so the default test suite stays green.
+    errno = 0;
+    pid_t probe = fork();
+    if (probe == -1 && errno == ENOSYS) {
+        printf("SKIP: fork()/execve() not enabled (CONFIG_fork off)\n");
+        printf("=== tst-execve done: 0 failures ===\n"); fflush(stdout);
+        return 0;
+    }
+    if (probe == 0) {
+        _exit(0);   // probe fork's child
+    }
+    if (probe > 0) {
+        int st = 0; waitpid(probe, &st, 0);   // reap the probe child
+    }
     // execve() a real payload from a fork child; a successful exec never
     // returns, so if it returns the exec FAILED (child exits 99).  The payload
     // (/tests/payload-exit7.so) prints a marker and exit(7)s.

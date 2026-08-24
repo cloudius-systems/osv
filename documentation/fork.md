@@ -13,8 +13,8 @@ what does not, and why.
 ## Off by default: the `fork` configure flag
 
 All of the fork() machinery - the fork()/vfork()/execve()/waitpid()
-implementations, the per-child address space, and the copy-on-write changes -
-is gated behind the `CONFIG_fork` kconfig option (make variable `conf_fork`),
+implementations and the private user-stack copy - is gated behind the
+`CONFIG_fork` kconfig option (make variable `conf_fork`),
 which defaults to **n**. When it is disabled (the default), NONE of this code
 is compiled into the kernel: the fork object files are excluded from the build,
 fork()/vfork() return ENOSYS as before, and OSv behaves exactly as it did with

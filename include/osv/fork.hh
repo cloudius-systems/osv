@@ -38,9 +38,11 @@ namespace fork {
 // program's exit status under the child's pid.
 void adopt_execed_app(shared_app_t app);
 
-// Register the current thread as a fork() child of @parent_pid with child pid
-// @child_pid.  Called on the child just before it resumes at the fork() return
-// site.  Sets up the child's exit hook so the parent's waitpid() can reap it.
+// Register a fork() child of @parent_pid with child pid @child_pid.  Called in
+// the PARENT before the child thread is started, so the entry is present in the
+// registry by the time the parent (or the child's exit path) looks it up; this
+// ordering is what makes the wait*() lookup race-free.  Sets up the child's
+// exit hook so the parent's waitpid() can reap it.
 void register_child(pid_t child_pid, pid_t parent_pid);
 
 // Record that child @child_pid exited with @status (encoded WIFEXITED-style),

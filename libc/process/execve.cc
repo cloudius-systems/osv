@@ -78,8 +78,12 @@ int execve(const char *path, char *const argv[], char *const envp[])
         // its own globals rather than colliding with the caller's.
         child = osv::application::run(path, args, true,
                                       envp ? &env : nullptr);
+    } catch (const osv::invalid_elf_error &e) {
+        // The file exists but is not a loadable ELF -> ENOEXEC, as on Linux.
+        return libc_error(ENOEXEC);
     } catch (const osv::launch_error &e) {
-        // Could not load/exec the target - Linux returns ENOENT/ENOEXEC/EACCES.
+        // Could not open/load the target at all -> ENOENT (file not found),
+        // rather than reporting every launch failure inaccurately.
         return libc_error(ENOENT);
     }
 
