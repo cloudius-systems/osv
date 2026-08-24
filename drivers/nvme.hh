@@ -29,7 +29,14 @@
 #define NVME_ADMIN_QUEUE_SIZE 8
 
 //Will be lower if the device doesnt support the specified queue size
-#define NVME_IO_QUEUE_SIZE 64
+// A deeper IO queue lets many I/Os stay in flight concurrently instead of
+// blocking submitters on a full submission queue.  Under a concurrent database
+// workload on real (native NVMe) hardware the old depth of 64 filled quickly,
+// serializing threads on the sq-full wait; 256 keeps more requests in flight
+// without materially more memory.  The device's advertised max (cap.mqes) still
+// clamps this in create_io_queues(), so it is safe on controllers with a
+// smaller queue-entry limit.
+#define NVME_IO_QUEUE_SIZE 256
 
 namespace nvme {
 
