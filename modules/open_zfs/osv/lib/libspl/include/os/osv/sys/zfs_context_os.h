@@ -3,7 +3,7 @@
  * OSv userspace zfs_context_os.h
  *
  * Minimal definitions for building libzfs/libzutil/zpool/zfs userspace
- * tools against OpenZFS 2.4.1 on OSv.  This is NOT the kernel version
+ * tools against OpenZFS 2.4.4 on OSv.  This is NOT the kernel version
  * (include/os/osv/zfs/sys/zfs_context_os.h); it is the userspace SPL
  * context header placed so that the libspl include path finds it at
  * sys/zfs_context_os.h.

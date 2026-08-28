@@ -51,13 +51,15 @@ include conf/base.mk
 conf_zfs ?= bsd
 ifeq ($(conf_zfs),openzfs)
 # The modules/open_zfs/openzfs submodule is pinned to a PUBLISHED upstream OpenZFS tag
-# (github.com/openzfs/zfs, zfs-2.4.3).  The OSv platform layer (files that do NOT
+# (github.com/openzfs/zfs, zfs-2.4.4).  The OSv platform layer (files that do NOT
 # exist in upstream OpenZFS) lives as normal parent-tracked source under
 # modules/open_zfs/osv/, mirroring upstream's own module/os/<platform>/ layout.
 # The only changes to the pristine upstream tree are a small set of edits to ~15
 # existing OpenZFS files, carried as a single git patch in modules/open_zfs/patches/
 # and applied here before the OpenZFS sources are compiled, so we never maintain an
-# OpenZFS fork.  The stamp file makes this idempotent.
+# OpenZFS fork.  The stamp file records the submodule commit the patches were
+# applied to and a hash of the patches, so that the patches are applied again
+# whenever either changes.
 openzfs_patch_stamp := modules/open_zfs/openzfs/.osv-patches-applied
 openzfs_patches := $(addprefix ../patches/,$(notdir $(wildcard modules/open_zfs/patches/*.patch)))
 # Apply the OSv edits to the pristine submodule tree.  A failure here must stop
@@ -75,10 +77,34 @@ openzfs_patches := $(addprefix ../patches/,$(notdir $(wildcard modules/open_zfs/
 # it means both the apply and the stamp succeeded.  Today a single patch file is
 # applied and the partial-apply window is narrow, but this is what makes adding
 # further patches to the series safe.
-ifeq (,$(wildcard $(openzfs_patch_stamp)))
 ifneq (,$(wildcard modules/open_zfs/openzfs/module))
 ifneq (,$(openzfs_patches))
-openzfs_patch_out := $(shell git -C modules/open_zfs/openzfs apply --whitespace=nowarn $(openzfs_patches) 2>&1 && touch $(openzfs_patch_stamp) && echo __osv_patch_ok__)
+openzfs_pinned := $(or $(shell git ls-files -s modules/open_zfs/openzfs 2>/dev/null | cut -d' ' -f2),none)
+openzfs_patch_key := $(openzfs_pinned)-$(shell cat $(wildcard modules/open_zfs/patches/*.patch) | sha256sum | cut -c1-64)
+ifneq ($(openzfs_patch_key),$(shell cat $(openzfs_patch_stamp) 2>/dev/null))
+# The tree pins another commit, or the patches changed, since the stamp was
+# written (an empty stamp comes from an older Makefile).  The submodule then
+# carries an old version of the patches, which also makes a plain "git submodule
+# update" refuse to move it.  Discard them by checking out the pinned commit.
+# NB: that discards every change in the files the patches touch; a change to
+# any other file in the submodule stops the build instead, so that local work
+# there is never thrown away.
+ifneq (none,$(openzfs_pinned))
+openzfs_patched_files := $(shell sed -n 's|^diff --git a/\([^ ]*\) .*|\1|p' $(wildcard modules/open_zfs/patches/*.patch) | sort -u)
+openzfs_reset_out := $(shell if [ -e $(openzfs_patch_stamp) ] || \
+	[ "$$(git -C modules/open_zfs/openzfs rev-parse HEAD)" != "$(openzfs_pinned)" ]; then \
+	other=$$(git -C modules/open_zfs/openzfs status --porcelain --untracked-files=normal | \
+		cut -c4- | grep -vxF -e .osv-patches-applied $(addprefix -e ,$(openzfs_patched_files))); \
+	[ -z "$$other" ] || { echo "local changes in $$other"; exit 1; }; \
+	{ git -C modules/open_zfs/openzfs cat-file -e "$(openzfs_pinned)^{commit}" 2>/dev/null || \
+	  git -C modules/open_zfs/openzfs fetch -q origin $(openzfs_pinned); } && \
+	git -C modules/open_zfs/openzfs checkout -q -f $(openzfs_pinned) && rm -f $(openzfs_patch_stamp); \
+	fi 2>&1 && echo __osv_reset_ok__)
+ifneq (__osv_reset_ok__,$(lastword $(openzfs_reset_out)))
+$(error Failed to reset modules/open_zfs/openzfs to $(openzfs_pinned) before applying the OSv OpenZFS patches: $(openzfs_reset_out). Run "git submodule update --force modules/open_zfs/openzfs" and retry)
+endif
+endif
+openzfs_patch_out := $(shell git -C modules/open_zfs/openzfs apply --whitespace=nowarn $(openzfs_patches) 2>&1 && echo $(openzfs_patch_key) > $(openzfs_patch_stamp) && echo __osv_patch_ok__)
 ifneq (__osv_patch_ok__,$(lastword $(openzfs_patch_out)))
 $(error Failed to apply the OSv OpenZFS patches to modules/open_zfs/openzfs: $(openzfs_patch_out). The submodule tree may be partially patched; restore it with "git -C modules/open_zfs/openzfs checkout -- . && git -C modules/open_zfs/openzfs clean -fd" before retrying)
 endif

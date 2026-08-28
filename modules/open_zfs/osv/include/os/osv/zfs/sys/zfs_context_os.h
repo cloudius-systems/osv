@@ -249,6 +249,14 @@ zfs_uio_init(zfs_uio_t *uio, struct uio *uio_s)
 #include <sys/rwlock.h>
 
 /*
+ * Include cred types (cred_t) - OpenZFS 2.4.4 references cred_t in
+ * sys/zfs_file.h (zfs_file_open gained a cred_t *arg) but zfs_context.h
+ * does not include sys/cred.h on the _KERNEL path; provide it from the
+ * SPL layer, mirroring the FreeBSD/Linux zfs_context_os.h.
+ */
+#include <sys/cred.h>
+
+/*
  * RW_NONE - some code uses this as a "no lock" sentinel.
  */
 #ifndef RW_NONE
