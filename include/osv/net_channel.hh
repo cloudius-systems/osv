@@ -160,7 +160,11 @@ private:
 // so their wakes can be issued together at the end of the pass (see
 // classifier::post_packet(m, batch)).  Deduplicates so a channel that received
 // several packets in the pass is woken only once.  A small inline capacity
-// avoids heap traffic on the hot RX path; overflow spills to a heap vector.
+// avoids heap traffic on the hot RX path; overflow spills to a heap vector
+// that is allocated at most once and then reused for the life of the batch
+// (the receiver keeps one batch object across every drain pass), so a
+// workload that steadily touches more than inline_capacity channels per pass
+// does not allocate and free on the RX hot path.
 // Must be used and flush()ed under the same osv::rcu_read_lock that guarded the
 // post_packet() calls (net_channel is rcu_dispose()d on teardown).
 class net_channel_wake_batch {
@@ -198,11 +202,13 @@ public:
             for (auto* c : *_spill) {
                 c->wake();
             }
-            delete _spill;
-            _spill = nullptr;
+            // Keep the vector (and its capacity) for the next pass instead of
+            // freeing it: this object outlives the pass, so repeated overflow
+            // must not turn into repeated heap traffic on the RX hot path.
+            _spill->clear();
         }
     }
-    bool empty() const { return _n == 0 && !_spill; }
+    bool empty() const { return _n == 0 && (!_spill || _spill->empty()); }
     ~net_channel_wake_batch() { delete _spill; }
 private:
     static const unsigned inline_capacity = 16;
