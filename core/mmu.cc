@@ -258,22 +258,100 @@ static const std::vector<cow_range> *cow_share_ranges;
 // having private stack memory -- see arch/x64/fork.cc.
 static const std::vector<cow_range> *cow_privatize_ranges;
 
+// Sorted, coalesced, disjoint views of the two range sets above.
+//
+// WHY: addr_is_shared()/addr_is_privatize() are called ONCE PER LEAF PTE by
+// clone_pt_level0, and each was a LINEAR scan of its range vector.
+// cow_share_ranges holds one entry per MAP_SHARED/stack vma PLUS one per LIVE
+// THREAD (see the with_all_threads loop in clone_address_space).  OSv pins ~2
+// threads per CPU (idle_thread, page_pool_l1_<id>) and a server app adds one or
+// more per connection, so the scan length grows with both vCPU count and
+// workload concurrency, making the whole clone walk O(PTEs x threads).  Sorting
+// once per fork and binary searching makes it O(PTEs x log threads).
+//
+// CORRECTNESS: only HOW the "is this VA in the set?" predicate is computed
+// changes -- not which VAs are selected, no PTE value, no lock, and no flush
+// semantics.  Coalescing touching/overlapping ranges preserves the predicate
+// exactly, since the union of the intervals is what the linear scan tested.
+// Half-open [start, end) throughout, matching the original comparison
+// (va >= start && va < end).
+//
+// SCOPE/LIFETIME: identical to the cow_share_ranges/cow_privatize_ranges
+// pointers these cache -- written only by a thread inside clone_address_space
+// between publishing and clearing those pointers, under the parent's
+// vmas_mutex->for_write().  So this adds no new cross-thread sharing.  Kept
+// static so their capacity is reused across forks: clear() preserves it, so
+// steady-state rebuilds do not allocate (fewer allocations under the write lock
+// than the existing per-fork push_back growth already performs).
+static std::vector<cow_range> cow_share_sorted;
+static std::vector<cow_range> cow_privatize_sorted;
+
+// Memo of the last range that matched, per set.  A pure-function cache: a hit
+// returns exactly what the search would have returned, a miss falls through to
+// it.  This is what removes the dominant remaining per-PTE cost, because the
+// clone walk ascends VAs and a single large range (e.g. a multi-GB MAP_SHARED
+// segment) covers millions of consecutive PTEs.  start > end encodes "invalid".
+static cow_range memo_share{1, 0};
+static cow_range memo_privatize{1, 0};
+
+static void build_sorted_ranges(const std::vector<cow_range> *src,
+                                std::vector<cow_range> &dst)
+{
+    // The range sets are changing, so both memos are stale.
+    memo_share = cow_range{1, 0};
+    memo_privatize = cow_range{1, 0};
+    dst.clear();
+    if (!src || src->empty()) return;
+    dst.reserve(src->size());
+    for (auto &r : *src) {
+        if (r.end > r.start) dst.push_back(r);
+    }
+    std::sort(dst.begin(), dst.end(),
+              [](const cow_range &a, const cow_range &b) {
+                  return a.start < b.start;
+              });
+    // Coalesce overlapping/adjacent ranges so the result is strictly ordered
+    // and disjoint, which is what makes the binary search below exact.
+    size_t w = 0;
+    for (size_t i = 1; i < dst.size(); i++) {
+        if (dst[i].start <= dst[w].end) {
+            if (dst[i].end > dst[w].end) dst[w].end = dst[i].end;
+        } else {
+            dst[++w] = dst[i];
+        }
+    }
+    dst.resize(dst.empty() ? 0 : w + 1);
+}
+
+// The same predicate as the linear scan, in O(log n) on a sorted+disjoint set.
+static inline bool sorted_ranges_contain(const std::vector<cow_range> &v,
+                                         uintptr_t va, cow_range &memo)
+{
+    if (va >= memo.start && va < memo.end) return true;
+    // First range with start > va; the only candidate is the one before it.
+    auto it = std::upper_bound(v.begin(), v.end(), va,
+                               [](uintptr_t a, const cow_range &r) {
+                                   return a < r.start;
+                               });
+    if (it == v.begin()) return false;
+    --it;
+    if (va >= it->start && va < it->end) {
+        memo = *it;
+        return true;
+    }
+    return false;
+}
+
 static bool addr_is_shared(uintptr_t va)
 {
     if (!cow_share_ranges) return false;
-    for (auto &r : *cow_share_ranges) {
-        if (va >= r.start && va < r.end) return true;
-    }
-    return false;
+    return sorted_ranges_contain(cow_share_sorted, va, memo_share);
 }
 
 static bool addr_is_privatize(uintptr_t va)
 {
     if (!cow_privatize_ranges) return false;
-    for (auto &r : *cow_privatize_ranges) {
-        if (va >= r.start && va < r.end) return true;
-    }
-    return false;
+    return sorted_ranges_contain(cow_privatize_sorted, va, memo_privatize);
 }
 
 // The parent must hold vma_list_mutex for write while this runs.  base_virt is
@@ -450,6 +528,11 @@ address_space *clone_address_space(address_space *parent)
         });
         cow_share_ranges = &share_ranges;
         cow_privatize_ranges = &privatize_ranges;
+        // Build the sorted/coalesced lookup views ONCE per fork, after both
+        // range vectors are final and before the clone walk that queries them
+        // per PTE.  Same predicate, O(log n) per lookup instead of O(n).
+        build_sorted_ranges(cow_share_ranges, cow_share_sorted);
+        build_sorted_ranges(cow_privatize_ranges, cow_privatize_sorted);
 
         for (unsigned slot = 0; slot < pte_per_page; slot++) {
             if (slot >= pml4_app_first && slot <= pml4_app_last) {
