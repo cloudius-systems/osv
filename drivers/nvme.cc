@@ -9,6 +9,7 @@
 #include <sys/cdefs.h>
 
 #include "drivers/nvme.hh"
+#include "drivers/blk-common.hh"
 #include "drivers/pci-device.hh"
 #include <osv/interrupt.hh>
 
@@ -42,7 +43,6 @@ TRACEPOINT(trace_nvme_strategy, "bio=%p, bcount=%lu", struct bio*, size_t);
 
 namespace nvme {
 
-int driver::_disk_idx = 0;
 int driver::_instance = 0;
 
 struct nvme_priv {
@@ -153,8 +153,7 @@ driver::driver(pci::device &pci_dev)
         set_interrupt_coalescing(20, 2);
     }
 
-    std::string dev_name("vblk");
-    dev_name += std::to_string(_disk_idx++);
+    std::string dev_name = blk_next_device_name();
 
     struct device* dev = device_create(&_driver, dev_name.c_str(), D_BLK);
     struct nvme_priv* prv = reinterpret_cast<struct nvme_priv*>(dev->private_data);

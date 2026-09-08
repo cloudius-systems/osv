@@ -19,8 +19,6 @@ TRACEPOINT(trace_virtio_wait_for_queue, "queue(%p) have_elements=%d", void*, int
 
 namespace virtio {
 
-int virtio_driver::_disk_idx = 0;
-
 // Process-wide MSI-X vector budget shared by all virtio devices.  The x86-64
 // IDT exposes 224 usable vectors (32..255); GSI/legacy IRQs, the APIC timer
 // and a few IPIs also consume some, so we hand out at most a conservative
