@@ -115,6 +115,17 @@ enum port_reg_ssts_bits {
     PORT_SSTS_RETRY     = 0x0F,
 };
 
+// PORT_SIG values. The signature register reports the type of device attached
+// to the port, latched by the HBA from the first Register Device to Host FIS
+// the device sends (AHCI 1.3.1, section 3.3.4).
+enum port_reg_sig_values {
+    PORT_SIG_ATA        = 0x00000101,
+    PORT_SIG_ATAPI      = 0xEB140101,
+    PORT_SIG_SEMB       = 0xC33C0101,
+    PORT_SIG_PM         = 0x96690101,
+    PORT_SIG_NONE       = 0xFFFFFFFF,
+};
+
 // How long the driver waits for a register to settle. The HBA reset and a
 // port's command engine stopping have to complete within the specification's
 // limits (AHCI 1.3.1, sections 10.4.3 and 10.1.2). A command has no deadline

@@ -82,6 +82,24 @@ port::port(u32 pnr, hba *hba)
         return;
     }
 
+    // This driver supports plain ATA disks only. A port may also present an
+    // ATAPI device (typically an optical drive), a port multiplier or an
+    // enclosure management bridge, none of which accept the ATA IDENTIFY
+    // DEVICE command that disk_identify() issues. Reading the signature and
+    // skipping such a port avoids sending a command that is guaranteed to be
+    // aborted, and avoids the task file error handling that follows it.
+    //
+    // This is the common configuration rather than an exotic one. Machine
+    // types with a built-in AHCI controller, such as QEMU's q35 with its ICH9,
+    // attach an empty optical drive by default, so an ATAPI device is present
+    // on a port of the very controller this driver probes.
+    auto sig = port_readl(PORT_SIG);
+    if (sig != PORT_SIG_ATA) {
+        debugf("AHCI: port %d ignored, signature 0x%08x is not an ATA disk\n",
+               _pnr, sig);
+        return;
+    }
+
     if (!disk_identify()) {
         debugf("AHCI: port %d ignored, IDENTIFY DEVICE failed\n", _pnr);
         return;
