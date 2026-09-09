@@ -163,8 +163,8 @@ void dentry_init(void);
 
 #ifdef DEBUG_VFS
 /*
- * True iff the calling thread holds dentry_hash_lock.  Used by vn_lock() to
- * assert the VFS lock order (vnode lock -> dentry_hash_lock, never reverse).
+ * True iff the calling thread holds any dentry chain lock.  Used by vn_lock()
+ * to assert the VFS lock order (vnode lock -> chain lock, never reverse).
  */
 bool vfs_dentry_hash_lock_held(void);
 #endif
