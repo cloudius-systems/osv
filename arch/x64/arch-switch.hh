@@ -286,6 +286,12 @@ void thread::setup_tcb()
 
     _tcb->app_tcb = 0;
     _tcb->dtv = &_arch._dtv;
+    _tcb->reserved1 = 0;
+    // Install the psABI guards.  Applications compiled with -fstack-protector
+    // read the canary straight from %fs:0x28.  The value is process-wide; see
+    // tcb_guard_value() in arch-tls.hh.
+    _tcb->stack_guard = tcb_guard_value();
+    _tcb->pointer_guard = tcb_guard_value();
 }
 
 void thread::setup_large_syscall_stack()
