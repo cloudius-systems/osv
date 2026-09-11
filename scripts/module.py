@@ -214,7 +214,10 @@ def build(args):
     if args.add_required_to_manifest:
         modules = resolve.get_required_modules()
     else:
-        modules = list(module for module in resolve.get_required_modules() if module.name in selected_modules)
+        # A module that provides a selected name (bsd_zfs or open_zfs for zfs) stands in for it.
+        modules = list(module for module in resolve.get_required_modules()
+                       if module.name in selected_modules
+                       or set(getattr(module, 'provides', [])) & set(selected_modules))
 
     modules_to_run = resolve.get_modules_to_run()
 
