@@ -141,6 +141,7 @@ zfs-user-libs := libzfs.so libzfs_core.so libzutil.so libuutil.so libshare.so li
 ifeq ($(conf_zfs),openzfs)
 zfs-only-tests += $(zfs-openzfs-only-tests)
 endif
+zfs-only-tests += misc-zfs-arc-probe.so
 
 ext-only-tests := tst-readdir.so tst-concurrent-read.so tst-fs-link.so
 ext-only-tests += tst-ext-readlink.so

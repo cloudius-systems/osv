@@ -247,6 +247,44 @@ static bool test_parse_multiple_options_with_separate_value()
     return options.empty();
 }
 
+static uint64_t parse_size(const char *arg, bool *invalid)
+{
+    vector<const char*> argv = {arg};
+    auto options = parse_options_values(argv.size(), (char**)argv.data(), handle_parse_error, false);
+    *invalid = false;
+    return options::extract_option_size_value(options, "size", [invalid](const std::string &message) {
+        *invalid = true;
+    });
+}
+
+static bool test_parse_size_option_value()
+{
+    bool invalid;
+    bool ok = true;
+    ok &= parse_size("--size=12345", &invalid) == 12345 && !invalid;
+    ok &= parse_size("--size=64M", &invalid) == (64ULL << 20) && !invalid;
+    ok &= parse_size("--size=16g", &invalid) == (16ULL << 30) && !invalid;
+    ok &= parse_size("--size=3k", &invalid) == 3072 && !invalid;
+    ok &= parse_size("--size=2T", &invalid) == (2ULL << 40) && !invalid;
+    ok &= parse_size("--size=18446744073709551615", &invalid) == UINT64_MAX && !invalid;
+    return ok;
+}
+
+static bool test_parse_invalid_size_option_value()
+{
+    bool ok = true;
+    for (auto arg : {"--size=16GB", "--size=G", "--size=-1", "--size=0x10", "--size= 1",
+                     "--size=1.5G", "--size=18446744073709551616", "--size=16777216T"}) {
+        bool invalid;
+        parse_size(arg, &invalid);
+        if (!invalid) {
+            printf("accepted %s\n", arg);
+            ok = false;
+        }
+    }
+    return ok;
+}
+
 int main(int argc, char *argv[])
 {
     report(test_parse_empty(), "empty string");
@@ -263,6 +301,8 @@ int main(int argc, char *argv[])
     report(test_parse_single_float_option_value(), "single float option value");
     report(test_parse_multiple_options_with_separate_value(), "multiple options with separated values");
     report(test_parse_invalid_int_option_value(), "invalid int option");
+    report(test_parse_size_option_value(), "size option value");
+    report(test_parse_invalid_size_option_value(), "invalid size option");
 
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);
     return 0;

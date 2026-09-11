@@ -180,6 +180,7 @@ bool opt_pci_disabled = false;
 #if CONF_drivers_ena
 bool opt_ena_llq = false;
 #endif
+extern "C" uint64_t zfs_arc_max_option;
 
 #if CONF_tracepoints_sampler
 static int sampler_frequency;
@@ -235,7 +236,9 @@ static void usage()
 #endif
         "  --extra-zfs-pools     import extra ZFS pools\n"
         "  --mount-fs=arg        mount extra filesystem, format:<fs_type,url,path>\n"
-        "  --preload-zfs-library preload ZFS library from /usr/lib/fs\n\n");
+        "  --preload-zfs-library preload ZFS library from /usr/lib/fs\n"
+        "  --zfs-arc-max=arg     maximum size of the ZFS ARC, in bytes or with a\n"
+        "                        K, M, G or T suffix (64M up to the memory size)\n\n");
 }
 
 static void handle_parse_error(const std::string &message)
@@ -420,6 +423,19 @@ static void parse_options(int loader_argc, char** loader_argv)
         opt_ena_llq = true;
     }
 #endif
+
+    if (options::option_value_exists(options_values, "zfs-arc-max")) {
+        // OpenZFS's arc_init() ignores a ceiling below MIN_ARC_MAX (64 MiB) or
+        // at or above the memory size and keeps its default; the BSD ZFS's
+        // lower bound is 16 MiB.  Refuse anything outside the stricter range
+        // rather than boot with a cache size other than the one asked for.
+        auto size = options::extract_option_size_value(options_values, "zfs-arc-max", handle_parse_error);
+        if (size < (64ULL << 20) || size >= memory::phys_mem_size) {
+            handle_parse_error("the argument for option '--zfs-arc-max' must be at least 64M "
+                               "and less than the memory size");
+        }
+        zfs_arc_max_option = size;
+    }
 
     if (!options_values.empty()) {
         for (auto other_option : options_values) {

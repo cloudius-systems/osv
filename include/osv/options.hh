@@ -11,6 +11,8 @@
 #include <string>
 #include <vector>
 #include <map>
+#include <functional>
+#include <cstdint>
 
 //
 // The methods in 'options' namespace provide basic functionality intended to help
@@ -45,6 +47,12 @@ int extract_option_int_value(map<string,vector<string>> &options_values, const s
 // Returns the value of a single-value option (--<name>=<key>), tries to convert to a float
 // and removes it from the options_values
 float extract_option_float_value(map<string,vector<string>> &options_values, const string &name,
+        function<void (const string&)> error_handler);
+
+// Returns the value of a single-value option (--<name>=<size>) as a number of bytes and
+// removes it from the options_values.  The size is a decimal number with an optional
+// K, M, G or T suffix (powers of 1024, either case).
+uint64_t extract_option_size_value(map<string,vector<string>> &options_values, const string &name,
         function<void (const string&)> error_handler);
 
 // Returns the values of a multi-value option (--<key>=<val1>, --<key>=<val2>) and removes

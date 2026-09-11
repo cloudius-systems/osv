@@ -53,6 +53,9 @@ extern void start_pagecache_access_scanner();
 
 extern int zfs_init(void);
 extern bool zfs_driver_initialized;
+extern uint64_t zfs_arc_max;
+extern uint64_t zfs_arc_min;
+extern uint64_t zfs_arc_max_option;
 
 //This init function gets called on loading of libsolaris.so
 //and it initializes all necessary resources (threads, etc) used by the code in
@@ -82,6 +85,17 @@ void __attribute__((constructor)) zfs_initialize(void) {
     zfs_update_vfsops(&zfs_vfsops);
     //Start ZFS access scanner (part of pagecache)
     start_pagecache_access_scanner();
+
+    //Apply the --zfs-arc-max boot option before zfs_init() runs arc_init().
+    //arc_init() raises the target to its minimum, RAM/32 by default, so lower
+    //the minimum to half the ceiling as OpenZFS's arc_init() does, or a guest
+    //over 2 GB would ignore a small ceiling.
+    if (zfs_arc_max_option) {
+        zfs_arc_max = zfs_arc_max_option;
+        if (!zfs_arc_min) {
+            zfs_arc_min = zfs_arc_max_option / 2;
+        }
+    }
 
     //Finally call zfs_init() which is what would been normally called by vfs_init()
     //The dummy zfs_init() defined in kernel does not do anything so
