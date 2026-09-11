@@ -256,6 +256,18 @@ zfs_initialize(void)
 	}
 
 	/*
+	 * The --zfs-arc-max boot option (loader.cc) stands in for the
+	 * zfs_arc_max module parameter, which OSv has no way to set.  arc_init()
+	 * validates it exactly as it validates the module parameter.
+	 */
+	{
+		extern uint64_t zfs_arc_max;
+		extern uint64_t zfs_arc_max_option;
+		if (zfs_arc_max_option != 0)
+			zfs_arc_max = zfs_arc_max_option;
+	}
+
+	/*
 	 * Enable ZFS recovery mode for OSv.
 	 *
 	 * zfs_panic_recover() calls CE_PANIC by default, which aborts the

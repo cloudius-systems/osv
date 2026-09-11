@@ -8,6 +8,7 @@
 #include <functional>
 #include <cassert>
 #include <stdexcept>
+#include <cctype>
 #include <osv/options.hh>
 
 namespace options {
@@ -157,6 +158,45 @@ float extract_option_float_value(map<string,vector<string>> &options_values, con
         handle_invalid_argument(name, value_str, error_handler);
     }
     return value;
+}
+
+uint64_t extract_option_size_value(map<string,vector<string>> &options_values, const string &name, function<void (const string&)> error_handler)
+{
+    auto value_str = extract_option_values(options_values, name)[0];
+
+    // Accept only decimal digits, so that std::stoull() cannot take a sign,
+    // leading blanks or a hexadecimal prefix, then at most one unit suffix.
+    size_t digits = 0;
+    while (digits < value_str.length() && isdigit((unsigned char)value_str[digits])) {
+        digits++;
+    }
+    unsigned shift = 0;
+    if (digits + 1 == value_str.length()) {
+        switch (toupper((unsigned char)value_str[digits])) {
+        case 'K': shift = 10; break;
+        case 'M': shift = 20; break;
+        case 'G': shift = 30; break;
+        case 'T': shift = 40; break;
+        }
+    }
+    if (digits == 0 || (digits != value_str.length() && shift == 0)) {
+        handle_invalid_argument(name, value_str, error_handler);
+        return 0;
+    }
+
+    uint64_t value;
+    try {
+        value = std::stoull(value_str.substr(0, digits));
+    }
+    catch (const out_of_range& e) {
+        handle_invalid_argument(name, value_str, error_handler);
+        return 0;
+    }
+    if (value > (UINT64_MAX >> shift)) {
+        handle_invalid_argument(name, value_str, error_handler);
+        return 0;
+    }
+    return value << shift;
 }
 
 vector<string> extract_option_values(map<string,vector<string>> &options_values, const string &name)

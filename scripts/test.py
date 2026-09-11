@@ -8,6 +8,7 @@ import os
 
 import tests.test_net as test_net
 import tests.test_tracing as test_tracing
+import tests.test_zfs_arc_max as test_zfs_arc_max
 
 from operator import attrgetter
 from tests.testing import *
@@ -203,6 +204,7 @@ if __name__ == "__main__":
 
     test_net.set_arch(cmdargs.arch)
     test_tracing.set_arch(cmdargs.arch)
+    test_zfs_arc_max.set_arch(cmdargs.arch)
 
     disabled_list.extend(cmdargs.disabled_list)
     main()

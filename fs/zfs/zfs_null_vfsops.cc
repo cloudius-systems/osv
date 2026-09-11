@@ -38,6 +38,9 @@ struct vfsops zfs_vfsops = {
 
 extern "C" {
 OSV_LIBSOLARIS_API bool zfs_driver_initialized = false;
+// The ARC ceiling in bytes from the --zfs-arc-max boot option, or 0 for the
+// ZFS default.  libsolaris.so copies it into zfs_arc_max before arc_init().
+OSV_LIBSOLARIS_API uint64_t zfs_arc_max_option = 0;
 int zfs_init(void)
 {
     return 0;
