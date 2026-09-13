@@ -51,5 +51,6 @@ config sched_wake_pull
     balancer cannot do for a wake/run/block cycle that never accumulates a
     visible runqueue.  Self-throttling: only idle CPUs ask, one outstanding
     request per victim, so the IPI rate is bounded by the idle-CPU count, not
-    the wake rate.  Compiling it in costs nothing: it is a runtime no-op
-    unless the OSV_WAKE_PULL=1 environment toggle is set at boot.
+    the wake rate.  Enabled at runtime by default; set OSV_WAKE_PULL=0 in the
+    environment at boot to disable it (for example to compare against the
+    timer-only balancer).

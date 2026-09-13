@@ -77,8 +77,8 @@ std::vector<cpu*> cpus __attribute__((init_priority((int)init_prio::cpus)));
 // Idle-CPU PULL (work-stealing) runtime toggle (see cpu::try_pull_from_busiest
 // / init reaper).  When on, an idle CPU pulls a runnable thread from the
 // busiest CPU instead of the timer-driven load balancer waiting a full tick to
-// notice the imbalance.  Default off; armed at boot via env OSV_WAKE_PULL=1.
-bool wake_pull_enabled = false;
+// notice the imbalance.  Default on; set env OSV_WAKE_PULL=0 to disable.
+bool wake_pull_enabled = true;
 // Only pull from a victim whose runqueue is deeper than this (queued work
 // beyond the one thread it is running) so we never disturb a lightly-loaded
 // machine and never fight the victim over its last runnable thread.
@@ -2012,14 +2012,17 @@ void init_detached_threads_reaper()
 {
     thread::_s_reaper = new thread::reaper;
 #if CONF_sched_wake_pull
-    // Idle-CPU PULL (work-stealing) runtime toggle: env OSV_WAKE_PULL=1 arms it,
-    // default off.  Compiled in but a no-op at runtime unless armed, so the
-    // default build behaves exactly as before; set OSV_WAKE_PULL=1 to enable
-    // idle CPUs pulling work from the busiest CPU under concurrency.
+    // Idle-CPU PULL (work-stealing): an idle CPU pulls a runnable thread from
+    // the busiest CPU instead of waiting a full load-balancer tick.  Enabled
+    // by default; set OSV_WAKE_PULL=0 to disable it (e.g. to compare against
+    // the timer-only balancer).  On a workload that fans many threads out from
+    // one waker it keeps idle CPUs busy that the 100ms balancer would leave
+    // idle between passes.
     {
         extern bool wake_pull_enabled;
         const char* e = getenv("OSV_WAKE_PULL");
-        wake_pull_enabled = (e && e[0] == '1');
+        if (e && e[0])
+            wake_pull_enabled = (e[0] != '0');
         printf("WAKE_PULL %s\n", wake_pull_enabled ? "ON" : "off");
     }
 #endif
