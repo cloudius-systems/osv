@@ -45,7 +45,24 @@ namespace fork_arena {
 // (96 << 39) is clear of the ELF load slot (32) and the default mmap hole
 // (which grows up from slot 64).
 constexpr uintptr_t arena_base = 96ull << 39;   // 0x300000000000
-constexpr size_t    arena_size = 512ull << 20;  // 512 MiB of VA (lazily faulted)
+// DEFAULT arena size.  EAGERLY populated (mmap_populate) at init -- committed
+// RAM at boot, NOT lazily faulted (eager backing is load-bearing: alloc() can
+// run IRQs-off, where a demand fault would abort; see init()).  Overridable at
+// boot via the --fork-arena-size-mb loader option.  Growing it delays (does not
+// fix) the arena
+// VA-exhaustion -> identity-heap fallback leak under unbounded fork churn, at a
+// cost of that many extra MiB of committed boot RAM.
+constexpr size_t    arena_size = 512ull << 20;  // 512 MiB default (committed at boot)
+// arena_base + effective size (set in init() from --fork-arena-size-mb, else
+// arena_base + arena_size).  Use this (g_end), not arena_size, for bounds; it is
+// 0 until init() runs, so contains() correctly rejects any pointer before ready.
+extern uintptr_t g_end;
+
+// Set the requested arena size in MiB (clamped to [default .. 4096] in init()).
+// Called by the loader from the --fork-arena-size-mb cmdline option BEFORE
+// init() runs; read from the cmdline, not getenv, because init() runs before
+// the application environment exists.  mb==0 keeps the default.
+void set_size_mb(unsigned long mb);
 
 // One-time setup: reserve the arena VA as an anonymous app-slot mapping.  Call
 // once, after the SMP allocator is up, before the application runs.  Idempotent.
@@ -83,7 +100,7 @@ struct kernel_heap_scope {
 static inline bool contains(const void *p)
 {
     auto a = reinterpret_cast<uintptr_t>(p);
-    return a >= arena_base && a < arena_base + arena_size;
+    return a >= arena_base && a < g_end;
 }
 
 // Allocate `size` bytes with `alignment` from the arena; nullptr if it cannot
