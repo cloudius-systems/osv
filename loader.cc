@@ -241,6 +241,9 @@ static void usage()
         "  --rootfs=arg          root filesystem to use (zfs, rofs, ramfs or virtiofs)\n"
         "  --assign-net          assign virtio network to the application\n"
         "  --maxnic=arg          maximum NIC number\n"
+        "  --fork-arena-size-mb=arg  fork COW arena size in MiB (default 512, cap 4096;\n"
+        "                        committed boot RAM, so guest RAM must exceed this plus\n"
+        "                        the workload; delays the fork-churn VA leak, not a fix)\n"
         "  --norandom            don't initialize any random device\n"
         "  --noshutdown          continue running after main() returns\n"
         "  --power-off-on-abort  use poweroff instead of halt if it's aborted\n"
@@ -351,6 +354,20 @@ static void parse_options(int loader_argc, char** loader_argv)
         opt_maxnic = true;
         maxnic = options::extract_option_int_value(options_values, "maxnic", handle_parse_error);
     }
+
+#if CONF_fork
+    if (options::option_value_exists(options_values, "fork-arena-size-mb")) {
+        // Grow the fork COW arena (committed boot RAM) to delay the VA-exhaustion
+        // -> identity-heap leak under sustained fork churn.  Read here (before
+        // fork_arena::init() runs) because init() precedes the app environment,
+        // so an env var would be invisible to it.
+        auto mb = options::extract_option_int_value(options_values,
+                      "fork-arena-size-mb", handle_parse_error);
+        if (mb > 0) {
+            fork_arena::set_size_mb((unsigned long)mb);
+        }
+    }
+#endif
 
 #if CONF_tracepoints
     if (extract_option_flag(options_values, "trace-backtrace")) {
