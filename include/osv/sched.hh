@@ -1039,6 +1039,11 @@ struct cpu : private timer_base::client {
     timer_list timers;
     timer_base preemption_timer;
     thread* idle_thread;
+    // The idle-spin window (see do_idle()) and the number of consecutive
+    // halts. Used only by this CPU's idle thread.
+    static constexpr std::chrono::nanoseconds idle_spin_max{500000};
+    std::chrono::nanoseconds idle_spin_window = idle_spin_max;
+    unsigned idle_halt_streak = 0;
     // if true, cpu is now polling incoming_wakeups_mask
     std::atomic<bool> idle_poll = { false };
     // there is a data dependency between next two fields

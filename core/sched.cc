@@ -484,6 +484,26 @@ void cpu::send_wakeup_ipi()
     }
 }
 
+// How long an idle CPU polls incoming_wakeups before it halts. Halting
+// (arch::wait_for_interrupt) is a VM exit under a hypervisor, and waking a
+// halted CPU takes an IPI, so on a request/reply workload, where a CPU's thread
+// is woken again shortly after it blocks, catching the wake while spinning
+// saves several VM exits per request. Spinning on a CPU that stays idle only
+// burns host CPU, so the window adapts per CPU, like Linux's halt-polling
+// (halt_poll_ns) but in the guest:
+//   - A wake caught while spinning, or just before halting, sets the window to
+//     idle_spin_max, so a CPU that is woken often stays fully polled.
+//   - A halt is not enough to shrink it, since a busy CPU also halts now and
+//     then. After idle_shrink_after consecutive halts, each further halt halves
+//     the window, down to idle_spin_floor.
+// idle_spin_max must stay well below the period of OSv's own periodic
+// threads (pagecache's access scanner runs every millisecond): an otherwise
+// idle CPU that one of them wakes within the window keeps spinning forever.
+// The floor is more than zero, so that send_wakeup_ipi()'s idle_poll handshake
+// can still avoid the IPI for a CPU that is about to halt.
+static constexpr std::chrono::nanoseconds idle_spin_floor{2000};
+static constexpr unsigned idle_shrink_after = 4;
+
 void cpu::do_idle()
 {
     do {
@@ -498,10 +518,18 @@ void cpu::do_idle()
 #endif
         WITH_LOCK(idle_poll_lock) {
             // spin for a bit before halting
-            for (unsigned ctr = 0; ctr < 10000; ++ctr) {
+            auto end = osv::clock::uptime::now() + idle_spin_window;
+            for (unsigned ctr = 1; ; ++ctr) {
                 handle_incoming_wakeups();
                 if (!runqueue.empty()) {
+                    idle_spin_window = idle_spin_max;
+                    idle_halt_streak = 0;
                     return;
+                }
+                // Reading the clock costs more than a poll, so check it only
+                // every 64 polls.
+                if (ctr % 64 == 0 && osv::clock::uptime::now() >= end) {
+                    break;
                 }
             }
         }
@@ -511,7 +539,14 @@ void cpu::do_idle()
         std::unique_lock<irq_lock_type> guard(irq_lock);
         handle_incoming_wakeups();
         if (!runqueue.empty()) {
+            idle_spin_window = idle_spin_max;
+            idle_halt_streak = 0;
             return;
+        }
+        if (idle_halt_streak < idle_shrink_after) {
+            ++idle_halt_streak;
+        } else {
+            idle_spin_window = std::max(idle_spin_window / 2, idle_spin_floor);
         }
         guard.release();
         arch::wait_for_interrupt(); // this unlocks irq_lock
