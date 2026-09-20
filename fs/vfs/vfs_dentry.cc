@@ -46,7 +46,64 @@
 
 static LIST_HEAD(dentry_hash_head, dentry) dentry_hash_table[DENTRY_BUCKETS];
 static LIST_HEAD(fake, dentry) fake;
+
+/*
+ * LOCK ORDERING RULE (whole VFS):
+ *
+ *     vnode lock (vn_lock)  ->  dentry_hash_lock
+ *
+ * and NEVER the reverse.  namei() establishes this direction: it holds
+ * vn_lock(dvp) across dentry_lookup()/dentry_alloc() (vfs_lookup.cc), both of
+ * which take dentry_hash_lock inside.  Therefore no code may call anything
+ * that takes a vnode lock while holding dentry_hash_lock.
+ *
+ * drele() used to violate exactly that: it took dentry_hash_lock and then
+ * called vn_del_name(), which does vn_lock() internally.  A namei() on one
+ * thread (vn_lock held, waiting for dentry_hash_lock) against a drele() on
+ * another (dentry_hash_lock held, waiting for vn_lock) is an AB-BA deadlock
+ * with nothing left runnable -- observed as all vCPUs halted in do_idle with
+ * an empty wakeup mask and >1000 threads parked, while memory was plentiful.
+ *
+ * dentry_hash_lock is a leaf lock now.  Keep it that way: do not call out to
+ * vnode code, and do not allocate, while holding it.
+ */
 static mutex dentry_hash_lock;
+
+#ifdef DEBUG_VFS
+/*
+ * Teeth for the ordering rule above.  When DEBUG_VFS is on, every thread
+ * tracks whether it currently holds dentry_hash_lock; vn_lock() asserts that
+ * it does not.  This fires on the unfixed drele() and is silent once
+ * vn_del_name() is moved out of the critical section.
+ */
+extern "C" bool vfs_dentry_hash_lock_held(void);   /* declared in vfs.h */
+static __thread int dentry_hash_lock_depth;
+bool vfs_dentry_hash_lock_held(void)
+{
+    return dentry_hash_lock_depth != 0;
+}
+static void dentry_hash_lock_enter(void) { dentry_hash_lock_depth++; }
+static void dentry_hash_lock_exit(void)  { dentry_hash_lock_depth--; }
+#else
+static inline void dentry_hash_lock_enter(void) {}
+static inline void dentry_hash_lock_exit(void)  {}
+#endif
+
+/*
+ * dentry_hash_lock accessors.  Use these, not mutex_lock/unlock directly, so
+ * the ordering instrumentation cannot be bypassed by a new call site.
+ */
+static void dentry_hash_lock_acquire(void)
+{
+    mutex_lock(&dentry_hash_lock);
+    dentry_hash_lock_enter();
+}
+
+static void dentry_hash_lock_release(void)
+{
+    dentry_hash_lock_exit();
+    mutex_unlock(&dentry_hash_lock);
+}
 
 /*
  * Get the hash value from the mount point and path name.
@@ -95,9 +152,9 @@ dentry_alloc(struct dentry *parent_dp, struct vnode *vp, const char *path)
 
     vn_add_name(vp, dp);
 
-    mutex_lock(&dentry_hash_lock);
+    dentry_hash_lock_acquire();
     LIST_INSERT_HEAD(&dentry_hash_table[dentry_hash(mp, path)], dp, d_link);
-    mutex_unlock(&dentry_hash_lock);
+    dentry_hash_lock_release();
     return dp;
 };
 
@@ -106,15 +163,15 @@ dentry_lookup(struct mount *mp, char *path)
 {
     struct dentry *dp;
 
-    mutex_lock(&dentry_hash_lock);
+    dentry_hash_lock_acquire();
     LIST_FOREACH(dp, &dentry_hash_table[dentry_hash(mp, path)], d_link) {
         if (dp->d_mount == mp && !strncmp(dp->d_path, path, PATH_MAX)) {
             dp->d_refcnt++;
-            mutex_unlock(&dentry_hash_lock);
+            dentry_hash_lock_release();
             return dp;
         }
     }
-    mutex_unlock(&dentry_hash_lock);
+    dentry_hash_lock_release();
     return nullptr;                /* not found */
 }
 
@@ -153,6 +210,7 @@ dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path)
     }
 
     WITH_LOCK(dentry_hash_lock) {
+        dentry_hash_lock_enter();
         // Remove all dp's child dentries from the hashtable.
         dentry_children_remove(dp);
         // Remove dp with outdated hash info from the hashtable.
@@ -163,6 +221,7 @@ dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path)
         // Insert dp updated hash info into the hashtable.
         LIST_INSERT_HEAD(&dentry_hash_table[dentry_hash(dp->d_mount, path)],
             dp, d_link);
+        dentry_hash_lock_exit();
     }
 
     if (old_pdp) {
@@ -175,11 +234,11 @@ dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path)
 void
 dentry_remove(struct dentry *dp)
 {
-    mutex_lock(&dentry_hash_lock);
+    dentry_hash_lock_acquire();
     LIST_REMOVE(dp, d_link);
     /* put it on a fake list for drele() to work*/
     LIST_INSERT_HEAD(&fake, dp, d_link);
-    mutex_unlock(&dentry_hash_lock);
+    dentry_hash_lock_release();
 }
 
 void
@@ -188,9 +247,9 @@ dref(struct dentry *dp)
     ASSERT(dp);
     ASSERT(dp->d_refcnt > 0);
 
-    mutex_lock(&dentry_hash_lock);
+    dentry_hash_lock_acquire();
     dp->d_refcnt++;
-    mutex_unlock(&dentry_hash_lock);
+    dentry_hash_lock_release();
 }
 
 void
@@ -199,15 +258,27 @@ drele(struct dentry *dp)
     ASSERT(dp);
     ASSERT(dp->d_refcnt > 0);
 
-    mutex_lock(&dentry_hash_lock);
+    dentry_hash_lock_acquire();
     if (--dp->d_refcnt) {
-        mutex_unlock(&dentry_hash_lock);
+        dentry_hash_lock_release();
         return;
     }
+    /*
+     * Last reference.  Unlink from the hash chain while still holding the
+     * lock -- that is what makes the drop below safe: once dp is off the
+     * chain, dentry_lookup() can no longer find it, so no other thread can
+     * resurrect it by taking a new reference.  This thread is the sole owner
+     * of dp from here on, and d_refcnt is 0 and stays 0.
+     *
+     * vn_del_name() must NOT be called under dentry_hash_lock: it takes the
+     * vnode lock, which inverts the vn_lock -> dentry_hash_lock order that
+     * namei() establishes (see the ordering note at the top of this file).
+     * Release first, then touch the vnode.
+     */
     LIST_REMOVE(dp, d_link);
-    vn_del_name(dp->d_vnode, dp);
+    dentry_hash_lock_release();
 
-    mutex_unlock(&dentry_hash_lock);
+    vn_del_name(dp->d_vnode, dp);
 
     if (dp->d_parent) {
         WITH_LOCK(dp->d_parent->d_lock) {
