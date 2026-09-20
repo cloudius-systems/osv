@@ -71,37 +71,27 @@ static mutex dentry_hash_lock;
 
 #ifdef DEBUG_VFS
 /*
- * Teeth for the ordering rule above.  When DEBUG_VFS is on, every thread
- * tracks whether it currently holds dentry_hash_lock; vn_lock() asserts that
- * it does not.  This fires on the unfixed drele() and is silent once
- * vn_del_name() is moved out of the critical section.
+ * Teeth for the ordering rule above: vn_lock() asserts that the caller does not
+ * already hold dentry_hash_lock.  This fires on the unfixed drele() and is
+ * silent once vn_del_name() is moved out of the critical section.
  */
-extern "C" bool vfs_dentry_hash_lock_held(void);   /* declared in vfs.h */
-static __thread int dentry_hash_lock_depth;
 bool vfs_dentry_hash_lock_held(void)
 {
-    return dentry_hash_lock_depth != 0;
+    return dentry_hash_lock.owned();
 }
-static void dentry_hash_lock_enter(void) { dentry_hash_lock_depth++; }
-static void dentry_hash_lock_exit(void)  { dentry_hash_lock_depth--; }
-#else
-static inline void dentry_hash_lock_enter(void) {}
-static inline void dentry_hash_lock_exit(void)  {}
 #endif
 
 /*
- * dentry_hash_lock accessors.  Use these, not mutex_lock/unlock directly, so
- * the ordering instrumentation cannot be bypassed by a new call site.
+ * dentry_hash_lock accessors.  Use these, not mutex_lock/unlock directly, so a
+ * new call site cannot bypass the ordering rule above.
  */
 static void dentry_hash_lock_acquire(void)
 {
     mutex_lock(&dentry_hash_lock);
-    dentry_hash_lock_enter();
 }
 
 static void dentry_hash_lock_release(void)
 {
-    dentry_hash_lock_exit();
     mutex_unlock(&dentry_hash_lock);
 }
 
@@ -215,7 +205,6 @@ dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path)
     }
 
     WITH_LOCK(dentry_hash_lock) {
-        dentry_hash_lock_enter();
         // Remove all dp's child dentries from the hashtable.
         dentry_children_remove(dp);
         // Remove dp with outdated hash info from the hashtable.
@@ -226,7 +215,6 @@ dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path)
         // Insert dp updated hash info into the hashtable.
         LIST_INSERT_HEAD(&dentry_hash_table[dentry_hash(dp->d_mount, path)],
             dp, d_link);
-        dentry_hash_lock_exit();
     }
 
     if (old_pdp) {
