@@ -57,23 +57,26 @@ static LIST_HEAD(fake, dentry) fake;
  * which take dentry_hash_lock inside.  Therefore no code may call anything
  * that takes a vnode lock while holding dentry_hash_lock.
  *
- * drele() used to violate exactly that: it took dentry_hash_lock and then
- * called vn_del_name(), which does vn_lock() internally.  A namei() on one
- * thread (vn_lock held, waiting for dentry_hash_lock) against a drele() on
- * another (dentry_hash_lock held, waiting for vn_lock) is an AB-BA deadlock
- * with nothing left runnable -- observed as all vCPUs halted in do_idle with
- * an empty wakeup mask and >1000 threads parked, while memory was plentiful.
+ * Inverting it deadlocks: a namei() holding vn_lock and waiting for
+ * dentry_hash_lock, against a thread holding dentry_hash_lock and waiting for
+ * vn_lock, leaves neither able to proceed.  Reaching that state needs two
+ * distinct dentries aliasing one vnode, which rename() can produce: sys_rename()
+ * holds vn_lock(vp1) across the destination lookup and the following
+ * dentry_move()/dentry_remove(), and vp1 may be any vnode type.
  *
- * dentry_hash_lock is a leaf lock now.  Keep it that way: do not call out to
- * vnode code, and do not allocate, while holding it.
+ * dentry_hash_lock does not call into the vnode layer.  Keep it that way, and
+ * do not allocate while holding it.  It does nest dentry->d_lock (via
+ * dentry_children_remove()); that direction is consistent at every site, and
+ * d_lock is never held while taking dentry_hash_lock.
  */
 static mutex dentry_hash_lock;
 
 #ifdef DEBUG_VFS
 /*
  * Teeth for the ordering rule above: vn_lock() asserts that the caller does not
- * already hold dentry_hash_lock.  This fires on the unfixed drele() and is
- * silent once vn_del_name() is moved out of the critical section.
+ * already hold dentry_hash_lock.  Note that DEBUG_VFS is not enabled in a
+ * default build (see vfs.h), so this only has effect when it is turned on
+ * deliberately.
  */
 bool vfs_dentry_hash_lock_held(void)
 {
@@ -184,9 +187,9 @@ dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path)
     struct dentry *old_pdp = dp->d_parent;
     char *old_path = dp->d_path;
     // Duplicate the new path BEFORE taking dentry_hash_lock.  strdup() can
-    // block in the page allocator, and dentry_hash_lock is a leaf lock held
-    // by every lookup in the system; sleeping under it stalls all VFS name
-    // resolution for the duration.  Nothing here needs the lock.
+    // block in the page allocator, and dentry_hash_lock serialises every name
+    // lookup in the system; sleeping under it stalls all VFS name resolution
+    // for the duration.  Nothing here needs the lock.
     char *new_path = strdup(path);
 
     if (old_pdp) {
