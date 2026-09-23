@@ -44,7 +44,6 @@
 #include <sys/stat.h>
 #include <sys/epoll.h>
 #include <sys/socket.h>
-#include <sys/statx.h>
 #include <errno.h>
 #include <unistd.h>
 #include <fcntl.h>

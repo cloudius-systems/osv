@@ -1222,6 +1222,8 @@ musl += math/__math_uflowf.o
 musl += math/__math_divzero.o
 musl += math/__math_divzerof.o
 musl += math/__math_invalid.o
+# musl 1.2.x added a long-double variant, referenced by sqrtl().
+musl += math/__math_invalidl.o
 musl += math/__math_invalidf.o
 musl += math/acos.o
 musl += math/acosf.o
@@ -1417,6 +1419,10 @@ musl += math/sinhf.o
 musl += math/sinhl.o
 musl += math/sinl.o
 musl += math/sqrt.o
+# musl 1.2.2 rewrote the software sqrt to use a lookup table
+# (__rsqrt_tab), which lives in this new file.  sqrt/sqrtf/sqrtl all
+# reference it.
+musl += math/sqrt_data.o
 musl += math/sqrtf.o
 musl += math/sqrtl.o
 musl += math/tan.o
@@ -1520,6 +1526,10 @@ musl += network/dns_parse.o
 musl += network/in6addr_any.o
 musl += network/in6addr_loopback.o
 musl += network/lookup_name.o
+# dns_parse_callback()'s `family` is set on every path that reaches its
+# use (the rr != ctx->rrtype check leaves only RR_A and RR_AAAA), but gcc
+# cannot see it through the switch.  Same treatment as res_msend.o above.
+$(out)/musl/src/network/lookup_name.o: CFLAGS += -Wno-maybe-uninitialized $(cc-hide-flags-$(conf_hide_symbols))
 musl += network/lookup_serv.o
 libc += network/getnameinfo.o
 libc += network/__dns.o
@@ -1536,7 +1546,10 @@ $(out)/musl/src/network/if_indextoname.o: CFLAGS += --include libc/syscall_to_fu
 musl += network/if_nametoindex.o
 $(out)/musl/src/network/if_nametoindex.o: CFLAGS += --include libc/syscall_to_function.h --include libc/network/__socket.h -Wno-stringop-truncation
 musl += network/gai_strerror.o
-musl += network/h_errno.o
+# musl 1.2.x's h_errno.c reaches into musl's struct pthread via
+# pthread_impl.h, which OSv does not use.  Ours is thread-local via
+# __thread instead; see libc/network/h_errno.c.
+libc += network/h_errno.o
 musl += network/getservbyname_r.o
 musl += network/getservbyname.o
 musl += network/getservbyport_r.o
@@ -1612,6 +1625,9 @@ musl += stdio/__towrite.o
 musl += stdio/__uflow.o
 libc += stdio/__vfprintf_chk.o
 libc += stdio/ofl.o
+# musl 1.2.4 dropped the LFS64 symbol aliases, keeping only macros.  The
+# host libstdc++.a still references fseeko64/ftello64 as symbols.
+libc += stdio/lfs64_aliases.o
 musl += stdio/ofl_add.o
 musl += stdio/asprintf.o
 musl += stdio/clearerr.o
@@ -1737,6 +1753,10 @@ musl += stdlib/ldiv.o
 musl += stdlib/llabs.o
 musl += stdlib/lldiv.o
 musl += stdlib/qsort.o
+# musl 1.2.3 split qsort() out of qsort.c, which now defines only __qsort_r().
+# Without qsort_nr.o the kernel links with no qsort symbol at all, and nothing
+# in the build says so.
+musl += stdlib/qsort_nr.o
 $(out)/musl/src/stdlib/qsort.o: COMMON += -Wno-dangling-pointer
 libc += stdlib/qsort_r.o
 $(out)/libc/stdlib/qsort_r.o: COMMON += -Wno-dangling-pointer
@@ -1846,7 +1866,10 @@ libc += string/__wmemmove_chk.o
 musl += string/wmemset.o
 libc += string/__wmemset_chk.o
 
-musl += temp/__randname.o
+# musl 1.2.x's __randname.c seeds from musl's struct pthread via
+# pthread_impl.h, which OSv does not use.  Ours uses gettid();
+# see libc/temp/__randname.c.
+libc += temp/__randname.o
 musl += temp/mkdtemp.o
 musl += temp/mkstemp.o
 musl += temp/mktemp.o
@@ -1854,7 +1877,10 @@ musl += temp/mkostemp.o
 musl += temp/mkostemps.o
 
 musl += time/__map_file.o
-$(out)/musl/src/time/__map_file.o: CFLAGS += --include libc/syscall_to_function.h -Wno-incompatible-pointer-types
+# musl 1.2.x's __map_file.c switched from syscall(SYS_fstat, ...) on a
+# struct kstat to the hidden __fstat() on a struct stat.  OSv has no
+# __fstat; point it at OSv's own fstat(), which has the same signature.
+$(out)/musl/src/time/__map_file.o: CFLAGS += --include libc/syscall_to_function.h -Wno-incompatible-pointer-types -D__fstat=fstat
 musl += time/__month_to_secs.o
 musl += time/__secs_to_tm.o
 musl += time/__tm_to_secs.o
@@ -2827,7 +2853,12 @@ $(libzfs-objects): post-includes-bsd =
 
 $(libzfs-objects): kernel-defines =
 
-$(libzfs-objects): CFLAGS += -D_GNU_SOURCE
+# musl 1.2.4 stopped exposing the LFS64 aliases (readdir64, dirent64,
+# off64_t, ...) under _GNU_SOURCE; they now need _LARGEFILE64_SOURCE
+# named explicitly.  These illumos-derived sources use those spellings.
+# On a 64-bit target the aliases are plain #defines to the unsuffixed
+# forms, so this changes no code, only which names are visible.
+$(libzfs-objects): CFLAGS += -D_GNU_SOURCE -D_LARGEFILE64_SOURCE
 
 $(libzfs-objects): CFLAGS += -Wno-switch -D__va_list=__builtin_va_list '-DTEXT_DOMAIN=""' \
 			-Wno-maybe-uninitialized -Wno-unused-variable -Wno-unknown-pragmas -Wno-unused-function \

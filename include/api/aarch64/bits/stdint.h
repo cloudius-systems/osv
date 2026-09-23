@@ -1,1 +1,1 @@
-../../../../musl/arch/aarch64/bits/stdint.h
+../../../../musl/arch/generic/bits/stdint.h
