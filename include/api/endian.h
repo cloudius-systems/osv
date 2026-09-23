@@ -10,7 +10,11 @@
 #if defined(__GNUC__) && defined(__BYTE_ORDER__)
 #define __BYTE_ORDER __BYTE_ORDER__
 #else
-#include <bits/endian.h>
+/* musl 97d35a55 deleted the per-arch bits/endian.h headers, moving
+   __BYTE_ORDER into bits/alltypes.h.  OSv generates its own alltypes.h and so
+   does not get it from there, and the old <bits/endian.h> no longer exists to
+   fall back on.  Both OSv targets (x64, aarch64) are little-endian. */
+#define __BYTE_ORDER __LITTLE_ENDIAN
 #endif
 
 #if defined(_GNU_SOURCE) || defined(_BSD_SOURCE)
