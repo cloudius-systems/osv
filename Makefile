@@ -1628,6 +1628,7 @@ libc += stdio/ofl.o
 # musl 1.2.4 dropped the LFS64 symbol aliases, keeping only macros.  The
 # host libstdc++.a still references fseeko64/ftello64 as symbols.
 libc += stdio/lfs64_aliases.o
+libc += fstat_musl.o
 musl += stdio/ofl_add.o
 musl += stdio/asprintf.o
 musl += stdio/clearerr.o
@@ -1878,9 +1879,22 @@ musl += temp/mkostemps.o
 
 musl += time/__map_file.o
 # musl 1.2.x's __map_file.c switched from syscall(SYS_fstat, ...) on a
-# struct kstat to the hidden __fstat() on a struct stat.  OSv has no
-# __fstat; point it at OSv's own fstat(), which has the same signature.
-$(out)/musl/src/time/__map_file.o: CFLAGS += --include libc/syscall_to_function.h -Wno-incompatible-pointer-types -D__fstat=fstat
+# struct kstat to the hidden __fstat() on a struct stat.
+#
+# *** DO NOT REINSTATE -D__fstat=fstat HERE. ***  musl declares
+#     hidden int __fstat(int, struct stat *);
+# in src/include/sys/stat.h, so that -D rewrote the DECLARATION as well as
+# the call, making this TU declare OSv's own fstat as HIDDEN.  A hidden
+# declaration in any translation unit wins at link time, so fstat was
+# demoted from GLOBAL to STB_LOCAL in loader.elf.  OSv's runtime resolver
+# only matches GLOBAL/WEAK, so every glibc-linked shared object importing
+# fstat (all the OpenZFS userspace libraries carry U fstat@GLIBC_2.33, since
+# glibc 2.33 made fstat a real symbol rather than an inline over __fxstat)
+# failed to load:  /libzutil.so: failed looking up symbol fstat
+# i.e. conf_zfs=openzfs compiled but could not boot.  stat/lstat/fstatat were
+# unaffected only because nothing rewrote their names.
+# libc/fstat_musl.c now provides a REAL non-hidden __fstat instead.
+$(out)/musl/src/time/__map_file.o: CFLAGS += --include libc/syscall_to_function.h -Wno-incompatible-pointer-types
 musl += time/__month_to_secs.o
 musl += time/__secs_to_tm.o
 musl += time/__tm_to_secs.o
@@ -2415,11 +2429,21 @@ OPENSSL_INCLUDE := $(shell ls -d /nix/store/mvl4lw9v8p9f6hlw258j2slrhy7gjggl-ope
 ZLIB_INCLUDE := $(shell ls -d /nix/store/pcs65d7kzpd5dq3wm1nx99i3ax8y1dw6-zlib-1.3-dev/include 2>/dev/null || \
 	ls -d /nix/store/*-zlib-*-dev/include 2>/dev/null | head -1)
 
+# musl 1.2.6 (taken by #1517) narrowed the LFS64 alias gating: 1.2.1's
+# include/dirent.h exposed readdir64/dirent64 under
+# "#if defined(_LARGEFILE64_SOURCE) || defined(_GNU_SOURCE)", while 1.2.6's
+# include/dirent.h:71 gates them on _LARGEFILE64_SOURCE ALONE.  These
+# illumos-derived sources use the 64-suffixed spellings (stat64, fstat64,
+# statfs64, pread64, pwrite64, open64, readdir64, lstat64, dirent64), so the
+# name must be requested explicitly.  On a 64-bit target the aliases are plain
+# #defines to the unsuffixed forms, so this changes no code, only which names
+# are visible -- the same argument as the $(libzfs-objects) treatment below.
 ozfs-cflags-common = \
 	$(foreach p, $(strip $(ozfs-userspace-includes)), -isystem $(p)) \
 	$(if $(OPENSSL_INCLUDE), -isystem $(OPENSSL_INCLUDE)) \
 	$(if $(ZLIB_INCLUDE), -isystem $(ZLIB_INCLUDE)) \
 	-D_GNU_SOURCE \
+	-D_LARGEFILE64_SOURCE \
 	-D__OSV__ \
 	-DHAVE_ATTRIBUTE_VISIBILITY_DEFAULT \
 	'-DTEXT_DOMAIN=""' \
