@@ -16,6 +16,8 @@
 
 //#include <gtest/gtest.h>
 #define BOOST_TEST_MODULE tst-stdio
+// musl >= 1.2.4 declares fopen64/fpos64_t/... only under _LARGEFILE64_SOURCE.
+#define _LARGEFILE64_SOURCE
 //gcc tests/tst-stdio.cc -lstdc++  -lboost_unit_test_framework -lboost_filesystem -o /tmp/a
 //#define BOOST_TEST_DYN_LINK //ONLY FOR LINUX
 
