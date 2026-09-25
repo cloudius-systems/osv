@@ -268,6 +268,13 @@ endif
 tests += tst-blk-inflight.so
 internal-api-tests += tst-blk-inflight.so
 
+# tst-pmu calls the kernel's x64 PMU readout, which only conf_pmu=1 builds.
+ifeq ($(arch),x64)
+ifeq ($(conf_pmu),1)
+tests += tst-pmu.so
+endif
+endif
+
 # Tests with special compilation parameters needed...
 $(out)/tests/tst-mmap.so: COMMON += -Wl,-z,now
 $(out)/tests/tst-elf-permissions.so: COMMON += -Wl,-z,relro
