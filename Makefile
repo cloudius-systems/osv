@@ -1030,6 +1030,11 @@ objects += arch/x64/vmlinux.o
 objects += arch/x64/vmlinux-boot64.o
 objects += arch/x64/pvh-boot.o
 objects += arch/x64/syscall.o
+# The PMU readout (include/osv/pmu.hh) is built only with conf_pmu=1, e.g.
+# "scripts/build conf_pmu=1 image=tests", which also builds tests/tst-pmu.so.
+ifeq ($(conf_pmu),1)
+objects += arch/x64/pmu.o
+endif
 ifeq ($(conf_drivers_acpi),1)
 objects += $(acpi)
 endif
