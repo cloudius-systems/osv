@@ -3,14 +3,67 @@
 import gdb
 import re
 import os, os.path
+import sys
 import heapq
 import fnmatch
 from glob import glob
 from collections import defaultdict
 
-build_dir = os.path.dirname(gdb.current_objfile().filename)
-arch = build_dir[build_dir.rfind(".")+1:]
-osv_dir = os.path.abspath(os.path.join(build_dir, '../..'))
+# When this script is auto-loaded by gdb it runs with the debugged objfile as
+# the "current objfile", so gdb.current_objfile() gives us the loader.elf path
+# to derive the build dir from.  When it is instead sourced explicitly (gdb -x,
+# or `source scripts/loader.py`, e.g. when attaching to a remote gdbstub),
+# current_objfile() is None; fall back to the main executable's filename, and
+# finally to the cwd, so `osv info threads` works in both invocation modes.
+def _osv_dirs():
+    # Returns (build_dir, arch, osv_dir).  osv_dir is the source tree root that
+    # contains scripts/osv (the python package this file imports); it is found
+    # by walking up from a candidate directory until scripts/osv exists.
+    def find_osv_root(start):
+        d = os.path.abspath(start)
+        for _ in range(8):
+            if os.path.isdir(os.path.join(d, 'scripts', 'osv')):
+                return d
+            parent = os.path.dirname(d)
+            if parent == d:
+                break
+            d = parent
+        return None
+
+    build_dir = None
+    objfile = gdb.current_objfile()
+    if objfile is not None and objfile.filename:
+        build_dir = os.path.dirname(objfile.filename)
+    if build_dir is None:
+        try:
+            ps = gdb.current_progspace()
+            if ps is not None and ps.filename:
+                build_dir = os.path.dirname(ps.filename)
+        except Exception:
+            pass
+    if build_dir is None:
+        for of in gdb.objfiles():
+            if of.filename and 'loader' in os.path.basename(of.filename):
+                build_dir = os.path.dirname(of.filename)
+                break
+    if build_dir is None:
+        build_dir = os.getcwd()
+
+    arch = build_dir[build_dir.rfind(".") + 1:]
+    # Default (auto-load) layout: build_dir == <osv>/build/<mode>.<arch>.
+    osv_dir = os.path.abspath(os.path.join(build_dir, '../..'))
+    if not os.path.isdir(os.path.join(osv_dir, 'scripts', 'osv')):
+        # Sourced explicitly with the loader.elf living outside build/ (e.g. a
+        # stashed loader-forkN.elf next to the tree): locate the source root
+        # by walking up from build_dir, then from cwd.
+        root = find_osv_root(build_dir) or find_osv_root(os.getcwd())
+        if root is not None:
+            osv_dir = root
+        if arch not in ('x64', 'aarch64'):
+            arch = 'x64'
+    return build_dir, arch, osv_dir
+
+build_dir, arch, osv_dir = _osv_dirs()
 apps_dir = os.path.join(osv_dir, 'apps')
 external = os.path.join(osv_dir, 'external', arch)
 modules = os.path.join(osv_dir, 'modules')
@@ -1100,7 +1153,8 @@ class osv_info_threads(gdb.Command):
                     # Here we try to skip such functions and instead show a more
                     # interesting caller which initiated the wait.
                     file_deny_list = ["arch-switch.hh", "sched.cc", "sched.hh", "sched.S",
-                                      "mutex.hh", "mutex.cc", "mutex.c", "mutex.h", "psci.cc"]
+                                      "mutex.hh", "mutex.cc", "mutex.c", "mutex.h", "psci.cc",
+                                      "clock-common.cc", "pvclock-abi.cc", "kvmclock.cc"]
 
                     # Functions from the list of denied files which are interesting
                     sched_thread_join = 'sched::thread::join()'
