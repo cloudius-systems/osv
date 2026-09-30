@@ -23,9 +23,12 @@ extern "C" {
 #define	maxclsyspri	68
 #define	defclsyspri	72
 
-/* Max CPUs - match netport.h */
+/* Max CPUs - must match max_cpus in include/osv/sched.hh and MAXCPU in
+   bsd/porting/netport.h. ZFS sizes per-CPU arrays as max_ncpus and indexes
+   them by current CPU id, so this must cover the largest id the scheduler
+   hands out. */
 #ifndef MAXCPU
-#define	MAXCPU		(sizeof (unsigned long) * 8)
+#define	MAXCPU		256
 #endif
 #define	max_ncpus	MAXCPU
 #define	boot_max_ncpus	MAXCPU

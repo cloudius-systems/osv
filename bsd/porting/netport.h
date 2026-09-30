@@ -277,8 +277,11 @@ static __inline intrmask_t  spltty(void)        { return 0; }
 static __inline intrmask_t  splvm(void)     { return 0; }
 static __inline void        splx(intrmask_t ipl)   { return; }
 
-/* must match max_cpus in include/sched.hh */
-#define MAXCPU		(sizeof(unsigned long) * 8)
+/* must match max_cpus in include/osv/sched.hh (checked by a static_assert in
+   bsd/porting/cpu.cc, which includes both this header and sched.hh). ZFS sizes
+   per-CPU arrays as MAXCPU and indexes them by current CPU id, so this must be
+   >= the largest CPU id the scheduler will hand out. */
+#define MAXCPU		256
 
 extern unsigned smp_processors;
 #define mp_ncpus smp_processors
