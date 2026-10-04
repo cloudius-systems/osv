@@ -26,6 +26,9 @@ module:
 # default.policy was removed in JDK 24 along with the Security Manager (JEP 486)
 	$(call very-quiet, if [ -f $(java_jdk_path)/lib/security/default.policy ]; then echo "/usr/lib/jvm/java/lib/security/default.policy: $(java_jdk_path)/lib/security/default.policy" >> usr.manifest; fi)
 	$(call very-quiet, echo "/usr/lib/jvm/java/conf/**: $(java_jdk_path)/conf/**" >> usr.manifest)
+# Fedora's java.security includes the system-wide crypto policy, and a missing
+# included file is a fatal error
+	$(call very-quiet, if [ -f /etc/crypto-policies/back-ends/java.config ]; then echo "/etc/crypto-policies/back-ends/java.config: /etc/crypto-policies/back-ends/java.config" >> usr.manifest; fi)
 	$(call very-quiet, if [ "$(libsunec_path)" != "" ]; then $(SRC)/scripts/manifest_from_host.sh $(libsunec_path) >> usr.manifest; fi)
 
 clean:
