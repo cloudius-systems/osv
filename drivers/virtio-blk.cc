@@ -389,9 +389,8 @@ int blk::drain_queue(vring* queue)
  *
  * virtio-blk uses one shared interrupt, so a completion landing on any queue
  * wakes this thread.  It sleeps until at least one queue's used ring is
- * non-empty, then drains every queue.  Each queue's lock is held only while
- * that queue is drained, so make_request() on other CPUs/queues can proceed
- * concurrently.
+ * non-empty, then drains every queue. Submission locks must not be taken:
+ * a producer can sleep holding one while waiting for this consumer to drain.
  */
 bool blk::any_queue_not_empty()
 {
@@ -425,11 +424,9 @@ void blk::req_done()
         trace_virtio_blk_wake();
 
         for (int q = 0; q < _num_queues; q++) {
-            WITH_LOCK(_queue_locks[q]) {
-                auto* q_ring = get_virt_queue(q);
-                drain_queue(q_ring);
-                q_ring->wakeup_waiter();
-            }
+            auto* q_ring = get_virt_queue(q);
+            drain_queue(q_ring);
+            q_ring->wakeup_waiter();
         }
     }
 }
@@ -470,10 +467,9 @@ void blk::req_done_q(int qid)
         // waiting for a completion to advance _used_ring_host_head so the
         // producer can GC descriptors and make room.  In per-queue mode only
         // this one thread ever drains queue qid, so the completion drain is a
-        // single-consumer path that races the producer's get_buf_gc only on
-        // the u16 _used_ring_host_head counter -- lock-free, exactly the
-        // invariant the single-thread req_done() relied on.  Grabbing the
-        // per-queue lock here would block this thread on a producer sleeping
+        // single-consumer path. The atomic _used_ring_host_head publishes
+        // completed cookie access to the producer's get_buf_gc before reuse.
+        // Grabbing the per-queue lock here would block this thread on a producer sleeping
         // in add_buf_wait() while that producer waits on this thread to free
         // ring space: a per-queue self-deadlock (the same hang the single
         // completion thread avoided, seen ~1-in-3 under heavy ZFS checkpoint
