@@ -23,7 +23,8 @@ module:
 	esac
 	$(call very-quiet, $(SRC)/scripts/manifest_from_host.sh -li libfreeblpriv3.so > usr.manifest)
 	$(call very-quiet, $(SRC)/scripts/manifest_from_host.sh -li libnss3.so >> usr.manifest)
-	$(call very-quiet, echo "/usr/lib/jvm/java/lib/security/default.policy: $(java_jdk_path)/lib/security/default.policy" >> usr.manifest)
+# default.policy was removed in JDK 24 along with the Security Manager (JEP 486)
+	$(call very-quiet, if [ -f $(java_jdk_path)/lib/security/default.policy ]; then echo "/usr/lib/jvm/java/lib/security/default.policy: $(java_jdk_path)/lib/security/default.policy" >> usr.manifest; fi)
 	$(call very-quiet, echo "/usr/lib/jvm/java/conf/**: $(java_jdk_path)/conf/**" >> usr.manifest)
 	$(call very-quiet, if [ "$(libsunec_path)" != "" ]; then $(SRC)/scripts/manifest_from_host.sh $(libsunec_path) >> usr.manifest; fi)
 
