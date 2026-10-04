@@ -194,8 +194,17 @@ class Fedora(object):
         ec2_post_install = None
         version = '43'
 
+    class Fedora_44(object):
+        removed =['java-1.8.0-openjdk']
+        packages = []
+        ec2_packages = []
+        test_packages = []
+        ec2_post_install = None
+        version = '44'
+
     versions = [
-        Fedora_27, Fedora_28, Fedora_29, Fedora_30, Fedora_31, Fedora_32, Fedora_33, Fedora_34, Fedora_35, Fedora_37, Fedora_38, Fedora_39, Fedora_40, Fedora_41, Fedora_42, Fedora_43
+        Fedora_27, Fedora_28, Fedora_29, Fedora_30, Fedora_31, Fedora_32, Fedora_33, Fedora_34, Fedora_35, Fedora_37, Fedora_38, Fedora_39, Fedora_40, Fedora_41, Fedora_42, Fedora_43,
+        Fedora_44
     ]
 
 
