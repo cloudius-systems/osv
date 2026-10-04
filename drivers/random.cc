@@ -218,7 +218,7 @@ drng_read(void *buf, int size)
 //
 // Arm FEAT_RNG, RNDR: architectural hardware source of entropy.
 // RNDR returns a 64-bit random number from a DRBG seeded by a true entropy
-// source, with NZCV.C=0 on success (C=1 means the RNG could not return a
+// source, with NZCV.Z=0 on success (Z=1 means the RNG could not return a
 // number in reasonable time, and the result must be discarded).
 //
 #ifdef __aarch64__
@@ -240,9 +240,9 @@ static inline bool rndr_with_retries(uint64_t *data)
     for (auto retry = 0; retry <= rndr_retries_max; retry++) {
         uint64_t val;
         uint64_t fail;
-        // mrs <x>, RNDR (S3_3_C2_C4_0); PSTATE.C is set if the read failed.
+        // mrs <x>, RNDR (S3_3_C2_C4_0); PSTATE.Z is set if the read failed.
         asm volatile("mrs %0, s3_3_c2_c4_0\n\t"
-                     "cset %1, cs\n\t"
+                     "cset %1, eq\n\t"
                      : "=r"(val), "=r"(fail)
                      :
                      : "cc");
