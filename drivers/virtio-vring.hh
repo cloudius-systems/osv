@@ -247,6 +247,9 @@ class virtio_driver;
 
     private:
 
+        // Fail-stop on an invalid index; no completion/reclamation is safe.
+        unsigned checked_descriptor_index(u32 idx) const;
+
         // Up pointer
         virtio_driver* _driver;
         u16 _q_index;
