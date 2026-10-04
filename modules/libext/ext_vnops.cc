@@ -529,7 +529,8 @@ static bool ext_ensure_workers(ext_vdata *vdata, struct ext4_fs *fs,
     vdata->fs = fs;
     vdata->inode_no = inode_no;
     for (unsigned i = 0; i < RA_WORKERS; i++) {
-        if (pthread_create(&vdata->workers[i], nullptr,
+        // Teardown joins the successful prefix, not the attempted slots.
+        if (pthread_create(&vdata->workers[vdata->nworkers], nullptr,
                            ext_prefetch_worker, vdata) == 0) {
             vdata->nworkers++;
         }
