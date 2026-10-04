@@ -56,7 +56,7 @@ usage() {
 	exit ${1:-0}
 }
 
-trap 'echo "$0 failed: $BASH_COMMAND" >&2; exit $?' ERR
+trap 'status=$?; echo "$0 failed: $BASH_COMMAND" >&2; exit "$status"' ERR
 
 # If "MAKEFLAGS" is set, we've been run from "make". The following hacks
 # allows our Makefile to forward "make image=..." requests to to us
