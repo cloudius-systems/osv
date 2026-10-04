@@ -155,6 +155,9 @@ void rng::refill()
         wait_for_queue(_queue, &vring::used_ring_not_empty);
 
         _queue->get_buf_elem(&len);
+        if (len > remaining) {
+            abort("virtio-rng: used length %u exceeds submitted capacity %zu", len, remaining);
+        }
         _queue->get_buf_finalize();
     }
     copy_n(buf.begin(), len, back_inserter(_entropy));
