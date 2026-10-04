@@ -287,9 +287,9 @@ struct ExtentVersions {
     static ExtentVersions decode(bincode::Decoder& dec) {
         ExtentVersions msg;
         msg.gen_numbers   = dec.decode_vec<uint64_t>(
-            [&]() { return dec.decode_u64(); });
+            [&]() { return dec.decode_u64(); }, 8);
         msg.flush_numbers = dec.decode_vec<uint64_t>(
-            [&]() { return dec.decode_u64(); });
+            [&]() { return dec.decode_u64(); }, 8);
         msg.dirty_bits    = dec.decode_vec<bool>(
             [&]() { return dec.decode_bool(); });
         return msg;
@@ -450,6 +450,9 @@ struct ReadResponse {
         if (result_tag == 0) {
             uint64_t len = dec.decode_u64();
             std::vector<ReadBlockContext> contexts;
+            if (len > dec.remaining() / 4) {
+                throw std::runtime_error("Read context count exceeds frame");
+            }
             contexts.reserve(len);
             for (uint64_t i = 0; i < len; i++) {
                 ReadBlockContext ctx;
@@ -461,6 +464,8 @@ struct ReadResponse {
                     ctx.encryption_ctx = dec.decode_encryption_context();
                 } else if (ctx.type == ReadBlockType::Unencrypted) {
                     ctx.hash = dec.decode_u64();
+                } else {
+                    throw std::runtime_error("Unknown read block type");
                 }
                 contexts.push_back(ctx);
             }

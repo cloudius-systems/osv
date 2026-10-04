@@ -390,8 +390,12 @@ namespace crucible {
  * Initialize Crucible block device driver.
  */
 int crucible_init(const std::string& targets_str, const std::string& uuid_str,
-                  uint32_t block_size, bool read_only, int device_index)
+                  uint32_t block_size, bool read_only, int device_index, uint64_t generation)
 {
+    if (!generation) {
+        kprintf("crucible_init: explicit operator-owned generation required\n");
+        return EINVAL;
+    }
     if (targets_str.empty() || uuid_str.empty()) {
         kprintf("crucible_init: missing required options (--crucible%d and --crucible%d-uuid)\n",
                 device_index, device_index);
@@ -435,7 +439,8 @@ int crucible_init(const std::string& targets_str, const std::string& uuid_str,
             block_size,
             total_blocks,
             read_only,
-            false  // encrypted - not supported yet
+            false,  // encrypted - not supported yet
+            generation
         ));
 
         // Connect to downstairs servers (non-blocking with exception handling)

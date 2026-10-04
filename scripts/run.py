@@ -94,6 +94,8 @@ def set_imgargs(options):
     crucible_opts = ""
     if options.crucible:
         crucible_opts += ' --crucible=%s' % options.crucible
+    if options.crucible_generation is not None:
+        crucible_opts += ' --crucible-generation=%s' % options.crucible_generation
     if options.crucible_uuid:
         crucible_opts += ' --crucible-uuid=%s' % options.crucible_uuid
     if options.crucible_block_size != 512:
@@ -105,6 +107,9 @@ def set_imgargs(options):
     for i in range(8):
         targets_attr = 'crucible%d' % i
         uuid_attr = 'crucible%d_uuid' % i
+        generation = getattr(options, 'crucible%d_generation' % i)
+        if generation is not None:
+            crucible_opts += ' --crucible%d-generation=%s' % (i, generation)
         if hasattr(options, targets_attr) and getattr(options, targets_attr):
             crucible_opts += ' --crucible%d=%s' % (i, getattr(options, targets_attr))
         if hasattr(options, uuid_attr) and getattr(options, uuid_attr):
@@ -684,6 +689,8 @@ if __name__ == "__main__":
                         help="specify GIC version (only applicable on aarch64)")
     parser.add_argument("--crucible", "--crucible-targets", action="store",
                         help="Crucible downstairs servers (host:port,host:port,host:port)")
+    parser.add_argument("--crucible-generation", action="store",
+                        help="Required externally leased nonzero generation; no automatic fencing")
     parser.add_argument("--crucible-uuid", action="store",
                         help="Crucible region UUID")
     parser.add_argument("--crucible-block-size", action="store", type=int, default=512,
@@ -697,6 +704,9 @@ if __name__ == "__main__":
     for i in range(8):
         parser.add_argument("--crucible%d" % i, action="store",
                             help="Crucible device %d downstairs servers" % i)
+        parser.add_argument("--crucible%d-generation" % i, action="store",
+                            dest="crucible%d_generation" % i,
+                            help="Externally leased generation for volume %d" % i)
         parser.add_argument("--crucible%d-uuid" % i, action="store", dest="crucible%d_uuid" % i,
                             help="Crucible device %d region UUID" % i)
 
