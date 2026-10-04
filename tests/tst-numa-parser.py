@@ -14,7 +14,7 @@ import subprocess
 import tempfile
 
 root = Path(__file__).resolve().parents[1]
-cases = ['valid', 'short-cpu', 'short-x2apic', 'short-memory', 'short-slit',
+cases = ['ordering', 'memory-only', 'conflicts', 'budgets', 'allocation-failure', 'slit-semantics', 'valid', 'short-cpu', 'short-x2apic', 'short-memory', 'short-slit',
          'domain-bound', 'max-pxm', 'bad-tail', 'overflow-memory', 'empty-memory',
          'boundaries', 'sparse', 'ignored', 'slit-bounds']
 (root / 'build').mkdir(exist_ok=True)
