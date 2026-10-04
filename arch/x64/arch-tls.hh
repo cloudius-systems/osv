@@ -14,6 +14,7 @@ struct thread_control_block {
     thread_control_block* self;
     void* tls_base;
     unsigned long app_tcb;
+    void* dtv; // Address of the DTV (Dynamic Thread Vector), used by __tlsdesc_dynamic
 };
 
 #endif /* ARCH_TLS_HH */

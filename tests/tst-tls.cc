@@ -166,6 +166,20 @@ int main(int argc, char** argv)
     });
     t1.join();
 #ifdef __DLOPEN__
+    // Try again in a new thread, but this time call into libtls.so before
+    // anything else accesses its thread-local variables. This way, if
+    // libtls.so uses TLS descriptors (-mtls-dialect=gnu2), its TLS block
+    // for this thread is allocated by the TLS descriptor resolver instead
+    // of by dlsym().
+    std::thread t2([external_library,handle] {
+            external_library();
+            int *ex1_ptr3 = reinterpret_cast<int*>(dlsym(handle, "ex1"));
+            int *ex3_ptr3 = reinterpret_cast<int*>(dlsym(handle, "ex3"));
+            assert(ex1_ptr3 && ex3_ptr3);
+            report(*ex1_ptr3 == 322, "ex1 modified in new thread before dlsym");
+            report(*ex3_ptr3 == 766, "ex3 modified in new thread before dlsym");
+    });
+    t2.join();
     dlclose(handle);
 #endif
 
