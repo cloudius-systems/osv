@@ -175,14 +175,14 @@ class Fedora(object):
     class Fedora_41(object):
         packages = []
         ec2_packages = []
-        test_packages = []
+        test_packages = ['binutils-gold']
         ec2_post_install = None
         version = '41'
 
     class Fedora_42(object):
         packages = []
         ec2_packages = []
-        test_packages = []
+        test_packages = ['binutils-gold']
         ec2_post_install = None
         version = '42'
 
@@ -190,7 +190,7 @@ class Fedora(object):
         removed =['java-1.8.0-openjdk']
         packages = []
         ec2_packages = []
-        test_packages = []
+        test_packages = ['binutils-gold']
         ec2_post_install = None
         version = '43'
 
@@ -198,7 +198,7 @@ class Fedora(object):
         removed =['java-1.8.0-openjdk']
         packages = []
         ec2_packages = []
-        test_packages = []
+        test_packages = ['binutils-gold']
         ec2_post_install = None
         version = '44'
 
