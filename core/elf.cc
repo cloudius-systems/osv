@@ -775,6 +775,13 @@ void object::relocate_rela()
         void *addr = _base + p->r_offset;
         auto addend = p->r_addend;
 
+        // TLS descriptor relocations were traditionally placed in DT_JMPREL
+        // (see relocate_pltgot()), but newer linkers (e.g., GNU ld 2.46)
+        // place them in DT_RELA.
+        if (type == ARCH_TLSDESC) {
+            arch_relocate_tls_desc(sym, addr, addend);
+            continue;
+        }
         if (!arch_relocate_rela(type, sym, addr, addend)) {
             debug_early_u64("relocate_rela(): unknown relocation type ", type);
             abort();
