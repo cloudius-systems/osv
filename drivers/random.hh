@@ -37,10 +37,9 @@ public:
 
 void randomdev_init();
 
-// Re-key the CSPRNG after a hypervisor resume so that guests restored from the
-// same full-VM snapshot diverge instead of replaying an identical random
-// stream. Safe no-op if the random device is not yet initialized. Only called
-// when a resume has actually been detected.
+// Best-effort rekey after a suspected resume; timing is neither entropy nor a
+// clone-uniqueness guarantee. No-op before device initialization; an unseeded
+// generator still needs credited entropy before it can serve reads.
 void reseed_on_resume();
 
 }
