@@ -15,12 +15,13 @@ void PendingRequest::mark_response(int downstairs_idx, bool success,
                                    CrucibleError error)
 {
     WITH_LOCK(mtx) {
-        if (downstairs_responded[downstairs_idx]) {
+        if (completed || downstairs_responded[downstairs_idx]) {
             // Duplicate response, ignore
             return;
         }
 
         downstairs_responded[downstairs_idx] = true;
+        downstairs_succeeded[downstairs_idx] = success;
         responses_received.fetch_add(1, std::memory_order_relaxed);
 
         if (success) {
@@ -37,13 +38,7 @@ void PendingRequest::mark_response(int downstairs_idx, bool success,
             if (success_count >= required_quorum) {
                 result = Result<void>::ok();
             } else {
-                // Pick first error from failed downstairs
-                for (int i = 0; i < 3; i++) {
-                    if (!downstairs_responded[i] || downstairs_errors[i] != CrucibleError::IoError) {
-                        result = Result<void>::err(downstairs_errors[i]);
-                        break;
-                    }
-                }
+                result = Result<void>::err(error);
             }
 
             cv.wake_all();
@@ -85,9 +80,10 @@ RequestManager::~RequestManager()
     cancel_all();
 }
 
-std::shared_ptr<PendingRequest> RequestManager::create_request(uint64_t job_id, int required_quorum)
+std::shared_ptr<PendingRequest> RequestManager::create_request(uint64_t job_id, MessageType type,
+                                                               uint32_t read_length, int required_quorum)
 {
-    auto req = std::make_shared<PendingRequest>(job_id, required_quorum);
+    auto req = std::make_shared<PendingRequest>(job_id, type, read_length, required_quorum);
 
     WITH_LOCK(mtx_) {
         requests_[job_id] = req;
@@ -124,40 +120,30 @@ size_t RequestManager::pending_count() const
 
 void RequestManager::cancel_all()
 {
+    std::map<uint64_t, std::shared_ptr<PendingRequest>> pending;
     WITH_LOCK(mtx_) {
-        for (auto& pair : requests_) {
-            auto& req = pair.second;
-            WITH_LOCK(req->mtx) {
-                if (!req->completed) {
-                    req->completed = true;
-                    req->result = Result<void>::err(CrucibleError::ConnectionError);
-                    req->cv.wake_all();
-                }
+        pending.swap(requests_);
+    }
+    for (auto& pair : pending) {
+        auto& req = pair.second;
+        WITH_LOCK(req->mtx) {
+            if (!req->completed) {
+                req->completed = true;
+                req->result = Result<void>::err(CrucibleError::ConnectionError);
+                req->cv.wake_all();
             }
         }
-        requests_.clear();
     }
 }
 
 void RequestManager::fail_downstairs(int downstairs_idx)
 {
-    /*
-     * Snapshot the live requests under mtx_, then mark each outside the map
-     * lock.  mark_response takes the per-request mtx and wakes any waiter; it
-     * is idempotent per downstairs, so a request that already heard from this
-     * downstairs is untouched.  Holding shared_ptrs keeps the requests alive
-     * even if their owning op wakes, fails, and calls remove_request meanwhile.
-     */
-    std::vector<std::shared_ptr<PendingRequest>> snapshot;
+    // Map -> request is the sole nested lock order. Avoid allocating while
+    // quarantining: this path must also work after std::bad_alloc.
     WITH_LOCK(mtx_) {
-        snapshot.reserve(requests_.size());
         for (auto& pair : requests_) {
-            snapshot.push_back(pair.second);
+            pair.second->mark_response(downstairs_idx, false, CrucibleError::ConnectionError);
         }
-    }
-
-    for (auto& req : snapshot) {
-        req->mark_response(downstairs_idx, false, CrucibleError::ConnectionError);
     }
 }
 

@@ -19,7 +19,9 @@
 #include <cstring>
 #include <algorithm>
 #include <sys/select.h>
+#include <arpa/inet.h>
 #include <errno.h>
+#include <limits>
 
 // OSv uses kprintf for debug logging
 extern "C" {
@@ -33,9 +35,9 @@ namespace crucible {
 // Helper: Generate random UUID
 Uuid generate_uuid()
 {
-    static std::random_device rd;
-    static std::mt19937_64 gen(rd());
-    static std::uniform_int_distribution<uint8_t> dis(0, 255);
+    std::random_device rd;
+    std::mt19937_64 gen(rd());
+    std::uniform_int_distribution<uint8_t> dis(0, 255);
 
     Uuid uuid;
     for (int i = 0; i < 16; i++) {
@@ -60,12 +62,16 @@ std::pair<std::string, uint16_t> parse_target_string(const std::string& target)
     std::string host = target.substr(0, colon);
     std::string port_str = target.substr(colon + 1);
 
-    try {
-        uint16_t port = static_cast<uint16_t>(std::stoul(port_str));
-        return {host, port};
-    } catch (...) {
-        throw std::runtime_error("Invalid port number: " + port_str);
+    in_addr address{};
+    if (inet_pton(AF_INET, host.c_str(), &address) != 1 || port_str.empty() ||
+        port_str.find_first_not_of("0123456789") != std::string::npos) {
+        throw ConnectionError("Expected numeric IPv4:decimal-port target");
     }
+    auto port = std::stoul(port_str);
+    if (!port || port > 65535) {
+        throw ConnectionError("Port must be in 1..65535");
+    }
+    return {host, static_cast<uint16_t>(port)};
 }
 
 // UpsairsClient implementation
@@ -75,16 +81,23 @@ UpsairsClient::UpsairsClient(const std::vector<std::string>& targets,
                              uint32_t block_size,
                              uint64_t total_blocks,
                              bool read_only,
-                             bool encrypted)
+                             bool encrypted,
+                             uint64_t generation)
     : targets_(targets)
     , region_uuid_(region_uuid)
     , upstairs_id_(generate_uuid())
     , session_id_(generate_uuid())
     , block_size_(block_size)
     , total_blocks_(total_blocks)
+    , generation_(generation)
     , read_only_(read_only)
     , encrypted_(encrypted)
 {
+    for (auto& admitted : admitted_) { admitted.store(false); }
+    if (!generation_ || encrypted_) {
+        throw std::runtime_error("Nonzero external generation and unencrypted region required");
+    }
+
     if (targets.size() != 3) {
         throw std::runtime_error("Crucible requires exactly 3 downstairs targets");
     }
@@ -101,92 +114,101 @@ UpsairsClient::~UpsairsClient()
 
 void UpsairsClient::connect()
 {
+    std::unique_lock<mutex> lifecycle_guard(lifecycle_mtx_);
+    if (stopping_) {
+        throw ConnectionError("Session stopped");
+    }
     if (running_) {
         return;  // Already connected
     }
 
-    // Parse targets and establish connections
-    for (size_t i = 0; i < 3; i++) {
-        try {
-            auto target_pair = parse_target_string(targets_[i]);
-            std::string host = target_pair.first;
-            uint16_t port = target_pair.second;
-            connections_[i].reset(new Connection(host, port));
-            connected_count_++;
-
-            kprintf("[Crucible] connected to downstairs %zu (%s:%u)\n",
-                    i, host.c_str(), port);
-        } catch (const std::exception& e) {
-            kprintf("[Crucible] connect to downstairs %zu (%s) failed: %s\n",
-                    i, targets_[i].c_str(), e.what());
+    if (attempted_) {
+        throw std::runtime_error("Session cannot restart: repair and fresh admission required");
+    }
+    attempted_ = true;
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    try {
+        // Validate the entire configuration before promoting any replica.
+        std::array<std::pair<std::string, uint16_t>, 3> parsed;
+        for (size_t i = 0; i < 3; ++i) { parsed[i] = parse_target_string(targets_[i]); }
+        for (size_t i = 0; i < 3; i++) {
+            const auto& target = parsed[i];
+            connections_[i].reset(new Connection(target.first, target.second, stopping_, deadline));
+            handshake(i, deadline);
+            query_region_info(i, deadline);
         }
-    }
-
-    if (connected_count_ < 2) {
-        disconnect();
-        throw std::runtime_error("Failed to connect to at least 2 downstairs servers");
-    }
-
-    // Perform handshake with all connected downstairs
-    for (size_t i = 0; i < 3; i++) {
-        if (connections_[i] && connections_[i]->is_connected()) {
-            try {
-                handshake(i);
-                query_region_info(i);
-            } catch (const std::exception& e) {
-                kprintf("[Crucible] Handshake/query failed for downstairs %zu: %s\n", i, e.what());
-                connections_[i]->close();
-                connections_[i].reset();
-                connected_count_--;
-            }
+        validate_cohort();
+        if (stopping_) {
+            throw ConnectionError("Admission cancelled");
         }
+        for (auto& admitted : admitted_) {
+            admitted = true;
+        }
+        connected_count_ = 3;
+
+        // Start the per-downstairs sender threads, then the I/O (response) thread.
+        start_senders();
+        running_ = true;
+        io_thread_ = sched::thread::make([this] { this->io_loop(); });
+        io_thread_->start();
+
+        kprintf("[Crucible] upstairs ready (%d/3 downstairs)\n",
+                connected_count_.load());
+    } catch (...) {
+        stopping_ = true;
+        disconnect_locked();
+        throw;
     }
-
-    if (connected_count_ < 2) {
-        disconnect();
-        throw std::runtime_error("Failed to complete handshake with at least 2 downstairs");
-    }
-
-    // Start the per-downstairs sender threads, then the I/O (response) thread.
-    running_ = true;
-    start_senders();
-    io_thread_ = sched::thread::make([this] { this->io_loop(); });
-    io_thread_->start();
-
-    kprintf("[Crucible] upstairs ready (%d/3 downstairs)\n",
-            connected_count_.load());
 }
 
 void UpsairsClient::disconnect()
 {
-    if (running_) {
-        running_ = false;
+    stopping_ = true; // visible to the admission owner before waiting for it
+    std::unique_lock<mutex> lifecycle_guard(lifecycle_mtx_);
+    disconnect_locked();
+}
 
-        // io_loop polls running_ every 100 ms in select(), so it exits on its
-        // own; join it before tearing down the senders and sockets.
-        if (io_thread_) {
-            io_thread_->join();
-            delete io_thread_;
-            io_thread_ = nullptr;
+void UpsairsClient::disconnect_locked()
+{
+    running_ = false;
+    for (int i = 0; i < 3; ++i) {
+        fail_downstairs(i);
+        if (connections_[i]) {
+            connections_[i]->shutdown();
         }
-
-        // Stop the sender threads (wakes idle ones, closes sockets to unblock
-        // any wedged in a blocking send(), then joins).
-        stop_senders();
     }
-
-    // Reset connections
+    request_mgr_.cancel_all();
+    stop_senders();
+    if (io_thread_) {
+        io_thread_->join();
+        delete io_thread_;
+        io_thread_ = nullptr;
+    }
+    // Drain the admitted API operation after waking its request.
+    std::unique_lock<mutex> operation_guard(operation_mtx_);
+    // No descriptor recycling until all socket users have stopped.
     for (auto& conn : connections_) {
         if (conn) {
             conn->close();
-            conn.reset();
         }
     }
+}
 
-    connected_count_ = 0;
-
-    // Cancel pending requests
-    request_mgr_.cancel_all();
+void UpsairsClient::fail_downstairs(int index)
+{
+    if (!admitted_[index].exchange(false)) {
+        return;
+    }
+    connected_count_--;
+    connections_[index]->shutdown();
+    auto& sender = senders_[index];
+    WITH_LOCK(sender.mtx) {
+        sender.queue.clear();
+        sender.queued_bytes = 0;
+    }
+    request_mgr_.fail_downstairs(index);
+    // No replay log or live repair: never re-admit this socket/session.
+    kprintf("[Crucible] downstairs %d quarantined until external repair\n", index);
 }
 
 void UpsairsClient::start_senders()
@@ -217,7 +239,7 @@ void UpsairsClient::stop_senders()
     // join() forever.
     for (auto& conn : connections_) {
         if (conn) {
-            conn->close();
+            conn->shutdown();
         }
     }
 
@@ -237,18 +259,26 @@ bool UpsairsClient::enqueue_frame(int downstairs_idx,
                                   std::vector<uint8_t> data)
 {
     auto& conn = connections_[downstairs_idx];
-    if (!conn || !conn->is_connected()) {
+    if (!admitted_[downstairs_idx] || !conn) {
         return false;
     }
     auto& s = senders_[downstairs_idx];
     WITH_LOCK(s.mtx) {
-        if (!s.running) {
+        if (!s.running || !admitted_[downstairs_idx]) {
             return false;
         }
-        s.queue.push_back(SendFrame{std::move(header), std::move(data)});
-        s.cv.wake_one();
+        // Includes at most 32 queued frames / 4 MiB plus one active send.
+        // A laggard is quarantined, never buffered without a ceiling.
+        size_t bytes = header.size() + data.size();
+        if (s.queue.size() < 32 && bytes <= 4 * 1024 * 1024 - s.queued_bytes) {
+            s.queue.push_back(SendFrame{std::move(header), std::move(data)});
+            s.queued_bytes += bytes;
+            s.cv.wake_one();
+            return true;
+        }
     }
-    return true;
+    fail_downstairs(downstairs_idx);
+    return false;
 }
 
 void UpsairsClient::sender_loop(int downstairs_idx)
@@ -264,12 +294,13 @@ void UpsairsClient::sender_loop(int downstairs_idx)
                 return;
             }
             frame = std::move(s.queue.front());
+            s.queued_bytes -= frame.header.size() + frame.data.size();
             s.queue.pop_front();
         }
 
         auto& conn = connections_[downstairs_idx];
-        if (!conn || !conn->is_connected()) {
-            // Socket went away (reconnect in progress); drop the frame.  The
+        if (!admitted_[downstairs_idx] || !conn) {
+            // Quarantined socket; drop the frame. The
             // owning request's quorum is satisfied by the other downstairs, or
             // fails via fail_downstairs() / the wait_for_quorum backstop.
             continue;
@@ -288,29 +319,29 @@ void UpsairsClient::sender_loop(int downstairs_idx)
                     frame.data.data(), frame.data.size());
             }
         } catch (const std::exception& e) {
-            // Send failed: close the socket so io_loop's reconnect path takes
-            // over.  In-flight requests to this downstairs are failed by
-            // fail_downstairs() when io_loop notices the closed connection.
+            // Both directions use the same idempotent quarantine path.
             kprintf("[Crucible] sender %d: send failed: %s\n",
                     downstairs_idx, e.what());
-            conn->close();
+            fail_downstairs(downstairs_idx);
         }
     }
 }
 
 bool UpsairsClient::is_connected() const
 {
-    return connected_count_ >= 2;
+    return running_ && connected_count_ >= 2;
 }
 
 int UpsairsClient::read_sync(uint64_t offset, uint32_t length, void* buffer)
 {
+    // ponytail: serialize jobs; range-aware dependency tracking can restore parallelism.
+    std::unique_lock<mutex> operation_guard(operation_mtx_);
     if (!is_connected()) {
         return EIO;
     }
 
     // Validate parameters
-    if (offset + length > total_size()) {
+    if (offset > total_size() || length > total_size() - offset) {
         return EINVAL;
     }
 
@@ -318,112 +349,95 @@ int UpsairsClient::read_sync(uint64_t offset, uint32_t length, void* buffer)
         return EINVAL;
     }
 
-    // Calculate block range
-    uint64_t start_block = offset / block_size_;
-    uint64_t block_count = length / block_size_;
-    uint8_t* data_ptr = static_cast<uint8_t*>(buffer);
+    if (!length) { return 0; }
+    if (!buffer || length > 1024 * 1024) { return EINVAL; }
 
-    // Allocate job ID
-    uint64_t job_id = job_allocator_.allocate();
+    try {
+        // Calculate block range
+        uint64_t start_block = offset / block_size_;
+        uint64_t block_count = length / block_size_;
+        uint8_t* data_ptr = static_cast<uint8_t*>(buffer);
 
-    // Create pending request
-    auto req = request_mgr_.create_request(job_id);
+        // Allocate job ID
+        uint64_t job_id;
+        auto dependencies = begin_job(job_id);
 
-    // Build ReadRequest message
-    ReadRequest read_msg;
-    read_msg.upstairs_id = upstairs_id_;
-    read_msg.session_id = session_id_;
-    read_msg.job_id = job_id;
-    read_msg.dependencies = {};  // No dependencies for now
-    read_msg.start_block = start_block;
-    read_msg.count = block_count;
+        // Create pending request
+        auto req = request_mgr_.create_request(job_id, MessageType::ReadResponse, length);
 
-    // Encode message
-    auto frame = encode_message(read_msg);
+        // Build ReadRequest message
+        ReadRequest read_msg;
+        read_msg.upstairs_id = upstairs_id_;
+        read_msg.session_id = session_id_;
+        read_msg.job_id = job_id;
+        read_msg.dependencies = std::move(dependencies);
+        read_msg.start_block = start_block;
+        read_msg.count = block_count;
 
-    /*
-     * Enqueue to all connected downstairs.  Reads need only 2-of-3
-     * responses (set in PendingRequest's required_quorum); we still
-     * send to all three so the third can serve as a tiebreaker on
-     * checksum mismatch.  Enqueue is non-blocking: a backpressured
-     * downstairs stalls only its own sender thread, never this read's
-     * dispatch to the other two.
-     */
-    int sent_count = 0;
-    for (int i = 0; i < 3; i++) {
-        if (enqueue_frame(i, frame)) {
-            sent_count++;
-        }
-    }
+        // Encode message
+        auto frame = encode_message(read_msg);
 
-    if (sent_count < 2) {
-        request_mgr_.remove_request(job_id);
-        kprintf("[Crucible] read job_id=%lu: only %d of 3 downstairs reachable\n",
-                job_id, sent_count);
-        return EIO;
-    }
-
-    if (!req->wait_for_quorum()) {
-        request_mgr_.remove_request(job_id);
-        kprintf("[Crucible] read job_id=%lu: quorum not reached\n", job_id);
-        return EIO;
-    }
-
-    // Find first successful response with data
-    int source_idx = -1;
-    for (int i = 0; i < 3; i++) {
-        if (req->downstairs_responded[i] && !req->read_data[i].empty()) {
-            source_idx = i;
-            break;
-        }
-    }
-
-    if (source_idx < 0) {
-        request_mgr_.remove_request(job_id);
-        kprintf("[Crucible] Read job_id=%lu: no valid data received\n", job_id);
-        return EIO;
-    }
-
-    // Verify hash and copy data
-    const auto& data = req->read_data[source_idx];
-    const auto& contexts = req->read_contexts[source_idx];
-
-    if (data.size() != length || contexts.size() != block_count) {
-        request_mgr_.remove_request(job_id);
-        kprintf("[Crucible] Read job_id=%lu: data size mismatch\n", job_id);
-        return EIO;
-    }
-
-    /*
-     * Per-block hash verification.  If a downstairs returned data with
-     * an integrity hash mismatch, we have either a bug or storage
-     * corruption -- log it and fail the read.  An Empty (no-context)
-     * block was never written so the data is whatever was in the extent
-     * file (zeros for a fresh region); we accept it without hashing.
-     */
-    for (uint64_t i = 0; i < block_count; i++) {
-        const auto& ctx = contexts[i];
-        if (ctx.type == ReadBlockType::Unencrypted) {
-            uint64_t computed_hash = xxhash64_block(
-                data.data() + i * block_size_, block_size_);
-            if (computed_hash != ctx.hash) {
-                request_mgr_.remove_request(job_id);
-                kprintf("[Crucible] Read job_id=%lu: hash mismatch at block %lu "
-                        "(start_block=%lu, count=%lu, expected=0x%016lx, got=0x%016lx)\n",
-                        job_id, i, start_block, block_count,
-                        ctx.hash, computed_hash);
-                return EIO;
+        // Dispatch only to members of the admitted cohort.
+        int sent_count = 0;
+        for (int i = 0; i < 3; i++) {
+            if (enqueue_frame(i, frame)) {
+                sent_count++;
+            } else {
+                req->mark_response(i, false, CrucibleError::ConnectionError);
             }
         }
-    }
 
-    std::memcpy(data_ptr, data.data(), length);
-    request_mgr_.remove_request(job_id);
-    return 0;
+        if (sent_count < 2) {
+            request_mgr_.remove_request(job_id);
+            for (int i = 0; i < 3; ++i) { fail_downstairs(i); }
+            kprintf("[Crucible] read job_id=%lu: only %d of 3 downstairs reachable\n",
+                    job_id, sent_count);
+            return EIO;
+        }
+
+        if (!req->wait_for_quorum()) {
+            request_mgr_.remove_request(job_id);
+            for (int i = 0; i < 3; ++i) { fail_downstairs(i); }
+            kprintf("[Crucible] read job_id=%lu: quorum not reached\n", job_id);
+            return EIO;
+        }
+
+        std::unique_lock<mutex> response_guard(req->mtx);
+
+        // Find first successful response with data
+        int source_idx = -1;
+        for (int i = 0; i < 3; i++) {
+            if (req->downstairs_succeeded[i] && !req->read_data[i].empty()) {
+                source_idx = i;
+                break;
+            }
+        }
+
+        if (source_idx < 0) {
+            response_guard.unlock();
+            request_mgr_.remove_request(job_id);
+            for (int i = 0; i < 3; ++i) { fail_downstairs(i); }
+            kprintf("[Crucible] Read job_id=%lu: no valid data received\n", job_id);
+            return EIO;
+        }
+
+        // Each credited response was validated in full by the response owner.
+        const auto& data = req->read_data[source_idx];
+        std::memcpy(data_ptr, data.data(), length);
+        response_guard.unlock();
+        request_mgr_.remove_request(job_id);
+        return 0;
+    } catch (...) {
+        fence_session();
+        request_mgr_.cancel_all();
+        throw;
+    }
 }
 
 int UpsairsClient::write_sync(uint64_t offset, uint32_t length, const void* buffer)
 {
+    // ponytail: serialize jobs; range-aware dependency tracking can restore parallelism.
+    std::unique_lock<mutex> operation_guard(operation_mtx_);
     if (!is_connected()) {
         return EIO;
     }
@@ -433,7 +447,7 @@ int UpsairsClient::write_sync(uint64_t offset, uint32_t length, const void* buff
     }
 
     // Validate parameters
-    if (offset + length > total_size()) {
+    if (offset > total_size() || length > total_size() - offset) {
         return EINVAL;
     }
 
@@ -441,87 +455,99 @@ int UpsairsClient::write_sync(uint64_t offset, uint32_t length, const void* buff
         return EINVAL;
     }
 
-    // Calculate block range
-    uint64_t start_block = offset / block_size_;
-    uint64_t block_count = length / block_size_;
-    const uint8_t* data_ptr = static_cast<const uint8_t*>(buffer);
+    if (!length) { return 0; }
+    if (!buffer || length > 1024 * 1024) { return EINVAL; }
 
-    // Allocate job id, record it as an outstanding write, and depend on the
-    // most recent flush so this write is ordered after it on every replica.
-    uint64_t job_id;
-    auto dependencies = begin_write(job_id);
+    try {
+        // Calculate block range
+        uint64_t start_block = offset / block_size_;
+        uint64_t block_count = length / block_size_;
+        const uint8_t* data_ptr = static_cast<const uint8_t*>(buffer);
 
-    // Create pending request
-    auto req = request_mgr_.create_request(job_id);
+        // Chain after the preceding operation on every replica.
+        uint64_t job_id;
+        auto dependencies = begin_job(job_id);
 
-    // Build block contexts with hashes
-    std::vector<BlockContext> contexts;
-    contexts.reserve(block_count);
+        // Create pending request
+        auto req = request_mgr_.create_request(job_id, MessageType::WriteAck);
 
-    for (uint64_t i = 0; i < block_count; i++) {
-        BlockContext ctx;
-        ctx.hash = xxhash64_block(data_ptr + i * block_size_, block_size_);
-        ctx.encryption_ctx = nullopt;  // No encryption for now
-        contexts.push_back(ctx);
-    }
+        // Build block contexts with hashes
+        std::vector<BlockContext> contexts;
+        contexts.reserve(block_count);
 
-    /*
-     * Build the Write message header.  The frame is encoded as:
-     *   [u32 LE total_len][header bytes][u64 LE data_len=length][data]
-     * The header through the u64 data length prefix is produced by
-     * encode_message_with_data_header(); we then send the actual block
-     * data immediately afterwards on the same socket.
-     */
-    Write write_msg;
-    write_msg.upstairs_id = upstairs_id_;
-    write_msg.session_id = session_id_;
-    write_msg.job_id = job_id;
-    write_msg.dependencies = std::move(dependencies);
-    write_msg.start_block = start_block;
-    write_msg.contexts = std::move(contexts);
-
-    auto header_frame = encode_message_with_data_header(write_msg, length);
-
-    /*
-     * Enqueue the header+data pair to each connected downstairs sender.
-     * The sender thread writes the two halves back to back under the
-     * connection send mutex, so they reach the wire as one atomic frame
-     * (ZFS's TXG sync issues many concurrent Writes; interleaved bytes on
-     * the socket trigger "bytes remaining on stream" / disconnect).  The
-     * enqueue itself is non-blocking, so a downstairs that is backpressuring
-     * TCP stalls only its own sender -- this write still dispatches to the
-     * other two and their 2-of-3 quorum completes it.  This is the fix for
-     * the 256-MiB flush-contention hang.
-     */
-    int sent_count = 0;
-    for (int i = 0; i < 3; i++) {
-        std::vector<uint8_t> data(data_ptr, data_ptr + length);
-        if (enqueue_frame(i, header_frame, std::move(data))) {
-            sent_count++;
+        for (uint64_t i = 0; i < block_count; i++) {
+            BlockContext ctx;
+            ctx.hash = xxhash64_block(data_ptr + i * block_size_, block_size_);
+            ctx.encryption_ctx = nullopt;  // No encryption for now
+            contexts.push_back(ctx);
         }
-    }
 
-    if (sent_count < 2) {
-        abort_write(job_id);
+        /*
+         * Build the Write message header.  The frame is encoded as:
+         *   [u32 LE total_len][header bytes][u64 LE data_len=length][data]
+         * The header through the u64 data length prefix is produced by
+         * encode_message_with_data_header(); we then send the actual block
+         * data immediately afterwards on the same socket.
+         */
+        Write write_msg;
+        write_msg.upstairs_id = upstairs_id_;
+        write_msg.session_id = session_id_;
+        write_msg.job_id = job_id;
+        write_msg.dependencies = std::move(dependencies);
+        write_msg.start_block = start_block;
+        write_msg.contexts = std::move(contexts);
+
+        auto header_frame = encode_message_with_data_header(write_msg, length);
+
+        /*
+         * Enqueue the header+data pair to each connected downstairs sender.
+         * The sender thread writes the two halves back to back under the
+         * connection send mutex, so they reach the wire as one atomic frame
+         * (ZFS's TXG sync issues many concurrent Writes; interleaved bytes on
+         * the socket trigger "bytes remaining on stream" / disconnect).  The
+         * enqueue itself is non-blocking, so a downstairs that is backpressuring
+         * TCP stalls only its own sender -- this write still dispatches to the
+         * other two and their 2-of-3 quorum completes it.  This is the fix for
+         * the 256-MiB flush-contention hang.
+         */
+        int sent_count = 0;
+        for (int i = 0; i < 3; i++) {
+            std::vector<uint8_t> data(data_ptr, data_ptr + length);
+            if (enqueue_frame(i, header_frame, std::move(data))) {
+                sent_count++;
+            } else {
+                req->mark_response(i, false, CrucibleError::ConnectionError);
+            }
+        }
+
+        if (sent_count < 2) {
+            request_mgr_.remove_request(job_id);
+            for (int i = 0; i < 3; ++i) { fail_downstairs(i); }
+            kprintf("[Crucible] write job_id=%lu: only %d of 3 downstairs reachable\n",
+                    job_id, sent_count);
+            return EIO;
+        }
+
+        if (!req->wait_for_quorum()) {
+            request_mgr_.remove_request(job_id);
+            for (int i = 0; i < 3; ++i) { fail_downstairs(i); }
+            kprintf("[Crucible] write job_id=%lu: quorum not reached\n", job_id);
+            return EIO;
+        }
+
         request_mgr_.remove_request(job_id);
-        kprintf("[Crucible] write job_id=%lu: only %d of 3 downstairs reachable\n",
-                job_id, sent_count);
-        return EIO;
+        return 0;
+    } catch (...) {
+        fence_session();
+        request_mgr_.cancel_all();
+        throw;
     }
-
-    if (!req->wait_for_quorum()) {
-        abort_write(job_id);
-        request_mgr_.remove_request(job_id);
-        kprintf("[Crucible] write job_id=%lu: quorum not reached\n", job_id);
-        return EIO;
-    }
-
-    request_mgr_.remove_request(job_id);
-    return 0;
 }
 
 int UpsairsClient::flush_sync()
 {
+    // ponytail: serialize jobs; range-aware dependency tracking can restore parallelism.
+    std::unique_lock<mutex> operation_guard(operation_mtx_);
     if (!is_connected()) {
         return EIO;
     }
@@ -530,69 +556,81 @@ int UpsairsClient::flush_sync()
         return 0;  // No-op for read-only
     }
 
-    // Allocate job id and snapshot every write submitted since the previous
-    // flush as this flush's dependencies -- the txg-closing barrier.
-    uint64_t job_id;
-    auto dependencies = begin_flush(job_id);
-
-    // Increment flush number
-    flush_number_++;
-
-    // Create pending request
-    auto req = request_mgr_.create_request(job_id);
-
-    // Build Flush message
-    Flush flush_msg;
-    flush_msg.upstairs_id = upstairs_id_;
-    flush_msg.session_id = session_id_;
-    flush_msg.job_id = job_id;
-    flush_msg.dependencies = std::move(dependencies);
-    flush_msg.flush_number = flush_number_;
-    flush_msg.gen_number = generation_;
-    /*
-     * No snapshot, no per-extent flush limit: both fields are encoded as
-     * None (single 0 byte each).  Setting extent_limit to extent_count
-     * was a leftover that the upstream protocol does not expect.
-     */
-    flush_msg.snapshot_name = nullopt;
-    flush_msg.extent_limit = nullopt;
-
-    auto frame = encode_message(flush_msg);
-
-    /*
-     * Enqueue to all connected downstairs (non-blocking).  A flush makes the
-     * downstairs fsync every dirty extent, which is the slow operation that
-     * backpressures TCP; routing it through the per-downstairs sender queue
-     * is exactly what keeps one slow replica from stalling the flush to the
-     * other two, so the 2-of-3 quorum still completes.
-     */
-    int sent_count = 0;
-    for (int i = 0; i < 3; i++) {
-        if (enqueue_frame(i, frame)) {
-            sent_count++;
+    try {
+        // Chain after all prior operations, including reads.
+        uint64_t job_id;
+        if (flush_number_ == std::numeric_limits<uint64_t>::max()) {
+            fence_session();
+            return EIO;
         }
-    }
+        auto dependencies = begin_job(job_id);
+        ++flush_number_;
 
-    if (sent_count < 2) {
+        // Create pending request
+        auto req = request_mgr_.create_request(job_id, MessageType::FlushAck);
+
+        // Build Flush message
+        Flush flush_msg;
+        flush_msg.upstairs_id = upstairs_id_;
+        flush_msg.session_id = session_id_;
+        flush_msg.job_id = job_id;
+        flush_msg.dependencies = std::move(dependencies);
+        flush_msg.flush_number = flush_number_;
+        flush_msg.gen_number = generation_;
+        /*
+         * No snapshot, no per-extent flush limit: both fields are encoded as
+         * None (single 0 byte each).  Setting extent_limit to extent_count
+         * was a leftover that the upstream protocol does not expect.
+         */
+        flush_msg.snapshot_name = nullopt;
+        flush_msg.extent_limit = nullopt;
+
+        auto frame = encode_message(flush_msg);
+
+        /*
+         * Enqueue to all connected downstairs (non-blocking).  A flush makes the
+         * downstairs fsync every dirty extent, which is the slow operation that
+         * backpressures TCP; routing it through the per-downstairs sender queue
+         * is exactly what keeps one slow replica from stalling the flush to the
+         * other two, so the 2-of-3 quorum still completes.
+         */
+        int sent_count = 0;
+        for (int i = 0; i < 3; i++) {
+            if (enqueue_frame(i, frame)) {
+                sent_count++;
+            } else {
+                req->mark_response(i, false, CrucibleError::ConnectionError);
+            }
+        }
+
+        if (sent_count < 2) {
+            request_mgr_.remove_request(job_id);
+            for (int i = 0; i < 3; ++i) { fail_downstairs(i); }
+            kprintf("[Crucible] flush job_id=%lu: only %d of 3 downstairs reachable\n",
+                    job_id, sent_count);
+            return EIO;
+        }
+
+        if (!req->wait_for_quorum()) {
+            request_mgr_.remove_request(job_id);
+            for (int i = 0; i < 3; ++i) { fail_downstairs(i); }
+            kprintf("[Crucible] flush job_id=%lu: quorum not reached\n", job_id);
+            return EIO;
+        }
+
         request_mgr_.remove_request(job_id);
-        kprintf("[Crucible] flush job_id=%lu: only %d of 3 downstairs reachable\n",
-                job_id, sent_count);
-        return EIO;
+        return 0;
+    } catch (...) {
+        fence_session();
+        request_mgr_.cancel_all();
+        throw;
     }
-
-    if (!req->wait_for_quorum()) {
-        request_mgr_.remove_request(job_id);
-        kprintf("[Crucible] flush job_id=%lu: quorum not reached\n", job_id);
-        return EIO;
-    }
-
-    // Barrier was advanced at allocation in begin_flush(); nothing to commit.
-    request_mgr_.remove_request(job_id);
-    return 0;
 }
 
 int UpsairsClient::create_snapshot(uint64_t snapshot_id)
 {
+    // ponytail: serialize jobs; range-aware dependency tracking can restore parallelism.
+    std::unique_lock<mutex> operation_guard(operation_mtx_);
     if (!is_connected()) {
         return EIO;
     }
@@ -608,66 +646,75 @@ int UpsairsClient::create_snapshot(uint64_t snapshot_id)
         return EIO;
     }
 
-    // Allocate job id and snapshot outstanding writes as dependencies: a
-    // snapshot is a Flush, so it must also wait for every prior write.
-    uint64_t job_id;
-    auto dependencies = begin_flush(job_id);
-
-    // Increment flush number
-    flush_number_++;
-
-    // Create pending request (requires 3/3 acknowledgments)
-    auto req = request_mgr_.create_request(job_id, 3);
-
-    /*
-     * Build a snapshot Flush.  The snapshot ID is stringified into
-     * SnapshotDetails.snapshot_name, which is what upstream Crucible
-     * accepts.  No per-extent limit.
-     */
-    char snapname[32];
-    snprintf(snapname, sizeof(snapname), "%lu", (unsigned long)snapshot_id);
-
-    Flush flush_msg;
-    flush_msg.upstairs_id = upstairs_id_;
-    flush_msg.session_id = session_id_;
-    flush_msg.job_id = job_id;
-    flush_msg.dependencies = std::move(dependencies);
-    flush_msg.flush_number = flush_number_;
-    flush_msg.gen_number = generation_;
-    flush_msg.snapshot_name = std::string(snapname);
-    flush_msg.extent_limit = nullopt;
-
-    auto frame = encode_message(flush_msg);
-
-    /*
-     * Snapshots require 3/3 acknowledgement (not 2/3): a downstairs
-     * that doesn't see the snapshot Flush would silently miss the
-     * point-in-time the user asked us to capture.  Enqueue to all three.
-     */
-    int sent_count = 0;
-    for (int i = 0; i < 3; i++) {
-        if (enqueue_frame(i, frame)) {
-            sent_count++;
+    try {
+        // A snapshot Flush participates in the same ordered job chain.
+        uint64_t job_id;
+        if (flush_number_ == std::numeric_limits<uint64_t>::max()) {
+            fence_session();
+            return EIO;
         }
-    }
+        auto dependencies = begin_job(job_id);
+        ++flush_number_;
 
-    if (sent_count < 3) {
+        // Create pending request (requires 3/3 acknowledgments)
+        auto req = request_mgr_.create_request(job_id, MessageType::FlushAck, 0, 3);
+
+        /*
+         * Build a snapshot Flush.  The snapshot ID is stringified into
+         * SnapshotDetails.snapshot_name, which is what upstream Crucible
+         * accepts.  No per-extent limit.
+         */
+        char snapname[32];
+        snprintf(snapname, sizeof(snapname), "%lu", (unsigned long)snapshot_id);
+
+        Flush flush_msg;
+        flush_msg.upstairs_id = upstairs_id_;
+        flush_msg.session_id = session_id_;
+        flush_msg.job_id = job_id;
+        flush_msg.dependencies = std::move(dependencies);
+        flush_msg.flush_number = flush_number_;
+        flush_msg.gen_number = generation_;
+        flush_msg.snapshot_name = std::string(snapname);
+        flush_msg.extent_limit = nullopt;
+
+        auto frame = encode_message(flush_msg);
+
+        /*
+         * Snapshots require 3/3 acknowledgement (not 2/3): a downstairs
+         * that doesn't see the snapshot Flush would silently miss the
+         * point-in-time the user asked us to capture.  Enqueue to all three.
+         */
+        int sent_count = 0;
+        for (int i = 0; i < 3; i++) {
+            if (enqueue_frame(i, frame)) {
+                sent_count++;
+            } else {
+                req->mark_response(i, false, CrucibleError::ConnectionError);
+            }
+        }
+
+        if (sent_count < 3) {
+            request_mgr_.remove_request(job_id);
+            for (int i = 0; i < 3; ++i) { fail_downstairs(i); }
+            kprintf("[Crucible] snapshot %lu: only %d of 3 downstairs reachable\n",
+                    snapshot_id, sent_count);
+            return EIO;
+        }
+
+        if (!req->wait_for_quorum()) {
+            request_mgr_.remove_request(job_id);
+            for (int i = 0; i < 3; ++i) { fail_downstairs(i); }
+            kprintf("[Crucible] snapshot %lu: 3/3 quorum not reached\n", snapshot_id);
+            return EIO;
+        }
+
         request_mgr_.remove_request(job_id);
-        kprintf("[Crucible] snapshot %lu: only %d of 3 downstairs reachable\n",
-                snapshot_id, sent_count);
-        return EIO;
+        return 0;
+    } catch (...) {
+        fence_session();
+        request_mgr_.cancel_all();
+        throw;
     }
-
-    if (!req->wait_for_quorum()) {
-        request_mgr_.remove_request(job_id);
-        kprintf("[Crucible] snapshot %lu: 3/3 quorum not reached\n", snapshot_id);
-        return EIO;
-    }
-
-    // Snapshot flush reached 3/3; the barrier was advanced at allocation in
-    // begin_flush(), so there is nothing more to commit here.
-    request_mgr_.remove_request(job_id);
-    return 0;
 }
 
 int UpsairsClient::discard_sync(uint64_t offset, uint64_t length)
@@ -688,180 +735,119 @@ std::pair<std::string, uint16_t> UpsairsClient::parse_target(const std::string& 
     return parse_target_string(target);
 }
 
-std::vector<uint64_t> UpsairsClient::begin_write(uint64_t& job_id)
+void UpsairsClient::fence_session()
 {
-    WITH_LOCK(dep_mtx_) {
-        job_id = job_allocator_.allocate();
-        // A write issued after a flush must be applied after it.
-        std::vector<uint64_t> deps;
-        if (last_flush_id_ != 0) {
-            deps.push_back(last_flush_id_);
-        }
-        // Record the write immediately, in id-allocation order, so any Flush
-        // allocated after this point lists it as a dependency.  This is the
-        // load-bearing invariant: the downstairs CompletedJobs set is a
-        // watermark (downstairs/src/complete_jobs.rs) and a FlushAck calls
-        // reset(flush_id), forgetting every lower job id.  If a Flush did not
-        // depend on this still-outstanding write, the downstairs could apply
-        // the Flush first, reset the watermark past this write's own flush
-        // dependency, and then block this write forever -- its dep id now sits
-        // below the watermark and is_complete() returns false for good.
-        // Listing every prior write as a Flush dep forces the downstairs to
-        // apply the write before the Flush, so the reset never strands it.
-        // Recording at allocation (not after quorum) is what makes the
-        // out-of-order sends from the async block dispatcher safe: the wire
-        // order may differ from allocation order, but the dep lists encode the
-        // true allocation order, so the downstairs reconstructs it.
-        pending_writes_.push_back(job_id);
-        return deps;
+    // No allocation on this path: it also handles allocation failures after
+    // partial enqueue. Never roll back a possibly transmitted job identifier.
+    for (int i = 0; i < 3; ++i) {
+        fail_downstairs(i);
     }
 }
 
-void UpsairsClient::abort_write(uint64_t job_id)
+std::vector<uint64_t> UpsairsClient::begin_job(uint64_t& job_id)
 {
-    WITH_LOCK(dep_mtx_) {
-        // A write that failed to reach quorum is fatal to the ZFS txg (the
-        // caller returns EIO), but drop it from the pending set anyway so a
-        // later Flush -- if one is still built before the pool suspends -- does
-        // not list a write id that no downstairs durably accepted.  If a Flush
-        // already snapshotted and cleared it, this is a harmless no-op.
-        auto it = std::find(pending_writes_.begin(), pending_writes_.end(), job_id);
-        if (it != pending_writes_.end()) {
-            pending_writes_.erase(it);
-        }
+    job_id = job_allocator_.allocate();
+    if (!job_id || job_id == std::numeric_limits<uint64_t>::max()) {
+        throw ConnectionError("Job identifier exhausted");
     }
+    std::vector<uint64_t> deps;
+    if (last_job_id_) {
+        deps.push_back(last_job_id_);
+    }
+    last_job_id_ = job_id;
+    return deps;
 }
 
-std::vector<uint64_t> UpsairsClient::begin_flush(uint64_t& job_id)
+bool UpsairsClient::receive_available(int index, std::vector<uint8_t>& frame)
 {
-    WITH_LOCK(dep_mtx_) {
-        job_id = job_allocator_.allocate();
-        // This flush depends on every write since the previous flush, plus
-        // that previous flush, so the chain of txg barriers stays ordered.
-        std::vector<uint64_t> deps = pending_writes_;
-        if (last_flush_id_ != 0) {
-            deps.push_back(last_flush_id_);
-        }
-        // Advance the barrier at allocation, not after quorum.  The deps list
-        // above is the complete set of writes this Flush orders; once the id is
-        // allocated, the next write must depend on THIS flush and the writes it
-        // covers are behind the barrier.  Deferring the advance to a post-quorum
-        // commit reopened the allocation-order gap the downstairs watermark
-        // requires (a write recorded only post-quorum could be omitted from an
-        // already-allocated flush's deps -> reset strands it).  A flush that
-        // fails quorum returns EIO, which is fatal to the txg, so there is no
-        // surviving pool state that needs the barrier rolled back.
-        pending_writes_.clear();
-        last_flush_id_ = job_id;
-        return deps;
+    auto& state = receive_[index];
+    auto now = std::chrono::steady_clock::now();
+    if (!state.bytes.empty() && now - state.started > std::chrono::seconds(5)) {
+        throw ConnectionError("Partial frame deadline exceeded");
     }
+    // One bounded chunk per peer per loop, so even a large frame cannot monopolize it.
+    uint8_t chunk[16384];
+    size_t size = std::min(sizeof(chunk), state.wanted - state.bytes.size());
+    auto n = connections_[index]->recv_available(chunk, size);
+    if (n < 0) {
+        return false;
+    }
+    if (!n) {
+        throw ConnectionError("Peer closed");
+    }
+    if (state.bytes.empty()) {
+        state.started = now;
+    }
+    state.bytes.insert(state.bytes.end(), chunk, chunk + n);
+    if (state.bytes.size() != state.wanted) {
+        return false;
+    }
+    if (state.wanted == 4) {
+        bincode::Decoder prefix(state.bytes);
+        auto length = prefix.decode_u32();
+        if (length < 8 || length > 2 * 1024 * 1024) {
+            throw ConnectionError("Frame size out of range");
+        }
+        state.wanted = length;
+        return false;
+    }
+    frame = std::move(state.bytes);
+    frame.erase(frame.begin(), frame.begin() + 4);
+    state.bytes = {};
+    state.wanted = 4;
+    return true;
 }
 
 void UpsairsClient::io_loop()
 {
-    /*
-     * Crucible downstairs drop a connection after 45 s of inactivity
-     * (downstairs VerboseTimeout = 3 × 15 s).  ZFS workloads have long idle
-     * gaps - notably the label/uberblock probe phase of zpool_create - during
-     * which the OSv driver would otherwise send nothing, the downstairs would
-     * time out, and the resulting reconnect churn would stall (or, before the
-     * tcp_input fast-path guard, panic) the kernel.  Mirror the real upstairs:
-     * send a Ruok ping to every connected downstairs whenever the link has
-     * been idle, well inside the 45 s window.  The Imok reply is handled in
-     * process_responses(); we do not block waiting for it here.
-     */
-    constexpr auto keepalive_interval = std::chrono::seconds(10);
-    auto next_ping = std::chrono::steady_clock::now() + keepalive_interval;
-
+    auto next_ping = std::chrono::steady_clock::now() + std::chrono::seconds(10);
     while (running_) {
         if (std::chrono::steady_clock::now() >= next_ping) {
-            send_keepalive();
-            next_ping = std::chrono::steady_clock::now() + keepalive_interval;
+            try {
+                send_keepalive();
+            } catch (...) {
+                fence_session();
+                return;
+            }
+            next_ping = std::chrono::steady_clock::now() + std::chrono::seconds(10);
         }
-
-        // Use select() to wait for readable connections
         fd_set readfds;
         FD_ZERO(&readfds);
         int max_fd = -1;
-
-        for (size_t i = 0; i < 3; i++) {
-            if (connections_[i] && connections_[i]->is_connected()) {
+        for (int i = 0; i < 3; ++i) {
+            if (admitted_[i]) {
                 int fd = connections_[i]->fd();
-                FD_SET(fd, &readfds);
-                if (fd > max_fd) {
-                    max_fd = fd;
+                if (fd >= FD_SETSIZE) {
+                    fail_downstairs(i);
+                    continue;
                 }
+                FD_SET(fd, &readfds);
+                max_fd = std::max(max_fd, fd);
             }
         }
-
-        if (max_fd < 0) {
-            // No connections, sleep
-            sched::thread::sleep(std::chrono::milliseconds(100));
+        timeval tv{0, 100000};
+        int ret = select(max_fd + 1, &readfds, nullptr, nullptr, &tv);
+        if (ret < 0 && errno == EINTR) {
             continue;
         }
-
-        // Wait with timeout
-        struct timeval tv = {0, 100000};  // 100ms
-        int ret = select(max_fd + 1, &readfds, nullptr, nullptr, &tv);
-
-        if (ret < 0) {
-            if (errno == EINTR) {
-                // Interrupted, retry
+        for (int i = 0; i < 3; ++i) {
+            if (!admitted_[i]) {
                 continue;
             }
-            kprintf("[Crucible] select() error: %d\n", errno);
-            break;
-        }
-
-        if (ret > 0) {
-            // Process responses from readable connections
-            for (size_t i = 0; i < 3; i++) {
-                if (connections_[i] && connections_[i]->is_connected()) {
-                    int fd = connections_[i]->fd();
-                    if (FD_ISSET(fd, &readfds)) {
-                        try {
-                            process_responses(i);
-                        } catch (const std::exception& e) {
-                            kprintf("[Crucible] Downstairs %zu connection lost: %s\n",
-                                    i, e.what());
-                            connections_[i]->close();
-                            connected_count_--;
-
-                            // Fail this downstairs against every in-flight
-                            // request so an op that just dropped below 2/3
-                            // quorum returns now instead of waiting out the
-                            // full wait_for_quorum backstop.  Ops that still
-                            // have 2 live downstairs keep waiting on them.
-                            request_mgr_.fail_downstairs(i);
-
-                            // Attempt reconnect with exponential backoff.
-                            // I/O thread stays alive so other downstairs keep working.
-                            sched::thread::make([this, i] {
-                                int delay_ms = 100;
-                                while (running_) {
-                                    sched::thread::sleep(
-                                        std::chrono::milliseconds(delay_ms));
-                                    try {
-                                        connections_[i]->reconnect();
-                                        handshake(i);
-                                        query_region_info(i);
-                                        connected_count_++;
-                                        kprintf("[Crucible] Downstairs %zu reconnected\n", i);
-                                        return;
-                                    } catch (const std::exception& re) {
-                                        kprintf("[Crucible] Downstairs %zu reconnect failed"
-                                                " (retry in %d ms): %s\n",
-                                                i, delay_ms, re.what());
-                                        delay_ms = std::min(delay_ms * 2, 30000);
-                                    }
-                                }
-                            }, sched::thread::attr().detached())->start();
-                        }
-                    }
+            try {
+                if (ret < 0) {
+                    throw ConnectionError("select failed");
                 }
+                // Nonblocking receive also checks an unfinished frame's deadline.
+                std::vector<uint8_t> frame;
+                if (receive_available(i, frame)) {
+                    process_responses(i, frame);
+                }
+            } catch (const std::exception& e) {
+                kprintf("[Crucible] downstairs %d: %s\n", i, e.what());
+                fail_downstairs(i);
             }
         }
-
     }
 }
 
@@ -884,90 +870,87 @@ void UpsairsClient::send_keepalive()
     }
 }
 
-void UpsairsClient::process_responses(int downstairs_idx)
+void UpsairsClient::process_responses(int index, const std::vector<uint8_t>& frame)
 {
-    // Receive frame
-    auto frame = receive_frame(downstairs_idx);
-
-    // Decode message type
     bincode::Decoder dec(frame);
-    MessageType type = decode_message_type(dec);
-
-    /*
-     * Handle responses from a downstairs.
-     *
-     * Late acks are expected under load: write_sync / read_sync / flush_sync
-     * complete and remove the request as soon as 2-of-3 quorum is reached.
-     * The third downstairs's ack/response then arrives after the request
-     * is gone - that is normal, not a bug, and we silently drop it.  The
-     * old kprintf for these "unknown job" messages produced enough console
-     * output under ZFS workloads to crash the kernel with
-     * "exception nested too deeply" inside the printf path.
-     */
-    switch (type) {
-        case MessageType::WriteAck: {
-            auto ack = WriteAck::decode(dec);
-            auto req = request_mgr_.find_request(ack.job_id);
-            if (req) {
-                req->mark_response(downstairs_idx, ack.result.is_ok,
-                                  ack.result.is_ok ? CrucibleError::IoError : ack.result.error);
-            }
-            break;
+    auto type = decode_message_type(dec);
+    if (type == MessageType::Imok && dec.at_end()) {
+        return;
+    }
+    if (type != MessageType::WriteAck && type != MessageType::FlushAck &&
+        type != MessageType::ReadResponse) {
+        // Includes activation loss and ErrorReport: no repair/replay supported.
+        throw ConnectionError("Unexpected data-plane message");
+    }
+    auto upstairs = dec.decode_uuid();
+    auto session = dec.decode_uuid();
+    auto job = dec.decode_u64();
+    if (upstairs != upstairs_id_ || session != session_id_) {
+        throw ConnectionError("Response session mismatch");
+    }
+    auto req = request_mgr_.find_request(job);
+    if (req && req->expected_type != type) {
+        throw ConnectionError("Response kind mismatch");
+    }
+    auto result = dec.decode_u32();
+    if (result != 0) {
+        // Conservatively quarantine any failed operation, including unsupported
+        // variable-length error variants. Never credit it or retain broken deps.
+        throw ConnectionError("Downstairs operation failed");
+    }
+    std::vector<uint8_t> data;
+    if (type == MessageType::ReadResponse) {
+        auto count = dec.decode_u64();
+        if (count > (1024 * 1024) / block_size_ || count > dec.remaining() / 4 ||
+            (req && count != req->read_length / block_size_)) {
+            throw ConnectionError("Read context count mismatch");
         }
-
-        case MessageType::ReadResponse: {
-            auto resp = ReadResponse::decode_header(dec);
-            auto req = request_mgr_.find_request(resp.job_id);
-            if (resp.blocks.is_ok) {
-                /*
-                 * The bulk data is part of the same frame, encoded inline
-                 * as bincode `bytes` (u64 length + raw bytes).  Read both
-                 * from the in-memory frame buffer; do not pull more bytes
-                 * from the socket -- the socket cursor is already at the
-                 * start of the next frame.
-                 */
-                uint64_t data_len = dec.decode_byte_slice_length();
-                std::vector<uint8_t> data = dec.decode_bytes(data_len);
-                if (req) {
-                    req->read_data[downstairs_idx] = std::move(data);
-                    req->read_contexts[downstairs_idx] =
-                        std::move(resp.blocks.value);
-                    req->mark_response(downstairs_idx, true);
+        std::vector<ReadBlockContext> contexts;
+        contexts.reserve(count);
+        for (uint64_t i = 0; i < count; ++i) {
+            ReadBlockContext ctx{};
+            ctx.type = static_cast<ReadBlockType>(dec.decode_u32());
+            if (ctx.type == ReadBlockType::Unencrypted) {
+                ctx.hash = dec.decode_u64();
+            } else if (ctx.type != ReadBlockType::Empty) {
+                throw ConnectionError("Unsupported read block type");
+            }
+            contexts.push_back(ctx);
+        }
+        auto length = dec.decode_u64();
+        if (count > dec.remaining() / block_size_ || length != count * block_size_ ||
+            length != dec.remaining() || (req && length != req->read_length)) {
+            throw ConnectionError("Read length mismatch");
+        }
+        data = dec.decode_bytes(length);
+        for (size_t i = 0; i < contexts.size(); ++i) {
+            auto block = data.data() + i * block_size_;
+            const auto& ctx = contexts[i];
+            if (ctx.type == ReadBlockType::Empty) {
+                if (std::any_of(block, block + block_size_, [](uint8_t c) { return c != 0; })) {
+                    throw ConnectionError("Nonzero data without integrity context");
                 }
-                /* else: late 3rd-of-3 read response, silently drop. */
-            } else {
-                if (req) {
-                    req->mark_response(downstairs_idx, false,
-                                       resp.blocks.error);
-                }
+            } else if (xxhash64_block(block, block_size_) != ctx.hash) {
+                throw ConnectionError("Read integrity hash mismatch");
             }
-            break;
         }
-
-        case MessageType::FlushAck: {
-            auto ack = FlushAck::decode(dec);
-            auto req = request_mgr_.find_request(ack.job_id);
-            if (req) {
-                req->mark_response(downstairs_idx, ack.result.is_ok,
-                                  ack.result.is_ok ? CrucibleError::IoError : ack.result.error);
+    }
+    if (!dec.at_end()) {
+        throw ConnectionError("Trailing response data");
+    }
+    // Even a late third response is validated before being discarded.
+    if (req) {
+        WITH_LOCK(req->mtx) {
+            if (req->completed || req->downstairs_responded[index]) {
+                return;
             }
-            break;
+            req->read_data[index] = std::move(data);
         }
-
-        case MessageType::Imok: {
-            /* Health check response. Quiet success: no log. */
-            (void) downstairs_idx;
-            break;
-        }
-
-        default:
-            kprintf("[Crucible] Unexpected message type from downstairs %d: %u\n",
-                  downstairs_idx, static_cast<uint32_t>(type));
-            break;
+        req->mark_response(index, true);
     }
 }
 
-void UpsairsClient::handshake(int downstairs_idx)
+void UpsairsClient::handshake(int downstairs_idx, std::chrono::steady_clock::time_point deadline)
 {
     auto& conn = connections_[downstairs_idx];
     if (!conn || !conn->is_connected()) {
@@ -986,7 +969,7 @@ void UpsairsClient::handshake(int downstairs_idx)
     here_msg.alternate_versions.clear();
 
     auto frame = encode_message(here_msg);
-    conn->send_exact(frame.data(), frame.size());
+    conn->send_exact(frame.data(), frame.size(), deadline);
 
     // Receive response
     auto response_frame = receive_frame(downstairs_idx);
@@ -996,6 +979,7 @@ void UpsairsClient::handshake(int downstairs_idx)
 
     if (type == MessageType::YesItsMe) {
         auto yes_msg = YesItsMe::decode(dec);
+        if (!dec.at_end()) { throw ConnectionError("Trailing handshake data"); }
 
         if (yes_msg.version != static_cast<uint32_t>(ProtocolVersion::V13)) {
             throw std::runtime_error("Version mismatch in YesItsMe: got " +
@@ -1013,13 +997,18 @@ void UpsairsClient::handshake(int downstairs_idx)
         promote.session_id = session_id_;
         promote.generation = generation_;
         auto promote_frame = encode_message(promote);
-        conn->send_exact(promote_frame.data(), promote_frame.size());
+        conn->send_exact(promote_frame.data(), promote_frame.size(), deadline);
 
         auto resp_frame = receive_frame(downstairs_idx);
         bincode::Decoder resp_dec(resp_frame);
         MessageType resp_type = decode_message_type(resp_dec);
         if (resp_type == MessageType::YouAreNowActive) {
-            (void) YouAreNowActive::decode(resp_dec);
+            auto active = YouAreNowActive::decode(resp_dec);
+            if (!resp_dec.at_end()) { throw ConnectionError("Trailing activation data"); }
+            if (active.upstairs_id != upstairs_id_ || active.session_id != session_id_ ||
+                active.generation != generation_) {
+                throw ConnectionError("Activation identity mismatch");
+            }
             kprintf("[Crucible] downstairs %d active (repair port %u)\n",
                     downstairs_idx, yes_msg.repair_addr.port);
         } else if (resp_type == MessageType::YouAreNoLongerActive) {
@@ -1049,7 +1038,7 @@ void UpsairsClient::handshake(int downstairs_idx)
     }
 }
 
-void UpsairsClient::query_region_info(int downstairs_idx)
+void UpsairsClient::query_region_info(int downstairs_idx, std::chrono::steady_clock::time_point deadline)
 {
     auto& conn = connections_[downstairs_idx];
     if (!conn || !conn->is_connected()) {
@@ -1058,7 +1047,7 @@ void UpsairsClient::query_region_info(int downstairs_idx)
 
     RegionInfoPlease req_msg;
     auto frame = encode_message(req_msg);
-    conn->send_exact(frame.data(), frame.size());
+    conn->send_exact(frame.data(), frame.size(), deadline);
 
     auto response_frame = receive_frame(downstairs_idx);
     bincode::Decoder dec(response_frame);
@@ -1070,7 +1059,21 @@ void UpsairsClient::query_region_info(int downstairs_idx)
     }
 
     auto info_msg = RegionInfo::decode(dec);
-    region_def_ = info_msg.region_def;
+    if (!dec.at_end()) { throw ConnectionError("Trailing region data"); }
+    const auto& def = info_msg.region_def;
+    if (downstairs_idx == 0) {
+        region_def_ = def;
+    } else if (def.block_size != region_def_.block_size ||
+               def.extent_size != region_def_.extent_size ||
+               def.extent_size_shift != region_def_.extent_size_shift ||
+               def.extent_count != region_def_.extent_count ||
+               def.encrypted != region_def_.encrypted) {
+        throw ConnectionError("Replica geometry mismatch");
+    }
+    if (def.encrypted || !def.extent_size || !def.extent_count ||
+        def.extent_size > std::numeric_limits<uint64_t>::max() / def.extent_count) {
+        throw ConnectionError("Invalid region geometry");
+    }
 
     // Validate region definition
     if (region_def_.block_size != block_size_) {
@@ -1091,18 +1094,10 @@ void UpsairsClient::query_region_info(int downstairs_idx)
                 region_def_.extent_count, region_def_.extent_size);
     }
 
-    /*
-     * Final negotiation step: send ExtentVersionsPlease so the downstairs
-     * transitions out of "waiting for extent versions" and starts treating
-     * incoming Write/Flush/ReadRequest messages as I/O instead of
-     * "ignored message during negotiation".  We don't act on the per-extent
-     * gen/flush/dirty data - the OSv driver doesn't implement live repair -
-     * but we have to consume the bytes off the socket so the next reply
-     * isn't misframed.
-     */
+    // Keep metadata for all-three clean-cohort admission, never hash-based freshness.
     ExtentVersionsPlease ev_req;
     auto ev_frame = encode_message(ev_req);
-    conn->send_exact(ev_frame.data(), ev_frame.size());
+    conn->send_exact(ev_frame.data(), ev_frame.size(), deadline);
 
     auto ev_resp_frame = receive_frame(downstairs_idx);
     bincode::Decoder ev_dec(ev_resp_frame);
@@ -1111,7 +1106,33 @@ void UpsairsClient::query_region_info(int downstairs_idx)
         throw std::runtime_error("Expected ExtentVersions, got " +
                                   std::to_string(static_cast<uint32_t>(ev_type)));
     }
-    (void) ExtentVersions::decode(ev_dec);
+    versions_[downstairs_idx] = ExtentVersions::decode(ev_dec);
+    if (!ev_dec.at_end()) { throw ConnectionError("Trailing extent metadata"); }
+}
+
+void UpsairsClient::validate_cohort()
+{
+    uint64_t max_flush = 0;
+    for (const auto& v : versions_) {
+        if (v.gen_numbers.size() != region_def_.extent_count ||
+            v.flush_numbers.size() != region_def_.extent_count ||
+            v.dirty_bits.size() != region_def_.extent_count ||
+            v.gen_numbers != versions_[0].gen_numbers ||
+            v.flush_numbers != versions_[0].flush_numbers) {
+            throw ConnectionError("Replica metadata needs external reconciliation");
+        }
+        for (size_t i = 0; i < v.gen_numbers.size(); ++i) {
+            if (v.dirty_bits[i] || v.gen_numbers[i] >= generation_) {
+                throw ConnectionError("Dirty extent or external generation too low");
+            }
+            max_flush = std::max(max_flush, v.flush_numbers[i]);
+        }
+    }
+    if (max_flush == std::numeric_limits<uint64_t>::max()) {
+        throw ConnectionError("Flush number exhausted");
+    }
+    // This is only a flush sequence, NOT permission to invent a fencing epoch.
+    flush_number_ = max_flush;
 }
 
 std::vector<uint8_t> UpsairsClient::receive_frame(int downstairs_idx)
@@ -1129,7 +1150,7 @@ std::vector<uint8_t> UpsairsClient::receive_frame(int downstairs_idx)
     uint32_t total_length;
     conn->recv_exact(&total_length, 4);
 
-    if (total_length < 4 || total_length > 100 * 1024 * 1024) {
+    if (total_length < 8 || total_length > 2 * 1024 * 1024) {
         throw std::runtime_error("Frame size out of range");
     }
     uint32_t payload_length = total_length - 4;

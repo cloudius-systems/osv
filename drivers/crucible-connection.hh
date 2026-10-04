@@ -9,6 +9,8 @@
 #ifndef CRUCIBLE_CONNECTION_HH
 #define CRUCIBLE_CONNECTION_HH
 
+#include <atomic>
+#include <chrono>
 #include <string>
 #include <memory>
 #include <mutex>
@@ -42,7 +44,9 @@ public:
      * @param port TCP port number
      * @throws std::system_error on connection failure
      */
-    Connection(const std::string& host, uint16_t port);
+    Connection(const std::string& host, uint16_t port,
+               const std::atomic<bool>& cancelled,
+               std::chrono::steady_clock::time_point admission_deadline);
 
     /**
      * Destructor - closes connection if open.
@@ -52,8 +56,8 @@ public:
     // Non-copyable, movable
     Connection(const Connection&) = delete;
     Connection& operator=(const Connection&) = delete;
-    Connection(Connection&&) noexcept;
-    Connection& operator=(Connection&&) noexcept;
+    Connection(Connection&&) = delete;
+    Connection& operator=(Connection&&) = delete;
 
     /**
      * Send data over the connection (single syscall, may be partial).
@@ -73,6 +77,9 @@ public:
      * @throws ConnectionError on send failure or EOF
      */
     void send_exact(const void* buf, size_t len);
+    // Admission supplies its shared cohort deadline; ordinary sends get a new budget.
+    void send_exact(const void* buf, size_t len,
+                    std::chrono::steady_clock::time_point deadline);
 
     /**
      * Send a header buffer immediately followed by a separate data
@@ -121,13 +128,10 @@ public:
      */
     bool is_connected() const;
 
-    /**
-     * Close and reconnect to the same host:port.
-     *
-     * Re-applies SO_KEEPALIVE settings.  Throws ConnectionError on failure.
-     * After this returns successfully, is_connected() is true.
-     */
-    void reconnect();
+    // Cancel I/O without recycling the descriptor. close() requires joined users.
+    void shutdown();
+    // Nonblocking receive: -1 means would-block, zero means EOF.
+    ssize_t recv_available(void* buf, size_t len);
 
     /**
      * Close the connection.
@@ -145,12 +149,16 @@ public:
 
 private:
     /* Loop until len bytes are sent.  Caller must hold send_lock_. */
-    void send_all_locked(const void* buf, size_t len);
+    using Deadline = std::chrono::steady_clock::time_point;
+    void wait_ready(short events, Deadline deadline);
+    void send_all_locked(const void* buf, size_t len, Deadline deadline);
+    const std::atomic<bool>& cancelled_;
+    Deadline admission_deadline_;
 
     int fd_{-1};
     std::string host_;
     uint16_t port_;
-    bool connected_{false};
+    std::atomic<bool> connected_{false};
 
     /*
      * Serialise concurrent send / recv calls.  send_lock_ ensures one

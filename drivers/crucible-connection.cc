@@ -15,55 +15,52 @@
 #include <netdb.h>
 #include <unistd.h>
 #include <fcntl.h>
+#include <poll.h>
+#include <algorithm>
 #include <errno.h>
 #include <cstring>
 #include <stdexcept>
 
 namespace crucible {
 
-Connection::Connection(const std::string& host, uint16_t port)
-    : host_(host), port_(port)
+Connection::Connection(const std::string& host, uint16_t port,
+                       const std::atomic<bool>& cancelled, Deadline admission_deadline)
+    : cancelled_(cancelled), admission_deadline_(admission_deadline), host_(host), port_(port)
 {
-    // Create socket
+    // Numeric IPv4 only: synchronous DNS has no portable cancellation contract.
+    sockaddr_in address{};
+    address.sin_family = AF_INET;
+    address.sin_port = htons(port);
+    if (!port || inet_pton(AF_INET, host.c_str(), &address.sin_addr) != 1) {
+        throw ConnectionError("Crucible requires a numeric IPv4 address and nonzero port");
+    }
     fd_ = socket(AF_INET, SOCK_STREAM, 0);
     if (fd_ < 0) {
-        throw ConnectionError("Failed to create socket: " +
-                            std::string(strerror(errno)));
+        throw ConnectionError("Failed to create socket");
     }
-
-    // Resolve hostname
-    struct addrinfo hints{};
-    struct addrinfo* result = nullptr;
-
-    hints.ai_family = AF_INET;  // IPv4 for now
-    hints.ai_socktype = SOCK_STREAM;
-
-    std::string port_str = std::to_string(port);
-    int rv = getaddrinfo(host.c_str(), port_str.c_str(), &hints, &result);
-    if (rv != 0) {
-        ::close(fd_);
-        fd_ = -1;
-        throw ConnectionError("Failed to resolve host: " +
-                            std::string(gai_strerror(rv)));
-    }
-
-    // Try to connect
-    bool connected = false;
-    for (struct addrinfo* rp = result; rp != nullptr; rp = rp->ai_next) {
-        if (connect(fd_, rp->ai_addr, rp->ai_addrlen) == 0) {
-            connected = true;
-            break;
+    try {
+        int flags = fcntl(fd_, F_GETFL, 0);
+        if (flags < 0 || fcntl(fd_, F_SETFL, flags | O_NONBLOCK) < 0) {
+            throw ConnectionError("Cannot make socket nonblocking");
         }
-    }
-
-    freeaddrinfo(result);
-
-    if (!connected) {
-        int saved_errno = errno;
+        if (::connect(fd_, reinterpret_cast<sockaddr*>(&address), sizeof(address)) < 0) {
+            if (errno != EINPROGRESS) {
+                throw ConnectionError("Connect failed");
+            }
+            wait_ready(POLLOUT, admission_deadline_);
+            int error = 0;
+            socklen_t size = sizeof(error);
+            if (getsockopt(fd_, SOL_SOCKET, SO_ERROR, &error, &size) < 0 || error) {
+                throw ConnectionError("Connect failed");
+            }
+        }
+        if (cancelled_ || std::chrono::steady_clock::now() >= admission_deadline_) {
+            throw ConnectionError("Admission cancelled or expired");
+        }
+    } catch (...) {
         ::close(fd_);
         fd_ = -1;
-        throw ConnectionError("Failed to connect to " + host + ":" +
-                            port_str + ": " + strerror(saved_errno));
+        throw;
     }
 
     // Disable Nagle: Crucible's synchronous write/flush path sends one small
@@ -93,91 +90,30 @@ Connection::Connection(const std::string& host, uint16_t port)
     connected_ = true;
 }
 
-void Connection::reconnect()
-{
-    close();
-
-    fd_ = socket(AF_INET, SOCK_STREAM, 0);
-    if (fd_ < 0) {
-        throw ConnectionError("Failed to create socket: " +
-                              std::string(strerror(errno)));
-    }
-
-    struct addrinfo hints{};
-    struct addrinfo *result = nullptr;
-    hints.ai_family   = AF_INET;
-    hints.ai_socktype = SOCK_STREAM;
-
-    std::string port_str = std::to_string(port_);
-    int rv = getaddrinfo(host_.c_str(), port_str.c_str(), &hints, &result);
-    if (rv != 0) {
-        ::close(fd_);
-        fd_ = -1;
-        throw ConnectionError("Failed to resolve host: " +
-                              std::string(gai_strerror(rv)));
-    }
-
-    bool ok = false;
-    for (struct addrinfo *rp = result; rp != nullptr; rp = rp->ai_next) {
-        if (::connect(fd_, rp->ai_addr, rp->ai_addrlen) == 0) {
-            ok = true;
-            break;
-        }
-    }
-    freeaddrinfo(result);
-
-    if (!ok) {
-        int saved_errno = errno;
-        ::close(fd_);
-        fd_ = -1;
-        throw ConnectionError("Reconnect failed to " + host_ + ":" +
-                              port_str + ": " + strerror(saved_errno));
-    }
-
-    // Re-apply TCP_NODELAY and keepalive on the new socket.
-    int opt = 1;
-    setsockopt(fd_, IPPROTO_TCP, TCP_NODELAY, &opt, sizeof(opt));
-    opt = 1;
-    setsockopt(fd_, SOL_SOCKET,  SO_KEEPALIVE,  &opt, sizeof(opt));
-    opt = 10;
-    setsockopt(fd_, IPPROTO_TCP, TCP_KEEPIDLE,  &opt, sizeof(opt));
-    opt = 5;
-    setsockopt(fd_, IPPROTO_TCP, TCP_KEEPINTVL, &opt, sizeof(opt));
-    opt = 3;
-    setsockopt(fd_, IPPROTO_TCP, TCP_KEEPCNT,   &opt, sizeof(opt));
-
-    connected_ = true;
-}
-
 Connection::~Connection()
 {
     close();
 }
 
-Connection::Connection(Connection&& other) noexcept
-    : fd_(other.fd_)
-    , host_(std::move(other.host_))
-    , port_(other.port_)
-    , connected_(other.connected_)
+void Connection::shutdown()
 {
-    other.fd_ = -1;
-    other.connected_ = false;
+    // fd_ is immutable until all users have joined.
+    connected_ = false;
+    if (fd_ >= 0) {
+        ::shutdown(fd_, SHUT_RDWR);
+    }
 }
 
-Connection& Connection::operator=(Connection&& other) noexcept
+ssize_t Connection::recv_available(void* buf, size_t len)
 {
-    if (this != &other) {
-        close();
-
-        fd_ = other.fd_;
-        host_ = std::move(other.host_);
-        port_ = other.port_;
-        connected_ = other.connected_;
-
-        other.fd_ = -1;
-        other.connected_ = false;
+    ssize_t n;
+    do {
+        n = ::recv(fd_, buf, len, MSG_DONTWAIT);
+    } while (n < 0 && errno == EINTR);
+    if (n < 0 && errno != EAGAIN && errno != EWOULDBLOCK) {
+        throw ConnectionError("Receive failed");
     }
-    return *this;
+    return n;
 }
 
 ssize_t Connection::send(const void* buf, size_t len)
@@ -186,10 +122,9 @@ ssize_t Connection::send(const void* buf, size_t len)
         throw ConnectionError("Not connected");
     }
 
-    ssize_t sent = ::send(fd_, buf, len, 0);
+    ssize_t sent = ::send(fd_, buf, len, MSG_NOSIGNAL);
     if (sent < 0) {
         int saved_errno = errno;
-        connected_ = false;
         throw ConnectionError("Send failed: " + std::string(strerror(saved_errno)));
     }
 
@@ -205,74 +140,91 @@ ssize_t Connection::recv(void* buf, size_t len)
     ssize_t received = ::recv(fd_, buf, len, 0);
     if (received < 0) {
         int saved_errno = errno;
-        connected_ = false;
         throw ConnectionError("Recv failed: " + std::string(strerror(saved_errno)));
     }
 
-    if (received == 0) {
-        // EOF - connection closed by peer
-        connected_ = false;
-    }
 
     return received;
 }
 
-/* Caller must hold send_lock_.  Same bytes-out-the-door loop as
- * send_exact() but without re-acquiring the mutex. */
-void Connection::send_all_locked(const void* buf, size_t len)
+void Connection::wait_ready(short events, Deadline deadline)
 {
-    size_t total_sent = 0;
-    const uint8_t* ptr = static_cast<const uint8_t*>(buf);
-
-    while (total_sent < len) {
-        ssize_t n = send(ptr + total_sent, len - total_sent);
-        if (n == 0) {
-            throw ConnectionError("Connection closed before sending all data");
+    while (!cancelled_) {
+        auto remaining = std::chrono::duration_cast<std::chrono::milliseconds>(
+            deadline - std::chrono::steady_clock::now()).count();
+        if (remaining <= 0) {
+            throw ConnectionError("Socket operation deadline exceeded");
         }
-        total_sent += n;
+        pollfd pfd{fd_, events, 0};
+        int result = poll(&pfd, 1, std::min<int64_t>(remaining, 50));
+        if (result > 0) {
+            if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+                throw ConnectionError("Socket closed");
+            }
+            if (pfd.revents & events) {
+                return;
+            }
+        } else if (result < 0 && errno != EINTR) {
+            throw ConnectionError("Socket poll failed");
+        }
+    }
+    throw ConnectionError("Socket operation cancelled");
+}
+
+void Connection::send_all_locked(const void* buf, size_t len, Deadline deadline)
+{
+    auto ptr = static_cast<const uint8_t*>(buf);
+    while (len) {
+        wait_ready(POLLOUT, deadline);
+        ssize_t n = ::send(fd_, ptr, len, MSG_NOSIGNAL | MSG_DONTWAIT);
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+            continue;
+        }
+        if (n <= 0) {
+            throw ConnectionError("Send failed");
+        }
+        ptr += n;
+        len -= n;
     }
 }
 
 void Connection::send_exact(const void* buf, size_t len)
 {
-    /*
-     * Serialise concurrent senders.  Multiple OSv block-layer threads
-     * may submit Writes simultaneously; without this lock their
-     * header and data bytes can interleave on the socket and the
-     * downstairs disconnects with "bytes remaining on stream".
-     */
     std::lock_guard<std::mutex> guard(send_lock_);
-    send_all_locked(buf, len);
+    send_all_locked(buf, len, std::chrono::steady_clock::now() + std::chrono::seconds(5));
+}
+
+void Connection::send_exact(const void* buf, size_t len, Deadline deadline)
+{
+    std::lock_guard<std::mutex> guard(send_lock_);
+    send_all_locked(buf, len, std::min(deadline,
+        std::chrono::steady_clock::now() + std::chrono::seconds(5)));
 }
 
 void Connection::send_exact_with_data(const void* header, size_t hlen,
                                       const void* data, size_t dlen)
 {
-    /*
-     * Holding the lock across BOTH the header and the data sends is
-     * what makes this atomic against concurrent senders -- a Crucible
-     * Write frame is one logical unit on the wire even though it is
-     * physically split between the bincode header (with the data
-     * length prefix) and the data bytes themselves.
-     */
     std::lock_guard<std::mutex> guard(send_lock_);
-    send_all_locked(header, hlen);
-    send_all_locked(data, dlen);
+    auto deadline = std::chrono::steady_clock::now() + std::chrono::seconds(5);
+    send_all_locked(header, hlen, deadline);
+    send_all_locked(data, dlen, deadline);
 }
 
 void Connection::recv_exact(void* buf, size_t len)
 {
     std::lock_guard<std::mutex> guard(recv_lock_);
-
-    size_t total_received = 0;
-    uint8_t* ptr = static_cast<uint8_t*>(buf);
-
-    while (total_received < len) {
-        ssize_t n = recv(ptr + total_received, len - total_received);
-        if (n == 0) {
-            throw ConnectionError("Connection closed before receiving all data");
+    auto ptr = static_cast<uint8_t*>(buf);
+    while (len) {
+        wait_ready(POLLIN, admission_deadline_);
+        ssize_t n = ::recv(fd_, ptr, len, MSG_DONTWAIT);
+        if (n < 0 && (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR)) {
+            continue;
         }
-        total_received += n;
+        if (n <= 0) {
+            throw ConnectionError("Receive failed");
+        }
+        ptr += n;
+        len -= n;
     }
 }
 

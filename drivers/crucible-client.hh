@@ -12,6 +12,7 @@
 #include "crucible-connection.hh"
 #include "crucible-types.hh"
 #include "crucible-request.hh"
+#include "crucible-messages.hh"
 #include <osv/sched.hh>
 #include <osv/mutex.h>
 #include <osv/condvar.h>
@@ -29,7 +30,8 @@ namespace crucible {
  * Implements the Crucible upstairs protocol for distributed block storage.
  * Connects to 3 downstairs servers and implements 2/3 quorum logic.
  *
- * Thread-safety: Safe for concurrent operations from multiple threads.
+ * Thread-safety: concurrent operations and disconnect are supported.
+ * Destruction requires external callers quiesced; a stopped client cannot reconnect.
  */
 class UpsairsClient {
 public:
@@ -48,7 +50,8 @@ public:
                   uint32_t block_size,
                   uint64_t total_blocks,
                   bool read_only = false,
-                  bool encrypted = false);
+                  bool encrypted = false,
+                  uint64_t generation = 0);
 
     ~UpsairsClient();
 
@@ -155,7 +158,7 @@ private:
     Uuid session_id_;         // Generated per session
     uint32_t block_size_;
     uint64_t total_blocks_;
-    uint64_t generation_{0};
+    uint64_t generation_;
     uint64_t flush_number_{0};  // Incremented on each flush
     bool read_only_;
     bool encrypted_;
@@ -163,32 +166,24 @@ private:
     // Connections (3 downstairs servers)
     std::array<std::unique_ptr<Connection>, 3> connections_;
     std::atomic<int> connected_count_{0};
+    std::array<std::atomic<bool>, 3> admitted_;
+    std::array<ExtentVersions, 3> versions_;
+    mutex lifecycle_mtx_;
+    std::atomic<bool> stopping_{false};
+    void disconnect_locked();
+    bool attempted_{false}; // A session cannot be restarted without repair/admission.
+    struct ReceiveState {
+        std::vector<uint8_t> bytes;
+        size_t wanted{4};
+        std::chrono::steady_clock::time_point started;
+    };
+    std::array<ReceiveState, 3> receive_;
+    void fail_downstairs(int index);
+    bool receive_available(int index, std::vector<uint8_t>& frame);
+    void validate_cohort();
 
-    /*
-     * Per-downstairs asynchronous sender.
-     *
-     * The decisive fix for the 256-MiB hang: the old code sent a Write/Flush
-     * to downstairs 0, then 1, then 2 in a serial blocking loop, each call
-     * holding that connection's send mutex across both the header and data
-     * halves of the frame.  When one downstairs backpressured TCP (busy
-     * fsync'ing dirty 64-MiB extents during a flush) the issuing thread
-     * wedged in send()/sbwait at index 0 and NEVER advanced to downstairs 1
-     * and 2 -- so the 2-of-3 quorum that the two fast replicas could have
-     * satisfied was never even attempted.  wait_for_quorum then timed out,
-     * the op returned EIO, ZFS failmode=wait suspended the pool, and
-     * txg_wait_synced hung forever.
-     *
-     * Each downstairs now owns a dedicated sender thread draining a FIFO
-     * frame queue.  write_sync/flush_sync/read_sync enqueue the encoded
-     * frame to all connected downstairs (a non-blocking push under a short
-     * mutex) and proceed straight to wait_for_quorum.  A backpressured
-     * downstairs stalls only its own sender thread; the other two drain and
-     * ack, quorum is reached, and the op completes.  The slow replica's
-     * queue drains in submission order once its socket clears, so the
-     * Write->Flush dependency lists (which encode allocation order, not wire
-     * order) keep every replica consistent.  This mirrors upstream Crucible's
-     * per-client async send model.
-     */
+    // Independent bounded sender queues keep a lagging replica from blocking
+    // dispatch to the healthy quorum. Wire dependencies preserve job ordering.
     struct SendFrame {
         std::vector<uint8_t> header;  // frame prefix + bincode header (+ data len)
         std::vector<uint8_t> data;    // bulk payload for Writes; empty otherwise
@@ -197,6 +192,7 @@ private:
         mutex mtx;
         condvar cv;
         std::deque<SendFrame> queue;
+        size_t queued_bytes{0};
         sched::thread* thread{nullptr};
         bool running{false};
     };
@@ -217,8 +213,8 @@ private:
      *
      * Drains the FIFO queue, writing each frame (header then optional data,
      * back to back under the connection send mutex so the pair reaches the
-     * wire as one contiguous Crucible frame).  A send failure closes the
-     * connection; io_loop's reconnect path takes over.
+     * wire as one contiguous Crucible frame).  A send failure permanently
+     * quarantines this replica; no reconnect is attempted.
      */
     void sender_loop(int downstairs_idx);
 
@@ -232,38 +228,12 @@ private:
     JobIdAllocator job_allocator_;
     RequestManager request_mgr_;
 
-    /*
-     * Write->Flush dependency tracking.
-     *
-     * A Crucible downstairs applies jobs from an internal work queue and is
-     * free to reorder independent jobs; the dependency list is what forces
-     * ordering.  ZFS issues many concurrent Writes from its z_wr threads and
-     * then a single Flush to close the txg.  Each Flush must depend on every
-     * Write submitted since the previous Flush, otherwise a downstairs that
-     * is lagging (e.g. the 3rd replica past 2/3 quorum) may apply the Flush
-     * before an outstanding Write -- the Write then lands after the flush
-     * boundary on that replica and is not durable on crash, which presents as
-     * a wedged txg_wait_synced or silent divergence between replicas.
-     *
-     * A new Write in turn depends on the most recent Flush so a write issued
-     * after a flush is ordered after it, matching the upstream upstairs.
-     *
-     * We deliberately do NOT add Write->Write dependencies for overlapping
-     * block ranges (which the full upstream upstairs does).  ZFS is copy-on-
-     * write: it never issues two concurrent writes to the same block within a
-     * txg -- each logical block gets a freshly allocated DVA -- so independent
-     * Writes are genuinely order-insensitive and only the Flush barrier needs
-     * ordering.  The few in-place rewrites (labels, uberblock array) are
-     * issued at txg-sync time, serialized behind the data Writes by this same
-     * Flush barrier.
-     *
-     * dep_mtx_ serializes "allocate id + record" against "snapshot + reset"
-     * so the snapshot taken by a Flush is exactly the set of Writes ZFS
-     * ordered before it.
-     */
-    mutex dep_mtx_;
-    std::vector<uint64_t> pending_writes_;  // Writes since last flush
-    uint64_t last_flush_id_{0};             // 0 = no flush issued yet
+    // ponytail: serialized operations form a transitive last-job chain,
+    // including reads and flushes. Range tracking can restore parallelism.
+    mutex operation_mtx_;
+    uint64_t last_job_id_{0};
+    std::vector<uint64_t> begin_job(uint64_t& job_id);
+    void fence_session();
 
     // I/O thread
     sched::thread* io_thread_{nullptr};
@@ -283,47 +253,6 @@ private:
     std::pair<std::string, uint16_t> parse_target(const std::string& target);
 
     /**
-     * Allocate a job id for a Write and compute its dependency list.
-     *
-     * Records the write in pending_writes_ immediately, in id-allocation
-     * order, so every Flush allocated afterwards lists it as a dependency.
-     * The write itself depends on the most recent Flush (if any) so a write
-     * issued after a flush is applied after it.  Recording at allocation (not
-     * after quorum) preserves the allocation-order == watermark-order
-     * invariant the downstairs CompletedJobs watermark requires.
-     *
-     * @param job_id Output: the allocated job id
-     * @return Dependency list to place in the Write message
-     */
-    std::vector<uint64_t> begin_write(uint64_t& job_id);
-
-    /**
-     * Remove a write from the pending set after it failed to reach quorum.
-     *
-     * A failed write returns EIO (fatal to the ZFS txg); dropping it keeps a
-     * later Flush from listing a write id no downstairs durably accepted.  A
-     * no-op if a Flush already snapshotted and cleared the pending set.
-     *
-     * @param job_id The write's job id, from begin_write()
-     */
-    void abort_write(uint64_t job_id);
-
-    /**
-     * Allocate a job id for a Flush and compute its dependency list.
-     *
-     * Snapshots every Write submitted since the previous Flush (plus the
-     * previous Flush itself) as dependencies, then advances the barrier at
-     * allocation: clears the pending set and records this flush as the most
-     * recent.  This is the barrier that makes ZFS's flush-after-writes
-     * ordering hold on every replica.  The advance happens here, not in a
-     * post-quorum commit, so the allocation-order invariant holds.
-     *
-     * @param job_id Output: the allocated job id
-     * @return Dependency list to place in the Flush message
-     */
-    std::vector<uint64_t> begin_flush(uint64_t& job_id);
-
-    /**
      * I/O thread main loop.
      */
     void io_loop();
@@ -341,7 +270,7 @@ private:
      *
      * @param downstairs_idx Index of downstairs (0-2)
      */
-    void process_responses(int downstairs_idx);
+    void process_responses(int downstairs_idx, const std::vector<uint8_t>& frame);
 
     /**
      * Perform handshake with a downstairs server.
@@ -349,7 +278,7 @@ private:
      * @param downstairs_idx Index of downstairs (0-2)
      * @throws std::runtime_error on handshake failure
      */
-    void handshake(int downstairs_idx);
+    void handshake(int downstairs_idx, std::chrono::steady_clock::time_point deadline);
 
     /**
      * Query region information from downstairs.
@@ -357,7 +286,7 @@ private:
      * @param downstairs_idx Index of downstairs (0-2)
      * @throws std::runtime_error on query failure
      */
-    void query_region_info(int downstairs_idx);
+    void query_region_info(int downstairs_idx, std::chrono::steady_clock::time_point deadline);
 
     /**
      * Receive a frame (length prefix + data).

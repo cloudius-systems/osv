@@ -44,11 +44,12 @@ namespace crucible {
  * @param block_size Block size in bytes (default: 512)
  * @param read_only Mount read-only if true
  * @param device_index Device index for multi-volume support (0-7, default: 0)
+ * @param generation Required externally leased nonzero generation; default refuses admission
  * @return 0 on success, error code on failure (boot continues regardless)
  */
 int crucible_init(const std::string& targets, const std::string& uuid,
                   uint32_t block_size = 512, bool read_only = false,
-                  int device_index = 0);
+                  int device_index = 0, uint64_t generation = 0);
 
 } // namespace crucible
 
