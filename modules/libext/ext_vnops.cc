@@ -463,8 +463,8 @@ Finish:
 
 // Worker pool: each thread pulls a fill job off the queue and calls
 // ext_internal_read() synchronously into the job's ring slot buffer, using its
-// own inode_ref (concurrent reads of the same inode are safe: lwext4 locks its
-// block cache internally and inode refs are per-caller). Each blocked worker
+// own inode_ref. Inode refs share cached metadata: mutators must drain these
+// workers before changing the file's contents or mappings. Each blocked worker
 // holds one bio at the device, so RA_WORKERS threads give queue depth
 // ~RA_WORKERS. Jobs carry the ring generation; if it no longer matches when
 // the fill finishes, a seek/invalidate happened and the result is discarded
@@ -1357,8 +1357,19 @@ ext_create(struct vnode *dvp, char *name, mode_t mode)
 }
 
 static int
-ext_trunc_inode(struct ext4_fs *fs, uint32_t index, uint64_t new_size, bool *update_cmtimes)
+ext_trunc_inode(struct vnode *vp, uint64_t new_size, bool *update_cmtimes)
 {
+    // Callers hold the vnode lock, preventing new reads from arming the ring.
+    // lwext4's cache lock does not protect inode mappings for a read's lifetime;
+    // drain the workers before any truncate (including last-link removal).
+    ext_vdata *vdata = (ext_vdata *)vp->v_data;
+    if (vdata) {
+        mutex_lock(&vdata->ra_lock);
+        ext_ra_invalidate(vdata);
+        mutex_unlock(&vdata->ra_lock);
+    }
+    struct ext4_fs *fs = (struct ext4_fs *)vp->v_mount->m_data;
+    uint32_t index = vp->v_ino;
     struct ext4_inode_ref inode_ref;
     int r = ext4_fs_get_inode_ref(fs, index, &inode_ref);
     if (r != EOK)
@@ -1434,8 +1445,9 @@ Finish:
 }
 
 static int
-ext_dir_trunc(struct ext4_fs *fs, struct ext4_inode_ref *parent, struct ext4_inode_ref *dir)
+ext_dir_trunc(struct vnode *vp, struct ext4_inode_ref *parent, struct ext4_inode_ref *dir)
 {
+    struct ext4_fs *fs = (struct ext4_fs *)vp->v_mount->m_data;
     int r = EOK;
     uint32_t block_size = ext4_sb_get_block_size(&fs->sb);
 
@@ -1446,13 +1458,13 @@ ext_dir_trunc(struct ext4_fs *fs, struct ext4_inode_ref *parent, struct ext4_ino
         if (r != EOK)
             return r;
 
-        r = ext_trunc_inode(fs, dir->index, EXT4_DIR_DX_INIT_BCNT * block_size, nullptr);
+        r = ext_trunc_inode(vp, EXT4_DIR_DX_INIT_BCNT * block_size, nullptr);
         if (r != EOK)
             return r;
     } else
 #endif
     {
-        r = ext_trunc_inode(fs, dir->index, block_size, nullptr);
+        r = ext_trunc_inode(vp, block_size, nullptr);
         if (r != EOK)
             return r;
     }
@@ -1480,13 +1492,13 @@ ext_dir_remove_entry(struct vnode *dvp, struct vnode *vp, char *name)
     uint32_t inode_type = ext4_inode_type(&fs->sb, child._ref.inode);
     if (inode_type != EXT4_INODE_MODE_DIRECTORY) {
         if (ext4_inode_get_links_cnt(child._ref.inode) == 1) {
-            r = ext_trunc_inode(fs, child._ref.index, 0, nullptr);
+            r = ext_trunc_inode(vp, 0, nullptr);
             if (r != EOK) {
                 return r;
             }
         }
     } else {
-        r = ext_dir_trunc(fs, &parent._ref, &child._ref);
+        r = ext_dir_trunc(vp, &parent._ref, &child._ref);
         if (r != EOK) {
             return r;
         }
@@ -1747,18 +1759,8 @@ ext_truncate(struct vnode *vp, off_t new_size)
 {
     ext_debug("truncate i-node=%ld, new_size:%ld\n", vp->v_ino, new_size);
     struct ext4_fs *fs = (struct ext4_fs *)vp->v_mount->m_data;
-    // Truncation changes the file's block layout; drop any read-ahead windows
-    // and cancel in-flight prefetch first.
-    {
-        ext_vdata *vdata = (ext_vdata *)vp->v_data;
-        if (vdata) {
-            mutex_lock(&vdata->ra_lock);
-            ext_ra_invalidate(vdata);
-            mutex_unlock(&vdata->ra_lock);
-        }
-    }
     bool update_cmtimed = false;
-    int r = ext_trunc_inode(fs, vp->v_ino, new_size, &update_cmtimed);
+    int r = ext_trunc_inode(vp, new_size, &update_cmtimed);
     if (update_cmtimed) {
         auto_inode_ref inode_ref(fs, vp->v_ino);
         if (inode_ref._r != EOK) {
