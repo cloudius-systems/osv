@@ -49,6 +49,16 @@ unsigned node_of_cpu(unsigned cpu_id)
     return it == s_topology.cpu_to_node.end() ? 0 : it->second;
 }
 
+int node_of_phys(uint64_t phys)
+{
+    for (const auto& range : s_topology.mem_ranges) {
+        if (phys >= range.base && phys - range.base < range.length) {
+            return int(range.node);
+        }
+    }
+    return -1;
+}
+
 bool cpu_node_known(unsigned cpu_id)
 {
     return s_topology.cpu_to_node.find(cpu_id) != s_topology.cpu_to_node.end();

@@ -10,6 +10,7 @@
 
 #include <osv/debug.hh>
 #include <osv/sched.hh>
+#include <osv/numa.hh>
 #include <osv/mutex.h>
 #include <osv/waitqueue.hh>
 #include <osv/stubbing.hh>
@@ -184,23 +185,65 @@ int futex(int *uaddr, int op, int val, const struct timespec *timeout,
 static long get_mempolicy(int *policy, unsigned long *nmask,
         unsigned long maxnode, void *addr, int flags)
 {
-    // As OSv has no support for NUMA nodes, we do here the minimum possible,
-    // which is basically to return the same policy (MPOL_DEFAULT) and list
-    // of nodes (just node 0) no matter if the caller asked for the default
-    // policy, the allowed policy, or the policy for a specific address.
-    if ((flags & MPOL_F_NODE)) {
-        *policy = 0; // in this case, store a node id, not a policy
-        return 0;
+    // Native Linux uses ALIGN(maxnode - 1, 64), and libnuma passes size + 1.
+    // Bound before arithmetic, rather than inheriting unsigned overflow quirks.
+    if (nmask && (maxnode < numa::nr_nodes() || maxnode > 32769)) {
+        errno = EINVAL;
+        return -1;
     }
-    if (policy) {
-        *policy = MPOL_DEFAULT;
+    if ((flags & ~(MPOL_F_NODE | MPOL_F_ADDR | MPOL_F_MEMS_ALLOWED)) ||
+        ((flags & MPOL_F_MEMS_ALLOWED) && flags != MPOL_F_MEMS_ALLOWED)) {
+        errno = EINVAL;
+        return -1;
     }
-    if (nmask) {
-        if (maxnode < 1) {
+    if (flags == MPOL_F_MEMS_ALLOWED) {
+        // No cpusets or placement enforcement: this is a compatibility mask
+        // of firmware-reported memory nodes, not certified allocator coverage.
+        // Missing memory metadata must not report an empty permission set.
+        if (numa::available() && numa::memory_ranges().empty()) {
+            errno = EOPNOTSUPP;
+            return -1;
+        }
+    } else {
+        // No safe VMA/page query yet. Never translate or dereference addr.
+        if (flags & MPOL_F_ADDR) {
+            errno = EOPNOTSUPP;
+            return -1;
+        }
+        if (addr || (flags & MPOL_F_NODE)) {
+            // NODE without ADDR asks for the next interleave node, not CPU node.
             errno = EINVAL;
             return -1;
         }
-        nmask[0] |= 1;
+    }
+    if (policy) {
+        int mode = MPOL_DEFAULT; // No nondefault policy, NOT local placement.
+        memcpy(policy, &mode, sizeof(mode));
+    }
+    if (nmask) {
+        size_t bytes = ((maxnode - 1 + 63) / 64) * sizeof(unsigned long);
+        // Shared-address-space buffer convention, as with other OSv syscalls;
+        // memcpy permits unaligned valid buffers, not hostile-pointer isolation.
+        memset(nmask, 0, bytes);
+        if (flags == MPOL_F_MEMS_ALLOWED) {
+            auto set_node = [&](unsigned node) {
+                size_t offset = (node / 64) * sizeof(unsigned long);
+                if (offset < bytes) {
+                    unsigned long word;
+                    auto* dest = reinterpret_cast<char*>(nmask) + offset;
+                    memcpy(&word, dest, sizeof(word));
+                    word |= 1UL << (node % 64);
+                    memcpy(dest, &word, sizeof(word));
+                }
+            };
+            if (!numa::available()) {
+                set_node(0);
+            } else {
+                for (const auto& range : numa::memory_ranges()) {
+                    set_node(range.node);
+                }
+            }
+        }
     }
     return 0;
 }
@@ -210,9 +253,40 @@ static long get_mempolicy(int *policy, unsigned long *nmask,
 static long set_mempolicy(int policy, unsigned long *nmask,
         unsigned long maxnode)
 {
-    // OSv has very minimal support for NUMA - merely exposes
-    // all cpus as a single node0 and cannot really apply any meaningful policy
-    // Therefore we implement this as noop, ignore all arguments and return success
+    // Recognize Linux modes through WEIGHTED_INTERLEAVE, but implement only
+    // an unmodified DEFAULT reset. Never pretend to enforce placement.
+    constexpr int balancing = 1 << 13, relative = 1 << 14, fixed = 1 << 15;
+    int mode = policy & ~(balancing | relative | fixed);
+    if (mode < 0 || mode > 6 ||
+        ((policy & relative) && (policy & fixed)) ||
+        ((policy & balancing) && mode != 2 && mode != 5)) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (policy != MPOL_DEFAULT) {
+        errno = EOPNOTSUPP;
+        return -1;
+    }
+    if (!nmask) {
+        return 0;
+    }
+    if (!maxnode || maxnode > 32769) {
+        errno = EINVAL;
+        return -1;
+    }
+    // Linux get_nodes() consumes maxnode-1 bits; padding is ignored.
+    unsigned long bits = maxnode - 1;
+    for (unsigned long bit = 0; bit < bits; bit += 64) {
+        unsigned long word;
+        memcpy(&word, reinterpret_cast<const char*>(nmask) + bit / 8, sizeof(word));
+        if (bits - bit < 64) {
+            word &= (1UL << (bits - bit)) - 1;
+        }
+        if (word) {
+            errno = EINVAL;
+            return -1;
+        }
+    }
     return 0;
 }
 #endif
@@ -460,12 +534,13 @@ static long sys_getcwd(char *buf, unsigned long size)
 #define __NR_sys_getcpu __NR_getcpu
 static long sys_getcpu(unsigned int *cpu, unsigned int *node, void *tcache)
 {
+    unsigned id = sched::cpu::current()->id;
     if (cpu) {
-        *cpu = sched::cpu::current()->id;
+        memcpy(cpu, &id, sizeof(id));
     }
-
     if (node) {
-       *node = 0;
+        unsigned n = numa::node_of_cpu(id);
+        memcpy(node, &n, sizeof(n));
     }
 
     return 0;
