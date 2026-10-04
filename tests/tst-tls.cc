@@ -25,6 +25,11 @@ __thread int v2 = 234;
 #ifndef __DLOPEN__
 extern __thread int ex1;
 extern __thread int ex2;
+#else
+// The library to dlopen(). It defines ex1, ex3 and external_library().
+#ifndef __DLOPEN_LIB__
+#define __DLOPEN_LIB__ "/tests/libtls.so"
+#endif
 #endif
 
 // If the compiler knows the thread-local variable must be defined in the same
@@ -77,7 +82,7 @@ int main(int argc, char** argv)
     //We do not test ex2 variable because in libtls.cc it is set
     //to be accessed via initial-exec which by design is not possible
     //if libtls.so is dlopen-ed
-    auto handle = dlopen("/tests/libtls.so", RTLD_NOW);
+    auto handle = dlopen(__DLOPEN_LIB__, RTLD_NOW);
     assert(handle);
     int *ex1_ptr = reinterpret_cast<int*>(dlsym(handle, "ex1"));
     int *ex3_ptr = reinterpret_cast<int*>(dlsym(handle, "ex3"));
@@ -166,6 +171,20 @@ int main(int argc, char** argv)
     });
     t1.join();
 #ifdef __DLOPEN__
+    // Try again in a new thread, but this time call into libtls.so before
+    // anything else accesses its thread-local variables. This way, if
+    // libtls.so uses TLS descriptors (-mtls-dialect=gnu2), its TLS block
+    // for this thread is allocated by the TLS descriptor resolver instead
+    // of by dlsym().
+    std::thread t2([external_library,handle] {
+            external_library();
+            int *ex1_ptr3 = reinterpret_cast<int*>(dlsym(handle, "ex1"));
+            int *ex3_ptr3 = reinterpret_cast<int*>(dlsym(handle, "ex3"));
+            assert(ex1_ptr3 && ex3_ptr3);
+            report(*ex1_ptr3 == 322, "ex1 modified in new thread before dlsym");
+            report(*ex3_ptr3 == 766, "ex3 modified in new thread before dlsym");
+    });
+    t2.join();
     dlclose(handle);
 #endif
 

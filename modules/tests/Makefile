@@ -221,6 +221,7 @@ internal-api-tests := tst-app.so tst-async.so tst-bsd-evh.so \
 
 ifeq ($(arch),x64)
 tests += tst-mmx-fpu.so tst-tls-desc.so tst-tls-pie-desc.so libtls_desc.so
+tests += tst-tls-pie-dlopen-desc.so
 endif
 
 tests += testrunner.so
@@ -248,6 +249,7 @@ $(out)/tests/tst-tls-pie.so: COMMON += -fuse-ld=bfd
 $(out)/tests/tst-tls-desc.so: COMMON += -fuse-ld=bfd
 $(out)/tests/tst-tls-pie-desc.so: COMMON += -fuse-ld=bfd
 $(out)/tests/tst-tls-pie-dlopen.so: COMMON += -fuse-ld=bfd
+$(out)/tests/tst-tls-pie-dlopen-desc.so: COMMON += -fuse-ld=bfd
 
 $(out)/tests/tst-dlfcn.so: COMMON += -rdynamic -ldl
 
@@ -300,6 +302,17 @@ $(out)/tests/tst-tls-pie-dlopen.so: \
 		$(out)/tests/tst-tls-pie-dlopen.o
 	$(makedir)
 	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -export-dynamic -pthread -fpie -o $@ $< $(LIBS), LD tests/tst-tls-pie-dlopen.so)
+
+# Like tst-tls-pie-dlopen.so, but dlopen() libtls_desc.so, which uses TLS
+# descriptors regardless of the compiler's default TLS dialect.
+$(out)/tests/tst-tls-pie-dlopen-desc.o: CXXFLAGS:=$(subst -fPIC,-fpie,$(CXXFLAGS)) -D__DLOPEN__=1 -D__DLOPEN_LIB__='"/tests/libtls_desc.so"'
+$(out)/tests/tst-tls-pie-dlopen-desc.o: $(src)/tests/tst-tls.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX tests/tst-tls.cc => tests/tst-tls-pie-dlopen-desc.o)
+$(out)/tests/tst-tls-pie-dlopen-desc.so: \
+		$(out)/tests/tst-tls-pie-dlopen-desc.o
+	$(makedir)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -export-dynamic -pthread -fpie -o $@ $< $(LIBS), LD tests/tst-tls-pie-dlopen-desc.so)
 
 $(out)/tests/libtls_gold.so: COMMON += -fuse-ld=gold
 $(out)/tests/libtls_gold.so: $(out)/tests/libtls.o
