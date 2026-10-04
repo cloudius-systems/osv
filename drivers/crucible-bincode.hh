@@ -174,10 +174,10 @@ private:
 class Decoder {
 public:
     Decoder(const std::vector<uint8_t>& data)
-        : data_(data), pos_(0) {}
+        : data_(data.data()), size_(data.size()), pos_(0) {}
 
     Decoder(const uint8_t* data, size_t len)
-        : data_(data, data + len), pos_(0) {}
+        : data_(data), size_(len), pos_(0) {}
 
     /**
      * Get current position.
@@ -187,24 +187,24 @@ public:
     /**
      * Get remaining bytes.
      */
-    size_t remaining() const { return data_.size() - pos_; }
+    size_t remaining() const { return size_ - pos_; }
 
     /**
      * Check if at end.
      */
-    bool at_end() const { return pos_ >= data_.size(); }
+    bool at_end() const { return pos_ >= size_; }
 
     // Primitive types
 
     uint8_t decode_u8() {
-        if (pos_ + 1 > data_.size()) {
+        if (pos_ + 1 > size_) {
             throw std::runtime_error("Decode error: not enough data for u8");
         }
         return data_[pos_++];
     }
 
     uint16_t decode_u16() {
-        if (pos_ + 2 > data_.size()) {
+        if (pos_ + 2 > size_) {
             throw std::runtime_error("Decode error: not enough data for u16");
         }
         uint16_t val = data_[pos_] |
@@ -214,7 +214,7 @@ public:
     }
 
     uint32_t decode_u32() {
-        if (pos_ + 4 > data_.size()) {
+        if (pos_ + 4 > size_) {
             throw std::runtime_error("Decode error: not enough data for u32");
         }
         uint32_t val = data_[pos_] |
@@ -226,7 +226,7 @@ public:
     }
 
     uint64_t decode_u64() {
-        if (pos_ + 8 > data_.size()) {
+        if (pos_ + 8 > size_) {
             throw std::runtime_error("Decode error: not enough data for u64");
         }
         uint64_t val = 0;
@@ -239,6 +239,7 @@ public:
 
     bool decode_bool() {
         uint8_t val = decode_u8();
+        if (val > 1) { throw std::runtime_error("Invalid boolean tag"); }
         return val != 0;
     }
 
@@ -253,7 +254,7 @@ public:
         if (len != 16) {
             throw std::runtime_error("Decode error: UUID byte-length is not 16");
         }
-        if (pos_ + 16 > data_.size()) {
+        if (pos_ + 16 > size_) {
             throw std::runtime_error("Decode error: not enough data for UUID");
         }
         Uuid uuid;
@@ -263,7 +264,7 @@ public:
     }
 
     EncryptionContext decode_encryption_context() {
-        if (pos_ + 28 > data_.size()) {
+        if (pos_ + 28 > size_) {
             throw std::runtime_error("Decode error: not enough data for EncryptionContext");
         }
         EncryptionContext ctx;
@@ -289,9 +290,12 @@ public:
 
     // Vec<T>
     template<typename T, typename DecodeFunc>
-    std::vector<T> decode_vec(DecodeFunc decode_fn) {
+    std::vector<T> decode_vec(DecodeFunc decode_fn, size_t minimum_size = 1) {
         uint64_t len = decode_u64();
         std::vector<T> vec;
+        if (!minimum_size || len > remaining() / minimum_size) {
+            throw std::runtime_error("Vector count exceeds frame");
+        }
         vec.reserve(len);
         for (uint64_t i = 0; i < len; i++) {
             vec.push_back(decode_fn());
@@ -302,20 +306,21 @@ public:
     // String (Vec<u8>)
     std::string decode_string() {
         uint64_t len = decode_u64();
-        if (pos_ + len > data_.size()) {
+        if (len > remaining()) {
             throw std::runtime_error("Decode error: not enough data for string");
         }
-        std::string str(reinterpret_cast<const char*>(&data_[pos_]), len);
+        if (!len) { return {}; }
+        std::string str(reinterpret_cast<const char*>(data_ + pos_), len);
         pos_ += len;
         return str;
     }
 
     // Raw bytes (caller already knows the length).
     std::vector<uint8_t> decode_bytes(size_t len) {
-        if (pos_ + len > data_.size()) {
+        if (len > remaining()) {
             throw std::runtime_error("Decode error: not enough data for bytes");
         }
-        std::vector<uint8_t> bytes(data_.begin() + pos_, data_.begin() + pos_ + len);
+        std::vector<uint8_t> bytes(data_ + pos_, data_ + pos_ + len);
         pos_ += len;
         return bytes;
     }
@@ -331,14 +336,16 @@ public:
 
     // Skip bytes
     void skip(size_t len) {
-        if (pos_ + len > data_.size()) {
+        if (len > remaining()) {
             throw std::runtime_error("Decode error: cannot skip beyond end");
         }
         pos_ += len;
     }
 
 private:
-    std::vector<uint8_t> data_;
+    // Borrow the frame; the caller keeps it alive for the decode.
+    const uint8_t* data_;
+    size_t size_;
     size_t pos_;
 };
 

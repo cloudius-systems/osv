@@ -61,6 +61,7 @@
 #include "drivers/console.hh"
 #include "drivers/null.hh"
 #include "drivers/crucible-blk.hh"
+#include "drivers/crucible-config.hh"
 
 #include "libc/network/__dns.hh"
 #include <processor.hh>
@@ -192,6 +193,7 @@ extern "C" uint64_t zfs_arc_max_option;
 #if CONF_drivers_crucible
 static std::string opt_crucible_targets;
 static std::string opt_crucible_uuid;
+static uint64_t opt_crucible_generation = 0;
 static uint32_t opt_crucible_block_size = 512;
 static bool opt_crucible_read_only = false;
 
@@ -199,6 +201,7 @@ static bool opt_crucible_read_only = false;
 #define MAX_CRUCIBLE_DEVICES 8
 static std::string opt_crucible_targets_indexed[MAX_CRUCIBLE_DEVICES];
 static std::string opt_crucible_uuid_indexed[MAX_CRUCIBLE_DEVICES];
+static uint64_t opt_crucible_generation_indexed[MAX_CRUCIBLE_DEVICES]{};
 #endif
 
 #if CONF_tracepoints_sampler
@@ -261,6 +264,8 @@ static void usage()
         "                        K, M, G or T suffix (64M up to the memory size)\n"
 #if CONF_drivers_crucible
         "  --crucible=arg        Crucible downstairs servers (host1:port1,host2:port2,host3:port3)\n"
+        "  --crucible-generation=arg Required operator-leased generation (nonzero)\n"
+        "  --crucibleN-generation=arg Required per indexed volume (N=0..7)\n"
         "  --crucible-uuid=arg   Crucible region UUID\n"
         "  --crucible-block-size=arg Block size in bytes (default: 512)\n"
         "  --crucible-read-only  Mount Crucible volume read-only\n"
@@ -503,10 +508,22 @@ static void parse_options(int loader_argc, char** loader_argv)
         opt_crucible_read_only = true;
     }
 
+    auto extract_generation = [&](const std::string& key) -> uint64_t {
+        if (!options::option_value_exists(options_values, key)) { return 0; }
+        try {
+            return crucible::parse_generation(options::extract_option_value(options_values, key));
+        } catch (const std::exception& e) {
+            handle_parse_error(key + ": " + e.what());
+            return 0;
+        }
+    };
+    opt_crucible_generation = extract_generation("crucible-generation");
+
     // Parse indexed Crucible volumes (crucible0, crucible1, ...)
     for (int i = 0; i < MAX_CRUCIBLE_DEVICES; i++) {
         std::string targets_key = "crucible" + std::to_string(i);
         std::string uuid_key = "crucible" + std::to_string(i) + "-uuid";
+        opt_crucible_generation_indexed[i] = extract_generation(targets_key + "-generation");
 
         if (options::option_value_exists(options_values, targets_key)) {
             opt_crucible_targets_indexed[i] = options::extract_option_value(options_values, targets_key);
@@ -798,7 +815,7 @@ void* do_main_thread(void *_main_args)
     // Legacy single volume support (--crucible)
     if (!opt_crucible_targets.empty()) {
         int ret = crucible::crucible_init(opt_crucible_targets, opt_crucible_uuid,
-                                          opt_crucible_block_size, opt_crucible_read_only, 0);
+                                          opt_crucible_block_size, opt_crucible_read_only, 0, opt_crucible_generation);
         if (ret != 0) {
             kprintf("loader: Crucible initialization returned error %d (boot continues)\n", ret);
         }
@@ -809,7 +826,8 @@ void* do_main_thread(void *_main_args)
         if (!opt_crucible_targets_indexed[i].empty()) {
             int ret = crucible::crucible_init(opt_crucible_targets_indexed[i],
                                               opt_crucible_uuid_indexed[i],
-                                              opt_crucible_block_size, opt_crucible_read_only, i);
+                                              opt_crucible_block_size, opt_crucible_read_only, i,
+                                              opt_crucible_generation_indexed[i]);
             if (ret != 0) {
                 kprintf("loader: Crucible device %d initialization returned error %d (boot continues)\n",
                         i, ret);

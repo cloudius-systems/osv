@@ -20,6 +20,7 @@
 #include <map>
 
 namespace crucible {
+enum class MessageType : uint32_t;
 
 /**
  * Pending request tracker for quorum logic.
@@ -29,6 +30,8 @@ namespace crucible {
  */
 struct PendingRequest {
     uint64_t job_id;
+    const MessageType expected_type;
+    const uint32_t read_length;
 
     // Response tracking
     std::atomic<int> responses_received{0};
@@ -37,11 +40,11 @@ struct PendingRequest {
 
     // Per-downstairs state
     std::array<bool, 3> downstairs_responded{false, false, false};
-    std::array<CrucibleError, 3> downstairs_errors;
+    std::array<bool, 3> downstairs_succeeded{false, false, false};
+    std::array<CrucibleError, 3> downstairs_errors{{CrucibleError::IoError, CrucibleError::IoError, CrucibleError::IoError}};
 
     // For read operations: store response data
     std::array<std::vector<uint8_t>, 3> read_data;
-    std::array<std::vector<ReadBlockContext>, 3> read_contexts;
 
     // Synchronization
     mutex mtx;
@@ -57,8 +60,10 @@ struct PendingRequest {
     // Required quorum (2 for normal ops, 3 for snapshots)
     int required_quorum{2};
 
-    PendingRequest(uint64_t id, int quorum = 2)
+    PendingRequest(uint64_t id, MessageType type, uint32_t length, int quorum = 2)
         : job_id(id)
+        , expected_type(type)
+        , read_length(length)
         , result(Result<void>::err(CrucibleError::Timeout))
         , start_time(std::chrono::steady_clock::now())
         , required_quorum(quorum)
@@ -100,7 +105,7 @@ struct PendingRequest {
      * @return true if required quorum responses received (success or error)
      */
     bool has_quorum() const {
-        return success_count >= required_quorum || error_count >= required_quorum;
+        return success_count >= required_quorum || error_count > 3 - required_quorum;
     }
 
     /**
@@ -132,7 +137,8 @@ public:
      * @param required_quorum Required number of successful responses (default 2)
      * @return Shared pointer to pending request
      */
-    std::shared_ptr<PendingRequest> create_request(uint64_t job_id, int required_quorum = 2);
+    std::shared_ptr<PendingRequest> create_request(uint64_t job_id, MessageType type,
+                                                   uint32_t read_length = 0, int required_quorum = 2);
 
     /**
      * Find an existing pending request.
