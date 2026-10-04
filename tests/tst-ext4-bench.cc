@@ -27,12 +27,21 @@
 #include <chrono>
 #include <vector>
 #include <random>
+#include <algorithm>
+#include <cstdint>
 
 using clk = std::chrono::steady_clock;
 
 static double secs(clk::time_point a, clk::time_point b)
 {
     return std::chrono::duration<double>(b - a).count();
+}
+
+// Encode the absolute 8-byte word index in little-endian order. Unlike a
+// byte-periodic pattern, every 256KiB window contains different data.
+static char pattern_byte(uint64_t offset)
+{
+    return char(((offset / 8) >> (8 * (offset % 8))) & 0xff);
 }
 
 // Write `total` bytes to `path` in `bs`-sized chunks; return MB/s.
@@ -47,21 +56,21 @@ static double bench_write(const char *path, size_t total, size_t bs, bool do_fsy
     while (written < total) {
         // Absolute-offset pattern so a sequential read can verify integrity
         // regardless of chunk size / read-ahead window boundaries.
-        for (size_t i = 0; i < bs; i++)
-            buf[i] = (char)(((written + i) * 7 + 3) & 0xff);
-        ssize_t n = write(fd, buf.data(), bs);
-        if (n != (ssize_t)bs) { perror("write"); close(fd); return -1; }
+        size_t chunk = std::min(bs, total - written);
+        for (size_t i = 0; i < chunk; i++)
+            buf[i] = pattern_byte(written + i);
+        ssize_t n = write(fd, buf.data(), chunk);
+        if (n != (ssize_t)chunk) { perror("write"); close(fd); return -1; }
         written += n;
     }
-    if (do_fsync && fsync(fd) != 0) { perror("fsync"); }
+    if (do_fsync && fsync(fd) != 0) { perror("fsync"); close(fd); return -1; }
     auto t1 = clk::now();
     close(fd);
     return (total / (1024.0 * 1024.0)) / secs(t0, t1);
 }
 
 // Sequential read of `total` bytes in `bs` chunks; return MB/s. If verify is
-// set, checks each byte matches the write pattern (i*7+3)&0xff, proving the
-// read path (incl. read-ahead) returns correct data.
+// set, checks each byte against its absolute-offset word index.
 static double bench_read_seq(const char *path, size_t total, size_t bs, bool verify = false)
 {
     int fd = open(path, O_RDONLY);
@@ -70,11 +79,15 @@ static double bench_read_seq(const char *path, size_t total, size_t bs, bool ver
     auto t0 = clk::now();
     size_t rd = 0;
     while (rd < total) {
-        ssize_t n = read(fd, buf.data(), bs);
-        if (n <= 0) break;
+        ssize_t n = read(fd, buf.data(), std::min(bs, total - rd));
+        if (n <= 0) {
+            fprintf(stderr, "read: error or premature EOF after %zu bytes\n", rd);
+            close(fd);
+            return -1;
+        }
         if (verify) {
             for (ssize_t i = 0; i < n; i++) {
-                char expect = (char)(((rd + i) * 7 + 3) & 0xff);
+                char expect = pattern_byte(rd + i);
                 if (buf[i] != expect) {
                     fprintf(stderr, "VERIFY FAIL at byte %zu: got %d want %d\n",
                             rd + i, (unsigned char)buf[i], (unsigned char)expect);
@@ -105,7 +118,7 @@ static double bench_read_rand(const char *path, size_t file_size, size_t bs, int
     for (int i = 0; i < count; i++) {
         off_t off = (off_t)dist(rng) * bs;
         ssize_t n = pread(fd, buf.data(), bs, off);
-        if (n <= 0) break;
+        if (n != (ssize_t)bs) { fprintf(stderr, "short random read\n"); close(fd); return -1; }
         rd += n;
     }
     auto t1 = clk::now();
@@ -119,6 +132,8 @@ int main(int argc, char **argv)
     // Sizes: modest by default so it runs on small images; override via argv.
     size_t total = (argc > 2) ? strtoull(argv[2], nullptr, 0) : (64UL << 20); // 64 MiB
     size_t bs = (argc > 3) ? strtoull(argv[3], nullptr, 0) : (128UL << 10);   // 128 KiB
+
+    if (!bs || total < 4096) { fprintf(stderr, "invalid sizes\n"); return 1; }
 
     char path[512];
     snprintf(path, sizeof(path), "%s/bench.dat", dir);
