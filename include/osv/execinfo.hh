@@ -19,10 +19,8 @@ int backtrace_safe(void** pc, int nr);
 // frame-pointer chain.
 //
 // Use this from anything that samples (a profiler, a periodic tracepoint).
-// backtrace_safe() cannot see past the interrupt entry stub, because the stub
-// pushes an exception_frame and not a frame record, so an fp walk started in
-// the handler terminates in the entry frames and attributes every sample to
-// them instead of to the code that was running.
+// A frame-pointer walk can recover callers but not the interrupted leaf PC.
+// Start with the saved PC, then walk the interrupted frame-pointer chain.
 //
 // Outside interrupt context this is exactly backtrace_safe().
 int backtrace_safe_from_interrupt(void** pc, int nr);
