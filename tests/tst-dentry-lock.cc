@@ -188,7 +188,8 @@ int main(int argc, char **argv)
         std::printf("FAILED\n");
         return 1;
     }
-    // Reaching this line at all is the result: the unfixed kernel never does.
+    // This stress test passes before and after the fix; completion is not a
+    // reproducer for the lock-order inversion.
     std::printf("OK\n");
     return 0;
 }
