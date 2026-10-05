@@ -2008,6 +2008,9 @@ endif
 ifeq ($(conf_fs_sysfs),1)
 fs_objs += sysfs/sysfs_vnops.o
 endif
+ifeq ($(conf_fs_9p),1)
+fs_objs += 9p/codec.o
+endif
 fs_objs += zfs/zfs_null_vfsops.o
 
 objects += $(addprefix fs/, $(fs_objs))

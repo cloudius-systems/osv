@@ -17,3 +17,8 @@ config fs_buffer_cache_size
   prompt "Buffer cache size"
   int
   default 256
+
+config fs_9p
+  prompt "Include 9P2000.L filesystem client"
+  bool
+  default n
