@@ -20,6 +20,11 @@ using namespace memory;
 
 namespace virtio {
 
+// The in-class initializer is only a declaration; std::min binds its
+// arguments by reference, which odr-uses the member and needs this
+// definition when the compiler does not constant-fold (for example -O0).
+const unsigned balloon::PFNS_PER_REQUEST;
+
 balloon::balloon(virtio_device& dev)
     : virtio_driver(dev)
     , _thread(sched::thread::make([&] { worker(); },
