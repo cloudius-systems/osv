@@ -109,6 +109,12 @@ void session::drain()
         request& r = *_req[id];
         frame f;
         int rc = decode(r.rx.data(), r.rx_len, _msize ? _msize : _offered, f);
+        if (!rc && f.tag != r.tag) {
+            // A reply arrived in the buffer of a request with another tag:
+            // the transport or server crossed them. Matching it by tag alone
+            // could deliver it to the wrong caller.
+            rc = EPROTO;
+        }
         if (id == version_id) {
             uint32_t m = 0;
             if (!rc) {
