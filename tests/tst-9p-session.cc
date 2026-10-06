@@ -1306,6 +1306,47 @@ static void flush_slot_expiry()
     std::puts("PASS: flush slot expiry");
 }
 
+// A late original reply, in its own buffer after Rflush retired its tag,
+// once that tag has been reissued to another request: it must fail the
+// session, not complete the tag's new owner.
+static void late_original_after_reuse()
+{
+    fake* f;
+    auto s = make(f);
+    caller a(*s, p9::Tread, read_body(root), after(milliseconds(50)));
+    require(f->await(1), "first submitted");
+    auto ra = f->at(0);
+    auto fl = flush_of(f, 2, *ra);
+    f->reply(*fl, rflush(fl->tag));
+    f->retire(fl);
+    a.join();
+    require(a.rc == ETIMEDOUT && !s->dead(), "first canceled by Rflush");
+    // ra's buffer stays unretired. Walk the tag space until the next
+    // tag issued is ra's again.
+    require(ra->tag != 0, "first tag has a predecessor");
+    f->autoreply = true;
+    frame out;
+    unsigned n = 0;
+    do {
+        require(s->rpc(p9::Tread, read_body(root), out, p9::op_deadline())
+                == 0, "rpc through the tag space");
+    } while (out.tag != uint16_t(ra->tag - 1) && ++n < 0x10000);
+    require(out.tag == uint16_t(ra->tag - 1) && n > 1000, "tag space walked");
+    f->autoreply = false;
+    unsigned n0 = f->submitted;
+    caller b(*s, p9::Tread, read_body(root), p9::op_deadline());
+    require(f->await(n0 + 1), "second submitted");
+    auto rb = f->at(f->pending() - 1);
+    require(rb != ra && rb->tag == ra->tag, "tag reissued to another request");
+    f->reply(*ra, rread(ra->tag)); // the late original, in its own buffer
+    require(s->dead() == EPROTO, "late original after reissue fails");
+    b.join();
+    require(b.rc == EPROTO, "not delivered to the tag's new owner");
+    f->shutdown(p9::op_deadline());
+    require(s->busy() == 0 && s->charged() == 0, "retired after failure");
+    std::puts("PASS: late original after tag reuse");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IOLBF, 0); // keep lines if killed
@@ -1330,6 +1371,7 @@ int main()
     orphan_clunk();
     mass_timeout();
     flush_slot_expiry();
+    late_original_after_reuse();
     stress();
     std::printf("SUMMARY: %u session checks, 0 failures\n", checks);
     return 0;

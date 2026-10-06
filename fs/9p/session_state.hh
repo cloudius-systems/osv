@@ -130,8 +130,8 @@ private:
 //   tag retirement: the server will send nothing more on the tag;
 //   buffer retirement: the transport no longer references the buffers.
 // The slot, and its charge, is reused only after all three. Replies are
-// matched by tag, buffer retirement by id, since a tag retired by Rflush
-// can outlive the buffer it was sent from.
+// matched by id and must carry that slot's live tag; buffer retirement is
+// by id, since a buffer can outlive the tag Rflush retired.
 class request_table {
 public:
     static constexpr unsigned flush_id = data_tags;
@@ -147,10 +147,11 @@ public:
     // outstanding. EINVAL: bad id or err 0. The session error once dead. The flush
     // is not charged, so a full budget cannot block cancellation.
     int cancel(unsigned id, int err, uint16_t& flushtag);
-    // A decoded reply. 0 if accepted. EPROTO for a protocol violation
-    // (unknown tag, bad reply, duplicate, late original), which fails the
+    // A decoded reply that arrived in id's buffer (flush_id for Rflush).
+    // 0 if accepted. EPROTO for a protocol violation (a tag that is not
+    // id's live tag, bad reply, duplicate, late original), which fails the
     // session. The session error, dropping r, once dead.
-    int received(frame r);
+    int received(unsigned id, frame r);
     // The transport released id's buffers (flush_id for the flush). Refunds
     // the charge; allowed on a dead session. 0, or EINVAL if not held.
     int retired(unsigned id);
