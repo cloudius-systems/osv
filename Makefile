@@ -2011,6 +2011,7 @@ endif
 ifeq ($(conf_fs_9p),1)
 fs_objs += 9p/codec.o
 fs_objs += 9p/session_state.o
+fs_objs += 9p/session.o
 endif
 fs_objs += zfs/zfs_null_vfsops.o
 
