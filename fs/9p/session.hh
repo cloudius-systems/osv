@@ -134,10 +134,13 @@ public:
     int walk(uint32_t fid, const std::vector<std::string>& names,
              uint32_t& newfid, bytes& qids, deadline d);
     // Tclunk(fid): once sent, the fid is released whatever the reply
-    // (clunk(5)); if nothing was sent (no slot before d) it stays live. A
-    // clunk canceled without a reply leaves the server's fid state unknown,
-    // which fails the session. EBADF if fid is not live or already being
-    // clunked, EBUSY while a request pins it.
+    // (clunk(5)); if nothing was sent (no slot before d) it stays live and
+    // ETIMEDOUT (or the abort errno) is returned. A clunk canceled without
+    // a reply leaves the server's fid state unknown, which fails the
+    // session with EIO and returns that session error (dead() == EIO), not
+    // the cancel errno. A server Rlerror(EIO) also returns EIO with the
+    // session alive; dead() tells them apart. EBADF if fid is not live or
+    // already being clunked, EBUSY while a request pins it.
     int clunk(uint32_t fid, deadline d);
 
     // Cancel every request started before this call with err (nonzero),

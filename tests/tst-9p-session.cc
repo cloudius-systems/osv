@@ -552,8 +552,9 @@ static void uncertain_clunk()
     auto fl = flush_of(f, 2, *r);
     f->reply(*fl, rflush(fl->tag));
     c.join();
-    require(c.rc == ETIMEDOUT && s->dead() == EIO,
+    require(s->dead() == EIO,
             "clunk canceled without a reply retires the session");
+    require(c.rc == EIO, "and reports the session error, not ETIMEDOUT");
     require(s->fids() == 0, "fid dropped");
     f->shutdown(p9::op_deadline());
 
