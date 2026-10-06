@@ -55,6 +55,8 @@ struct mount {
 	struct dentry	*m_covered;	/* vnode covered on parent fs */
 	void		*m_data;	/* private data for fs */
 	fsid_t 		m_fsid; 	/* id that uniquely identifies the fs */
+	int		m_lookups;	/* vfs_findroot() pins: taken under
+					   mount_lock, dropped lock-free */
 };
 
 #endif
