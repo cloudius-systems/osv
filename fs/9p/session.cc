@@ -44,6 +44,28 @@ int limit_of(uint8_t type, const bytes& b, uint32_t& limit)
     }
 }
 
+void put_u16(bytes& b, uint16_t v)
+{
+    b.push_back(uint8_t(v));
+    b.push_back(uint8_t(v >> 8));
+}
+
+void put_u32(bytes& b, uint32_t v)
+{
+    put_u16(b, uint16_t(v));
+    put_u16(b, uint16_t(v >> 16));
+}
+
+int put_str(bytes& b, const std::string& str)
+{
+    if (str.size() > 0xffff) {
+        return ENAMETOOLONG;
+    }
+    put_u16(b, uint16_t(str.size()));
+    b.insert(b.end(), str.begin(), str.end());
+    return 0;
+}
+
 }
 
 session::session(std::unique_ptr<transport> t, size_t ceiling)
@@ -76,23 +98,57 @@ void session::drain()
         _table.fail(EPROTO);
     }
     for (unsigned i = 0; i < _narrived; i++) {
-        request& r = *_req[_arrived[i]];
+        unsigned id = _arrived[i];
+        request& r = *_req[id];
         frame f;
-        int rc = decode(r.rx.data(), r.rx_len, _msize, f);
-        if (rc) {
+        int rc = decode(r.rx.data(), r.rx_len, _msize ? _msize : _offered, f);
+        if (id == version_id) {
+            uint32_t m = 0;
+            if (!rc) {
+                rc = check_version(f, _offered, m);
+            }
+            _version_err = rc;
+            if (rc) {
+                _table.fail(rc);
+            } else {
+                _msize = m;
+            }
+        } else if (rc) {
             _table.fail(rc);
         } else {
             _table.received(std::move(f));
         }
     }
     _narrived = 0;
-    for (unsigned id = 0; id <= data_tags; id++) {
+    if (_table.dead() && _version_err == EINPROGRESS) {
+        _version_err = _table.dead();
+    }
+    for (unsigned id = 0; id <= version_id; id++) {
         std::shared_ptr<request>& r = _req[id];
-        if (r && r->gone && !r->refunded) {
-            _table.retired(id);
-            r->refunded = true;
+        if (!r) {
+            continue;
         }
-        if (r && !_table.busy(id)) {
+        bool busy;
+        if (id == version_id) {
+            busy = !r->gone || _version_err == EINPROGRESS;
+        } else {
+            if (r->gone && !r->refunded) {
+                _table.retired(id);
+                r->refunded = true;
+            }
+            // Fid pins last until the server is done with the request (its
+            // tag retired, by reply, Rflush or session failure); buffer
+            // retirement concerns memory only. Tags are reissued only by
+            // admit(), which always follows a drain().
+            if (!_table.tags().held(r->tag)) {
+                for (auto& p : r->pin) {
+                    unpin(p);
+                    p = nofid;
+                }
+            }
+            busy = _table.busy(id);
+        }
+        if (!busy) {
             r.reset();
         }
     }
@@ -101,7 +157,7 @@ void session::drain()
 void session::received(request& r, size_t n)
 {
     WITH_LOCK(_mtx) {
-        if (r.id > data_tags || _req[r.id].get() != &r || r.arrived
+        if (r.id > version_id || _req[r.id].get() != &r || r.arrived
             || r.gone || n > r.rx.size()) {
             _bad = true;
         } else {
@@ -116,7 +172,7 @@ void session::received(request& r, size_t n)
 void session::retired(request& r)
 {
     WITH_LOCK(_mtx) {
-        if (r.id > data_tags || _req[r.id].get() != &r || r.gone) {
+        if (r.id > version_id || _req[r.id].get() != &r || r.gone) {
             _bad = true;
         } else {
             r.gone = true;
@@ -125,29 +181,45 @@ void session::retired(request& r)
     }
 }
 
-int session::rpc(uint8_t type, const bytes& body, frame& reply, deadline d)
+// Caller holds pins on pin0/pin1 (nofid for none); on return they belong
+// to the request if one was admitted, else they are dropped here.
+int session::call(uint8_t type, const bytes& body, frame& reply, deadline d,
+                  uint32_t pin0, uint32_t pin1, bool* sent)
 {
-    uint32_t limit;
-    if (int rc = limit_of(type, body, limit)) {
-        return rc;
+    if (sent) {
+        *sent = false;
     }
     std::shared_ptr<request> r;
+    int rc = 0;
+    uint32_t limit;
     try {
         r = std::make_shared<request>();
     } catch (const std::bad_alloc&) {
-        return ENOMEM;
+        rc = ENOMEM;
     }
-    r->owner = this;
+    if (!rc) {
+        rc = limit_of(type, body, limit);
+    }
     std::unique_lock<mutex> lk(_mtx);
     const uint32_t msize = _msize;
-    if (body.size() > msize - 7) {
-        return EMSGSIZE;
+    if (!rc && !msize) {
+        rc = _table.dead() ? _table.dead() : ENOTCONN;
     }
+    if (!rc && body.size() > msize - 7) {
+        rc = EMSGSIZE;
+    }
+    if (rc) {
+        unpin(pin0);
+        unpin(pin1);
+        return rc;
+    }
+    r->owner = this;
+    r->pin[0] = pin0;
+    r->pin[1] = pin1;
     // Admission charges both buffers before anything is allocated, so
     // callers waiting for a slot hold no memory.
     unsigned id;
     uint16_t tag;
-    int rc;
     for (;;) {
         drain();
         rc = _table.admit(type, limit, 7 + body.size() + msize, id, tag);
@@ -158,10 +230,13 @@ int session::rpc(uint8_t type, const bytes& body, frame& reply, deadline d)
             break;
         }
         if (wait(d)) {
-            return ETIMEDOUT; // nothing was sent
+            rc = ETIMEDOUT; // nothing was sent
+            break;
         }
     }
     if (rc) {
+        unpin(pin0);
+        unpin(pin1);
         return rc;
     }
     // Allocate buffers and encode in caller context without the lock. The
@@ -179,6 +254,9 @@ int session::rpc(uint8_t type, const bytes& body, frame& reply, deadline d)
     }
     lk.lock();
     _req[id] = r;
+    if (sent) {
+        *sent = true; // or failed in a way that fails the session
+    }
     if (!rc) {
         rc = _table.dead();
     }
@@ -235,6 +313,230 @@ unsigned session::busy()
             n += _table.busy(id);
         }
         return n;
+    }
+}
+
+// Called with _mtx held, after drain().
+int session::pin_live(uint32_t fid)
+{
+    if (_fids.get(fid) != fid_table::state::live || _closing[fid]) {
+        return EBADF;
+    }
+    ++_pins[fid];
+    return 0;
+}
+
+void session::unpin(uint32_t fid)
+{
+    if (fid == nofid) {
+        return;
+    }
+    if (--_pins[fid] == 0 && _doomed[fid]) {
+        _doomed[fid] = false;
+        _closing[fid] = false;
+        _fids.release(fid);
+    }
+}
+
+void session::drop_fid(uint32_t fid)
+{
+    _doomed[fid] = true;
+    unpin(fid);
+}
+
+int session::rpc(uint8_t type, const bytes& body, frame& reply, deadline d)
+{
+    if ((type != Tlopen && type != Tread && type != Twrite)
+        || body.size() < 4) {
+        return EINVAL;
+    }
+    uint32_t fid = get_u32(body, 0);
+    WITH_LOCK(_mtx) {
+        drain();
+        if (int rc = pin_live(fid)) {
+            return rc;
+        }
+    }
+    return call(type, body, reply, d, fid, nofid);
+}
+
+int session::attach(const std::string& uname, const std::string& aname,
+                    uint32_t n_uname, uint32_t& fid, bytes& qid, deadline d)
+{
+    uint32_t f;
+    WITH_LOCK(_mtx) {
+        drain();
+        if (int rc = _fids.reserve(f)) {
+            return rc;
+        }
+        _pins[f] = 2; // ours and the request's
+    }
+    bytes body;
+    put_u32(body, f);
+    put_u32(body, nofid);
+    int rc = put_str(body, uname);
+    if (!rc) {
+        rc = put_str(body, aname);
+    }
+    put_u32(body, n_uname);
+    frame reply;
+    if (rc) {
+        WITH_LOCK(_mtx) {
+            unpin(f);
+        }
+    } else {
+        rc = call(Tattach, body, reply, d, f, nofid);
+    }
+    WITH_LOCK(_mtx) {
+        if (!rc) {
+            _fids.make_live(f);
+            unpin(f);
+            fid = f;
+            qid = std::move(reply.body);
+        } else {
+            drop_fid(f);
+        }
+    }
+    return rc;
+}
+
+int session::walk(uint32_t fid, const std::vector<std::string>& names,
+                  uint32_t& newfid, bytes& qids, deadline d)
+{
+    if (names.size() > 16) { // MAXWELEM, walk(5)
+        return E2BIG;
+    }
+    uint32_t f;
+    WITH_LOCK(_mtx) {
+        drain();
+        if (int rc = pin_live(fid)) {
+            return rc;
+        }
+        if (int rc = _fids.reserve(f)) {
+            unpin(fid);
+            return rc;
+        }
+        _pins[f] = 2;
+    }
+    bytes body;
+    put_u32(body, fid);
+    put_u32(body, f);
+    put_u16(body, uint16_t(names.size()));
+    int rc = 0;
+    for (auto& n : names) {
+        if (!rc) {
+            rc = put_str(body, n);
+        }
+    }
+    frame reply;
+    if (rc) {
+        WITH_LOCK(_mtx) {
+            unpin(fid);
+            unpin(f);
+        }
+    } else {
+        rc = call(Twalk, body, reply, d, fid, f);
+    }
+    // Rwalk nwqid[2] then qids; check_reply bounded nwqid by nwname.
+    if (!rc && uint16_t(reply.body[0] | reply.body[1] << 8) != names.size()) {
+        rc = ENOENT; // partial walk: newfid was not created
+    }
+    WITH_LOCK(_mtx) {
+        if (!rc) {
+            _fids.make_live(f);
+            unpin(f);
+            newfid = f;
+            qids.assign(reply.body.begin() + 2, reply.body.end());
+        } else {
+            drop_fid(f);
+        }
+    }
+    return rc;
+}
+
+int session::clunk(uint32_t fid, deadline d)
+{
+    WITH_LOCK(_mtx) {
+        drain();
+        if (_fids.get(fid) != fid_table::state::live || _closing[fid]) {
+            return EBADF;
+        }
+        if (_pins[fid]) {
+            return EBUSY;
+        }
+        _closing[fid] = true;
+        _pins[fid] = 2; // ours and the request's
+    }
+    bytes body;
+    put_u32(body, fid);
+    frame reply;
+    bool sent;
+    int rc = call(Tclunk, body, reply, d, fid, nofid, &sent);
+    WITH_LOCK(_mtx) {
+        if (sent || _table.dead()) {
+            drop_fid(fid); // clunk(5): gone whatever the reply
+        } else {
+            _closing[fid] = false; // never sent: still live on the server
+            unpin(fid);
+        }
+    }
+    return rc;
+}
+
+int session::negotiate(uint32_t msize, deadline d)
+{
+    if (msize < min_msize || msize > 65536) {
+        return EINVAL;
+    }
+    auto r = std::make_shared<request>();
+    r->owner = this;
+    r->id = version_id;
+    r->tag = notag;
+    bytes body;
+    put_u32(body, msize);
+    put_str(body, "9P2000.L");
+    int rc = encode(frame{Tversion, notag, body}, msize, r->tx);
+    if (rc) {
+        return rc;
+    }
+    r->rx.resize(msize);
+    std::unique_lock<mutex> lk(_mtx);
+    if (_offered || _table.dead()) {
+        return _table.dead() ? _table.dead() : EALREADY;
+    }
+    _offered = msize;
+    _req[version_id] = r;
+    lk.unlock();
+    rc = _t->submit(r, d);
+    lk.lock();
+    if (rc) {
+        r->gone = true;
+        _table.fail(rc);
+    }
+    for (;;) {
+        drain();
+        if (_version_err != EINPROGRESS) {
+            return _version_err;
+        }
+        if (wait(d)) {
+            _table.fail(ETIMEDOUT);
+        }
+    }
+}
+
+uint32_t session::msize()
+{
+    WITH_LOCK(_mtx) {
+        drain();
+        return _msize;
+    }
+}
+
+unsigned session::fids()
+{
+    WITH_LOCK(_mtx) {
+        drain();
+        return _fids.used();
     }
 }
 
