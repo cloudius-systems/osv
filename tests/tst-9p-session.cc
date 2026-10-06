@@ -71,6 +71,7 @@ public:
     uint32_t version_msize = p9::min_msize;
     std::string version = "9P2000.L";
     uint16_t walk_short = 0; // autoreply walks this many names fewer
+    uint32_t lerror = 0; // autoreply answers Tread with Rlerror(lerror)
     std::vector<std::shared_ptr<request>> held; // submitted, not retired
     std::atomic<unsigned> submitted{0};
 
@@ -133,6 +134,11 @@ public:
         }
         case p9::Tread:
             f.body.assign(4, 0);
+            if (lerror) {
+                f.type = p9::Rlerror;
+                f.body.clear();
+                put32(f.body, lerror);
+            }
             break;
         }
         return f;
@@ -1015,8 +1021,96 @@ static void stress()
     std::puts("PASS: stress");
 }
 
+// Errno values the session itself uses (EINPROGRESS, EAGAIN, ENOMEM) can
+// also come from the server or the transport; none may be read as state.
+static void errno_values()
+{
+    // Rlerror(115) to one of two concurrent callers: each gets its own.
+    fake* f;
+    auto s = make(f);
+    caller a(*s, p9::Tread, read_body(root), p9::op_deadline());
+    require(f->await(1), "first submitted");
+    caller b(*s, p9::Tread, read_body(root), p9::op_deadline());
+    require(f->await(2), "second submitted");
+    auto ra = f->at(0), rb = f->at(1);
+    f->reply(*ra, frame{p9::Rlerror, ra->tag, {115, 0, 0, 0}});
+    f->retire(ra);
+    require(a.returns_within(milliseconds(2000)), "Rlerror(115) returns");
+    a.join();
+    require(a.rc == EINPROGRESS && a.reply.type == p9::Rlerror
+            && a.reply.tag == ra->tag, "Rlerror(115) is the first caller's");
+    caller c(*s, p9::Tread, read_body(root), p9::op_deadline());
+    require(f->await(3), "third reuses the freed slot");
+    auto rc = f->at(1);
+    f->reply(*rc, rread(rc->tag));
+    f->reply(*rb, rread(rb->tag));
+    f->retire(rb);
+    f->retire(rc);
+    b.join();
+    c.join();
+    require(b.rc == 0 && b.reply.tag == rb->tag && c.rc == 0
+            && c.reply.tag == rc->tag, "the others get their own replies");
+    require(!s->dead() && s->busy() == 0, "session healthy");
+
+    // Every ecode, answered inside submit(): returned once, mapped.
+    f->autoreply = true;
+    for (uint32_t e = 1; e <= 140; e++) {
+        f->lerror = e;
+        frame out;
+        int got = s->rpc(p9::Tread, read_body(root), out,
+                         after(milliseconds(2000)));
+        require(got == p9::map_lerror(e) && out.type == p9::Rlerror,
+                "Rlerror ecode returned as the result");
+    }
+    f->lerror = 0;
+    f->autoreply = false;
+    require(!s->dead() && s->busy() == 0, "session healthy");
+
+    // A transport errno of EINPROGRESS fails negotiate instead of spinning.
+    for (int how = 0; how < 2; how++) {
+        fake* g = new fake;
+        p9::session u{std::unique_ptr<p9::transport>(g)};
+        g->fail_submit = how ? 0 : EINPROGRESS;
+        caller n([&] { return u.negotiate(65536, after(milliseconds(200))); });
+        if (how) {
+            require(g->await(1), "Tversion submitted");
+            g->failed_from_transport(u, EINPROGRESS);
+        }
+        require(n.returns_within(milliseconds(3000)),
+                "negotiate returns on an EINPROGRESS transport error");
+        n.join();
+        require(n.rc == EINPROGRESS && u.dead() == EINPROGRESS,
+                "with that error");
+        g->shutdown(p9::op_deadline());
+    }
+
+    // The same errnos on a data request, and EAGAIN as the session error.
+    int errs[] = {EINPROGRESS, EAGAIN, ENOMEM};
+    for (int how = 0; how < 2; how++) {
+        for (int e : errs) {
+            auto t = make(f);
+            f->fail_submit = how ? 0 : e;
+            caller d(*t, p9::Tread, read_body(root), after(milliseconds(200)));
+            if (how) {
+                require(f->await(1), "submitted");
+                f->failed_from_transport(*t, e);
+            }
+            require(d.returns_within(milliseconds(3000)), "rpc returns");
+            d.join();
+            require(d.rc == e && t->dead() == e, "with the transport errno");
+            frame out;
+            require(t->rpc(p9::Tread, read_body(root), out,
+                           after(milliseconds(200))) == e,
+                    "later rpc refused at once with the session errno");
+            f->shutdown(p9::op_deadline());
+        }
+    }
+    std::puts("PASS: errno values");
+}
+
 int main()
 {
+    std::setvbuf(stdout, nullptr, _IOLBF, 0); // keep lines if killed
     negotiation();
     fids();
     plain_rpc();
@@ -1033,6 +1127,7 @@ int main()
     many();
     transport_failure();
     shutdown_waits_for_retirement();
+    errno_values();
     stress();
     std::printf("SUMMARY: %u session checks, 0 failures\n", checks);
     return 0;

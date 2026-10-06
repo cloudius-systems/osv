@@ -189,7 +189,8 @@ private:
     int _failed = 0;   // errno from failed()
     uint32_t _msize = 0; // 0 until negotiated
     uint32_t _offered = 0;
-    int _version_err = EINPROGRESS;
+    bool _version_done = false; // Rversion applied or session failed
+    int _version_err = 0;
     unsigned _abort_gen = 0; // bumped by abort()
     int _abort_err = 0;
     fid_table _fids;
