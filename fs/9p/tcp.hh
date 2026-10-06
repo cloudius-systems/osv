@@ -15,6 +15,10 @@
 #include "session.hh"
 
 struct sockaddr;
+#ifdef __OSV__
+#define __NEED_socklen_t
+#include <bits/alltypes.h>
+#endif
 
 // 9P over a byte stream (TCP). Sends are serialized so complete frames
 // never interleave; one receiver thread assembles each reply frame,
@@ -45,6 +49,17 @@ public:
 // after shutdown(), ECONNRESET at end of stream, EPROTO for a bad frame,
 // else the stream's errno. Nothing is resent.
 std::unique_ptr<transport> stream_transport(std::unique_ptr<stream> s);
+
+#ifdef __OSV__
+// Connect a TCP socket to addr (AF_INET, Linux sockaddr layout) by d and
+// return the transport over it. 0; ETIMEDOUT if not connected by d (the
+// attempt is abandoned and the socket closed); EINVAL or EAFNOSUPPORT for
+// a bad address; else the connect errno (ECONNREFUSED, ENETUNREACH, ...).
+// Never waits past d. The socket has no file descriptor: applications
+// cannot see or close it.
+int connect_tcp(const sockaddr* addr, socklen_t len, deadline d,
+                std::unique_ptr<transport>& out);
+#endif
 
 }
 
