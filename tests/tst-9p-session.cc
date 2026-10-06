@@ -298,27 +298,242 @@ static void plain_rpc()
     std::puts("PASS: plain rpc");
 }
 
-static void reply_after_caller_left()
+// Wait (bounded) for the flush; return it.
+static std::shared_ptr<request> flush_of(fake* f, unsigned n,
+                                         const request& orig)
+{
+    require(f->await(n), "Tflush submitted");
+    auto fl = f->at(f->pending() - 1);
+    frame t = decoded(*fl);
+    require(t.type == p9::Tflush && t.tag == fl->tag && t.body.size() == 2
+            && uint16_t(t.body[0] | t.body[1] << 8) == orig.tag,
+            "Tflush(oldtag) on its own tag");
+    require(fl->tag != orig.tag && fl->tag != p9::notag, "flush tag distinct");
+    return fl;
+}
+
+static frame rflush(uint16_t tag)
+{
+    return frame{p9::Rflush, tag, {}};
+}
+
+static void flush_then_rflush()
 {
     fake* f;
     auto s = make(f);
-    caller c(*s, p9::Tread, read_body(root), after(milliseconds(200)));
+    unsigned n0 = s->completions();
+    caller c(*s, p9::Tread, read_body(root), after(milliseconds(100)));
     require(f->await(1), "request submitted");
-    c.join();
-    require(c.rc == ETIMEDOUT, "deadline bounds the wait");
-    require(s->dead() != 0, "uncertain request fails the session");
     auto r = f->at(0);
-    require(s->busy() == 1, "request outlives its caller until retired");
-    // The transport still owns the buffers: write a late reply into them.
-    f->reply(*r, rread(r->tag));
-    require(sent(*r).type == p9::Tread, "tx intact after caller returned");
+    auto fl = flush_of(f, 2, *r);
+    require(!c.returns_within(milliseconds(50)),
+            "caller waits for Rflush");
+    f->reply(*fl, rflush(fl->tag));
+    require(c.returns_within(milliseconds(2000)), "Rflush wakes caller");
+    c.join();
+    require(c.rc == ETIMEDOUT && !s->dead(), "canceled, session healthy");
+    require(s->busy() == 2, "both buffers still owned by the transport");
+    // Rflush retired the old tag but not its buffer: write into it now.
+    std::fill(r->rx.begin(), r->rx.end(), 0xaa);
+    f->retire(fl);
+    require(s->busy() == 1, "flush slot freed by its own retirement");
     f->retire(r);
-    require(s->busy() == 0 && s->charged() == 0, "late retirement frees");
+    require(s->busy() == 0 && s->charged() == 0 && s->completions() == n0 + 1,
+            "retired once, completed once");
+    std::puts("PASS: flush then Rflush");
+}
+
+static void reply_wins_flush()
+{
+    fake* f;
+    auto s = make(f);
+    unsigned n0 = s->completions();
+    caller c(*s, p9::Tread, read_body(root), after(milliseconds(100)));
+    require(f->await(1), "request submitted");
+    auto r = f->at(0);
+    auto fl = flush_of(f, 2, *r);
+    f->reply(*r, rread(r->tag));
+    require(!c.returns_within(milliseconds(50)),
+            "caller still waits for Rflush after the original");
+    // The old tag stays held until Rflush: a new request cannot reuse it.
+    f->autoreply = false;
+    caller d(*s, p9::Tread, read_body(root), p9::op_deadline());
+    require(f->await(3), "another request admitted");
+    require(f->at(2)->tag != r->tag, "oldtag not reissued before Rflush");
+    f->reply(*fl, rflush(fl->tag));
+    c.join();
+    require(c.rc == 0 && c.reply.type == p9::Rread,
+            "original reply honored once");
+    auto q = f->at(2);
+    f->reply(*q, rread(q->tag));
+    d.join();
+    f->retire(r);
+    f->retire(fl);
+    f->retire(q);
+    require(!s->dead() && s->busy() == 0 && s->completions() == n0 + 2,
+            "one completion each");
+    std::puts("PASS: reply wins flush");
+}
+
+static void flush_timeout_kills()
+{
+    fake* f;
+    auto s = make(f);
+    auto t0 = osv::clock::uptime::now();
+    caller c(*s, p9::Tread, read_body(root), after(milliseconds(50)));
+    require(f->await(2), "request and flush submitted");
+    c.join();
+    auto took = osv::clock::uptime::now() - t0;
+    require(c.rc == ETIMEDOUT && s->dead() == ETIMEDOUT,
+            "no Rflush in 5 s kills the session");
+    require(took >= p9::flush_timeout && took < p9::flush_timeout
+            + seconds(3), "flush deadline is 5 s");
+    require(s->busy() == 2, "buffers still owned until retired");
+    f->shutdown(p9::op_deadline());
+    require(s->busy() == 0 && s->charged() == 0, "retired after death");
+    std::puts("PASS: flush timeout");
+}
+
+static void abort_cancels()
+{
+    fake* f;
+    auto s = make(f);
+    caller c(*s, p9::Tread, read_body(root), p9::op_deadline());
+    require(f->await(1), "request submitted");
+    auto r = f->at(0);
+    s->abort(EINTR);
+    auto fl = flush_of(f, 2, *r);
+    f->reply(*fl, rflush(fl->tag));
+    c.join();
+    require(c.rc == EINTR, "abort errno returned");
+    f->retire(r);
+    f->retire(fl);
     frame out;
-    require(s->rpc(p9::Tread, read_body(root), out, p9::op_deadline())
-                == s->dead(), "dead session refuses new rpc");
-    require(f->submitted == 1, "nothing sent after failure");
-    std::puts("PASS: reply after caller left");
+    f->autoreply = true;
+    require(s->rpc(p9::Tread, read_body(root), out, p9::op_deadline()) == 0,
+            "later requests unaffected");
+    std::puts("PASS: abort");
+}
+
+static void serialized_flushes()
+{
+    // Two requests time out together; only one Tflush may be outstanding.
+    fake* f;
+    auto s = make(f);
+    caller a(*s, p9::Tread, read_body(root), after(milliseconds(50)));
+    caller b(*s, p9::Tread, read_body(root), after(milliseconds(50)));
+    require(f->await(3), "two requests and one flush");
+    std::this_thread::sleep_for(milliseconds(100));
+    require(f->submitted == 3, "second flush waits for the slot");
+    auto fl = f->at(2);
+    f->reply(*fl, rflush(fl->tag));
+    std::this_thread::sleep_for(milliseconds(50));
+    require(f->submitted == 3, "flush slot held until its buffer retires");
+    f->retire(fl);
+    require(f->await(4), "second flush once the first fully retires");
+    auto fl2 = f->at(f->pending() - 1);
+    require(decoded(*fl2).type == p9::Tflush, "second Tflush");
+    f->reply(*fl2, rflush(fl2->tag));
+    a.join();
+    b.join();
+    require(a.rc == ETIMEDOUT && b.rc == ETIMEDOUT && !s->dead(),
+            "both canceled");
+    f->shutdown(p9::op_deadline());
+    require(s->busy() == 0, "drained");
+    std::puts("PASS: serialized flushes");
+}
+
+static void cancel_racing_create()
+{
+    // A walk canceled after the server created newfid: the fid is clunked.
+    fake* f;
+    auto s = make(f);
+    unsigned before = s->fids();
+    uint32_t nf = 0;
+    bytes qids;
+    caller c([&] {
+        return s->walk(root, {"x"}, nf, qids, after(milliseconds(50)));
+    });
+    require(f->await(1), "walk submitted");
+    auto r = f->at(0);
+    auto fl = flush_of(f, 2, *r);
+    f->reply(*r, f->answer(decoded(*r))); // Rwalk wins
+    f->reply(*fl, rflush(fl->tag));
+    require(f->await(3), "compensating Tclunk");
+    auto cl = f->at(2);
+    frame t = sent(*cl);
+    require(t.type == p9::Tclunk && get32(t.body, 0) == get32(decoded(*r).body, 4),
+            "clunk names the new fid");
+    f->reply(*cl, frame{p9::Rclunk, cl->tag, {}});
+    c.join();
+    require(c.rc == ETIMEDOUT && s->fids() == before && !s->dead(),
+            "canceled walk leaves no fid behind");
+    f->shutdown(p9::op_deadline());
+
+    // Same for attach.
+    auto s2 = make(f);
+    before = s2->fids();
+    caller d([&] {
+        return s2->attach("u", "", 0, nf, qids, after(milliseconds(50)));
+    });
+    require(f->await(1), "attach submitted");
+    r = f->at(0);
+    fl = flush_of(f, 2, *r);
+    f->reply(*r, f->answer(decoded(*r)));
+    f->reply(*fl, rflush(fl->tag));
+    require(f->await(3), "compensating Tclunk");
+    cl = f->at(2);
+    require(sent(*cl).type == p9::Tclunk, "Tclunk after attach");
+    f->reply(*cl, frame{p9::Rclunk, cl->tag, {}});
+    d.join();
+    require(d.rc == ETIMEDOUT && s2->fids() == before && !s2->dead(),
+            "canceled attach leaves no fid behind");
+    f->shutdown(p9::op_deadline());
+
+    // Rflush first: the fid was never created; nothing to clunk.
+    auto s3 = make(f);
+    before = s3->fids();
+    caller e([&] {
+        return s3->walk(root, {"x"}, nf, qids, after(milliseconds(50)));
+    });
+    require(f->await(1), "walk submitted");
+    r = f->at(0);
+    fl = flush_of(f, 2, *r);
+    f->reply(*fl, rflush(fl->tag));
+    e.join();
+    require(e.rc == ETIMEDOUT && s3->fids() == before && f->submitted == 2,
+            "flushed walk releases newfid without a clunk");
+    f->shutdown(p9::op_deadline());
+    std::puts("PASS: cancel racing create");
+}
+
+static void uncertain_clunk()
+{
+    fake* f;
+    auto s = make(f);
+    caller c([&] { return s->clunk(root, after(milliseconds(50))); });
+    require(f->await(1), "clunk submitted");
+    auto r = f->at(0);
+    auto fl = flush_of(f, 2, *r);
+    f->reply(*fl, rflush(fl->tag));
+    c.join();
+    require(c.rc == ETIMEDOUT && s->dead() == EIO,
+            "clunk canceled without a reply retires the session");
+    require(s->fids() == 0, "fid dropped");
+    f->shutdown(p9::op_deadline());
+
+    // A clunk whose reply beats Rflush is certain: the session lives.
+    auto s2 = make(f);
+    caller d([&] { return s2->clunk(root, after(milliseconds(50))); });
+    require(f->await(1), "clunk submitted");
+    r = f->at(0);
+    fl = flush_of(f, 2, *r);
+    f->reply(*r, frame{p9::Rclunk, r->tag, {}});
+    f->reply(*fl, rflush(fl->tag));
+    d.join();
+    require(d.rc == 0 && !s2->dead() && s2->fids() == 0, "certain clunk");
+    f->shutdown(p9::op_deadline());
+    std::puts("PASS: uncertain clunk");
 }
 
 static void admission()
@@ -619,7 +834,13 @@ int main()
     negotiation();
     fids();
     plain_rpc();
-    reply_after_caller_left();
+    flush_then_rflush();
+    reply_wins_flush();
+    flush_timeout_kills();
+    abort_cancels();
+    serialized_flushes();
+    cancel_racing_create();
+    uncertain_clunk();
     admission();
     ceiling();
     contract();

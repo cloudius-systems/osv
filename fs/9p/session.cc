@@ -138,9 +138,11 @@ void session::drain()
             }
             // Fid pins last until the server is done with the request (its
             // tag retired, by reply, Rflush or session failure); buffer
-            // retirement concerns memory only. Tags are reissued only by
-            // admit(), which always follows a drain().
+            // retirement concerns memory only. Tags retire only inside
+            // drain() or by fail(), and are reissued only by admit(), which
+            // always follows a drain(); so this test is exact.
             if (!_table.tags().held(r->tag)) {
+                r->tag_done = true;
                 for (auto& p : r->pin) {
                     unpin(p);
                     p = nofid;
@@ -150,6 +152,7 @@ void session::drain()
         }
         if (!busy) {
             r.reset();
+            _cv.wake_all(); // a slot, its charge or fids may now be free
         }
     }
 }
@@ -184,11 +187,13 @@ void session::retired(request& r)
 // Caller holds pins on pin0/pin1 (nofid for none); on return they belong
 // to the request if one was admitted, else they are dropped here.
 int session::call(uint8_t type, const bytes& body, frame& reply, deadline d,
-                  uint32_t pin0, uint32_t pin1, bool* sent)
+                  uint32_t pin0, uint32_t pin1, outcome* out)
 {
-    if (sent) {
-        *sent = false;
+    outcome dummy;
+    if (!out) {
+        out = &dummy;
     }
+    *out = outcome{};
     std::shared_ptr<request> r;
     int rc = 0;
     uint32_t limit;
@@ -205,6 +210,7 @@ int session::call(uint8_t type, const bytes& body, frame& reply, deadline d,
     if (!rc && !msize) {
         rc = _table.dead() ? _table.dead() : ENOTCONN;
     }
+    const unsigned gen = _abort_gen;
     if (!rc && body.size() > msize - 7) {
         rc = EMSGSIZE;
     }
@@ -227,6 +233,10 @@ int session::call(uint8_t type, const bytes& body, frame& reply, deadline d,
         // (ENOMEM), never past d.
         if ((rc != EAGAIN && rc != ENOMEM)
             || (rc == ENOMEM && _table.charged() == 0)) {
+            break;
+        }
+        if (_abort_gen != gen) {
+            rc = _abort_err; // nothing was sent
             break;
         }
         if (wait(d)) {
@@ -254,9 +264,7 @@ int session::call(uint8_t type, const bytes& body, frame& reply, deadline d,
     }
     lk.lock();
     _req[id] = r;
-    if (sent) {
-        *sent = true; // or failed in a way that fails the session
-    }
+    out->sent = true; // or failed in a way that fails the session
     if (!rc) {
         rc = _table.dead();
     }
@@ -272,19 +280,114 @@ int session::call(uint8_t type, const bytes& body, frame& reply, deadline d,
         r->gone = true;
         _table.fail(rc);
     }
+    // Collect the result. If d passes (or abort()) first, cancel with a
+    // Tflush; a caller that sent one also waits until it resolves, so every
+    // flush has someone enforcing its deadline.
+    int result = EINPROGRESS;
+    int cancel = 0; // errno once canceling
+    bool flush_sent = false;
+    deadline fd{};
     for (;;) {
         drain();
-        int err;
-        int c = _table.collect(id, err, reply);
-        if (c != EINPROGRESS) {
-            drain();
-            return c ? c : err;
+        if (result == EINPROGRESS) {
+            int err;
+            int c = _table.collect(id, err, reply);
+            if (c != EINPROGRESS) {
+                result = c ? c : err;
+                out->replied = c == 0 && reply.type != 0;
+            }
         }
-        if (wait(d)) {
-            // ponytail: no Tflush yet, so a timed-out request fails the
-            // session; cancellation replaces this.
-            _table.fail(ETIMEDOUT);
+        if (result != EINPROGRESS && (!flush_sent || r->tag_done)) {
+            drain(); // collect() may have freed the slot
+            return result;
         }
+        auto now = osv::clock::uptime::now();
+        if (result == EINPROGRESS && !cancel
+            && (_abort_gen != gen || now >= d)) {
+            cancel = _abort_gen != gen ? _abort_err : ETIMEDOUT;
+            fd = now + flush_timeout; // bounds waiting for the flush slot
+        }
+        if (cancel && !flush_sent && result == EINPROGRESS) {
+            // Serialized: EAGAIN while another flush holds the slot.
+            int f = flush(lk, id, cancel);
+            if (f != EAGAIN) {
+                flush_sent = f == 0;
+                out->flushed = flush_sent ? cancel : 0;
+                fd = osv::clock::uptime::now() + flush_timeout;
+                continue;
+            }
+        }
+        if (wait(cancel ? fd : d) && cancel) {
+            _table.fail(ETIMEDOUT); // no Rflush within flush_timeout
+        }
+    }
+}
+
+// Cancel id with err: reserve the flush slot in the table, then build and
+// submit Tflush(oldtag) without the lock. 0 once sent (or once the attempt
+// failed the session); EAGAIN if the slot is busy; EALREADY if id already
+// completed or the session is dead. Called and returns with lk held.
+int session::flush(std::unique_lock<mutex>& lk, unsigned id, int err)
+{
+    uint16_t ftag;
+    uint16_t oldtag = _req[id]->tag;
+    int rc = _table.cancel(id, err, ftag);
+    if (rc) {
+        return rc == EAGAIN ? EAGAIN : EALREADY;
+    }
+    const uint32_t msize = _msize;
+    lk.unlock();
+    std::shared_ptr<request> f;
+    try {
+        f = std::make_shared<request>();
+        f->owner = this;
+        f->id = request_table::flush_id;
+        f->tag = ftag;
+        rc = encode(frame{Tflush, ftag, {uint8_t(oldtag),
+                                         uint8_t(oldtag >> 8)}},
+                    msize, f->tx);
+        f->rx.resize(7); // Rflush is header only; anything longer is EPROTO
+    } catch (const std::bad_alloc&) {
+        rc = ENOMEM;
+    }
+    lk.lock();
+    if (!f) {
+        _table.fail(ENOMEM);
+        _table.retired(request_table::flush_id);
+        return 0;
+    }
+    _req[request_table::flush_id] = f;
+    if (!rc) {
+        rc = _table.dead();
+    }
+    if (!rc) {
+        lk.unlock();
+        rc = _t->submit(f, osv::clock::uptime::now() + flush_timeout);
+        lk.lock();
+    }
+    if (rc) {
+        f->gone = true;
+        _table.fail(rc);
+    }
+    return 0;
+}
+
+void session::abort(int err)
+{
+    WITH_LOCK(_mtx) {
+        if (err) {
+            _abort_err = err;
+            ++_abort_gen;
+            _cv.wake_all();
+        }
+    }
+}
+
+unsigned session::completions()
+{
+    WITH_LOCK(_mtx) {
+        drain();
+        return _table.completions();
     }
 }
 
@@ -383,19 +486,16 @@ int session::attach(const std::string& uname, const std::string& aname,
     if (rc) {
         WITH_LOCK(_mtx) {
             unpin(f);
-        }
-    } else {
-        rc = call(Tattach, body, reply, d, f, nofid);
-    }
-    WITH_LOCK(_mtx) {
-        if (!rc) {
-            _fids.make_live(f);
-            unpin(f);
-            fid = f;
-            qid = std::move(reply.body);
-        } else {
             drop_fid(f);
         }
+    } else {
+        outcome o;
+        rc = call(Tattach, body, reply, d, f, nofid, &o);
+        rc = created(f, rc, o);
+    }
+    if (!rc) {
+        fid = f;
+        qid = std::move(reply.body);
     }
     return rc;
 }
@@ -433,23 +533,22 @@ int session::walk(uint32_t fid, const std::vector<std::string>& names,
         WITH_LOCK(_mtx) {
             unpin(fid);
             unpin(f);
-        }
-    } else {
-        rc = call(Twalk, body, reply, d, fid, f);
-    }
-    // Rwalk nwqid[2] then qids; check_reply bounded nwqid by nwname.
-    if (!rc && uint16_t(reply.body[0] | reply.body[1] << 8) != names.size()) {
-        rc = ENOENT; // partial walk: newfid was not created
-    }
-    WITH_LOCK(_mtx) {
-        if (!rc) {
-            _fids.make_live(f);
-            unpin(f);
-            newfid = f;
-            qids.assign(reply.body.begin() + 2, reply.body.end());
-        } else {
             drop_fid(f);
         }
+        return rc;
+    }
+    outcome o;
+    rc = call(Twalk, body, reply, d, fid, f, &o);
+    // Rwalk nwqid[2] then qids; check_reply bounded nwqid by nwname. A
+    // partial walk did not create newfid (walk(5)).
+    if (!rc && uint16_t(reply.body[0] | reply.body[1] << 8) != names.size()) {
+        o.replied = false;
+        rc = ENOENT;
+    }
+    rc = created(f, rc, o);
+    if (!rc) {
+        newfid = f;
+        qids.assign(reply.body.begin() + 2, reply.body.end());
     }
     return rc;
 }
@@ -470,10 +569,16 @@ int session::clunk(uint32_t fid, deadline d)
     bytes body;
     put_u32(body, fid);
     frame reply;
-    bool sent;
-    int rc = call(Tclunk, body, reply, d, fid, nofid, &sent);
+    outcome o;
+    int rc = call(Tclunk, body, reply, d, fid, nofid, &o);
     WITH_LOCK(_mtx) {
-        if (sent || _table.dead()) {
+        if (o.sent && o.flushed && !o.replied) {
+            // Canceled before any reply: the server may or may not have
+            // clunked the fid, and it cannot be asked again. Retire the
+            // session rather than guess.
+            _table.fail(EIO);
+        }
+        if (o.sent || _table.dead()) {
             drop_fid(fid); // clunk(5): gone whatever the reply
         } else {
             _closing[fid] = false; // never sent: still live on the server
@@ -481,6 +586,31 @@ int session::clunk(uint32_t fid, deadline d)
         }
     }
     return rc;
+}
+
+// Resolve a reserved fid f after the Tattach/Twalk that names it. On
+// success it becomes live. If the server created it but the caller had
+// already canceled (reply won the race with Tflush), it is clunked and the
+// cancellation error returned; if that clunk is uncertain, clunk() fails
+// the session. Otherwise f is released.
+int session::created(uint32_t f, int rc, const outcome& o)
+{
+    bool orphan = o.flushed && o.replied && rc == 0;
+    WITH_LOCK(_mtx) {
+        if (rc) {
+            drop_fid(f);
+            return rc;
+        }
+        _fids.make_live(f);
+        unpin(f);
+    }
+    if (orphan) {
+        // ponytail: compensating clunk waits a fresh op deadline; the
+        // caller's deadline already passed.
+        clunk(f, op_deadline());
+        return o.flushed;
+    }
+    return 0;
 }
 
 int session::negotiate(uint32_t msize, deadline d)
