@@ -16,6 +16,8 @@
 #include <unistd.h>
 #include <fcntl.h>
 #include <stdio.h>
+#include <errno.h>
+#include <sys/syscall.h>
 
 static int tests = 0, fails = 0;
 
@@ -85,6 +87,35 @@ int main(int ac, char** av)
     report(r == 0, "SETFL bogus");
     r = fcntl(fd, F_GETFL);
     report(r == save_r, "GETFL bogus");
+
+    // fcntl() is variadic and reads its third argument according to the
+    // command. Integer commands must see the value passed.
+    int dfd = fcntl(fd, F_DUPFD, 100);
+    report(dfd >= 100, "F_DUPFD honors the minimum descriptor");
+    report(fcntl(dfd, F_GETFL) == save_r, "F_DUPFD duplicates the file");
+    close(dfd);
+    dfd = fcntl(fd, F_DUPFD_CLOEXEC, 200);
+    report(dfd >= 200, "F_DUPFD_CLOEXEC honors the minimum descriptor");
+    report(fcntl(dfd, F_GETFL) == save_r, "F_DUPFD_CLOEXEC duplicates the file");
+    close(dfd);
+    report(fcntl(fd, F_SETOWN, getpid()) == 0, "F_SETOWN");
+
+    // Commands that take no argument give the same answer whether or not
+    // the caller passes a spurious one.
+    report(fcntl(fd, F_GETFD) == fcntl(fd, F_GETFD, 12345), "F_GETFD ignores extra argument");
+    report(fcntl(fd, F_GETFL) == fcntl(fd, F_GETFL, 12345), "F_GETFL ignores extra argument");
+
+    // Unknown commands fail with EINVAL, with or without an argument.
+    errno = 0;
+    report(fcntl(fd, 0x7fff) == -1 && errno == EINVAL, "unknown command");
+    errno = 0;
+    report(fcntl(fd, 0x7fff, 12345) == -1 && errno == EINVAL, "unknown command with argument");
+
+    // The system call entry passes the same arguments on to fcntl().
+    dfd = syscall(SYS_fcntl, fd, F_DUPFD, 300);
+    report(dfd >= 300, "syscall F_DUPFD honors the minimum descriptor");
+    close(dfd);
+    report(syscall(SYS_fcntl, fd, F_GETFL) == save_r, "syscall F_GETFL");
 
     close(fd);
     remove("/tmp/tst-fcntl");

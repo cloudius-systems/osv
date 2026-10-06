@@ -65,7 +65,7 @@
     SYSCALL4(pwrite64, int, const void *, size_t, off_t);
     SYSCALL1(fdatasync, int);
     SYSCALL6(pselect6, int, fd_set *, fd_set *, fd_set *, struct timespec *, sys_sigset*);
-    SYSCALL3(fcntl, int, int, int);
+    SYSCALL3(sys_fcntl, int, int, unsigned long);
     SYSCALL4(pread64, int, void *, size_t, off_t);
     SYSCALL2(ftruncate, int, off_t);
     SYSCALL1(fsync, int);
