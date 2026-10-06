@@ -12,7 +12,10 @@
 #include <chrono>
 #include <cstddef>
 #include <cstdint>
+#include <bitset>
 #include <memory>
+#include <string>
+#include <vector>
 
 #include <osv/clock.hh>
 #include <osv/condvar.h>
@@ -51,6 +54,7 @@ struct request {
     uint16_t tag = notag;
     bytes tx;
     bytes rx;
+    uint32_t pin[2] = {nofid, nofid}; // fids held until the tag retires
     // Private to the session, under its mutex.
     size_t rx_len = 0;
     bool arrived = false;
@@ -79,11 +83,38 @@ public:
     session(const session&) = delete;
     session& operator=(const session&) = delete;
 
-    // Send T-message type with body and wait until d for its reply.
-    // Returns 0 with the reply, the mapped errno of an Rlerror (reply
-    // holds it), EMSGSIZE if the frame exceeds msize, ETIMEDOUT if no data
-    // slot frees before d (nothing sent), or the session error once failed.
+    // Send Tversion(msize, "9P2000.L") on NOTAG and wait until d. 0 and
+    // msize() set; EINVAL for msize outside [min_msize, 65536]; EALREADY
+    // once negotiated or in progress. Any other failure (EPROTONOSUPPORT
+    // for another dialect, EPROTO, ETIMEDOUT) fails the session.
+    int negotiate(uint32_t msize, deadline d);
+    uint32_t msize();
+
+    // Send Tlopen, Tread or Twrite (EINVAL for other types) and wait until
+    // d for the reply. The fid that starts the body must be live (EBADF
+    // otherwise, or while it is being clunked) and stays pinned until the
+    // server is done with the request. Returns 0 with the reply, the mapped errno of
+    // an Rlerror (reply holds it), ENOTCONN before negotiate(), EMSGSIZE if
+    // the frame exceeds msize, ETIMEDOUT if no data slot frees before d
+    // (nothing sent), or the session error once failed.
     int rpc(uint8_t type, const bytes& body, frame& reply, deadline d);
+
+    // Fid helpers. Each fid is released exactly once, and only after every
+    // request that names it has retired, so it is never reused while the
+    // server may still act on it. ENFILE when max_fids are in use.
+    // Tattach(fid, NOFID, uname, aname, n_uname) on a new fid; 0 with the
+    // live fid and the 13-byte qid.
+    int attach(const std::string& uname, const std::string& aname,
+               uint32_t n_uname, uint32_t& fid, bytes& qid, deadline d);
+    // Twalk(fid, newfid, names) on a new fid; 0 with the live newfid and
+    // its qids only if every name was walked, ENOENT for a partial walk.
+    int walk(uint32_t fid, const std::vector<std::string>& names,
+             uint32_t& newfid, bytes& qids, deadline d);
+    // Tclunk(fid): once sent, the fid is released whatever the reply
+    // (clunk(5)); if nothing was sent (no slot before d) it stays live.
+    // EBADF if fid is not live or already being clunked, EBUSY while a
+    // request pins it.
+    int clunk(uint32_t fid, deadline d);
 
     // Transport completions; see struct request.
     void received(request& r, size_t n);
@@ -93,10 +124,19 @@ public:
     int dead();
     size_t charged();
     unsigned busy(); // request slots not yet fully retired
+    unsigned fids(); // fids reserved or live
 
 private:
+    static constexpr unsigned version_id = data_tags + 1;
     int wait(deadline d);
     void drain();
+    // rpc() with fids already pinned by the caller; unpinned when the
+    // request's tag retires (or at once if nothing was admitted).
+    int call(uint8_t type, const bytes& body, frame& reply, deadline d,
+             uint32_t pin0, uint32_t pin1, bool* sent = nullptr);
+    int pin_live(uint32_t fid);
+    void unpin(uint32_t fid);
+    void drop_fid(uint32_t fid); // release now or at the last unpin
 
     std::unique_ptr<transport> _t;
     mutex _mtx;
@@ -104,11 +144,18 @@ private:
     request_table _table;
     // Replies in arrival order, decoded later in caller context so the
     // table sees them in the order the transport delivered them.
-    std::array<std::shared_ptr<request>, data_tags + 1> _req;
-    std::array<unsigned, data_tags + 1> _arrived;
+    // Data slots, the flush slot, then the Tversion slot (not in _table).
+    std::array<std::shared_ptr<request>, version_id + 1> _req;
+    std::array<unsigned, version_id + 1> _arrived;
     unsigned _narrived = 0;
     bool _bad = false; // transport broke the completion contract
-    uint32_t _msize = min_msize;
+    uint32_t _msize = 0; // 0 until negotiated
+    uint32_t _offered = 0;
+    int _version_err = EINPROGRESS;
+    fid_table _fids;
+    std::array<uint32_t, max_fids> _pins{}; // helpers and requests holding a fid
+    std::bitset<max_fids> _closing; // clunk in progress: no new pins
+    std::bitset<max_fids> _doomed;  // release at the last unpin
 };
 
 }
