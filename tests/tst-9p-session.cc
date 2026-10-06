@@ -74,8 +74,29 @@ public:
     std::vector<std::shared_ptr<request>> held; // submitted, not retired
     std::atomic<unsigned> submitted{0};
 
+    // When set, the first submit checks from another thread that the
+    // session lock is free (the mutex is recursive, so holding it across
+    // submit would not deadlock the submitting thread itself).
+    p9::session* probe = nullptr;
+    std::atomic<bool> probed{false};
+    bool probe_ok = false;
+    std::thread prober;
+
     int submit(std::shared_ptr<request> r, p9::deadline) override
     {
+        if (probe) {
+            p9::session* sp = probe;
+            probe = nullptr;
+            prober = std::thread([this, sp] {
+                sp->dead();
+                probed = true;
+            });
+            auto d = after(milliseconds(1000));
+            while (!probed && osv::clock::uptime::now() < d) {
+                std::this_thread::sleep_for(milliseconds(1));
+            }
+            probe_ok = probed;
+        }
         WITH_LOCK(mtx) {
             if (fail_submit) {
                 return fail_submit;
@@ -273,8 +294,11 @@ static void plain_rpc()
 {
     fake* f;
     auto s = make(f);
+    f->probe = s.get();
     caller c(*s, p9::Tread, read_body(root), p9::op_deadline());
     require(f->await(1), "request submitted");
+    f->prober.join();
+    require(f->probe_ok, "session lock not held across submit");
     auto r = f->at(0);
     frame t = sent(*r);
     require(t.type == p9::Tread && t.body == read_body(root), "tx encoded");
