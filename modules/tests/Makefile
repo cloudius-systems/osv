@@ -249,6 +249,10 @@ internal-api-tests += tst-9p-session-state.so
 tests += tst-9p-session.so
 internal-api-tests += tst-9p-session.so
 endif
+ifeq ($(conf_fs_9p_tcp),1)
+tests += tst-9p-tcp.so
+internal-api-tests += tst-9p-tcp.so
+endif
 
 ifeq ($(arch),x64)
 tests += tst-mmx-fpu.so tst-tls-desc.so tst-tls-pie-desc.so libtls_desc.so

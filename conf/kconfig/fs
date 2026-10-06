@@ -22,3 +22,9 @@ config fs_9p
   prompt "Include 9P2000.L filesystem client"
   bool
   default n
+
+config fs_9p_tcp
+  prompt "Include 9P TCP transport"
+  depends on fs_9p && networking_stack
+  bool
+  default n

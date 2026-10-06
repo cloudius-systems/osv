@@ -2013,6 +2013,16 @@ fs_objs += 9p/codec.o
 fs_objs += 9p/session_state.o
 fs_objs += 9p/session.o
 endif
+# Command-line values bypass the Kconfig "depends on", so check here.
+ifeq ($(conf_fs_9p_tcp),1)
+ifneq ($(conf_fs_9p),1)
+$(error conf_fs_9p_tcp=1 needs conf_fs_9p=1: the 9P TCP transport is part of the 9P client)
+endif
+ifneq ($(conf_networking_stack),1)
+$(error conf_fs_9p_tcp=1 needs conf_networking_stack=1: the 9P TCP transport uses the networking stack)
+endif
+fs_objs += 9p/tcp.o
+endif
 fs_objs += zfs/zfs_null_vfsops.o
 
 objects += $(addprefix fs/, $(fs_objs))
