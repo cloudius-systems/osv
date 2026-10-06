@@ -156,6 +156,8 @@ public:
     // After a partial Rwalk (0 < nwqid < nwname) newfid is clunked like a
     // canceled one before ENOENT is returned: walk(5) says it was not
     // created, but diod keeps it. Any reply to that Tclunk releases it.
+    // A partial Rwalk that wins a race with Tflush still returns ENOENT,
+    // not the cancel errno: the reply is honored, as rpc() describes.
     int walk(uint32_t fid, const std::vector<std::string>& names,
              uint32_t& newfid, bytes& qids, deadline d);
     // Tclunk(fid): once sent, the fid is released whatever the reply

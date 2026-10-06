@@ -682,8 +682,10 @@ int session::created(uint32_t f, int rc, const outcome& o, bool partial)
         _closing[f] = true;
         ++_pins[f];
     }
-    // ponytail: compensating clunk waits a fresh op deadline; the
-    // caller's deadline already passed.
+    // ponytail: compensating clunk waits a fresh op deadline. For a
+    // canceled attach/walk the caller's deadline already passed; for a
+    // partial walk it may not have, but the clunk is not the caller's
+    // request and gets its own bound (see rpc() for the totals).
     send_clunk(f, op_deadline(), true);
     return rc ? rc : o.flushed;
 }
