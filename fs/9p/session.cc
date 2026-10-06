@@ -356,6 +356,9 @@ int session::flush(std::unique_lock<mutex>& lk, unsigned id, int err)
 {
     uint16_t ftag;
     uint16_t oldtag = _req[id]->tag;
+    if (_table.dead()) {
+        return EALREADY; // never read a session errno as "slot busy"
+    }
     int rc = _table.cancel(id, err, ftag);
     if (rc) {
         return rc == EAGAIN ? EAGAIN : EALREADY;
@@ -639,9 +642,10 @@ int session::send_clunk(uint32_t fid, deadline d, bool must)
             // Canceled before any reply: the server may or may not have
             // clunked the fid, and it cannot be asked again. Or an orphan
             // fid could not be clunked at all. Retire the session rather
-            // than guess or leak. Report the session error, not the
-            // cancel errno, so ETIMEDOUT keeps meaning "not sent, still
-            // live".
+            // than guess or leak. Report the session error rather than
+            // the cancel errno. If dead() is nonzero on return the fid is
+            // gone, whatever the value (the session error may itself be
+            // ETIMEDOUT).
             _table.fail(EIO);
             rc = _table.dead();
         }
