@@ -1928,7 +1928,17 @@ int fcntl(int fd, int cmd, ...)
         WARN_ONCE("fcntl(F_SETLK) stubbed\n");
         break;
     case F_GETLK:
-        WARN_ONCE("fcntl(F_GETLK) stubbed\n");
+        if (!lock) {
+            error = EFAULT;
+            break;
+        }
+        if (lock->l_type != F_RDLCK && lock->l_type != F_WRLCK) {
+            error = EINVAL;
+            break;
+        }
+        // OSv runs a single process, and a process's own record locks
+        // never conflict with its own query, so nothing can block it.
+        lock->l_type = F_UNLCK;
         break;
     case F_SETLKW:
         WARN_ONCE("fcntl(F_SETLKW) stubbed\n");
