@@ -144,7 +144,7 @@ public:
     // Cancel id. 0: send Tflush(oldtag) on flushtag as transport id
     // flush_id; err completes id if Rflush wins. EALREADY: already complete
     // or already being flushed, send nothing. EAGAIN: another flush is
-    // outstanding. EINVAL: bad id. The session error once dead. The flush
+    // outstanding. EINVAL: bad id or err 0. The session error once dead. The flush
     // is not charged, so a full budget cannot block cancellation.
     int cancel(unsigned id, int err, uint16_t& flushtag);
     // A decoded reply. 0 if accepted. EPROTO for a protocol violation
