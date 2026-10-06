@@ -131,11 +131,13 @@ public:
     // not retiring flushes). A reply that wins the race is honored once (returned
     // here); otherwise the result is ETIMEDOUT (or the abort errno).
     //
-    // Worst case, a caller returns by d + flush_slot_timeout +
-    // flush_timeout (d + 165 s). attach() and walk() can add a compensating
-    // clunk with its own op_deadline() and the same cancellation bounds, so
-    // they return by d + 360 s. Every wait is bounded; these are expiry
-    // limits, not queue guarantees (the flush slot is not FIFO).
+    // Worst case, a caller returns by d + flush_slot_timeout + 2 *
+    // flush_timeout (d + 170 s): the Tflush send and the Rflush wait are
+    // each bounded by flush_timeout. attach() and walk() can add a
+    // compensating clunk with its own op_deadline() and the same
+    // cancellation bounds, so they return by d + 370 s. Every wait is
+    // bounded; these are expiry limits, not queue guarantees (the flush
+    // slot is not FIFO).
     int rpc(uint8_t type, const bytes& body, frame& reply, deadline d);
 
     // Fid helpers. Each fid is released exactly once, and only after every
