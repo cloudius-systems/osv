@@ -278,11 +278,13 @@ static uint32_t root; // fid attached by make()
 // A negotiated session with one attached fid (root), autoreply off.
 static std::unique_ptr<p9::session> make(fake*& f,
                                          size_t ceiling = p9::alloc_ceiling,
-                                         bool attach = true)
+                                         bool attach = true,
+                                         osv::clock::uptime::duration slot
+                                             = p9::flush_slot_timeout)
 {
     f = new fake;
     std::unique_ptr<p9::session> s(
-        new p9::session(std::unique_ptr<p9::transport>(f), ceiling));
+        new p9::session(std::unique_ptr<p9::transport>(f), ceiling, slot));
     f->autoreply = true;
     require(s->negotiate(65536, p9::op_deadline()) == 0, "negotiate");
     require(s->msize() == p9::min_msize, "msize from Rversion");
@@ -1272,6 +1274,38 @@ static void mass_timeout()
     std::puts("PASS: mass timeout");
 }
 
+// A transport that delivers Rflush but never retires the Tflush buffer
+// keeps the flush slot held. A later canceler waits for the slot only
+// until the slot bound, then fails the session; its Tflush is never sent.
+static void flush_slot_expiry()
+{
+    fake* f;
+    const auto bound = milliseconds(300);
+    auto s = make(f, p9::alloc_ceiling, true, bound);
+    caller a(*s, p9::Tread, read_body(root), after(milliseconds(50)));
+    require(f->await(1), "first submitted");
+    auto fl = flush_of(f, 2, *f->at(0));
+    f->reply(*fl, rflush(fl->tag)); // and never retire fl
+    a.join();
+    require(a.rc == ETIMEDOUT && !s->dead(), "first canceled by Rflush");
+    auto d = after(milliseconds(50));
+    caller b(*s, p9::Tread, read_body(root), d);
+    require(f->await(3), "second submitted");
+    require(!b.returns_within(milliseconds(150)) && !s->dead(),
+            "second waits for the held flush slot");
+    require(b.returns_within(milliseconds(3000)),
+            "slot wait expires at the session's slot bound");
+    b.join();
+    auto took = osv::clock::uptime::now() - d;
+    require(b.rc == ETIMEDOUT && s->dead() == ETIMEDOUT,
+            "slot expiry fails the session");
+    require(took >= bound, "not before the slot bound");
+    require(f->submitted == 3, "second Tflush never sent");
+    f->shutdown(p9::op_deadline());
+    require(s->busy() == 0 && s->charged() == 0, "retired after failure");
+    std::puts("PASS: flush slot expiry");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IOLBF, 0); // keep lines if killed
@@ -1295,6 +1329,7 @@ int main()
     crossed_reply();
     orphan_clunk();
     mass_timeout();
+    flush_slot_expiry();
     stress();
     std::printf("SUMMARY: %u session checks, 0 failures\n", checks);
     return 0;

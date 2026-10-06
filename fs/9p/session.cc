@@ -68,8 +68,9 @@ int put_str(bytes& b, const std::string& str)
 
 }
 
-session::session(std::unique_ptr<transport> t, size_t ceiling)
-    : _t(std::move(t)), _table(ceiling)
+session::session(std::unique_ptr<transport> t, size_t ceiling,
+                 osv::clock::uptime::duration slot_bound)
+    : _t(std::move(t)), _slot_bound(slot_bound), _table(ceiling)
 {
 }
 
@@ -328,7 +329,7 @@ int session::call(uint8_t type, const bytes& body, frame& reply, deadline d,
         if (!collected && !cancel
             && (_abort_gen != gen || now >= d)) {
             cancel = _abort_gen != gen ? _abort_err : ETIMEDOUT;
-            fd = now + flush_slot_timeout; // bounds waiting for the slot
+            fd = now + _slot_bound; // bounds waiting for the slot
         }
         if (cancel && !flush_sent && !collected) {
             // Serialized: EAGAIN while another flush holds the slot.
@@ -341,7 +342,7 @@ int session::call(uint8_t type, const bytes& body, frame& reply, deadline d,
             }
         }
         if (wait(cancel ? fd : d) && cancel) {
-            // No flush slot within flush_slot_timeout, or no Rflush
+            // No flush slot within _slot_bound, or no Rflush
             // within flush_timeout of sending Tflush.
             _table.fail(ETIMEDOUT);
         }
