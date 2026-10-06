@@ -13,6 +13,7 @@
 
 #include <algorithm>
 #include <cerrno>
+#include <utility>
 
 namespace p9 {
 
@@ -224,6 +225,192 @@ int check_reply(const expect& e, const frame& r, int& err)
     }
     err = 0;
     return 0;
+}
+
+void request_table::complete(slot& s, int err)
+{
+    s.completed = true;
+    s.err = err;
+    ++_completions;
+}
+
+void request_table::retire_tag(slot& s)
+{
+    if (s.tag_live) {
+        _tags.release(s.e.tag);
+        s.tag_live = false;
+    }
+}
+
+void request_table::maybe_free(unsigned id)
+{
+    slot& s = _slot[id];
+    if (s.used && !s.tag_live && !s.buffer_live && s.collected) {
+        s = slot{};
+    }
+}
+
+int request_table::protocol_error()
+{
+    fail(EPROTO);
+    return EPROTO;
+}
+
+int request_table::admit(uint8_t type, uint32_t limit, size_t bytes,
+                         unsigned& id, uint16_t& tag)
+{
+    if (_dead) {
+        return _dead;
+    }
+    switch (type) {
+    case Tattach: case Twalk: case Tlopen: case Tread: case Twrite:
+    case Tclunk:
+        break;
+    default:
+        return EINVAL;
+    }
+    unsigned i = 0;
+    while (i < data_tags && _slot[i].used) {
+        ++i;
+    }
+    if (i == data_tags) {
+        return EAGAIN;
+    }
+    if (int rc = _budget.charge(bytes)) {
+        return rc;
+    }
+    // Cannot fail: every held data tag belongs to a used slot, and one slot
+    // is free. (The converse does not hold: a slot may outlive its tag.)
+    uint16_t t = notag;
+    _tags.acquire(t);
+    slot& s = _slot[i];
+    s.used = s.tag_live = s.buffer_live = true;
+    s.charge = bytes;
+    s.e = {type, t, limit};
+    id = i;
+    tag = t;
+    return 0;
+}
+
+int request_table::cancel(unsigned id, int err, uint16_t& flushtag)
+{
+    if (_dead) {
+        return _dead;
+    }
+    if (id >= data_tags || !_slot[id].used) {
+        return EINVAL;
+    }
+    slot& s = _slot[id];
+    if (s.completed || s.flushing) {
+        return EALREADY;
+    }
+    slot& f = _slot[flush_id];
+    uint16_t t;
+    if (f.used || _tags.acquire_flush(t)) {
+        return EAGAIN;
+    }
+    // The flush has no caller: it is complete and collected from the start
+    // and is freed once Rflush retires its tag and the transport its buffer.
+    f.used = f.tag_live = f.buffer_live = true;
+    f.completed = f.collected = true;
+    f.e = {Tflush, t, 0};
+    s.flushing = true;
+    s.cancel_err = err;
+    _flush_target = id;
+    flushtag = t;
+    return 0;
+}
+
+int request_table::received(frame r)
+{
+    if (_dead) {
+        return _dead;
+    }
+    unsigned id = 0;
+    while (id <= flush_id
+           && !(_slot[id].tag_live && _slot[id].e.tag == r.tag)) {
+        ++id;
+    }
+    if (id > flush_id) {
+        return protocol_error(); // unknown tag, or an original after Rflush
+    }
+    slot& s = _slot[id];
+    int err;
+    if (s.replied || check_reply(s.e, r, err)) {
+        return protocol_error();
+    }
+    s.replied = true;
+    if (id == flush_id) {
+        // Rflush: the server sends nothing more on oldtag. If the original
+        // reply has not arrived, the request completes as canceled. Its
+        // buffer stays owned until the transport retires it.
+        slot& t = _slot[_flush_target];
+        if (!t.replied) {
+            complete(t, t.cancel_err);
+        }
+        t.flushing = false;
+        retire_tag(t);
+        retire_tag(s);
+        maybe_free(_flush_target);
+        maybe_free(flush_id);
+        return 0;
+    }
+    // An original reply is honored exactly once; while a flush is
+    // outstanding its tag stays held until Rflush.
+    s.reply = std::move(r);
+    complete(s, err);
+    if (!s.flushing) {
+        retire_tag(s);
+    }
+    maybe_free(id);
+    return 0;
+}
+
+int request_table::retired(unsigned id)
+{
+    if (id > flush_id || !_slot[id].buffer_live) {
+        return EINVAL;
+    }
+    slot& s = _slot[id];
+    s.buffer_live = false;
+    _budget.refund(s.charge);
+    s.charge = 0;
+    maybe_free(id);
+    return 0;
+}
+
+int request_table::collect(unsigned id, int& err, frame& reply)
+{
+    if (id >= data_tags || !_slot[id].used || _slot[id].collected) {
+        return EINVAL;
+    }
+    slot& s = _slot[id];
+    if (!s.completed) {
+        return EINPROGRESS;
+    }
+    err = s.err;
+    reply = std::move(s.reply);
+    s.reply = frame{};
+    s.collected = true;
+    maybe_free(id);
+    return 0;
+}
+
+void request_table::fail(int err)
+{
+    if (_dead) {
+        return;
+    }
+    _dead = err;
+    for (unsigned id = 0; id <= flush_id; id++) {
+        slot& s = _slot[id];
+        if (s.used && !s.completed) {
+            complete(s, err);
+        }
+        s.flushing = false;
+        retire_tag(s);
+        maybe_free(id);
+    }
 }
 
 }
