@@ -55,6 +55,7 @@ struct request {
     bytes tx;
     bytes rx;
     uint32_t pin[2] = {nofid, nofid}; // fids held until the tag retires
+    bool tag_done = false; // server will send nothing more for it
     // Private to the session, under its mutex.
     size_t rx_len = 0;
     bool arrived = false;
@@ -97,13 +98,21 @@ public:
     // an Rlerror (reply holds it), ENOTCONN before negotiate(), EMSGSIZE if
     // the frame exceeds msize, ETIMEDOUT if no data slot frees before d
     // (nothing sent), or the session error once failed.
+    //
+    // Cancellation: once d passes (or abort() is called) with the request
+    // outstanding, Tflush(oldtag) goes out on the reserved flush tag and the
+    // caller waits a further flush_timeout for Rflush; without it the
+    // session fails. A reply that wins the race is honored once (returned
+    // here); otherwise the result is ETIMEDOUT (or the abort errno).
     int rpc(uint8_t type, const bytes& body, frame& reply, deadline d);
 
     // Fid helpers. Each fid is released exactly once, and only after every
     // request that names it has retired, so it is never reused while the
     // server may still act on it. ENFILE when max_fids are in use.
     // Tattach(fid, NOFID, uname, aname, n_uname) on a new fid; 0 with the
-    // live fid and the 13-byte qid.
+    // live fid and the 13-byte qid. attach and walk cancel like rpc(); if
+    // the server creates the fid anyway (reply before Rflush), the fid is
+    // clunked and the cancellation error returned.
     int attach(const std::string& uname, const std::string& aname,
                uint32_t n_uname, uint32_t& fid, bytes& qid, deadline d);
     // Twalk(fid, newfid, names) on a new fid; 0 with the live newfid and
@@ -111,10 +120,16 @@ public:
     int walk(uint32_t fid, const std::vector<std::string>& names,
              uint32_t& newfid, bytes& qids, deadline d);
     // Tclunk(fid): once sent, the fid is released whatever the reply
-    // (clunk(5)); if nothing was sent (no slot before d) it stays live.
-    // EBADF if fid is not live or already being clunked, EBUSY while a
-    // request pins it.
+    // (clunk(5)); if nothing was sent (no slot before d) it stays live. A
+    // clunk canceled without a reply leaves the server's fid state unknown,
+    // which fails the session. EBADF if fid is not live or already being
+    // clunked, EBUSY while a request pins it.
     int clunk(uint32_t fid, deadline d);
+
+    // Cancel every request started before this call with err (nonzero),
+    // as if its deadline had passed; one still waiting for a slot returns
+    // err with nothing sent. Later requests are unaffected.
+    void abort(int err);
 
     // Transport completions; see struct request.
     void received(request& r, size_t n);
@@ -125,15 +140,23 @@ public:
     size_t charged();
     unsigned busy(); // request slots not yet fully retired
     unsigned fids(); // fids reserved or live
+    unsigned completions(); // data requests completed, ever
 
 private:
     static constexpr unsigned version_id = data_tags + 1;
     int wait(deadline d);
     void drain();
+    struct outcome {
+        bool sent = false;    // submitted, or failed the session trying
+        bool replied = false; // the server's reply was returned
+        int flushed = 0;      // errno a Tflush was sent for, else 0
+    };
     // rpc() with fids already pinned by the caller; unpinned when the
     // request's tag retires (or at once if nothing was admitted).
     int call(uint8_t type, const bytes& body, frame& reply, deadline d,
-             uint32_t pin0, uint32_t pin1, bool* sent = nullptr);
+             uint32_t pin0, uint32_t pin1, outcome* out = nullptr);
+    int flush(std::unique_lock<mutex>& lk, unsigned id, int err);
+    int created(uint32_t fid, int rc, const outcome& o);
     int pin_live(uint32_t fid);
     void unpin(uint32_t fid);
     void drop_fid(uint32_t fid); // release now or at the last unpin
@@ -152,6 +175,8 @@ private:
     uint32_t _msize = 0; // 0 until negotiated
     uint32_t _offered = 0;
     int _version_err = EINPROGRESS;
+    unsigned _abort_gen = 0; // bumped by abort()
+    int _abort_err = 0;
     fid_table _fids;
     std::array<uint32_t, max_fids> _pins{}; // helpers and requests holding a fid
     std::bitset<max_fids> _closing; // clunk in progress: no new pins
