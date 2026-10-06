@@ -2823,9 +2823,11 @@ extern "C" void unmount_rootfs(void)
 {
     int ret;
 
-    sys_umount("/dev");
+    // Poweroff unmounts regardless of remaining users, hence MNT_FORCE:
+    // descriptors are not closed when an application exits.
+    sys_umount2("/dev", MNT_FORCE);
 
-    ret = sys_umount("/proc");
+    ret = sys_umount2("/proc", MNT_FORCE);
     if (ret) {
         kprintf("Warning: unmount_rootfs: failed to unmount /proc, "
             "error = %s\n", strerror(ret));
@@ -2895,7 +2897,13 @@ void vfs_exit(void)
     replace_cwd(main_task, nullptr, []() { return 0; });
     /* Unmount file systems mounted with '--mount-fs=...' boot option */
     for (auto m: opt_mount_fs) {
-        sys_umount(m.mnt_dir);
+        // mount_fs() never mounts "/", and a forced unmount skips the
+        // root check, so skip it here too or the root mount is freed
+        // while /dev and /proc still reference it.
+        if (!strcmp(m.mnt_dir, "/")) {
+            continue;
+        }
+        sys_umount2(m.mnt_dir, MNT_FORCE);
     }
     /* Unmount all file systems */
     unmount_rootfs();
