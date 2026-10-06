@@ -246,6 +246,8 @@ tests += tst-9p-wire.so
 internal-api-tests += tst-9p-wire.so
 tests += tst-9p-session-state.so
 internal-api-tests += tst-9p-session-state.so
+tests += tst-9p-session.so
+internal-api-tests += tst-9p-session.so
 endif
 
 ifeq ($(arch),x64)
