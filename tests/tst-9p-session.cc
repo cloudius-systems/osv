@@ -1141,6 +1141,86 @@ static void crossed_reply()
     std::puts("PASS: crossed reply");
 }
 
+// A walk canceled after the server created newfid leaves an orphan fid
+// that only the compensating clunk owns: no other caller may pin it, and
+// if the clunk cannot be sent the session fails rather than leak it.
+static void orphan_clunk()
+{
+    // No budget for the clunk while the walk's buffer is unretired, then
+    // abort(): the clunk is never sent.
+    fake* f;
+    auto s = make(f, 7 + 17 + p9::min_msize); // one request at a time
+    unsigned before = s->fids();
+    uint32_t nf = 0;
+    bytes qids;
+    caller c([&] {
+        return s->walk(root, {"x"}, nf, qids, after(milliseconds(50)));
+    });
+    require(f->await(1), "walk submitted");
+    auto r = f->at(0);
+    uint32_t orphan = get32(decoded(*r).body, 4);
+    auto fl = flush_of(f, 2, *r);
+    f->reply(*r, f->answer(decoded(*r)));
+    f->reply(*fl, rflush(fl->tag));
+    std::this_thread::sleep_for(milliseconds(100));
+    require(f->submitted == 2 && !c.done, "compensating clunk waits");
+    frame out;
+    require(s->rpc(p9::Tread, read_body(orphan), out, after(milliseconds(1)))
+            == EBADF && s->clunk(orphan, after(milliseconds(1))) == EBADF,
+            "orphan not usable while its clunk waits");
+    s->abort(EINTR);
+    require(c.returns_within(milliseconds(2000)), "walk returns");
+    c.join();
+    require(c.rc == ETIMEDOUT, "walk returns its cancellation error");
+    require(s->dead() == EIO, "unsent compensating clunk fails the session");
+    require(s->fids() == before, "and the orphan is not left live");
+    f->shutdown(p9::op_deadline());
+
+    // Callers hammering the orphan's number while the walk resolves never
+    // pin it (racy by nature: a hit is a failure, a miss proves nothing).
+    unsigned hits = 0;
+    for (unsigned trial = 0; trial < 200 && !hits; trial++) {
+        auto t = make(f);
+        before = t->fids();
+        caller w([&] {
+            return t->walk(root, {"x"}, nf, qids, after(milliseconds(2)));
+        });
+        require(f->await(1), "walk submitted");
+        r = f->at(0);
+        orphan = get32(decoded(*r).body, 4);
+        std::atomic<bool> stop{false};
+        std::atomic<unsigned> got{0};
+        std::vector<std::thread> hammer;
+        for (int i = 0; i < 3; i++) {
+            hammer.emplace_back([&] {
+                frame o;
+                while (!stop) {
+                    if (t->rpc(p9::Tread, read_body(orphan), o,
+                               p9::op_deadline()) != EBADF) {
+                        ++got;
+                    }
+                }
+            });
+        }
+        fl = flush_of(f, 2, *r);
+        f->autoreply = true; // the compensating clunk, and any slip
+        f->reply(*r, f->answer(decoded(*r)));
+        f->reply(*fl, rflush(fl->tag));
+        w.join();
+        stop = true;
+        for (auto& h : hammer) {
+            h.join();
+        }
+        hits += got;
+        require(w.rc == ETIMEDOUT && !t->dead(), "canceled walk");
+        require(got || t->fids() == before, "orphan clunked");
+        f->autoreply = false;
+        f->shutdown(p9::op_deadline());
+    }
+    require(hits == 0, "orphan fid never pinned by another caller");
+    std::puts("PASS: orphan clunk");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IOLBF, 0); // keep lines if killed
@@ -1162,6 +1242,7 @@ int main()
     shutdown_waits_for_retirement();
     errno_values();
     crossed_reply();
+    orphan_clunk();
     stress();
     std::printf("SUMMARY: %u session checks, 0 failures\n", checks);
     return 0;

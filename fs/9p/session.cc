@@ -619,16 +619,25 @@ int session::clunk(uint32_t fid, deadline d)
         _closing[fid] = true;
         _pins[fid] = 2; // ours and the request's
     }
+    return send_clunk(fid, d, false);
+}
+
+// Send Tclunk for fid, already closing and pinned twice (the caller's pin
+// and the request's). If must, the fid cannot be left live (nobody owns
+// it), so failing to send fails the session.
+int session::send_clunk(uint32_t fid, deadline d, bool must)
+{
     bytes body;
     put_u32(body, fid);
     frame reply;
     outcome o;
     int rc = call(Tclunk, body, reply, d, fid, nofid, &o);
     WITH_LOCK(_mtx) {
-        if (o.sent && o.flushed && !o.replied) {
+        if ((o.sent && o.flushed && !o.replied) || (!o.sent && must)) {
             // Canceled before any reply: the server may or may not have
-            // clunked the fid, and it cannot be asked again. Retire the
-            // session rather than guess.
+            // clunked the fid, and it cannot be asked again. Or an orphan
+            // fid could not be clunked at all. Retire the session rather
+            // than guess or leak.
             _table.fail(EIO);
         }
         if (o.sent || _table.dead()) {
@@ -644,8 +653,8 @@ int session::clunk(uint32_t fid, deadline d)
 // Resolve a reserved fid f after the Tattach/Twalk that names it. On
 // success it becomes live. If the server created it but the caller had
 // already canceled (reply won the race with Tflush), it is clunked and the
-// cancellation error returned; if that clunk is uncertain, clunk() fails
-// the session. Otherwise f is released.
+// cancellation error returned; if that clunk is uncertain or cannot be
+// sent, the session fails. Otherwise f is released.
 int session::created(uint32_t f, int rc, const outcome& o)
 {
     bool orphan = o.flushed && o.replied && rc == 0;
@@ -655,15 +664,19 @@ int session::created(uint32_t f, int rc, const outcome& o)
             return rc;
         }
         _fids.make_live(f);
-        unpin(f);
+        if (!orphan) {
+            unpin(f);
+            return 0;
+        }
+        // Live and closing in one step: no caller can pin f before the
+        // clunk owns it. Our pin becomes the clunk's; add the request's.
+        _closing[f] = true;
+        ++_pins[f];
     }
-    if (orphan) {
-        // ponytail: compensating clunk waits a fresh op deadline; the
-        // caller's deadline already passed.
-        clunk(f, op_deadline());
-        return o.flushed;
-    }
-    return 0;
+    // ponytail: compensating clunk waits a fresh op deadline; the
+    // caller's deadline already passed.
+    send_clunk(f, op_deadline(), true);
+    return o.flushed;
 }
 
 int session::negotiate(uint32_t msize, deadline d)

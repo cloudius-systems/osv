@@ -117,7 +117,9 @@ public:
     // Tattach(fid, NOFID, uname, aname, n_uname) on a new fid; 0 with the
     // live fid and the 13-byte qid. attach and walk cancel like rpc(); if
     // the server creates the fid anyway (reply before Rflush), the fid is
-    // clunked and the cancellation error returned.
+    // clunked and the cancellation error returned. The fid is never
+    // visible as live to other callers; if that clunk cannot be sent (no
+    // slot before a fresh op_deadline(), or abort()) the session fails.
     int attach(const std::string& uname, const std::string& aname,
                uint32_t n_uname, uint32_t& fid, bytes& qid, deadline d);
     // Twalk(fid, newfid, names) on a new fid; 0 with the live newfid and
@@ -172,6 +174,7 @@ private:
              uint32_t pin0, uint32_t pin1, outcome* out = nullptr);
     int flush(std::unique_lock<mutex>& lk, unsigned id, int err);
     int created(uint32_t fid, int rc, const outcome& o);
+    int send_clunk(uint32_t fid, deadline d, bool must);
     int pin_live(uint32_t fid);
     void unpin(uint32_t fid);
     void drop_fid(uint32_t fid); // release now or at the last unpin
