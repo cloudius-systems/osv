@@ -1224,6 +1224,86 @@ static void orphan_clunk()
     std::puts("PASS: orphan clunk");
 }
 
+// A partial Rwalk (0 < nwqid < nwname): walk(5) says newfid was not
+// created, but diod keeps it, so it is clunked before walk() returns
+// ENOENT. Until that clunk resolves the number is neither usable nor
+// reusable; Rlerror and Rclunk both release it.
+static void partial_walk_clunk()
+{
+    std::vector<std::string> two{"x", "y"};
+    for (bool lerror : {true, false}) {
+        fake* f;
+        auto s = make(f);
+        unsigned before = s->fids();
+        uint32_t nf = 0;
+        bytes qids;
+        caller c([&] { return s->walk(root, two, nf, qids, p9::op_deadline()); });
+        require(f->await(1), "walk submitted");
+        auto r = f->at(0);
+        uint32_t newfid = get32(decoded(*r).body, 4);
+        f->walk_short = 1;
+        f->reply(*r, f->answer(decoded(*r))); // Rwalk, nwqid 1
+        f->walk_short = 0;
+        require(f->await(2), "Tclunk after a partial walk");
+        auto cl = f->at(1);
+        frame t = sent(*cl);
+        require(t.type == p9::Tclunk && get32(t.body, 0) == newfid,
+                "Tclunk names newfid");
+        require(!c.done && s->fids() == before + 1,
+                "newfid held until its clunk resolves");
+        frame out;
+        require(s->rpc(p9::Tread, read_body(newfid), out, after(milliseconds(1)))
+                == EBADF && s->clunk(newfid, after(milliseconds(1))) == EBADF
+                && s->walk(newfid, {}, nf, qids, after(milliseconds(1))) == EBADF,
+                "newfid not usable while its clunk waits");
+        if (lerror) {
+            // Every other number taken: the table is full, newfid not reissued.
+            f->autoreply = true;
+            uint32_t b;
+            while (s->fids() < p9::max_fids) {
+                require(s->walk(root, {}, b, qids, p9::op_deadline()) == 0
+                        && b != newfid, "clone never reuses newfid");
+            }
+            require(s->walk(root, {}, b, qids, p9::op_deadline()) == ENFILE,
+                    "newfid still counted");
+            f->autoreply = false;
+            f->reply(*cl, frame{p9::Rlerror, cl->tag, {2, 0, 0, 0}});
+        } else {
+            f->reply(*cl, frame{p9::Rclunk, cl->tag, {}});
+        }
+        require(c.returns_within(milliseconds(2000)), "walk returns");
+        c.join();
+        require(c.rc == ENOENT && !s->dead(), "partial walk is ENOENT");
+        if (lerror) {
+            uint32_t b;
+            f->autoreply = true;
+            require(s->fids() == p9::max_fids - 1
+                    && s->walk(root, {}, b, qids, p9::op_deadline()) == 0
+                    && b == newfid, "Rlerror to the clunk releases newfid");
+            f->autoreply = false;
+        } else {
+            require(s->fids() == before, "Rclunk releases newfid");
+        }
+        f->shutdown(p9::op_deadline());
+    }
+
+    // Unchanged: a walk answered by Rlerror (nwqid 0) sends no Tclunk.
+    fake* f;
+    auto s = make(f);
+    unsigned before = s->fids();
+    uint32_t nf = 0;
+    bytes qids;
+    caller c([&] { return s->walk(root, two, nf, qids, p9::op_deadline()); });
+    require(f->await(1), "walk submitted");
+    auto r = f->at(0);
+    f->reply(*r, frame{p9::Rlerror, r->tag, {2, 0, 0, 0}});
+    c.join();
+    require(c.rc == ENOENT && f->submitted == 1 && s->fids() == before,
+            "Rlerror walk releases newfid without a clunk");
+    f->shutdown(p9::op_deadline());
+    std::puts("PASS: partial walk clunk");
+}
+
 // Every data request times out at once against a server that answers each
 // Tflush, slowly: the last canceler queues behind 31 flushes taking longer
 // than flush_timeout in total, and the session must survive.
@@ -1369,6 +1449,7 @@ int main()
     errno_values();
     crossed_reply();
     orphan_clunk();
+    partial_walk_clunk();
     mass_timeout();
     flush_slot_expiry();
     late_original_after_reuse();

@@ -592,13 +592,17 @@ int session::walk(uint32_t fid, const std::vector<std::string>& names,
     }
     outcome o;
     rc = call(Twalk, body, reply, d, fid, f, &o);
-    // Rwalk nwqid[2] then qids; check_reply bounded nwqid by nwname. A
-    // partial walk did not create newfid (walk(5)).
-    if (!rc && uint16_t(reply.body[0] | reply.body[1] << 8) != names.size()) {
+    // Rwalk nwqid[2] then qids; check_reply bounded nwqid by nwname. By
+    // walk(5) a partial walk did not create newfid, but diod keeps it, so
+    // newfid is clunked anyway when any name was walked (as Linux does).
+    bool partial = false;
+    uint16_t nwqid = rc ? 0 : uint16_t(reply.body[0] | reply.body[1] << 8);
+    if (!rc && nwqid != names.size()) {
+        partial = nwqid > 0;
         o.replied = false;
         rc = ENOENT;
     }
-    rc = created(f, rc, o);
+    rc = created(f, rc, o, partial);
     if (!rc) {
         newfid = f;
         qids.assign(reply.body.begin() + 2, reply.body.end());
@@ -656,14 +660,15 @@ int session::send_clunk(uint32_t fid, deadline d, bool must)
 
 // Resolve a reserved fid f after the Tattach/Twalk that names it. On
 // success it becomes live. If the server created it but the caller had
-// already canceled (reply won the race with Tflush), it is clunked and the
-// cancellation error returned; if that clunk is uncertain or cannot be
-// sent, the session fails. Otherwise f is released.
-int session::created(uint32_t f, int rc, const outcome& o)
+// already canceled (reply won the race with Tflush), or may hold it after
+// a partial walk (rc ENOENT), it is clunked and the cancellation error (or
+// rc) returned; if that clunk is uncertain or cannot be sent, the session
+// fails. Otherwise f is released.
+int session::created(uint32_t f, int rc, const outcome& o, bool partial)
 {
-    bool orphan = o.flushed && o.replied && rc == 0;
+    bool orphan = partial || (o.flushed && o.replied && rc == 0);
     WITH_LOCK(_mtx) {
-        if (rc) {
+        if (rc && !orphan) {
             drop_fid(f);
             return rc;
         }
@@ -680,7 +685,7 @@ int session::created(uint32_t f, int rc, const outcome& o)
     // ponytail: compensating clunk waits a fresh op deadline; the
     // caller's deadline already passed.
     send_clunk(f, op_deadline(), true);
-    return o.flushed;
+    return rc ? rc : o.flushed;
 }
 
 int session::negotiate(uint32_t msize, deadline d)
