@@ -479,6 +479,9 @@ static void rflush_then_original()
 
     p9::request_table q;
     id = admit(q, tag);
+    ftag = 0x5a5a;
+    require(q.cancel(id, 0, ftag) == EINVAL && ftag == 0x5a5a
+            && !q.tags().flush_held(), "zero cancel errno refused");
     require(q.cancel(id, EINTR, ftag) == 0, "cancel");
     require(q.received(rflush(ftag)) == 0, "Rflush first");
     require(!q.tags().held(tag), "oldtag retired by Rflush");

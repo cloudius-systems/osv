@@ -297,7 +297,8 @@ int request_table::cancel(unsigned id, int err, uint16_t& flushtag)
     if (_dead) {
         return _dead;
     }
-    if (id >= data_tags || !_slot[id].used) {
+    // err 0 would make a canceled request look like a success with no reply.
+    if (id >= data_tags || !_slot[id].used || err == 0) {
         return EINVAL;
     }
     slot& s = _slot[id];
