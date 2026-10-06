@@ -639,8 +639,11 @@ int session::send_clunk(uint32_t fid, deadline d, bool must)
             // Canceled before any reply: the server may or may not have
             // clunked the fid, and it cannot be asked again. Or an orphan
             // fid could not be clunked at all. Retire the session rather
-            // than guess or leak.
+            // than guess or leak. Report the session error, not the
+            // cancel errno, so ETIMEDOUT keeps meaning "not sent, still
+            // live".
             _table.fail(EIO);
+            rc = _table.dead();
         }
         if (o.sent || _table.dead()) {
             drop_fid(fid); // clunk(5): gone whatever the reply
