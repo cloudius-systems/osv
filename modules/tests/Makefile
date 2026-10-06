@@ -229,6 +229,7 @@ tests += tst-libaio.so
 tests += tst-rlimit.so
 tests += tst-close-range.so
 tests += tst-numa.so
+internal-api-tests += tst-rename-failure.so
 
 # Tests with special compilation parameters needed...
 $(out)/tests/tst-mmap.so: COMMON += -Wl,-z,now
@@ -320,6 +321,7 @@ common-boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	tst-rcu-hashtable.so tst-unordered-ring-mpsc.so \
 	tst-seek.so tst-ctype.so tst-wctype.so tst-string.so tst-time.so tst-dax.so \
 	tst-net_if_test.so
+common-boost-tests += tst-rename-failure.so
 
 boost-tests := $(common-boost-tests)
 
