@@ -127,6 +127,12 @@ public:
     // the session (a slot held that long means the server or transport is
     // not retiring flushes). A reply that wins the race is honored once (returned
     // here); otherwise the result is ETIMEDOUT (or the abort errno).
+    //
+    // Worst case, a caller returns by d + flush_slot_timeout +
+    // flush_timeout (d + 165 s). attach() and walk() can add a compensating
+    // clunk with its own op_deadline() and the same cancellation bounds, so
+    // they return by d + 360 s. Every wait is bounded; these are expiry
+    // limits, not queue guarantees (the flush slot is not FIFO).
     int rpc(uint8_t type, const bytes& body, frame& reply, deadline d);
 
     // Fid helpers. Each fid is released exactly once, and only after every
@@ -150,8 +156,9 @@ public:
     // a reply leaves the server's fid state unknown, which fails the
     // session with EIO and returns that session error (dead() == EIO), not
     // the cancel errno. A server Rlerror(EIO) also returns EIO with the
-    // session alive; dead() tells them apart. EBADF if fid is not live or
-    // already being clunked, EBUSY while a request pins it.
+    // session alive; dead() tells them apart. Whatever the return value,
+    // if dead() is nonzero afterwards the fid is gone. EBADF if fid is not
+    // live or already being clunked, EBUSY while a request pins it.
     int clunk(uint32_t fid, deadline d);
 
     // Cancel every request started before this call with err (nonzero),
