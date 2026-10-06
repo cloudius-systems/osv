@@ -131,7 +131,7 @@ void session::drain()
         } else if (rc) {
             _table.fail(rc);
         } else {
-            _table.received(std::move(f));
+            _table.received(id, std::move(f));
         }
     }
     _narrived = 0;

@@ -322,18 +322,16 @@ int request_table::cancel(unsigned id, int err, uint16_t& flushtag)
     return 0;
 }
 
-int request_table::received(frame r)
+int request_table::received(unsigned id, frame r)
 {
     if (_dead) {
         return _dead;
     }
-    unsigned id = 0;
-    while (id <= flush_id
-           && !(_slot[id].tag_live && _slot[id].e.tag == r.tag)) {
-        ++id;
-    }
-    if (id > flush_id) {
-        return protocol_error(); // unknown tag, or an original after Rflush
+    // Match by the buffer the reply arrived in, not by tag alone: a late
+    // original whose tag Rflush retired and admit() reissued would
+    // otherwise go to the tag's new owner. check_reply() checks the tag.
+    if (id > flush_id || !_slot[id].tag_live) {
+        return protocol_error(); // an original after Rflush, or bad id
     }
     slot& s = _slot[id];
     int err;
