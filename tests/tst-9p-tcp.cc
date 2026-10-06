@@ -1194,28 +1194,325 @@ static void loopback_send_deadline()
     ::close(c);
     std::puts("PASS: loopback send deadline");
 }
+// Interoperability modes, driven by scripts/tests/test_9p.py against a
+// server on the host. Plain helpers first.
+static sockaddr_in endpoint(const char* ip, const char* port)
+{
+    sockaddr_in a{};
+    a.sin_family = AF_INET;
+    a.sin_port = htons(uint16_t(std::atoi(port)));
+    a.sin_addr.s_addr = inet_addr(ip);
+    return a;
+}
+
+static std::unique_ptr<p9::session> dial(const sockaddr_in& a, uint32_t want)
+{
+    std::unique_ptr<p9::transport> t;
+    require(p9::connect_tcp(reinterpret_cast<const sockaddr*>(&a), sizeof a,
+                            after(milliseconds(5000)), t) == 0,
+            "connect to the server");
+    std::unique_ptr<p9::session> s(new p9::session(std::move(t)));
+    require(s->negotiate(want, after(milliseconds(5000))) == 0,
+            "negotiate 9P2000.L");
+    return s;
+}
+
+static bytes lopen_body(uint32_t fid, uint32_t flags)
+{
+    bytes b;
+    put32(b, fid);
+    put32(b, flags);
+    return b;
+}
+
+static bytes io_body(uint32_t fid, uint64_t off, uint32_t count,
+                     const std::string& data = "")
+{
+    bytes b;
+    put32(b, fid);
+    put32(b, uint32_t(off));
+    put32(b, uint32_t(off >> 32));
+    put32(b, count);
+    b.insert(b.end(), data.begin(), data.end());
+    return b;
+}
+
+// The data of a well-formed Rread, else a marker no test expects.
+static std::string rread_data(const frame& r)
+{
+    if (r.type != p9::Rread || r.body.size() < 4
+        || le32(r.body.data()) != r.body.size() - 4) {
+        return "<not an Rread>";
+    }
+    return std::string(r.body.begin() + 4, r.body.end());
+}
+
+static uint32_t walk1(p9::session& s, uint32_t dir, const char* name)
+{
+    uint32_t fid;
+    bytes qids;
+    require(s.walk(dir, {name}, fid, qids, after(milliseconds(5000))) == 0
+            && qids.size() == 13, "Twalk one name");
+    return fid;
+}
+
+static void lopen(p9::session& s, uint32_t fid, uint32_t flags)
+{
+    frame r;
+    require(s.rpc(p9::Tlopen, lopen_body(fid, flags), r,
+                  after(milliseconds(5000))) == 0
+            && r.type == p9::Rlopen && r.body.size() == 17, "Tlopen");
+}
+
+static std::string read_at(p9::session& s, uint32_t fid, uint64_t off,
+                           uint32_t count)
+{
+    frame r;
+    int rc = s.rpc(p9::Tread, io_body(fid, off, count), r,
+                   after(milliseconds(5000)));
+    require(rc == 0, "Tread");
+    return rread_data(r);
+}
+
+static void clunk(p9::session& s, uint32_t fid)
+{
+    require(s.clunk(fid, after(milliseconds(5000))) == 0, "Tclunk");
+}
+
+constexpr uint32_t l_rdonly = 0, l_wronly = 1, l_trunc = 01000;
+constexpr size_t big_size = 1000000; // byte i of a/big is i % 251
+
+// diod with a private export prepared by the test operator (see
+// test_9p.py): directory a holds hello ("hello from the 9p export\n"),
+// big, out and fifo (a FIFO); directory b, a second export, holds another
+// link to that FIFO. diod runs with one worker per export (-t 1).
+static void diod_interop(const sockaddr_in& at, uint32_t uid, const char* a,
+                         const char* b)
+{
+    auto s = dial(at, 65536);
+    const uint32_t msize = s->msize();
+    std::printf("diod: negotiated 9P2000.L msize %u\n", msize);
+    require(msize >= 4096 && msize <= 65536, "msize in range");
+    std::puts("PASS: diod negotiate");
+
+    uint32_t ra, rb, other;
+    bytes qid;
+    int rc = s->attach("osv", a, uid + 1, other, qid,
+                       after(milliseconds(5000)));
+    std::printf("diod: attach as uid %u: errno %d\n", uid + 1, rc);
+    require(rc != 0 && s->dead() == 0, "attach as another uid refused");
+    require(s->attach("osv", a, uid, ra, qid, after(milliseconds(5000))) == 0
+            && qid.size() == 13 && (qid[0] & 0x80), "Tattach export a");
+    require(s->attach("osv", b, uid, rb, qid, after(milliseconds(5000))) == 0,
+            "Tattach export b");
+    std::puts("PASS: diod attach");
+
+    uint32_t nf;
+    bytes qids;
+    require(s->walk(ra, {"missing"}, nf, qids, after(milliseconds(5000)))
+            == ENOENT, "Twalk to a missing name: ENOENT");
+    require(s->walk(ra, {"hello", "below"}, nf, qids,
+                    after(milliseconds(5000))) == ENOENT,
+            "partial Twalk: ENOENT, no fid");
+    require(s->dead() == 0, "ENOENT keeps the session");
+    std::puts("PASS: diod ENOENT");
+
+    uint32_t h = walk1(*s, ra, "hello");
+    lopen(*s, h, l_rdonly);
+    require(read_at(*s, h, 0, 4096) == "hello from the 9p export\n",
+            "Tread hello");
+    require(read_at(*s, h, 4096, 4096).empty(), "Tread past EOF is empty");
+    // Concurrent reads of a file larger than msize: many tags in flight,
+    // replies spanning several TCP segments.
+    uint32_t g = walk1(*s, ra, "big");
+    lopen(*s, g, l_rdonly);
+    // Below msize minus diod's 24-byte I/O header, so no read is cut.
+    const uint32_t chunk = msize - 64;
+    const unsigned n = unsigned((big_size + chunk - 1) / chunk);
+    std::atomic<unsigned> good{0};
+    std::vector<std::thread> ts;
+    for (unsigned k = 0; k < 8; k++) {
+        ts.emplace_back([&, k] {
+            for (unsigned i = k; i < n; i += 8) {
+                frame r;
+                uint64_t off = uint64_t(i) * chunk;
+                if (s->rpc(p9::Tread, io_body(g, off, chunk), r,
+                           after(milliseconds(10000)))) {
+                    continue;
+                }
+                std::string d = rread_data(r);
+                bool ok = d.size() == std::min<uint64_t>(chunk,
+                                                         big_size - off);
+                for (size_t j = 0; ok && j < d.size(); j++) {
+                    ok = uint8_t(d[j]) == (off + j) % 251;
+                }
+                good += ok;
+            }
+        });
+    }
+    for (auto& t : ts) {
+        t.join();
+    }
+    require(good == n, "concurrent Treads of big return its bytes");
+    std::puts("PASS: diod read");
+
+    const std::string w = "written by OSv over 9P/TCP\n";
+    uint32_t o = walk1(*s, ra, "out");
+    lopen(*s, o, l_wronly | l_trunc);
+    frame r;
+    require(s->rpc(p9::Twrite, io_body(o, 0, uint32_t(w.size()), w), r,
+                   after(milliseconds(5000))) == 0
+            && r.type == p9::Rwrite && le32(r.body.data()) == w.size(),
+            "Twrite");
+    clunk(*s, o);
+    o = walk1(*s, ra, "out");
+    lopen(*s, o, l_rdonly);
+    require(read_at(*s, o, 0, 4096) == w, "written bytes read back");
+    clunk(*s, o);
+    std::puts("PASS: diod write");
+
+    // Tflush: block export a's only worker in a FIFO open, so a Tread
+    // queued behind it is canceled before diod starts it; diod answers
+    // Rflush at once and never answers the original.
+    uint32_t ff = walk1(*s, ra, "fifo");
+    std::atomic<int> open_rc{-1};
+    std::thread opener([&] {
+        frame fr;
+        open_rc = s->rpc(p9::Tlopen, lopen_body(ff, l_rdonly), fr,
+                         after(milliseconds(20000)));
+    });
+    std::this_thread::sleep_for(milliseconds(300));
+    require(open_rc == -1, "FIFO open holds the worker");
+    auto t0 = osv::clock::uptime::now();
+    rc = s->rpc(p9::Tread, io_body(h, 0, 64), r, after(milliseconds(500)));
+    long took = ms_since(t0);
+    std::printf("diod: queued Tread returned %d after %ld ms\n", rc, took);
+    require(rc == ETIMEDOUT, "queued Tread canceled by Tflush");
+    require(took < 3000, "Rflush well before flush_timeout");
+    require(s->dead() == 0, "Rflush keeps the session");
+    // Release the worker through export b, which has its own worker.
+    uint32_t wf = walk1(*s, rb, "fifo");
+    lopen(*s, wf, l_wronly);
+    opener.join();
+    require(open_rc == 0, "FIFO open completes");
+    require(read_at(*s, h, 0, 4096) == "hello from the 9p export\n",
+            "Tread after the flush");
+    std::puts("PASS: diod flush");
+
+    for (uint32_t f : {wf, ff, g, h, ra, rb}) {
+        clunk(*s, f);
+    }
+    require(s->fids() == 0 && settled(*s), "every fid clunked and retired");
+    require(s->shutdown(after(milliseconds(5000))) == 0, "shutdown");
+    require(live_receivers() == 0, "receiver joined");
+    std::puts("PASS: diod clunk and shutdown");
+}
+
+// The fault-only peer in test_9p.py; one connection per case, in this
+// order. It answers Tversion, Tattach and Tread ("frag") just enough to
+// reach each fault.
+static void peer_faults(const sockaddr_in& at)
+{
+    {
+        // Each reply alone goes out one byte per segment; replies to
+        // reads in flight together are coalesced into one send.
+        auto s = dial(at, 8192);
+        uint32_t fid;
+        bytes qid;
+        require(s->attach("osv", "/", 0, fid, qid, after(milliseconds(5000)))
+                == 0, "attach (byte-at-a-time reply)");
+        for (int i = 0; i < 4; i++) {
+            require(read_at(*s, fid, 0, 4) == "frag", "fragmented Rread");
+        }
+        std::vector<std::thread> ts;
+        std::atomic<unsigned> good{0};
+        for (int i = 0; i < 6; i++) {
+            ts.emplace_back([&] {
+                frame r;
+                good += s->rpc(p9::Tread, io_body(fid, 0, 4), r,
+                               after(milliseconds(10000))) == 0
+                    && rread_data(r) == "frag";
+            });
+        }
+        for (auto& t : ts) {
+            t.join();
+        }
+        require(good == 6, "coalesced Rreads");
+        require(s->shutdown(after(milliseconds(5000))) == 0, "shutdown");
+        std::puts("PASS: peer fragmentation and coalescing");
+    }
+    struct fault {
+        const char* name;
+        int want;     // the call's return and the session error
+        long min_ms;  // bounds on how long the call takes
+        long max_ms;
+    };
+    // stall: 5 bytes of the Rread, then silence with the connection open.
+    // The Tflush cannot be answered, so the session fails at flush_timeout.
+    const fault cases[] = {
+        {"partial frame then EOF", ECONNRESET, 0, 3000},
+        {"stall mid-frame", ETIMEDOUT, 5000, 8000},
+        {"reset", ECONNRESET, 0, 3000},
+    };
+    for (auto& c : cases) {
+        auto s = dial(at, 8192);
+        uint32_t fid;
+        bytes qid;
+        require(s->attach("osv", "/", 0, fid, qid, after(milliseconds(5000)))
+                == 0, "attach");
+        frame r;
+        auto t0 = osv::clock::uptime::now();
+        int rc = s->rpc(p9::Tread, io_body(fid, 0, 4), r,
+                        after(milliseconds(300)));
+        long took = ms_since(t0);
+        std::printf("peer %s: rc %d after %ld ms, session %d\n", c.name, rc,
+                    took, s->dead());
+        require(rc == c.want && s->dead() == c.want, "fault fails the session");
+        require(took >= c.min_ms && took < c.max_ms, "fault seen in time");
+        t0 = osv::clock::uptime::now();
+        require(s->shutdown(after(milliseconds(5000))) == 0, "shutdown");
+        require(ms_since(t0) < 2000 && live_receivers() == 0,
+                "receiver woken and joined");
+        std::printf("PASS: peer %s\n", c.name);
+    }
+}
 #endif
 
-// "socket" as the only argument runs just the real-socket groups.
+// No argument: every self-contained group. "socket": only the real-socket
+// groups. "diod IP PORT UID ANAME_A ANAME_B" and "peer IP PORT": the
+// interoperability modes above.
 int main(int argc, char** argv)
 {
-    if (argc < 2 || std::string(argv[1]) != "socket") {
-        fragmentation();
-        interleaving();
-        send_deadline();
-        failures();
-        flush_retires();
-        shutdown_joins();
-        destroy_joins();
-    }
+    const std::string mode = argc > 1 ? argv[1] : "";
 #ifdef __OSV__
-    connect_errors();
-    connect_timeout();
-    loopback_session();
-    loopback_shutdown();
-    loopback_partial_send();
-    loopback_send_deadline();
+    if (mode == "diod" && argc == 7) {
+        diod_interop(endpoint(argv[2], argv[3]), uint32_t(std::atoi(argv[4])),
+                     argv[5], argv[6]);
+    } else if (mode == "peer" && argc == 4) {
+        peer_faults(endpoint(argv[2], argv[3]));
+    } else
 #endif
+    if (mode.empty() || (mode == "socket" && argc == 2)) {
+        if (mode.empty()) {
+            fragmentation();
+            interleaving();
+            send_deadline();
+            failures();
+            flush_retires();
+            shutdown_joins();
+            destroy_joins();
+        }
+#ifdef __OSV__
+        connect_errors();
+        connect_timeout();
+        loopback_session();
+        loopback_shutdown();
+        loopback_partial_send();
+        loopback_send_deadline();
+#endif
+    } else {
+        require(false, "known mode and argument count");
+    }
     std::printf("SUMMARY: %u tcp checks, 0 failures\n", checks.load());
     return 0;
 }
