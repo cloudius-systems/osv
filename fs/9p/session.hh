@@ -84,7 +84,18 @@ public:
 
 class session {
 public:
-    // ceiling bounds the bytes charged by outstanding requests.
+    // ceiling bounds the bytes charged by outstanding requests: each data
+    // request's tx (7 + body) and rx (msize) buffers, from admission until
+    // the transport retires them. Not charged, and bounded separately:
+    //   decoded reply copies waiting in uncollected slots, at most
+    //     data_tags x (msize - 7) (about 2 MiB at msize 65536); a reply
+    //     becomes the caller's at collect;
+    //   the Tversion request (rx of msize), once per session;
+    //   the Tflush request (9 + 7 bytes), so cancellation never waits for
+    //     budget;
+    //   a returning caller's retired request object, freed as rpc()
+    //     returns (one per calling thread).
+    // So the worst case is about ceiling + data_tags x msize.
     explicit session(std::unique_ptr<transport> t,
                      size_t ceiling = alloc_ceiling);
     // shutdown(op_deadline()), then destroy the transport. No caller may
