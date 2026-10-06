@@ -115,6 +115,7 @@ void session::drain()
                 rc = check_version(f, _offered, m);
             }
             _version_err = rc;
+            _version_done = true;
             if (rc) {
                 _table.fail(rc);
             } else {
@@ -127,8 +128,9 @@ void session::drain()
         }
     }
     _narrived = 0;
-    if (_table.dead() && _version_err == EINPROGRESS) {
+    if (_table.dead() && !_version_done) {
         _version_err = _table.dead();
+        _version_done = true;
     }
     for (unsigned id = 0; id <= version_id; id++) {
         std::shared_ptr<request>& r = _req[id];
@@ -137,7 +139,7 @@ void session::drain()
         }
         bool busy;
         if (id == version_id) {
-            busy = !r->gone || _version_err == EINPROGRESS;
+            busy = !r->gone || !_version_done;
         } else {
             if (r->gone && !r->refunded) {
                 _table.retired(id);
@@ -235,6 +237,11 @@ int session::call(uint8_t type, const bytes& body, frame& reply, deadline d,
     uint16_t tag;
     for (;;) {
         drain();
+        // The session errno can be any value, EAGAIN and ENOMEM included,
+        // so test it apart from admit()'s retry codes.
+        if ((rc = _table.dead())) {
+            break;
+        }
         rc = _table.admit(type, limit, 7 + body.size() + msize, id, tag);
         // Wait for a slot (EAGAIN) or for charged bytes to be refunded
         // (ENOMEM), never past d.
@@ -289,32 +296,35 @@ int session::call(uint8_t type, const bytes& body, frame& reply, deadline d,
     }
     // Collect the result. If d passes (or abort()) first, cancel with a
     // Tflush; a caller that sent one also waits until it resolves, so every
-    // flush has someone enforcing its deadline.
-    int result = EINPROGRESS;
+    // flush has someone enforcing its deadline. Whether the result is in
+    // is tracked apart from its value: a server Rlerror may carry any errno.
+    bool collected = false;
+    int result = 0;
     int cancel = 0; // errno once canceling
     bool flush_sent = false;
     deadline fd{};
     for (;;) {
         drain();
-        if (result == EINPROGRESS) {
+        if (!collected) {
             int err;
             int c = _table.collect(id, err, reply);
             if (c != EINPROGRESS) {
+                collected = true;
                 result = c ? c : err;
                 out->replied = c == 0 && reply.type != 0;
             }
         }
-        if (result != EINPROGRESS && (!flush_sent || r->tag_done)) {
+        if (collected && (!flush_sent || r->tag_done)) {
             drain(); // collect() may have freed the slot
             return result;
         }
         auto now = osv::clock::uptime::now();
-        if (result == EINPROGRESS && !cancel
+        if (!collected && !cancel
             && (_abort_gen != gen || now >= d)) {
             cancel = _abort_gen != gen ? _abort_err : ETIMEDOUT;
             fd = now + flush_timeout; // bounds waiting for the flush slot
         }
-        if (cancel && !flush_sent && result == EINPROGRESS) {
+        if (cancel && !flush_sent && !collected) {
             // Serialized: EAGAIN while another flush holds the slot.
             int f = flush(lk, id, cancel);
             if (f != EAGAIN) {
@@ -682,7 +692,7 @@ int session::negotiate(uint32_t msize, deadline d)
     }
     for (;;) {
         drain();
-        if (_version_err != EINPROGRESS) {
+        if (_version_done) {
             return _version_err;
         }
         if (wait(d)) {
