@@ -32,6 +32,10 @@ namespace p9 {
 using deadline = osv::clock::uptime::time_point;
 constexpr std::chrono::seconds op_timeout{30};
 constexpr std::chrono::seconds flush_timeout{5};
+// Flushes are serialized on one reserved tag. A canceling caller may queue
+// behind every other data request's flush, each answered within
+// flush_timeout, so its wait for the slot gets a bound of its own.
+constexpr std::chrono::seconds flush_slot_timeout = flush_timeout * data_tags;
 
 inline deadline op_deadline()
 {
@@ -107,7 +111,10 @@ public:
     // Cancellation: once d passes (or abort() is called) with the request
     // outstanding, Tflush(oldtag) goes out on the reserved flush tag and the
     // caller waits a further flush_timeout for Rflush; without it the
-    // session fails. A reply that wins the race is honored once (returned
+    // session fails. Flushes are serialized: the wait for the flush slot is
+    // bounded separately by flush_slot_timeout, and its expiry also fails
+    // the session (a slot held that long means the server or transport is
+    // not retiring flushes). A reply that wins the race is honored once (returned
     // here); otherwise the result is ETIMEDOUT (or the abort errno).
     int rpc(uint8_t type, const bytes& body, frame& reply, deadline d);
 
