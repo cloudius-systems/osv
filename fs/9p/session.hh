@@ -96,8 +96,11 @@ public:
     //   a returning caller's retired request object, freed as rpc()
     //     returns (one per calling thread).
     // So the worst case is about ceiling + data_tags x msize.
+    // slot_bound replaces flush_slot_timeout (tests use a short one).
     explicit session(std::unique_ptr<transport> t,
-                     size_t ceiling = alloc_ceiling);
+                     size_t ceiling = alloc_ceiling,
+                     osv::clock::uptime::duration slot_bound
+                         = flush_slot_timeout);
     // shutdown(op_deadline()), then destroy the transport. No caller may
     // still be inside the session.
     ~session();
@@ -208,6 +211,7 @@ private:
     void drop_fid(uint32_t fid); // release now or at the last unpin
 
     std::unique_ptr<transport> _t;
+    const osv::clock::uptime::duration _slot_bound;
     mutex _mtx;
     condvar _cv;
     request_table _table;
