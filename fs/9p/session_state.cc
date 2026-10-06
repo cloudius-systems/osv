@@ -11,6 +11,7 @@
 
 #include "session_state.hh"
 
+#include <algorithm>
 #include <cerrno>
 
 namespace p9 {
@@ -121,6 +122,107 @@ int budget::refund(size_t n)
         return EINVAL;
     }
     _used -= n;
+    return 0;
+}
+
+namespace {
+
+constexpr size_t qid_size = 13; // type[1] version[4] path[8]
+
+uint32_t get_u32(const uint8_t* p)
+{
+    return uint32_t(p[0]) | uint32_t(p[1]) << 8 | uint32_t(p[2]) << 16
+        | uint32_t(p[3]) << 24;
+}
+
+uint16_t get_u16(const uint8_t* p)
+{
+    return uint16_t(p[0] | p[1] << 8);
+}
+
+}
+
+int check_version(const frame& r, uint32_t offered, uint32_t& msize)
+{
+    // Rversion: msize[4] version[s]; s is len[2] then len bytes, no NUL.
+    static const char dialect[] = "9P2000.L";
+    const size_t n = sizeof(dialect) - 1;
+    const bytes& b = r.body;
+    if (r.type != Rversion || r.tag != notag || b.size() < 6
+        || b.size() != 6 + size_t(get_u16(&b[4]))) {
+        return EPROTO;
+    }
+    if (b.size() != 6 + n || !std::equal(dialect, dialect + n, &b[6])) {
+        return EPROTONOSUPPORT;
+    }
+    uint32_t m = get_u32(&b[0]);
+    if (m < min_msize || m > offered) {
+        return EPROTO;
+    }
+    msize = m;
+    return 0;
+}
+
+int map_lerror(uint32_t ecode)
+{
+    // Linux asm-generic errno numbers 1..133; 41 and 58 are unassigned.
+    // OSv's public errno.h uses the same numbering.
+    if (ecode == 0) {
+        return EPROTO;
+    }
+    if (ecode > 133 || ecode == 41 || ecode == 58) {
+        return EIO;
+    }
+    return int(ecode);
+}
+
+int check_reply(const expect& e, const frame& r, int& err)
+{
+    if (r.tag != e.tag) {
+        return EPROTO;
+    }
+    const bytes& b = r.body;
+    if (r.type == Rlerror) {
+        // Tflush must be answered by Rflush (flush(5)).
+        if (e.type == Tflush || b.size() != 4) {
+            return EPROTO;
+        }
+        err = map_lerror(get_u32(b.data()));
+        return 0;
+    }
+    if (r.type != uint8_t(e.type + 1)) {
+        return EPROTO; // includes legacy Rerror
+    }
+    bool ok;
+    switch (e.type) {
+    case Tattach:
+        ok = b.size() == qid_size;
+        break;
+    case Tlopen:
+        ok = b.size() == qid_size + 4;
+        break;
+    case Tclunk:
+    case Tflush:
+        ok = b.empty();
+        break;
+    case Twrite:
+        ok = b.size() == 4 && get_u32(b.data()) <= e.limit;
+        break;
+    case Tread:
+        ok = b.size() >= 4 && get_u32(b.data()) <= e.limit
+            && b.size() - 4 == get_u32(b.data());
+        break;
+    case Twalk:
+        ok = b.size() >= 2 && get_u16(b.data()) <= e.limit
+            && b.size() == 2 + qid_size * get_u16(b.data());
+        break;
+    default:
+        return EINVAL;
+    }
+    if (!ok) {
+        return EPROTO;
+    }
+    err = 0;
     return 0;
 }
 
