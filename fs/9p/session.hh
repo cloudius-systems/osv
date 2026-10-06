@@ -71,7 +71,9 @@ public:
     // fails, since a partial send cannot be undone.
     virtual int submit(std::shared_ptr<request> r, deadline d) = 0;
     // Stop: retire every request held, join internal threads. 0, or an
-    // errno if some buffer may still be referenced at d.
+    // errno if some buffer may still be referenced at d. The destructor
+    // must join any thread that can call into the session; it may keep its
+    // shares of requests it could not retire.
     virtual int shutdown(deadline d) = 0;
 };
 
@@ -80,6 +82,8 @@ public:
     // ceiling bounds the bytes charged by outstanding requests.
     explicit session(std::unique_ptr<transport> t,
                      size_t ceiling = alloc_ceiling);
+    // shutdown(op_deadline()), then destroy the transport. No caller may
+    // still be inside the session.
     ~session();
     session(const session&) = delete;
     session& operator=(const session&) = delete;
@@ -134,6 +138,16 @@ public:
     // Transport completions; see struct request.
     void received(request& r, size_t n);
     void retired(request& r);
+    // The transport is broken (EOF, reset, device error): every waiter
+    // wakes once with err (nonzero) and nothing is resent. The transport
+    // still retires each request it holds. Same context rules as above.
+    void failed(int err);
+
+    // Fail the session with ESHUTDOWN, wake every waiter, and stop the
+    // transport, waiting until d. Buffers are released only after the
+    // transport has retired them: 0 once all are, else EBUSY (requests
+    // remain owned and shutdown() may be called again). Idempotent.
+    int shutdown(deadline d);
 
     // Observers; they first apply pending completions.
     int dead();
@@ -172,6 +186,7 @@ private:
     std::array<unsigned, version_id + 1> _arrived;
     unsigned _narrived = 0;
     bool _bad = false; // transport broke the completion contract
+    int _failed = 0;   // errno from failed()
     uint32_t _msize = 0; // 0 until negotiated
     uint32_t _offered = 0;
     int _version_err = EINPROGRESS;
