@@ -360,7 +360,7 @@ static void plain()
     int err;
     frame r;
     require(rt.collect(id, err, r) == EINPROGRESS, "not complete yet");
-    require(rt.received(rclunk(tag)) == 0, "reply accepted");
+    require(rt.received(id, rclunk(tag)) == 0, "reply accepted");
     require(!rt.tags().held(tag), "tag retired by its reply");
     require(rt.busy(id) && rt.charged() == 100,
             "buffer still owned until transport retires it");
@@ -374,14 +374,14 @@ static void plain()
     // Buffer retired before the reply is processed: tag still pins the slot.
     id = admit(rt, tag);
     require(rt.retired(id) == 0 && rt.busy(id), "tag pins slot");
-    require(rt.received(rclunk(tag)) == 0, "reply after buffer retired");
+    require(rt.received(id, rclunk(tag)) == 0, "reply after buffer retired");
     require(rt.busy(id), "uncollected result pins slot");
     collect_is(rt, id, 0, true, "reply after buffer retired delivered");
     require(!rt.busy(id) && rt.charged() == 0, "freed after all three");
 
     // Rlerror completes with the mapped errno.
     id = admit(rt, tag);
-    require(rt.received({p9::Rlerror, tag, {2, 0, 0, 0}}) == 0, "Rlerror");
+    require(rt.received(id, {p9::Rlerror, tag, {2, 0, 0, 0}}) == 0, "Rlerror");
     int e2;
     frame r2;
     require(rt.collect(id, e2, r2) == 0 && e2 == ENOENT, "Rlerror errno");
@@ -411,7 +411,8 @@ static void admission()
     uint16_t ftag;
     require(rt.cancel(ids[3], ETIMEDOUT, ftag) == 0,
             "flush admitted with 32 data requests outstanding");
-    require(rt.received(rflush(ftag)) == 0, "Rflush");
+    require(rt.received(p9::request_table::flush_id, rflush(ftag)) == 0,
+            "Rflush");
     require(rt.retired(p9::request_table::flush_id) == 0, "flush retired");
     require(rt.busy(ids[3]), "canceled slot pinned by its buffer");
     require(rt.admit(p9::Tclunk, 0, 1, id, tag) == EAGAIN,
@@ -439,10 +440,11 @@ static void original_then_rflush()
     uint16_t t2;
     unsigned id2 = admit(rt, t2);
     require(rt.cancel(id2, ETIMEDOUT, f2) == EAGAIN, "one flush at a time");
-    require(rt.received(rclunk(tag)) == 0, "original before Rflush honored");
+    require(rt.received(id, rclunk(tag)) == 0,
+            "original before Rflush honored");
     require(rt.tags().held(tag), "oldtag held until Rflush");
     collect_is(rt, id, 0, true, "original success delivered once");
-    require(rt.received(rclunk(tag)) == EPROTO && rt.dead() == EPROTO,
+    require(rt.received(id, rclunk(tag)) == EPROTO && rt.dead() == EPROTO,
             "duplicate original fails session");
     int err;
     frame r;
@@ -453,12 +455,13 @@ static void original_then_rflush()
     p9::request_table q;
     id = admit(q, tag);
     require(q.cancel(id, ETIMEDOUT, ftag) == 0, "cancel");
-    require(q.received(rclunk(tag)) == 0, "original first");
+    require(q.received(id, rclunk(tag)) == 0, "original first");
     require(q.retired(id) == 0, "original buffer retired");
     collect_is(q, id, 0, true, "original result");
     require(q.busy(id) && q.tags().held(tag),
             "slot and oldtag pinned until Rflush");
-    require(q.received(rflush(ftag)) == 0, "Rflush after original");
+    require(q.received(p9::request_table::flush_id, rflush(ftag)) == 0,
+            "Rflush after original");
     require(!q.tags().held(tag) && !q.tags().flush_held(), "tags retired");
     require(!q.busy(id), "original slot freed");
     require(q.busy(p9::request_table::flush_id), "flush buffer still owned");
@@ -474,7 +477,7 @@ static void rflush_then_original()
     uint16_t tag, ftag;
     unsigned id = admit(rt, tag);
     require(rt.cancel(id, ETIMEDOUT, ftag) == 0, "cancel");
-    require(rt.received({p9::Rflush, tag, {}}) == EPROTO,
+    require(rt.received(id, {p9::Rflush, tag, {}}) == EPROTO,
             "Rflush on the original tag is a protocol error");
 
     p9::request_table q;
@@ -483,25 +486,53 @@ static void rflush_then_original()
     require(q.cancel(id, 0, ftag) == EINVAL && ftag == 0x5a5a
             && !q.tags().flush_held(), "zero cancel errno refused");
     require(q.cancel(id, EINTR, ftag) == 0, "cancel");
-    require(q.received(rflush(ftag)) == 0, "Rflush first");
+    require(q.received(p9::request_table::flush_id, rflush(ftag)) == 0,
+            "Rflush first");
     require(!q.tags().held(tag), "oldtag retired by Rflush");
     require(q.busy(id) && q.charged() == 100,
             "Rflush does not retire the original buffer");
     collect_is(q, id, EINTR, false, "canceled once with cancel error");
     require(q.busy(id), "slot pinned by buffer after collection");
     require(q.retired(id) == 0 && !q.busy(id), "freed by buffer retirement");
-    require(q.received(rclunk(tag)) == EPROTO && q.dead() == EPROTO,
+    require(q.received(id, rclunk(tag)) == EPROTO && q.dead() == EPROTO,
             "late original after Rflush fails session");
     require(q.completions() == 1, "late original not delivered");
+
+    // The late original arrives after its tag was reissued to another
+    // slot: matched by id it fails the session, never completing the
+    // tag's new owner.
+    p9::request_table w;
+    id = admit(w, tag);
+    require(w.cancel(id, EINTR, ftag) == 0, "cancel");
+    require(w.received(p9::request_table::flush_id, rflush(ftag)) == 0
+            && w.retired(p9::request_table::flush_id) == 0, "Rflush");
+    collect_is(w, id, EINTR, false, "canceled");
+    require(w.busy(id), "original buffer not retired");
+    uint16_t t2 = 0;
+    unsigned id2 = 0;
+    for (unsigned n = 0; n < 0x10000; n++) {
+        id2 = admit(w, t2);
+        if (t2 == tag) {
+            break;
+        }
+        require(w.received(id2, rclunk(t2)) == 0 && w.retired(id2) == 0,
+                "cycle a tag");
+        collect_is(w, id2, 0, true, "cycled");
+    }
+    require(t2 == tag && id2 != id, "tag reissued to another slot");
+    require(w.received(id, rclunk(tag)) == EPROTO && w.dead() == EPROTO,
+            "late original after reissue fails session");
+    collect_is(w, id2, EPROTO, false, "new owner gets the session error");
 
     p9::request_table x;
     id = admit(x, tag);
     require(x.cancel(id, EINTR, ftag) == 0, "cancel");
-    require(x.received({p9::Rlerror, ftag, {4, 0, 0, 0}}) == EPROTO,
+    require(x.received(p9::request_table::flush_id,
+                       {p9::Rlerror, ftag, {4, 0, 0, 0}}) == EPROTO,
             "Rlerror to Tflush fails session");
     p9::request_table y;
     id = admit(y, tag);
-    require(y.received(rclunk(tag)) == 0, "reply");
+    require(y.received(id, rclunk(tag)) == 0, "reply");
     require(y.cancel(id, EINTR, ftag) == EALREADY, "cancel after completion");
     require(!y.tags().flush_held(), "no flush for completed request");
     require(y.cancel(p9::data_tags, EINTR, ftag) == EINVAL
@@ -517,7 +548,7 @@ static void transport_failure()
     for (unsigned i = 0; i < 4; i++) {
         ids[i] = admit(rt, tags[i]);
     }
-    require(rt.received(rclunk(tags[0])) == 0, "one already answered");
+    require(rt.received(ids[0], rclunk(tags[0])) == 0, "one already answered");
     require(rt.cancel(ids[1], ETIMEDOUT, ftag) == 0, "one being flushed");
     rt.fail(ECONNRESET);
     require(rt.dead() == ECONNRESET, "session dead");
@@ -540,12 +571,13 @@ static void transport_failure()
     uint16_t tag;
     require(rt.admit(p9::Tclunk, 0, 1, id, tag) == ECONNRESET, "no admit");
     require(rt.cancel(ids[2], EINTR, ftag) == ECONNRESET, "no cancel");
-    require(rt.received(rclunk(tags[2])) == ECONNRESET, "reply dropped");
+    require(rt.received(ids[2], rclunk(tags[2])) == ECONNRESET,
+            "reply dropped");
     require(rt.completions() == 4, "nothing completed twice");
 
     p9::request_table u;
     id = admit(u, tag);
-    require(u.received(rclunk(tag + 1)) == EPROTO && u.dead() == EPROTO,
+    require(u.received(id, rclunk(tag + 1)) == EPROTO && u.dead() == EPROTO,
             "unknown tag fails session");
     collect_is(u, id, EPROTO, false, "outstanding failed by protocol error");
     std::puts("PASS: transport failure");
