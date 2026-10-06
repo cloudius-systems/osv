@@ -1221,6 +1221,56 @@ static void orphan_clunk()
     std::puts("PASS: orphan clunk");
 }
 
+// Every data request times out at once against a server that answers each
+// Tflush, slowly: the last canceler queues behind 31 flushes taking longer
+// than flush_timeout in total, and the session must survive.
+static void mass_timeout()
+{
+    fake* f;
+    auto s = make(f);
+    const auto per_flush = milliseconds(250); // 32 x 250 ms > 5 s
+    std::atomic<bool> stop{false};
+    std::atomic<unsigned> flushes{0};
+    std::thread server([&] {
+        while (!stop) {
+            std::shared_ptr<request> q;
+            WITH_LOCK(f->mtx) {
+                for (auto& h : f->held) {
+                    if (decoded(*h).type == p9::Tflush) {
+                        q = h;
+                    }
+                }
+            }
+            if (!q) {
+                std::this_thread::sleep_for(milliseconds(1));
+                continue;
+            }
+            std::this_thread::sleep_for(per_flush);
+            f->reply(*q, rflush(q->tag));
+            f->retire(q);
+            ++flushes;
+        }
+    });
+    std::deque<caller> cs;
+    for (unsigned i = 0; i < p9::data_tags; i++) {
+        cs.emplace_back(*s, p9::Tread, read_body(root), after(milliseconds(50)));
+    }
+    auto t0 = osv::clock::uptime::now();
+    for (auto& c : cs) {
+        c.join();
+        require(c.rc == ETIMEDOUT, "each waiter canceled");
+    }
+    auto took = osv::clock::uptime::now() - t0;
+    stop = true;
+    server.join();
+    require(took > p9::flush_timeout, "flushes took longer than 5 s in all");
+    require(flushes == p9::data_tags && !s->dead(),
+            "slow but answering server keeps the session");
+    f->shutdown(p9::op_deadline());
+    require(s->busy() == 0 && s->charged() == 0, "drained");
+    std::puts("PASS: mass timeout");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IOLBF, 0); // keep lines if killed
@@ -1243,6 +1293,7 @@ int main()
     errno_values();
     crossed_reply();
     orphan_clunk();
+    mass_timeout();
     stress();
     std::printf("SUMMARY: %u session checks, 0 failures\n", checks);
     return 0;

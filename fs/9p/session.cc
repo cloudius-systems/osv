@@ -328,7 +328,7 @@ int session::call(uint8_t type, const bytes& body, frame& reply, deadline d,
         if (!collected && !cancel
             && (_abort_gen != gen || now >= d)) {
             cancel = _abort_gen != gen ? _abort_err : ETIMEDOUT;
-            fd = now + flush_timeout; // bounds waiting for the flush slot
+            fd = now + flush_slot_timeout; // bounds waiting for the slot
         }
         if (cancel && !flush_sent && !collected) {
             // Serialized: EAGAIN while another flush holds the slot.
@@ -341,7 +341,9 @@ int session::call(uint8_t type, const bytes& body, frame& reply, deadline d,
             }
         }
         if (wait(cancel ? fd : d) && cancel) {
-            _table.fail(ETIMEDOUT); // no Rflush within flush_timeout
+            // No flush slot within flush_slot_timeout, or no Rflush
+            // within flush_timeout of sending Tflush.
+            _table.fail(ETIMEDOUT);
         }
     }
 }
