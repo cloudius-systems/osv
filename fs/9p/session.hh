@@ -153,6 +153,9 @@ public:
                uint32_t n_uname, uint32_t& fid, bytes& qid, deadline d);
     // Twalk(fid, newfid, names) on a new fid; 0 with the live newfid and
     // its qids only if every name was walked, ENOENT for a partial walk.
+    // After a partial Rwalk (0 < nwqid < nwname) newfid is clunked like a
+    // canceled one before ENOENT is returned: walk(5) says it was not
+    // created, but diod keeps it. Any reply to that Tclunk releases it.
     int walk(uint32_t fid, const std::vector<std::string>& names,
              uint32_t& newfid, bytes& qids, deadline d);
     // Tclunk(fid): once sent, the fid is released whatever the reply
@@ -206,7 +209,7 @@ private:
     int call(uint8_t type, const bytes& body, frame& reply, deadline d,
              uint32_t pin0, uint32_t pin1, outcome* out = nullptr);
     int flush(std::unique_lock<mutex>& lk, unsigned id, int err);
-    int created(uint32_t fid, int rc, const outcome& o);
+    int created(uint32_t fid, int rc, const outcome& o, bool partial = false);
     int send_clunk(uint32_t fid, deadline d, bool must);
     int pin_live(uint32_t fid);
     void unpin(uint32_t fid);
