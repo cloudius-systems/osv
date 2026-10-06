@@ -1108,6 +1108,39 @@ static void errno_values()
     std::puts("PASS: errno values");
 }
 
+// A reply whose tag names another outstanding request, delivered in this
+// request's buffer, fails the session; neither caller takes it as theirs.
+static void crossed_reply()
+{
+    fake* f;
+    auto s = make(f);
+    caller a(*s, p9::Tread, read_body(root), p9::op_deadline());
+    require(f->await(1), "first submitted");
+    caller b(*s, p9::Tread, read_body(root), p9::op_deadline());
+    require(f->await(2), "second submitted");
+    auto ra = f->at(0), rb = f->at(1);
+    f->reply(*ra, rread(rb->tag));
+    require(s->dead() == EPROTO, "reply in another request's buffer fails");
+    a.join();
+    b.join();
+    require(a.rc == EPROTO && b.rc == EPROTO, "neither caller takes it");
+    f->shutdown(p9::op_deadline());
+    require(s->busy() == 0 && s->charged() == 0, "retired after failure");
+
+    // The flush tag too: an Rflush delivered in the original's buffer.
+    auto t = make(f);
+    caller c(*t, p9::Tread, read_body(root), after(milliseconds(50)));
+    require(f->await(1), "submitted");
+    auto r = f->at(0);
+    auto fl = flush_of(f, 2, *r);
+    f->reply(*r, rflush(fl->tag));
+    require(t->dead() == EPROTO, "Rflush in the original's buffer fails");
+    c.join();
+    require(c.rc == EPROTO, "caller sees the protocol error");
+    f->shutdown(p9::op_deadline());
+    std::puts("PASS: crossed reply");
+}
+
 int main()
 {
     std::setvbuf(stdout, nullptr, _IOLBF, 0); // keep lines if killed
@@ -1128,6 +1161,7 @@ int main()
     transport_failure();
     shutdown_waits_for_retirement();
     errno_values();
+    crossed_reply();
     stress();
     std::printf("SUMMARY: %u session checks, 0 failures\n", checks);
     return 0;

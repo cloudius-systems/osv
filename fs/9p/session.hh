@@ -47,7 +47,8 @@ class session;
 // owner->retired(*this) exactly once, and touches neither buffer after
 // retired(). Both calls take the session mutex, record and wake, and never
 // allocate or free: safe from a completion thread, not from interrupt
-// context. Decoding happens later in the waiting caller.
+// context. Decoding happens later in the waiting caller; a reply whose
+// tag differs from r.tag fails the session with EPROTO.
 struct request {
     session* owner = nullptr;
     unsigned id = 0;
