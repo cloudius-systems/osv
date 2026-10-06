@@ -75,7 +75,11 @@ session::session(std::unique_ptr<transport> t, size_t ceiling)
 
 session::~session()
 {
-    _t->shutdown(op_deadline());
+    shutdown(op_deadline());
+    // Destroy the transport while the session is intact: it joins its
+    // threads, and any request it never retired stays alive through the
+    // transport's own share, never freed here.
+    _t.reset();
 }
 
 // ETIMEDOUT if d has passed, else wait for a wake or d and return 0, so
@@ -96,6 +100,9 @@ void session::drain()
 {
     if (_bad) {
         _table.fail(EPROTO);
+    }
+    if (_failed) {
+        _table.fail(_failed);
     }
     for (unsigned i = 0; i < _narrived; i++) {
         unsigned id = _arrived[i];
@@ -389,6 +396,36 @@ unsigned session::completions()
         drain();
         return _table.completions();
     }
+}
+
+void session::failed(int err)
+{
+    WITH_LOCK(_mtx) {
+        if (!_failed) {
+            _failed = err ? err : EIO;
+        }
+        _cv.wake_all();
+    }
+}
+
+int session::shutdown(deadline d)
+{
+    std::unique_lock<mutex> lk(_mtx);
+    if (!_failed) {
+        _failed = ESHUTDOWN;
+    }
+    drain(); // fails the table: every waiter will see ESHUTDOWN
+    _cv.wake_all();
+    lk.unlock();
+    int rc = _t->shutdown(d);
+    lk.lock();
+    drain();
+    for (auto& r : _req) {
+        if (r && !r->gone) {
+            return EBUSY;
+        }
+    }
+    return rc ? EBUSY : 0;
 }
 
 int session::dead()

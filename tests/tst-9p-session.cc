@@ -116,8 +116,12 @@ public:
         }
         return f;
     }
+    bool stuck = false; // shutdown cannot retire (device still owns DMA)
     int shutdown(p9::deadline) override
     {
+        if (stuck) {
+            return ETIMEDOUT;
+        }
         std::vector<std::shared_ptr<request>> all;
         WITH_LOCK(mtx) {
             all.swap(held);
@@ -162,6 +166,7 @@ public:
         std::copy(wire.begin(), wire.end(), r.rx.begin());
         r.owner->received(r, wire.size());
     }
+    void failed_from_transport(p9::session& s, int err) { s.failed(err); }
     void retire(const std::shared_ptr<request>& r)
     {
         WITH_LOCK(mtx) {
@@ -829,6 +834,163 @@ static void fids()
     std::puts("PASS: fids");
 }
 
+static void transport_failure()
+{
+    fake* f;
+    auto s = make(f);
+    unsigned n0 = s->completions();
+    std::deque<caller> cs;
+    for (unsigned i = 0; i < p9::data_tags; i++) {
+        cs.emplace_back(*s, p9::Tread, read_body(root), p9::op_deadline());
+    }
+    require(f->await(p9::data_tags), "32 in flight");
+    // One canceled (its Tflush outstanding), one waiting for a slot.
+    caller late(*s, p9::Tread, read_body(root), p9::op_deadline());
+    s->abort(EINTR);
+    require(f->await(p9::data_tags + 1), "a Tflush outstanding");
+    std::this_thread::sleep_for(milliseconds(20));
+    unsigned sent = f->submitted;
+    f->failed_from_transport(*s, ECONNRESET);
+    for (auto& c : cs) {
+        require(c.returns_within(milliseconds(2000)), "waiter woken");
+        c.join();
+        require(c.rc == ECONNRESET, "with the transport error");
+    }
+    late.join();
+    require(late.rc == EINTR || late.rc == ECONNRESET,
+            "slot waiter woken without sending");
+    require(s->completions() == n0 + p9::data_tags,
+            "each admitted request completed exactly once");
+    require(f->submitted == sent, "nothing resent");
+    frame out;
+    require(s->rpc(p9::Tread, read_body(root), out, p9::op_deadline())
+            == ECONNRESET && f->submitted == sent, "no new work");
+    require(s->busy() == p9::data_tags + 1 && s->charged() > 0,
+            "buffers held until the transport retires them");
+    // Late completions from the broken transport land in owned buffers.
+    auto r = f->at(0);
+    f->reply(*r, rread(r->tag));
+    require(s->dead() == ECONNRESET, "late reply dropped");
+    require(s->shutdown(p9::op_deadline()) == 0, "shutdown retires all");
+    require(s->busy() == 0 && s->charged() == 0, "then releases");
+    std::puts("PASS: transport failure");
+}
+
+static void shutdown_waits_for_retirement()
+{
+    fake* f;
+    auto s = make(f);
+    caller c(*s, p9::Tread, read_body(root), p9::op_deadline());
+    require(f->await(1), "submitted");
+    auto r = f->at(0);
+    f->stuck = true;
+    require(s->shutdown(p9::op_deadline()) == EBUSY,
+            "shutdown reports buffers still owned");
+    c.join();
+    require(c.rc == ESHUTDOWN, "waiter woken by shutdown");
+    require(s->busy() == 1 && s->charged() > 0, "buffer not released");
+    // The device still writes into the buffer: it must be alive.
+    std::fill(r->rx.begin(), r->rx.end(), 0x55);
+    f->stuck = false;
+    require(s->shutdown(p9::op_deadline()) == 0, "second shutdown completes");
+    require(s->busy() == 0 && s->charged() == 0, "released after retirement");
+    frame out;
+    require(s->rpc(p9::Tread, read_body(root), out, p9::op_deadline())
+            == ESHUTDOWN, "no work after shutdown");
+    uint32_t x;
+    bytes q;
+    require(s->negotiate(65536, p9::op_deadline()) == ESHUTDOWN
+            && s->attach("u", "", 0, x, q, p9::op_deadline()) == ESHUTDOWN,
+            "helpers refused too");
+
+    // Destroying a session whose transport still holds a request: the
+    // request outlives the session through the transport's share.
+    fake* g;
+    auto t = make(g);
+    caller d(*t, p9::Tread, read_body(root), p9::op_deadline());
+    require(g->await(1), "submitted");
+    auto keep = g->at(0);
+    g->stuck = true;
+    t->shutdown(p9::op_deadline());
+    d.join();
+    require(d.rc == ESHUTDOWN, "woken");
+    t.reset(); // deletes g with its share; ours keeps the buffer alive
+    std::fill(keep->rx.begin(), keep->rx.end(), 0x66);
+    require(keep.use_count() == 1, "only the test holds it now");
+    std::puts("PASS: shutdown");
+}
+
+static void stress()
+{
+    // Callers, a replying server thread, timeouts and a transport failure
+    // racing on real threads. Every caller returns once; nothing leaks.
+    for (unsigned round = 0; round < 20; round++) {
+        fake* f;
+        auto s = make(f);
+        unsigned n0 = s->completions();
+        std::atomic<bool> stop{false};
+        std::thread server([&] {
+            unsigned k = 0;
+            while (!stop) {
+                // Answer a request picked out of order, then retire it.
+                std::shared_ptr<request> q;
+                WITH_LOCK(f->mtx) {
+                    if (!f->held.empty()) {
+                        q = f->held[k++ % f->held.size()];
+                    }
+                }
+                if (!q) {
+                    std::this_thread::yield();
+                    continue;
+                }
+                frame t = decoded(*q);
+                if (t.type == p9::Tflush) {
+                    // flush(5): the original, if unanswered, gets no reply.
+                    uint16_t old = uint16_t(t.body[0] | t.body[1] << 8);
+                    std::shared_ptr<request> o;
+                    WITH_LOCK(f->mtx) {
+                        for (auto& h : f->held) {
+                            if (h->tag == old && h != q) {
+                                o = h;
+                            }
+                        }
+                    }
+                    if (o) {
+                        f->retire(o);
+                    }
+                    f->reply(*q, rflush(t.tag));
+                } else {
+                    f->reply(*q, rread(t.tag));
+                }
+                f->retire(q);
+            }
+        });
+        std::deque<caller> cs;
+        for (unsigned i = 0; i < 48; i++) {
+            cs.emplace_back(*s, p9::Tread, read_body(root),
+                            after(milliseconds(i % 3 ? 1000 : 1)));
+        }
+        std::this_thread::sleep_for(milliseconds(round % 5));
+        if (round % 2) {
+            f->failed_from_transport(*s, ECONNRESET);
+        }
+        unsigned ok = 0;
+        for (auto& c : cs) {
+            c.join();
+            require(c.rc == 0 || c.rc == ETIMEDOUT || c.rc == ECONNRESET,
+                    "bounded result");
+            ok += c.rc == 0;
+        }
+        stop = true;
+        server.join();
+        require(s->completions() - n0 <= 48 && s->completions() - n0 >= ok,
+                "at most one completion per caller");
+        require(s->shutdown(p9::op_deadline()) == 0 && s->busy() == 0
+                && s->charged() == 0, "drained");
+    }
+    std::puts("PASS: stress");
+}
+
 int main()
 {
     negotiation();
@@ -845,6 +1007,9 @@ int main()
     ceiling();
     contract();
     many();
+    transport_failure();
+    shutdown_waits_for_retirement();
+    stress();
     std::printf("SUMMARY: %u session checks, 0 failures\n", checks);
     return 0;
 }
