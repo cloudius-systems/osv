@@ -218,6 +218,7 @@ internal-api-tests := tst-app.so tst-async.so tst-bsd-evh.so \
 	tst-sem-timed-wait.so tst-small-malloc.so tst-solaris-taskq.so \
 	tst-threadcomplete.so tst-tracepoint.so tst-unordered-ring-mpsc.so \
 	tst-vfs.so tst-wait-for.so tst-without-namespace.so
+internal-api-tests += tst-virtio-lifecycle.so
 
 ifeq ($(arch),x64)
 tests += tst-mmx-fpu.so tst-tls-desc.so tst-tls-pie-desc.so libtls_desc.so
@@ -229,6 +230,8 @@ tests += tst-libaio.so
 tests += tst-rlimit.so
 tests += tst-close-range.so
 tests += tst-numa.so
+# Needs a drivers profile with virtio; the default "all" profile has it.
+tests += tst-virtio-lifecycle.so
 
 # Tests with special compilation parameters needed...
 $(out)/tests/tst-mmap.so: COMMON += -Wl,-z,now

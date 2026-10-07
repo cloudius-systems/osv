@@ -108,6 +108,7 @@ protected:
     // Actual drivers should implement this on top of the basic ring features
     virtual u64 get_driver_features() { return 1 << VIRTIO_RING_F_INDIRECT_DESC | 1 << VIRTIO_RING_F_EVENT_IDX; }
     void setup_features();
+    int setup_features_checked();
 protected:
     virtio_device& _dev;
     vring* _queues[max_virtqueues_nr];
