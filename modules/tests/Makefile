@@ -225,6 +225,10 @@ endif
 
 tests += testrunner.so
 
+# Needs a drivers profile with virtio; the default "all" profile has it.
+tests += tst-virtio-lifecycle.so
+internal-api-tests += tst-virtio-lifecycle.so
+
 tests += tst-libaio.so
 tests += tst-rlimit.so
 tests += tst-close-range.so
