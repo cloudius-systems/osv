@@ -235,6 +235,8 @@ internal-api-tests := tst-app.so tst-async.so tst-dns-decname.so tst-bsd-evh.so 
 	tst-threadcomplete.so tst-tracepoint.so tst-unordered-ring-mpsc.so \
 	tst-vfs.so tst-wait-for.so tst-without-namespace.so
 internal-api-tests += tst-vfs-mount-pins.so
+tests += tst-vfs-remote.so
+internal-api-tests += tst-vfs-remote.so
 
 ifeq ($(arch),x64)
 tests += tst-x64-unhandled-vector.so
