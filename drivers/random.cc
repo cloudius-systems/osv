@@ -38,6 +38,8 @@
 
 #include <osv/device.h>
 #include <osv/uio.h>
+#include <osv/vnode.h>
+#include <fcntl.h>
 #include <osv/debug.hh>
 
 #include <dev/random/randomdev.h>
@@ -49,6 +51,7 @@ namespace randomdev {
 
 struct random_device_priv {
     random_device* drv;
+    bool urandom;
 };
 
 static random_device_priv *to_priv(device *dev)
@@ -62,9 +65,12 @@ random_read(struct device *dev, struct uio *uio, int ioflags)
     int c, error = 0;
     char random_buf[PAGE_SIZE];
 
-    // Blocking logic
+    // Blocking logic.  VFS passes IO_* flags, and the adaptor's block() takes
+    // open(2) flags.  As on Linux, /dev/urandom ignores O_NONBLOCK and never
+    // fails with EAGAIN; unlike Linux, it still waits for the first seeding.
     if (!random_adaptor->seeded) {
-        error = (*random_adaptor->block)(ioflags);
+        bool nonblock = (ioflags & IO_NONBLOCK) && !to_priv(dev)->urandom;
+        error = (*random_adaptor->block)(nonblock ? O_NONBLOCK : 0);
     }
 
     if (!error) {
@@ -187,6 +193,7 @@ random_device::random_device()
     _urandom_dev = device_create(&random_device_driver, "urandom", D_CHR);
     prv = to_priv(_urandom_dev);
     prv->drv = this;
+    prv->urandom = true;
 }
 
 random_device::~random_device()
