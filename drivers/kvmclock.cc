@@ -19,6 +19,10 @@
 #include <osv/sched.hh>
 #include <mutex>
 #include <atomic>
+#include <osv/kernel_config_core_reseed_on_resume.h>
+#if CONF_core_reseed_on_resume
+#include "drivers/random.hh"
+#endif
 
 using namespace osv::clock;
 
@@ -65,9 +69,30 @@ kvmclock::kvmclock()
     //
     // Start a thread that will synchronize the wall clock with the host
     auto t = sched::thread::make([this] {
+#if CONF_core_reseed_on_resume
+        // Best-effort resume hint: a long sleep can also be scheduling delay,
+        // and short pauses or restored clocks can be missed. This cannot gate
+        // the first post-resume RNG consumer. A VM generation notification
+        // would avoid timing guesses; fresh entropy is still needed to recover
+        // security from a disclosed snapshot.
+        u64 prev_system_time = this->system_time();
+#endif
         while (true) {
             sched::thread::sleep(std::chrono::seconds(1));
+#if CONF_core_reseed_on_resume
+            u64 now_system_time = this->system_time();
+            // We slept 1 second. Allow slack for scheduling delay, but treat
+            // a jump well beyond that (more than 1.5 seconds) as a hypervisor
+            // resume hint (also possible under ordinary scheduling delay).
+            if (now_system_time > prev_system_time &&
+                (now_system_time - prev_system_time) > 1500000000ULL) {
+                randomdev::reseed_on_resume();
+            }
+#endif
             this->sync_wall_clock();
+#if CONF_core_reseed_on_resume
+            prev_system_time = this->system_time();
+#endif
         }
     }, sched::thread::attr().name("kvm_wall_clock_sync"));
     t->start();
