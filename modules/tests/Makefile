@@ -227,6 +227,7 @@ tests += testrunner.so
 
 tests += tst-libaio.so
 tests += tst-rlimit.so
+tests += misc-ext4-headers.so
 tests += tst-close-range.so
 tests += tst-numa.so
 tests += tst-random-flush.so
