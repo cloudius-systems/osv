@@ -274,6 +274,9 @@ ifeq ($(conf_pmu),1)
 tests += tst-pmu.so
 endif
 endif
+tests += tst-random-vfs.so
+internal-api-tests += tst-random-flush.so
+internal-api-tests += tst-random-vfs.so
 
 # Tests with special compilation parameters needed...
 $(out)/tests/tst-mmap.so: COMMON += -Wl,-z,now
