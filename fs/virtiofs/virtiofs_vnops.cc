@@ -194,7 +194,7 @@ static int virtiofs_readlink(struct vnode* vnode, struct uio* uio)
 
 // Read @read_amt bytes from @inode, using the fallback FUSE_READ mechanism.
 static int virtiofs_read_fallback(virtiofs_inode& inode, u64 file_handle,
-    u32 read_amt, u32 flags, virtio::fs& drv, struct uio& uio)
+    u32 read_amt, virtio::fs& drv, struct uio& uio)
 {
     std::unique_ptr<fuse_read_in> in_args {new (std::nothrow) fuse_read_in()};
     std::unique_ptr<void, std::function<void(void*)>> buf {
@@ -206,7 +206,7 @@ static int virtiofs_read_fallback(virtiofs_inode& inode, u64 file_handle,
     in_args->fh = file_handle;
     in_args->offset = uio.uio_offset;
     in_args->size = read_amt;
-    in_args->flags = flags;
+    in_args->flags = OPEN_FLAGS; // Same open flags as FUSE_OPEN, not vnode IO_*.
 
     virtiofs_debug("inode %lld, reading %lld bytes at offset %lld\n",
         inode.nodeid, read_amt, uio.uio_offset);
@@ -222,7 +222,7 @@ static int virtiofs_read_fallback(virtiofs_inode& inode, u64 file_handle,
 }
 
 static int virtiofs_read(struct vnode* vnode, struct file* fp, struct uio* uio,
-    int ioflag)
+    int /*ioflag*/)
 {
     // Can't read directories
     if (vnode->v_type == VDIR) {
@@ -263,7 +263,7 @@ static int virtiofs_read(struct vnode* vnode, struct file* fp, struct uio* uio,
     }
     // DAX unavailable or failed, use fallback
     return virtiofs_read_fallback(*inode, file_data->file_handle, read_amt,
-        ioflag, *drv, *uio);
+        *drv, *uio);
 }
 
 // Checks if @buf (with size @len) points to a valid fuse_dirent (with its name
