@@ -1,0 +1,124 @@
+Validate ext4 extent headers and the superblock block size at mount
+
+Backport of two proposed upstream lwext4 fixes, needed until lwext4 or
+the osvunikernel fork carries them:
+
+- gkostka/lwext4 PR #107, commit 2d3407305c2d5f9b40d8209fc0a15a4d3d2d2feb
+  (Chris Thomas), src/ext4_extent.c only: bound eh_max by the capacity of
+  the buffer holding the extent header, require eh_entries > 0 for index
+  nodes, cap the depth at 5, and check the root header in the inode
+  before walking the tree. Fixes lwext4 issues #100 and #91
+  (CVE-2025-70101).
+- From gkostka/lwext4 PR #111, commit 7b6535051575455303b6686a9411e0537e63af41
+  (Chris Thomas), only the s_log_block_size range check, written here in
+  ext4_sb_check(): reject log_block_size > 6 (1 KiB..64 KiB, as Linux).
+  Fixes lwext4 issue #90 (CVE-2025-70100).
+
+Applies to osvunikernel/lwext4 6f6d8f7c509da696e71e80cc5a59abfc48e4971b.
+
+diff --git a/src/ext4_extent.c b/src/ext4_extent.c
+index abac59b..a6bee80 100644
+--- a/src/ext4_extent.c
++++ b/src/ext4_extent.c
+@@ -130,6 +130,9 @@ struct ext4_extent_header {
+ 
+ #define EXT4_EXTENT_MAGIC 0xF30A
+ 
++/* Maximum depth of an extent tree (same limit as Linux) */
++#define EXT4_EXTENT_MAX_DEPTH 5
++
+ #define EXT4_EXTENT_FIRST(header)                                              \
+     ((struct ext4_extent *)(((char *)(header)) +                           \
+                 sizeof(struct ext4_extent_header)))
+@@ -725,22 +728,38 @@ static void ext4_ext_drop_refs(struct ext4_inode_ref *inode_ref,
+ 
+ /*
+  * Check that whether the basic information inside the extent header
+- * is correct or not.
++ * is correct or not. The header is either the tree root stored in the
++ * inode or the header of the extent tree block read from pblk.
+  */
+ static int ext4_ext_check(struct ext4_inode_ref *inode_ref,
+ 			  struct ext4_extent_header *eh, uint16_t depth,
+-			  ext4_fsblk_t pblk __unused)
++			  ext4_fsblk_t pblk)
+ {
+ 	struct ext4_extent_tail *tail;
+ 	struct ext4_sblock *sb = &inode_ref->fs->sb;
++	bool root = eh == ext_inode_hdr(inode_ref->inode);
++	uint32_t buf_size;
++	uint16_t max;
+ 	const char *error_msg;
+ 	(void)error_msg;
+ 
++	/*
++	 * Number of entries that fit in the buffer holding the header.
++	 * Extents and indexes have the same size, so this bounds both.
++	 */
++	if (root)
++		buf_size = sizeof(inode_ref->inode->blocks);
++	else
++		buf_size = ext4_sb_get_block_size(sb);
++	max = (buf_size - sizeof(struct ext4_extent_header)) /
++	      sizeof(struct ext4_extent);
++
+ 	if (to_le16(eh->magic) != EXT4_EXTENT_MAGIC) {
+ 		error_msg = "invalid magic";
+ 		goto corrupted;
+ 	}
+-	if (to_le16(eh->depth) != depth) {
++	if (to_le16(eh->depth) != depth ||
++	    depth > EXT4_EXTENT_MAX_DEPTH) {
+ 		error_msg = "unexpected eh_depth";
+ 		goto corrupted;
+ 	}
+@@ -748,10 +767,22 @@ static int ext4_ext_check(struct ext4_inode_ref *inode_ref,
+ 		error_msg = "invalid eh_max";
+ 		goto corrupted;
+ 	}
++	if (to_le16(eh->max_entries_count) > max) {
++		error_msg = "too large eh_max";
++		goto corrupted;
++	}
+ 	if (to_le16(eh->entries_count) > to_le16(eh->max_entries_count)) {
+ 		error_msg = "invalid eh_entries";
+ 		goto corrupted;
+ 	}
++	if (eh->entries_count == 0 && depth > 0) {
++		error_msg = "eh_entries is 0 but eh_depth is > 0";
++		goto corrupted;
++	}
++
++	/* The tree root in the inode is covered by the inode checksum */
++	if (root)
++		return EOK;
+ 
+ 	tail = find_ext4_extent_tail(eh);
+ 	if (ext4_sb_feature_ro_com(sb, EXT4_FRO_COM_METADATA_CSUM)) {
+@@ -866,6 +897,10 @@ static int ext4_find_extent(struct ext4_inode_ref *inode_ref, ext4_lblk_t block,
+ 	eh = ext_inode_hdr(inode_ref->inode);
+ 	depth = ext_depth(inode_ref->inode);
+ 
++	ret = ext4_ext_check(inode_ref, eh, depth, 0);
++	if (ret != EOK)
++		goto err;
++
+ 	if (path) {
+ 		ext4_ext_drop_refs(inode_ref, path, 0);
+ 		if (depth > path[0].maxdepth) {
+diff --git a/src/ext4_super.c b/src/ext4_super.c
+index 092c38b..f5c8a26 100644
+--- a/src/ext4_super.c
++++ b/src/ext4_super.c
+@@ -142,6 +142,11 @@ bool ext4_sb_check(struct ext4_sblock *s)
+ 	if (ext4_get32(s, blocks_per_group) == 0)
+ 		return false;
+ 
++	/* Block size is 1024 << log_block_size; Linux allows 1 KiB..64 KiB.
++	 * Larger values overflow the shift and give a zero block size. */
++	if (ext4_get32(s, log_block_size) > 6)
++		return false;
++
+ 	if (ext4_get32(s, inodes_per_group) == 0)
+ 		return false;
+ 
