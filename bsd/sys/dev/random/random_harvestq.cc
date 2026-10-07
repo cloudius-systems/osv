@@ -61,12 +61,24 @@ __FBSDID("$FreeBSD$");
 
 #ifdef __OSV__
 #include <stddef.h>
+#include <atomic>
+#include <osv/mutex.h>
 #include <sys/bus.h>
 #include <lockfree/unordered_ring_mpsc.hh>
 #endif
 
-/* <0 to end the kthread, 0 to let it run, 1 to flush the harvest queues */
+/* <0 to end the kthread, 0 to let it run */
 int random_kthread_control = 0;
+
+/*
+ * Flush protocol. A flusher publishes a new request number and waits for the
+ * worker to acknowledge it. The worker samples the request number BEFORE it
+ * drains the rings and acknowledges only that sample afterwards, so a pass
+ * which was already past the caller's ring cannot acknowledge a newer request.
+ * flush_mutex serializes flushers, so each waits for its own request.
+ */
+static std::atomic<uint64_t> flush_request{0}, flush_ack{0};
+static mutex flush_mutex;
 
 static struct proc *random_kthread_proc;
 
@@ -80,6 +92,7 @@ random_kthread(void *arg)
 
 	/* Process until told to stop */
 	for (; random_kthread_control >= 0;) {
+		auto request = flush_request.load(std::memory_order_acquire);
 		/*
 		 * Grab all the entropy events.
 		 * Drain entropy source records into a thread-local
@@ -100,13 +113,8 @@ random_kthread(void *arg)
 		 */
 		live_entropy_sources_feed(1, entropy_processor);
 
-		/*
-		 * If a queue flush was commanded, it has now happened,
-		 * and we can mark this by resetting the command.
-		 */
-
-		if (random_kthread_control == 1)
-			random_kthread_control = 0;
+		/* Flush requests sampled before this pass's drain are done. */
+		flush_ack.store(request, std::memory_order_release);
 
 #ifdef __OSV__
 		tsleep(&random_kthread_control, 0, "-", hz/10);
@@ -162,4 +170,15 @@ random_harvestq_internal(u_int64_t somecounter, const void *entropy,
 	    ("random_harvest_internal: origin %d invalid\n", origin));
 
 	ring->emplace(somecounter, entropy, count, bits, origin);
+}
+
+/* Return once every record queued before this call has been processed. */
+void
+random_harvestq_flush(void)
+{
+	SCOPE_LOCK(flush_mutex);
+	auto request = flush_request.load(std::memory_order_relaxed) + 1;
+	flush_request.store(request, std::memory_order_release);
+	while (flush_ack.load(std::memory_order_acquire) != request)
+		bsd_pause("-", hz / 10);
 }
