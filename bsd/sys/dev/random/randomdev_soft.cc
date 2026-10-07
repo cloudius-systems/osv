@@ -189,6 +189,12 @@ randomdev_init(void)
 	    random_context.read);
 }
 
+/*
+ * RNG teardown is not supported on OSv. The random device is created once at
+ * boot and never destroyed, so nothing calls this. The code below, and
+ * random_harvestq_deinit(), are inherited from FreeBSD and were never made
+ * safe against concurrent harvesting, reads or flushes.
+ */
 void
 randomdev_deinit(void)
 {
@@ -276,9 +282,7 @@ static void
 randomdev_flush_reseed(void)
 {
 	/* Command a entropy queue flush and wait for it to finish */
-	random_kthread_control = 1;
-	while (random_kthread_control)
-		bsd_pause("-", hz / 10);
+	random_harvestq_flush();
 
 #if defined(RANDOM_YARROW)
 	/* This ultimately calls randomdev_unblock() */
