@@ -820,7 +820,7 @@ zfs_vop_read(struct vnode *vp, struct file *fp, struct uio *uio, int flags)
  * zfs_vop_write - OSv vop_write bridge.
  *
  * The flags parameter from vfs_file::write() carries IO_APPEND,
- * IO_SYNC, and IO_DIRECT (the latter set when fp->f_flags & O_DIRECT).
+ * IO_SYNC and IO_NONBLOCK. VFS does not yet set IO_DIRECT for O_DIRECT.
  */
 static int
 zfs_vop_write(struct vnode *vp, struct uio *uio, int flags)
