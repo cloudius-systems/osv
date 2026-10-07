@@ -229,6 +229,7 @@ tests += tst-libaio.so
 tests += tst-rlimit.so
 tests += tst-close-range.so
 tests += tst-numa.so
+tests += misc-ext4-headers.so
 
 # Tests with special compilation parameters needed...
 $(out)/tests/tst-mmap.so: COMMON += -Wl,-z,now
