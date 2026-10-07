@@ -127,6 +127,7 @@ struct vattr {
 #define IO_APPEND	0x0001
 #define IO_SYNC		0x0002
 #define IO_DIRECT	0x0004	/* bypass page cache (O_DIRECT) */
+#define IO_NONBLOCK	0x0008
 
 /*
  * ARC actions
