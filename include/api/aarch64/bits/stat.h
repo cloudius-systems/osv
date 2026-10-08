@@ -1,1 +1,1 @@
-../../../../musl/arch/aarch64/bits/stat.h
+../../../../musl/arch/generic/bits/stat.h

@@ -37,7 +37,6 @@
 #include <sys/param.h>
 #include <sys/statvfs.h>
 #include <sys/stat.h>
-#include <sys/statx.h>
 #include <sys/time.h>
 #include <sys/sendfile.h>
 

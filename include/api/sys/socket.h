@@ -209,13 +209,16 @@ struct ucred
 #define MSG_EOR       0x0080
 #define MSG_WAITALL   0x0100
 #define MSG_FIN       0x0200
-#define MSD_SYN       0x0400
+#define MSG_SYN       0x0400
 #define MSG_CONFIRM   0x0800
 #define MSG_RST       0x1000
 #define MSG_ERRQUEUE  0x2000
 #define MSG_NOSIGNAL  0x4000
 #define MSG_MORE      0x8000
 #define MSG_WAITFORONE 0x10000
+#define MSG_BATCH     0x40000
+#define MSG_ZEROCOPY  0x4000000
+#define MSG_FASTOPEN  0x20000000
 #define MSG_CMSG_CLOEXEC 0x40000000
 
 #define __CMSG_LEN(cmsg) (((cmsg)->cmsg_len + sizeof(long) - 1) & ~(long)(sizeof(long) - 1))

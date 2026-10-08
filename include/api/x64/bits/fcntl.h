@@ -1,1 +1,1 @@
-../../../../musl/arch/x86_64/bits/fcntl.h
+../../../../musl/arch/generic/bits/fcntl.h
