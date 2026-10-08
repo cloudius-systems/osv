@@ -11,7 +11,7 @@ config fs_sysfs
 config fs_max_file_descriptors
   prompt "Maximum file descriptors"
   hex
-  default 0x4000
+  default 0x10000
 
 config fs_buffer_cache_size
   prompt "Buffer cache size"
