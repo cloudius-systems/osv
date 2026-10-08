@@ -95,9 +95,10 @@ struct mount {
 
 /*
  * Set by a filesystem's vfs_mount, never taken from mount(2): every lookup
- * asks the filesystem instead of trusting the name cache.  The bit is
- * outside MNT_VISFLAGMASK.  It is the bit of musl's MS_NOREMOTELOCK, which
- * is internal to the Linux kernel and not passed to mount(2); sys_mount()
+ * asks the filesystem instead of trusting the name cache, and SEEK_END asks
+ * it for the size instead of trusting v_size.  The bit is outside
+ * MNT_VISFLAGMASK.  It is the bit of musl's MS_NOREMOTELOCK, which is
+ * internal to the Linux kernel and not passed to mount(2); sys_mount()
  * clears it from the caller's flags in any case.
  */
 #define	MNT_NONAMECACHE	0x08000000
