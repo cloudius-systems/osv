@@ -438,6 +438,11 @@ vn_access(struct vnode *vp, int flags)
 {
 	int error = 0;
 
+	if (vp->v_op->vop_access) {
+		if ((flags & VWRITE) && (vp->v_mount->m_flags & MNT_RDONLY))
+			return EROFS;
+		return vp->v_op->vop_access(vp, flags);
+	}
 	/*
 	 * Everything in OSv runs as the superuser, which may read and write a
 	 * file whatever its mode bits, but may execute it only if some execute
