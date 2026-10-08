@@ -267,6 +267,10 @@ ifeq ($(conf_fs_9p_tcp),1)
 tests += tst-9p-tcp.so
 internal-api-tests += tst-9p-tcp.so
 endif
+ifeq ($(conf_fs_9p_tcp),1)
+tests += tst-9p-fs.so
+internal-api-tests += tst-9p-fs.so
+endif
 
 ifeq ($(arch),x64)
 tests += tst-x64-unhandled-vector.so
