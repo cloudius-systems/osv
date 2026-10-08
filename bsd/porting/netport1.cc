@@ -90,3 +90,19 @@ int openzfs_cv_timedwait(kcondvar_t *cv, mutex_t *mutex, clock_t abstime)
     auto ret = cv->wait(mutex, std::chrono::nanoseconds(ticks2ns(delta)));
     return ret == ETIMEDOUT ? -1 : 0;
 }
+
+// Nanosecond-granular timed wait, for OpenZFS callers whose delays are shorter
+// than a tick.  cv_timedwait_hires() in the OSv SPL header resolves its
+// absolute/relative deadline against gethrtime() and passes the remaining delay
+// here, so no clock conversion happens on this side.  Rounding these delays to
+// hz-granular ticks would truncate every sub-millisecond wait to zero, which
+// defeats ZIL commit-batch coalescing (see the comment at the call site).
+OSV_LIBSOLARIS_API
+int osv_cv_timedwait_ns(kcondvar_t *cv, mutex_t *mutex, long long delta_ns)
+{
+    if (delta_ns <= 0) {
+        return -1;
+    }
+    auto ret = cv->wait(mutex, std::chrono::nanoseconds(delta_ns));
+    return ret == ETIMEDOUT ? -1 : 0;
+}

@@ -50,6 +50,9 @@ typedef enum {
 int cv_timedwait(kcondvar_t *cv, mutex_t *mutex, clock_t tmo);
 // OpenZFS variant: absolute deadline (see bsd/porting/netport1.cc).
 int openzfs_cv_timedwait(kcondvar_t *cv, mutex_t *mutex, clock_t abstime);
+// Nanosecond-granular relative wait, for delays shorter than a tick
+// (see cv_timedwait_hires() in the OSv SPL condvar header).
+int osv_cv_timedwait_ns(kcondvar_t *cv, mutex_t *mutex, long long delta_ns);
 
 #ifdef __cplusplus
 }
