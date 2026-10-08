@@ -1121,27 +1121,47 @@ ena_enable_msix(struct ena_adapter *adapter)
 		return (EINVAL);
 	}
 
-	/* Reserved the max msix vectors we might need */
+	/*
+	 * We want one MSI-X vector per IO queue plus one for the admin/AENQ
+	 * management interrupt. adapter->max_num_io_queues was already bounded
+	 * to the device's MSI-X vector budget (msix_get_num_entries() - 1) in
+	 * ena_calc_max_io_queue_num(), so the request below always fits in the
+	 * device's MSI-X table. This mirrors the NVMe MSI-X-budget bound (see
+	 * drivers/nvme.cc) and is what makes inbound RX work on many-vCPU Nitro
+	 * guests: without the bound the driver would create ~one IO queue per
+	 * vCPU and exhaust the vector table, leaving the queues that inbound
+	 * traffic lands on without a working RX-completion interrupt.
+	 */
 	int msix_vecs = ENA_MAX_MSIX_VEC(adapter->max_num_io_queues);
+	unsigned dev_entries = dev->msix_get_num_entries();
 
-	ena_log(dev, DBG, "trying to enable MSI-X, vectors: %d", msix_vecs);
+	ena_log(dev, DBG, "trying to enable MSI-X, vectors: %d (device has %u)",
+	    msix_vecs, dev_entries);
 
 	dev->set_bus_master(true);
 	dev->msix_enable();
 	assert(dev->is_msix());
 
-	if (msix_vecs != dev->msix_get_num_entries()) {
+	/*
+	 * The queue-count bound above guarantees this holds; assert it so a
+	 * future change to the queue-sizing math cannot silently start asking
+	 * for more vectors than the device (and OSv's IDT) can back.
+	 */
+	assert((unsigned)msix_vecs <= dev_entries);
+
+	if ((unsigned)msix_vecs > dev_entries) {
 		if (msix_vecs == ENA_ADMIN_MSIX_VEC) {
 			ena_log(dev, ERR,
-			    "Not enough number of MSI-x allocated: %d",
+			    "Not enough MSI-X vectors allocated: %d",
 			    msix_vecs);
 			dev->msix_disable();
 			return ENOSPC;
 		}
+		/* Fall back to what the device can actually back. */
+		msix_vecs = dev_entries;
 		ena_log(dev, ERR,
-		    "Enable only %d MSI-x (out of %d), reduce "
-		    "the number of queues",
-		    msix_vecs, dev->msix_get_num_entries());
+		    "Reduced to %d MSI-X vectors (device has %u)",
+		    msix_vecs, dev_entries);
 	}
 
 	adapter->msix_vecs = msix_vecs;
@@ -1324,9 +1344,104 @@ ena_unmask_all_io_irqs(struct ena_adapter *adapter)
 }
 
 static int
+ena_rss_configure(struct ena_adapter *adapter)
+{
+	struct ena_com_dev *ena_dev = adapter->ena_dev;
+	int rc, i;
+
+	/*
+	 * Program the RSS indirection table and hash so the device steers
+	 * inbound flows only to the IO queues we actually created and service.
+	 *
+	 * Without this the device keeps whatever (possibly stale/default)
+	 * indirection table it powered up with, which can point inbound
+	 * unicast at RX queues OSv never set up an interrupt for. The result
+	 * is the classic "ARP resolves but inbound TCP is dropped" failure on
+	 * multi-queue Nitro: broadcast/flow-miss traffic lands on queue 0 and
+	 * works, RSS-hashed unicast lands elsewhere and is silently lost.
+	 *
+	 * All steps are best-effort: if the device reports a feature as
+	 * unsupported we log and continue rather than fail bring-up.
+	 */
+	rc = ena_com_rss_init(ena_dev, ENA_RX_RSS_TABLE_LOG_SIZE);
+	if (unlikely(rc != 0)) {
+		if (rc == ENA_COM_UNSUPPORTED) {
+			ena_log(adapter->pdev, WARN, "RSS not supported by device");
+			return (0);
+		}
+		ena_log(adapter->pdev, ERR, "Cannot init RSS rc: %d", rc);
+		return (rc);
+	}
+
+	/*
+	 * Spread the indirection table evenly across the RX queues we created
+	 * and service. Each entry value must be an ENA RX queue id
+	 * (ENA_IO_RXQ_IDX), not a plain 0..num_io_queues-1 index: ena_com
+	 * validates every entry against ena_dev->io_sq_queues[] and rejects the
+	 * whole table (ENA_COM_INVAL) unless the referenced queue has RX
+	 * direction. RX queues live at odd io-queue indices (2*q + 1); a plain
+	 * index q points at a TX queue (even index), so the table-set silently
+	 * failed and the device kept its power-up default indirection - which
+	 * steers inbound unicast to queues OSv never services (broadcast/ARP
+	 * still reaches queue 0, so it looked like "ARP works, TCP dropped").
+	 */
+	for (i = 0; i < ENA_RX_RSS_TABLE_SIZE; i++) {
+		uint16_t qid = ENA_IO_RXQ_IDX(i % adapter->num_io_queues);
+		rc = ena_com_indirect_table_fill_entry(ena_dev, i, qid);
+		if (unlikely(rc != 0 && rc != ENA_COM_UNSUPPORTED)) {
+			ena_log(adapter->pdev, ERR,
+			    "Cannot fill indirect table entry %d rc: %d", i, rc);
+			goto err_rss_destroy;
+		}
+	}
+
+	/*
+	 * Keep the default Toeplitz key filled by ena_com_rss_init(); passing a
+	 * NULL key leaves it in place. ena_com_fill_hash_function() already
+	 * flushes the hash function to the device, so no separate
+	 * ena_com_set_hash_function() call is needed. Not fatal if unsupported.
+	 */
+	rc = ena_com_fill_hash_function(ena_dev, ENA_ADMIN_TOEPLITZ, NULL,
+	    ENA_HASH_KEY_SIZE, 0x0);
+	if (unlikely(rc != 0 && rc != ENA_COM_UNSUPPORTED)) {
+		ena_log(adapter->pdev, ERR, "Cannot fill hash function rc: %d", rc);
+		goto err_rss_destroy;
+	}
+
+	/*
+	 * Flush the indirection table to the device. This is the step that
+	 * actually makes inbound unicast steer to our serviced RX queues.
+	 */
+	rc = ena_com_indirect_table_set(ena_dev);
+	if (unlikely(rc != 0 && rc != ENA_COM_UNSUPPORTED)) {
+		ena_log(adapter->pdev, ERR, "Cannot set indirect table rc: %d", rc);
+		goto err_rss_destroy;
+	}
+
+	ENA_FLAG_SET_ATOMIC(ENA_FLAG_RSS_ACTIVE, adapter);
+	ena_log(adapter->pdev, INFO,
+	    "RSS configured: %d-entry indirection table across %d IO queues",
+	    ENA_RX_RSS_TABLE_SIZE, adapter->num_io_queues);
+	return (0);
+
+err_rss_destroy:
+	ena_com_rss_destroy(ena_dev);
+	return (rc);
+}
+
+static int
 ena_up_complete(struct ena_adapter *adapter)
 {
 	int rc = ena_change_mtu(adapter->ifp, adapter->ifp->if_mtu);
+	if (unlikely(rc != 0))
+		return (rc);
+
+	/*
+	 * Program the RSS indirection table so inbound flows only reach the
+	 * queues we service. Best-effort: a device without RSS still works
+	 * (everything lands on queue 0).
+	 */
+	rc = ena_rss_configure(adapter);
 	if (unlikely(rc != 0))
 		return (rc);
 
