@@ -231,7 +231,7 @@ index 22f9be7..29044e1 100644
  	if (zfs_arc_evict_threads == 0) {
  		/*
  		 * Compute number of threads we want to use for eviction.
-@@ -4757,6 +4775,49 @@ arc_reduce_target_size(uint64_t to_free)
+@@ -4757,5 +4775,73 @@ arc_reduce_target_size(uint64_t to_free)
  	return (to_free);
  }
  
@@ -278,9 +278,33 @@ index 22f9be7..29044e1 100644
 +	return (to_free);
 +}
 +
++/*
++ * OSv: synchronous hard-mode shrink.  Lower the target and kick eviction the
++ * same way arc_reduce_target_size_noshrink() does, then block until the
++ * requested amount has actually been evicted.  Called only from the hard-mode
++ * ARC shrinker (OSv reclaimer about to OOM), which needs real freed memory
++ * before it returns, not just a lowered target.  lax=B_TRUE returns early once
++ * the ARC stops overflowing; use_reserve=B_FALSE.  The eviction waiter is
++ * fork-COW-coherent (identity heap) and the OSv reclaimer thread may block.
++ */
++uint64_t
++arc_reduce_target_size_shrink_sync(uint64_t to_free)
++{
++	uint64_t asize_before = aggsum_value(&arc_sums.arcstat_size);
++	uint64_t requested = arc_reduce_target_size_noshrink(to_free);
++
++	if (requested == 0)
++		return (0);
++
++	arc_wait_for_eviction(requested, B_TRUE, B_FALSE);
++
++	uint64_t asize_after = aggsum_value(&arc_sums.arcstat_size);
++	return (asize_before > asize_after ?
++	    (asize_before - asize_after) : 0);
++}
++
  /*
   * Determine if the system is under memory pressure and is asking
-  * to reclaim memory. A return value of B_TRUE indicates that the system
 @@ -7982,6 +8043,18 @@ arc_set_limits(uint64_t allmem)
  	/* Set min cache to 1/32 of all memory, or 32MB, whichever is more. */
  	arc_c_min = MAX(allmem / 32, 2ULL << SPA_MAXBLOCKSHIFT);
