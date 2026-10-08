@@ -35,6 +35,7 @@ struct features_type {
     bool xen_clocksource;
     bool xen_vector_callback;
     bool xen_pci;
+    bool rndr; /* FEAT_RNG: the RNDR/RNDRRS hardware CSPRNG registers */
 };
 
 extern const features_type& features();

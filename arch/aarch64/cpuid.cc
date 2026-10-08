@@ -33,6 +33,8 @@ static const char *hwcap_str[HWCAP_BIT_N] = {
 #define IS_SHA2_SET(ISAR)  (((ISAR >> 12) & 0x0f) == 1)
 #define IS_CRC32_SET(ISAR) (((ISAR >> 16) & 0x0f) == 1)
 #define IS_ATOMIC_SET(ISAR) (((ISAR >> 20) & 0x0f) == 2)
+/* FEAT_RNG: ID_AA64ISAR0_EL1.RNDR (bits 63:60) == 1 means RNDR/RNDRRS exist */
+#define IS_RNDR_SET(ISAR)  (((ISAR >> 60) & 0x0f) == 1)
 
 const std::string& features_str()
 {
@@ -134,6 +136,10 @@ const unsigned long hwcap32()
 
 void process_cpuid(features_type& features)
 {
+    u64 isar; /* Instruction Set Attribute Register 0 */
+    asm volatile ("mrs %0, ID_AA64ISAR0_EL1" : "=r"(isar));
+    features.rndr = IS_RNDR_SET(isar);
+
 #if CONF_drivers_xen
     xen::get_features(features);
 #endif
