@@ -21,7 +21,9 @@
 # 2. peer: a fault-only peer (fragmentation and coalescing, a partial frame
 #    then EOF, a stall, a reset); it supplements diod, never replaces it.
 # 3. fs peer: mount failures (Rlerror to Tattach, a 9P2000.u Rversion, an
-#    Rlerror to the root Tgetattr); it reports any fid left unclunked.
+#    Rlerror to the root Tgetattr), then lookup, open, read and readdir
+#    faults on a small served tree; it reports any fid left unclunked and
+#    any Tread larger than the iounit it gave.
 #
 # Both runs are captured with tcpdump on lo (the host side of QEMU's user
 # network) and with a QEMU filter-dump on the guest NIC. The 9P messages are
@@ -38,7 +40,7 @@ GUEST_HOST = '192.168.122.1'
 NAMES = {7: 'Rlerror', 12: 'Tlopen', 13: 'Rlopen', 100: 'Tversion',
          101: 'Rversion', 104: 'Tattach', 105: 'Rattach', 108: 'Tflush',
          109: 'Rflush', 110: 'Twalk', 111: 'Rwalk', 116: 'Tread',
-         24: 'Tgetattr', 25: 'Rgetattr',
+         24: 'Tgetattr', 25: 'Rgetattr', 40: 'Treaddir', 41: 'Rreaddir',
          117: 'Rread', 118: 'Twrite', 119: 'Rwrite', 120: 'Tclunk',
          121: 'Rclunk'}
 HELLO = b'hello from the 9p export\n'
@@ -48,14 +50,25 @@ DIOD_PASS = ['diod negotiate', 'diod attach', 'diod ENOENT', 'diod read',
 PEER_PASS = ['peer fragmentation and coalescing',
              'peer partial frame then EOF', 'peer stall mid-frame',
              'peer reset']
+LINKED = b'one object, two names\n'
+DIR_ENTRIES = 400
 FS_DIOD_PASS = ['diod mount and unmount', 'diod mounts are distinct',
-                'diod refusals']
+                'diod refusals', 'diod read files',
+                'diod read across iounit chunks', 'diod hardlink identity',
+                '(w) write unsupported',
+                'diod readdir across Rreaddir replies']
 FS_PEER_PASS = ['peer bad aname', 'peer wrong version',
-                'peer root getattr error']
+                'peer root getattr error', 'peer lookup getattr error',
+                'peer lookup qid mismatch', 'peer lookup unknown type',
+                'peer lookup reused identity', 'peer lopen error',
+                'peer lopen qid mismatch', 'peer special file',
+                'peer iounit', 'peer read error after progress',
+                'peer readdir short record', 'peer readdir slash in name',
+                'peer readdir cookie past off_t']
 DIOD_WIRE = ['Tversion', 'Rversion', 'Tattach', 'Rattach', 'Twalk', 'Rwalk',
              'Tlopen', 'Rlopen', 'Tread', 'Rread', 'Twrite', 'Rwrite',
              'Tclunk', 'Rclunk', 'Tflush', 'Rflush', 'Rlerror', 'Tgetattr',
-             'Rgetattr']
+             'Rgetattr', 'Treaddir', 'Rreaddir']
 
 
 def verdict(console, wanted):
@@ -264,13 +277,112 @@ def peer(port, log, stop):
     ls.close()
 
 
-# The mount-failure peer for tst-9p-fs, one connection per case. Fids
-# attached and never clunked are reported as 'unclunked' lines.
-FS_CASES = ['aname', 'version', 'getattr']
+# The fault peer for tst-9p-fs, one connection per case, in the order
+# tst-9p-fs runs them: three mount failures, then faults on a tree of a
+# root directory (qid path 1), f (path 2, 1000 bytes, byte i is i % 251)
+# and p (path 3, a FIFO). Fids never clunked are reported as 'unclunked'
+# lines, protocol misuse as 'BAD' lines.
+FS_CASES = ['aname', 'version', 'getattr', 'lookup-getattr', 'lookup-qid',
+            'lookup-type', 'live-reuse', 'lopen', 'lopen-qid', 'special',
+            'iounit', 'read-error', 'rd-short', 'rd-slash', 'rd-cookie']
+# object: (mode, size). u has no file type; g is a directory whose qid
+# path is f's, as if the server reused a live identity.
+FS_TREE = {1: (0o40755, 0), 2: (0o100644, 1000), 3: (0o10644, 0),
+           4: (0o644, 0), 5: (0o40755, 0)}
+FS_NAMES = {'f': 2, 'p': 3, 'u': 4, 'g': 5}
+FS_QPATH = {5: 2}
+FS_DATA = bytes(i % 251 for i in range(1000))
+EACCES, EIO, ENOENT, EOPNOTSUPP = 13, 5, 2, 95
+
+
+def qid(obj, qpath=None):
+    t = 0x80 if FS_TREE[obj][0] & 0o170000 == 0o40000 else 0
+    return struct.pack('<BIQ', t, 0, qpath or FS_QPATH.get(obj, obj))
+
+
+def rgetattr(obj, qpath=None):
+    mode, size = FS_TREE[obj]
+    return (struct.pack('<Q', 0x7ff) + qid(obj, qpath)
+            + struct.pack('<IIIQQQQQ', mode, 1000, 1000, 1, 0, size, 4096,
+                          (size + 511) // 512) + bytes(64 + 16))
+
+
+def dirent(path, cookie, name):
+    return (qid(path) + struct.pack('<QB', cookie, 4 if path == 1 else 8)
+            + struct.pack('<H', len(name)) + name)
+
+
+def rreaddir(case, off):
+    if off:
+        return b''   # one batch, then end of directory
+    if case == 'rd-short':   # name[s] says 40 bytes, one follows
+        return dirent(2, 1, b'f')[:22] + struct.pack('<H', 40) + b'f'
+    if case == 'rd-slash':
+        return dirent(2, 1, b'a/b')
+    if case == 'rd-cookie':
+        return dirent(2, 1 << 63, b'f')
+    return dirent(1, 1, b'.') + dirent(2, 2, b'f')
+
+
+def fs_peer_answer(case, typ, body, fids, log):
+    """The reply to one request, or None to say nothing."""
+    u32 = lambda at: struct.unpack('<I', body[at:at + 4])[0]
+    err = lambda e: (7, struct.pack('<I', e))
+    if typ == 104:
+        if case == 'aname':
+            return err(ENOENT)
+        fids[u32(0)] = 1
+        return 105, qid(1)
+    if typ == 120:
+        fids.pop(u32(0), None)
+        return 121, b''
+    if u32(0) not in fids:
+        log.append('fs-%s: BAD %s on unknown fid %d' % (
+            case, NAMES.get(typ, typ), u32(0)))
+        return err(EIO)
+    obj = fids[u32(0)]
+    if typ == 24:
+        if case == 'getattr' or (case == 'lookup-getattr' and obj != 1):
+            return err(EACCES)
+        bad = case == 'lookup-qid' and obj != 1
+        return 25, rgetattr(obj, 99 if bad else None)
+    if typ == 110:   # fid newfid nwname names
+        n = struct.unpack('<H', body[8:10])[0]
+        if n == 0:
+            fids[u32(4)] = obj
+            return 111, struct.pack('<H', 0)
+        name = body[12:12 + struct.unpack('<H', body[10:12])[0]]
+        if n != 1 or obj != 1 or name.decode() not in FS_NAMES:
+            return err(ENOENT)
+        fids[u32(4)] = FS_NAMES[name.decode()]
+        return 111, struct.pack('<H', 1) + qid(fids[u32(4)])
+    if typ == 12:    # Tlopen fid flags -> qid iounit
+        if case == 'lopen' and obj != 1:
+            return err(EACCES)
+        q = qid(obj, 99 if case == 'lopen-qid' and obj != 1 else None)
+        iounit = 100 if case in ('iounit', 'read-error') else 0
+        return 13, q + struct.pack('<I', iounit)
+    if typ == 116:   # Tread fid offset count
+        off, count = struct.unpack('<QI', body[4:16])
+        if case in ('iounit', 'read-error') and count > 100:
+            log.append('fs-%s: BAD Tread count %d above iounit 100'
+                       % (case, count))
+        if case == 'read-error' and off > 0:
+            return err(EIO)
+        lim = 100 if case in ('iounit', 'read-error') else count
+        if case == 'iounit' and off == 0:
+            lim = 60   # a short count that is not EOF
+        d = FS_DATA[off:off + min(count, lim)]
+        return 117, struct.pack('<I', len(d)) + d
+    if typ == 40:    # Treaddir fid offset count
+        off, count = struct.unpack('<QI', body[4:16])
+        d = rreaddir(case, off)[:count]
+        return 41, struct.pack('<I', len(d)) + d
+    return err(EOPNOTSUPP)
 
 
 def fs_peer_conn(c, case, log):
-    fids = set()
+    fids = {}
     while True:
         f = recv_frame(c)
         if f is None:
@@ -281,18 +393,9 @@ def fs_peer_conn(c, case, log):
             v = b'9P2000.u' if case == 'version' else b'9P2000.L'
             c.sendall(reply(101, tag, struct.pack('<IH', min(
                 8192, struct.unpack('<I', body[:4])[0]), len(v)) + v))
-        elif typ == 104 and case == 'aname':
-            c.sendall(reply(7, tag, struct.pack('<I', 2)))     # ENOENT
-        elif typ == 104:
-            fids.add(struct.unpack('<I', body[:4])[0])
-            c.sendall(reply(105, tag, b'\x80' + bytes(12)))
-        elif typ == 24:
-            c.sendall(reply(7, tag, struct.pack('<I', 13)))    # EACCES
-        elif typ == 120:
-            fids.discard(struct.unpack('<I', body[:4])[0])
-            c.sendall(reply(121, tag, b''))
-        else:
-            c.sendall(reply(7, tag, struct.pack('<I', 95)))    # EOPNOTSUPP
+            continue
+        r = fs_peer_answer(case, typ, body, fids, log)
+        c.sendall(reply(r[0], tag, r[1]))
     log.append('fs-%s: client closed' % case)
     if fids:
         log.append('fs-%s: %d unclunked fids' % (case, len(fids)))
@@ -343,8 +446,9 @@ def stop_capture(p, pidfile):
 
 def guest(args, ev, name, cmd, test='tst-9p-tcp'):
     out = os.path.join(ev, name + '.console')
+    # No VNC display, so runs with distinct ports can share a host.
     run = ['timeout', '300', sys.executable, 'scripts/run.py', '-m', '2G',
-           '-c', '2', '--arch', args.arch, '--nogdb', '--pass-args',
+           '-c', '2', '--arch', args.arch, '--nogdb', '--novnc', '--pass-args',
            '-object filter-dump,id=fd0,netdev=un0,file=%s'
            % os.path.join(ev, name + '-guest.pcap'),
            '-e', '--rootfs=rofs /tests/%s.so %s' % (test, cmd)]
@@ -365,6 +469,11 @@ def run_diod(args, ev, problems):
     open(os.path.join(a, 'big'), 'wb').write(
         bytes(i % 251 for i in range(1000000)))
     open(os.path.join(a, 'out'), 'wb').close()
+    open(os.path.join(a, 'h1'), 'wb').write(LINKED)
+    os.mkdir(os.path.join(a, 'd'), 0o700)
+    for i in range(DIR_ENTRIES):
+        open(os.path.join(a, 'd', 'e%03d' % i), 'wb').close()
+    os.link(os.path.join(a, 'h1'), os.path.join(a, 'd', 'h2'))
     os.mkfifo(os.path.join(a, 'fifo'), 0o600)
     os.link(os.path.join(a, 'fifo'), os.path.join(b, 'fifo'))
     cmd = [args.diod, '-f', '-n', '-N', '-t', '1', '-c', '/dev/null',
@@ -391,6 +500,7 @@ def run_diod(args, ev, problems):
             d.wait()
     problems += ['diod: ' + p for p in verdict(console, DIOD_PASS)]
     problems += ['fs-diod: ' + p for p in verdict(fs_console, FS_DIOD_PASS)]
+    # tst-9p-tcp wrote it; the (w) group of tst-9p-fs must not change it.
     if open(os.path.join(a, 'out'), 'rb').read() != WRITTEN:
         problems.append('diod: host file a/out does not hold the Twrite bytes')
     # The guest clunks every fid it creates; diod lists any it still holds.
@@ -424,9 +534,10 @@ def run_fs_peer(args, ev, problems):
     problems += fs_peer_log(log)
 
 
-# Every case connected, was closed by the client and left no fid.
+# Every case connected, was closed by the client, left no fid and kept to
+# the protocol.
 def fs_peer_log(log):
-    bad = ['fs-peer: ' + l for l in log if 'unclunked' in l]
+    bad = ['fs-peer: ' + l for l in log if 'unclunked' in l or 'BAD' in l]
     bad += ['fs-peer: case %s never closed' % c for c in FS_CASES
             if 'fs-%s: client closed' % c not in log]
     return bad
@@ -502,6 +613,28 @@ def selftest():
     assert fs_peer_log(closed) == []
     assert fs_peer_log(closed[1:])
     assert fs_peer_log(closed + ['fs-getattr: 1 unclunked fids'])
+    assert fs_peer_log(closed + ['fs-iounit: BAD Tread count 1000'])
+    fids, log = {}, []
+    assert fs_peer_answer('iounit', 104, struct.pack('<I', 5), fids, log)[0] \
+        == 105
+    w = fs_peer_answer('iounit', 110, struct.pack('<IIHH', 5, 6, 1, 1) + b'f',
+                       fids, log)
+    assert w[0] == 111 and w[1][2 + 5:2 + 13] == struct.pack('<Q', 2)
+    assert fs_peer_answer('iounit', 12, struct.pack('<II', 6, 0), fids,
+                          log)[1][13:] == struct.pack('<I', 100)
+    r = fs_peer_answer('iounit', 116, struct.pack('<IQI', 6, 900, 1000),
+                       fids, log)
+    assert r[1] == struct.pack('<I', 100) + FS_DATA[900:] and log
+    assert fs_peer_answer('iounit', 116, struct.pack('<IQI', 6, 0, 100),
+                          fids, [])[1][:4] == struct.pack('<I', 60)
+    assert len(rgetattr(2)) == 153
+    assert fs_peer_answer('lookup-qid', 24, struct.pack('<IQ', 6, 0x7ff),
+                          fids, [])[1][13:21] == struct.pack('<Q', 99)
+    assert fs_peer_answer('iounit', 116, struct.pack('<IQI', 9, 0, 1), fids,
+                          [])[0] == 7
+    assert qid(5) == struct.pack('<BIQ', 0x80, 0, 2) and qid(2)[0] == 0
+    assert rgetattr(5)[8:21] == qid(5)
+    assert len(rreaddir('x', 0)) == 2 * 24 + 2 and rreaddir('x', 5) == b''
     print('selftest ok')
 
 
