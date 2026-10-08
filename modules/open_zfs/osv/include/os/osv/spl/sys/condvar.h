@@ -50,16 +50,19 @@ static inline int
 cv_timedwait_hires(kcondvar_t *cvp, mutex_t *mp, long long tim,
     long long res __attribute__((unused)), int flag)
 {
-	clock_t ticks;
-
-	if (flag == 0) {
-		/* Relative time: add current hrtime */
-		tim += gethrtime();
-	}
-
-	/* Convert absolute hrtime (nanoseconds) to tick deadline */
-	ticks = (clock_t)(tim / (1000000000LL / hz));
-	return (cv_timedwait(cvp, mp, ticks));
+	/*
+	 * Nanosecond-precise wait.  Tick granularity (1ms at hz=1000) would
+	 * round the sub-millisecond ZIL commit-batch window
+	 * (zil_commit_waiter_timeout sizes it as ~10% of the last log-write
+	 * latency) down to zero, so concurrent fsyncs never coalesce into one
+	 * log write plus one device cache flush and every commit pays its own
+	 * synchronous flush.  `tim` is an absolute gethrtime() (wall-clock, CLOCK_REALTIME)
+	 * deadline when the flag (ABSOLUTE) is nonzero, else a relative
+	 * nanosecond delay.
+	 */
+	extern int openzfs_cv_timedwait_hires(kcondvar_t *, mutex_t *,
+	    long long, int);
+	return (openzfs_cv_timedwait_hires(cvp, mp, tim, flag != 0));
 }
 
 #define	cv_timedwait_sig_hires		cv_timedwait_hires
