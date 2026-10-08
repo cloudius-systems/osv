@@ -114,7 +114,6 @@ protected:
     u32 _num_queues;
     bool _cap_indirect_buf;
     bool _cap_event_idx = false;
-    static int _disk_idx;
     u64 _enabled_features;
 };
 

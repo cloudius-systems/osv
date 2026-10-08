@@ -17,8 +17,6 @@ TRACEPOINT(trace_virtio_wait_for_queue, "queue(%p) have_elements=%d", void*, int
 
 namespace virtio {
 
-int virtio_driver::_disk_idx = 0;
-
 virtio_driver::virtio_driver(virtio_device& dev)
     : hw_driver()
     , _dev(dev)

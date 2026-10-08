@@ -11,12 +11,20 @@
 #include <osv/bio.h>
 #include <osv/ioctl.h>
 
+#include <atomic>
+
 #include <osv/trace.hh>
 #include "drivers/blk-common.hh"
 
 #include <sys/mount.h>
 
 TRACEPOINT(trace_blk_ioctl, "dev=%s type=%#x nr=%d size=%d, dir=%d", char*, int, int, int, int);
+
+std::string blk_next_device_name()
+{
+    static std::atomic<int> disk_idx(0);
+    return "vblk" + std::to_string(disk_idx++);
+}
 
 int
 blk_ioctl(struct device* dev, u_long io_cmd, void* buf)

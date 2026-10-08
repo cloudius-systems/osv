@@ -218,8 +218,7 @@ blk::blk(virtio_device& virtio_dev)
 
     struct blk_priv* prv;
     struct device *dev;
-    std::string dev_name("vblk");
-    dev_name += std::to_string(_disk_idx++);
+    std::string dev_name = blk_next_device_name();
 
     dev = device_create(&blk_driver, dev_name.c_str(), D_BLK);
     prv = reinterpret_cast<struct blk_priv*>(dev->private_data);

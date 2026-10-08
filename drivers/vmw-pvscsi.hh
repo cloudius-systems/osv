@@ -172,9 +172,6 @@ private:
     static int _instance;
     int _id;
 
-    // Disk index number
-    static int _disk_idx;
-
     // This mutex protects parallel make_request invocations
     mutex _lock;
 
