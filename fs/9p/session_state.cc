@@ -202,6 +202,12 @@ int check_reply(const expect& e, const frame& r, int& err)
     case Tlopen:
         ok = b.size() == qid_size + 4;
         break;
+    case Tgetattr:
+        // valid[8] qid[13] mode uid gid[4 each], then nlink rdev size
+        // blksize blocks, atime mtime ctime btime (sec nsec), gen and
+        // data_version, 8 bytes each (diod protocol.md)
+        ok = b.size() == 8 + qid_size + 3 * 4 + 15 * 8;
+        break;
     case Tclunk:
     case Tflush:
         ok = b.empty();
@@ -264,7 +270,7 @@ int request_table::admit(uint8_t type, uint32_t limit, size_t bytes,
     }
     switch (type) {
     case Tattach: case Twalk: case Tlopen: case Tread: case Twrite:
-    case Tclunk:
+    case Tclunk: case Tgetattr:
         break;
     default:
         return EINVAL;
