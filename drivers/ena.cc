@@ -11,6 +11,7 @@
 #include "drivers/pci-device.hh"
 
 #include <osv/aligned_new.hh>
+#include <stdexcept>
 
 #include <bsd/sys/net/ethernet.h>
 

@@ -74,6 +74,8 @@
 #include <bsd/sys/netinet/if_ether.h>
 #endif
 
+#include <osv/net_channel.hh>
+
 struct ifindex_entry {
 	struct  ifnet *ife_ifnet;
 };
@@ -366,9 +368,12 @@ if_alloc(u_char type)
 	// bsd defines a variable named 'ifnet', so we must do this ugliness
 	typedef struct ifnet s_ifnet;
 	std::unique_ptr<s_ifnet> ifp;
+	std::unique_ptr<classifier> if_classifier;
 	u_short idx;
 
 	ifp.reset(new s_ifnet{});
+	if_classifier.reset(new classifier());
+	ifp->if_classifier = NULL;
 	IFNET_WLOCK();
 	if (ifindex_alloc_locked(&idx) != 0) {
 		IFNET_WUNLOCK();
@@ -396,6 +401,8 @@ if_alloc(u_char type)
 
 	refcount_init(&ifp->if_refcount, 1);	/* Index reference. */
 	ifnet_setbyindex(ifp->if_index, ifp.get());
+
+	ifp->if_classifier = if_classifier.release();
 	return ifp.release();
 }
 
@@ -407,6 +414,7 @@ if_alloc(u_char type)
 static void
 if_free_internal(struct ifnet *ifp)
 {
+	delete ifp->if_classifier;
 
 	KASSERT((ifp->if_flags & IFF_DYING),
 	    ("if_free_internal: interface not dying"));
@@ -3146,3 +3154,10 @@ if_deregister_com_alloc(u_char type)
 	if_com_alloc[type] = NULL;
 	if_com_free[type] = NULL;
 }
+
+int
+if_net_channel_input(struct ifnet *ifp, struct mbuf *m)
+{
+	return ifp->if_classifier->post_packet(m);
+}
+
