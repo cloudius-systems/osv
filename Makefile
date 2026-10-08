@@ -2022,7 +2022,12 @@ ifneq ($(conf_networking_stack),1)
 $(error conf_fs_9p_tcp=1 needs conf_networking_stack=1: the 9P TCP transport uses the networking stack)
 endif
 fs_objs += 9p/tcp.o
+fs_objs += 9p/9p_vfsops.o
+fs_objs += 9p/9p_vnops.o
 endif
+# The generated kernel_config_fs_9p_tcp.h follows .config only, so a
+# command-line conf_fs_9p_tcp=1 would not reach it; pass the make value.
+$(out)/fs/vfs/vfs_conf.o: CXXFLAGS += -DCONF_fs_9p_tcp=$(if $(filter 1,$(conf_fs_9p_tcp)),1,0)
 fs_objs += zfs/zfs_null_vfsops.o
 
 objects += $(addprefix fs/, $(fs_objs))
