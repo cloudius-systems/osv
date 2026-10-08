@@ -90,21 +90,8 @@ int p9_inactive(vnode* vp)
     return 0;
 }
 
-uint64_t le(const uint8_t* p, int n)
-{
-    uint64_t v = 0;
-    for (int i = n - 1; i >= 0; i--) {
-        v = v << 8 | p[i];
-    }
-    return v;
-}
-
-void put_le(p9::bytes& b, uint64_t v, int n)
-{
-    for (int i = 0; i < n; i++) {
-        b.push_back(uint8_t(v >> 8 * i));
-    }
-}
+using p9::le;
+using p9::put_le;
 
 p9::inode_state* in_of(vnode* vp)
 {
@@ -116,12 +103,20 @@ p9::open_state* os_of(file* fp)
     return static_cast<p9::open_state*>(file_data(fp));
 }
 
-// One name; a name the VFS should never pass is refused, not walked.
+int bind(mount* mp, uint32_t fid, const p9::attr& a, vnode** vpp);
+
+// A name the VFS should never pass is refused, never sent.
+bool bad_name(const char* name)
+{
+    return !*name || strchr(name, '/') || !strcmp(name, ".")
+        || !strcmp(name, "..");
+}
+
+// One name.
 int p9_lookup(vnode* dvp, char* name, vnode** vpp)
 {
     *vpp = nullptr;
-    if (!*name || strchr(name, '/') || !strcmp(name, ".")
-        || !strcmp(name, "..")) {
+    if (bad_name(name)) {
         return EINVAL;
     }
     if (dvp->v_type != VDIR) {
@@ -135,21 +130,31 @@ int p9_lookup(vnode* dvp, char* name, vnode** vpp)
         return rc;
     }
     p9::attr a;
-    uint64_t ino = 0;
     rc = p9::getattr(ms, fid, a);
     if (!rc && le(qid.data() + 5, 8) != a.qpath) {
         rc = EIO; // Rwalk and Rgetattr disagree on the object
     }
-    if (!rc && type_of(a.mode) == VNON) {
-        rc = EIO;
+    if (rc) {
+        ms.s->clunk(fid, ms.d());
+        return rc;
     }
+    return bind(dvp->v_mount, fid, a, vpp);
+}
+
+// The vnode for a walked fid and its Rgetattr: locked and referenced in
+// *vpp. The fid is consumed: it becomes the vnode's, or is clunked.
+int bind(mount* mp, uint32_t fid, const p9::attr& a, vnode** vpp)
+{
+    auto& ms = *static_cast<p9::mount_state*>(mp->m_data);
+    uint64_t ino = 0;
+    int rc = type_of(a.mode) == VNON ? EIO : 0;
     if (!rc) {
         rc = ms.qids.ino(a.qpath, ino);
     }
     vnode* vp = nullptr;
     if (!rc) {
         // No RPC under the vnode table lock: vget() only allocates.
-        bool live = vget(dvp->v_mount, ino, &vp);
+        bool live = vget(mp, ino, &vp);
         if (!vp) {
             rc = ENOMEM;
         } else if (live && in_of(vp)) {
@@ -203,6 +208,22 @@ uint32_t lflags(int f)
     return l;
 }
 
+// The open_state for an opened fid from Rlopen or Rlcreate (qid[13]
+// iounit[4]); the caller clunks fid on error.
+int open_state_of(p9::mount_state& ms, uint32_t fid, const p9::bytes& r,
+                  p9::open_state*& os)
+{
+    uint32_t cap = ms.s->msize() - p9::io_header;
+    uint32_t iou = uint32_t(le(r.data() + 13, 4));
+    os = new (std::nothrow) p9::open_state;
+    if (!os) {
+        return ENOMEM;
+    }
+    os->fid = fid;
+    os->iounit = iou && iou < cap ? iou : cap;
+    return 0;
+}
+
 int p9_open(file* fp)
 {
     vnode* vp = file_dentry(fp)->d_vnode;
@@ -210,9 +231,8 @@ int p9_open(file* fp)
     if (vp->v_type != VREG && vp->v_type != VDIR) {
         return EOPNOTSUPP; // no special-file I/O over 9P
     }
-    // The VFS checked write access. O_TRUNC is sent with Tlopen, but the
-    // VFS calls vop_truncate (unsupported) first unless vop_create_open is
-    // set, so until then an O_TRUNC open fails EOPNOTSUPP.
+    // The VFS checked write access and leaves O_TRUNC to us (we have
+    // vop_create_open): it goes to the server with Tlopen.
     uint32_t fid;
     p9::bytes qid;
     int rc = ms.s->walk(in_of(vp)->fid, {}, fid, qid, ms.d());
@@ -232,14 +252,7 @@ int p9_open(file* fp)
         }
     }
     if (!rc) {
-        uint32_t cap = ms.s->msize() - p9::io_header;
-        uint32_t iou = uint32_t(le(r.body.data() + 13, 4));
-        os = new (std::nothrow) p9::open_state;
-        rc = os ? 0 : ENOMEM;
-        if (os) {
-            os->fid = fid;
-            os->iounit = iou && iou < cap ? iou : cap;
-        }
+        rc = open_state_of(ms, fid, r.body, os);
     }
     if (rc) {
         ms.s->clunk(fid, ms.d());
@@ -376,6 +389,170 @@ int p9_seek(vnode*, file*, off_t, off_t)
     return 0; // offsets are the caller's; directory offsets are cookies
 }
 
+void put_name(p9::bytes& b, const char* name)
+{
+    size_t n = strlen(name); // < PATH_MAX, from the VFS
+    put_le(b, n, 2);
+    b.insert(b.end(), name, name + n);
+}
+
+// Tlcreate on a clone of the directory's fid, which becomes the open fid
+// of the new file; Linux open flags, so an existing file is opened
+// without O_EXCL and truncated with O_TRUNC by the server, atomically.
+// The vnode gets its own unopened fid, walked to the name and required to
+// be the object Rlcreate opened (else the name was replaced: EIO).
+int p9_create_open(vnode* dvp, const char* name, int flags, mode_t mode,
+                   vnode** vpp, void** datap)
+{
+    *vpp = nullptr;
+    *datap = nullptr;
+    if (bad_name(name)) {
+        return EINVAL;
+    }
+    auto& ms = ms_of(dvp);
+    uint32_t ofid, vfid;
+    p9::bytes qid, wq;
+    int rc = ms.s->walk(in_of(dvp)->fid, {}, ofid, qid, ms.d());
+    if (rc) {
+        return rc;
+    }
+    p9::bytes body;
+    put_le(body, ofid, 4);
+    put_name(body, name);
+    put_le(body, lflags(flags) | 0100 | (flags & O_EXCL ? 0200 : 0), 4);
+    put_le(body, mode & 07777, 4);
+    put_le(body, ms.gid, 4);
+    p9::frame r;
+    rc = ms.s->rpc(p9::Tlcreate, body, r, ms.d());
+    if (rc) {
+        ms.s->clunk(ofid, ms.d());
+        return rc;
+    }
+    uint64_t qpath = le(r.body.data() + 5, 8);
+    p9::open_state* os = nullptr;
+    rc = open_state_of(ms, ofid, r.body, os);
+    if (rc) {
+        ms.s->clunk(ofid, ms.d());
+        return rc;
+    }
+    p9::attr a;
+    rc = ms.s->walk(in_of(dvp)->fid, {name}, vfid, wq, ms.d());
+    if (!rc) {
+        rc = p9::getattr(ms, vfid, a);
+        if (!rc && (a.qpath != qpath || le(wq.data() + 5, 8) != qpath
+                    || type_of(a.mode) != VREG)) {
+            rc = EIO;
+        }
+        rc = rc ? (ms.s->clunk(vfid, ms.d()), rc) : bind(dvp->v_mount, vfid,
+                                                         a, vpp);
+    }
+    if (rc) {
+        ms.s->clunk(ofid, ms.d());
+        delete os;
+        return rc;
+    }
+    *datap = os;
+    return 0;
+}
+
+int p9_mkdir(vnode* dvp, char* name, mode_t mode)
+{
+    if (bad_name(name)) {
+        return EINVAL;
+    }
+    auto& ms = ms_of(dvp);
+    p9::bytes body;
+    put_le(body, in_of(dvp)->fid, 4);
+    put_name(body, name);
+    put_le(body, mode & 07777, 4);
+    put_le(body, ms.gid, 4);
+    p9::frame r;
+    return ms.s->rpc(p9::Tmkdir, body, r, ms.d());
+}
+
+constexpr uint32_t at_removedir = 0x200; // Linux AT_REMOVEDIR
+
+int unlinkat(vnode* dvp, const char* name, uint32_t flags)
+{
+    if (bad_name(name)) {
+        return EINVAL;
+    }
+    auto& ms = ms_of(dvp);
+    p9::bytes body;
+    put_le(body, in_of(dvp)->fid, 4);
+    put_name(body, name);
+    put_le(body, flags, 4);
+    p9::frame r;
+    int rc = ms.s->rpc(p9::Tunlinkat, body, r, ms.d());
+    if (rc != EOPNOTSUPP) {
+        return rc;
+    }
+    // A server without Tunlinkat (diod 1.0.24) gets Tremove of a fid
+    // walked to the name, as Linux v9fs does; the fid is gone either way.
+    uint32_t fid;
+    p9::bytes qid;
+    if ((rc = ms.s->walk(in_of(dvp)->fid, {name}, fid, qid, ms.d()))) {
+        return rc;
+    }
+    return ms.s->remove(fid, ms.d());
+}
+
+// The vnode keeps its fid: open fids still reach the object.
+int p9_remove(vnode* dvp, vnode*, char* name)
+{
+    return unlinkat(dvp, name, 0);
+}
+
+int p9_rmdir(vnode* dvp, vnode*, char* name)
+{
+    return unlinkat(dvp, name, at_removedir);
+}
+
+// Trenameat; a server without it (diod 1.0.24 answers EOPNOTSUPP) gets
+// Trename of the object's own fid, as Linux v9fs does.
+int p9_rename(vnode* dvp1, vnode* vp1, char* sname, vnode* dvp2, vnode*,
+              char* dname)
+{
+    if (bad_name(sname) || bad_name(dname)) {
+        return EINVAL;
+    }
+    auto& ms = ms_of(dvp1);
+    p9::bytes body;
+    put_le(body, in_of(dvp1)->fid, 4);
+    put_name(body, sname);
+    put_le(body, in_of(dvp2)->fid, 4);
+    put_name(body, dname);
+    p9::frame r;
+    int rc = ms.s->rpc(p9::Trenameat, body, r, ms.d());
+    if (rc != EOPNOTSUPP) {
+        return rc;
+    }
+    body.clear();
+    put_le(body, in_of(vp1)->fid, 4);
+    put_le(body, in_of(dvp2)->fid, 4);
+    put_name(body, dname);
+    return ms.s->rpc(p9::Trename, body, r, ms.d());
+}
+
+// chmod only: other attributes (times, size, owner) are refused until
+// they are implemented, rather than silently ignored.
+int p9_setattr(vnode* vp, vattr* va)
+{
+    if (va->va_mask != AT_MODE) {
+        return EOPNOTSUPP;
+    }
+    auto& ms = ms_of(vp);
+    p9::bytes body;
+    put_le(body, in_of(vp)->fid, 4);
+    // valid[4] mode[4] uid[4] gid[4] size[8] atime_sec[8] atime_nsec[8]
+    // mtime_sec[8] mtime_nsec[8]; only P9_ATTR_MODE (1) is valid.
+    put_le(body, 1, 4);
+    put_le(body, va->va_mode & 07777, 4);
+    body.resize(body.size() + 4 + 4 + 8 + 4 * 8, 0);
+    p9::frame r;
+    return ms.s->rpc(p9::Tsetattr, body, r, ms.d());
+}
+
 int p9_unsupported()
 {
     return EOPNOTSUPP;
@@ -395,13 +572,13 @@ struct vnops p9_vnops = {
     U(vnop_fsync_t),
     p9_readdir,
     p9_lookup,
-    U(vnop_create_t),
-    U(vnop_remove_t),
-    U(vnop_rename_t),
-    U(vnop_mkdir_t),
-    U(vnop_rmdir_t),
+    U(vnop_create_t), /* create_open is used instead */
+    p9_remove,
+    p9_rename,
+    p9_mkdir,
+    p9_rmdir,
     p9_getattr,
-    U(vnop_setattr_t),
+    p9_setattr,
     p9_inactive,
     U(vnop_truncate_t),
     U(vnop_link_t),
@@ -409,6 +586,6 @@ struct vnops p9_vnops = {
     U(vnop_fallocate_t),
     U(vnop_readlink_t),
     U(vnop_symlink_t),
-    nullptr, /* create_open */
+    p9_create_open,
     nullptr, /* access */
 };

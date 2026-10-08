@@ -116,6 +116,10 @@ struct dirent_rec {
 constexpr size_t max_name = 255; // d_name holds it and a NUL
 int parse_dirent(const uint8_t* p, size_t left, dirent_rec& e);
 
+// Little-endian n-byte (n <= 8) field at p; append v as n bytes.
+uint64_t le(const uint8_t* p, int n);
+void put_le(bytes& b, uint64_t v, int n);
+
 // Tgetattr(fid, basic) and decode: 0, or the RPC or decode errno.
 int getattr(mount_state& ms, uint32_t fid, attr& a);
 

@@ -17,6 +17,7 @@
 #include <cstring>
 #include <new>
 #include <sys/stat.h>
+#include <sys/statfs.h>
 
 #include <arpa/inet.h>
 #include <netinet/in.h>
@@ -49,6 +50,10 @@ bool number(const std::string& v, uint64_t max, uint64_t& out)
     return true;
 }
 
+std::atomic<uint32_t> mounts{0};
+
+}
+
 uint64_t le(const uint8_t* p, int n)
 {
     uint64_t v = 0;
@@ -63,10 +68,6 @@ void put_le(bytes& b, uint64_t v, int n)
     for (int i = 0; i < n; i++) {
         b.push_back(uint8_t(v >> 8 * i));
     }
-}
-
-std::atomic<uint32_t> mounts{0};
-
 }
 
 int parse_options(const char* data, options& o)
@@ -323,9 +324,30 @@ static int p9_sync(struct mount*)
     return 0; // nothing is written through this mount yet
 }
 
-static int p9_statfs(struct mount*, struct statfs*)
+// Tstatfs on the root fid: the server's numbers, none invented.
+static int p9_statfs(struct mount* mp, struct statfs* sf)
 {
-    return EOPNOTSUPP;
+    auto& ms = *static_cast<p9::mount_state*>(mp->m_data);
+    auto* root = static_cast<p9::inode_state*>(mp->m_root->d_vnode->v_data);
+    p9::bytes body;
+    p9::put_le(body, root->fid, 4);
+    p9::frame r;
+    if (int rc = ms.s->rpc(p9::Tstatfs, body, r, ms.d())) {
+        return rc;
+    }
+    // type[4] bsize[4] blocks bfree bavail files ffree fsid[8] namelen[4]
+    const uint8_t* p = r.body.data();
+    sf->f_type = 0x01021997; // V9FS_MAGIC, as Linux reports
+    sf->f_bsize = p9::le(p + 4, 4);
+    sf->f_frsize = sf->f_bsize;
+    sf->f_blocks = p9::le(p + 8, 8);
+    sf->f_bfree = p9::le(p + 16, 8);
+    sf->f_bavail = p9::le(p + 24, 8);
+    sf->f_files = p9::le(p + 32, 8);
+    sf->f_ffree = p9::le(p + 40, 8);
+    sf->f_fsid = mp->m_fsid;
+    sf->f_namelen = p9::le(p + 56, 4);
+    return 0;
 }
 
 extern struct vnops p9_vnops;
