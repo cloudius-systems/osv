@@ -42,6 +42,9 @@ $(out)/%.so: $(out)/%.o
 	$(call quiet, $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(LIBS), LD $*.so)
 
 $(out)/tests/tst-non-fpic.o: CXXFLAGS:=$(subst -fPIC,-fno-pic -mcmodel=large,$(CXXFLAGS))
+# This test deliberately has text relocations, which some linkers (e.g.,
+# Fedora 44's) reject by default.
+$(out)/tests/tst-non-fpic.so: LDFLAGS += -Wl,-z,notext
 
 $(out)/tests/tst-getopt-pie.o: CXXFLAGS:=$(subst -fPIC,-fpie,$(CXXFLAGS))
 $(out)/tests/tst-getopt-pie.o: $(src)/tests/tst-getopt.cc

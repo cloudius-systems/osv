@@ -18,6 +18,12 @@
 #endif
 
 extern "C" size_t __tlsdesc_static(size_t *);
+extern "C" size_t __tlsdesc_dynamic(size_t *);
+
+// __tlsdesc_dynamic (tlsdesc.S) hardcodes these offsets
+static_assert(offsetof(thread_control_block, dtv) == 24);
+static_assert(offsetof(sched::dtv, last_index) == 0);
+static_assert(offsetof(sched::dtv, first) == 8);
 namespace elf {
 
 // This function is solely used to relocate symbols in OSv kernel ELF
@@ -183,15 +189,50 @@ bool object::arch_relocate_jump_slot(symbol_module& sym, void *addr, Elf64_Sxwor
 
 void object::arch_relocate_tls_desc(u32 sym, void *addr, Elf64_Sxword addend)
 {
-    //TODO: Differentiate between DL_NEEDED (static TLS, initial-exec) and dynamic TLS (dlopen)
-    //For now assume it is always static TLS case
-    //
+    // Determine if static or dynamic access
+    // In general, TLS access of a symbol in a dynamically opened ELF (dlopen()-ed)
+    // needs to be handled using a dynamic TLS descriptor, otherwise a static one
+    bool dynamic = false;
+    symbol_module sm;
+    if (sym) {
+        sm = symbol(sym);
+        // In some cases symbol in the same dlopen()-ed ELF may be relocated via
+        // a symbol table and we need to handle it using a dynamic descriptor
+        if (sm.obj->module_index() == _module_index) {
+            dynamic = _dlopen_ed;
+        }
+    } else {
+        dynamic = _dlopen_ed;
+    }
+
+    // Dynamic access
+    if (dynamic) {
+        // First place the address of the resolver function
+        *static_cast<size_t*>(addr) = (size_t)__tlsdesc_dynamic;
+        // Secondly allocate simple structure describing ELF index and symbol TLS offset
+        // that will be passed as an argument to __tlsdesc_dynamic
+        // TODO: For now let us not worry about deallocating it - in most cases ELFs
+        // stay loaded until OSv shutdowns
+        auto *mo = new module_and_offset;
+        *(static_cast<size_t*>(addr) + 1) = reinterpret_cast<size_t>(mo);
+        if (sym) {
+            mo->module = sm.obj->module_index();
+            mo->offset = (size_t)sm.symbol->st_value + addend;
+            elf_debug("arch_relocate_tls_desc: dynamic access, self, sym:%d, module:%d, offset:%lu\n", sym, mo->module, mo->offset);
+        } else {
+            mo->module = _module_index;
+            mo->offset = addend;
+            elf_debug("arch_relocate_tls_desc: dynamic access, self, module:%d, offset:%lu\n", mo->module, mo->offset);
+        }
+        return;
+    }
+
+    // Static access
     // First place the address of the resolver function - __tlsdesc_static
     *static_cast<size_t*>(addr) = (size_t)__tlsdesc_static;
     //
     // Secondly calculate and store the argument passed to the resolver function - TLS offset
     if (sym) {
-        auto sm = symbol(sym);
         sm.obj->alloc_static_tls();
         auto offset = sm.symbol->st_value + addend;
         ulong tls_offset;
