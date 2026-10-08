@@ -122,7 +122,11 @@ protected:
     static constexpr size_t max_pending_levels = 4;
 
     // Let us hold to allocated PRP pages but also limit to up 16 ones
-    ring_spsc<u64*, unsigned, 16> _free_prp_lists;
+    // Cache of pre-allocated PRP-list pages for multi-page I/Os.  Sized to the
+    // IO queue depth class so a deep, busy queue rarely misses into alloc_page()
+    // on the submit path; a miss still falls back to alloc and a full pool frees
+    // on return, so this is a churn optimization, not a correctness limit.
+    ring_spsc<u64*, unsigned, 128> _free_prp_lists;
 
     mutex _lock;
 };
