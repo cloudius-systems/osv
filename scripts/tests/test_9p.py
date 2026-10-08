@@ -56,7 +56,10 @@ FS_DIOD_PASS = ['diod mount and unmount', 'diod mounts are distinct',
                 'diod refusals', 'diod read files',
                 'diod read across iounit chunks', 'diod hardlink identity',
                 '(w) write unsupported',
-                'diod readdir across Rreaddir replies']
+                'diod readdir across Rreaddir replies', 'diod create',
+                'diod namespace changes', 'diod chmod', 'diod statfs',
+                'diod replacement while open']
+OLD_OBJ, NEW_OBJ = b'old object\n', b'new object\n'
 FS_PEER_PASS = ['peer bad aname', 'peer wrong version',
                 'peer root getattr error', 'peer lookup getattr error',
                 'peer lookup qid mismatch', 'peer lookup unknown type',
@@ -64,7 +67,11 @@ FS_PEER_PASS = ['peer bad aname', 'peer wrong version',
                 'peer lopen qid mismatch', 'peer special file',
                 'peer iounit', 'peer read error after progress',
                 'peer readdir short record', 'peer readdir slash in name',
-                'peer readdir cookie past off_t']
+                'peer readdir cookie past off_t', 'peer lcreate error',
+                'peer lcreate replaced', 'peer mkdir error',
+                'peer unlink error', 'peer rename error',
+                'peer rename fallback error', 'peer unlink fallback error',
+                'peer setattr error', 'peer statfs error']
 DIOD_WIRE = ['Tversion', 'Rversion', 'Tattach', 'Rattach', 'Twalk', 'Rwalk',
              'Tlopen', 'Rlopen', 'Tread', 'Rread', 'Twrite', 'Rwrite',
              'Tclunk', 'Rclunk', 'Tflush', 'Rflush', 'Rlerror', 'Tgetattr',
@@ -284,11 +291,17 @@ def peer(port, log, stop):
 # lines, protocol misuse as 'BAD' lines.
 FS_CASES = ['aname', 'version', 'getattr', 'lookup-getattr', 'lookup-qid',
             'lookup-type', 'live-reuse', 'lopen', 'lopen-qid', 'special',
-            'iounit', 'read-error', 'rd-short', 'rd-slash', 'rd-cookie']
+            'iounit', 'read-error', 'rd-short', 'rd-slash', 'rd-cookie',
+            'lcreate', 'lcreate-qid', 'mkdir', 'unlink', 'rename',
+            'rename-old', 'unlink-old', 'setattr', 'statfs']
+# Rlerror answers per case: (request type, errno).
+FS_ERR = {'mkdir': (72, 13), 'unlink': (76, 13), 'rename': (74, 18),
+          'rename-old': (20, 18), 'unlink-old': (122, 13),
+          'setattr': (26, 1), 'statfs': (8, 38)}
 # object: (mode, size). u has no file type; g is a directory whose qid
 # path is f's, as if the server reused a live identity.
 FS_TREE = {1: (0o40755, 0), 2: (0o100644, 1000), 3: (0o10644, 0),
-           4: (0o644, 0), 5: (0o40755, 0)}
+           4: (0o644, 0), 5: (0o40755, 0), 6: (0o100600, 0)}
 FS_NAMES = {'f': 2, 'p': 3, 'u': 4, 'g': 5}
 FS_QPATH = {5: 2}
 FS_DATA = bytes(i % 251 for i in range(1000))
@@ -333,9 +346,14 @@ def fs_peer_answer(case, typ, body, fids, log):
             return err(ENOENT)
         fids[u32(0)] = 1
         return 105, qid(1)
-    if typ == 120:
-        fids.pop(u32(0), None)
-        return 121, b''
+    if typ in (120, 122):   # Tclunk, Tremove: the fid is gone either way
+        obj = fids.pop(u32(0), None)
+        if typ == 122 and case in FS_ERR and FS_ERR[case][0] == 122:
+            if obj != 2:
+                log.append('fs-%s: BAD Tremove of fid %d, not f'
+                           % (case, u32(0)))
+            return err(FS_ERR[case][1])
+        return typ + 1, b''
     if u32(0) not in fids:
         log.append('fs-%s: BAD %s on unknown fid %d' % (
             case, NAMES.get(typ, typ), u32(0)))
@@ -352,6 +370,10 @@ def fs_peer_answer(case, typ, body, fids, log):
             fids[u32(4)] = obj
             return 111, struct.pack('<H', 0)
         name = body[12:12 + struct.unpack('<H', body[10:12])[0]]
+        if (n == 1 and obj == 1 and name == b'n' and case == 'lcreate-qid'
+                and 6 in fids.values()):
+            fids[u32(4)] = 2   # after Rlcreate: another object, f
+            return 111, struct.pack('<H', 1) + qid(2)
         if n != 1 or obj != 1 or name.decode() not in FS_NAMES:
             return err(ENOENT)
         fids[u32(4)] = FS_NAMES[name.decode()]
@@ -374,6 +396,22 @@ def fs_peer_answer(case, typ, body, fids, log):
             lim = 60   # a short count that is not EOF
         d = FS_DATA[off:off + min(count, lim)]
         return 117, struct.pack('<I', len(d)) + d
+    if typ == 14:    # Tlcreate fid name flags mode gid -> qid iounit
+        at = 6 + struct.unpack('<H', body[4:6])[0]
+        flags, mode, gid = struct.unpack('<III', body[at:at + 12])
+        if flags & 0o300 != 0o300 or mode != 0o600 or gid != 1000:
+            log.append('fs-%s: BAD Tlcreate flags %o mode %o gid %d'
+                       % (case, flags, mode, gid))
+        if case == 'lcreate':
+            return err(EACCES)
+        fids[u32(0)] = 6
+        return 15, qid(6) + struct.pack('<I', 0)
+    if case in ('rename-old', 'unlink-old') and typ in (74, 76):
+        return err(EOPNOTSUPP)
+    if typ == 20 and obj != 2:   # Trename fid dfid name: fid must be f's
+        log.append('fs-%s: BAD Trename of fid %d, not f' % (case, u32(0)))
+    if case in FS_ERR and FS_ERR[case][0] == typ:
+        return err(FS_ERR[case][1])
     if typ == 40:    # Treaddir fid offset count
         off, count = struct.unpack('<QI', body[4:16])
         d = rreaddir(case, off)[:count]
@@ -470,6 +508,14 @@ def run_diod(args, ev, problems):
         bytes(i % 251 for i in range(1000000)))
     open(os.path.join(a, 'out'), 'wb').close()
     open(os.path.join(a, 'h1'), 'wb').write(LINKED)
+    open(os.path.join(a, 'trunc'), 'wb').write(b'some bytes\n')
+    open(os.path.join(a, 'modef'), 'wb').close()
+    os.chmod(os.path.join(a, 'modef'), 0o644)
+    open(os.path.join(a, 'victim'), 'wb').write(OLD_OBJ)
+    open(os.path.join(root, 'victim.new'), 'wb').write(NEW_OBJ)
+    sv = os.statvfs(a)
+    open(os.path.join(a, 'statfs.txt'), 'w').write('%d %d %d\n' % (
+        sv.f_bsize, sv.f_blocks, sv.f_namemax))
     os.mkdir(os.path.join(a, 'd'), 0o700)
     for i in range(DIR_ENTRIES):
         open(os.path.join(a, 'd', 'e%03d' % i), 'wb').close()
@@ -488,8 +534,13 @@ def run_diod(args, ev, problems):
                        shell=True)
         console, _ = guest(args, ev, 'diod', 'diod %s %d %d %s %s' % (
             GUEST_HOST, args.port, os.getuid(), a, b))
+        stop = threading.Event()
+        rt = threading.Thread(target=replacer, args=(a, root, stop))
+        rt.start()
         fs_console, _ = guest(args, ev, 'fs-diod', 'diod %s %d %d %s' % (
             GUEST_HOST, args.port, os.getuid(), a), 'tst-9p-fs')
+        stop.set()
+        rt.join(timeout=30)
     finally:
         # Reaped even if the guest run raises.
         d.send_signal(signal.SIGTERM)
@@ -503,10 +554,44 @@ def run_diod(args, ev, problems):
     # tst-9p-tcp wrote it; the (w) group of tst-9p-fs must not change it.
     if open(os.path.join(a, 'out'), 'rb').read() != WRITTEN:
         problems.append('diod: host file a/out does not hold the Twrite bytes')
+    problems += ['fs-diod: ' + p for p in host_changes(a)]
     # The guest clunks every fid it creates; diod lists any it still holds.
     leaks = [l for l in open(os.path.join(ev, 'diod.log'))
              if 'unclunked' in l]
     problems += ['diod: server reports ' + l.strip() for l in leaks]
+
+
+# Once the guest creates a/ready (holding a/victim open), replace a/victim
+# by a rename from outside the export and create a/replaced.
+def replacer(a, root, stop):
+    while not stop.is_set():
+        if os.path.exists(os.path.join(a, 'ready')):
+            os.rename(os.path.join(root, 'victim.new'),
+                      os.path.join(a, 'victim'))
+            open(os.path.join(a, 'replaced'), 'wb').close()
+            return
+        time.sleep(0.05)
+
+
+# What tst-9p-fs changes left in the export, seen from the host.
+def host_changes(a):
+    bad = []
+    j = lambda n: os.path.join(a, n)
+    def mode(n):
+        return os.stat(j(n)).st_mode & 0o7777 if os.path.exists(j(n)) else None
+    def data(n):
+        return open(j(n), 'rb').read() if os.path.exists(j(n)) else None
+    if mode('kept') != 0o640 or data('kept') != b'':
+        bad.append('host: kept is not an empty 0640 file')
+    if mode('modef') != 0o600:
+        bad.append('host: modef mode is %s, want 0600' % oct(mode('modef') or 0))
+    if data('trunc') != b'':
+        bad.append('host: trunc was not truncated')
+    if data('victim') != NEW_OBJ:
+        bad.append('host: victim is not the replacement')
+    bad += ['host: %s still exists' % n for n in ('moved', 'nd')
+            if os.path.lexists(j(n))]
+    return bad
 
 
 def run_peer(args, ev, problems):
@@ -635,6 +720,46 @@ def selftest():
     assert qid(5) == struct.pack('<BIQ', 0x80, 0, 2) and qid(2)[0] == 0
     assert rgetattr(5)[8:21] == qid(5)
     assert len(rreaddir('x', 0)) == 2 * 24 + 2 and rreaddir('x', 5) == b''
+    fids = {5: 1}
+    lc = struct.pack('<IH', 5, 1) + b'n' + struct.pack('<III', 0o301, 0o600,
+                                                      1000)
+    log = []
+    assert fs_peer_answer('lcreate', 14, lc, fids, log)[0] == 7 \
+        and fids == {5: 1} and log == []
+    assert fs_peer_answer('lcreate-qid', 14, lc.replace(
+        struct.pack('<I', 0o301), struct.pack('<I', 0o101)), fids,
+        log)[0] == 15 and fids == {5: 6} and log
+    fids[7] = 1
+    w = fs_peer_answer('lcreate-qid', 110,
+                       struct.pack('<IIHH', 7, 8, 1, 1) + b'n', fids, [])
+    assert w[0] == 111 and fids[8] == 2
+    assert fs_peer_answer('rename', 74, struct.pack('<I', 7), fids,
+                          [])[1] == struct.pack('<I', 18)
+    assert fs_peer_answer('mkdir', 74, struct.pack('<I', 7), fids,
+                          [])[1] == struct.pack('<I', 95)
+    fids[9] = 2
+    log = []
+    assert fs_peer_answer('rename-old', 74, struct.pack('<I', 7), fids,
+                          log)[1] == struct.pack('<I', 95)
+    assert fs_peer_answer('rename-old', 20, struct.pack('<II', 9, 7), fids,
+                          log)[1] == struct.pack('<I', 18) and log == []
+    fs_peer_answer('rename-old', 20, struct.pack('<II', 7, 7), fids, log)
+    assert log
+    log = []
+    assert fs_peer_answer('unlink-old', 76, struct.pack('<I', 7), fids,
+                          log)[1] == struct.pack('<I', 95)
+    assert fs_peer_answer('unlink-old', 122, struct.pack('<I', 9), fids,
+                          log)[1] == struct.pack('<I', 13) and 9 not in fids
+    assert log == []
+    with tempfile.TemporaryDirectory() as t:
+        for n, b in (('kept', b''), ('modef', b''), ('trunc', b''),
+                     ('victim', NEW_OBJ)):
+            open(os.path.join(t, n), 'wb').write(b)
+        os.chmod(os.path.join(t, 'kept'), 0o640)
+        os.chmod(os.path.join(t, 'modef'), 0o600)
+        assert host_changes(t) == []
+        os.mkdir(os.path.join(t, 'nd'))
+        assert host_changes(t) == ['host: nd still exists']
     print('selftest ok')
 
 
