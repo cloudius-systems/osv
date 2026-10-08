@@ -10,6 +10,18 @@ config lazy_stack_invariant
   prompt "Check lazy stack invariant"
   def_bool $(shell,grep -q ^conf_lazy_stack_invariant=1 conf/base.mk && echo y || echo n)
 
+config sched_load_balance_ms
+  prompt "Scheduler load-balancer interval (ms)"
+  int
+  default 10
+  help
+    How often each CPU's load balancer runs, in milliseconds.  It is the only
+    mechanism that spreads runnable threads across CPUs, so a smaller value
+    disperses a thread fan-out (e.g. a server spawning a worker per connection)
+    onto idle CPUs faster, at the cost of more frequent balancing passes.  10ms
+    is a good default; raise it to reduce balancing overhead on workloads that
+    do not fan out.
+
 config threads_default_kernel_stack_size
   prompt "Kernel thread default stack size"
   int
