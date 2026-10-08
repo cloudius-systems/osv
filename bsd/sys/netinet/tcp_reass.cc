@@ -52,7 +52,7 @@
 #include <bsd/sys/netinet/ip_var.h>
 #include <bsd/sys/netinet/ip_options.h>
 
-#if 0
+#ifdef INET6
 #include <bsd/sys/netinet/ip6.h>
 #include <bsd/sys/netinet6/in6_pcb.h>
 #include <bsd/sys/netinet6/ip6_var.h>
@@ -64,7 +64,7 @@
 #include <bsd/sys/netinet/tcp_seq.h>
 #include <bsd/sys/netinet/tcp_timer.h>
 #include <bsd/sys/netinet/tcp_var.h>
-#if 0
+#ifdef INET6
 #include <bsd/sys/netinet6/tcp6_var.h>
 #endif
 
