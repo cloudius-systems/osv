@@ -21,7 +21,8 @@ uint32_t get_u32(const bytes& b, size_t at)
         | uint32_t(b[at + 2]) << 16 | uint32_t(b[at + 3]) << 24;
 }
 
-// The reply bound check_reply() needs: Twalk nwname, Tread/Twrite count.
+// The reply bound check_reply() needs: Twalk nwname, Tread/Twrite/Treaddir
+// count.
 int limit_of(uint8_t type, const bytes& b, uint32_t& limit)
 {
     limit = 0;
@@ -34,6 +35,7 @@ int limit_of(uint8_t type, const bytes& b, uint32_t& limit)
         return 0;
     case Tread: // fid[4] offset[8] count[4]
     case Twrite:
+    case Treaddir:
         if (b.size() < 16) {
             return EINVAL;
         }
@@ -502,7 +504,8 @@ void session::drop_fid(uint32_t fid)
 
 int session::rpc(uint8_t type, const bytes& body, frame& reply, deadline d)
 {
-    if ((type != Tlopen && type != Tread && type != Twrite && type != Tgetattr)
+    if ((type != Tlopen && type != Tread && type != Twrite && type != Tgetattr
+         && type != Treaddir)
         || body.size() < 4) {
         return EINVAL;
     }
