@@ -177,7 +177,10 @@ bool vfs_file::put_page(void *addr, uintptr_t off, mmu::hw_ptep<0> ptep)
 
 void vfs_file::sync(off_t start, off_t end)
 {
-    pagecache::sync(this, start, end);
+    // pagecache::sync() now reports writeback errors by return value rather
+    // than throwing; the munmap/msync path (mmu::file_vma::sync) surfaces any
+    // error via its own sys_fsync() tail, so no caller depends on a throw here.
+    (void) pagecache::sync(this, start, end);
 }
 
 // Locking: VOP_CACHE will call into the filesystem, and that can trigger an

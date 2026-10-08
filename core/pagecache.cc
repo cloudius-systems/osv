@@ -957,7 +957,15 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep<0> ptep)
     return addr != zero_page;
 }
 
-void sync(vfs_file* fp, off_t start, off_t end)
+// Flush dirty MAP_SHARED pages for [start,end) back to the filesystem.
+// Returns 0 on success or the writeback errno.  Historically this threw a C++
+// error on writeback failure, but it is reached from munmap() (via
+// mmu::file_vma::sync) as well as from an explicit fsync path, and throwing on
+// the munmap path is both unnecessary (the caller converts the result to a
+// return value) and unsafe: an exception raised there can abort when the C++
+// unwinder cannot run in that context.  Report the error by return value
+// instead and let each caller decide how to surface it.
+int sync(vfs_file* fp, off_t start, off_t end)
 {
     struct stat st;
     fp->stat(&st);
@@ -989,20 +997,23 @@ void sync(vfs_file* fp, off_t start, off_t end)
     }
 
     if (to_flush.empty())
-        return;
+        return 0;
 
     mmu::flush_tlb_all();
 
     /* Phase 3: write each page back to the filesystem. */
+    int ret = 0;
     for (auto cp : to_flush) {
         auto err = cp->writeback();
         if (err) {
             // Re-mark dirty: phase 2 cleared the flag, but the data never
             // reached the filesystem, so it must not be treated as clean.
             cp->mark_dirty();
-            throw make_error(err);
+            if (!ret)
+                ret = err;
         }
     }
+    return ret;
 }
 
 /*
