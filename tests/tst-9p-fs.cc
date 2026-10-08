@@ -10,20 +10,30 @@
 //
 // No argument: option parsing, the qid map and Rgetattr decoding, with no
 // server. "diod IP PORT UID ANAME": mount cycles against diod (see
-// scripts/tests/test_9p.py), identity refusal and a bad aname. "peer IP
-// PORT": the fault peer of test_9p.py, one connection per case: an
-// Rlerror to Tattach, an Rversion for another dialect, an Rlerror to the
-// root Tgetattr. A failed mount must leave nothing mounted; the peer and
-// diod report any fid left unclunked.
+// scripts/tests/test_9p.py), identity refusal and a bad aname, then the
+// files test_9p.py prepared in the export: contents, reads across iounit
+// chunks, directory listings across several Rreaddir replies, hard link
+// identity, and the (w) group. "peer IP PORT": the fault peer of
+// test_9p.py, one connection per case: mount failures, then lookup, open,
+// read and readdir faults. A failed mount must leave nothing mounted; the
+// peer and diod report any fid left unclunked.
 
 #include <sys/mount.h>
+#include <sys/mman.h>
 #include <sys/stat.h>
+#include <dirent.h>
 #include <errno.h>
+#include <fcntl.h>
+#include <unistd.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 
+#include <algorithm>
+#include <functional>
+#include <set>
 #include <string>
+#include <vector>
 
 #include <osv/dentry.h>
 #include <osv/mount.h>
@@ -233,6 +243,222 @@ static void diod(const char* ip, const char* port, unsigned long uid,
     puts("PASS: diod refusals");
 }
 
+static std::string slurp(const std::string& path)
+{
+    std::string r;
+    int fd = open(path.c_str(), O_RDONLY);
+    if (fd < 0) {
+        return "open failed";
+    }
+    char buf[100];
+    ssize_t n;
+    while ((n = read(fd, buf, sizeof buf)) > 0) {
+        r.append(buf, n);
+    }
+    close(fd);
+    return n < 0 ? "read failed" : r;
+}
+
+static p9::session& session_of(const std::string& dir)
+{
+    struct dentry* dp;
+    require(namei(dir.c_str(), &dp) == 0, "namei " + dir);
+    auto* ms = static_cast<p9::mount_state*>(dp->d_mount->m_data);
+    drele(dp);
+    return *ms->s;
+}
+
+constexpr size_t big_size = 1000000; // byte i of big is i % 251
+constexpr unsigned dir_entries = 400; // d/e000 .. d/e399, and d/h2
+
+// Every entry of dir, by name: d_ino, the order read and the cookie after
+// it. Also saves telldir() after entry `mark` and the entry after it.
+struct listing {
+    std::vector<std::string> names;
+    std::vector<ino_t> inos;
+    long mark_pos = -1;
+    std::string after_mark;
+    int err = 0;
+};
+
+static listing list(const std::string& dir, size_t mark = 0)
+{
+    listing l;
+    DIR* d = opendir(dir.c_str());
+    if (!d) {
+        l.err = errno;
+        return l;
+    }
+    for (;;) {
+        errno = 0;
+        dirent* e = readdir(d);
+        if (!e) {
+            l.err = errno;
+            break;
+        }
+        if (mark && l.names.size() == mark + 1) {
+            l.after_mark = e->d_name;
+        }
+        l.names.push_back(e->d_name);
+        l.inos.push_back(e->d_ino);
+        if (mark && l.names.size() == mark + 1) {
+            l.mark_pos = telldir(d);
+        }
+    }
+    if (l.mark_pos >= 0) {
+        seekdir(d, l.mark_pos);
+        dirent* e = readdir(d);
+        if (!e || l.after_mark != e->d_name) {
+            l.err = EILSEQ; // seekdir did not return to the cookie
+        }
+    }
+    closedir(d);
+    return l;
+}
+
+// Each of e000..e399 and h2 exactly once; "." and ".." at most once each
+// (the server decides whether to list them); nothing else.
+static bool full_listing(const listing& l)
+{
+    std::set<std::string> want{"h2"};
+    for (unsigned i = 0; i < dir_entries; i++) {
+        char n[8];
+        snprintf(n, sizeof n, "e%03u", i);
+        want.insert(n);
+    }
+    std::set<std::string> got(l.names.begin(), l.names.end());
+    size_t dots = got.erase(".") + got.erase("..");
+    return !l.err && got == want && l.names.size() == want.size() + dots;
+}
+
+static ino_t ino_of(const std::string& path)
+{
+    struct stat st;
+    return stat(path.c_str(), &st) ? ino_t(-1) : st.st_ino;
+}
+
+// The files test_9p.py prepared in the export (hello, big, out holding what
+// tst-9p-tcp wrote, fifo, h1, d/), read through the mount.
+static void files(const char* ip, const char* port, unsigned long uid,
+                  const char* aname)
+{
+    const std::string a = "/tmp/9p-a";
+    mkdir(a.c_str(), 0755);
+    require(mount9p(a, opts(ip, port, aname, uid)) == 0, "mount for files");
+    require(slurp(a + "/hello") == "hello from the 9p export\n",
+            "hello contents");
+    require(slurp(a + "/h1") == "one object, two names\n", "h1 contents");
+    struct stat st;
+    require(stat((a + "/hello").c_str(), &st) == 0 && S_ISREG(st.st_mode)
+            && st.st_size == 25 && st.st_ino != 0, "stat hello");
+    require(stat((a + "/nothere").c_str(), &st) == -1 && errno == ENOENT,
+            "missing name is ENOENT");
+    puts("PASS: diod read files");
+
+    // 200000 bytes at msize 65536 take four Treads (iounit 65512); the
+    // read returns all of them, not just the first chunk.
+    int fd = open((a + "/big").c_str(), O_RDONLY);
+    require(fd >= 0, "open big");
+    std::vector<char> buf(300000);
+    size_t at = 0;
+    bool same = true;
+    for (;;) {
+        ssize_t n = read(fd, buf.data(), 200000);
+        require(n >= 0, "read big");
+        if (n == 0) {
+            break;
+        }
+        require(size_t(n) == std::min<size_t>(200000, big_size - at),
+                "a read spanning chunks returns every byte asked");
+        for (ssize_t i = 0; i < n; i++) {
+            same = same && buf[i] == char((at + i) % 251);
+        }
+        at += n;
+    }
+    require(same && at == big_size, "big contents");
+    require(pread(fd, buf.data(), 1000, big_size - 500) == 500
+            && buf[0] == char((big_size - 500) % 251), "pread before EOF");
+    require(pread(fd, buf.data(), 1000, big_size) == 0, "pread at EOF");
+    require(read(fd, buf.data(), 10) == 0, "read at EOF");
+    close(fd);
+    fd = open(a.c_str(), O_RDONLY);
+    require(fd >= 0 && read(fd, buf.data(), 10) == -1 && errno == EISDIR,
+            "read of a directory is EISDIR");
+    close(fd);
+    require(open((a + "/fifo").c_str(), O_RDONLY | O_NONBLOCK) == -1
+            && errno == EOPNOTSUPP, "a FIFO is not opened over 9P");
+    puts("PASS: diod read across iounit chunks");
+
+    // Hard link: one qid, one inode, under both names and in readdir.
+    ino_t i1 = ino_of(a + "/h1");
+    require(i1 != ino_t(-1) && i1 == ino_of(a + "/d/h2")
+            && i1 != ino_of(a + "/hello"), "h1 and d/h2 share st_ino");
+    require(stat((a + "/h1").c_str(), &st) == 0 && st.st_nlink == 2,
+            "h1 has two links");
+    fd = open((a + "/h1").c_str(), O_RDONLY);
+    require(fd >= 0, "open h1");
+    // With h1's vnode held, lookups of both names reuse it.
+    for (int i = 0; i < 3; i++) {
+        require(ino_of(a + "/d/h2") == i1 && ino_of(a + "/h1") == i1,
+                "lookups of a held object");
+    }
+    require(slurp(a + "/d/h2") == "one object, two names\n",
+            "d/h2 contents while h1 is open");
+    close(fd);
+    listing l = list(a + "/d");
+    require(full_listing(l), "readdir lists every entry");
+    for (size_t i = 0; i < l.names.size(); i++) {
+        if (l.names[i] == "h2") {
+            require(l.inos[i] == i1, "readdir d_ino of h2 is h1's st_ino");
+        }
+    }
+    listing r = list(a);
+    require(!r.err && std::set<std::string>(r.names.begin(), r.names.end())
+            .count("hello"), "readdir of the root");
+    for (size_t i = 0; i < r.names.size(); i++) {
+        if (r.names[i] == "." || r.names[i] == "..") {
+            require(r.inos[i] == 0, "the root's " + r.names[i]
+                    + " is the root inode");
+        }
+    }
+    puts("PASS: diod hardlink identity");
+
+    // (w): VOP_WRITE has no file, so it cannot use the open fid; until a
+    // per-open write hook exists, writes are refused and the host file
+    // keeps its bytes (test_9p.py checks out after this run).
+    fd = open((a + "/out").c_str(), O_WRONLY);
+    require(fd >= 0, "(w) open out for writing");
+    require(write(fd, "x", 1) == -1 && errno == EOPNOTSUPP,
+            "(w) write is EOPNOTSUPP");
+    require(close(fd) == 0, "(w) close");
+    puts("PASS: (w) write unsupported");
+
+    // Everything is closed: only the root's fid is left.
+    unsigned live = session_of(a).fids();
+    printf("diod: %u fids live after close\n", live);
+    require(live == 1, "only the root fid is live");
+    require(umount(a.c_str()) == 0 && unmounted(a), "unmount after files");
+
+    // msize 4096: d needs several Rreaddir replies (about 145 entries
+    // each), and telldir/seekdir carry the server's cookies.
+    require(mount9p(a, opts(ip, port, aname, uid) + ",msize=4096") == 0,
+            "mount msize 4096");
+    l = list(a + "/d", 200);
+    printf("diod: msize 4096 listing: %zu entries, err %d\n",
+           l.names.size(), l.err);
+    require(full_listing(l), "readdir across Rreaddir replies");
+    require(l.mark_pos >= 0, "telldir after entry 200");
+    require(slurp(a + "/hello") == "hello from the 9p export\n",
+            "hello at msize 4096");
+    fd = open((a + "/big").c_str(), O_RDONLY);
+    require(fd >= 0 && read(fd, buf.data(), 300000) == 300000
+            && buf[299999] == char(299999 % 251), "big at msize 4096");
+    close(fd);
+    require(session_of(a).fids() == 1, "only the root fid, msize 4096");
+    require(umount(a.c_str()) == 0 && unmounted(a), "unmount msize 4096");
+    puts("PASS: diod readdir across Rreaddir replies");
+}
+
 // The peer serves each case on its own connection, in this order.
 static void peer(const char* ip, const char* port)
 {
@@ -255,6 +481,130 @@ static void peer(const char* ip, const char* port)
         require(unmounted(a), std::string("nothing mounted: ") + c.name);
         printf("PASS: peer %s\n", c.name);
     }
+    // I/O faults, one mount each. The peer serves f (1000 bytes, byte i is
+    // i % 251), p (a FIFO), u (no file type) and g in its root.
+    const std::string f = a + "/f";
+    struct stat st;
+    char buf[2000];
+    auto io = [&](const char* name, std::function<int()> op, int want) {
+        require(mount9p(a, opts(ip, port, "/x", 1000)) == 0,
+                std::string("mount: ") + name);
+        errno = 0;
+        int rc = op();
+        printf("peer %s: returned %d\n", name, rc);
+        require(rc == want, std::string("errno: ") + name);
+        require(umount(a.c_str()) == 0 && unmounted(a),
+                std::string("unmount: ") + name);
+        printf("PASS: peer %s\n", name);
+    };
+    auto err = [](int rc) { return rc < 0 ? errno : 0; };
+    auto readall = [&](int want_n, int want_after) {
+        int fd = open(f.c_str(), O_RDONLY);
+        if (fd < 0) {
+            return errno;
+        }
+        ssize_t n = read(fd, buf, 1000);
+        bool ok = n == want_n;
+        for (int i = 0; ok && i < n; i++) {
+            ok = buf[i] == char(i % 251);
+        }
+        int after = err(read(fd, buf, 1000));
+        close(fd);
+        return ok && after == want_after ? 0 : -1;
+    };
+    auto readdir_err = [&]() {
+        DIR* d = opendir(a.c_str());
+        if (!d) {
+            return -2;
+        }
+        errno = 0;
+        int rc = readdir(d) ? 0 : errno;
+        closedir(d);
+        return rc;
+    };
+    io("lookup getattr error", [&] { return err(stat(f.c_str(), &st)); },
+       EACCES);
+    io("lookup qid mismatch", [&] { return err(stat(f.c_str(), &st)); }, EIO);
+    io("lookup unknown type", [&] {
+        return err(stat((a + "/u").c_str(), &st));
+    }, EIO);
+    // g claims f's qid path as a directory while f's vnode is held.
+    io("lookup reused identity", [&] {
+        int fd = open(f.c_str(), O_RDONLY);
+        if (fd < 0) {
+            return -1;
+        }
+        int rc = err(stat((a + "/g").c_str(), &st));
+        close(fd);
+        return rc;
+    }, EIO);
+    io("lopen error", [&] { return err(open(f.c_str(), O_RDONLY)); }, EACCES);
+    io("lopen qid mismatch", [&] { return err(open(f.c_str(), O_RDONLY)); },
+       EIO);
+    io("special file", [&] {
+        if (stat((a + "/p").c_str(), &st) || !S_ISFIFO(st.st_mode)) {
+            return -1;
+        }
+        return err(open((a + "/p").c_str(), O_RDONLY | O_NONBLOCK));
+    }, EOPNOTSUPP);
+    // Rlopen iounit 100: Treads of at most 100 (the first answered with
+    // 60 bytes, which is not EOF), then EOF.
+    io("iounit", [&] { return readall(1000, 0); }, 0);
+    // An Rlerror after the first chunk: the read returns the 100 bytes it
+    // has; the next read reports the error.
+    io("read error after progress", [&] { return readall(100, EIO); }, 0);
+    io("readdir short record", readdir_err, EIO);
+    io("readdir slash in name", readdir_err, EIO);
+    io("readdir cookie past off_t", readdir_err, EIO);
+}
+
+// Each record is placed to end on a page boundary followed by a
+// PROT_NONE page, so a parser that reads past `left` faults.
+static void dirents()
+{
+    long pg = sysconf(_SC_PAGESIZE);
+    auto* m = static_cast<uint8_t*>(mmap(nullptr, 2 * pg,
+        PROT_READ | PROT_WRITE, MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
+    require(m != MAP_FAILED && mprotect(m + pg, pg, PROT_NONE) == 0,
+            "guard page");
+    auto rec = [](uint64_t qpath, uint64_t cookie, const std::string& name,
+                  int claim = -1) {
+        p9::bytes b;
+        b.push_back(0);
+        put(b, 0, 4);
+        put(b, qpath, 8);
+        put(b, cookie, 8);
+        b.push_back(8);
+        put(b, claim < 0 ? name.size() : size_t(claim), 2);
+        b.insert(b.end(), name.begin(), name.end());
+        return b;
+    };
+    auto parse = [&](const p9::bytes& b, p9::dirent_rec& e) {
+        uint8_t* at = m + pg - b.size();
+        memcpy(at, b.data(), b.size());
+        return p9::parse_dirent(at, b.size(), e);
+    };
+    p9::dirent_rec e;
+    require(parse(rec(7, 9, "name"), e) == 0 && e.qpath == 7 && e.cookie == 9
+            && e.type == 8 && e.len == 4 && !memcmp(e.name, "name", 4)
+            && e.size == 28, "dirent fields");
+    require(parse(rec(1, INT64_MAX, std::string(255, 'x')), e) == 0
+            && e.len == 255, "255-byte name, cookie INT64_MAX");
+    // These would read past the record; the guard page faults if so.
+    require(parse(rec(1, 1, "f", 40), e) == EIO, "name runs past the reply");
+    require(parse(rec(1, 1, "", 0), e) == EIO, "empty name");
+    p9::bytes hdr = rec(1, 1, "f");
+    hdr.resize(23);
+    require(parse(hdr, e) == EIO, "record shorter than its header");
+    require(parse(rec(1, 1, std::string(256, 'x')), e) == EIO,
+            "256-byte name");
+    require(parse(rec(1, 1, "a/b"), e) == EIO, "slash in a name");
+    require(parse(rec(1, 1, std::string("a\0b", 3)), e) == EIO,
+            "NUL in a name");
+    require(parse(rec(1, uint64_t(INT64_MAX) + 1, "f"), e) == EIO,
+            "cookie above INT64_MAX");
+    munmap(m, 2 * pg);
+    puts("PASS: Rreaddir records");
 }
 
 int main(int argc, char** argv)
@@ -265,8 +615,10 @@ int main(int argc, char** argv)
         options();
         qids();
         attrs();
+        dirents();
     } else if (mode == "diod" && argc == 6) {
         diod(argv[2], argv[3], strtoul(argv[4], nullptr, 10), argv[5]);
+        files(argv[2], argv[3], strtoul(argv[4], nullptr, 10), argv[5]);
     } else if (mode == "peer" && argc == 4) {
         peer(argv[2], argv[3]);
     } else {
