@@ -199,6 +199,12 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 	lib-circular-reloc1.so lib-circular-reloc2.so tst-rwlock.so
 #	tst-f128.so \
 
+# PMU readout controls -- only built when conf_pmu=1 (the facility is
+# CONF-gated; the app links kernel symbols pmu::available()/program()/read()).
+ifeq ($(conf_pmu),1)
+tests += tst-pmu.so
+endif
+
 # The OpenZFS-userspace-API tests only build/run under conf_zfs=openzfs (they
 # dlopen libzfs.so / libzfs_core.so, which conf_zfs=bsd does not build).  They
 # are already appended to zfs-only-tests (hence to specific-fs-tests for
