@@ -114,10 +114,12 @@ public:
     int negotiate(uint32_t msize, deadline d);
     uint32_t msize();
 
-    // Send Tlopen, Tread, Twrite, Tgetattr or Treaddir (EINVAL for other
-    // types) and wait until d for the reply. The fid that starts the body
-    // must be live (EBADF otherwise, or while it is being clunked) and stays
-    // pinned until the server is done with the request. Returns 0 with the reply, the mapped errno of
+    // Send Tlopen, Tread, Twrite, Tgetattr, Treaddir, Tlcreate, Tmkdir,
+    // Tunlinkat, Trenameat, Trename, Tstatfs or Tsetattr (EINVAL for other
+    // types) and wait until d for the reply. The fid that starts the body,
+    // and Trenameat's newdirfid or Trename's dfid, must be live (EBADF
+    // otherwise, or while it is being clunked) and stay pinned until the
+    // server is done with the request. Returns 0 with the reply, the mapped errno of
     // an Rlerror (reply holds it), ENOTCONN before negotiate(), EMSGSIZE if
     // the frame exceeds msize, ETIMEDOUT if no data slot frees before d
     // (nothing sent), or the session error once failed.
@@ -170,6 +172,10 @@ public:
     // if dead() is nonzero afterwards the fid is gone. EBADF if fid is not
     // live or already being clunked, EBUSY while a request pins it.
     int clunk(uint32_t fid, deadline d);
+    // Tremove(fid): remove the object, and release the fid exactly as
+    // clunk() does whatever the reply (remove(5)); the server's errno is
+    // returned.
+    int remove(uint32_t fid, deadline d);
 
     // Cancel every request started before this call with err (nonzero),
     // as if its deadline had passed; one still waiting for a slot returns
@@ -212,7 +218,9 @@ private:
              uint32_t pin0, uint32_t pin1, outcome* out = nullptr);
     int flush(std::unique_lock<mutex>& lk, unsigned id, int err);
     int created(uint32_t fid, int rc, const outcome& o, bool partial = false);
-    int send_clunk(uint32_t fid, deadline d, bool must);
+    int release(uint32_t fid, deadline d, uint8_t type);
+    int send_clunk(uint32_t fid, deadline d, bool must,
+                   uint8_t type = Tclunk);
     int pin_live(uint32_t fid);
     void unpin(uint32_t fid);
     void drop_fid(uint32_t fid); // release now or at the last unpin

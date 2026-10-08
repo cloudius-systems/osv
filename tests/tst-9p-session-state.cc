@@ -275,6 +275,17 @@ static void replies()
             "Rreaddir count data");
     reply_bad({p9::Treaddir, t, 1}, {p9::Rreaddir, t, cat(le32(2), {1, 2})},
               "Rreaddir count above requested");
+    lengths({p9::Tlcreate, t, 0}, {p9::Rlcreate, t, bytes(17, 0)},
+            "Rlcreate qid[13] iounit[4]");
+    lengths({p9::Tmkdir, t, 0}, {p9::Rmkdir, t, bytes(13, 0)},
+            "Rmkdir qid[13]");
+    lengths({p9::Tstatfs, t, 0}, {p9::Rstatfs, t, bytes(60, 0)},
+            "Rstatfs 60 bytes");
+    lengths({p9::Tsetattr, t, 0}, {p9::Rsetattr, t, {}}, "Rsetattr empty");
+    lengths({p9::Trenameat, t, 0}, {p9::Rrenameat, t, {}}, "Rrenameat empty");
+    lengths({p9::Trename, t, 0}, {p9::Rrename, t, {}}, "Rrename empty");
+    lengths({p9::Tremove, t, 0}, {p9::Rremove, t, {}}, "Rremove empty");
+    lengths({p9::Tunlinkat, t, 0}, {p9::Runlinkat, t, {}}, "Runlinkat empty");
     lengths({p9::Tclunk, t, 0}, {p9::Rclunk, t, {}}, "Rclunk empty");
     lengths({p9::Tflush, t, 0}, {p9::Rflush, t, {}}, "Rflush empty");
     lengths({p9::Twrite, t, 100}, {p9::Rwrite, t, le32(100)}, "Rwrite count");
@@ -315,7 +326,9 @@ static void replies()
     // Rlerror ecode[4] answers any request except Tflush.
     for (uint8_t ty : {p9::Tattach, p9::Twalk, p9::Tlopen, p9::Tread,
                        p9::Twrite, p9::Tclunk, p9::Tgetattr,
-                       p9::Treaddir}) {
+                       p9::Treaddir, p9::Tlcreate, p9::Tmkdir, p9::Tstatfs,
+                       p9::Tsetattr, p9::Trenameat, p9::Tunlinkat,
+                       p9::Trename, p9::Tremove}) {
         p9::expect e{ty, t, 1};
         lengths(e, {p9::Rlerror, t, le32(ENOENT)}, "Rlerror ecode[4]", ENOENT);
         reply_ok(e, {p9::Rlerror, t, le32(ENOENT)}, ENOENT, "Rlerror errno");
@@ -409,6 +422,14 @@ static void plain()
             && rt.collect(id, e2, r2) == 0 && e2 == 0
             && r2.body.size() == 6 && rt.retired(id) == 0,
             "Treaddir admitted and answered");
+    for (uint8_t ty : {p9::Tlcreate, p9::Tmkdir, p9::Tstatfs, p9::Tsetattr,
+                       p9::Trenameat, p9::Tunlinkat, p9::Trename,
+                       p9::Tremove}) {
+        require(rt.admit(ty, 0, 1, id, tag) == 0
+                && rt.received(id, {p9::Rlerror, tag, le32(EACCES)}) == 0
+                && rt.collect(id, e2, r2) == 0 && e2 == EACCES
+                && rt.retired(id) == 0, "Part C type admitted");
+    }
     require(rt.charged() == 0 && rt.tags().data_held() == 0, "nothing leaked");
     std::puts("PASS: plain request lifecycle");
 }

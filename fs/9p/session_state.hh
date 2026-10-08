@@ -32,12 +32,16 @@ constexpr uint32_t min_msize = 4096;
 
 // Message types used by this layer (numbers from Linux include/net/9p/9p.h).
 enum : uint8_t {
-    Rlerror = 7, Tlopen = 12, Rlopen = 13, Tgetattr = 24, Rgetattr = 25,
-    Treaddir = 40, Rreaddir = 41,
+    Rlerror = 7, Tstatfs = 8, Rstatfs = 9, Tlopen = 12, Rlopen = 13,
+    Tlcreate = 14, Rlcreate = 15, Trename = 20, Rrename = 21,
+    Tgetattr = 24, Rgetattr = 25,
+    Tsetattr = 26, Rsetattr = 27, Treaddir = 40, Rreaddir = 41,
+    Tmkdir = 72, Rmkdir = 73, Trenameat = 74, Rrenameat = 75,
+    Tunlinkat = 76, Runlinkat = 77,
     Tversion = 100, Rversion = 101,
     Tattach = 104, Rattach = 105, Rerror = 107, Tflush = 108, Rflush = 109,
     Twalk = 110, Rwalk = 111, Tread = 116, Rread = 117, Twrite = 118,
-    Rwrite = 119, Tclunk = 120, Rclunk = 121,
+    Rwrite = 119, Tclunk = 120, Rclunk = 121, Tremove = 122, Rremove = 123,
 };
 
 // Validate the Rversion answering a Tversion that offered msize `offered`.
