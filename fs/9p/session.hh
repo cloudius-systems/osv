@@ -114,8 +114,8 @@ public:
     int negotiate(uint32_t msize, deadline d);
     uint32_t msize();
 
-    // Send Tlopen, Tread or Twrite (EINVAL for other types) and wait until
-    // d for the reply. The fid that starts the body must be live (EBADF
+    // Send Tlopen, Tread, Twrite or Tgetattr (EINVAL for other types) and
+    // wait until d for the reply. The fid that starts the body must be live (EBADF
     // otherwise, or while it is being clunked) and stays pinned until the
     // server is done with the request. Returns 0 with the reply, the mapped errno of
     // an Rlerror (reply holds it), ENOTCONN before negotiate(), EMSGSIZE if

@@ -32,7 +32,8 @@ constexpr uint32_t min_msize = 4096;
 
 // Message types used by this layer (numbers from Linux include/net/9p/9p.h).
 enum : uint8_t {
-    Rlerror = 7, Tlopen = 12, Rlopen = 13, Tversion = 100, Rversion = 101,
+    Rlerror = 7, Tlopen = 12, Rlopen = 13, Tgetattr = 24, Rgetattr = 25,
+    Tversion = 100, Rversion = 101,
     Tattach = 104, Rattach = 105, Rerror = 107, Tflush = 108, Rflush = 109,
     Twalk = 110, Rwalk = 111, Tread = 116, Rread = 117, Twrite = 118,
     Rwrite = 119, Tclunk = 120, Rclunk = 121,
