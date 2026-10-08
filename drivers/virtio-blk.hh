@@ -151,6 +151,11 @@ public:
     int make_request(struct bio*);
 
     void req_done();
+    /* Per-queue completion drain (candidate A: OSV_BLK_MQ_COMPLETE=1).
+     * One thread per queue drains only its own queue so the biodone/
+     * zio_interrupt/cv_broadcast completion work parallelizes across CPUs
+     * instead of funnelling through a single req_done() thread. */
+    void req_done_q(int qid);
     int64_t size();
 
     void set_readonly() {_ro = true;}
@@ -167,6 +172,8 @@ private:
     /* Wake predicate for the completion thread: true if any queue's used
      * ring has completions pending. */
     bool any_queue_not_empty();
+    /* Per-queue wake predicate for req_done_q(). */
+    bool queue_not_empty(int qid);
 
     struct blk_req {
         blk_req(struct bio* b) :bio(b) {};
