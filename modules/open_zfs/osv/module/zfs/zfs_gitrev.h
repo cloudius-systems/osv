@@ -2,6 +2,6 @@
 #ifndef _ZFS_GITREV_H
 #define _ZFS_GITREV_H
 
-#define ZFS_META_GITREV "OpenZFS 2.4.1 (OSv port)"
+#define ZFS_META_GITREV "OpenZFS 2.4.4 (OSv port)"
 
 #endif /* _ZFS_GITREV_H */
