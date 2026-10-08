@@ -1309,6 +1309,14 @@ void thread::destroy()
 // waking state.
 void thread::wake_impl(detached_state* st, unsigned allowed_initial_states_mask)
 {
+    // Defend against a null detached_state: a wait_record whose backing thread
+    // is not resolvable in the waker's address space can yield a null st here.
+    // Dereferencing it would fault, and on a preemption-disabled wake path that
+    // fault aborts the instance (assert(preemptable()) in page_fault).  Skip
+    // the wake.
+    if (!st) {
+        return;
+    }
     status old_status = status::waiting;
     trace_sched_wake(st->t);
     while (!st->st.compare_exchange_weak(old_status, status::waking)) {
