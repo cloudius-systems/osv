@@ -71,7 +71,8 @@ FS_PEER_PASS = ['peer bad aname', 'peer wrong version',
                 'peer lcreate replaced', 'peer mkdir error',
                 'peer unlink error', 'peer rename error',
                 'peer rename fallback error', 'peer unlink fallback error',
-                'peer setattr error', 'peer statfs error']
+                'peer setattr error', 'peer statfs error',
+                'peer rmdir flag']
 DIOD_WIRE = ['Tversion', 'Rversion', 'Tattach', 'Rattach', 'Twalk', 'Rwalk',
              'Tlopen', 'Rlopen', 'Tread', 'Rread', 'Twrite', 'Rwrite',
              'Tclunk', 'Rclunk', 'Tflush', 'Rflush', 'Rlerror', 'Tgetattr',
@@ -293,7 +294,7 @@ FS_CASES = ['aname', 'version', 'getattr', 'lookup-getattr', 'lookup-qid',
             'lookup-type', 'live-reuse', 'lopen', 'lopen-qid', 'special',
             'iounit', 'read-error', 'rd-short', 'rd-slash', 'rd-cookie',
             'lcreate', 'lcreate-qid', 'mkdir', 'unlink', 'rename',
-            'rename-old', 'unlink-old', 'setattr', 'statfs']
+            'rename-old', 'unlink-old', 'setattr', 'statfs', 'rmdir']
 # Rlerror answers per case: (request type, errno).
 FS_ERR = {'mkdir': (72, 13), 'unlink': (76, 13), 'rename': (74, 18),
           'rename-old': (20, 18), 'unlink-old': (122, 13),
@@ -301,8 +302,9 @@ FS_ERR = {'mkdir': (72, 13), 'unlink': (76, 13), 'rename': (74, 18),
 # object: (mode, size). u has no file type; g is a directory whose qid
 # path is f's, as if the server reused a live identity.
 FS_TREE = {1: (0o40755, 0), 2: (0o100644, 1000), 3: (0o10644, 0),
-           4: (0o644, 0), 5: (0o40755, 0), 6: (0o100600, 0)}
-FS_NAMES = {'f': 2, 'p': 3, 'u': 4, 'g': 5}
+           4: (0o644, 0), 5: (0o40755, 0), 6: (0o100600, 0),
+           7: (0o40755, 0)}
+FS_NAMES = {'f': 2, 'p': 3, 'u': 4, 'g': 5, 'e': 7}   # e: empty dir
 FS_QPATH = {5: 2}
 FS_DATA = bytes(i % 251 for i in range(1000))
 EACCES, EIO, ENOENT, EOPNOTSUPP = 13, 5, 2, 95
@@ -408,13 +410,19 @@ def fs_peer_answer(case, typ, body, fids, log):
         return 15, qid(6) + struct.pack('<I', 0)
     if case in ('rename-old', 'unlink-old') and typ in (74, 76):
         return err(EOPNOTSUPP)
+    if case == 'rmdir' and typ == 76:   # Tunlinkat dirfd name flags
+        at = 6 + struct.unpack('<H', body[4:6])[0]
+        if u32(at) != 0x200:
+            log.append('fs-rmdir: BAD Tunlinkat flags %#x, want AT_REMOVEDIR'
+                       % u32(at))
+        return err(EACCES)
     if typ == 20 and obj != 2:   # Trename fid dfid name: fid must be f's
         log.append('fs-%s: BAD Trename of fid %d, not f' % (case, u32(0)))
     if case in FS_ERR and FS_ERR[case][0] == typ:
         return err(FS_ERR[case][1])
     if typ == 40:    # Treaddir fid offset count
         off, count = struct.unpack('<QI', body[4:16])
-        d = rreaddir(case, off)[:count]
+        d = b'' if case == 'rmdir' else rreaddir(case, off)[:count]
         return 41, struct.pack('<I', len(d)) + d
     return err(EOPNOTSUPP)
 
@@ -751,6 +759,12 @@ def selftest():
     assert fs_peer_answer('unlink-old', 122, struct.pack('<I', 9), fids,
                           log)[1] == struct.pack('<I', 13) and 9 not in fids
     assert log == []
+    fids[10] = 1
+    un = lambda f: struct.pack('<IH', 10, 1) + b'e' + struct.pack('<I', f)
+    assert fs_peer_answer('rmdir', 76, un(0x200), fids, log)[0] == 7 \
+        and log == []
+    fs_peer_answer('rmdir', 76, un(0), fids, log)
+    assert log
     with tempfile.TemporaryDirectory() as t:
         for n, b in (('kept', b''), ('modef', b''), ('trunc', b''),
                      ('victim', NEW_OBJ)):
