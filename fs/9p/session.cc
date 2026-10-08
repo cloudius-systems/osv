@@ -502,7 +502,7 @@ void session::drop_fid(uint32_t fid)
 
 int session::rpc(uint8_t type, const bytes& body, frame& reply, deadline d)
 {
-    if ((type != Tlopen && type != Tread && type != Twrite)
+    if ((type != Tlopen && type != Tread && type != Twrite && type != Tgetattr)
         || body.size() < 4) {
         return EINVAL;
     }
