@@ -25,7 +25,11 @@ msix_vector::msix_vector(pci::function* dev)
 
 msix_vector::~msix_vector()
 {
-    idt.unregister_handler(_vector);
+    // _vector == 0 means IDT vector allocation failed (see the ctor); there is
+    // nothing to unregister in that case.
+    if (_vector) {
+        idt.unregister_handler(_vector);
+    }
 }
 
 pci::function* msix_vector::get_pci_function(void)
@@ -198,7 +202,16 @@ std::vector<msix_vector*> interrupt_manager::request_vectors(unsigned num_vector
     auto num = std::min(num_vectors, num_entries);
 
     for (unsigned i = 0; i < num; ++i) {
-        results.push_back(new msix_vector(_dev));
+        auto* vec = new msix_vector(_dev);
+        // A zero vector means the global IDT vector pool is exhausted.  Stop
+        // here and return however many we did get; easy_register() treats a
+        // short result as failure so the caller can fall back to fewer queues
+        // rather than crash.
+        if (!vec->get_vector()) {
+            delete vec;
+            break;
+        }
+        results.push_back(vec);
     }
 
     return (results);
