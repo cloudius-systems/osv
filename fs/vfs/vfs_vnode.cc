@@ -356,7 +356,9 @@ vn_stat(struct vnode *vp, struct stat *st)
 	st->st_mode = mode;
 	st->st_nlink = vap->va_nlink;
 	st->st_blksize = BSIZE;
-	st->st_blocks = vap->va_size / S_BLKSIZE;
+	/* Sparse files: use the filesystem's count when it gives one. */
+	st->st_blocks = (vap->va_mask & AT_NBLOCKS) ? vap->va_nblocks :
+	    vap->va_size / S_BLKSIZE;
 	st->st_uid = vap->va_uid;
 	st->st_gid = vap->va_gid;
 	st->st_dev = vap->va_fsid;
@@ -405,8 +407,9 @@ vn_setmode(struct vnode *vp, mode_t new_mode)
     vattr.va_mode = new_mode;
     vattr.va_mask = AT_MODE;
     vn_lock(vp);
-    vp->v_mode = new_mode;
     int error = VOP_SETATTR(vp, &vattr);
+    if (!error)
+        vp->v_mode = new_mode;
     vn_unlock(vp);
     return error;
 }

@@ -42,6 +42,19 @@
 // The legacy mount runs (w), (d) and (n) as controls: its cache still
 // answers held names, and MNT_NONAMECACHE passed to mount(2) is ignored.
 //
+// Metadata the filesystem is authoritative for. The fixture's getattr can
+// report a size and an AT_NBLOCKS block count that differ from the
+// vnode's cached v_size, as a server can.
+// (e) After the file grows behind the VFS, SEEK_END on the no-name-cache
+//     mount refreshes the size, and a failed refresh fails the seek; the
+//     legacy mount keeps the cached size. On every mount, an offset that
+//     overflows off_t is EINVAL, as on Linux, and a bad whence leaves no
+//     lock held.
+// (b) stat reports the filesystem's blocks when AT_NBLOCKS is valid, and
+//     derives them from the size when it is not.
+// (m) A chmod or fchmod the filesystem refuses leaves the mode vn_access()
+//     checks unchanged.
+//
 // After each case the fixture checks that no vnode reference, root dentry
 // reference or directory lock is left behind.
 
@@ -50,6 +63,7 @@
 #include <errno.h>
 #include <fcntl.h>
 #include <limits.h>
+#include <sys/uio.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -60,6 +74,7 @@
 #include <osv/file.h>
 #include <osv/mount.h>
 #include <osv/vnode.h>
+#include <osv/vnode_attr.h>
 
 extern "C" int namei(const char *path, struct dentry **dpp);
 
@@ -100,6 +115,10 @@ static int n_create_open, n_open, n_close_ctx;
 static uint64_t created_ino;
 static open_ctx *last_ctx;
 static int n_lookup, n_access, access_err;
+static int getattr_err, setattr_err;
+static bool sized, blocks_set;         // getattr overrides, for one inode
+static uint64_t sized_ino, blocks_ino, server_blocks;
+static off_t server_size;
 
 // Leak observables of the mounted fixture. Every live vnode holds m_count
 // (vget() calls vfs_busy()), every dentry holds its parent, and the root
@@ -117,6 +136,8 @@ static void reset()
     created_ino = 0;
     last_ctx = nullptr;
     n_lookup = n_access = access_err = 0;
+    getattr_err = setattr_err = 0;
+    sized = blocks_set = false;
 }
 
 // Called right after the object `name` is created in dvp. Records it and,
@@ -235,6 +256,28 @@ static int fix_access(struct vnode *vp, int flags)
     return access_err;
 }
 
+// The filesystem's answer, which may differ from the vnode's cache.
+static int fix_getattr(struct vnode *vp, struct vattr *va)
+{
+    if (getattr_err) {
+        return getattr_err;
+    }
+    int error = ram->vop_getattr(vp, va);
+    if (!error && sized && vp->v_ino == sized_ino) {
+        va->va_size = server_size;
+    }
+    if (!error && blocks_set && vp->v_ino == blocks_ino) {
+        va->va_mask |= AT_NBLOCKS;
+        va->va_nblocks = server_blocks;
+    }
+    return error;
+}
+
+static int fix_setattr(struct vnode *vp, struct vattr *va)
+{
+    return setattr_err ? setattr_err : ram->vop_setattr(vp, va);
+}
+
 // nocache: the filesystem opts into MNT_NONAMECACHE and adds vop_access.
 // mflags are passed to mount(2).
 static bool mount_fixture(const std::string& dir, bool hook,
@@ -263,6 +306,8 @@ static bool mount_fixture(const std::string& dir, bool hook,
     vn->vop_open = hook ? hook_open : legacy_open;
     vn->vop_close = fix_close;
     vn->vop_lookup = fix_lookup;
+    vn->vop_getattr = fix_getattr;
+    vn->vop_setattr = fix_setattr;
     if (hook) {
         vn->vop_create = racing_create;
         vn->vop_create_open = fix_create_open;
@@ -844,6 +889,180 @@ static void test_access(const std::string& dir, bool nc)
     check_no_leak(tag);
 }
 
+// ---- P4: metadata the filesystem is authoritative for ---------------------
+
+// Another client appends `data` to the file open as fd: the bytes land and
+// the filesystem reports the new size, but the vnode's cached size stays.
+static bool ext_grow(int fd, const char *data)
+{
+    struct file *fp;
+    if (fget(fd, &fp) != 0) {
+        return false;
+    }
+    struct vnode *vp = fp->f_dentry->d_vnode;
+    vn_lock(vp);
+    off_t old = vp->v_size;
+    struct iovec iov = {(void *)data, strlen(data)};
+    struct uio uio = {&iov, 1, old, (ssize_t)strlen(data), UIO_WRITE};
+    int error = ram->vop_write(vp, &uio, 0);
+    sized = true;
+    sized_ino = vp->v_ino;
+    server_size = old + strlen(data);
+    vp->v_size = old;
+    vn_unlock(vp);
+    fdrop(fp);
+    return !error;
+}
+
+static int file_locks(int fd)
+{
+    struct file *fp;
+    if (fget(fd, &fp) != 0) {
+        return -1;
+    }
+    int locks = fp->f_dentry->d_vnode->v_nrlocks;
+    fdrop(fp);
+    return locks;
+}
+
+static void test_seek_end(const std::string& dir, bool nc)
+{
+    const std::string tag = nc ? "(e) " : "(l) (e) ";
+    const std::string f = dir + "/e";
+    reset();
+    int fd = -1;
+    if (!put(f, "abc") || (fd = open(f.c_str(), O_RDWR)) < 0 ||
+        !ext_grow(fd, "defgh")) {
+        report(false, tag + "setup");
+        if (fd >= 0) {
+            close(fd);
+        }
+        return;
+    }
+    off_t end = lseek(fd, 0, SEEK_END);
+    if (nc) {
+        report(end == 8, tag + "SEEK_END sees the size the filesystem"
+               " reports (got " + std::to_string(end) + ")");
+        char buf[8] = {};
+        report(pread(fd, buf, sizeof(buf) - 1, 3) == 5 &&
+               !strcmp(buf, "defgh"), tag + "the added bytes are readable");
+        end = lseek(fd, -2, SEEK_END);
+        report(end == 6, tag + "SEEK_END - 2 (got " + std::to_string(end) +
+               ")");
+        getattr_err = EIO;
+        bool failed = fails_with(lseek(fd, 0, SEEK_END), EIO);
+        getattr_err = 0;
+        end = lseek(fd, 0, SEEK_CUR);
+        report(failed && end == 6, tag + "failed refresh is EIO, offset"
+               " unchanged (at " + std::to_string(end) + ")");
+        // (S3) A server size the VFS cannot trust: a negative va_size must
+        // be rejected, not fed to the SEEK_END arithmetic and on to mmap.
+        off_t saved = server_size;
+        server_size = -1;
+        bool neg = fails_with(lseek(fd, 0, SEEK_END), EIO);
+        server_size = saved;
+        end = lseek(fd, 0, SEEK_CUR);
+        report(neg && end == 6, tag + "a negative server size is EIO,"
+               " offset unchanged (at " + std::to_string(end) + ")");
+    } else {
+        report(end == 3, tag + "SEEK_END uses the cached size (got " +
+               std::to_string(end) + ")");
+    }
+    report(fails_with(lseek(fd, LLONG_MAX, SEEK_END), EINVAL),
+           tag + "SEEK_END past the largest off_t is EINVAL");
+    report(lseek(fd, 1, SEEK_SET) == 1 &&
+           fails_with(lseek(fd, LLONG_MAX, SEEK_CUR), EINVAL) &&
+           lseek(fd, 0, SEEK_CUR) == 1,
+           tag + "SEEK_CUR past the largest off_t is EINVAL, offset"
+           " unchanged");
+    report(fails_with(lseek(fd, 0, 99), EINVAL), tag + "bad whence is EINVAL");
+    int locks = file_locks(fd);
+    report(locks == 0, tag + "lseek leaves the file unlocked (locks " +
+           std::to_string(locks) + ")");
+    close(fd);
+    check_no_leak(tag);
+}
+
+static void test_blocks(const std::string& dir)
+{
+    const std::string f = dir + "/s", g = dir + "/s2";
+    const off_t size = 1 << 20;
+    reset();
+    int fd = open(f.c_str(), O_CREAT | O_RDWR, 0644);
+    int gd = open(g.c_str(), O_CREAT | O_RDWR, 0644);
+    struct file *fp;
+    if (fd < 0 || gd < 0 || ftruncate(fd, size) != 0 ||
+        ftruncate(gd, size) != 0 || fget(fd, &fp) != 0) {
+        report(false, "(b) setup");
+    } else {
+        blocks_ino = fp->f_dentry->d_vnode->v_ino;
+        fdrop(fp);
+        blocks_set = true;
+        server_blocks = 8;
+        struct stat st = {};
+        bool ok = stat(f.c_str(), &st) == 0;
+        report(ok && st.st_blocks == 8 && st.st_size == size,
+               "(b) stat reports the filesystem's blocks (got " +
+               std::to_string(st.st_blocks) + ")");
+        server_blocks = 0;
+        st = {};
+        ok = fstat(fd, &st) == 0;
+        report(ok && st.st_blocks == 0, "(b) fstat of an all-hole file: 0"
+               " blocks (got " + std::to_string(st.st_blocks) + ")");
+        st = {};
+        ok = stat(g.c_str(), &st) == 0;
+        report(ok && st.st_blocks == size / 512, "(b) without AT_NBLOCKS,"
+               " blocks derive from the size (got " +
+               std::to_string(st.st_blocks) + ")");
+    }
+    if (fd >= 0) {
+        close(fd);
+    }
+    if (gd >= 0) {
+        close(gd);
+    }
+    check_no_leak("(b)");
+}
+
+// On the legacy mount vn_access() checks the cached v_mode. The file stays
+// open so that vnode stays cached.
+static void test_chmod_failure(const std::string& dir)
+{
+    const std::string f = dir + "/m";
+    reset();
+    int fd = -1;
+    if (!put(f, "m") || (fd = open(f.c_str(), O_RDONLY)) < 0 ||
+        chmod(f.c_str(), 0644) != 0) {
+        report(false, "(m) setup");
+        if (fd >= 0) {
+            close(fd);
+        }
+        return;
+    }
+    setattr_err = EPERM;
+    bool failed = fails_with(chmod(f.c_str(), 0), EPERM);
+    report(failed && access(f.c_str(), R_OK) == 0,
+           "(m) refused chmod: read is still allowed");
+    struct file *fp;
+    if (fget(fd, &fp) == 0) {
+        mode_t m = fp->f_dentry->d_vnode->v_mode;
+        report((m & 07777) == 0644, "(m) refused chmod: v_mode unchanged"
+               " (got " + std::to_string(m & 07777) + ")");
+        fdrop(fp);
+    }
+    failed = fails_with(fchmod(fd, 0), EPERM);
+    report(failed && access(f.c_str(), W_OK) == 0,
+           "(m) refused fchmod: write is still allowed");
+    setattr_err = 0;
+    struct stat st = {};
+    report(chmod(f.c_str(), 0) == 0 && stat(f.c_str(), &st) == 0 &&
+           (st.st_mode & 07777) == 0 &&
+           fails_with(access(f.c_str(), R_OK), EACCES),
+           "(m) successful chmod publishes the mode");
+    close(fd);
+    check_no_leak("(m)");
+}
+
 int main(int argc, char **argv)
 {
     mkdir("/tmp", 0755);
@@ -866,6 +1085,8 @@ int main(int argc, char **argv)
         test_names(nc, true);
         test_access(nc, true);
         test_mount_root(nc);
+        test_seek_end(nc, true);
+        test_blocks(nc);
         unmount_fixture(nc);
     }
     // MNT_NONAMECACHE is for filesystems to set, not a mount(2) flag.
@@ -875,6 +1096,8 @@ int main(int argc, char **argv)
         test_legacy(legacy);
         test_names(legacy, false);
         test_access(legacy, false);
+        test_seek_end(legacy, false);
+        test_chmod_failure(legacy);
         unmount_fixture(legacy);
     }
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);

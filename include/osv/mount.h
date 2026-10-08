@@ -95,7 +95,8 @@ struct mount {
 
 /*
  * Set by a filesystem's vfs_mount, never taken from mount(2): every lookup
- * asks the filesystem instead of trusting the name cache.
+ * asks the filesystem instead of trusting the name cache, and SEEK_END asks
+ * it for the size instead of trusting v_size.
  */
 #define	MNT_NONAMECACHE	0x08000000	/* outside MNT_VISFLAGMASK and MS_* */
 
