@@ -94,6 +94,12 @@ struct mount {
 #define	MNT_ROOTFS	0x00004000	/* identifies the root filesystem */
 
 /*
+ * Set by a filesystem's vfs_mount, never taken from mount(2): every lookup
+ * asks the filesystem instead of trusting the name cache.
+ */
+#define	MNT_NONAMECACHE	0x08000000	/* outside MNT_VISFLAGMASK and MS_* */
+
+/*
  * Mask of flags that are visible to statfs()
  */
 #define	MNT_VISFLAGMASK	0x0000ffff

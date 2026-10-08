@@ -96,6 +96,60 @@ namei_follow_link(struct dentry *dp, char *node, char *name, char *fp, size_t mo
     name[0] = 0;
     return (0);
 }
+
+/*
+ * Whether a cached dentry for node, a path in mp, may answer a lookup.
+ * A filesystem that sets MNT_NONAMECACHE is asked every time, except for
+ * its root, which is the mount's own dentry.
+ */
+static bool
+cache_answers(struct mount *mp, const char *node)
+{
+    return !(mp->m_flags & MNT_NONAMECACHE) || !strcmp(node, "/");
+}
+
+/*
+ * Get a held dentry for node, the path in mp of name in the locked
+ * directory ddp. If the cache may not answer, the filesystem is asked. A
+ * cached dentry for the same object is reused; one for another object is
+ * unhashed, as sys_unlink() does, so later lookups miss it while its
+ * holders keep it, and replaced. *dropp is a reference for the caller to
+ * drele() once ddp is unlocked, or nullptr.
+ */
+static int
+lookup_child(struct mount *mp, struct dentry *ddp, char *name, char *node,
+             struct dentry **dpp, struct dentry **dropp)
+{
+    struct dentry *dp;
+    struct vnode *vp;
+    int error;
+
+    *dropp = nullptr;
+    dp = dentry_lookup(mp, node);
+    /* An empty name (a trailing slash) is the directory ddp itself. */
+    if (dp && (cache_answers(mp, node) || !*name)) {
+        *dpp = dp;
+        return 0;
+    }
+    /* Find a vnode in this directory. */
+    error = VOP_LOOKUP(ddp->d_vnode, name, &vp);
+    if (error) {
+        *dropp = dp;
+        return error;
+    }
+    if (dp && dp->d_vnode != vp) {
+        dentry_remove(dp);
+        *dropp = dp;
+        dp = nullptr;
+    }
+    if (!dp) {
+        dp = dentry_alloc(ddp, vp, node);
+    }
+    vput(vp);
+    *dpp = dp;
+    return dp ? 0 : ENOMEM;
+}
+
 /*
  * Convert a pathname into a pointer to a dentry
  *
@@ -111,8 +165,8 @@ namei(const char *path, struct dentry **dpp)
     std::unique_ptr<char []> fp (new char [PATH_MAX]);
     std::unique_ptr<char []> t (new char [PATH_MAX]);
     struct mount *mp;
-    struct dentry *dp, *ddp;
-    struct vnode *dvp, *vp;
+    struct dentry *dp, *ddp, *drop;
+    struct vnode *dvp;
     int error, i;
     int links_followed;
     bool need_continue;
@@ -134,7 +188,7 @@ namei(const char *path, struct dentry **dpp)
         int mountpoint_len = p - fp.get() - 1;
         strlcpy(node, "/", sizeof(node));
         strlcat(node, p, sizeof(node));
-        dp = dentry_lookup(mp, node);
+        dp = cache_answers(mp, node) ? dentry_lookup(mp, node) : nullptr;
         if (dp) {
             /* vnode is already active. */
             vfs_putroot(mp);
@@ -183,27 +237,15 @@ namei(const char *path, struct dentry **dpp)
             strlcat(node, name, sizeof(node));
             dvp = ddp->d_vnode;
             vn_lock(dvp);
-            dp = dentry_lookup(mp, node);
-            if (dp == nullptr) {
-                /* Find a vnode in this directory. */
-                error = VOP_LOOKUP(dvp, name, &vp);
-                if (error) {
-                    vn_unlock(dvp);
-                    drele(ddp);
-                    return error;
-                }
-
-                dp = dentry_alloc(ddp, vp, node);
-                vput(vp);
-
-                if (!dp) {
-                    vn_unlock(dvp);
-                    drele(ddp);
-                    return ENOMEM;
-                }
-            }
+            error = lookup_child(mp, ddp, name, node, &dp, &drop);
             vn_unlock(dvp);
+            if (drop) {
+                drele(drop);
+            }
             drele(ddp);
+            if (error) {
+                return error;
+            }
             ddp = dp;
 
             if (dp->d_vnode->v_type == VLNK) {
@@ -218,7 +260,6 @@ namei(const char *path, struct dentry **dpp)
                 p       = fp.get();
                 dp      = nullptr;
                 ddp     = nullptr;
-                vp      = nullptr;
                 dvp     = nullptr;
                 name[0] = 0;
                 node[0] = 0;
@@ -255,9 +296,8 @@ namei_last_nofollow(char *path, struct dentry *ddp, struct dentry **dpp)
     int           error;
     struct mount  *mp;
     char          *p;
-    struct dentry *dp;
+    struct dentry *dp, *drop = nullptr;
     struct vnode  *dvp;
-    struct vnode  *vp;
     std::unique_ptr<char []> node (new char[PATH_MAX]);
 
     dvp  = nullptr;
@@ -289,27 +329,13 @@ namei_last_nofollow(char *path, struct dentry *ddp, struct dentry **dpp)
 
     dvp = ddp->d_vnode;
     vn_lock(dvp);
-    dp = dentry_lookup(mp, node.get());
-    if (dp == nullptr) {
-        error = VOP_LOOKUP(dvp, name, &vp);
-        if (error != 0) {
-            goto out;
-        }
-
-        dp = dentry_alloc(ddp, vp, node.get());
-        vput(vp);
-
-        if (dp == nullptr) {
-            error = ENOMEM;
-            goto out;
-        }
+    error = lookup_child(mp, ddp, name, node.get(), &dp, &drop);
+    if (error == 0) {
+        *dpp = dp;
     }
-
-    *dpp  = dp;
-    error = 0;
-out:
-    if (dvp != nullptr) {
-        vn_unlock(dvp);
+    vn_unlock(dvp);
+    if (drop != nullptr) {
+        drele(drop);
     }
     vfs_putroot(mp);
     return (error);

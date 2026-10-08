@@ -419,6 +419,11 @@ vn_access(struct vnode *vp, int flags)
 {
 	int error = 0;
 
+	if (vp->v_op->vop_access) {
+		if ((flags & VWRITE) && (vp->v_mount->m_flags & MNT_RDONLY))
+			return EROFS;
+		return vp->v_op->vop_access(vp, flags);
+	}
 	if ((flags & VEXEC) && (vp->v_mode & 0111) == 0) {
 		error = EACCES;
 		goto out;
