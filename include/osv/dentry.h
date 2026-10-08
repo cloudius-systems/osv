@@ -24,6 +24,13 @@ struct dentry {
 	mutex_t		d_lock;
 	LIST_HEAD(, dentry) d_children;
 	LIST_ENTRY(dentry) d_children_link;
+	/*
+	 * Index of the hash chain d_link currently sits on, so a dentry can be
+	 * unlinked under the correct per-chain lock without recomputing a hash
+	 * from d_path (which may already have been replaced by a rename).
+	 * Maintained by fs/vfs/vfs_dentry.cc; see the locking note there.
+	 */
+	unsigned	d_hash_index;
 };
 
 #if defined(__cplusplus) && !defined(USE_C_INTERFACE)
