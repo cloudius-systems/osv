@@ -271,6 +271,10 @@ static void replies()
             "Rlopen qid[13] iounit[4]");
     lengths({p9::Tgetattr, t, 0}, {p9::Rgetattr, t, bytes(153, 0)},
             "Rgetattr 153 bytes");
+    lengths({p9::Treaddir, t, 100}, {p9::Rreaddir, t, cat(le32(2), {1, 2})},
+            "Rreaddir count data");
+    reply_bad({p9::Treaddir, t, 1}, {p9::Rreaddir, t, cat(le32(2), {1, 2})},
+              "Rreaddir count above requested");
     lengths({p9::Tclunk, t, 0}, {p9::Rclunk, t, {}}, "Rclunk empty");
     lengths({p9::Tflush, t, 0}, {p9::Rflush, t, {}}, "Rflush empty");
     lengths({p9::Twrite, t, 100}, {p9::Rwrite, t, le32(100)}, "Rwrite count");
@@ -310,7 +314,8 @@ static void replies()
 
     // Rlerror ecode[4] answers any request except Tflush.
     for (uint8_t ty : {p9::Tattach, p9::Twalk, p9::Tlopen, p9::Tread,
-                       p9::Twrite, p9::Tclunk, p9::Tgetattr}) {
+                       p9::Twrite, p9::Tclunk, p9::Tgetattr,
+                       p9::Treaddir}) {
         p9::expect e{ty, t, 1};
         lengths(e, {p9::Rlerror, t, le32(ENOENT)}, "Rlerror ecode[4]", ENOENT);
         reply_ok(e, {p9::Rlerror, t, le32(ENOENT)}, ENOENT, "Rlerror errno");
@@ -399,6 +404,11 @@ static void plain()
             && rt.collect(id, e2, r2) == 0 && e2 == 0
             && r2.body.size() == 153 && rt.retired(id) == 0,
             "Tgetattr admitted and answered");
+    require(rt.admit(p9::Treaddir, 8, 1, id, tag) == 0
+            && rt.received(id, {p9::Rreaddir, tag, cat(le32(2), {1, 2})}) == 0
+            && rt.collect(id, e2, r2) == 0 && e2 == 0
+            && r2.body.size() == 6 && rt.retired(id) == 0,
+            "Treaddir admitted and answered");
     require(rt.charged() == 0 && rt.tags().data_held() == 0, "nothing leaked");
     std::puts("PASS: plain request lifecycle");
 }

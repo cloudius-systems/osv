@@ -216,6 +216,7 @@ int check_reply(const expect& e, const frame& r, int& err)
         ok = b.size() == 4 && get_u32(b.data()) <= e.limit;
         break;
     case Tread:
+    case Treaddir: // count[4] data[count], like Rread
         ok = b.size() >= 4 && get_u32(b.data()) <= e.limit
             && b.size() - 4 == get_u32(b.data());
         break;
@@ -270,7 +271,7 @@ int request_table::admit(uint8_t type, uint32_t limit, size_t bytes,
     }
     switch (type) {
     case Tattach: case Twalk: case Tlopen: case Tread: case Twrite:
-    case Tclunk: case Tgetattr:
+    case Tclunk: case Tgetattr: case Treaddir:
         break;
     default:
         return EINVAL;
