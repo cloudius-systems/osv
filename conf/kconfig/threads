@@ -6,6 +6,21 @@ config lazy_stack
   prompt "Use lazy stack"
   def_bool $(shell,grep -q ^conf_lazy_stack=1 conf/base.mk && echo y || echo n)
 
+config fork
+  prompt "Include fork()/vfork() support (thread-backed, off by default)"
+  bool
+  default n
+  help
+    Enable OSv's thread-backed fork()/vfork()/execve()/waitpid() emulation.
+    A forked child is a new OSv thread that resumes at the fork() call site on
+    a private copy of the caller's stack; the child still SHARES the parent's
+    heap and global variables (OSv remains a single-address-space unikernel -
+    there is no per-child memory isolation).  See documentation/fork.md for
+    exactly what works and what does not.  It is OFF by default: with this
+    disabled, none of the fork code is compiled in and OSv behaves exactly as
+    before (fork() returns ENOSYS).  Enable it only for workloads that require
+    fork() (e.g. fork()+exec() to spawn a helper program).
+
 config lazy_stack_invariant
   prompt "Check lazy stack invariant"
   def_bool $(shell,grep -q ^conf_lazy_stack_invariant=1 conf/base.mk && echo y || echo n)

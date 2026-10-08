@@ -418,7 +418,8 @@ int kill(pid_t pid, int sig)
         // SIG_DFL signal as fatal and powers the VM off, which is wrong for
         // these three: e.g. delivering SIGCHLD to a process with no handler
         // installed must be silently ignored, not fatal.  Honor the ignore
-        // default for them instead of powering off.
+        // default for them instead of powering off.  (OSv's fork() emulation
+        // relies on this: it raises SIGCHLD to the parent when a child exits.)
         if (sig == SIGCHLD || sig == SIGURG || sig == SIGWINCH) {
             return 0;
         }
