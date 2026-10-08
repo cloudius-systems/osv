@@ -584,6 +584,9 @@ static void peer(const char* ip, const char* port)
         struct statfs sf;
         return err(statfs(a.c_str(), &sf));
     }, ENOSYS);
+    // diod takes no Tunlinkat, so only the peer sees rmdir's flag: it
+    // requires AT_REMOVEDIR and answers EACCES.
+    io("rmdir flag", [&] { return err(rmdir((a + "/e").c_str())); }, EACCES);
 }
 
 // Changes through the mount: create (Tlcreate hands its open fid to the
