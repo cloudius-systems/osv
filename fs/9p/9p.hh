@@ -84,6 +84,38 @@ struct inode_state {
     uint64_t qpath;
 };
 
+// f_data of an open file: a fid cloned from the vnode's and Tlopened, so
+// I/O uses what this open was authorized for, never a path or another
+// open's fid. For a directory, the last Rreaddir is kept with the cookie it
+// was read at and the position in it.
+struct open_state {
+    uint32_t fid;
+    uint32_t iounit; // largest Tread count to send
+    bytes dir;
+    size_t dpos = 0;
+    off_t dcookie = -1; // f_offset that dir[dpos] continues from
+};
+
+// Linux P9_IOHDRSZ: Tread/Twrite headers fit in it, so a count of
+// msize - io_header always fits a frame.
+constexpr uint32_t io_header = 24;
+
+// One Rreaddir record at p, with left bytes from p to the end of the
+// reply: qid[13] offset[8] type[1] name[s]. 0, or EIO if it runs past
+// left, the name is empty, longer than max_name or holds '/' or NUL, or
+// the cookie (offset, for the next entry) is above INT64_MAX. Reads
+// nothing at or past p + left.
+struct dirent_rec {
+    uint64_t qpath;
+    uint64_t cookie;
+    uint8_t type;
+    const char* name; // not terminated
+    size_t len;
+    size_t size; // bytes the record takes
+};
+constexpr size_t max_name = 255; // d_name holds it and a NUL
+int parse_dirent(const uint8_t* p, size_t left, dirent_rec& e);
+
 // Tgetattr(fid, basic) and decode: 0, or the RPC or decode errno.
 int getattr(mount_state& ms, uint32_t fid, attr& a);
 
