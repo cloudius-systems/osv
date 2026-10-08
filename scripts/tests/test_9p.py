@@ -5,8 +5,8 @@
 # This work is open source software, licensed under the terms of the
 # BSD license as described in the LICENSE file in the top-level directory.
 #
-# 9P over TCP interoperability for tests/tst-9p-tcp.so, run from the top of
-# an OSv tree whose image already holds /tests/tst-9p-tcp.so. That test is
+# 9P over TCP interoperability for tests/tst-9p-tcp.so and tests/tst-9p-fs.so,
+# run from the top of an OSv tree whose image already holds both. They are
 # built only with conf_fs_9p=1 conf_fs_9p_tcp=1 (conf/kconfig/fs), so pass
 # both to the kernel and tests-module builds that make the image:
 #
@@ -17,8 +17,11 @@
 #    worker per export, listening on 127.0.0.1 only, which a QEMU
 #    user-network guest reaches as 192.168.122.1. Run as the invoking
 #    (nonprivileged) user, diod lets only that uid attach.
+#    tst-9p-fs then mounts the same export through mount(2).
 # 2. peer: a fault-only peer (fragmentation and coalescing, a partial frame
 #    then EOF, a stall, a reset); it supplements diod, never replaces it.
+# 3. fs peer: mount failures (Rlerror to Tattach, a 9P2000.u Rversion, an
+#    Rlerror to the root Tgetattr); it reports any fid left unclunked.
 #
 # Both runs are captured with tcpdump on lo (the host side of QEMU's user
 # network) and with a QEMU filter-dump on the guest NIC. The 9P messages are
@@ -35,6 +38,7 @@ GUEST_HOST = '192.168.122.1'
 NAMES = {7: 'Rlerror', 12: 'Tlopen', 13: 'Rlopen', 100: 'Tversion',
          101: 'Rversion', 104: 'Tattach', 105: 'Rattach', 108: 'Tflush',
          109: 'Rflush', 110: 'Twalk', 111: 'Rwalk', 116: 'Tread',
+         24: 'Tgetattr', 25: 'Rgetattr',
          117: 'Rread', 118: 'Twrite', 119: 'Rwrite', 120: 'Tclunk',
          121: 'Rclunk'}
 HELLO = b'hello from the 9p export\n'
@@ -44,9 +48,14 @@ DIOD_PASS = ['diod negotiate', 'diod attach', 'diod ENOENT', 'diod read',
 PEER_PASS = ['peer fragmentation and coalescing',
              'peer partial frame then EOF', 'peer stall mid-frame',
              'peer reset']
+FS_DIOD_PASS = ['diod mount and unmount', 'diod mounts are distinct',
+                'diod refusals']
+FS_PEER_PASS = ['peer bad aname', 'peer wrong version',
+                'peer root getattr error']
 DIOD_WIRE = ['Tversion', 'Rversion', 'Tattach', 'Rattach', 'Twalk', 'Rwalk',
              'Tlopen', 'Rlopen', 'Tread', 'Rread', 'Twrite', 'Rwrite',
-             'Tclunk', 'Rclunk', 'Tflush', 'Rflush', 'Rlerror']
+             'Tclunk', 'Rclunk', 'Tflush', 'Rflush', 'Rlerror', 'Tgetattr',
+             'Rgetattr']
 
 
 def verdict(console, wanted):
@@ -255,6 +264,63 @@ def peer(port, log, stop):
     ls.close()
 
 
+# The mount-failure peer for tst-9p-fs, one connection per case. Fids
+# attached and never clunked are reported as 'unclunked' lines.
+FS_CASES = ['aname', 'version', 'getattr']
+
+
+def fs_peer_conn(c, case, log):
+    fids = set()
+    while True:
+        f = recv_frame(c)
+        if f is None:
+            break
+        typ, tag, body = f
+        log.append('fs-%s: got %s tag %d' % (case, NAMES.get(typ, typ), tag))
+        if typ == 100:
+            v = b'9P2000.u' if case == 'version' else b'9P2000.L'
+            c.sendall(reply(101, tag, struct.pack('<IH', min(
+                8192, struct.unpack('<I', body[:4])[0]), len(v)) + v))
+        elif typ == 104 and case == 'aname':
+            c.sendall(reply(7, tag, struct.pack('<I', 2)))     # ENOENT
+        elif typ == 104:
+            fids.add(struct.unpack('<I', body[:4])[0])
+            c.sendall(reply(105, tag, b'\x80' + bytes(12)))
+        elif typ == 24:
+            c.sendall(reply(7, tag, struct.pack('<I', 13)))    # EACCES
+        elif typ == 120:
+            fids.discard(struct.unpack('<I', body[:4])[0])
+            c.sendall(reply(121, tag, b''))
+        else:
+            c.sendall(reply(7, tag, struct.pack('<I', 95)))    # EOPNOTSUPP
+    log.append('fs-%s: client closed' % case)
+    if fids:
+        log.append('fs-%s: %d unclunked fids' % (case, len(fids)))
+
+
+def fs_peer(port, log, stop):
+    ls = socket.socket()
+    ls.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    ls.bind(('127.0.0.1', port))
+    ls.listen(1)
+    ls.settimeout(1)
+    for case in FS_CASES:
+        while not stop.is_set():
+            try:
+                c, _ = ls.accept()
+                break
+            except socket.timeout:
+                pass
+        else:
+            break
+        try:
+            fs_peer_conn(c, case, log)
+        except OSError as e:
+            log.append('fs-%s: %s' % (case, e))
+        c.close()
+    ls.close()
+
+
 # ---- orchestration ----
 
 def capture(ev, name, ports):
@@ -275,13 +341,13 @@ def stop_capture(p, pidfile):
     p.wait(timeout=30)
 
 
-def guest(args, ev, name, cmd):
+def guest(args, ev, name, cmd, test='tst-9p-tcp'):
     out = os.path.join(ev, name + '.console')
     run = ['timeout', '300', sys.executable, 'scripts/run.py', '-m', '2G',
            '-c', '2', '--arch', args.arch, '--nogdb', '--pass-args',
            '-object filter-dump,id=fd0,netdev=un0,file=%s'
            % os.path.join(ev, name + '-guest.pcap'),
-           '-e', '--rootfs=rofs /tests/tst-9p-tcp.so ' + cmd]
+           '-e', '--rootfs=rofs /tests/%s.so %s' % (test, cmd)]
     with open(os.path.join(ev, name + '.command'), 'w') as f:
         f.write(' '.join(run) + '\n')
     rc = subprocess.run(run, stdout=open(out, 'w'),
@@ -313,6 +379,8 @@ def run_diod(args, ev, problems):
                        shell=True)
         console, _ = guest(args, ev, 'diod', 'diod %s %d %d %s %s' % (
             GUEST_HOST, args.port, os.getuid(), a, b))
+        fs_console, _ = guest(args, ev, 'fs-diod', 'diod %s %d %d %s' % (
+            GUEST_HOST, args.port, os.getuid(), a), 'tst-9p-fs')
     finally:
         # Reaped even if the guest run raises.
         d.send_signal(signal.SIGTERM)
@@ -322,6 +390,7 @@ def run_diod(args, ev, problems):
             d.kill()
             d.wait()
     problems += ['diod: ' + p for p in verdict(console, DIOD_PASS)]
+    problems += ['fs-diod: ' + p for p in verdict(fs_console, FS_DIOD_PASS)]
     if open(os.path.join(a, 'out'), 'rb').read() != WRITTEN:
         problems.append('diod: host file a/out does not hold the Twrite bytes')
     # The guest clunks every fid it creates; diod lists any it still holds.
@@ -340,6 +409,27 @@ def run_peer(args, ev, problems):
     t.join(timeout=30)
     open(os.path.join(ev, 'peer.log'), 'w').write('\n'.join(log) + '\n')
     problems += ['peer: ' + p for p in verdict(console, PEER_PASS)]
+
+
+def run_fs_peer(args, ev, problems):
+    log, stop = [], threading.Event()
+    t = threading.Thread(target=fs_peer, args=(args.fs_peer_port, log, stop))
+    t.start()
+    console, _ = guest(args, ev, 'fs-peer', 'peer %s %d' % (
+        GUEST_HOST, args.fs_peer_port), 'tst-9p-fs')
+    stop.set()
+    t.join(timeout=30)
+    open(os.path.join(ev, 'fs-peer.log'), 'w').write('\n'.join(log) + '\n')
+    problems += ['fs-peer: ' + p for p in verdict(console, FS_PEER_PASS)]
+    problems += fs_peer_log(log)
+
+
+# Every case connected, was closed by the client and left no fid.
+def fs_peer_log(log):
+    bad = ['fs-peer: ' + l for l in log if 'unclunked' in l]
+    bad += ['fs-peer: case %s never closed' % c for c in FS_CASES
+            if 'fs-%s: client closed' % c not in log]
+    return bad
 
 
 def check_wire(ev, problems):
@@ -408,6 +498,10 @@ def selftest():
     assert trailing([{'flow': 'x', 'trailing_bytes': 3}], ok)
     assert trailing([], ok[:1] + ok[2:])
     assert trailing([], ok + [{'flow': cl, 'trailing_bytes': 2}])
+    closed = ['fs-%s: client closed' % c for c in FS_CASES]
+    assert fs_peer_log(closed) == []
+    assert fs_peer_log(closed[1:])
+    assert fs_peer_log(closed + ['fs-getattr: 1 unclunked fids'])
     print('selftest ok')
 
 
@@ -419,6 +513,7 @@ def main():
     ap.add_argument('--diod', default='/usr/sbin/diod')
     ap.add_argument('--port', type=int, default=5640)
     ap.add_argument('--peer-port', type=int, default=5641)
+    ap.add_argument('--fs-peer-port', type=int, default=5642)
     ap.add_argument('--selftest', action='store_true')
     ARGS = args = ap.parse_args()
     selftest()
@@ -427,10 +522,12 @@ def main():
     ev = os.path.abspath(args.evidence_dir)
     os.makedirs(ev)
     problems = []
-    cap, pidfile = capture(ev, 'host-lo', [args.port, args.peer_port])
+    cap, pidfile = capture(ev, 'host-lo', [args.port, args.peer_port,
+                                           args.fs_peer_port])
     try:
         run_diod(args, ev, problems)
         run_peer(args, ev, problems)
+        run_fs_peer(args, ev, problems)
     finally:
         stop_capture(cap, pidfile)
     check_wire(ev, problems)
