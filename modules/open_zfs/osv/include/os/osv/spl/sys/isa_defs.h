@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: CDDL-1.0
 /*
  * OSv SPL isa_defs.h - ISA definitions for OpenZFS.
- * Based on the FreeBSD version. OSv only supports x86_64.
+ * Based on the FreeBSD version. OSv supports x86_64 and aarch64.
  */
 #ifndef	_SPL_OSV_ISA_DEFS_H
 #define	_SPL_OSV_ISA_DEFS_H
@@ -27,8 +27,15 @@ extern "C" {
 #endif
 #define	_SUNOS_VTOC_16
 
+#elif defined(__aarch64__)
+
+#if !defined(_LP64)
+#error "_LP64 not defined"
+#endif
+#define	_SUNOS_VTOC_16
+
 #else
-#error "ISA not supported - OSv only supports x86_64"
+#error "ISA not supported - OSv supports x86_64 and aarch64"
 #endif
 
 #if __BYTE_ORDER == __BIG_ENDIAN
