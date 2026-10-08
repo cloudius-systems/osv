@@ -200,7 +200,16 @@ int check_reply(const expect& e, const frame& r, int& err)
         ok = b.size() == qid_size;
         break;
     case Tlopen:
+    case Tlcreate: // qid[13] iounit[4]
         ok = b.size() == qid_size + 4;
+        break;
+    case Tmkdir:
+        ok = b.size() == qid_size;
+        break;
+    case Tstatfs:
+        // type[4] bsize[4] blocks bfree bavail files ffree fsid[8 each]
+        // namelen[4]
+        ok = b.size() == 4 + 4 + 6 * 8 + 4;
         break;
     case Tgetattr:
         // valid[8] qid[13] mode uid gid[4 each], then nlink rdev size
@@ -209,7 +218,12 @@ int check_reply(const expect& e, const frame& r, int& err)
         ok = b.size() == 8 + qid_size + 3 * 4 + 15 * 8;
         break;
     case Tclunk:
+    case Tremove:
     case Tflush:
+    case Tsetattr:
+    case Trename:
+    case Trenameat:
+    case Tunlinkat:
         ok = b.empty();
         break;
     case Twrite:
@@ -271,7 +285,9 @@ int request_table::admit(uint8_t type, uint32_t limit, size_t bytes,
     }
     switch (type) {
     case Tattach: case Twalk: case Tlopen: case Tread: case Twrite:
-    case Tclunk: case Tgetattr: case Treaddir:
+    case Tclunk: case Tgetattr: case Treaddir: case Tlcreate: case Tmkdir:
+    case Tunlinkat: case Trenameat: case Trename: case Tstatfs:
+    case Tsetattr: case Tremove:
         break;
     default:
         return EINVAL;

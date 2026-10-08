@@ -504,19 +504,44 @@ void session::drop_fid(uint32_t fid)
 
 int session::rpc(uint8_t type, const bytes& body, frame& reply, deadline d)
 {
-    if ((type != Tlopen && type != Tread && type != Twrite && type != Tgetattr
-         && type != Treaddir)
-        || body.size() < 4) {
+    switch (type) {
+    case Tlopen: case Tread: case Twrite: case Tgetattr: case Treaddir:
+    case Tlcreate: case Tmkdir: case Tunlinkat: case Trenameat: case Trename:
+    case Tstatfs: case Tsetattr:
+        break;
+    default:
         return EINVAL;
     }
-    uint32_t fid = get_u32(body, 0);
+    if (body.size() < 4) {
+        return EINVAL;
+    }
+    uint32_t fid = get_u32(body, 0), fid2 = nofid;
+    if (type == Trenameat) {
+        // olddirfid[4] oldname[s] newdirfid[4] newname[s]: both pinned.
+        size_t at = body.size() < 6 ? 0 : 6 + (body[4] | body[5] << 8);
+        if (at == 0 || body.size() < at + 4) {
+            return EINVAL;
+        }
+        fid2 = get_u32(body, at);
+    } else if (type == Trename) { // fid[4] dfid[4] name[s]
+        if (body.size() < 8) {
+            return EINVAL;
+        }
+        fid2 = get_u32(body, 4);
+    }
     WITH_LOCK(_mtx) {
         drain();
         if (int rc = pin_live(fid)) {
             return rc;
         }
+        if (fid2 != nofid) {
+            if (int rc = pin_live(fid2)) {
+                unpin(fid);
+                return rc;
+            }
+        }
     }
-    return call(type, body, reply, d, fid, nofid);
+    return call(type, body, reply, d, fid, fid2);
 }
 
 int session::attach(const std::string& uname, const std::string& aname,
@@ -615,6 +640,16 @@ int session::walk(uint32_t fid, const std::vector<std::string>& names,
 
 int session::clunk(uint32_t fid, deadline d)
 {
+    return release(fid, d, Tclunk);
+}
+
+int session::remove(uint32_t fid, deadline d)
+{
+    return release(fid, d, Tremove);
+}
+
+int session::release(uint32_t fid, deadline d, uint8_t type)
+{
     WITH_LOCK(_mtx) {
         drain();
         if (_fids.get(fid) != fid_table::state::live || _closing[fid]) {
@@ -626,19 +661,19 @@ int session::clunk(uint32_t fid, deadline d)
         _closing[fid] = true;
         _pins[fid] = 2; // ours and the request's
     }
-    return send_clunk(fid, d, false);
+    return send_clunk(fid, d, false, type);
 }
 
 // Send Tclunk for fid, already closing and pinned twice (the caller's pin
 // and the request's). If must, the fid cannot be left live (nobody owns
 // it), so failing to send fails the session.
-int session::send_clunk(uint32_t fid, deadline d, bool must)
+int session::send_clunk(uint32_t fid, deadline d, bool must, uint8_t type)
 {
     bytes body;
     put_u32(body, fid);
     frame reply;
     outcome o;
-    int rc = call(Tclunk, body, reply, d, fid, nofid, &o);
+    int rc = call(type, body, reply, d, fid, nofid, &o);
     WITH_LOCK(_mtx) {
         if ((o.sent && o.flushed && !o.replied) || (!o.sent && must)) {
             // Canceled before any reply: the server may or may not have
