@@ -160,6 +160,14 @@ void drele(struct dentry *dp);
 void dentry_init(void);
 
 #ifdef DEBUG_VFS
+/*
+ * True iff the calling thread holds dentry_hash_lock.  Used by vn_lock() to
+ * assert the VFS lock order (vnode lock -> dentry_hash_lock, never reverse).
+ */
+bool vfs_dentry_hash_lock_held(void);
+#endif
+
+#ifdef DEBUG_VFS
 void	 vnode_dump(void);
 void	 mount_dump(void);
 #endif
