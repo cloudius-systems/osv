@@ -290,6 +290,12 @@ public:
 
     void enable(bool = true);
     void backtrace(bool);
+    // Attribute this tracepoint's backtrace to the interrupted code rather than
+    // to the call path that reached the tracepoint.  Only a sampling profiler
+    // wants this; for every other tracepoint the call path is the point.
+    void interrupt_backtrace(bool v) {
+        _interrupt_backtrace = v;
+    }
     
     const tracepoint_id id;
     const char* name;
@@ -307,6 +313,7 @@ public:
     static const size_t backtrace_len = 10;
 protected:
     bool _backtrace = false;
+    bool _interrupt_backtrace = false;
     bool _logging = false;
     bool active = false; // logging || !probes.empty()
     osv::rcu_ptr<std::vector<probe*>> probes_ptr;
