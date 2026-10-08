@@ -21,6 +21,8 @@
 #include <sys/mount.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
+#include <sys/statfs.h>
+#include <sys/time.h>
 #include <dirent.h>
 #include <errno.h>
 #include <fcntl.h>
@@ -556,6 +558,135 @@ static void peer(const char* ip, const char* port)
     io("readdir short record", readdir_err, EIO);
     io("readdir slash in name", readdir_err, EIO);
     io("readdir cookie past off_t", readdir_err, EIO);
+    const std::string n = a + "/n";
+    io("lcreate error", [&] {
+        return err(open(n.c_str(), O_CREAT | O_EXCL | O_WRONLY, 0600));
+    }, EACCES);
+    // Rlcreate names one object, a walk to the name another: replaced.
+    io("lcreate replaced", [&] {
+        return err(open(n.c_str(), O_CREAT | O_EXCL | O_WRONLY, 0600));
+    }, EIO);
+    io("mkdir error", [&] { return err(mkdir(n.c_str(), 0700)); }, EACCES);
+    io("unlink error", [&] { return err(unlink(f.c_str())); }, EACCES);
+    io("rename error", [&] {
+        return err(rename(f.c_str(), (a + "/f2").c_str()));
+    }, EXDEV);
+    // Trenameat unsupported (EOPNOTSUPP), then Trename of f's fid: EXDEV.
+    io("rename fallback error", [&] {
+        return err(rename(f.c_str(), (a + "/f2").c_str()));
+    }, EXDEV);
+    // Tunlinkat unsupported, then Tremove of a fid walked to f: EACCES,
+    // and the fid is released all the same.
+    io("unlink fallback error", [&] { return err(unlink(f.c_str())); },
+       EACCES);
+    io("setattr error", [&] { return err(chmod(f.c_str(), 0600)); }, EPERM);
+    io("statfs error", [&] {
+        struct statfs sf;
+        return err(statfs(a.c_str(), &sf));
+    }, ENOSYS);
+}
+
+// Changes through the mount: create (Tlcreate hands its open fid to the
+// file), O_TRUNC, mkdir, rename, rmdir, unlink, chmod, statfs, and a file
+// the host replaces while the guest holds it open (test_9p.py replaces
+// victim once ready exists, then creates replaced).
+static void changes(const char* ip, const char* port, unsigned long uid,
+                    const char* aname)
+{
+    const std::string a = "/tmp/9p-a";
+    require(mount9p(a, opts(ip, port, aname, uid)) == 0, "mount for changes");
+    struct stat st, st2;
+    char buf[100];
+    int fd = open((a + "/kept").c_str(), O_CREAT | O_EXCL | O_RDWR, 0640);
+    require(fd >= 0, "create kept");
+    require(fstat(fd, &st) == 0 && S_ISREG(st.st_mode) && st.st_size == 0
+            && (st.st_mode & 07777) == 0640, "fstat of the created file");
+    require(stat((a + "/kept").c_str(), &st2) == 0 && st2.st_ino == st.st_ino,
+            "the name is the created object");
+    require(read(fd, buf, 1) == 0, "a new file reads EOF");
+    require(write(fd, "x", 1) == -1 && errno == EOPNOTSUPP,
+            "(w) write to a created file is EOPNOTSUPP");
+    require(close(fd) == 0, "close kept");
+    require(open((a + "/kept").c_str(), O_CREAT | O_EXCL | O_RDWR, 0640) == -1
+            && errno == EEXIST, "O_EXCL on an existing name");
+    fd = open((a + "/hello").c_str(), O_CREAT | O_RDONLY, 0600);
+    require(fd >= 0 && read(fd, buf, sizeof buf) == 25,
+            "O_CREAT opens an existing file");
+    close(fd);
+    fd = open((a + "/trunc").c_str(), O_WRONLY | O_TRUNC);
+    require(fd >= 0 && fstat(fd, &st) == 0 && st.st_size == 0,
+            "O_TRUNC truncates on the server");
+    close(fd);
+    puts("PASS: diod create");
+
+    require(mkdir((a + "/nd").c_str(), 0750) == 0, "mkdir");
+    require(stat((a + "/nd").c_str(), &st) == 0 && S_ISDIR(st.st_mode),
+            "stat the new directory");
+    require(mkdir((a + "/nd").c_str(), 0750) == -1 && errno == EEXIST,
+            "mkdir of an existing name");
+    fd = open((a + "/nd/t").c_str(), O_CREAT | O_EXCL | O_WRONLY, 0600);
+    require(fd >= 0 && close(fd) == 0, "create in the new directory");
+    ino_t t = ino_of(a + "/nd/t");
+    require(rename((a + "/nd/t").c_str(), (a + "/moved").c_str()) == 0,
+            "rename across directories");
+    require(ino_of(a + "/moved") == t && stat((a + "/nd/t").c_str(), &st) == -1
+            && errno == ENOENT, "the object moved");
+    require(rmdir((a + "/d").c_str()) == -1 && errno == ENOTEMPTY,
+            "rmdir of a full directory");
+    require(rmdir((a + "/nd").c_str()) == 0 && stat((a + "/nd").c_str(), &st)
+            == -1 && errno == ENOENT, "rmdir");
+    require(unlink((a + "/moved").c_str()) == 0
+            && stat((a + "/moved").c_str(), &st) == -1 && errno == ENOENT,
+            "unlink");
+    require(unlink((a + "/moved").c_str()) == -1 && errno == ENOENT,
+            "unlink of a missing name");
+    puts("PASS: diod namespace changes");
+
+    const std::string m = a + "/modef";
+    require(chmod(m.c_str(), 0600) == 0 && stat(m.c_str(), &st) == 0
+            && (st.st_mode & 07777) == 0600, "chmod");
+    require(utimes(m.c_str(), nullptr) == -1 && errno == EOPNOTSUPP,
+            "utimes is refused, not ignored");
+    require(stat(m.c_str(), &st) == 0 && (st.st_mode & 07777) == 0600,
+            "the refused utimes left the mode");
+    puts("PASS: diod chmod");
+
+    struct statfs sf;
+    require(statfs(a.c_str(), &sf) == 0, "statfs");
+    snprintf(buf, sizeof buf, "%lu %llu %lu\n", (unsigned long)sf.f_bsize,
+             (unsigned long long)sf.f_blocks, (unsigned long)sf.f_namelen);
+    std::string host = slurp(a + "/statfs.txt");
+    printf("diod: statfs %s host %s", buf, host.c_str());
+    require(host == buf && sf.f_type == 0x01021997 && sf.f_bfree <= sf.f_blocks,
+            "statfs is the server's");
+    puts("PASS: diod statfs");
+
+    fd = open((a + "/victim").c_str(), O_RDONLY);
+    require(fd >= 0, "open victim");
+    ino_t old = ino_of(a + "/victim");
+    int r = open((a + "/ready").c_str(), O_CREAT | O_EXCL | O_WRONLY, 0600);
+    require(r >= 0 && close(r) == 0, "tell the host to replace victim");
+    bool replaced = false;
+    for (int i = 0; i < 300 && !replaced; i++) {
+        replaced = stat((a + "/replaced").c_str(), &st) == 0;
+        if (!replaced) {
+            usleep(100000);
+        }
+    }
+    require(replaced, "the host replaced victim");
+    require(pread(fd, buf, sizeof buf, 0) == 11
+            && !memcmp(buf, "old object\n", 11),
+            "the open fd still reads the old object");
+    require(slurp(a + "/victim") == "new object\n",
+            "the name opens the new object");
+    require(ino_of(a + "/victim") != old, "the name is a new inode");
+    close(fd);
+    puts("PASS: diod replacement while open");
+
+    unsigned live = session_of(a).fids();
+    printf("diod: %u fids live after changes\n", live);
+    require(live == 1, "only the root fid after changes");
+    require(umount(a.c_str()) == 0 && unmounted(a), "unmount after changes");
 }
 
 // Each record is placed to end on a page boundary followed by a
@@ -619,6 +750,7 @@ int main(int argc, char** argv)
     } else if (mode == "diod" && argc == 6) {
         diod(argv[2], argv[3], strtoul(argv[4], nullptr, 10), argv[5]);
         files(argv[2], argv[3], strtoul(argv[4], nullptr, 10), argv[5]);
+        changes(argv[2], argv[3], strtoul(argv[4], nullptr, 10), argv[5]);
     } else if (mode == "peer" && argc == 4) {
         peer(argv[2], argv[3]);
     } else {
