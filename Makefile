@@ -2231,8 +2231,14 @@ bootfs_dep := scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep) $(ou
 ifeq ($(fs),ext)
 bootfs_dep += $(out)/modules/libext/libext.so
 else
-ifeq ($(fs),zfs)
+# bootfs.manifest.skel names /usr/lib/fs/libsolaris.so unconditionally, so the
+# ZFS library is part of bootfs for every configuration, not only fs=zfs.  List
+# it, and the tools that go with it, as a prerequisite unconditionally.
 bootfs_dep += $(tools:%=$(out)/%) $(out)/libsolaris.so
+ifeq ($(fs),ramfs)
+# For fs=ramfs the bootfs manifest is the generated $(out)/usr.manifest, which
+# also lists the two mount tools.
+bootfs_dep += $(out)/tools/mount/mount-fs.so $(out)/tools/mount/umount.so
 endif
 endif
 $(out)/bootfs.bin: $(bootfs_dep)
