@@ -176,6 +176,12 @@ public:
     // clunk() does whatever the reply (remove(5)); the server's errno is
     // returned.
     int remove(uint32_t fid, deadline d);
+    // clunk() or remove() for a fid whose caller keeps no handle to it (a
+    // vnode being freed, an unwind, a file being closed): if nothing can
+    // be sent before d, the fid cannot be left live with no owner, so the
+    // session fails (EIO) and the fid is gone, as for an orphan. EBADF and
+    // EBUSY as for clunk().
+    int discard(uint32_t fid, deadline d, uint8_t type = Tclunk);
 
     // Cancel every request started before this call with err (nonzero),
     // as if its deadline had passed; one still waiting for a slot returns
@@ -218,7 +224,7 @@ private:
              uint32_t pin0, uint32_t pin1, outcome* out = nullptr);
     int flush(std::unique_lock<mutex>& lk, unsigned id, int err);
     int created(uint32_t fid, int rc, const outcome& o, bool partial = false);
-    int release(uint32_t fid, deadline d, uint8_t type);
+    int release(uint32_t fid, deadline d, uint8_t type, bool must = false);
     int send_clunk(uint32_t fid, deadline d, bool must,
                    uint8_t type = Tclunk);
     int pin_live(uint32_t fid);

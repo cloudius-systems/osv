@@ -83,7 +83,7 @@ int p9_inactive(vnode* vp)
 {
     auto* in = static_cast<p9::inode_state*>(vp->v_data);
     if (in) {
-        ms_of(vp).s->clunk(in->fid, ms_of(vp).d());
+        ms_of(vp).s->discard(in->fid, ms_of(vp).d());
         delete in;
         vp->v_data = nullptr;
     }
@@ -135,7 +135,7 @@ int p9_lookup(vnode* dvp, char* name, vnode** vpp)
         rc = EIO; // Rwalk and Rgetattr disagree on the object
     }
     if (rc) {
-        ms.s->clunk(fid, ms.d());
+        ms.s->discard(fid, ms.d());
         return rc;
     }
     return bind(dvp->v_mount, fid, a, vpp);
@@ -167,7 +167,7 @@ int bind(mount* mp, uint32_t fid, const p9::attr& a, vnode** vpp)
                 // checks (there is no vop_access).
                 vp->v_mode = a.mode;
                 vp->v_size = off_t(a.size);
-                ms.s->clunk(fid, ms.d());
+                ms.s->discard(fid, ms.d());
                 *vpp = vp;
                 return 0;
             }
@@ -188,7 +188,7 @@ int bind(mount* mp, uint32_t fid, const p9::attr& a, vnode** vpp)
             }
         }
     }
-    ms.s->clunk(fid, ms.d());
+    ms.s->discard(fid, ms.d());
     return rc;
 }
 
@@ -259,7 +259,7 @@ int p9_open(file* fp)
         rc = open_state_of(ms, fid, r.body, os);
     }
     if (rc) {
-        ms.s->clunk(fid, ms.d());
+        ms.s->discard(fid, ms.d());
         return rc;
     }
     file_setdata(fp, os);
@@ -273,7 +273,7 @@ int p9_close(vnode* vp, file* fp)
         return 0;
     }
     auto& ms = ms_of(vp);
-    int rc = ms.s->clunk(os->fid, ms.d());
+    int rc = ms.s->discard(os->fid, ms.d());
     delete os;
     file_setdata(fp, nullptr);
     return rc;
@@ -429,14 +429,14 @@ int p9_create_open(vnode* dvp, const char* name, int flags, mode_t mode,
     p9::frame r;
     rc = ms.s->rpc(p9::Tlcreate, body, r, ms.d());
     if (rc) {
-        ms.s->clunk(ofid, ms.d());
+        ms.s->discard(ofid, ms.d());
         return rc;
     }
     uint64_t qpath = le(r.body.data() + 5, 8);
     p9::open_state* os = nullptr;
     rc = open_state_of(ms, ofid, r.body, os);
     if (rc) {
-        ms.s->clunk(ofid, ms.d());
+        ms.s->discard(ofid, ms.d());
         return rc;
     }
     p9::attr a;
@@ -447,11 +447,11 @@ int p9_create_open(vnode* dvp, const char* name, int flags, mode_t mode,
                     || type_of(a.mode) != VREG)) {
             rc = EIO;
         }
-        rc = rc ? (ms.s->clunk(vfid, ms.d()), rc) : bind(dvp->v_mount, vfid,
+        rc = rc ? (ms.s->discard(vfid, ms.d()), rc) : bind(dvp->v_mount, vfid,
                                                          a, vpp);
     }
     if (rc) {
-        ms.s->clunk(ofid, ms.d());
+        ms.s->discard(ofid, ms.d());
         delete os;
         return rc;
     }
@@ -506,10 +506,10 @@ int unlinkat(vnode* dvp, vnode* vp, const char* name, uint32_t flags)
         return rc;
     }
     if (le(qid.data() + 5, 8) != in_of(vp)->qpath) {
-        ms.s->clunk(fid, ms.d());
+        ms.s->discard(fid, ms.d());
         return EBUSY;
     }
-    return ms.s->remove(fid, ms.d());
+    return ms.s->discard(fid, ms.d(), p9::Tremove);
 }
 
 // The vnode keeps its fid: open fids still reach the object.

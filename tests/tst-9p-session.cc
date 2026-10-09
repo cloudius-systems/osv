@@ -867,6 +867,47 @@ static void fids()
     std::puts("PASS: fids");
 }
 
+// discard() is a clunk or Tremove whose caller keeps no handle to the fid.
+// If it cannot be sent (no slot before its deadline), the fid has no owner
+// left, so the session fails and the fid is gone rather than leaked.
+static void discard_unsent()
+{
+    for (uint8_t type : {p9::Tclunk, p9::Tremove}) {
+        fake* f;
+        auto s = make(f);
+        f->autoreply = true;
+        uint32_t a;
+        bytes qids;
+        require(s->walk(root, {}, a, qids, p9::op_deadline()) == 0,
+                "clone to discard");
+        f->autoreply = false;
+        f->submitted = 0;
+        std::deque<caller> busy;
+        for (unsigned i = 0; i < p9::data_tags; i++) {
+            busy.emplace_back(*s, p9::Tread, read_body(root),
+                              p9::op_deadline());
+        }
+        require(f->await(p9::data_tags), "slots full for discard");
+        int rc = s->discard(a, after(milliseconds(1)), type);
+        require(rc == EIO && s->dead() == EIO,
+                "unsent discard fails the session");
+        require(s->clunk(a, after(milliseconds(1))) == EBADF,
+                "discarded fid is gone");
+        for (auto& c : busy) {
+            c.join();
+        }
+        // With a slot, discard is an ordinary clunk or Tremove.
+        fake* g;
+        auto t = make(g);
+        g->autoreply = true;
+        require(t->walk(root, {}, a, qids, p9::op_deadline()) == 0
+                && t->discard(a, p9::op_deadline(), type) == 0
+                && !t->dead() && t->fids() == 1,
+                "sent discard releases the fid");
+    }
+    std::puts("PASS: discard of an unsent clunk");
+}
+
 static void transport_failure()
 {
     fake* f;
@@ -1440,6 +1481,7 @@ int main()
     serialized_flushes();
     cancel_racing_create();
     uncertain_clunk();
+    discard_unsent();
     admission();
     ceiling();
     contract();
