@@ -160,10 +160,12 @@ ramfs_remove_node(struct ramfs_node *dnp, struct ramfs_node *np)
 {
     struct ramfs_node *prev;
 
-    if (dnp->rn_child == NULL)
-        return EBUSY;
-
     mutex_lock(&ramfs_lock);
+
+    if (dnp->rn_child == NULL) {
+        mutex_unlock(&ramfs_lock);
+        return EBUSY;
+    }
 
     /* Unlink from the directory list */
     if (dnp->rn_child == np) {
@@ -179,10 +181,12 @@ ramfs_remove_node(struct ramfs_node *dnp, struct ramfs_node *np)
         prev->rn_next = np->rn_next;
     }
 
+    /*
+     * A vnode may still point at np (a lookup that is not finished, a
+     * cached dentry, an open file); the last ramfs_inactive() frees it then.
+     */
     np->rn_removed = true;
-    if (np->rn_ref_count <= 0) {
-        ramfs_free_node(np);
-    }
+    ramfs_free_node(np);
 
     set_times_to_now(&(dnp->rn_mtime), &(dnp->rn_ctime));
 
@@ -246,22 +250,30 @@ ramfs_lookup(struct vnode *dvp, char *name, struct vnode **vpp)
         mutex_unlock(&ramfs_lock);
         return ENOENT;
     }
-    if (vget(dvp->v_mount, np->inode_no, &vp)) {
-        /* found in cache */
-        *vpp = vp;
+    /*
+     * vget() may sleep on the lock of a cached vnode, whose holder may be
+     * waiting for ramfs_lock (unlink, rename). Hold np by reference, not by
+     * ramfs_lock, across it.
+     */
+    np->rn_ref_count++;
+    mutex_unlock(&ramfs_lock);
+
+    if (vget(dvp->v_mount, np->inode_no, &vp) || !vp) {
+        /* found in cache (that vnode holds its own reference), or no memory */
+        mutex_lock(&ramfs_lock);
+        np->rn_ref_count--;
+        ramfs_free_node(np);
         mutex_unlock(&ramfs_lock);
+        if (!vp)
+            return ENOMEM;
+        *vpp = vp;
         return 0;
     }
-    if (!vp) {
-        mutex_unlock(&ramfs_lock);
-        return ENOMEM;
-    }
+    /* vp is new and locked; the reference taken above is now vp's */
     vp->v_data = np;
     vp->v_mode = ALLPERMS;
     vp->v_type = np->rn_type;
     vp->v_size = np->rn_size;
-
-    mutex_unlock(&ramfs_lock);
 
     *vpp = vp;
 
@@ -722,27 +734,32 @@ ramfs_setattr(struct vnode *vnode, struct vattr *attr) {
     return 0;
 }
 
-int ramfs_open(struct file *fp)
+/*
+ * A ramfs_node lives while it is linked in its directory or a vnode points
+ * at it. rn_ref_count counts the vnodes; an open file holds its vnode, so
+ * open and close need not count anything.
+ */
+static int
+ramfs_inactive(struct vnode *vp)
 {
-    struct vnode *vp = file_dentry(fp)->d_vnode;
     struct ramfs_node *np = (ramfs_node *) vp->v_data;
-    np->rn_ref_count++;
+
+    if (np == NULL)
+        return 0;
+    mutex_lock(&ramfs_lock);
+    vp->v_data = NULL;
+    np->rn_ref_count--;
+    ramfs_free_node(np);
+    mutex_unlock(&ramfs_lock);
     return 0;
 }
 
-int ramfs_close(struct vnode *dvp, struct file *file)
-{
-    struct vnode *vp = file_dentry(file)->d_vnode;
-    struct ramfs_node *np = (ramfs_node *) vp->v_data;
-    np->rn_ref_count--;
-    ramfs_free_node(np);
-    return 0;
-}
+#define ramfs_open      ((vnop_open_t)vop_nullop)
+#define ramfs_close     ((vnop_close_t)vop_nullop)
 
 #define ramfs_seek      ((vnop_seek_t)vop_nullop)
 #define ramfs_ioctl     ((vnop_ioctl_t)vop_einval)
 #define ramfs_fsync     ((vnop_fsync_t)vop_nullop)
-#define ramfs_inactive  ((vnop_inactive_t)vop_nullop)
 #define ramfs_link      ((vnop_link_t)vop_eperm)
 #define ramfs_fallocate ((vnop_fallocate_t)vop_nullop)
 

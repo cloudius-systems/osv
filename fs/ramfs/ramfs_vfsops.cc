@@ -71,6 +71,7 @@ ramfs_mount(struct mount *mp, const char *dev, int flags, const void *data)
     np = ramfs_allocate_node("/", VDIR);
     if (np == NULL)
         return ENOMEM;
+    np->rn_ref_count = 1;   /* the root vnode's, dropped by ramfs_inactive() */
     mp->m_root->d_vnode->v_data = np;
     return 0;
 }
