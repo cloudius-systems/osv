@@ -294,10 +294,12 @@ FS_CASES = ['aname', 'version', 'getattr', 'lookup-getattr', 'lookup-qid',
             'lookup-type', 'live-reuse', 'lopen', 'lopen-qid', 'special',
             'iounit', 'read-error', 'rd-short', 'rd-slash', 'rd-cookie',
             'lcreate', 'lcreate-qid', 'mkdir', 'unlink', 'rename',
-            'rename-old', 'unlink-old', 'setattr', 'statfs', 'rmdir']
+            'rename-old', 'unlink-old', 'unlink-replaced', 'setattr',
+            'statfs', 'rmdir']
 # Rlerror answers per case: (request type, errno).
 FS_ERR = {'mkdir': (72, 13), 'unlink': (76, 13), 'rename': (74, 18),
           'rename-old': (20, 18), 'unlink-old': (122, 13),
+          'unlink-replaced': (122, 13),
           'setattr': (26, 1), 'statfs': (8, 38)}
 # object: (mode, size). u has no file type; g is a directory whose qid
 # path is f's, as if the server reused a live identity.
@@ -308,6 +310,7 @@ FS_NAMES = {'f': 2, 'p': 3, 'u': 4, 'g': 5, 'e': 7}   # e: empty dir
 FS_QPATH = {5: 2}
 FS_DATA = bytes(i % 251 for i in range(1000))
 EACCES, EIO, ENOENT, EOPNOTSUPP = 13, 5, 2, 95
+WALKED_F = {}   # unlink-replaced: per connection, f was walked once
 
 
 def qid(obj, qpath=None):
@@ -379,6 +382,12 @@ def fs_peer_answer(case, typ, body, fids, log):
         if n != 1 or obj != 1 or name.decode() not in FS_NAMES:
             return err(ENOENT)
         fids[u32(4)] = FS_NAMES[name.decode()]
+        if case == 'unlink-replaced' and name == b'f':
+            # The first walk (the lookup) finds f; from then on the host
+            # has replaced f with a directory, which a second walk sees.
+            if WALKED_F.get(id(fids)):
+                fids[u32(4)] = 7
+            WALKED_F[id(fids)] = True
         return 111, struct.pack('<H', 1) + qid(fids[u32(4)])
     if typ == 12:    # Tlopen fid flags -> qid iounit
         if case == 'lopen' and obj != 1:
@@ -408,7 +417,8 @@ def fs_peer_answer(case, typ, body, fids, log):
             return err(EACCES)
         fids[u32(0)] = 6
         return 15, qid(6) + struct.pack('<I', 0)
-    if case in ('rename-old', 'unlink-old') and typ in (74, 76):
+    if case in ('rename-old', 'unlink-old', 'unlink-replaced') \
+            and typ in (74, 76):
         return err(EOPNOTSUPP)
     if case == 'rmdir' and typ == 76:   # Tunlinkat dirfd name flags
         at = 6 + struct.unpack('<H', body[4:6])[0]
@@ -759,6 +769,20 @@ def selftest():
     assert fs_peer_answer('unlink-old', 122, struct.pack('<I', 9), fids,
                           log)[1] == struct.pack('<I', 13) and 9 not in fids
     assert log == []
+    # unlink-replaced: the lookup's walk names f, a second walk the
+    # directory e (7); Tremove must name f (a clone of the vnode's fid).
+    fr, log = {11: 1}, []
+    wf = lambda nf: struct.pack('<IIHH', 11, nf, 1, 1) + b'f'
+    fs_peer_answer('unlink-replaced', 110, wf(12), fr, log)
+    fs_peer_answer('unlink-replaced', 110, wf(13), fr, log)
+    assert fr[12] == 2 and fr[13] == 7
+    fs_peer_answer('unlink-replaced', 110, struct.pack('<IIH', 12, 14, 0),
+                   fr, log)
+    assert fs_peer_answer('unlink-replaced', 122, struct.pack('<I', 14), fr,
+                          log)[1] == struct.pack('<I', 13) and log == []
+    fs_peer_answer('unlink-replaced', 122, struct.pack('<I', 13), fr, log)
+    assert log
+    log = []
     fids[10] = 1
     un = lambda f: struct.pack('<IH', 10, 1) + b'e' + struct.pack('<I', f)
     assert fs_peer_answer('rmdir', 76, un(0x200), fids, log)[0] == 7 \
