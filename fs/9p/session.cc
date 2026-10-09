@@ -648,7 +648,12 @@ int session::remove(uint32_t fid, deadline d)
     return release(fid, d, Tremove);
 }
 
-int session::release(uint32_t fid, deadline d, uint8_t type)
+int session::discard(uint32_t fid, deadline d, uint8_t type)
+{
+    return release(fid, d, type == Tremove ? Tremove : Tclunk, true);
+}
+
+int session::release(uint32_t fid, deadline d, uint8_t type, bool must)
 {
     WITH_LOCK(_mtx) {
         drain();
@@ -661,7 +666,7 @@ int session::release(uint32_t fid, deadline d, uint8_t type)
         _closing[fid] = true;
         _pins[fid] = 2; // ours and the request's
     }
-    return send_clunk(fid, d, false, type);
+    return send_clunk(fid, d, must, type);
 }
 
 // Send Tclunk for fid, already closing and pinned twice (the caller's pin
