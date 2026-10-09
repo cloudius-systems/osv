@@ -163,6 +163,10 @@ int bind(mount* mp, uint32_t fid, const p9::attr& a, vnode** vpp)
                 vput(vp);
                 rc = EIO; // the server reused a live identity
             } else {
+                // vp is locked: take the fresh attributes, which vn_access()
+                // checks (there is no vop_access).
+                vp->v_mode = a.mode;
+                vp->v_size = off_t(a.size);
                 ms.s->clunk(fid, ms.d());
                 *vpp = vp;
                 return 0;
