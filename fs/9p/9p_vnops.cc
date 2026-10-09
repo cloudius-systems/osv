@@ -472,7 +472,7 @@ int p9_mkdir(vnode* dvp, char* name, mode_t mode)
 
 constexpr uint32_t at_removedir = 0x200; // Linux AT_REMOVEDIR
 
-int unlinkat(vnode* dvp, const char* name, uint32_t flags)
+int unlinkat(vnode* dvp, vnode* vp, const char* name, uint32_t flags)
 {
     if (bad_name(name)) {
         return EINVAL;
@@ -488,24 +488,35 @@ int unlinkat(vnode* dvp, const char* name, uint32_t flags)
         return rc;
     }
     // A server without Tunlinkat (diod 1.0.24) gets Tremove of a fid
-    // walked to the name, as Linux v9fs does; the fid is gone either way.
+    // walked to the name, and only if that names the object the VFS
+    // checked (type, permission): if the host replaced the name since the
+    // lookup, Tremove would remove another object, a directory for unlink
+    // or a file for rmdir, so refuse with EBUSY. The vnode's own fid will
+    // not do: a vnode is per object, and with hard links its fid is the
+    // first name walked, which a path-based server removes instead. A
+    // clunk releases the fid if it is not sent; Tremove releases it either
+    // way.
     uint32_t fid;
     p9::bytes qid;
     if ((rc = ms.s->walk(in_of(dvp)->fid, {name}, fid, qid, ms.d()))) {
         return rc;
     }
+    if (le(qid.data() + 5, 8) != in_of(vp)->qpath) {
+        ms.s->clunk(fid, ms.d());
+        return EBUSY;
+    }
     return ms.s->remove(fid, ms.d());
 }
 
 // The vnode keeps its fid: open fids still reach the object.
-int p9_remove(vnode* dvp, vnode*, char* name)
+int p9_remove(vnode* dvp, vnode* vp, char* name)
 {
-    return unlinkat(dvp, name, 0);
+    return unlinkat(dvp, vp, name, 0);
 }
 
-int p9_rmdir(vnode* dvp, vnode*, char* name)
+int p9_rmdir(vnode* dvp, vnode* vp, char* name)
 {
-    return unlinkat(dvp, name, at_removedir);
+    return unlinkat(dvp, vp, name, at_removedir);
 }
 
 // Trenameat; a server without it (diod 1.0.24 answers EOPNOTSUPP) gets
