@@ -27,10 +27,11 @@ struct mount;
 // vop_inactive (the root vnode owns the attach fid).
 namespace p9 {
 
-// mount(2) data: "trans=tcp,addr=A.B.C.D,port=N,aname=PATH,uid=N" plus
-// optional "gid=N,msize=N,timeout=SECONDS,cache=none". Every key at most
+// mount(2) data: "trans=tcp,addr=A.B.C.D,port=N,aname=PATH,uid=N,gid=N"
+// plus optional "msize=N,timeout=SECONDS,cache=none". Every key at most
 // once, no unknown keys, no empty values. msize and timeout may only lower
-// the approved maxima (65536 bytes, 30 s). gid defaults to uid.
+// the approved maxima (65536 bytes, 30 s). gid is required: it is the gid
+// new files and directories are created with.
 struct options {
     std::string addr;
     uint16_t port = 0;
@@ -74,7 +75,7 @@ struct mount_state {
     std::unique_ptr<session> s;
     qid_map qids;
     std::chrono::seconds timeout;
-    uint32_t gid; // create gid, used once creation lands
+    uint32_t gid; // the gid of new files and directories
     uint64_t fsid;
     deadline d() const { return osv::clock::uptime::now() + timeout; }
 };
