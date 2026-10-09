@@ -283,7 +283,7 @@ int mount(struct mount* mp, const char* dev, int flags, const void* data)
         rc = root ? 0 : ENOMEM;
     }
     if (rc) {
-        ms->s->clunk(fid, ms->d());
+        ms->s->discard(fid, ms->d());
         return rc;
     }
     uint32_t n = ++mounts;
