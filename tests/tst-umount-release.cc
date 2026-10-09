@@ -11,6 +11,16 @@
 //
 // (c) ramfs, the control: its unmount already releases them.
 // (r) rofs, on a private in-memory block device holding a minimal image.
+// (i) bsd ZFS: an idle unforced unmount succeeds and releases both.
+// (h) bsd ZFS: the same with one extra hold on the mount, which zfs_umount()
+//     allows.
+// (z) bsd ZFS: an unforced unmount refused with EBUSY, then a real one.
+// (d) bsd ZFS: the same with only the mount root directory open.
+// (v) bsd ZFS: the same with a bare reference on the root vnode.
+// (w) bsd ZFS: the same with a bare reference on a file vnode.
+// The zfs cases run only when the root filesystem is bsd ZFS; they mount the
+// existing osv/zfs dataset, which the image builder creates and the loader
+// leaves unmounted.
 //
 // A case that observes a leaked or double-dropped reference reports FAIL and
 // then leaks what it holds rather than touch freed state again.
@@ -18,6 +28,7 @@
 #include <sys/mount.h>
 #include <sys/stat.h>
 #include <errno.h>
+#include <fcntl.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
@@ -85,7 +96,8 @@ static bool root_hashed(struct mount *mp, struct dentry *root)
 // Mount, check the covered dentry gained exactly the mount's reference,
 // unmount, and check that both references are gone.
 static void mount_cycle(const std::string& what, const std::string& dir,
-                        const char *dev, const char *fs, unsigned long flags)
+                        const char *dev, const char *fs, unsigned long flags,
+                        void (*after_mount)(struct mount *) = nullptr)
 {
     if (mkdir(dir.c_str(), 0755) != 0 && errno != EEXIST) {
         report(false, what + ": mkdir " + dir + ": " + strerror(errno));
@@ -109,6 +121,9 @@ static void mount_cycle(const std::string& what, const std::string& dir,
     report(c1 == c0 + 1, what + ": mount holds the covered dentry (" +
            n2s(c0) + " -> " + n2s(c1) + ")");
     report(r1 == 1, what + ": mount holds its root dentry (" + n2s(r1) + ")");
+    if (after_mount) {
+        after_mount(mp);
+    }
     if (umount(dir.c_str()) != 0) {
         report(false, what + ": unmount: " + strerror(errno));
         drele(cov);
@@ -179,6 +194,266 @@ static void test_rofs()
     // Not destroyed: on a failed case the mount may still be listed.
 }
 
+// The zfs cases expect bsd ZFS's unmount, which refuses a busy mount.
+// OpenZFS's does not (it relies on the VFS for that), so they are skipped.
+static bool root_is_zfs()
+{
+#ifdef CONF_ZFS_OPENZFS
+    return false;
+#endif
+    for (auto& m : osv::current_mounts()) {
+        if (m.path == "/" && m.type == "zfs") {
+            return true;
+        }
+    }
+    return false;
+}
+
+static void test_zfs_idle()
+{
+    if (!root_is_zfs()) {
+        printf("SKIP: (i) zfs: root filesystem is not bsd zfs\n");
+        return;
+    }
+    mount_cycle("(i) zfs idle", "/tmp/umrel-i", "osv/zfs", "zfs", 0);
+}
+
+// (h) One extra hold on the mount itself (vfs_busy(), as zfs_ioctl.c's
+// VFS_HOLD() takes): zfs_umount() allows one ("off by 1"), so this idle
+// unmount succeeds, as it did when the check ran after the release.
+static void test_zfs_vfs_hold()
+{
+    if (!root_is_zfs()) {
+        printf("SKIP: (h) zfs: root filesystem is not bsd zfs\n");
+        return;
+    }
+    // The mount is freed by the unmount; the hold is never dropped.
+    mount_cycle("(h) zfs one vfs hold", "/tmp/umrel-h", "osv/zfs", "zfs", 0,
+                [](struct mount *mp) { vfs_busy(mp); });
+}
+
+static void test_zfs()
+{
+    const std::string what = "(z) zfs", dir = "/tmp/umrel-z";
+    const char *ds = "osv/zfs";
+    if (!root_is_zfs()) {
+        printf("SKIP: %s: root filesystem is not bsd zfs\n", what.c_str());
+        return;
+    }
+    if (mkdir(dir.c_str(), 0755) != 0 && errno != EEXIST) {
+        report(false, what + ": mkdir " + dir + ": " + strerror(errno));
+        return;
+    }
+    struct dentry *cov;
+    if (namei(dir.c_str(), &cov) != 0) {
+        report(false, what + ": namei " + dir);
+        return;
+    }
+    int c0 = cov->d_refcnt;
+    if (mount(ds, dir.c_str(), "zfs", 0, nullptr) != 0) {
+        report(false, what + ": mount " + ds + ": " + strerror(errno));
+        drele(cov);
+        return;
+    }
+    int c1 = cov->d_refcnt;
+    report(c1 == c0 + 1, what + ": mount holds the covered dentry (" +
+           n2s(c0) + " -> " + n2s(c1) + ")");
+
+    const std::string f = dir + "/f";
+    int fd = open(f.c_str(), O_CREAT | O_TRUNC | O_RDWR, 0644);
+    if (fd < 0 || write(fd, "abc", 3) != 3) {
+        report(false, what + ": create " + f + ": " + strerror(errno));
+        return;
+    }
+    struct mount *mp = nullptr;
+    int r0 = root_refs(dir, &mp);
+    struct dentry *root = mp ? mp->m_root : nullptr;
+
+    int r = umount(dir.c_str());
+    int err = errno;
+    if (r == 0) {
+        // The mount is gone under the open file: leak fd and cov.
+        report(false, what + ": unforced unmount returned 0 with a file open");
+        return;
+    }
+    report(err == EBUSY, what + ": unforced unmount with a file open fails "
+           "with EBUSY (got " + strerror(err) + ")");
+    int r1 = root_refs(dir, nullptr);
+    int c2 = cov->d_refcnt;
+    bool kept = report(r1 == r0, what + ": refused unmount keeps the root "
+                       "dentry reference (" + n2s(r0) + " -> " + n2s(r1) + ")");
+    kept = report(c2 == c1, what + ": refused unmount keeps the covered "
+                  "dentry reference (" + n2s(c1) + " -> " + n2s(c2) + ")")
+           && kept;
+    if (!kept) {
+        // A real unmount would release the dropped references a second
+        // time: leave the mount, fd and cov as they are.
+        return;
+    }
+
+    char buf[8] = {};
+    struct stat st;
+    const std::string g = dir + "/g";
+    int gfd = open(g.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0644);
+    bool ok = pwrite(fd, "xyz", 3, 3) == 3 && pread(fd, buf, 6, 0) == 6 &&
+              memcmp(buf, "abcxyz", 6) == 0 && gfd >= 0 &&
+              write(gfd, "more", 4) == 4 && close(gfd) == 0 &&
+              stat(g.c_str(), &st) == 0 && st.st_size == 4;
+    report(ok, what + ": mount usable after EBUSY");
+    unlink(g.c_str());
+    unlink(f.c_str());
+    report(close(fd) == 0, what + ": close");
+
+    r = umount(dir.c_str());
+    if (!report(r == 0, what + ": unmount after close" +
+                (r ? std::string(" (got ") + strerror(errno) + ")" : ""))) {
+        return;
+    }
+    int c3 = cov->d_refcnt;
+    ok = report(c3 == c0, what + ": unmount releases the covered dentry (" +
+                n2s(c0) + " -> " + n2s(c3) + ")");
+    ok = report(!root_hashed(mp, root), what + ": unmount releases its root dentry")
+         && ok;
+    drele(cov);
+    if (ok) {
+        rmdir(dir.c_str());
+    }
+}
+
+// Mount osv/zfs at dir, hold what hold() takes, and expect an unforced
+// unmount to be refused with both dentry references intact; then drop the
+// hold and expect a clean unmount. hold() returns false on setup failure.
+static void busy_cycle(const std::string& what, const std::string& dir,
+                       bool (*hold)(const std::string& dir),
+                       void (*unhold)())
+{
+    if (!root_is_zfs()) {
+        printf("SKIP: %s: root filesystem is not bsd zfs\n", what.c_str());
+        return;
+    }
+    if (mkdir(dir.c_str(), 0755) != 0 && errno != EEXIST) {
+        report(false, what + ": mkdir " + dir + ": " + strerror(errno));
+        return;
+    }
+    struct dentry *cov;
+    if (namei(dir.c_str(), &cov) != 0) {
+        report(false, what + ": namei " + dir);
+        return;
+    }
+    int c0 = cov->d_refcnt;
+    if (mount("osv/zfs", dir.c_str(), "zfs", 0, nullptr) != 0) {
+        report(false, what + ": mount: " + strerror(errno));
+        drele(cov);
+        return;
+    }
+    int c1 = cov->d_refcnt;
+    if (!report(hold(dir), what + ": hold")) {
+        return;
+    }
+    struct mount *mp = nullptr;
+    int r0 = root_refs(dir, &mp);
+    struct dentry *root = mp ? mp->m_root : nullptr;
+    int r = umount(dir.c_str());
+    int err = errno;
+    if (r == 0) {
+        // The mount is gone under the hold: leak it and cov.
+        report(false, what + ": unforced unmount returned 0 while held");
+        return;
+    }
+    report(err == EBUSY, what + ": unforced unmount while held fails with "
+           "EBUSY (got " + strerror(err) + ")");
+    // The covered dentry belongs to the parent mount, so it is safe to read
+    // even if the refused unmount dropped (and freed) the root dentry.
+    if (!report(cov->d_refcnt == c1, what + ": refused unmount keeps the "
+                "covered dentry reference (" + n2s(c1) + " -> " +
+                n2s(cov->d_refcnt) + ")")) {
+        return;
+    }
+    int r1 = root_refs(dir, nullptr);
+    if (!report(r1 == r0, what + ": refused unmount keeps the root dentry "
+                "reference (" + n2s(r0) + " -> " + n2s(r1) + ")")) {
+        return;
+    }
+    unhold();
+    unlink((dir + "/f").c_str());
+    r = umount(dir.c_str());
+    if (!report(r == 0, what + ": unmount after release" +
+                (r ? std::string(" (got ") + strerror(errno) + ")" : ""))) {
+        return;
+    }
+    bool ok = report(cov->d_refcnt == c0, what + ": unmount releases the "
+                     "covered dentry (" + n2s(c0) + " -> " +
+                     n2s(cov->d_refcnt) + ")");
+    ok = report(!root_hashed(mp, root), what + ": unmount releases its root dentry")
+         && ok;
+    drele(cov);
+    if (ok) {
+        rmdir(dir.c_str());
+    }
+}
+
+// (d) The mount root directory is open: the root dentry has a second
+// reference, the root vnode only the root dentry's.
+static int held_fd = -1;
+static bool hold_root_dir(const std::string& dir)
+{
+    held_fd = open(dir.c_str(), O_RDONLY | O_DIRECTORY);
+    return held_fd >= 0;
+}
+static void unhold_fd()
+{
+    close(held_fd);
+}
+
+// (v) A bare reference on the root vnode, as the page cache takes on a file
+// it caches: the root dentry has only the mount's reference.
+// (w) The same on a file vnode, with no dentry left for the file.
+static struct vnode *held_vp;
+static bool hold_vnode(const std::string& path)
+{
+    struct dentry *dp;
+    if (namei(path.c_str(), &dp) != 0) {
+        return false;
+    }
+    held_vp = dp->d_vnode;
+    vref(held_vp);
+    drele(dp);
+    return true;
+}
+static bool hold_root_vnode(const std::string& dir)
+{
+    return hold_vnode(dir) && held_vp->v_refcnt == 2;
+}
+static bool hold_file_vnode(const std::string& dir)
+{
+    const std::string f = dir + "/f";
+    int fd = open(f.c_str(), O_CREAT | O_TRUNC | O_WRONLY, 0644);
+    return fd >= 0 && close(fd) == 0 && hold_vnode(f) &&
+           held_vp->v_refcnt == 1;
+}
+static void unhold_vnode()
+{
+    vrele(held_vp);
+}
+
+static void test_zfs_root_dir_open()
+{
+    busy_cycle("(d) zfs root directory open", "/tmp/umrel-d",
+               hold_root_dir, unhold_fd);
+}
+
+static void test_zfs_root_vnode()
+{
+    busy_cycle("(v) zfs root vnode held", "/tmp/umrel-v",
+               hold_root_vnode, unhold_vnode);
+}
+
+static void test_zfs_file_vnode()
+{
+    busy_cycle("(w) zfs file vnode held", "/tmp/umrel-w",
+               hold_file_vnode, unhold_vnode);
+}
+
 // An optional argument selects cases by letter.
 int main(int argc, char **argv)
 {
@@ -187,7 +462,10 @@ int main(int argc, char **argv)
         char tag;
         void (*fn)();
     } cases[] = {
-        {'c', test_ramfs}, {'r', test_rofs},
+        {'c', test_ramfs}, {'r', test_rofs}, {'i', test_zfs_idle},
+        {'h', test_zfs_vfs_hold},
+        {'z', test_zfs}, {'d', test_zfs_root_dir_open},
+        {'v', test_zfs_root_vnode}, {'w', test_zfs_file_vnode},
     };
     mkdir("/tmp", 0755);
     for (auto& c : cases) {

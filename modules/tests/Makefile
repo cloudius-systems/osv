@@ -233,6 +233,9 @@ tests += tst-random-flush.so
 internal-api-tests += tst-random-flush.so
 tests += tst-umount-release.so
 internal-api-tests += tst-umount-release.so
+ifeq ($(conf_zfs),openzfs)
+$(out)/tests/tst-umount-release.o: COMMON += -DCONF_ZFS_OPENZFS
+endif
 
 # Tests with special compilation parameters needed...
 $(out)/tests/tst-mmap.so: COMMON += -Wl,-z,now

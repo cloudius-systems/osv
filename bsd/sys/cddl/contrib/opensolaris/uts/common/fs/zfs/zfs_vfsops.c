@@ -62,6 +62,9 @@
 #include <sys/spa_boot.h>
 #include "zfs_comutil.h"
 #include <fs/vfs/vfs_id.h>
+#ifdef __OSV__
+#include <osv/dentry.h>
+#endif
 
 #if notyet
 struct mtx zfs_debug_mtx;
@@ -1694,9 +1697,7 @@ zfs_umount(vfs_t *vfsp, int fflag)
 		rrw_exit(&zfsvfs->z_teardown_lock, FTAG);
 	}
 
-#ifdef __OSV__
-	release_mp_dentries(vfsp);
-#else
+#ifndef __OSV__
 	/*
 	 * Flush all the files.
 	 */
@@ -1722,15 +1723,50 @@ zfs_umount(vfs_t *vfsp, int fflag)
 		 * own, and any active references underneath are
 		 * reflected in the vnode count.
 		 */
+		int count = vfsp->m_count;
+#ifdef __OSV__
+		/*
+		 * On OSv this check runs before release_mp_dentries() below,
+		 * so that a refused unmount keeps the mount's dentries. Until
+		 * that release, m_count also counts what the mount's root
+		 * dentry keeps alive: the root vnode (vget()'s vfs_busy())
+		 * and, through it, the root znode (zfs_znode_alloc()'s
+		 * VFS_HOLD()). The release drops the root vnode only if the
+		 * mount's reference is the last one on the root dentry and
+		 * the root dentry's is the last one on the vnode, and
+		 * zfs_inactive() then frees the znode only if it still has its
+		 * SA handle (z_sa_hdl) and that vnode's is its last reference.
+		 * Count out exactly what the release would
+		 * drop, so that the thresholds below decide as they did when
+		 * the check ran after the release.
+		 */
+		struct vnode *rootvp = vfsp->m_root->d_vnode;
+		znode_t *rootzp = VTOZ(rootvp);
+
+		if (vfsp->m_root->d_refcnt == 1 && rootvp->v_refcnt == 1) {
+			count--;
+			if (rootzp != NULL && rootzp->z_sa_hdl != NULL &&
+			    rootzp->z_ref_cnt == 1)
+				count--;
+		}
+#endif
 		if (zfsvfs->z_ctldir == NULL) {
-			if (vfsp->m_count > 1)
+			if (count > 1)
 				return (EBUSY);
 		} else {
-			if (vfsp->m_count > 2 ||
+			if (count > 2 ||
 			    zfsvfs->z_ctldir->v_refcnt > 1)
 				return (EBUSY);
 		}
 	}
+
+#ifdef __OSV__
+	/*
+	 * Drop the mount's dentries only once the unmount can no longer be
+	 * refused, so that an EBUSY leaves the mount as it was.
+	 */
+	release_mp_dentries(vfsp);
+#endif
 
 	VERIFY(zfsvfs_teardown(zfsvfs, B_TRUE) == 0);
 	os = zfsvfs->z_os;
