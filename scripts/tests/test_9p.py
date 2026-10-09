@@ -53,6 +53,7 @@ PEER_PASS = ['peer fragmentation and coalescing',
 LINKED = b'one object, two names\n'
 DIR_ENTRIES = 400
 FS_DIOD_PASS = ['diod mount and unmount', 'diod mounts are distinct',
+                "diod forced unmount waits for the root's holders",
                 'diod refusals', 'diod read files',
                 'diod read across iounit chunks', 'diod hardlink identity',
                 '(w) write unsupported',
@@ -71,6 +72,7 @@ FS_PEER_PASS = ['peer bad aname', 'peer wrong version',
                 'peer lcreate replaced', 'peer mkdir error',
                 'peer unlink error', 'peer rename error',
                 'peer rename fallback error', 'peer unlink fallback error',
+                'peer unlink fallback refuses a replaced name',
                 'peer setattr error', 'peer statfs error',
                 'peer rmdir flag']
 DIOD_WIRE = ['Tversion', 'Rversion', 'Tattach', 'Rattach', 'Twalk', 'Rwalk',
@@ -299,7 +301,6 @@ FS_CASES = ['aname', 'version', 'getattr', 'lookup-getattr', 'lookup-qid',
 # Rlerror answers per case: (request type, errno).
 FS_ERR = {'mkdir': (72, 13), 'unlink': (76, 13), 'rename': (74, 18),
           'rename-old': (20, 18), 'unlink-old': (122, 13),
-          'unlink-replaced': (122, 13),
           'setattr': (26, 1), 'statfs': (8, 38)}
 # object: (mode, size). u has no file type; g is a directory whose qid
 # path is f's, as if the server reused a live identity.
@@ -353,6 +354,13 @@ def fs_peer_answer(case, typ, body, fids, log):
         return 105, qid(1)
     if typ in (120, 122):   # Tclunk, Tremove: the fid is gone either way
         obj = fids.pop(u32(0), None)
+        if typ == 122 and case == 'unlink-replaced':
+            # The name now resolves to a directory (7); the client must
+            # have seen the qid mismatch and NOT sent Tremove at all.
+            log.append('fs-unlink-replaced: BAD Tremove of fid %d (obj %r);'
+                       ' expected a Tclunk after the qid mismatch'
+                       % (u32(0), obj))
+            return err(13)
         if typ == 122 and case in FS_ERR and FS_ERR[case][0] == 122:
             if obj != 2:
                 log.append('fs-%s: BAD Tremove of fid %d, not f'
@@ -769,19 +777,20 @@ def selftest():
     assert fs_peer_answer('unlink-old', 122, struct.pack('<I', 9), fids,
                           log)[1] == struct.pack('<I', 13) and 9 not in fids
     assert log == []
-    # unlink-replaced: the lookup's walk names f, a second walk the
-    # directory e (7); Tremove must name f (a clone of the vnode's fid).
+    # unlink-replaced: the lookup walks f (obj 2); the unlink fallback
+    # walks f again and gets the directory e (7). The client must see the
+    # qid mismatch, Tclunk (not Tremove) that fid, and the guest gets EBUSY.
     fr, log = {11: 1}, []
     wf = lambda nf: struct.pack('<IIHH', 11, nf, 1, 1) + b'f'
-    fs_peer_answer('unlink-replaced', 110, wf(12), fr, log)
-    fs_peer_answer('unlink-replaced', 110, wf(13), fr, log)
+    fs_peer_answer('unlink-replaced', 110, wf(12), fr, log)   # lookup -> f
+    fs_peer_answer('unlink-replaced', 110, wf(13), fr, log)   # fallback -> e
     assert fr[12] == 2 and fr[13] == 7
-    fs_peer_answer('unlink-replaced', 110, struct.pack('<IIH', 12, 14, 0),
-                   fr, log)
-    assert fs_peer_answer('unlink-replaced', 122, struct.pack('<I', 14), fr,
-                          log)[1] == struct.pack('<I', 13) and log == []
-    fs_peer_answer('unlink-replaced', 122, struct.pack('<I', 13), fr, log)
+    # a Tclunk of 13 is fine (no BAD, fid gone); a Tremove of 13 is BAD.
+    assert fs_peer_answer('unlink-replaced', 120, struct.pack('<I', 13),
+                          fr, log) == (121, b'') and log == []
+    fs_peer_answer('unlink-replaced', 122, struct.pack('<I', 7), {7: 7}, log)
     assert log
+    log = []
     log = []
     fids[10] = 1
     un = lambda f: struct.pack('<IH', 10, 1) + b'e' + struct.pack('<I', f)

@@ -18,6 +18,7 @@
 // read and readdir faults. A failed mount must leave nothing mounted; the
 // peer and diod report any fid left unclunked.
 
+#include <limits.h>
 #include <sys/mount.h>
 #include <sys/mman.h>
 #include <sys/stat.h>
@@ -234,6 +235,30 @@ static void diod(const char* ip, const char* port, unsigned long uid,
     require(umount(a.c_str()) == 0 && umount(b.c_str()) == 0
             && unmounted(a) && unmounted(b), "unmount both");
     puts("PASS: diod mounts are distinct");
+    // Even a forced unmount waits while the root is held: an open
+    // directory, then a cwd. The session must outlive every holder.
+    require(mount9p(a, good) == 0, "mount for forced unmount");
+    {
+        int dfd = open(a.c_str(), O_RDONLY | O_DIRECTORY);
+        require(dfd >= 0, "open the root");
+        errno = 0;
+        require(umount2(a.c_str(), MNT_FORCE) == -1 && errno == EBUSY,
+                "forced unmount refused while the root is open");
+        struct stat st;
+        require(fstat(dfd, &st) == 0 && S_ISDIR(st.st_mode),
+                "the open root still works");
+        close(dfd);
+        char cwd[PATH_MAX];
+        require(getcwd(cwd, sizeof cwd) && chdir(a.c_str()) == 0,
+                "chdir into the mount");
+        errno = 0;
+        bool refused = umount2(a.c_str(), MNT_FORCE) == -1 && errno == EBUSY;
+        require(chdir(cwd) == 0, "chdir back");
+        require(refused, "forced unmount refused while it is a cwd");
+        require(umount2(a.c_str(), MNT_FORCE) == 0 && unmounted(a),
+                "forced unmount once nothing holds the root");
+    }
+    puts("PASS: diod forced unmount waits for the root's holders");
     // diod refuses an identity other than its own uid and a missing
     // export with EPERM; the mount reports it and never retries.
     int rc = mount9p(a, opts(ip, port, aname, uid + 1));
@@ -579,6 +604,13 @@ static void peer(const char* ip, const char* port)
     // and the fid is released all the same.
     io("unlink fallback error", [&] { return err(unlink(f.c_str())); },
        EACCES);
+    // As above, but the host replaced the name with a directory after the
+    // lookup. The fallback walks the name, sees the qid is not the vnode's,
+    // refuses with EBUSY and clunks the stray fid. The peer logs BAD if the
+    // client instead sends Tremove of the replacement.
+    io("unlink fallback refuses a replaced name", [&] {
+        return err(unlink(f.c_str()));
+    }, EBUSY);
     io("setattr error", [&] { return err(chmod(f.c_str(), 0600)); }, EPERM);
     io("statfs error", [&] {
         struct statfs sf;
