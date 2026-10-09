@@ -163,8 +163,9 @@ ramfs_remove_node(struct ramfs_node *dnp, struct ramfs_node *np)
     mutex_lock(&ramfs_lock);
 
     if (dnp->rn_child == NULL) {
+        /* np is not in this directory: another unlink took it first */
         mutex_unlock(&ramfs_lock);
-        return EBUSY;
+        return ENOENT;
     }
 
     /* Unlink from the directory list */
