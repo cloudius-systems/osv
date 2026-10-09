@@ -697,32 +697,36 @@ sys_rmdir(char *path)
 		return error;
 
 	vp = dp->d_vnode;
-	vn_lock(vp);
-	if ((error = vn_access(vp, VWRITE)) != 0)
-		goto out;
-	if (vp->v_type != VDIR) {
-		error = ENOTDIR;
-		goto out;
-	}
-	if (vp->v_flags & VROOT || vp->v_refcnt >= 2) {
-		error = EBUSY;
-		goto out;
-	}
 	if ((error = lookup(path, &ddp, &name)) != 0)
 		goto out;
 
+	/* Directory before entry, the order lookup takes them in. */
 	vn_lock(ddp->d_vnode);
+	vn_lock(vp);
+	if ((error = vn_access(vp, VWRITE)) != 0)
+		goto out_unlock;
+	if (vp->v_type != VDIR) {
+		error = ENOTDIR;
+		goto out_unlock;
+	}
+	if (vp->v_flags & VROOT || vp->v_refcnt >= 2) {
+		error = EBUSY;
+		goto out_unlock;
+	}
 	error = VOP_RMDIR(ddp->d_vnode, vp, name);
-	vn_unlock(ddp->d_vnode);
 
 	vn_unlock(vp);
+	vn_unlock(ddp->d_vnode);
 	dentry_remove(dp);
 	drele(ddp);
 	drele(dp);
 	return error;
 
- out:
+ out_unlock:
 	vn_unlock(vp);
+	vn_unlock(ddp->d_vnode);
+	drele(ddp);
+ out:
 	drele(dp);
 	return error;
 }
@@ -800,6 +804,17 @@ strip_trailing(char *path, char ch)
 	path[len] = '\0';
 }
 
+/* True if a is b or an ancestor of b in the dentry tree. */
+static bool
+dentry_is_ancestor(struct dentry *a, struct dentry *b)
+{
+	for (; b; b = b->d_parent) {
+		if (a == b)
+			return true;
+	}
+	return false;
+}
+
 int
 sys_rename(char *src, char *dest)
 {
@@ -809,6 +824,7 @@ sys_rename(char *src, char *dest)
 	int error;
 	char root[] = "/";
 	bool ts; /* trailing slash */
+	bool locked = false;
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_rename: src=%s dest=%s\n", src, dest));
 
@@ -833,8 +849,9 @@ sys_rename(char *src, char *dest)
 	}
 
 	vp1 = dp1->d_vnode;
-	vn_lock(vp1);
 
+	/* v_type is fixed when the vnode is created, so these checks need
+	 * no vnode lock. */
 	if (vp1->v_type != VDIR && ts == true) {
 		error = ENOTDIR;
 		goto err1;
@@ -859,7 +876,6 @@ sys_rename(char *src, char *dest)
 		/* target exists */
 
 		vp2 = dp2->d_vnode;
-		vn_lock(vp2);
 
 		if (vp2->v_type != VDIR && vp2->v_type != VLNK) {
 			if (vp1->v_type == VDIR || ts == true) {
@@ -870,6 +886,8 @@ sys_rename(char *src, char *dest)
 			error = EISDIR;
 			goto err2;
 		}
+		/* This opens and reads the target, so it must run before any
+		 * vnode below is locked. */
 		if (vp2->v_type == VDIR && check_dir_empty(dest)) {
 			error = EEXIST;
 			goto err2;
@@ -911,21 +929,38 @@ sys_rename(char *src, char *dest)
 	dname++;
 
 	dvp1 = ddp1->d_vnode;
-	vn_lock(dvp1);
-
 	dvp2 = ddp2->d_vnode;
-	vn_lock(dvp2);
+
+	/*
+	 * Lock the directories before the entries, the order lookup takes
+	 * them in. Of two directories, lock an ancestor before its
+	 * descendant (lookup's order again); otherwise lock in a fixed
+	 * order. vn_lock() is recursive, so the same directory twice is
+	 * fine.
+	 */
+	if (dentry_is_ancestor(ddp2, ddp1) ||
+	    (!dentry_is_ancestor(ddp1, ddp2) && dvp2 < dvp1)) {
+		vn_lock(dvp2);
+		vn_lock(dvp1);
+	} else {
+		vn_lock(dvp1);
+		vn_lock(dvp2);
+	}
+	vn_lock(vp1);
+	if (vp2)
+		vn_lock(vp2);
+	locked = true;
 
 	/* Source and destination directions should be writable) */
 	if ((error = vn_access(dvp1, VWRITE)) != 0)
-	    goto err3;
+	    goto err2;
 	if ((error = vn_access(dvp2, VWRITE)) != 0)
-	    goto err3;
+	    goto err2;
 
 	/* The source and dest must be same file system */
 	if (dvp1->v_mount != dvp2->v_mount) {
 		error = EXDEV;
-		goto err3;
+		goto err2;
 	}
 
 	error = VOP_RENAME(dvp1, vp1, sname, dvp2, vp2, dname);
@@ -934,17 +969,18 @@ sys_rename(char *src, char *dest)
 	if (dp2)
 		dentry_remove(dp2);
 
- err3:
-	vn_unlock(dvp2);
-	vn_unlock(dvp1);
  err2:
-	if (vp2) {
-		vn_unlock(vp2);
-		drele(dp2);
+	if (locked) {
+		if (vp2)
+			vn_unlock(vp2);
+		vn_unlock(vp1);
+		vn_unlock(dvp2);
+		vn_unlock(dvp1);
 	}
+	if (vp2)
+		drele(dp2);
 	drele(ddp2);
  err1:
-	vn_unlock(vp1);
 	drele(dp1);
 	drele(ddp1);
 	return error;
@@ -1031,8 +1067,9 @@ sys_link(char *oldpath, char *newpath)
 		return error;
 
 	vp = olddp->d_vnode;
-	vn_lock(vp);
+	newdp = nullptr;
 
+	/* v_type is fixed when the vnode is created. */
 	if (vp->v_type == VDIR) {
 		error = EPERM;
 		goto out;
@@ -1048,7 +1085,9 @@ sys_link(char *oldpath, char *newpath)
 	if ((error = lookup(newpath, &newdirdp, &name)) != 0)
 		goto out;
 
+	/* Directory before entry, the order lookup takes them in. */
 	vn_lock(newdirdp->d_vnode);
+	vn_lock(vp);
 
 	/* Both files must reside on the same mounted file system */
 	if (olddp->d_mount != newdirdp->d_mount) {
@@ -1068,12 +1107,13 @@ sys_link(char *oldpath, char *newpath)
 
 	error = VOP_LINK(newdirdp->d_vnode, vp, name);
  out1:
+	vn_unlock(vp);
 	vn_unlock(newdirdp->d_vnode);
 	drele(newdirdp);
  out:
-	vn_unlock(vp);
 	drele(olddp);
-	drele(newdp);
+	if (newdp)
+		drele(newdp);
 	return error;
 }
 
@@ -1102,6 +1142,8 @@ sys_unlink(char *path)
 	}
 
 	vp = dp->d_vnode;
+	/* Directory before entry, the order lookup takes them in. */
+	vn_lock(ddp->d_vnode);
 	vn_lock(vp);
 	if (vp->v_type == VDIR) {
 	    // Posix specifies that we should return EPERM here, but Linux
@@ -1114,15 +1156,13 @@ sys_unlink(char *path)
 		goto out;
 	}
 
-	vn_lock(ddp->d_vnode);
 	if ((error = vn_access(ddp->d_vnode, VWRITE)) != 0) {
-	    vn_unlock(ddp->d_vnode);
 	    goto out;
 	}
 	error = VOP_REMOVE(ddp->d_vnode, vp, name);
-	vn_unlock(ddp->d_vnode);
 
 	vn_unlock(vp);
+	vn_unlock(ddp->d_vnode);
 	dentry_remove(dp);
 	drele(ddp);
 	drele(dp);
@@ -1130,6 +1170,7 @@ sys_unlink(char *path)
  out:
 	if (vp != nullptr) {
 		vn_unlock(vp);
+		vn_unlock(ddp->d_vnode);
 	}
 
 	if (dp != nullptr) {
