@@ -302,6 +302,9 @@ rofs_unmount(struct mount *mp, int flags)
     int error = device_close(dev);
     delete sb;
     delete rofs;
+    if (!error) {
+        release_mp_dentries(mp);
+    }
 
 #if defined(ROFS_DIAGNOSTICS_ENABLED)
     debugff("ROFS: spent %.2f ms reading from disk\n", ((double) rofs_block_read_ms.load()) / 1000);
