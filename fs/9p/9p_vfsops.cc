@@ -301,9 +301,13 @@ int mount(struct mount* mp, const char* dev, int flags, const void* data)
 
 int unmount(struct mount* mp, int flags)
 {
-    // A vnode besides the root (m_count counts live vnodes) would use the
-    // session after it is gone, so even a forced unmount waits for it.
-    if (mp->m_count > 1) {
+    // Anything that can still reach the session must be gone, even for a
+    // forced unmount (which skips the VFS's own checks): a vnode besides
+    // the root (m_count counts live vnodes), a lookup in flight, or a
+    // holder of the root itself (an open directory, a cwd).
+    if (mp->m_count > 1
+        || __atomic_load_n(&mp->m_lookups, __ATOMIC_ACQUIRE) != 0
+        || dentry_refcnt(mp->m_root) > 1) {
         return EBUSY;
     }
     auto* ms = static_cast<mount_state*>(mp->m_data);
@@ -321,7 +325,7 @@ int unmount(struct mount* mp, int flags)
 
 static int p9_sync(struct mount*)
 {
-    return 0; // nothing is written through this mount yet
+    return 0; // uncached: every change is already the server's
 }
 
 // Tstatfs on the root fid: the server's numbers, none invented.
