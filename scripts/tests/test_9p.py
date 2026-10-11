@@ -488,6 +488,132 @@ def fs_peer(port, log, stop):
     ls.close()
 
 
+# ---- the lock-order peer (tst-9p-fs lockorder) ----
+#
+# A persistent 9P server with a two-object tree, root (qid path 1) and one
+# regular file f (qid path 2), that DELAYS every Twalk reply. The guest
+# runs two threads racing stat(f) against unlink(f); the delayed Twalk
+# holds the directory's vnode lock across the RPC, which is the window the
+# directory-before-entry fix needs. Each frame is answered on its own
+# worker thread so a delayed Twalk does not stall the other threads' tags
+# (the session multiplexes up to 32 tags on one connection). Without the
+# fix the guest deadlocks and its watchdog prints FAIL; with it the guest
+# makes progress and prints PASS. The server only needs to answer; it keeps
+# no durable state, so unlink is a no-op success and the file always walks.
+LOCK_WALK_DELAY = 0.03   # seconds held across each Twalk
+ROOT_QID = struct.pack('<BIQ', 0x80, 0, 1)   # directory
+FILE_QID = struct.pack('<BIQ', 0, 0, 2)      # regular file
+
+
+def lock_rgetattr(is_dir):
+    mode = 0o40755 if is_dir else 0o100644
+    qid = ROOT_QID if is_dir else FILE_QID
+    return (struct.pack('<Q', 0x7ff) + qid
+            + struct.pack('<IIIQQQQQ', mode, 1000, 1000, 1, 0, 0, 4096, 0)
+            + bytes(64 + 16))
+
+
+def lock_peer_answer(typ, tag, body, fids, lock, log):
+    """Reply bytes for one request, with the Twalk delay applied inline."""
+    u32 = lambda at: struct.unpack('<I', body[at:at + 4])[0]
+    if typ == 100:   # Tversion
+        v = b'9P2000.L'
+        return reply(101, tag, struct.pack('<IH', min(
+            8192, struct.unpack('<I', body[:4])[0]), len(v)) + v)
+    if typ == 104:   # Tattach -> root
+        with lock:
+            fids[u32(0)] = 1
+        return reply(105, tag, ROOT_QID)
+    if typ == 110:   # Twalk fid newfid nwname name...: delayed
+        nf = u32(4)
+        n = struct.unpack('<H', body[8:10])[0]
+        time.sleep(LOCK_WALK_DELAY)   # hold the directory lock across this
+        with lock:
+            base = fids.get(u32(0), 1)
+            if n == 0:
+                fids[nf] = base
+                return reply(111, tag, struct.pack('<H', 0))
+            name = body[12:12 + struct.unpack('<H', body[10:12])[0]]
+            if base != 1 or name != b'f':
+                return reply(7, tag, struct.pack('<I', ENOENT))
+            fids[nf] = 2
+        return reply(111, tag, struct.pack('<H', 1) + FILE_QID)
+    if typ == 24:    # Tgetattr
+        with lock:
+            obj = fids.get(u32(0), 1)
+        return reply(25, tag, lock_rgetattr(obj == 1))
+    if typ == 120:   # Tclunk
+        with lock:
+            fids.pop(u32(0), None)
+        return reply(121, tag, b'')
+    if typ == 76:    # Tunlinkat: pretend it worked (no durable state)
+        return reply(77, tag, b'')
+    if typ == 122:   # Tremove: fid is gone, success
+        with lock:
+            fids.pop(u32(0), None)
+        return reply(123, tag, b'')
+    if typ == 12:    # Tlopen (not expected from stat, answer anyway)
+        with lock:
+            obj = fids.get(u32(0), 1)
+        q = ROOT_QID if obj == 1 else FILE_QID
+        return reply(13, tag, q + struct.pack('<I', 0))
+    return reply(7, tag, struct.pack('<I', EOPNOTSUPP))
+
+
+def lock_peer_conn(c, log, stop):
+    c.setsockopt(socket.IPPROTO_TCP, socket.TCP_NODELAY, 1)
+    fids = {}
+    flock = threading.Lock()
+    wlock = threading.Lock()   # serialize sends; each handler is a thread
+    workers = []
+
+    def handle(typ, tag, b):
+        try:
+            r = lock_peer_answer(typ, tag, b, fids, flock, log)
+            with wlock:
+                c.sendall(r)
+        except OSError:
+            pass
+
+    while not stop.is_set():
+        try:
+            f = recv_frame(c)
+        except OSError:
+            break
+        if f is None:
+            break
+        typ, tag, b = f
+        t = threading.Thread(target=handle, args=(typ, tag, b))
+        t.start()
+        workers.append(t)
+        workers = [w for w in workers if w.is_alive()]
+    for w in workers:
+        w.join(timeout=5)
+    log.append('lock: client closed')
+
+
+def lock_peer(port, log, stop):
+    ls = socket.socket()
+    ls.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
+    ls.bind(('127.0.0.1', port))
+    ls.listen(1)
+    ls.settimeout(1)
+    while not stop.is_set():
+        try:
+            c, _ = ls.accept()
+        except socket.timeout:
+            continue
+        try:
+            lock_peer_conn(c, log, stop)
+        except OSError as e:
+            log.append('lock: %s' % e)
+        try:
+            c.close()
+        except OSError:
+            pass
+    ls.close()
+
+
 # ---- orchestration ----
 
 def capture(ev, name, ports):
@@ -643,6 +769,44 @@ def run_fs_peer(args, ev, problems):
     open(os.path.join(ev, 'fs-peer.log'), 'w').write('\n'.join(log) + '\n')
     problems += ['fs-peer: ' + p for p in verdict(console, FS_PEER_PASS)]
     problems += fs_peer_log(log)
+
+
+# The lock-order run. Starts the delaying lock peer, runs the two-thread
+# guest, and classifies the console: GREEN if the guest printed its PASS
+# line, RED (deadlock) if the guest's watchdog printed FAIL or the guest
+# produced no verdict at all (hung until run.py's timeout). The outcome is
+# written to lock-verdict.txt and returned; whether RED is the wanted
+# result depends on which arm (with or without the fix) the caller built,
+# so this never forces the outcome into `problems`. Only a broken run (the
+# peer saw no connection) is a hard problem.
+def run_lock_order(args, ev, problems):
+    log, stop = [], threading.Event()
+    t = threading.Thread(target=lock_peer, args=(args.lock_port, log, stop))
+    t.start()
+    console, rc = guest(args, ev, 'lock', 'lockorder %s %d' % (
+        GUEST_HOST, args.lock_port), 'tst-9p-fs')
+    stop.set()
+    t.join(timeout=30)
+    open(os.path.join(ev, 'lock.log'), 'w').write('\n'.join(log) + '\n')
+    lines = console.splitlines()
+    passed = any(l.startswith('PASS: lockorder') for l in lines)
+    deadlock = any('FAIL: lockorder deadlock' in l for l in lines)
+    summary = any(l.startswith('SUMMARY: ') and l.endswith(' 0 failures')
+                  for l in lines)
+    if passed and summary:
+        out = 'GREEN'
+    elif deadlock:
+        out = 'RED (deadlock, watchdog fired)'
+    else:
+        # No PASS and no explicit deadlock line: the guest hung until
+        # run.py's timeout (rc != 0, no SUMMARY). That is the deadlock
+        # without a clean watchdog print.
+        out = 'RED (hang, run.py timeout rc %d)' % rc
+    open(os.path.join(ev, 'lock-verdict.txt'), 'w').write(out + '\n')
+    print('lockorder: ' + out)
+    if 'lock: client closed' not in log:
+        problems.append('lock: peer saw no client connection')
+    return out
 
 
 # Every case connected, was closed by the client, left no fid and kept to
@@ -810,6 +974,38 @@ def selftest():
     print('selftest ok')
 
 
+def lock_selftest():
+    fids, lk, log = {}, threading.Lock(), []
+    # Tversion
+    assert lock_peer_answer(100, 0, struct.pack('<IH', 8192, 8) + b'9P2000.L',
+                            fids, lk, log)[4] == 101
+    # Tattach: fid 0 -> root
+    assert lock_peer_answer(104, 1, struct.pack('<I', 0) + bytes(20),
+                            fids, lk, log)[4] == 105 and fids[0] == 1
+    # Twalk fid 0 newfid 1 one name 'f' -> file qid, fid 1 -> obj 2
+    w = lock_peer_answer(110, 2, struct.pack('<IIH', 0, 1, 1)
+                         + struct.pack('<H', 1) + b'f', fids, lk, log)
+    assert w[4] == 111 and fids[1] == 2 and w[9:] == FILE_QID
+    # Twalk to a wrong name -> ENOENT
+    assert lock_peer_answer(110, 3, struct.pack('<IIH', 0, 2, 1)
+                            + struct.pack('<H', 1) + b'z', fids, lk,
+                            log)[4] == 7
+    # Tgetattr of the file fid -> regular file mode. Rgetattr body:
+    # valid[8] qid[13] mode[4] ...; frame = size[4] type[1] tag[2] body.
+    g = lock_peer_answer(24, 4, struct.pack('<I', 1), fids, lk, log)
+    assert g[4] == 25 and (struct.unpack('<I', g[7 + 21:7 + 25])[0]
+                           & 0o170000) == 0o100000
+    # Tgetattr of a root fid -> directory
+    g = lock_peer_answer(24, 5, struct.pack('<I', 0), fids, lk, log)
+    assert (struct.unpack('<I', g[7 + 21:7 + 25])[0] & 0o170000) == 0o40000
+    # Tunlinkat -> Runlinkat; Tclunk -> Rclunk
+    assert lock_peer_answer(76, 6, struct.pack('<I', 0) + bytes(8),
+                            fids, lk, log)[4] == 77
+    assert lock_peer_answer(120, 7, struct.pack('<I', 1), fids, lk, log)[4] \
+        == 121 and 1 not in fids
+    print('lock selftest ok')
+
+
 def main():
     global ARGS
     ap = argparse.ArgumentParser()
@@ -819,14 +1015,25 @@ def main():
     ap.add_argument('--port', type=int, default=5640)
     ap.add_argument('--peer-port', type=int, default=5641)
     ap.add_argument('--fs-peer-port', type=int, default=5642)
+    ap.add_argument('--lock-port', type=int, default=5643)
+    ap.add_argument('--only', choices=['lockorder'],
+                    help='run only this check (lockorder: the two-thread '
+                         'lock-order race, no diod or tcpdump)')
     ap.add_argument('--selftest', action='store_true')
     ARGS = args = ap.parse_args()
     selftest()
+    lock_selftest()
     if args.selftest:
         return 0
     ev = os.path.abspath(args.evidence_dir)
     os.makedirs(ev)
     problems = []
+    if args.only == 'lockorder':
+        run_lock_order(args, ev, problems)
+        open(os.path.join(ev, 'verdict.txt'), 'w').write(
+            ('FAIL\n' + '\n'.join(problems) if problems else 'PASS') + '\n')
+        print('\n'.join(problems) or 'test_9p: PASS')
+        return 1 if problems else 0
     cap, pidfile = capture(ev, 'host-lo', [args.port, args.peer_port,
                                            args.fs_peer_port])
     try:

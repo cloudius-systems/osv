@@ -33,9 +33,12 @@
 #include <string.h>
 
 #include <algorithm>
+#include <atomic>
+#include <chrono>
 #include <functional>
 #include <set>
 #include <string>
+#include <thread>
 #include <vector>
 
 #include <osv/dentry.h>
@@ -773,6 +776,98 @@ static void dirents()
     puts("PASS: Rreaddir records");
 }
 
+// A 9P mount whose VOP_LOOKUP sleeps across an RPC is the only in-tree
+// filesystem that holds a directory's vnode lock across a sleep, so it is
+// the only one that can show the lock-order bug the directory-before-entry
+// fix (vfs: lock the directory before the entry in unlink, rmdir, rename,
+// link) prevents. Two threads race on one name under the mount:
+//
+//   namei() locks the directory's vnode across VOP_LOOKUP, which in 9P
+//   walks the name with a Twalk/Tgetattr RPC (the peer below delays it),
+//   then vget()s the entry's vnode, taking its lock while still holding
+//   the directory lock: directory then entry.
+//
+//   sys_unlink() without the fix locks the entry's vnode first, then the
+//   directory's: entry then directory. The opposite order deadlocks
+//   (lookup holds the directory and waits for the entry; unlink holds the
+//   entry and waits for the directory). With the fix unlink locks the
+//   directory first and the two agree.
+//
+// The looker stat()s the name in a loop; the unlinker unlink()s it in a
+// loop. The server (scripts/tests/test_9p.py lock_peer) serves one file f
+// under the root and delays every Twalk so the directory lock is held
+// across the RPC, which is the window the fix closes. A watchdog fails the
+// test if neither side makes progress for a while: that stall is the
+// deadlock, which is what the test is for. A long mount timeout keeps the
+// session from retiring the parked RPC and breaking the deadlock before
+// the watchdog sees it.
+static void lockorder(const char* ip, const char* port)
+{
+    const std::string a = "/tmp/9p-a";
+    mkdir(a.c_str(), 0755);
+    // timeout=30: longer than the watchdog so a real deadlock is seen as a
+    // stall, not rescued by the session's own RPC timeout.
+    const std::string o = std::string("trans=tcp,addr=") + ip + ",port="
+        + port + ",aname=/x,uid=1000,gid=1000,timeout=30";
+    require(mount9p(a, o) == 0, "lockorder: mount");
+    const std::string f = a + "/f";
+
+    std::atomic<unsigned long> looks{0}, unlinks{0};
+    std::atomic<bool> stop{false};
+    std::thread looker([&] {
+        struct stat st;
+        while (!stop.load(std::memory_order_relaxed)) {
+            stat(f.c_str(), &st);   // walks the dir across the slow Twalk
+            looks.fetch_add(1, std::memory_order_relaxed);
+        }
+    });
+    std::thread unlinker([&] {
+        while (!stop.load(std::memory_order_relaxed)) {
+            unlink(f.c_str());      // locks entry then dir without the fix
+            unlinks.fetch_add(1, std::memory_order_relaxed);
+        }
+    });
+
+    // Both threads must keep making progress. With the fix they run freely;
+    // without it the AB-BA deadlock parks both and the counters stop. Watch
+    // for a stall of about a second and a half, over roughly ten seconds of
+    // racing.
+    using clk = std::chrono::steady_clock;
+    auto deadline = clk::now() + std::chrono::seconds(10);
+    unsigned long pl = 0, pu = 0;
+    auto last_progress = clk::now();
+    bool deadlocked = false;
+    while (clk::now() < deadline) {
+        std::this_thread::sleep_for(std::chrono::milliseconds(100));
+        unsigned long cl = looks.load(), cu = unlinks.load();
+        if (cl != pl || cu != pu) {
+            pl = cl;
+            pu = cu;
+            last_progress = clk::now();
+        } else if (clk::now() - last_progress
+                   > std::chrono::milliseconds(1500)) {
+            deadlocked = true;
+            break;
+        }
+    }
+    if (deadlocked) {
+        // Do not join: the threads are wedged in the kernel. Report and
+        // leave; the harness treats this FAIL line as the verdict.
+        printf("FAIL: lockorder deadlock (looks %lu unlinks %lu stalled)\n",
+               looks.load(), unlinks.load());
+        fflush(stdout);
+        _exit(1);
+    }
+    stop.store(true);
+    looker.join();
+    unlinker.join();
+    require(looks.load() > 0 && unlinks.load() > 0,
+            "lockorder: both threads made progress");
+    require(umount(a.c_str()) == 0 && unmounted(a), "lockorder: unmount");
+    printf("PASS: lockorder (looks %lu unlinks %lu)\n", looks.load(),
+           unlinks.load());
+}
+
 int main(int argc, char** argv)
 {
     mkdir("/tmp", 0755);
@@ -788,6 +883,8 @@ int main(int argc, char** argv)
         changes(argv[2], argv[3], strtoul(argv[4], nullptr, 10), argv[5]);
     } else if (mode == "peer" && argc == 4) {
         peer(argv[2], argv[3]);
+    } else if (mode == "lockorder" && argc == 4) {
+        lockorder(argv[2], argv[3]);
     } else {
         require(false, "known mode and argument count");
     }
