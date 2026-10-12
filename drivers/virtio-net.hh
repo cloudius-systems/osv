@@ -144,12 +144,25 @@ public:
          * Legal values are between 1 and 0x8000
          */
         u16 max_virtqueue_pairs;
+        /* Default MTU advice (VIRTIO_NET_F_MTU) */
+        u16 mtu;
+        /* Link speed in Mb/s and duplex (VIRTIO_NET_F_SPEED_DUPLEX) */
+        u32 speed;
+        u8  duplex;
         /* The following three fields are only valid (and only present in the
          * device config space) when VIRTIO_NET_F_RSS is negotiated. */
         u8  rss_max_key_size;
         u16 rss_max_indirection_table_length;
         u32 supported_hash_types;
     } __attribute__((packed));
+    // Offsets fixed by the virtio 1.1 spec, section 5.1.4; read_config()
+    // reads the RSS fields at offsetof() these members.
+    static_assert(offsetof(net_config, rss_max_key_size) == 17,
+                  "virtio-net config layout");
+    static_assert(offsetof(net_config, rss_max_indirection_table_length) == 18,
+                  "virtio-net config layout");
+    static_assert(offsetof(net_config, supported_hash_types) == 20,
+                  "virtio-net config layout");
 
     /* This is the first element of the scatter-gather list.  If you don't
      * specify GSO or CSUM features, you can simply ignore the header. */
