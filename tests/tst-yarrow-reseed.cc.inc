@@ -32,14 +32,10 @@ static int wakes;
 static void wakeup(void*) { ++wakes; }
 static void debug(const char*) {}
 static int msleep(void*, mtx*, int, const char*, int) { assert(false); return 0; }
-static int random_kthread_control;
-static int hz = 100;
 static struct harvest pending;
 static bool have_pending;
-static void bsd_pause(const char*, int) {
-    // Complete the flush handshake without a scheduler or live HW source.
+static void random_harvestq_flush() {
     if (have_pending) { random_process_event(&pending); have_pending = false; }
-    random_kthread_control = 0;
 }
 static thread_local unsigned encryptions;
 static void counted_encrypt(randomdev_key* key, void* in, void* out, unsigned n) {
