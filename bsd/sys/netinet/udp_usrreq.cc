@@ -58,7 +58,7 @@
 #include <bsd/sys/netinet/in_var.h>
 #include <bsd/sys/netinet/ip.h>
 #ifdef INET6
-#include <netinet/ip6.h>
+#include <bsd/sys/netinet/ip6.h>
 #endif
 #include <bsd/sys/netinet/ip_icmp.h>
 #include <bsd/sys/netinet/icmp_var.h>
