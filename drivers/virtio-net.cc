@@ -633,11 +633,17 @@ void net::receiver(struct rxq* rxq)
             osv::rcu_read_lock.lock();
         }
 
+        // With batching, bound each pass so the queued wakes are flushed and
+        // preemption comes back regularly even under sustained input, and do
+        // not refill the ring inside the pass (that would let the device keep
+        // it non-empty forever); refill once after the unlock instead.
+        unsigned budget = 64;
         while (void* buffer = vq->get_buf_elem(&len)) {
 
             vq->get_buf_finalize();
 
-            if (vq->effective_avail_ring_count() >= refill_thresh)
+            if (!batch_wakes &&
+                vq->effective_avail_ring_count() >= refill_thresh)
                 fill_rx_ring(rxq);
 
             // Bad packet/buffer - discard and continue to the next one
@@ -706,6 +712,9 @@ void net::receiver(struct rxq* rxq)
             // passing the packet up the network stack.
             if ((_ifn->if_drv_flags & IFF_DRV_RUNNING) == 0)
                 break;
+
+            if (batch_wakes && --budget == 0)
+                break;
         }
 
         if (batch_wakes) {
@@ -720,6 +729,8 @@ void net::receiver(struct rxq* rxq)
                 (*_ifn->if_input)(_ifn, m);
             }
             slow_path.clear();
+            if (vq->effective_avail_ring_count() >= refill_thresh)
+                fill_rx_ring(rxq);
         }
 
         // Update the stats
