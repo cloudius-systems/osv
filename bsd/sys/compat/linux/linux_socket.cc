@@ -1129,8 +1129,8 @@ linux_sendmsg(int s, struct l_msghdr* linux_msg, int flags, ssize_t* bytes)
 	 * Linux ping to work.
 	 */
 
-	if (linux_msg->msg_control != NULL && linux_msg->msg_controllen == 0)
-		linux_msg->msg_control = NULL;
+	if (linux_msg->msg_control != 0 && linux_msg->msg_controllen == 0)
+		linux_msg->msg_control = 0;
 
 	error = linux_to_bsd_msghdr(&msg, linux_msg);
 	if (error)
