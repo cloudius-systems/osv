@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import optparse, os, subprocess, socket, threading, stat, sys
+import optparse, os, shutil, signal, subprocess, socket, tempfile, threading, stat, sys, time
 from manifest_common import add_var, expand, unsymlink, read_manifest, defines, strip_file
 from contextlib import closing
 
@@ -48,7 +48,9 @@ def upload(osv, manifest, depends, port):
         for line in iter(lambda: file.readline(), b''):
             if not silent():
                 os.write(sys.stdout.fileno(), line)
-    threading.Thread(target=consumeoutput, args=(osv.stdout, lambda: stop_output)).start()
+    # A daemon, so a failed upload can exit without waiting for QEMU.
+    threading.Thread(target=consumeoutput, args=(osv.stdout, lambda: stop_output),
+                     daemon=True).start()
 
     # Send a CPIO header or file, padded to multiple of 4 bytes
     def cpio_send(data):
@@ -123,6 +125,36 @@ def upload(osv, manifest, depends, port):
         # have the upload fail.
         sys.exit(1)
 
+def read_pid(pidfile):
+    try:
+        with open(pidfile) as f:
+            return int(f.read())
+    except (OSError, ValueError):
+        return None
+
+def kill_qemu(osv, pidfile):
+    # QEMU is a grandchild (sh, then run.py), so stopping osv alone could
+    # leave it running. Signal it by the pid it wrote; run.py then exits.
+    # Only while osv runs: run.py normally has not reaped QEMU by then,
+    # so the pid in the file is still QEMU's. An early failure can come
+    # before QEMU has written the file, so give it a moment to appear.
+    pid = read_pid(pidfile)
+    for _ in range(50):
+        if pid is not None or osv.poll() is not None:
+            break
+        time.sleep(0.1)
+        pid = read_pid(pidfile)
+    if pid is not None and osv.poll() is None:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            pass
+    try:
+        osv.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        osv.kill()
+        osv.wait()
+
 def main():
     make_option = optparse.make_option
 
@@ -191,9 +223,23 @@ def main():
         '/zfs.so set compression=off osv; '
         '/tools/umount.so /zfs/zfs; /tools/umount.so /zfs; '
         '/zpool.so export osv') % console
-    osv = subprocess.Popen('cd ../..; scripts/run.py -k --kernel-path build/last/%s --arch=%s --vnc none -m 512 -c1 -i "%s" --block-device-cache writeback -s -e "%s" --forward tcp:127.0.0.1:%s-:10000' % (zfs_builder_name,arch,image_path,zfs_builder_cmd,upload_port), shell=True, stdout=subprocess.PIPE)
+    piddir = tempfile.mkdtemp(prefix='osv-upload-')
+    pidfile = os.path.join(piddir, 'qemu.pid')
+    osv = subprocess.Popen('cd ../..; scripts/run.py -k --kernel-path build/last/%s --arch=%s --vnc none -m 512 -c1 -i "%s" --block-device-cache writeback -s -e "%s" --forward tcp:127.0.0.1:%s-:10000 --pass-args=\"-pidfile %s\"' % (zfs_builder_name,arch,image_path,zfs_builder_cmd,upload_port,pidfile), shell=True, stdout=subprocess.PIPE)
 
-    upload(osv, manifest, depends, upload_port)
+    # A failed upload leaves cpiod waiting for a connection that will not
+    # come, so QEMU would never exit. Kill it and fail the build instead.
+    # (--pass-args needs the "=" form: its value starts with "-".)
+    try:
+        upload(osv, manifest, depends, upload_port)
+    except BaseException as e:
+        kill_qemu(osv, pidfile)
+        if isinstance(e, OSError):
+            sys.exit("ERROR: zfs_builder upload failed (%s); QEMU killed. "
+                     "cpiod may not have been listening yet." % e)
+        raise
+    finally:
+        shutil.rmtree(piddir, ignore_errors=True)
 
     # cpiod acknowledged the sync, so the ZFS image is written. Give QEMU up
     # to 120 seconds to exit cleanly (e.g. via ACPI poweroff), then kill it.
