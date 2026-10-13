@@ -127,6 +127,11 @@ static void dentry_children_remove(struct dentry *dp)
             ASSERT(entry);
             ASSERT(entry->d_refcnt > 0);
             LIST_REMOVE(entry, d_link);
+            // The child is still referenced, and its last drele() will
+            // LIST_REMOVE it from d_link again.  Park it on the fake list,
+            // as dentry_remove() does, so that unlink goes through valid
+            // links instead of the stale ones LIST_REMOVE leaves behind.
+            LIST_INSERT_HEAD(&fake, entry, d_link);
         }
     }
 }
