@@ -15,34 +15,54 @@ def find_free_port():
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         return s.getsockname()[1]
 
+# cpiod --ready sends this once it has accepted our connection.
+CPIOD_GREETING = b"CPIOD1\n"
+
+def wait_for_cpiod(osv, port, deadline_s=300):
+    # QEMU's hostfwd accepts connect() as soon as QEMU starts, whether or not
+    # cpiod is listening in the guest yet, so a successful connect proves
+    # nothing. Wait for cpiod's greeting instead. If the guest refuses the
+    # forwarded connection (not listening yet), the host socket is closed and
+    # we retry. Do not give up on a connection that is merely slow: closing
+    # it early could leave the guest a stale connection that consumes
+    # cpiod's only accept(), so each attempt waits up to the overall deadline.
+    import time as _time
+    deadline = _time.monotonic() + deadline_s
+    while _time.monotonic() < deadline:
+        if osv.poll() is not None:
+            sys.exit("qemu failed.")
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.connect(("127.0.0.1", port))
+            got = b""
+            while len(got) < len(CPIOD_GREETING):
+                s.settimeout(max(0.1, deadline - _time.monotonic()))
+                chunk = s.recv(len(CPIOD_GREETING) - len(got))
+                if not chunk:
+                    break
+                got += chunk
+            if got == CPIOD_GREETING:
+                s.settimeout(None)
+                return s
+            if got:
+                s.close()
+                sys.exit("ERROR: unexpected greeting from cpiod: %r" % got)
+        except (ConnectionRefusedError, ConnectionResetError, socket.timeout,
+                OSError):
+            pass
+        s.close()
+        _time.sleep(1)
+    sys.exit("Timed out waiting for cpiod on port %d" % port)
+
 def upload(osv, manifest, depends, port):
     manifest = [(x, y % defines) for (x, y) in manifest]
     files = list(expand(manifest))
     files = [(x, unsymlink(y)) for (x, y) in files]
 
-    # Poll the TCP port until cpiod is ready, then connect.
-    # Waiting for text on QEMU's stdout pipe is unreliable when QEMU uses
-    # '-chardev stdio,mux=on' with a non-tty stdout: the mux/readline layer
-    # does not forward guest serial output to the subprocess pipe.
-    import time as _time
-    s = None
-    for _attempt in range(120):
-        if osv.poll() is not None:
-            sys.exit("qemu failed.")
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect(("127.0.0.1", port))
-            break
-        except (ConnectionRefusedError, OSError):
-            s.close()
-            s = None
-            _time.sleep(1)
-    else:
-        sys.exit("Timed out waiting for cpiod on port %d" % port)
-
     # We'll want to read the rest of the guest's output, so that it doesn't
     # hang, and so the user can see what's happening. Easiest to do this with
-    # a thread.
+    # a thread. Start it before waiting for cpiod, so the guest's boot and
+    # mkfs output cannot fill the pipe while we wait.
     stop_output = False
     def consumeoutput(file, silent):
         for line in iter(lambda: file.readline(), b''):
@@ -51,6 +71,8 @@ def upload(osv, manifest, depends, port):
     # A daemon, so a failed upload can exit without waiting for QEMU.
     threading.Thread(target=consumeoutput, args=(osv.stdout, lambda: stop_output),
                      daemon=True).start()
+
+    s = wait_for_cpiod(osv, port)
 
     # Send a CPIO header or file, padded to multiple of 4 bytes
     def cpio_send(data):
@@ -219,7 +241,7 @@ def main():
     # provide.)  Commands are ';'-separated and run independently, so a
     # spurious unmount does not abort the chain.
     zfs_builder_cmd = ('%s --norandom --nomount --noinit --preload-zfs-library '
-        '/tools/mkfs.so; /tools/cpiod.so --prefix /zfs/; '
+        '/tools/mkfs.so; /tools/cpiod.so --ready --prefix /zfs/; '
         '/zfs.so set compression=off osv; '
         '/tools/umount.so /zfs/zfs; /tools/umount.so /zfs; '
         '/zpool.so export osv') % console
