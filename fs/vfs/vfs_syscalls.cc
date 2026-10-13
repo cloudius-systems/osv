@@ -847,7 +847,11 @@ sys_rename(char *src, char *dest)
 
 	error = VOP_RENAME(dvp1, vp1, sname, dvp2, vp2, dname);
 
+	dentry_move(dp1, ddp2, dname);
+	if (dp2)
+		dentry_remove(dp2);
 	if (!error) {
+		/* After the dentry cache update, so a woken reader sees the new names. */
 		int is_dir = (vp1->v_type == VDIR) ? 1 : 0;
 		// `src` is still the full source path, but `dest` was truncated to its
 		// parent above (*dname was NUL'd), so rebuild the full dest path.
@@ -867,9 +871,6 @@ sys_rename(char *src, char *dest)
 		osv_inotify_notify(src, IN_MOVED_FROM, is_dir, cookie);
 		osv_inotify_notify(full_dest, IN_MOVED_TO, is_dir, cookie);
 	}
-	dentry_move(dp1, ddp2, dname);
-	if (dp2)
-		dentry_remove(dp2);
 
  err3:
 	vn_unlock(dvp2);
