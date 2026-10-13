@@ -59,6 +59,22 @@
 int main()
 {
     printf("=== tst-fork-file-mmap ===\n");
+    // fork() is opt-in (CONFIG_fork). When it is off it returns -1/ENOSYS;
+    // skip cleanly so the default test suite (fork disabled) stays green.
+    errno = 0;
+    pid_t probe = fork();
+    if (probe == -1 && errno == ENOSYS) {
+        printf("SKIP: fork() not enabled (CONFIG_fork off)\n");
+        printf("=== tst-fork-file-mmap done: 0 failures ===\n");
+        return 0;
+    }
+    if (probe == 0) {
+        _exit(0);   // the probe fork's child: exit immediately
+    }
+    if (probe > 0) {
+        int probe_st = 0;
+        waitpid(probe, &probe_st, 0);   // reap the probe child
+    }
     const size_t page = (size_t)sysconf(_SC_PAGESIZE);
 
     // A read-only ROFS file present on the test image (~47 KiB).
