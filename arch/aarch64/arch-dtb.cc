@@ -225,14 +225,8 @@ u64 dtb_get_mmio_serial_console(int *irqid)
     if (node < 0)
         return 0;
 
-    const char *node_name = fdt_get_name(dtb, node, NULL);
-    if (!node_name) {
+    if (!dtb_get_reg(node, &address))
         return 0;
-    }
-
-    if (sscanf(node_name,"uart@%x", &address) != 1) {
-        return 0;
-    }
 
     if( !dtb_get_int_spec(node, int_spec, 1)) {
         return 0;
