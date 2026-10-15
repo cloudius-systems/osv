@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <errno.h>
 #include <string.h>
 #include <atomic>
 #include <algorithm>
@@ -18,8 +19,6 @@
 TRACEPOINT(trace_virtio_wait_for_queue, "queue(%p) have_elements=%d", void*, int);
 
 namespace virtio {
-
-int virtio_driver::_disk_idx = 0;
 
 // Process-wide MSI-X vector budget shared by all virtio devices.  The x86-64
 // IDT exposes 224 usable vectors (32..255); GSI/legacy IRQs, the APIC timer
@@ -82,6 +81,15 @@ virtio_driver::~virtio_driver()
 
 void virtio_driver::setup_features()
 {
+    int error = setup_features_checked();
+    assert(error == 0);
+}
+
+// Returns 0, or ENODEV when a modern device refuses the negotiated subset by
+// clearing FEATURES_OK. The device is then unusable, and the caller should
+// set FAILED or reset it (virtio spec 3.1.1).
+int virtio_driver::setup_features_checked()
+{
     // Step 4 - negotiate features
     u64 dev_features = get_device_features();
     u64 drv_features = this->get_driver_features();
@@ -108,8 +116,12 @@ void virtio_driver::setup_features()
         add_dev_status(VIRTIO_CONFIG_S_FEATURES_OK);
         //
         // Step 6 - re-read device status to ensure the FEATURES_OK bit is still set
-        assert(get_dev_status() & VIRTIO_CONFIG_S_FEATURES_OK);
+        if (!(get_dev_status() & VIRTIO_CONFIG_S_FEATURES_OK)) {
+            virtio_e("%s: device refused features %llx", get_name().c_str(), (unsigned long long)subset);
+            return ENODEV;
+        }
     }
+    return 0;
 }
 
 void virtio_driver::dump_config()

@@ -59,9 +59,32 @@ ifeq ($(conf_zfs),openzfs)
 # and applied here before the OpenZFS sources are compiled, so we never maintain an
 # OpenZFS fork.  The stamp file makes this idempotent.
 openzfs_patch_stamp := modules/open_zfs/openzfs/.osv-patches-applied
-$(shell if [ -d modules/open_zfs/openzfs/module ] && [ ! -f $(openzfs_patch_stamp) ]; then \
-	git -C modules/open_zfs/openzfs apply --whitespace=nowarn $(addprefix ../patches/,$(notdir $(wildcard modules/open_zfs/patches/*.patch))) 2>/dev/null \
-	&& touch $(openzfs_patch_stamp); fi)
+openzfs_patches := $(addprefix ../patches/,$(notdir $(wildcard modules/open_zfs/patches/*.patch)))
+# Apply the OSv edits to the pristine submodule tree.  A failure here must stop
+# the build rather than be discarded, for two reasons that compound:
+#   - git apply is not all-or-nothing across several patch files in one
+#     invocation: it can modify the files of the earlier patches and then reject
+#     a later one, leaving a partially patched OpenZFS tree behind.
+#   - the exit status of a $(shell ...) is invisible to make, so on its own it
+#     stops nothing; with the diagnostic sent to /dev/null as well there is no
+#     indication at all, and the build goes on to compile that tree.  The result
+#     is an OpenZFS built with only some of the OSv platform edits, which fails
+#     at run time (a missing edit shows up as a null call in the guest) with
+#     nothing in the build output pointing back to the cause.
+# So keep the message, and require an explicit sentinel from the recipe: reaching
+# it means both the apply and the stamp succeeded.  Today a single patch file is
+# applied and the partial-apply window is narrow, but this is what makes adding
+# further patches to the series safe.
+ifeq (,$(wildcard $(openzfs_patch_stamp)))
+ifneq (,$(wildcard modules/open_zfs/openzfs/module))
+ifneq (,$(openzfs_patches))
+openzfs_patch_out := $(shell git -C modules/open_zfs/openzfs apply --whitespace=nowarn $(openzfs_patches) 2>&1 && touch $(openzfs_patch_stamp) && echo __osv_patch_ok__)
+ifneq (__osv_patch_ok__,$(lastword $(openzfs_patch_out)))
+$(error Failed to apply the OSv OpenZFS patches to modules/open_zfs/openzfs: $(openzfs_patch_out). The submodule tree may be partially patched; restore it with "git -C modules/open_zfs/openzfs checkout -- . && git -C modules/open_zfs/openzfs clean -fd" before retrying)
+endif
+endif
+endif
+endif
 # The OpenZFS object lists + conf_zfs=openzfs flags are included further
 # below (after bsd_zfs defines the shared `solaris` list), from
 # modules/open_zfs/open_zfs_sources.mk.
@@ -1057,6 +1080,9 @@ objects += arch/x64/vmlinux.o
 objects += arch/x64/vmlinux-boot64.o
 objects += arch/x64/pvh-boot.o
 objects += arch/x64/syscall.o
+ifeq ($(conf_pmu),1)
+objects += arch/x64/pmu.o
+endif
 ifeq ($(conf_drivers_acpi),1)
 objects += $(acpi)
 endif
@@ -1176,8 +1202,10 @@ musl += ctype/isspace.o
 musl += ctype/isupper.o
 musl += ctype/isxdigit.o
 musl += ctype/toascii.o
+ifneq ($(conf_locale),1)
 musl += ctype/tolower.o
 musl += ctype/toupper.o
+endif
 
 musl += dirent/alphasort.o
 musl += dirent/scandir.o
@@ -1212,11 +1240,28 @@ musl += locale/catgets.o
 libc += locale/catopen.o
 libc += locale/intl.o
 libc += locale/locale.o
+ifeq ($(conf_locale),1)
+libc += locale/locale-data.o
+$(out)/libc/locale/locale.o: CXXFLAGS += -DOSV_CONF_LOCALE=1
+$(out)/libc/locale/locale-data.o: CXXFLAGS += -std=gnu++17
+# A loaded locale's LC_CTYPE tables (wide classes, maps, widths; byte tables
+# in ctype-byte.cc, which serves C and C.UTF-8 from musl's renamed objects).
+$(out)/libc/locale/wctype.o: CXXFLAGS += -DOSV_CONF_LOCALE=1
+libc += locale/ctype-byte.o
+# (hidden: they are not part of OSv's ABI; ctype-byte.cc exports the real names)
+$(out)/musl/src/ctype/__ctype_b_loc.o: CFLAGS += -D__ctype_b_loc=__osv_musl_ctype_b_loc -fvisibility=hidden
+$(out)/musl/src/ctype/__ctype_toupper_loc.o: CFLAGS += -D__ctype_toupper_loc=__osv_musl_ctype_toupper_loc -fvisibility=hidden
+$(out)/musl/src/ctype/__ctype_tolower_loc.o: CFLAGS += -D__ctype_tolower_loc=__osv_musl_ctype_tolower_loc -fvisibility=hidden
+endif
 libc += locale/ctype-utf8.o
 libc += locale/wctype.o
+ifneq ($(conf_locale),1)
 musl += locale/localeconv.o
+endif
 musl += locale/strcoll.o
-musl += locale/strfmon.o
+libc += locale/strfmon.o
+$(out)/libc/locale/strfmon.o: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include
+libc += locale/rpmatch.o
 libc += locale/strtod_l.o
 libc += locale/strtof_l.o
 libc += locale/strtold_l.o
@@ -1257,6 +1302,8 @@ musl += math/__math_uflowf.o
 musl += math/__math_divzero.o
 musl += math/__math_divzerof.o
 musl += math/__math_invalid.o
+# musl 1.2.x added a long-double variant, referenced by sqrtl().
+musl += math/__math_invalidl.o
 musl += math/__math_invalidf.o
 musl += math/acos.o
 musl += math/acosf.o
@@ -1452,6 +1499,10 @@ musl += math/sinhf.o
 musl += math/sinhl.o
 musl += math/sinl.o
 musl += math/sqrt.o
+# musl 1.2.2 rewrote the software sqrt to use a lookup table
+# (__rsqrt_tab), which lives in this new file.  sqrt/sqrtf/sqrtl all
+# reference it.
+musl += math/sqrt_data.o
 musl += math/sqrtf.o
 musl += math/sqrtl.o
 musl += math/tan.o
@@ -1549,6 +1600,10 @@ musl += network/dns_parse.o
 musl += network/in6addr_any.o
 musl += network/in6addr_loopback.o
 musl += network/lookup_name.o
+# dns_parse_callback()'s `family` is set on every path that reaches its
+# use (the rr != ctx->rrtype check leaves only RR_A and RR_AAAA), but gcc
+# cannot see it through the switch.  Same treatment as res_msend.o above.
+$(out)/musl/src/network/lookup_name.o: CFLAGS += -Wno-maybe-uninitialized $(cc-hide-flags-$(conf_hide_symbols))
 musl += network/lookup_serv.o
 libc += network/getnameinfo.o
 libc += network/__dns.o
@@ -1565,7 +1620,10 @@ $(out)/musl/src/network/if_indextoname.o: CFLAGS += --include libc/syscall_to_fu
 musl += network/if_nametoindex.o
 $(out)/musl/src/network/if_nametoindex.o: CFLAGS += --include libc/syscall_to_function.h --include libc/network/__socket.h -Wno-stringop-truncation
 musl += network/gai_strerror.o
-musl += network/h_errno.o
+# musl 1.2.x's h_errno.c reaches into musl's struct pthread via
+# pthread_impl.h, which OSv does not use.  Ours is thread-local via
+# __thread instead; see libc/network/h_errno.c.
+libc += network/h_errno.o
 musl += network/getservbyname_r.o
 musl += network/getservbyname.o
 musl += network/getservbyport_r.o
@@ -1650,6 +1708,10 @@ musl += stdio/__towrite.o
 musl += stdio/__uflow.o
 libc += stdio/__vfprintf_chk.o
 libc += stdio/ofl.o
+# musl 1.2.4 dropped the LFS64 symbol aliases, keeping only macros.  The
+# host libstdc++.a still references fseeko64/ftello64 as symbols.
+libc += stdio/lfs64_aliases.o
+libc += fstat_musl.o
 musl += stdio/ofl_add.o
 musl += stdio/asprintf.o
 musl += stdio/clearerr.o
@@ -1775,6 +1837,10 @@ musl += stdlib/ldiv.o
 musl += stdlib/llabs.o
 musl += stdlib/lldiv.o
 musl += stdlib/qsort.o
+# musl 1.2.3 split qsort() out of qsort.c, which now defines only __qsort_r().
+# Without qsort_nr.o the kernel links with no qsort symbol at all, and nothing
+# in the build says so.
+musl += stdlib/qsort_nr.o
 $(out)/musl/src/stdlib/qsort.o: COMMON += -Wno-dangling-pointer
 libc += stdlib/qsort_r.o
 $(out)/libc/stdlib/qsort_r.o: COMMON += -Wno-dangling-pointer
@@ -1884,7 +1950,10 @@ libc += string/__wmemmove_chk.o
 musl += string/wmemset.o
 libc += string/__wmemset_chk.o
 
-musl += temp/__randname.o
+# musl 1.2.x's __randname.c seeds from musl's struct pthread via
+# pthread_impl.h, which OSv does not use.  Ours uses gettid();
+# see libc/temp/__randname.c.
+libc += temp/__randname.o
 musl += temp/mkdtemp.o
 musl += temp/mkstemp.o
 musl += temp/mktemp.o
@@ -1892,6 +1961,22 @@ musl += temp/mkostemp.o
 musl += temp/mkostemps.o
 
 musl += time/__map_file.o
+# musl 1.2.x's __map_file.c switched from syscall(SYS_fstat, ...) on a
+# struct kstat to the hidden __fstat() on a struct stat.
+#
+# *** DO NOT REINSTATE -D__fstat=fstat HERE. ***  musl declares
+#     hidden int __fstat(int, struct stat *);
+# in src/include/sys/stat.h, so that -D rewrote the DECLARATION as well as
+# the call, making this TU declare OSv's own fstat as HIDDEN.  A hidden
+# declaration in any translation unit wins at link time, so fstat was
+# demoted from GLOBAL to STB_LOCAL in loader.elf.  OSv's runtime resolver
+# only matches GLOBAL/WEAK, so every glibc-linked shared object importing
+# fstat (all the OpenZFS userspace libraries carry U fstat@GLIBC_2.33, since
+# glibc 2.33 made fstat a real symbol rather than an inline over __fxstat)
+# failed to load:  /libzutil.so: failed looking up symbol fstat
+# i.e. conf_zfs=openzfs compiled but could not boot.  stat/lstat/fstatat were
+# unaffected only because nothing rewrote their names.
+# libc/fstat_musl.c now provides a REAL non-hidden __fstat instead.
 $(out)/musl/src/time/__map_file.o: CFLAGS += --include libc/syscall_to_function.h -Wno-incompatible-pointer-types
 musl += time/__month_to_secs.o
 musl += time/__secs_to_tm.o
@@ -1910,11 +1995,12 @@ musl += time/gmtime_r.o
 musl += time/localtime.o
 musl += time/localtime_r.o
 musl += time/mktime.o
-musl += time/strftime.o
-musl += time/strptime.o
+libc += time/strftime.o
+$(out)/libc/time/strftime.o: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include
+libc += time/strptime.o
+$(out)/libc/time/strptime.o: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include
 musl += time/time.o
 musl += time/timegm.o
-musl += time/wcsftime.o
 musl += time/ftime.o
 $(out)/libc/time/ftime.o: CFLAGS += -Ilibc/include
 
@@ -2298,6 +2384,29 @@ bootfs_dep += $(out)/modules/libext/libext.so
 else
 ifeq ($(fs),zfs)
 bootfs_dep += $(tools:%=$(out)/%) $(out)/libsolaris.so
+else
+ifeq ($(fs),ramfs)
+# For fs=ramfs, scripts/build passes $(out)/usr.manifest as the bootfs manifest,
+# and that manifest is generated from usr_ramfs.manifest.skel, which lists
+# tools/mount/mount-fs.so and tools/mount/umount.so.  Without these the very
+# first build of a fresh tree races: mkbootfs.py stats a tool nothing ordered
+# and dies with FileNotFoundError.
+bootfs_dep += $(out)/tools/mount/mount-fs.so $(out)/tools/mount/umount.so
+endif
+endif
+endif
+# bootfs.manifest.skel names /usr/lib/fs/libsolaris.so unconditionally, so the
+# ZFS library is part of bootfs for every root filesystem, not only fs=zfs.  Any
+# ZFS-enabled build therefore has to list it (and the tools that go with it) as a
+# prerequisite here, or mkbootfs runs before it exists: serially that is a hard
+# failure on the missing file, and under -j it is a race that shows up as an
+# intermittent build break.  Key on the ZFS build itself rather than on the root
+# filesystem choice.  A conf_zfs=openzfs image with, say, fs=ramfs and a runtime
+# data pool is a normal configuration and hits exactly this.
+# fs=ext and fs=zfs already have their dependencies from the chain above.
+ifdef conf_zfs_openzfs
+ifeq ($(filter ext zfs,$(fs)),)
+bootfs_dep += $(tools:%=$(out)/%) $(out)/libsolaris.so
 endif
 endif
 $(out)/bootfs.bin: $(bootfs_dep)
@@ -2454,11 +2563,21 @@ OPENSSL_INCLUDE := $(shell ls -d /nix/store/mvl4lw9v8p9f6hlw258j2slrhy7gjggl-ope
 ZLIB_INCLUDE := $(shell ls -d /nix/store/pcs65d7kzpd5dq3wm1nx99i3ax8y1dw6-zlib-1.3-dev/include 2>/dev/null || \
 	ls -d /nix/store/*-zlib-*-dev/include 2>/dev/null | head -1)
 
+# musl 1.2.6 (taken by #1517) narrowed the LFS64 alias gating: 1.2.1's
+# include/dirent.h exposed readdir64/dirent64 under
+# "#if defined(_LARGEFILE64_SOURCE) || defined(_GNU_SOURCE)", while 1.2.6's
+# include/dirent.h:71 gates them on _LARGEFILE64_SOURCE ALONE.  These
+# illumos-derived sources use the 64-suffixed spellings (stat64, fstat64,
+# statfs64, pread64, pwrite64, open64, readdir64, lstat64, dirent64), so the
+# name must be requested explicitly.  On a 64-bit target the aliases are plain
+# #defines to the unsuffixed forms, so this changes no code, only which names
+# are visible -- the same argument as the $(libzfs-objects) treatment below.
 ozfs-cflags-common = \
 	$(foreach p, $(strip $(ozfs-userspace-includes)), -isystem $(p)) \
 	$(if $(OPENSSL_INCLUDE), -isystem $(OPENSSL_INCLUDE)) \
 	$(if $(ZLIB_INCLUDE), -isystem $(ZLIB_INCLUDE)) \
 	-D_GNU_SOURCE \
+	-D_LARGEFILE64_SOURCE \
 	-D__OSV__ \
 	-DHAVE_ATTRIBUTE_VISIBILITY_DEFAULT \
 	'-DTEXT_DOMAIN=""' \
@@ -2892,7 +3011,12 @@ $(libzfs-objects): post-includes-bsd =
 
 $(libzfs-objects): kernel-defines =
 
-$(libzfs-objects): CFLAGS += -D_GNU_SOURCE
+# musl 1.2.4 stopped exposing the LFS64 aliases (readdir64, dirent64,
+# off64_t, ...) under _GNU_SOURCE; they now need _LARGEFILE64_SOURCE
+# named explicitly.  These illumos-derived sources use those spellings.
+# On a 64-bit target the aliases are plain #defines to the unsuffixed
+# forms, so this changes no code, only which names are visible.
+$(libzfs-objects): CFLAGS += -D_GNU_SOURCE -D_LARGEFILE64_SOURCE
 
 $(libzfs-objects): CFLAGS += -Wno-switch -D__va_list=__builtin_va_list '-DTEXT_DOMAIN=""' \
 			-Wno-maybe-uninitialized -Wno-unused-variable -Wno-unknown-pragmas -Wno-unused-function \

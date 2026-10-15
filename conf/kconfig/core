@@ -63,3 +63,15 @@ config core_newpoll
   prompt "Include newpoll"
   bool
   default n
+
+config pmu
+  prompt "Include x86_64 PMU (performance-counter) readout"
+  def_bool $(shell,grep -q ^conf_pmu=1 conf/base.mk && echo y || echo n)
+  help
+    Enable OSv's minimal x86_64 Intel architectural-perfmon readout
+    (include/osv/pmu.hh, arch/x64/pmu.cc): a diagnostic facility to count
+    instructions-retired, unhalted-cycles, iTLB/dTLB page-walk completions and
+    L3 misses on the current CPU.  OFF by default (conf_pmu=0 in conf/base.mk);
+    when disabled none of the PMU code is compiled in.  Diagnostic-only: no
+    sampling/overflow interrupts, no per-thread virtualization across preemption
+    (pin the measured thread).

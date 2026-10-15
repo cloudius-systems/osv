@@ -40,6 +40,7 @@ int vfs_file::close()
 int vfs_file::read(struct uio *uio, int flags)
 {
 	auto fp = this;
+	int ioflags = (fp->f_flags & O_NONBLOCK) ? IO_NONBLOCK : 0;
 	struct vnode *vp = fp->f_dentry->d_vnode;
 	int error;
 	size_t count;
@@ -59,13 +60,13 @@ int vfs_file::read(struct uio *uio, int flags)
 	 * fp->f_offset, so it keeps the lock.
 	 */
 	if (vp->v_type == VBLK && (flags & FOF_OFFSET) != 0)
-		return VOP_READ(vp, fp, uio, 0);
+		return VOP_READ(vp, fp, uio, ioflags);
 
 	vn_lock(vp);
 	if ((flags & FOF_OFFSET) == 0)
 		uio->uio_offset = fp->f_offset;
 
-	error = VOP_READ(vp, fp, uio, 0);
+	error = VOP_READ(vp, fp, uio, ioflags);
 	if (!error) {
 		count = bytes - uio->uio_resid;
 		if ((flags & FOF_OFFSET) == 0)
@@ -91,7 +92,7 @@ int vfs_file::write(struct uio *uio, int flags)
 {
 	auto fp = this;
 	struct vnode *vp = fp->f_dentry->d_vnode;
-	int ioflags = 0;
+	int ioflags = (fp->f_flags & O_NONBLOCK) ? IO_NONBLOCK : 0;
 	int error;
 	size_t count;
 	ssize_t bytes;
@@ -187,7 +188,10 @@ bool vfs_file::put_page(void *addr, uintptr_t off, mmu::hw_ptep<0> ptep)
 
 void vfs_file::sync(off_t start, off_t end)
 {
-    pagecache::sync(this, start, end);
+    // pagecache::sync() now reports writeback errors by return value rather
+    // than throwing; the munmap/msync path (mmu::file_vma::sync) surfaces any
+    // error via its own sys_fsync() tail, so no caller depends on a throw here.
+    (void) pagecache::sync(this, start, end);
 }
 
 // Locking: VOP_CACHE will call into the filesystem, and that can trigger an

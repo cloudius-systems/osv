@@ -9,10 +9,13 @@
 #include <sys/cdefs.h>
 
 #include "drivers/nvme.hh"
+#include "drivers/blk-common.hh"
 #include "drivers/pci-device.hh"
 #include <osv/interrupt.hh>
 
 #include <cassert>
+#include <cstdlib>
+#include <cstdio>
 #include <string>
 #include <string.h>
 #include <map>
@@ -42,7 +45,6 @@ TRACEPOINT(trace_nvme_strategy, "bio=%p, bcount=%lu", struct bio*, size_t);
 
 namespace nvme {
 
-int driver::_disk_idx = 0;
 int driver::_instance = 0;
 
 struct nvme_priv {
@@ -149,12 +151,31 @@ driver::driver(pci::device &pci_dev)
     //Create IO queues
     create_io_queues();
 
+    // NVMe interrupt coalescing trades completion latency for fewer interrupts:
+    // the controller delays a completion IRQ up to (time * 100us) or until
+    // 'threshold' completions accumulate.  That is a throughput win for deep,
+    // streaming IO but a large latency penalty for low-queue-depth synchronous
+    // IO -- e.g. a database fsync / ZFS ZIL commit that issues one FLUSH and
+    // waits for it: it pays the full aggregation-timer delay on every commit.
+    // Default to NO coalescing (lowest latency); allow opt-in via
+    // OSV_NVME_INT_COALESCING="threshold,time100us" for throughput-bound loads.
+    // QEMU's emulated controller ignores the feature, so only touch real ones.
     if (_identify_controller->vid != QEMU_VID) {
-        set_interrupt_coalescing(20, 2);
+        u8 coalesce_threshold = 0, coalesce_time = 0;
+        const char *ic = getenv("OSV_NVME_INT_COALESCING");
+        if (ic) {
+            int t = 0, tm = 0;
+            if (sscanf(ic, "%d,%d", &t, &tm) == 2) {
+                coalesce_threshold = (u8)t;
+                coalesce_time = (u8)tm;
+            }
+        }
+        if (coalesce_threshold || coalesce_time) {
+            set_interrupt_coalescing(coalesce_threshold, coalesce_time);
+        }
     }
 
-    std::string dev_name("vblk");
-    dev_name += std::to_string(_disk_idx++);
+    std::string dev_name = blk_next_device_name();
 
     struct device* dev = device_create(&_driver, dev_name.c_str(), D_BLK);
     struct nvme_priv* prv = reinterpret_cast<struct nvme_priv*>(dev->private_data);

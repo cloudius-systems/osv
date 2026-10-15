@@ -38,6 +38,8 @@
 
 #include <osv/device.h>
 #include <osv/uio.h>
+#include <osv/vnode.h>
+#include <fcntl.h>
 #include <osv/debug.hh>
 #include <osv/clock.hh>
 #include <atomic>
@@ -48,6 +50,9 @@
 #include <dev/random/random_adaptors.h>
 #include <dev/random/random_harvestq.h>
 #include <dev/random/live_entropy_sources.h>
+#ifdef __aarch64__
+#include "cpuid.hh"
+#endif
 
 #ifdef __x86_64__
 #include "processor.hh"
@@ -61,6 +66,7 @@ void reseed_on_resume();
 
 struct random_device_priv {
     random_device* drv;
+    bool urandom;
 };
 
 static random_device_priv *to_priv(device *dev)
@@ -92,6 +98,14 @@ static void reseed_if_resumed()
 }
 #endif
 
+#ifdef __x86_64__
+static int drng_read(void *, int);   // hardware RDRAND read, defined below
+#endif
+
+#ifdef __aarch64__
+static int rndr_read(void *, int);   // hardware RNDR read, defined below
+#endif
+
 static int
 random_read(struct device *dev, struct uio *uio, int ioflags)
 {
@@ -102,9 +116,65 @@ random_read(struct device *dev, struct uio *uio, int ioflags)
     reseed_if_resumed();
 #endif
 
-    // Blocking logic
+    // Blocking logic.
+    //
+    // VFS passes IO_* flags; the adaptor's block() takes open(2) flags.  As on
+    // Linux, /dev/urandom ignores O_NONBLOCK and never fails with EAGAIN; unlike
+    // Linux, it still waits for the first seeding (via the hardware path below or
+    // block()).  Compute the effective nonblocking request once.
+    bool nonblock = (ioflags & IO_NONBLOCK) && !to_priv(dev)->urandom;
+
     if (!random_adaptor->seeded) {
-        error = (*random_adaptor->block)(ioflags);
+        if (nonblock) {
+            // O_NONBLOCK on an unseeded /dev/random: honor it with EAGAIN rather
+            // than serving hardware or sleeping.  block() returns EWOULDBLOCK.
+            error = (*random_adaptor->block)(O_NONBLOCK);
+        } else {
+#if defined(__x86_64__) || defined(__aarch64__)
+            // The software CSPRNG has not accumulated enough harvested entropy to
+            // seed yet.  If the CPU has a hardware CSPRNG that needs no
+            // accumulation window (x86 RDRAND, aarch64 RNDR/FEAT_RNG), satisfy the
+            // read directly from it instead of blocking: its output is
+            // cryptographically secure, so /dev/{u,}random is usable from the very
+            // first read.  Otherwise an early reader -- e.g. a PostgreSQL backend
+            // generating its cancel key via pg_strong_random() ->
+            // read(/dev/urandom) -- blocks in randomdev_block() -> msleep(PCATCH);
+            // with signals unblocked that becomes an EINTR retry loop, and until
+            // the adaptor crosses its reseed threshold the read never completes.
+            // On x86 this was observed (racily) as "could not generate random
+            // cancel key" failing backends at startup.  On aarch64, where there was
+            // no hardware path at all before this, the very first postmaster read
+            // of /dev/urandom blocked FOREVER and PostgreSQL never reached "ready
+            // to accept connections" -- the postmaster thread sat in
+            // sys_read -> device_read -> randomdev::random_read ->
+            // randomdev_block -> _msleep -> sched::thread::wait with every CPU
+            // idle.  Pre-existing OSv startup race; independent of fork.
+#ifdef __x86_64__
+            if (processor::features().rdrand) {
+#endif
+#ifdef __aarch64__
+            if (processor::features().rndr) {
+#endif
+                while (uio->uio_resid > 0 && !error) {
+                    c = std::min(uio->uio_resid, static_cast<long int>(PAGE_SIZE));
+                    // the hardware read wants a multiple-of-8 length; round up in
+                    // the page buffer and copy out only what the caller asked for.
+                    int c8 = (c + 7) & ~7;
+#ifdef __x86_64__
+                    int got = drng_read(static_cast<void *>(random_buf), c8);
+#endif
+#ifdef __aarch64__
+                    int got = rndr_read(static_cast<void *>(random_buf), c8);
+#endif
+                    if (got <= 0) { error = EIO; break; }
+                    error = uiomove(random_buf, std::min(c, got), uio);
+                }
+                return error;
+            }
+#endif
+            // No hardware CSPRNG: wait for the software seed.
+            error = (*random_adaptor->block)(0);
+        }
     }
 
     if (!error) {
@@ -202,6 +272,68 @@ drng_read(void *buf, int size)
 }
 #endif
 
+//
+// Arm FEAT_RNG, RNDR: architectural hardware source of entropy.
+// RNDR returns a 64-bit random number from a DRBG seeded by a true entropy
+// source, with NZCV.Z=0 on success (Z=1 means the RNG could not return a
+// number in reasonable time, and the result must be discarded).
+//
+#ifdef __aarch64__
+static int rndr_read(void *, int);
+
+// Mirrors the x86 RDRAND retry policy: RNDR can transiently fail to deliver
+// while the underlying entropy source catches up, so retry a bounded number of
+// times before giving up.
+static constexpr int rndr_retries_max = 10;
+
+static struct random_hardware_source arm_rndr = {
+    "arm rndr",
+    RANDOM_PURE_RDRAND,
+    &rndr_read,
+};
+
+static inline bool rndr_with_retries(uint64_t *data)
+{
+    for (auto retry = 0; retry <= rndr_retries_max; retry++) {
+        uint64_t val;
+        uint64_t fail;
+        // mrs <x>, RNDR (S3_3_C2_C4_0); PSTATE.Z is set if the read failed.
+        asm volatile("mrs %0, s3_3_c2_c4_0\n\t"
+                     "cset %1, eq\n\t"
+                     : "=r"(val), "=r"(fail)
+                     :
+                     : "cc");
+        if (!fail) {
+            *data = val;
+            return true;
+        }
+    }
+    return false;
+}
+
+static int
+rndr_read(void *buf, int size)
+{
+    uint64_t *dest = static_cast<uint64_t *>(buf);
+    uint64_t data;
+    unsigned qwords, qwords_to_read;
+
+    assert((size & (sizeof(uint64_t) - 1)) == 0);
+    qwords_to_read = size / sizeof(uint64_t);
+
+    for (qwords = 0; qwords < qwords_to_read; qwords++) {
+        if (!rndr_with_retries(&data)) {
+            // Handle the unlikely case where RNDR failed after all retries.
+            break;
+        }
+
+        *dest++ = data;
+    }
+
+    return qwords * sizeof(uint64_t);
+}
+#endif
+
 random_device::random_device()
 {
     struct random_device_priv *prv;
@@ -209,6 +341,11 @@ random_device::random_device()
 #ifdef __x86_64__
     if (processor::features().rdrand) {
         live_entropy_source_register(&drng);
+    }
+#endif
+#ifdef __aarch64__
+    if (processor::features().rndr) {
+        live_entropy_source_register(&arm_rndr);
     }
 #endif
     if (live_entropy_sources_empty()) {
@@ -227,6 +364,7 @@ random_device::random_device()
     _urandom_dev = device_create(&random_device_driver, "urandom", D_CHR);
     prv = to_priv(_urandom_dev);
     prv->drv = this;
+    prv->urandom = true;
 }
 
 random_device::~random_device()
@@ -234,6 +372,11 @@ random_device::~random_device()
 #ifdef __x86_64__
     if (processor::features().rdrand) {
         live_entropy_source_deregister(&drng);
+    }
+#endif
+#ifdef __aarch64__
+    if (processor::features().rndr) {
+        live_entropy_source_deregister(&arm_rndr);
     }
 #endif
     (random_adaptor->deinit)();

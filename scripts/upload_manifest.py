@@ -1,6 +1,6 @@
 #!/usr/bin/python3
 
-import optparse, os, subprocess, socket, threading, stat, sys
+import optparse, os, shutil, signal, subprocess, socket, tempfile, threading, stat, sys, time
 from manifest_common import add_var, expand, unsymlink, read_manifest, defines, strip_file
 from contextlib import closing
 
@@ -15,40 +15,64 @@ def find_free_port():
         s.setsockopt(socket.SOL_SOCKET, socket.SO_REUSEADDR, 1)
         return s.getsockname()[1]
 
+# cpiod --ready sends this once it has accepted our connection.
+CPIOD_GREETING = b"CPIOD1\n"
+
+def wait_for_cpiod(osv, port, deadline_s=300):
+    # QEMU's hostfwd accepts connect() as soon as QEMU starts, whether or not
+    # cpiod is listening in the guest yet, so a successful connect proves
+    # nothing. Wait for cpiod's greeting instead. If the guest refuses the
+    # forwarded connection (not listening yet), the host socket is closed and
+    # we retry. Do not give up on a connection that is merely slow: closing
+    # it early could leave the guest a stale connection that consumes
+    # cpiod's only accept(), so each attempt waits up to the overall deadline.
+    import time as _time
+    deadline = _time.monotonic() + deadline_s
+    while _time.monotonic() < deadline:
+        if osv.poll() is not None:
+            sys.exit("qemu failed.")
+        s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+        try:
+            s.connect(("127.0.0.1", port))
+            got = b""
+            while len(got) < len(CPIOD_GREETING):
+                s.settimeout(max(0.1, deadline - _time.monotonic()))
+                chunk = s.recv(len(CPIOD_GREETING) - len(got))
+                if not chunk:
+                    break
+                got += chunk
+            if got == CPIOD_GREETING:
+                s.settimeout(None)
+                return s
+            if got:
+                s.close()
+                sys.exit("ERROR: unexpected greeting from cpiod: %r" % got)
+        except (ConnectionRefusedError, ConnectionResetError, socket.timeout,
+                OSError):
+            pass
+        s.close()
+        _time.sleep(1)
+    sys.exit("Timed out waiting for cpiod on port %d" % port)
+
 def upload(osv, manifest, depends, port):
     manifest = [(x, y % defines) for (x, y) in manifest]
     files = list(expand(manifest))
     files = [(x, unsymlink(y)) for (x, y) in files]
 
-    # Poll the TCP port until cpiod is ready, then connect.
-    # Waiting for text on QEMU's stdout pipe is unreliable when QEMU uses
-    # '-chardev stdio,mux=on' with a non-tty stdout: the mux/readline layer
-    # does not forward guest serial output to the subprocess pipe.
-    import time as _time
-    s = None
-    for _attempt in range(120):
-        if osv.poll() is not None:
-            sys.exit("qemu failed.")
-        try:
-            s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
-            s.connect(("127.0.0.1", port))
-            break
-        except (ConnectionRefusedError, OSError):
-            s.close()
-            s = None
-            _time.sleep(1)
-    else:
-        sys.exit("Timed out waiting for cpiod on port %d" % port)
-
     # We'll want to read the rest of the guest's output, so that it doesn't
     # hang, and so the user can see what's happening. Easiest to do this with
-    # a thread.
+    # a thread. Start it before waiting for cpiod, so the guest's boot and
+    # mkfs output cannot fill the pipe while we wait.
     stop_output = False
     def consumeoutput(file, silent):
         for line in iter(lambda: file.readline(), b''):
             if not silent():
                 os.write(sys.stdout.fileno(), line)
-    threading.Thread(target=consumeoutput, args=(osv.stdout, lambda: stop_output)).start()
+    # A daemon, so a failed upload can exit without waiting for QEMU.
+    threading.Thread(target=consumeoutput, args=(osv.stdout, lambda: stop_output),
+                     daemon=True).start()
+
+    s = wait_for_cpiod(osv, port)
 
     # Send a CPIO header or file, padded to multiple of 4 bytes
     def cpio_send(data):
@@ -123,6 +147,36 @@ def upload(osv, manifest, depends, port):
         # have the upload fail.
         sys.exit(1)
 
+def read_pid(pidfile):
+    try:
+        with open(pidfile) as f:
+            return int(f.read())
+    except (OSError, ValueError):
+        return None
+
+def kill_qemu(osv, pidfile):
+    # QEMU is a grandchild (sh, then run.py), so stopping osv alone could
+    # leave it running. Signal it by the pid it wrote; run.py then exits.
+    # Only while osv runs: run.py normally has not reaped QEMU by then,
+    # so the pid in the file is still QEMU's. An early failure can come
+    # before QEMU has written the file, so give it a moment to appear.
+    pid = read_pid(pidfile)
+    for _ in range(50):
+        if pid is not None or osv.poll() is not None:
+            break
+        time.sleep(0.1)
+        pid = read_pid(pidfile)
+    if pid is not None and osv.poll() is None:
+        try:
+            os.kill(pid, signal.SIGTERM)
+        except OSError:
+            pass
+    try:
+        osv.wait(timeout=10)
+    except subprocess.TimeoutExpired:
+        osv.kill()
+        osv.wait()
+
 def main():
     make_option = optparse.make_option
 
@@ -187,13 +241,27 @@ def main():
     # provide.)  Commands are ';'-separated and run independently, so a
     # spurious unmount does not abort the chain.
     zfs_builder_cmd = ('%s --norandom --nomount --noinit --preload-zfs-library '
-        '/tools/mkfs.so; /tools/cpiod.so --prefix /zfs/; '
+        '/tools/mkfs.so; /tools/cpiod.so --ready --prefix /zfs/; '
         '/zfs.so set compression=off osv; '
         '/tools/umount.so /zfs/zfs; /tools/umount.so /zfs; '
         '/zpool.so export osv') % console
-    osv = subprocess.Popen('cd ../..; scripts/run.py -k --kernel-path build/last/%s --arch=%s --vnc none -m 512 -c1 -i "%s" --block-device-cache writeback -s -e "%s" --forward tcp:127.0.0.1:%s-:10000' % (zfs_builder_name,arch,image_path,zfs_builder_cmd,upload_port), shell=True, stdout=subprocess.PIPE)
+    piddir = tempfile.mkdtemp(prefix='osv-upload-')
+    pidfile = os.path.join(piddir, 'qemu.pid')
+    osv = subprocess.Popen('cd ../..; scripts/run.py -k --kernel-path build/last/%s --arch=%s --vnc none -m 512 -c1 -i "%s" --block-device-cache writeback -s -e "%s" --forward tcp:127.0.0.1:%s-:10000 --pass-args=\"-pidfile %s\"' % (zfs_builder_name,arch,image_path,zfs_builder_cmd,upload_port,pidfile), shell=True, stdout=subprocess.PIPE)
 
-    upload(osv, manifest, depends, upload_port)
+    # A failed upload leaves cpiod waiting for a connection that will not
+    # come, so QEMU would never exit. Kill it and fail the build instead.
+    # (--pass-args needs the "=" form: its value starts with "-".)
+    try:
+        upload(osv, manifest, depends, upload_port)
+    except BaseException as e:
+        kill_qemu(osv, pidfile)
+        if isinstance(e, OSError):
+            sys.exit("ERROR: zfs_builder upload failed (%s); QEMU killed. "
+                     "cpiod may not have been listening yet." % e)
+        raise
+    finally:
+        shutil.rmtree(piddir, ignore_errors=True)
 
     # cpiod acknowledged the sync, so the ZFS image is written. Give QEMU up
     # to 120 seconds to exit cleanly (e.g. via ACPI poweroff), then kill it.

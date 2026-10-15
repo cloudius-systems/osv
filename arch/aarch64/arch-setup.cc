@@ -39,13 +39,50 @@
 
 #include <osv/kernel_config_networking_stack.h>
 
+// Temporary level-1 table for the phys_mem windows, filled with 1 GB block
+// descriptors so the windows cover all of physical memory during early boot.
+// One table = 512 entries x 1 GB = 512 GB of coverage.
+// ponytail: 512 GB ceiling; chain a second L1 table if a guest ever exceeds it
+// (setup_temporary_phys_map aborts with a clear message rather than hanging).
+static constexpr unsigned temp_phys_map_gbs = 512;
+static u64 temp_phys_map_l1[temp_phys_map_gbs] __attribute__((aligned(4096)));
+
 void setup_temporary_phys_map()
 {
-    // duplicate 1:1 mapping into the lower part of phys_mem
+    // Map the phys_mem windows over all of physical memory.
+    //
+    // This used to simply alias each window's top-level entry onto the boot
+    // identity entry (pt_ttbr0[pt_index(base,3)] = pt_ttbr0[0]).  That shares
+    // the boot identity level-1 table from boot.S, which only has valid
+    // entries for the first 4 GB of physical addresses (ident_pt_l2_0..3).
+    // Any RAM above 4 GB was therefore absent from the window, and
+    // free_initial_memory_range() -> page_range_allocator::insert() - which
+    // writes a back-pointer into the last 8 bytes of the free range - faulted
+    // at phys_mem + <end of RAM>.  With no exception handler installed this
+    // early, the guest wedged in the exception vector.  On the 'virt' machine
+    // RAM starts at 1 GB, so this hung for any guest with more than 3 GB.
+    //
+    // Instead, point the windows at our own level-1 table of 1 GB block
+    // descriptors.  The boot identity entry (pt_ttbr0[0]) is left untouched,
+    // so the kernel's 63 GB mapping and the low identity mapping still work.
+    auto phys_end = mmu::mem_addr + memory::phys_mem_size;
+    if (phys_end > u64(temp_phys_map_gbs) << 30) {
+        abort("setup_temporary_phys_map: physical memory exceeds the temporary map.\n");
+    }
+
+    // Block descriptor attributes match the boot tables in boot.S:
+    // valid (bit 0), block (bit 1 clear), AttrIdx=4 -> normal (bit 4), AF (bit 10).
+    for (unsigned i = 0; i < temp_phys_map_gbs; i++) {
+        temp_phys_map_l1[i] = (u64(i) << 30) | 0x411;
+    }
+
+    // Table descriptor pointing at the level-1 table above (valid + table).
+    u64 l1_desc = mmu::virt_to_phys(temp_phys_map_l1) | 0x3;
+
     u64 *pt_ttbr0 = reinterpret_cast<u64*>(processor::read_ttbr0());
     for (auto&& area : mmu::identity_mapped_areas) {
         auto base = reinterpret_cast<void*>(get_mem_area_base(area));
-        pt_ttbr0[mmu::pt_index(base, 3)] = pt_ttbr0[0];
+        pt_ttbr0[mmu::pt_index(base, 3)] = l1_desc;
     }
     mmu::flush_tlb_all();
 }

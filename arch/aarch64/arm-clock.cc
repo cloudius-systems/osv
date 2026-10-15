@@ -42,12 +42,10 @@ private:
 
 arm_clock::arm_clock() {
     asm volatile ("mrs %0, cntfrq_el0; isb; " : "=r"(freq_hz) :: "memory");
-    /* spec documents a typical range of 1-50 MHZ, but real cores run higher:
-     * current server ARM cores report generic-timer frequencies above 1GHz,
-     * which the previous 1GHz ceiling rejected and aborted the boot.  Allow up
-     * to 2GHz to cover current server ARM cores with headroom while still
-     * catching a garbage read. */
-    if (freq_hz < 1 * MHZ || freq_hz > 2000 * MHZ) {
+    /* spec documents a typical range of 1-50 MHZ, but the ampere-1a runs
+     * on 1Ghz and AWS Graviton3 reports 1.05Ghz, so do not impose an upper
+     * bound; only reject an unprogrammed (zero) or implausibly slow timer */
+    if (freq_hz < 1 * MHZ) {
         debug_early_u64("arm_clock(): read invalid frequency ", freq_hz);
         abort();
     }

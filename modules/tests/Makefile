@@ -147,6 +147,7 @@ endif
 ext-only-tests := tst-readdir.so tst-concurrent-read.so tst-fs-link.so
 ext-only-tests += tst-ext-readlink.so
 ext-only-tests += tst-ext4-rw.so
+ext-only-tests += tst-ext4-bench.so
 
 specific-fs-tests := $($(fs_type)-only-tests)
 
@@ -158,6 +159,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 	tst-mmap-file.so misc-mmap-big-file.so tst-mmap.so tst-huge.so \
 	tst-pthread-timedlock.so \
 	tst-signal-fills.so \
+	tst-dentry-lock.so \
 	tst-epoll-pwait2.so \
 	tst-splice.so \
 	tst-fs-syscalls.so \
@@ -279,9 +281,14 @@ endif
 tests += testrunner.so
 tests += tst-inotify.so
 
+# Needs a drivers profile with virtio; the default "all" profile has it.
+tests += tst-virtio-lifecycle.so
+internal-api-tests += tst-virtio-lifecycle.so
+
 tests += tst-libaio.so
 tests += tst-ramfs-unlink-race.so
 tests += tst-rlimit.so
+tests += misc-ext4-headers.so
 tests += tst-close-range.so
 tests += tst-numa-mempolicy.so
 tests += tst-numa-alloc.so
@@ -297,11 +304,41 @@ tests += tst-fork-file-mmap.so
 tests += tst-locale-builtin.so
 tests += tst-locale-ctype.so
 tests += misc-ctype-dump.so
+tests += tst-dentry-rename-child.so
+tests += tst-locale-data.so
+tests += misc-locale-dump.so
 internal-api-tests += tst-random-flush.so
 tests += tst-umount-release.so
 internal-api-tests += tst-umount-release.so
 ifeq ($(conf_zfs),openzfs)
 $(out)/tests/tst-umount-release.o: COMMON += -DCONF_ZFS_OPENZFS
+endif
+
+# PMU readout controls -- only built when conf_pmu=1 (the facility is
+# CONF-gated; the app links kernel symbols pmu::available()/program()/read()).
+ifeq ($(conf_pmu),1)
+tests += tst-pmu.so
+endif
+tests += tst-random-vfs.so
+internal-api-tests += tst-random-flush.so
+internal-api-tests += tst-random-vfs.so
+
+# Named locales (conf_locale=1, which reaches this Makefile via the
+# environment like conf_zfs): tst-locale-data checks either mode. With
+# conf_locale=1 the test locales are compiled with the build host's
+# localedef and go into the image under /usr/share/osv-locale-test and
+# /usr/lib/locale; the build fails if they cannot be made (tst-locale-data
+# would otherwise test nothing). With conf_locale=0 no data is built.
+conf_locale ?= 0
+# -fno-builtin-to{upper,lower}: GCC otherwise folds comparisons of their
+# results with the C locale's range (tr_TR's toupper('i') is 'i').
+$(out)/tests/tst-locale-data.o: CXXFLAGS += -std=gnu++17 -DOSV_CONF_LOCALE=$(conf_locale) \
+	-fno-builtin-toupper -fno-builtin-tolower
+ifeq ($(conf_locale),1)
+locale-test-data := $(out)/tests/locale-data
+locale-test-stamp := $(locale-test-data)/.stamp
+$(locale-test-stamp): $(src)/scripts/locale-oracle/make-test-locales.sh
+	$(call quiet, sh $< $(locale-test-data) && touch $@, LOCALEDEF tests/locale-data)
 endif
 
 # Tests with special compilation parameters needed...
@@ -395,6 +432,9 @@ common-boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	tst-seek.so tst-ctype.so tst-wctype.so tst-string.so tst-time.so tst-dax.so \
 	tst-net_if_test.so tst-tcp-v6.so tst-tcp-v6-smoke.so tst-ipv6-internet.so tst-ifaddr-dump.so
 
+common-boost-tests += tst-rename-failure.so
+internal-api-tests += tst-rename-failure.so
+
 boost-tests := $(common-boost-tests)
 
 rofs-only-boost-tests := rofs/tst-stdio.so
@@ -459,9 +499,16 @@ build_all_tests: $(all_tests:%=$(out)/%)
 .PHONY: build_all_tests clean
 
 # Automatically generate usr.manifest which includes all tests.
-usr.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel FORCE
+usr.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel $(locale-test-stamp) FORCE
 	@echo "  generating modules/tests/usr.manifest"
 	@cat $@.skel > $@
+	@if [ -n "$(locale-test-stamp)" ]; then \
+		echo "/usr/share/osv-locale-test/dir/**: ./tests/locale-data/dir/**"; \
+		echo "/usr/share/osv-locale-test/fb/**: ./tests/locale-data/fb/**"; \
+		echo "/usr/share/osv-locale-test/localedef-version.txt: ./tests/locale-data/localedef-version.txt"; \
+		echo "/usr/lib/locale/locale-archive: ./tests/locale-data/arch/usr/lib/locale/locale-archive"; \
+		echo "/usr/lib/locale/da_DK.utf8/**: ./tests/locale-data/default/da_DK.utf8/**"; \
+	fi >> $@
 	@case "$(CROSS_PREFIX)" in \
 		"aarch64"*) ./add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@ ;; \
 		*) LD_LIBRARY_PATH=$(boost-lib-dir) ldd $(addprefix $(out)/tests/,$(boost-tests)) $(addprefix $(out)/tests/,$(boost-program-options-tests)) | grep $(manifest-lib-pattern) | sed 's/ *[^ ] *\(.*\) => \(.*\) .*/\/usr\/lib\/\1: \2/' | sort | uniq >> $@ ;; \

@@ -110,13 +110,11 @@ int condvar::wait(mutex* user_mutex, sched::timer* tmr)
 void condvar::wake_one()
 {
     trace_condvar_wake_one(this);
-    // To make wake with no waiters faster, and avoid unnecessary contention
-    // in that case, first check the queue head outside the lock. If it is not
-    // empty, we still need to take the lock, and re-read the head.
-    if (!_waiters_fifo.oldest) {
-        return;
-    }
-
+    // Do NOT early-out on an unlocked read of _waiters_fifo.oldest: the waiter
+    // links its wait_record under _m then releases _m, and this reader does not
+    // take _m for the pre-check, so there is no acquire pairing that release --
+    // the just-linked record can read as a stale nullptr and the wakeup is
+    // dropped (see the fuller note in wake_all()).  Take _m first, then check.
     _m.lock();
     wait_record *wr = _waiters_fifo.oldest;
     if (wr) {
@@ -140,12 +138,21 @@ void condvar::wake_one()
 void condvar::wake_all()
 {
     trace_condvar_wake_all(this);
-    if (!_waiters_fifo.oldest) {
-        return;
-    }
-
+    // Do NOT early-out on an unlocked read of _waiters_fifo.oldest: a waiter
+    // links its wait_record under _m and then releases _m, but this reader does
+    // not take _m for the check, so there is no acquire to pair with that
+    // release and the just-linked record can be read as a stale nullptr --
+    // dropping the wakeup.  Under CONF_fork the waiter may be a forked child
+    // whose wait_record lives in another address space (coherent_wait_record),
+    // widening the window.  A sparse cross-address-space broadcast (e.g. a ZFS
+    // zio completion signalling a forked backend blocked in zio_wait) then
+    // wakes nobody and the backend hangs forever.  Take _m first, then check.
     _m.lock();
     wait_record *wr = _waiters_fifo.oldest;
+    if (!wr) {
+        _m.unlock();
+        return;
+    }
 
     // To help the assert() in condvar_wait(), we need to zero saved
     // user_mutex when all concurrent condvar_wait()s are done.

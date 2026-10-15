@@ -957,7 +957,15 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep<0> ptep)
     return addr != zero_page;
 }
 
-void sync(vfs_file* fp, off_t start, off_t end)
+// Flush dirty MAP_SHARED pages for [start,end) back to the filesystem.
+// Returns 0 on success or the writeback errno.  Historically this threw a C++
+// error on writeback failure, but it is reached from munmap() (via
+// mmu::file_vma::sync) as well as from an explicit fsync path, and throwing on
+// the munmap path is both unnecessary (the caller converts the result to a
+// return value) and unsafe: an exception raised there can abort when the C++
+// unwinder cannot run in that context.  Report the error by return value
+// instead and let each caller decide how to surface it.
+int sync(vfs_file* fp, off_t start, off_t end)
 {
     struct stat st;
     fp->stat(&st);
@@ -989,20 +997,23 @@ void sync(vfs_file* fp, off_t start, off_t end)
     }
 
     if (to_flush.empty())
-        return;
+        return 0;
 
     mmu::flush_tlb_all();
 
     /* Phase 3: write each page back to the filesystem. */
+    int ret = 0;
     for (auto cp : to_flush) {
         auto err = cp->writeback();
         if (err) {
             // Re-mark dirty: phase 2 cleared the flag, but the data never
             // reached the filesystem, so it must not be treated as clean.
             cp->mark_dirty();
-            throw make_error(err);
+            if (!ret)
+                ret = err;
         }
     }
+    return ret;
 }
 
 /*
@@ -1074,6 +1085,25 @@ int writeback_inode(dev_t dev, ino_t ino, off_t start, off_t end)
     std::vector<cached_page_write*> to_flush;
 
     SCOPE_LOCK(write_lock);
+
+    /*
+     * The write cache only ever holds pages faulted in through a writable
+     * MAP_SHARED mapping (see the single insert() call site, reached solely
+     * from the mmap write-fault path).  A file written with write()/pwrite()
+     * has no pages here, so its dirty set is empty.  Without this guard the
+     * loops below still walk every page in [start,end) doing a hash lookup
+     * that always misses -- an O(file-size) scan on every fsync() that flushes
+     * nothing.  Skip it when the cache holds no write pages at all: an empty
+     * cache cannot contain a dirty page for this inode, so there is nothing to
+     * promote, collect, or write back.
+     */
+    if (write_cache.empty())
+        return 0;
+    /* ponytail: whole-cache empty guard removes the O(file-size) scan for the
+     * write()/pwrite() case (no writable mmap pages anywhere).  A large file
+     * with a few dirty mmap pages elsewhere in the guest still scans its whole
+     * range; add a per-inode dirty-offset index if a mixed mmap+write workload
+     * ever needs that. */
 
     /* Phase 1: promote PTE-dirty pages to software-dirty.  clear_dirty()
      * writes the PTE only when the dirty bit was set (mapping preserved),

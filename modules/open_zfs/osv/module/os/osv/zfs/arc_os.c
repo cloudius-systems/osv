@@ -22,7 +22,8 @@
 #include <sys/kstat.h>
 #include <sys/zthr.h>
 #include <sys/aggsum.h>
-
+/* getenv()/strtoull(): zfs_context.h only pulls stdlib.h in for userspace. */
+#include <stdlib.h>
 extern unsigned long physmem;
 extern unsigned long freemem;
 
@@ -92,10 +93,53 @@ arc_available_memory(void)
  *      its eviction thread catches up.  Leaving 7/8 (≥ 112 MiB) free for
  *      everything else prevents the peak-usage spike from exceeding physmem.
  */
+/*
+ * Honour an explicit ARC ceiling from the environment.
+ *
+ * Other platforms expose zfs_arc_max as a module parameter or sysctl, both of
+ * which OSv lacks, so a unikernel image had no way to bound the ARC short of
+ * rebuilding.  That matters for any configuration that has to reason about
+ * cache size: sizing a guest against a known cache budget, comparing against
+ * another system with a fixed cache, or simply leaving room for an application
+ * that manages its own buffers.  Read the value here, before arc_init() applies
+ * its own validation, and let arc.c decide whether to accept it.
+ *
+ * Accepts a plain byte count with an optional K/M/G suffix.  A value arc.c
+ * rejects as out of range (below 64 MiB, or at or above physical memory) simply
+ * leaves the tiered default in place.
+ */
+static void
+arc_apply_env_max(void)
+{
+	const char *e = getenv("OSV_ZFS_ARC_MAX");
+	char *end = NULL;
+	unsigned long long v;
+
+	if (e == NULL || *e == '\0')
+		return;
+
+	v = strtoull(e, &end, 0);
+	if (end == e)
+		return;
+
+	switch (*end) {
+	case 'g': case 'G': v <<= 30; end++; break;
+	case 'm': case 'M': v <<= 20; end++; break;
+	case 'k': case 'K': v <<= 10; end++; break;
+	default: break;
+	}
+	if (*end != '\0')
+		return;
+
+	zfs_arc_max = (uint64_t)v;
+}
+
 uint64_t
 arc_default_max(uint64_t min, uint64_t allmem)
 {
 	uint64_t size;
+
+	arc_apply_env_max();
 
 	if (allmem >= (1ULL << 30))
 		size = MAX(allmem * 5 / 8, allmem - (1ULL << 30));
@@ -105,6 +149,18 @@ arc_default_max(uint64_t min, uint64_t allmem)
 		size = allmem / 8;
 	else
 		size = allmem / 8;
+
+	/*
+	 * OSv: the ARC and the application share one physical address space.
+	 * Cap the default at half of RAM for guests > 2 GiB so a large app
+	 * (e.g. PostgreSQL with multi-GiB shared_buffers plus many backends)
+	 * always keeps at least half the guest's memory and a checkpoint burst
+	 * cannot drive the guest OOM.  ZFS_MODULE_PARAM is a no-op on OSv, so
+	 * zfs_arc_max cannot yet override this at boot; a future cmdline wiring
+	 * could.
+	 */
+	if (allmem > (2ULL << 30))
+		size = MIN(size, allmem / 2);
 
 	return (MAX(size, min));
 }

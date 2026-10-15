@@ -49,6 +49,7 @@
 
 #include "gic-common.hh"
 #include <osv/spinlock.h>
+#include <osv/sched.hh>
 
 #define GICD_CTLR_WRITE_COMPLETE   (1UL << 31)
 #define GICD_CTLR_ARE_NS           (1U << 4)
@@ -279,7 +280,12 @@ private:
     u64 _typer;
 };
 
-constexpr int max_sgi_cpus = 16;
+// The SGI target is encoded as an affinity path (AFF3.AFF2.AFF1) plus a
+// 16-CPU target list within that affinity-1 cluster (the RS field selects
+// which group of 16), so GICv3 itself is not limited to 16 CPUs.  This array
+// only needs to hold one MPIDR per OSv logical CPU.  It used to be a flat 16,
+// which made send_sgi() assert as soon as a guest had more than 16 vCPUs.
+constexpr int max_sgi_cpus = sched::max_cpus;
 
 class gic_v3_driver : public gic_driver {
 public:

@@ -984,8 +984,12 @@ static void test_access(const std::string& dir, bool nc)
                tag + "read-only mount: read still asks the hook");
         fix_mp->m_flags &= ~MNT_RDONLY;
     } else {
-        report(ok && fails_with(access(f.c_str(), R_OK), EACCES),
-               tag + "mode 0 is EACCES without a hook");
+        // Without a hook vn_access() applies the superuser rule: the read
+        // and write bits do not deny, but execute still needs an x bit.
+        report(ok && access(f.c_str(), R_OK | W_OK) == 0,
+               tag + "mode 0: the superuser may read and write");
+        report(ok && fails_with(access(f.c_str(), X_OK), EACCES),
+               tag + "mode 0: execute is EACCES without a hook");
     }
     close(fd);
     check_no_leak(tag);
@@ -1126,15 +1130,16 @@ static void test_blocks(const std::string& dir)
     check_no_leak("(b)");
 }
 
-// On the legacy mount vn_access() checks the cached v_mode. The file stays
-// open so that vnode stays cached.
+// On the legacy mount vn_access() checks the cached v_mode (only its execute
+// bits deny, under the superuser rule). The file stays open so that vnode
+// stays cached.
 static void test_chmod_failure(const std::string& dir)
 {
     const std::string f = dir + "/m";
     reset();
     int fd = -1;
     if (!put(f, "m") || (fd = open(f.c_str(), O_RDONLY)) < 0 ||
-        chmod(f.c_str(), 0644) != 0) {
+        chmod(f.c_str(), 0755) != 0) {
         report(false, "(m) setup");
         if (fd >= 0) {
             close(fd);
@@ -1143,24 +1148,29 @@ static void test_chmod_failure(const std::string& dir)
     }
     setattr_err = EPERM;
     bool failed = fails_with(chmod(f.c_str(), 0), EPERM);
-    report(failed && access(f.c_str(), R_OK) == 0,
-           "(m) refused chmod: read is still allowed");
+    report(failed && access(f.c_str(), X_OK) == 0,
+           "(m) refused chmod: execute is still allowed");
     struct file *fp;
     if (fget(fd, &fp) == 0) {
         mode_t m = fp->f_dentry->d_vnode->v_mode;
-        report((m & 07777) == 0644, "(m) refused chmod: v_mode unchanged"
+        report((m & 07777) == 0755, "(m) refused chmod: v_mode unchanged"
                " (got " + std::to_string(m & 07777) + ")");
         fdrop(fp);
     }
     failed = fails_with(fchmod(fd, 0), EPERM);
-    report(failed && access(f.c_str(), W_OK) == 0,
-           "(m) refused fchmod: write is still allowed");
+    report(failed && access(f.c_str(), X_OK) == 0,
+           "(m) refused fchmod: execute is still allowed");
     setattr_err = 0;
     struct stat st = {};
+    // vn_access() reads the cached v_mode, so the execute bit shows whether
+    // a successful chmod reached it: refused at 0644 (after 0755), and at 0.
+    report(chmod(f.c_str(), 0644) == 0 &&
+           fails_with(access(f.c_str(), X_OK), EACCES),
+           "(m) successful chmod publishes the mode: 0644 refuses execute");
     report(chmod(f.c_str(), 0) == 0 && stat(f.c_str(), &st) == 0 &&
            (st.st_mode & 07777) == 0 &&
-           fails_with(access(f.c_str(), R_OK), EACCES),
-           "(m) successful chmod publishes the mode");
+           fails_with(access(f.c_str(), X_OK), EACCES),
+           "(m) successful chmod publishes the mode: 0 refuses execute");
     close(fd);
     check_no_leak("(m)");
 }
