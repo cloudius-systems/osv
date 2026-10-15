@@ -281,6 +281,10 @@ endif
 tests += testrunner.so
 tests += tst-inotify.so
 
+# Needs a drivers profile with virtio; the default "all" profile has it.
+tests += tst-virtio-lifecycle.so
+internal-api-tests += tst-virtio-lifecycle.so
+
 tests += tst-libaio.so
 tests += tst-ramfs-unlink-race.so
 tests += tst-rlimit.so
