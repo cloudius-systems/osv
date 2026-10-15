@@ -28,6 +28,15 @@ __attribute__((visibility("hidden"))) _Bool __osv_ctype_utf8(locale_t);
 #define OSV_CUR_UTF8 (__osv_ctype_utf8(0))
 #endif
 
+/* The loaded LC_CTYPE data (const osv_locale_data *) of l (NULL or
+ * LC_GLOBAL_LOCALE: the thread's current locale), or NULL for a built-in
+ * LC_CTYPE (C, C.UTF-8). Defined in libc/locale/locale.cc. */
+#ifdef __cplusplus
+extern "C" __attribute__((visibility("hidden"))) const void *__osv_ctype_data(locale_t) noexcept;
+#else
+__attribute__((visibility("hidden"))) const void *__osv_ctype_data(locale_t);
+#endif
+
 extern __thread locale_t __current_locale;
 #define CURRENT_LOCALE (__current_locale)
 

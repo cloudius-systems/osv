@@ -1121,8 +1121,10 @@ musl += ctype/isspace.o
 musl += ctype/isupper.o
 musl += ctype/isxdigit.o
 musl += ctype/toascii.o
+ifneq ($(conf_locale),1)
 musl += ctype/tolower.o
 musl += ctype/toupper.o
+endif
 
 musl += dirent/alphasort.o
 musl += dirent/scandir.o
@@ -1161,6 +1163,14 @@ ifeq ($(conf_locale),1)
 libc += locale/locale-data.o
 $(out)/libc/locale/locale.o: CXXFLAGS += -DOSV_CONF_LOCALE=1
 $(out)/libc/locale/locale-data.o: CXXFLAGS += -std=gnu++17
+# A loaded locale's LC_CTYPE tables (wide classes, maps, widths; byte tables
+# in ctype-byte.cc, which serves C and C.UTF-8 from musl's renamed objects).
+$(out)/libc/locale/wctype.o: CXXFLAGS += -DOSV_CONF_LOCALE=1
+libc += locale/ctype-byte.o
+# (hidden: they are not part of OSv's ABI; ctype-byte.cc exports the real names)
+$(out)/musl/src/ctype/__ctype_b_loc.o: CFLAGS += -D__ctype_b_loc=__osv_musl_ctype_b_loc -fvisibility=hidden
+$(out)/musl/src/ctype/__ctype_toupper_loc.o: CFLAGS += -D__ctype_toupper_loc=__osv_musl_ctype_toupper_loc -fvisibility=hidden
+$(out)/musl/src/ctype/__ctype_tolower_loc.o: CFLAGS += -D__ctype_tolower_loc=__osv_musl_ctype_tolower_loc -fvisibility=hidden
 endif
 libc += locale/ctype-utf8.o
 libc += locale/wctype.o
