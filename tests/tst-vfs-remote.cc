@@ -55,6 +55,17 @@
 // (m) A chmod or fchmod the filesystem refuses leaves the mode vn_access()
 //     checks unchanged.
 //
+// Writes through the open file. A fourth mount adds vop_write_file and
+// gives every open its own context in f_data, as a filesystem with
+// per-open server state would.
+// (wf) write, pwrite, writev, a dup, a positioned write to a VBLK vnode
+//      and msync writeback reach the hook with the file that wrote and
+//      that file's own context; two opens of one file keep separate
+//      contexts and offsets; a short write advances the offset by the
+//      bytes written; O_APPEND reaches the hook as IO_APPEND; a hook
+//      error is returned. The legacy mount runs the same sequence as a
+//      control: without the hook every write still uses VOP_WRITE.
+//
 // After each case the fixture checks that no vnode reference, root dentry
 // reference or directory lock is left behind.
 
@@ -64,10 +75,12 @@
 #include <fcntl.h>
 #include <limits.h>
 #include <sys/uio.h>
+#include <sys/mman.h>
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>
 
+#include <algorithm>
 #include <string>
 
 #include <osv/dentry.h>
@@ -104,8 +117,8 @@ struct open_ctx {
 };
 
 static struct vnops *ram;                   // ramfs vnops being wrapped
-static struct vnops hook_vnops, legacy_vnops, nc_vnops;
-static struct vfsops hook_vfsops, legacy_vfsops, nc_vfsops;
+static struct vnops hook_vnops, legacy_vnops, nc_vnops, wf_vnops;
+static struct vfsops hook_vfsops, legacy_vfsops, nc_vfsops, wf_vfsops;
 
 static bool race, hold, deny_open;
 static std::string hold_path;
@@ -119,6 +132,12 @@ static int getattr_err, setattr_err;
 static bool sized, blocks_set;         // getattr overrides, for one inode
 static uint64_t sized_ino, blocks_ino, server_blocks;
 static off_t server_size;
+// Writes: how the last one reached the filesystem, and what it was given.
+static int n_write, n_write_file, write_err, write_short, n_wctx;
+static struct file *w_fp;
+static void *w_data;
+static off_t w_off;
+static int w_flag, w_locks;
 
 // Leak observables of the mounted fixture. Every live vnode holds m_count
 // (vget() calls vfs_busy()), every dentry holds its parent, and the root
@@ -138,6 +157,11 @@ static void reset()
     n_lookup = n_access = access_err = 0;
     getattr_err = setattr_err = 0;
     sized = blocks_set = false;
+    n_write = n_write_file = write_err = write_short = 0;
+    w_fp = nullptr;
+    w_data = nullptr;
+    w_off = -1;
+    w_flag = w_locks = -1;
 }
 
 // Called right after the object `name` is created in dvp. Records it and,
@@ -278,10 +302,81 @@ static int fix_setattr(struct vnode *vp, struct vattr *va)
     return setattr_err ? setattr_err : ram->vop_setattr(vp, va);
 }
 
+// The filesystem's write, reached through VOP_WRITE or vop_write_file.
+// Records what it was given; write_err fails it, write_short leaves that
+// many bytes unwritten. A VBLK vnode is written as the regular ramfs file
+// it is.
+static int ram_write(struct vnode *vp, struct uio *uio, int ioflag)
+{
+    w_off = uio->uio_offset;
+    w_flag = ioflag;
+    w_locks = vp->v_nrlocks;
+    if (write_err) {
+        return write_err;
+    }
+    ssize_t keep = std::min<ssize_t>(write_short, uio->uio_resid);
+    uio->uio_resid -= keep;
+    bool blk = vp->v_type == VBLK;
+    if (blk) {
+        vp->v_type = VREG;
+    }
+    int error = ram->vop_write(vp, uio, ioflag);
+    if (blk) {
+        vp->v_type = VBLK;
+    }
+    uio->uio_resid += keep;
+    return error;
+}
+
+static int count_write(struct vnode *vp, struct uio *uio, int ioflag)
+{
+    ++n_write;
+    return ram_write(vp, uio, ioflag);
+}
+
+static int fix_write_file(struct vnode *vp, struct file *fp, struct uio *uio,
+                          int ioflag)
+{
+    ++n_write_file;
+    w_fp = fp;
+    w_data = fp ? fp->f_data : nullptr;
+    return ram_write(vp, uio, ioflag);
+}
+
+// Every open of the write-file mount gets its own context.
+static const unsigned wctx_magic = 0x9f3c0de2;
+struct wctx {
+    unsigned magic = wctx_magic;
+};
+
+static int wf_open(struct file *fp)
+{
+    ++n_open;
+    int error = ram->vop_open(fp);
+    if (!error) {
+        fp->f_data = new wctx;
+        ++n_wctx;
+    }
+    return error;
+}
+
+static int wf_close(struct vnode *vp, struct file *fp)
+{
+    auto c = static_cast<wctx *>(fp->f_data);
+    if (c && c->magic == wctx_magic) {
+        delete c;
+        --n_wctx;
+    }
+    fp->f_data = nullptr;
+    return ram->vop_close(vp, fp);
+}
+
 // nocache: the filesystem opts into MNT_NONAMECACHE and adds vop_access.
+// wfile: the filesystem adds vop_write_file and per-open contexts.
 // mflags are passed to mount(2).
 static bool mount_fixture(const std::string& dir, bool hook,
-                          bool nocache = false, unsigned long mflags = 0)
+                          bool nocache = false, unsigned long mflags = 0,
+                          bool wfile = false)
 {
     if (mkdir(dir.c_str(), 0755) != 0 && errno != EEXIST) {
         report(false, "mkdir " + dir + ": " + strerror(errno));
@@ -299,15 +394,22 @@ static bool mount_fixture(const std::string& dir, bool hook,
     struct vnode *root = dp->d_vnode;
     struct mount *mp = dp->d_mount;
     ram = root->v_op;
-    struct vnops *vn = nocache ? &nc_vnops : hook ? &hook_vnops : &legacy_vnops;
-    struct vfsops *ops = nocache ? &nc_vfsops : hook ? &hook_vfsops :
-                         &legacy_vfsops;
+    struct vnops *vn = wfile ? &wf_vnops : nocache ? &nc_vnops :
+                       hook ? &hook_vnops : &legacy_vnops;
+    struct vfsops *ops = wfile ? &wf_vfsops : nocache ? &nc_vfsops :
+                         hook ? &hook_vfsops : &legacy_vfsops;
     *vn = *ram;
     vn->vop_open = hook ? hook_open : legacy_open;
     vn->vop_close = fix_close;
     vn->vop_lookup = fix_lookup;
     vn->vop_getattr = fix_getattr;
     vn->vop_setattr = fix_setattr;
+    vn->vop_write = count_write;
+    if (wfile) {
+        vn->vop_open = wf_open;
+        vn->vop_close = wf_close;
+        vn->vop_write_file = fix_write_file;
+    }
     if (hook) {
         vn->vop_create = racing_create;
         vn->vop_create_open = fix_create_open;
@@ -1063,6 +1165,184 @@ static void test_chmod_failure(const std::string& dir)
     check_no_leak("(m)");
 }
 
+// ---- P3b: writes through the open file ----------------------------------
+
+static struct file *file_of(int fd)
+{
+    struct file *fp = nullptr;
+    if (fget(fd, &fp) == 0) {
+        fdrop(fp);      // the descriptor keeps it alive
+    }
+    return fp;
+}
+
+static void wbegin()
+{
+    n_write = n_write_file = 0;
+    w_fp = nullptr;
+    w_data = nullptr;
+    w_off = -1;
+    w_flag = w_locks = -1;
+}
+
+static int w_refs;     // the file vnode's references, which writes keep
+
+// The last write reached the filesystem once, at off, with `locks` vnode
+// locks held: through the hook with fp and the context fp's open made
+// (ctx) on the write-file mount, through VOP_WRITE on the legacy one.
+// Afterwards the vnode is unlocked and keeps its references.
+static bool reached(bool wf, struct file *fp, void *ctx, off_t off,
+                    int locks)
+{
+    if (!fp) {
+        return false;
+    }
+    struct vnode *vp = fp->f_dentry->d_vnode;
+    bool way = wf ? n_write == 0 && n_write_file == 1 && w_fp == fp &&
+                    ctx && w_data == ctx && fp->f_data == ctx
+                  : n_write == 1 && n_write_file == 0;
+    return way && w_off == off && w_locks == locks && vp->v_nrlocks == 0 &&
+           vp->v_refcnt == w_refs;
+}
+
+static std::string wmsg(struct file *fp)
+{
+    struct vnode *vp = fp ? fp->f_dentry->d_vnode : nullptr;
+    return " (write " + std::to_string(n_write) + ", write_file " +
+           std::to_string(n_write_file) + ", off " + std::to_string(w_off) +
+           ", locks " + std::to_string(w_locks) + ", after: locks " +
+           std::to_string(vp ? vp->v_nrlocks : -1) + " refs " +
+           std::to_string(vp ? vp->v_refcnt : -1) + "/" +
+           std::to_string(w_refs) + ")";
+}
+
+static off_t at(int fd)
+{
+    return lseek(fd, 0, SEEK_CUR);
+}
+
+static void test_write_file(const std::string& dir, bool wf)
+{
+    const std::string tag = wf ? "(wf) " : "(l) (wf) ";
+    const std::string f = dir + "/wr";
+    reset();
+    int a = open(f.c_str(), O_CREAT | O_RDWR | O_TRUNC, 0644);
+    int b = open(f.c_str(), O_RDWR);
+    struct file *fa = file_of(a), *fb = file_of(b);
+    if (!fa || !fb) {
+        report(false, tag + "setup");
+        close(a);
+        close(b);
+        return;
+    }
+    w_refs = fa->f_dentry->d_vnode->v_refcnt;
+    void *ca = fa->f_data, *cb = fb->f_data;
+    if (wf) {
+        report(fa->f_data && fb->f_data && fa->f_data != fb->f_data,
+               tag + "two opens have their own contexts");
+    }
+    bool ok;
+
+    wbegin();
+    ok = write(a, "abcd", 4) == 4;
+    report(ok && reached(wf, fa, ca, 0, 1) && at(a) == 4,
+           tag + "write: its file and offset" + wmsg(fa));
+
+    wbegin();
+    ok = write(b, "WX", 2) == 2;
+    report(ok && reached(wf, fb, cb, 0, 1) && at(b) == 2 && at(a) == 4,
+           tag + "second open: its own file, context and offset" + wmsg(fb));
+
+    wbegin();
+    ok = pwrite(a, "pq", 2, 6) == 2;
+    report(ok && reached(wf, fa, ca, 6, 1) && at(a) == 4,
+           tag + "pwrite: the given offset, shared offset unchanged" +
+           wmsg(fa));
+
+    wbegin();
+    struct iovec iov[2] = {{(void *)"12", 2}, {(void *)"345", 3}};
+    ok = writev(b, iov, 2) == 5;
+    report(ok && reached(wf, fb, cb, 2, 1) && at(b) == 7,
+           tag + "writev: its file and offset" + wmsg(fb));
+
+    wbegin();
+    int c = dup(a);
+    ok = c >= 0 && write(c, "z", 1) == 1;
+    report(ok && reached(wf, fa, ca, 4, 1) && at(a) == 5,
+           tag + "dup: the shared file, context and offset" + wmsg(fa));
+    if (c >= 0) {
+        close(c);
+    }
+
+    wbegin();
+    write_short = 3;
+    ssize_t n = write(a, "12345678", 8);
+    write_short = 0;
+    off_t pos = at(a);
+    report(n == 5 && reached(wf, fa, ca, 5, 1) && pos == 10,
+           tag + "short write: returns and advances by the bytes written"
+           " (" + std::to_string(n) + ", at " + std::to_string(pos) + ")" +
+           wmsg(fa));
+
+    wbegin();
+    write_err = EIO;
+    ok = fails_with(write(a, "e", 1), EIO);
+    write_err = 0;
+    report(ok && reached(wf, fa, ca, 10, 1) && at(a) == 10,
+           tag + "error is returned, offset unchanged" + wmsg(fa));
+
+    // A positioned write to a block device runs without the vnode lock.
+    wbegin();
+    struct vnode *vp = fa->f_dentry->d_vnode;
+    vp->v_type = VBLK;
+    ok = pwrite(a, "B", 1, 0) == 1;
+    vp->v_type = VREG;
+    report(ok && reached(wf, fa, ca, 0, 0) && at(a) == 10,
+           tag + "VBLK pwrite: its file, unlocked" + wmsg(fa));
+
+    wbegin();
+    int d = open(f.c_str(), O_WRONLY | O_APPEND);
+    struct file *fd_ = file_of(d);
+    void *cd = fd_ ? fd_->f_data : nullptr;
+    off_t before = size_of(f);
+    ok = fd_ && write(d, "AP", 2) == 2;
+    std::string got = get(f);
+    report(ok && reached(wf, fd_, cd, 0, 1) && (w_flag & IO_APPEND) &&
+           size_of(f) == before + 2 && got.size() >= 2 &&
+           got.substr(got.size() - 2) == "AP",
+           tag + "O_APPEND: IO_APPEND, data at the end (offset now " +
+           std::to_string(at(d)) + ")" + wmsg(fd_));
+    if (d >= 0) {
+        close(d);
+    }
+    if (wf) {
+        report(n_wctx == 2, tag + "closing one open frees only its context"
+               " (live " + std::to_string(n_wctx) + ")");
+    }
+
+    // ramfs has no vop_cache, so a shared mapping is written back by
+    // msync() through the mapping's file.
+    void *p = mmap(nullptr, 4096, PROT_READ | PROT_WRITE, MAP_SHARED, a, 0);
+    if (p == MAP_FAILED) {
+        report(false, tag + "mmap: " + strerror(errno));
+    } else {
+        static_cast<char *>(p)[1] = 'M';
+        wbegin();
+        ok = msync(p, 4096, MS_SYNC) == 0;
+        report(ok && reached(wf, fa, ca, 0, 1) && get(f)[1] == 'M',
+               tag + "msync writeback: the mapping's file" + wmsg(fa));
+        munmap(p, 4096);
+    }
+
+    close(a);
+    close(b);
+    if (wf) {
+        report(n_wctx == 0, tag + "every context freed (live " +
+               std::to_string(n_wctx) + ")");
+    }
+    check_no_leak(tag);
+}
+
 int main(int argc, char **argv)
 {
     mkdir("/tmp", 0755);
@@ -1089,6 +1369,11 @@ int main(int argc, char **argv)
         test_blocks(nc);
         unmount_fixture(nc);
     }
+    const std::string wfd = "/tmp/vfs-remote-w";
+    if (mount_fixture(wfd, false, false, 0, true)) {
+        test_write_file(wfd, true);
+        unmount_fixture(wfd);
+    }
     // MNT_NONAMECACHE is for filesystems to set, not a mount(2) flag.
     if (mount_fixture(legacy, false, false, MNT_NONAMECACHE)) {
         report(!(fix_mp->m_flags & MNT_NONAMECACHE),
@@ -1098,6 +1383,7 @@ int main(int argc, char **argv)
         test_access(legacy, false);
         test_seek_end(legacy, false);
         test_chmod_failure(legacy);
+        test_write_file(legacy, false);
         unmount_fixture(legacy);
     }
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);

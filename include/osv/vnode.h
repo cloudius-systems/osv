@@ -162,6 +162,8 @@ typedef int (*vnop_symlink_t)   (struct vnode *, char *, char *);
 typedef int (*vnop_create_open_t) (struct vnode *, const char *, int, mode_t,
 				    struct vnode **, void **);
 typedef int (*vnop_access_t)	(struct vnode *, int);
+typedef int (*vnop_write_file_t) (struct vnode *, struct file *, struct uio *,
+				   int);
 
 /*
  * vnode operations
@@ -210,6 +212,20 @@ struct vnops {
 	 * vp may be locked or unlocked.
 	 */
 	vnop_access_t		vop_access;
+	/*
+	 * Optional. A write through the open file fp, called in place of
+	 * vop_write whenever the VFS has the file, so a filesystem can use
+	 * the context of that open (fp->f_data) rather than one shared by
+	 * every open of the vnode. uio and ioflag (IO_APPEND, IO_SYNC) are as
+	 * for vop_write. It returns 0 or a positive errno. On success the VFS
+	 * advances a non-positioned write's shared f_offset by the bytes the
+	 * uio moved, so a short write counts only what was written; on error
+	 * f_offset is unchanged. vp is locked, except for a positioned write
+	 * to a VBLK vnode. Writes with no open file (writeback of a page
+	 * mapped from a vop_cache filesystem) still call vop_write, which
+	 * must remain valid.
+	 */
+	vnop_write_file_t	vop_write_file;
 };
 
 /*
