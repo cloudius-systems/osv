@@ -242,7 +242,6 @@ private:
     bool _poll_mode = false;
     pci::device& _pci_dev;
     interrupt_manager _msi;
-    static int _disk_idx;
     pci::bar *_bar6;
 };
 
