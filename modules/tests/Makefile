@@ -284,6 +284,7 @@ tests += tst-inotify.so
 tests += tst-libaio.so
 tests += tst-ramfs-unlink-race.so
 tests += tst-rlimit.so
+tests += misc-ext4-headers.so
 tests += tst-close-range.so
 tests += tst-numa-mempolicy.so
 tests += tst-numa-alloc.so
