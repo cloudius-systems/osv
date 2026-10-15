@@ -15,6 +15,7 @@
 #define strptime osv_strptime
 #define strptime_l osv_strptime_l
 #define __strptime_l osv___strptime_l
+#define rpmatch osv_rpmatch
 #define strfmon osv_strfmon
 #define strfmon_l osv_strfmon_l
 #define weak_alias(old, new) weak_alias_(old, new)
@@ -22,3 +23,5 @@
 /* OSv's __nl_langinfo_l takes a null or LC_GLOBAL_LOCALE locale as the current one; glibc's does not. */
 #include <langinfo.h>
 char *osv_shim_nl_langinfo_l(nl_item, locale_t);
+/* rpmatch.c reads the current locale through nl_langinfo: OSv's own. */
+#define nl_langinfo(it) osv_shim_nl_langinfo_l(it, (locale_t)0)

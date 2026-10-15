@@ -50,15 +50,15 @@ equals 1.2.6 except for wcwidth (240 code points), and musl's C locale equals it
 ../../tests/tst-locale-ctype-sample.h` writes the expected values tst-locale-ctype checks: 0..0x2ff,
 every run boundary of the generated tables, and 0x110000, 0x7fffffff and WEOF, in C and C.UTF-8.
 
-## strftime, strptime and strfmon
+## strftime, strptime, strfmon and rpmatch
 
 Written from experiments with glibc 2.41 and the bytes of its compiled files; no glibc source read.
 Each has a host differential that builds the OSv source for Linux and compares it with glibc over
 the same locale (C and C.UTF-8, or compiled data with `LOCPATH`), and a negative control (a mutant
 that the differential must catch):
 
-- `time-diff/build.sh` builds `libc/time/strftime.c`, `strptime.c` and `libc/locale/strfmon.c` for
-  Linux with the shims in `time-diff/shim/` (their public names prefixed `osv_`);
+- `time-diff/build.sh` builds `libc/time/strftime.c`, `strptime.c`, `libc/locale/strfmon.c` and
+  `rpmatch.c` for Linux with the shims in `time-diff/shim/` (their public names prefixed `osv_`);
   the harnesses call glibc directly. It takes the files from the tree it is in (`OSV_TREE`
   overrides).
   - `sfd d <locale>...` (`sfdiff.c`): strftime and wcsftime, every conversion character 32..126 with

@@ -7,7 +7,7 @@
 # are taken from (default: the one this script is in).
 set -e
 cd "$(dirname "$0")"; T=${OSV_TREE:-$(cd ../../.. && pwd)}; mkdir -p src o
-for f in libc/time/strftime.c libc/time/strptime.c libc/time/osv-time.h libc/locale/strfmon.c; do
+for f in libc/time/strftime.c libc/time/strptime.c libc/time/osv-time.h libc/locale/rpmatch.c libc/locale/strfmon.c; do
   [ -f $T/$f ] && cp $T/$f src/; done
 
 S="-O1 -g -fsanitize=address,undefined -fno-sanitize-recover=all"
@@ -22,4 +22,5 @@ gcc $S -o spd o/spdiff.o o/strptime.o o/strftime.o o/shim.o
 gcc $F -c -o o/strfmon.o src/strfmon.c
 gcc $S -c -o o/fmdiff.o fmdiff.c
 gcc $S -o fmd o/fmdiff.o o/strfmon.o o/shim.o -lm
+gcc $F -c -o o/rpmatch.o src/rpmatch.c
 nm o/sfdiff.o | grep -q ' U strftime_l$' && nm o/sfdiff.o | grep -q ' U osv___strftime_l$'
