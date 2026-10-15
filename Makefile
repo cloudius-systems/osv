@@ -1229,19 +1229,34 @@ environ_musl += string/strchrnul.c
 
 musl += ctype/__ctype_b_loc.o
 
-musl += errno/strerror.o
+# strerror, strerror_l, strsignal, gai_strerror, regerror: glibc's English
+# text, translated through the "libc" message domain with conf_locale=1
+# (libc/locale/messages.cc); sys_errlist holds the same text.
 libc += errno/strerror.o
+libc += locale/messages.o
 
 musl += locale/catclose.o
-musl += locale/__mo_lookup.o
-$(out)/musl/src/locale/__mo_lookup.o: CFLAGS += $(cc-hide-flags-$(conf_hide_symbols))
-musl += locale/pleval.o
+# __mo_lookup.o and pleval.o (musl's gettext internals) are dead since
+# Stage 1d: gettext.cc owns .mo lookup and plural evaluation in both configs
+# (conf0's intl.c stub is a msgid passthrough). Dropped. catopen/catgets/
+# catclose stay: they are the POSIX catgets API, unrelated to gettext.
 musl += locale/catgets.o
 libc += locale/catopen.o
-libc += locale/intl.o
 libc += locale/locale.o
 ifeq ($(conf_locale),1)
+# gettext (gettext.cc, .mo catalogs and plural expressions in mo.cc); with
+# conf_locale=0 the intl.c stub returns the msgid.
+libc += locale/gettext.o
+libc += locale/mo.o
+$(out)/libc/locale/messages.o: CXXFLAGS += -DOSV_CONF_LOCALE=1
 libc += locale/locale-data.o
+# LC_NUMERIC in printf, scanf and strtod: every file that includes
+# libc/internal/osv-numeric.h (without the flag it is C's stub)
+libc += locale/numeric.o
+osv-numeric-users := locale/numeric.o stdio/vfprintf.o stdio/vfwprintf.o stdio/vfscanf.o \
+	stdio/vfwscanf.o internal/floatscan.o internal/intscan.o stdlib/strtod.o \
+	locale/strtod_l.o locale/strtof_l.o locale/strtold_l.o
+$(addprefix $(out)/libc/, $(osv-numeric-users)): CFLAGS += -DOSV_CONF_LOCALE=1
 $(out)/libc/locale/locale.o: CXXFLAGS += -DOSV_CONF_LOCALE=1
 $(out)/libc/locale/locale-data.o: CXXFLAGS += -std=gnu++17
 # A loaded locale's LC_CTYPE tables (wide classes, maps, widths; byte tables
@@ -1257,17 +1272,24 @@ libc += locale/ctype-utf8.o
 libc += locale/wctype.o
 ifneq ($(conf_locale),1)
 musl += locale/localeconv.o
+libc += locale/intl.o
 endif
+ifneq ($(conf_locale),1)
 musl += locale/strcoll.o
+musl += locale/strxfrm.o
+musl += locale/wcscoll.o
+musl += locale/wcsxfrm.o
+else
+# A loaded locale's LC_COLLATE (strcoll, strxfrm, wcscoll, wcsxfrm and _l).
+libc += locale/collate.o
+$(out)/libc/locale/collate.o: CXXFLAGS += -std=gnu++17
+endif
 libc += locale/strfmon.o
 $(out)/libc/locale/strfmon.o: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include
 libc += locale/rpmatch.o
 libc += locale/strtod_l.o
 libc += locale/strtof_l.o
 libc += locale/strtold_l.o
-musl += locale/strxfrm.o
-musl += locale/wcscoll.o
-musl += locale/wcsxfrm.o
 
 musl += math/__cos.o
 musl += math/__cosdf.o
@@ -1619,7 +1641,6 @@ musl += network/if_indextoname.o
 $(out)/musl/src/network/if_indextoname.o: CFLAGS += --include libc/syscall_to_function.h --include libc/network/__socket.h -Wno-stringop-truncation
 musl += network/if_nametoindex.o
 $(out)/musl/src/network/if_nametoindex.o: CFLAGS += --include libc/syscall_to_function.h --include libc/network/__socket.h -Wno-stringop-truncation
-musl += network/gai_strerror.o
 # musl 1.2.x's h_errno.c reaches into musl's struct pthread via
 # pthread_impl.h, which OSv does not use.  Ours is thread-local via
 # __thread instead; see libc/network/h_errno.c.
@@ -1801,11 +1822,11 @@ musl += stdio/vasprintf.o
 libc += stdio/vdprintf.o
 libc += stdio/vfprintf.o
 $(out)/libc/stdio/vfprintf.o: COMMON += -Wno-maybe-uninitialized
-musl += stdio/vfscanf.o
-$(out)/musl/src/stdio/vfscanf.o: COMMON += -Wno-maybe-uninitialized
-musl += stdio/vfwprintf.o
-musl += stdio/vfwscanf.o
-$(out)/musl/src/stdio/vfwscanf.o: COMMON += -Wno-maybe-uninitialized
+libc += stdio/vfscanf.o
+$(out)/libc/stdio/vfscanf.o: COMMON += -Wno-maybe-uninitialized
+libc += stdio/vfwprintf.o
+libc += stdio/vfwscanf.o
+$(out)/libc/stdio/vfwscanf.o: COMMON += -Wno-maybe-uninitialized
 musl += stdio/vprintf.o
 musl += stdio/vscanf.o
 libc += stdio/vsnprintf.o
@@ -1909,7 +1930,6 @@ musl += string/strrchr.o
 musl += string/strsep.o
 libc += string/stresep.o
 libc_to_hide += string/stresep.o
-musl += string/strsignal.o
 musl += string/strspn.o
 musl += string/strstr.o
 musl += string/strtok.o
@@ -2030,7 +2050,6 @@ $(out)/musl/src/regex/regexec.o: CFLAGS += -UNDEBUG
 # In the C locale glibc's regex and fnmatch take each high byte as one character.
 $(out)/musl/src/regex/fnmatch.o $(out)/musl/src/regex/regcomp.o \
 $(out)/musl/src/regex/regexec.o: CFLAGS += -Dmbtowc=__osv_mbtowc_cu
-musl += regex/regerror.o
 musl += regex/tre-mem.o
 $(out)/musl/src/regex/tre-mem.o: CFLAGS += -UNDEBUG
 

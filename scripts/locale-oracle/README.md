@@ -104,7 +104,18 @@ control (a mutant that the differential must catch):
   three beyond): every class and map the locale names, the 12 standard classes, towupper, towlower,
   wcwidth, and the byte tables.
 
-The LC_CTYPE table format is described in `libc/locale/locale-data.h`. glibc behaviours that were
+- `collate/coll-diff.cc`: OSv's collation (`libc/locale/collate.cc` on the LC_COLLATE that
+  `locale-data.cc` loads) against glibc's strcoll, strxfrm, wcscoll and wcsxfrm: a word list (every
+  pair), random pairs over a mixed alphabet with invalid UTF-8, and every pair of a sample of single
+  code points. Signs and transform bytes must be equal, and so must the set of pairs where
+  strcmp(strxfrm) and strcoll disagree (glibc's two functions disagree; OSv keeps both as glibc's).
+  `collate/` also has the probes that measured the rules (xf.c, signs.c, enum.c, order.c, big.c,
+  shortn.c, cons.c, minpairs.c), a Python model of them (model.py), custom LC_COLLATE sources for
+  rule combinations no shipped locale has (make-custom-locales.sh), and the generator of
+  tst-locale-collate's expected output (gen-collate-expected.c).
+
+The LC_CTYPE table format is described in `libc/locale/locale-data.h`, LC_COLLATE's in
+STAGE1-FORMAT-SPEC.md section 6. glibc behaviours that were
 measured and reproduced (each surprising enough to note): wcsftime's `%Z` ignores `#` and, with `-`,
 its width; a `%EY` pad flag sticks to later era years in the same call; strptime's names and formats
 keep a "locale or C" state decided by the first differing match; after one `%O` number falls back to
@@ -115,8 +126,11 @@ Differences from glibc 2.41 that remain:
 - A locale that is not UTF-8 is ENOENT on OSv; glibc loads it (`xx_L1@euro` in fbdiff).
 - `nl_langinfo` of an LC_CTYPE word item: glibc returns the 32-bit word with the next 4 file bytes in
   the upper half; OSv returns the word alone.
-- Collation is byte order. Transliteration in named locales is not supported.
+- Collation follows the locale's LC_COLLATE since Stage 1c, equal to glibc except in a level whose
+  position rule differs between sections (no shipped locale; glibc's strcoll is not antisymmetric
+  there) and in which prefix of a too-short buffer strxfrm writes (C leaves it indeterminate).
+  Transliteration in named locales is not supported.
 - strfmon with a locale string longer than glibc's internal limit: glibc truncates the field (a
   3000-byte `mon_decimal_point` gives 198 bytes), OSv returns the whole amount or E2BIG.
-- `localeconv()->decimal_point` follows LC_NUMERIC, while printf and strtod still use ".".
+- `localeconv()->decimal_point`, printf and strtod all follow LC_NUMERIC since Stage 1b.
 - glibc's gmtime sets tm_zone "GMT", musl's "UTC" (misc-locale-dump uses localtime with TZ=UTC0).

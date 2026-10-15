@@ -7,8 +7,8 @@
 # Compile the test locales with the build host's localedef (glibc's locales
 # package) for an OSv test image built with conf_locale=1:
 #   make-test-locales.sh <out>
-# <out>/dir/<l>.utf8             the 14 default locales and tr_TR fa_IR ar_SA my_MM,
-#                                directory form (LOCPATH)
+# <out>/dir/<l>.utf8             the 14 default locales and tr_TR fa_IR ar_SA my_MM
+#                                cs_CZ fr_CA, directory form (LOCPATH)
 # <out>/dir/de_DE.ISO-8859-1     UTF-8 data under a Latin-1 name (codeset mismatch)
 # <out>/fb/de.utf8 de@euro de_AT de_CH.utf8@euro   sv_SE it_IT fr_FR es_ES data under
 #                                shorter names (the lookup fallback order)
@@ -16,10 +16,14 @@
 # <out>/arch/usr/lib/locale/locale-archive   the same locales as an archive
 # <out>/default/da_DK.utf8       for the default directory /usr/lib/locale
 # <out>/localedef-version.txt
+# <out>/msg/                     test catalogs (messages/mk-cats.sh; needs msgfmt)
+# <out>/libc-mo/<l>/LC_MESSAGES/libc.mo for the languages of the test locales, and
+#                                <out>/locale.alias: the build host's (tst-locale-messages)
 # modules/tests runs it only for conf_locale=1 test images. It exits 1, with
 # a message, if localedef is missing or cannot compile a locale (glibc's
-# locale sources, the "locales" package, are needed): tst-locale-data on a
-# conf_locale=1 image fails without the data.
+# locale sources, the "locales" package, are needed): tst-locale-data,
+# tst-locale-collate and tst-locale-messages on a conf_locale=1 image fail
+# without the data.
 set -e
 out=$1
 command -v localedef >/dev/null 2>&1 || {
@@ -30,9 +34,11 @@ tmp=$out.tmp
 rm -rf "$tmp"
 mkdir -p "$tmp/dir" "$tmp/arch/usr/lib/locale" "$tmp/default"
 # The 14 default locales, then tr_TR (case mapping) and fa_IR ar_SA my_MM
-# (alternative digits, right-to-left formats), which are not default locales.
+# (alternative digits, right-to-left formats), which are not default locales,
+# and cs_CZ (the contraction "ch") and fr_CA (backward accents) for collation
+# (Stage 1c).
 for l in en_US en_GB de_DE fr_FR es_ES it_IT pt_BR nl_NL sv_SE pl_PL ru_RU ja_JP zh_CN ko_KR \
-         tr_TR fa_IR ar_SA my_MM; do
+         tr_TR fa_IR ar_SA my_MM cs_CZ fr_CA; do
     localedef -i $l -f UTF-8 "$tmp/dir/$l.utf8" >/dev/null 2>&1 || {
         echo "make-test-locales: localedef -i $l failed (are glibc's locale sources installed?)" >&2
         exit 1
@@ -53,5 +59,19 @@ for f in dir/xx_L1/LC_CTYPE default/da_DK.utf8/LC_CTYPE; do
     [ -s "$tmp/$f" ] || { echo "localedef: no $f" >&2; exit 1; }
 done
 localedef --version | head -1 > "$tmp/localedef-version.txt"
+# Message catalogs for tst-locale-messages (msgfmt from gettext-tools). Since
+# Stage 1d a conf_locale=1 image needs these to exercise the gettext engine;
+# a missing msgfmt is a hard build failure (as localedef is), so a conf1 image
+# cannot ship without them and tst-locale-messages cannot pass vacuously.
+command -v msgfmt >/dev/null 2>&1 || {
+    echo "make-test-locales: no msgfmt; conf_locale=1 test images need gettext-tools for the message catalogs" >&2
+    exit 1
+}
+sh "$(dirname "$0")/messages/mk-cats.sh" "$tmp/msg"
+for l in de en_GB es fr it ja ko nl pl pt_BR ru sv tr zh_CN; do
+    m=/usr/share/locale/$l/LC_MESSAGES/libc.mo
+    [ -f $m ] && mkdir -p "$tmp/libc-mo/$l/LC_MESSAGES" && cp $m "$tmp/libc-mo/$l/LC_MESSAGES/"
+done
+[ -f /usr/share/locale/locale.alias ] && cp /usr/share/locale/locale.alias "$tmp/locale.alias"
 rm -rf "$out"
 mv "$tmp" "$out"
