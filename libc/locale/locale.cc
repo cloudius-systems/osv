@@ -569,6 +569,19 @@ bool __osv_ctype_utf8(locale_t l) noexcept
 }
 
 extern "C" OSV_HIDDEN
+const char *__osv_locale_name(int cat, locale_t l) noexcept
+{
+    if (!l || l == LC_GLOBAL_LOCALE) {
+        l = current_locale();
+    }
+    if (cat < 0 || cat >= NCAT || cat == LC_ALL) {
+        return nullptr;
+    }
+    const char *n = l->__names[cat];
+    return n ? n : c_name;
+}
+
+extern "C" OSV_HIDDEN
 const void *__osv_ctype_data(locale_t l) noexcept
 {
 #if OSV_CONF_LOCALE

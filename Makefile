@@ -1148,18 +1148,26 @@ environ_musl += string/strchrnul.c
 
 musl += ctype/__ctype_b_loc.o
 
-musl += errno/strerror.o
+# strerror, strerror_l, strsignal, gai_strerror, regerror: glibc's English
+# text, translated through the "libc" message domain with conf_locale=1
+# (libc/locale/messages.cc); sys_errlist holds the same text.
 libc += errno/strerror.o
+libc += locale/messages.o
 
 musl += locale/catclose.o
-musl += locale/__mo_lookup.o
-$(out)/musl/src/locale/__mo_lookup.o: CFLAGS += $(cc-hide-flags-$(conf_hide_symbols))
-musl += locale/pleval.o
+# __mo_lookup.o and pleval.o (musl's gettext internals) are dead since
+# Stage 1d: gettext.cc owns .mo lookup and plural evaluation in both configs
+# (conf0's intl.c stub is a msgid passthrough). Dropped. catopen/catgets/
+# catclose stay: they are the POSIX catgets API, unrelated to gettext.
 musl += locale/catgets.o
 libc += locale/catopen.o
-libc += locale/intl.o
 libc += locale/locale.o
 ifeq ($(conf_locale),1)
+# gettext (gettext.cc, .mo catalogs and plural expressions in mo.cc); with
+# conf_locale=0 the intl.c stub returns the msgid.
+libc += locale/gettext.o
+libc += locale/mo.o
+$(out)/libc/locale/messages.o: CXXFLAGS += -DOSV_CONF_LOCALE=1
 libc += locale/locale-data.o
 # LC_NUMERIC in printf, scanf and strtod: every file that includes
 # libc/internal/osv-numeric.h (without the flag it is C's stub)
@@ -1183,6 +1191,7 @@ libc += locale/ctype-utf8.o
 libc += locale/wctype.o
 ifneq ($(conf_locale),1)
 musl += locale/localeconv.o
+libc += locale/intl.o
 endif
 ifneq ($(conf_locale),1)
 musl += locale/strcoll.o
@@ -1541,7 +1550,6 @@ musl += network/if_indextoname.o
 $(out)/musl/src/network/if_indextoname.o: CFLAGS += --include libc/syscall_to_function.h --include libc/network/__socket.h -Wno-stringop-truncation
 musl += network/if_nametoindex.o
 $(out)/musl/src/network/if_nametoindex.o: CFLAGS += --include libc/syscall_to_function.h --include libc/network/__socket.h -Wno-stringop-truncation
-musl += network/gai_strerror.o
 musl += network/h_errno.o
 musl += network/getservbyname_r.o
 musl += network/getservbyname.o
@@ -1811,7 +1819,6 @@ musl += string/strrchr.o
 musl += string/strsep.o
 libc += string/stresep.o
 libc_to_hide += string/stresep.o
-musl += string/strsignal.o
 musl += string/strspn.o
 musl += string/strstr.o
 musl += string/strtok.o
@@ -1913,7 +1920,6 @@ $(out)/musl/src/regex/regexec.o: CFLAGS += -UNDEBUG
 # In the C locale glibc's regex and fnmatch take each high byte as one character.
 $(out)/musl/src/regex/fnmatch.o $(out)/musl/src/regex/regcomp.o \
 $(out)/musl/src/regex/regexec.o: CFLAGS += -Dmbtowc=__osv_mbtowc_cu
-musl += regex/regerror.o
 musl += regex/tre-mem.o
 $(out)/musl/src/regex/tre-mem.o: CFLAGS += -UNDEBUG
 

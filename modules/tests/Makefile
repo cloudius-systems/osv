@@ -235,6 +235,7 @@ tests += tst-locale-ctype.so
 tests += misc-ctype-dump.so
 tests += tst-locale-data.so
 tests += tst-locale-numeric.so
+tests += tst-locale-messages.so
 tests += misc-locale-dump.so
 tests += tst-locale-collate.so
 internal-api-tests += tst-random-flush.so
@@ -254,10 +255,17 @@ $(out)/tests/tst-locale-numeric.o: CXXFLAGS += -std=gnu++17 -DOSV_CONF_LOCALE=$(
 # tst-locale-collate.inc is glibc's expected output (generated on Linux by
 # scripts/locale-oracle/collate/gen-collate-expected.c).
 $(out)/tests/tst-locale-collate.o: CXXFLAGS += -std=gnu++17 -I$(src)/tests -DOSV_CONF_LOCALE=$(conf_locale)
+$(out)/tests/tst-locale-messages.o: CXXFLAGS += -std=gnu++17 -DOSV_CONF_LOCALE=$(conf_locale)
 ifeq ($(conf_locale),1)
+# The test-data build runs ONLY at conf_locale=1 (localedef and msgfmt produce
+# the named-locale data, message catalogs and libc.mo the conf1 tests need).
+# make-test-locales.sh hard-fails if localedef/msgfmt are missing, so a conf1
+# image cannot ship without the data; conf0 never enters this block, so a
+# localedef failure cannot break the conf0 build (Stage 1a F2/F3).
 locale-test-data := $(out)/tests/locale-data
 locale-test-stamp := $(locale-test-data)/.stamp
-$(locale-test-stamp): $(src)/scripts/locale-oracle/make-test-locales.sh
+$(locale-test-stamp): $(src)/scripts/locale-oracle/make-test-locales.sh \
+		$(src)/scripts/locale-oracle/messages/mk-cats.sh
 	$(call quiet, sh $< $(locale-test-data) && touch $@, LOCALEDEF tests/locale-data)
 endif
 
@@ -425,6 +433,15 @@ usr.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel $(l
 		echo "/usr/share/osv-locale-test/localedef-version.txt: ./tests/locale-data/localedef-version.txt"; \
 		echo "/usr/lib/locale/locale-archive: ./tests/locale-data/arch/usr/lib/locale/locale-archive"; \
 		echo "/usr/lib/locale/da_DK.utf8/**: ./tests/locale-data/default/da_DK.utf8/**"; \
+	fi >> $@
+	@if [ -d $(locale-test-data)/msg ]; then \
+		echo "/usr/share/osv-locale-test/msg/**: ./tests/locale-data/msg/**"; \
+	fi >> $@
+	@if [ -d $(locale-test-data)/libc-mo ]; then \
+		echo "/usr/share/locale/**: ./tests/locale-data/libc-mo/**"; \
+	fi >> $@
+	@if [ -f $(locale-test-data)/locale.alias ]; then \
+		echo "/usr/share/locale/locale.alias: ./tests/locale-data/locale.alias"; \
 	fi >> $@
 	@case "$(CROSS_PREFIX)" in \
 		"aarch64"*) ./add_aarch64_boost_libraries.sh $(OSV_BASE) >> $@ ;; \

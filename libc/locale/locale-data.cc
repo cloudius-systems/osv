@@ -378,52 +378,24 @@ const osv_locale_data *from_dirs(int cat, const char *locpath, const char *name)
 
 // Each candidate name of the directory search (see the top of the file),
 // through every directory; the first found wins.
+struct dirs_arg {
+    int cat;
+    const char *locpath;
+    const osv_locale_data *found;
+};
+
+bool try_dirs(const char *cand, void *arg)
+{
+    dirs_arg *a = static_cast<dirs_arg *>(arg);
+    a->found = from_dirs(a->cat, a->locpath, cand);
+    return a->found != nullptr;
+}
+
 const osv_locale_data *from_dirs_fallback(int cat, const char *locpath, const char *name)
 {
-    // language ends at the first '_', '.' or '@'; territory at '.' or '@';
-    // codeset at '@'; the modifier is the rest.
-    size_t lang = strcspn(name, "_.@");
-    size_t terr = name[lang] == '_' ? strcspn(name + lang, ".@") : 0;
-    size_t cs = name[lang + terr] == '.' ? strcspn(name + lang + terr, "@") : 0;
-    const char *mod = name + lang + terr + cs;
-    char norm[norm_max + 1];
-    bool has_norm = normalise(name, norm, sizeof(norm));
-    // The normalised codeset, with its '.': norm differs from name only there.
-    const char *ncs = norm + lang + terr;
-    size_t ncslen = has_norm ? strlen(ncs) - strlen(mod) : 0;
-    char cand[norm_max + 1];
-    for (int m = *mod ? 0 : 1; m < 2; m++) {
-        for (int t = terr ? 0 : 1; t < 2; t++) {
-            for (int c = cs ? 0 : 2; c < 3; c++) {
-                if (c == 1 && !has_norm) {
-                    continue;
-                }
-                // ponytail: an empty language gets no shorter names.
-                if (!lang && (m || t || c)) {
-                    continue;
-                }
-                size_t n = 0;
-                memcpy(cand, name, lang + (t ? 0 : terr));
-                n = lang + (t ? 0 : terr);
-                if (c == 0) {
-                    memcpy(cand + n, name + lang + terr, cs);
-                    n += cs;
-                } else if (c == 1) {
-                    memcpy(cand + n, ncs, ncslen);
-                    n += ncslen;
-                }
-                if (!m) {
-                    memcpy(cand + n, mod, strlen(mod));
-                    n += strlen(mod);
-                }
-                cand[n] = '\0';
-                if (const osv_locale_data *d = from_dirs(cat, locpath, cand)) {
-                    return d;
-                }
-            }
-        }
-    }
-    return nullptr;
+    dirs_arg a{cat, locpath, nullptr};
+    osv_locale_candidates(name, try_dirs, &a);
+    return a.found;
 }
 
 // ---- LC_CTYPE tables ------------------------------------------------------
@@ -1002,4 +974,58 @@ const char *osv_locale_list(const osv_locale_data *d, int idx, unsigned i) noexc
             return nullptr;
         }
     }
+}
+
+// glibc's candidate names for a locale name, longest first (see the top of
+// the file); gettext searches catalogs in the same order.
+bool osv_locale_candidates(const char *name, bool (*fn)(const char *cand, void *arg),
+                           void *arg) noexcept
+{
+    // language ends at the first '_', '.' or '@'; territory at '.' or '@';
+    // codeset at '@'; the modifier is the rest.
+    size_t lang = strcspn(name, "_.@");
+    size_t terr = name[lang] == '_' ? strcspn(name + lang, ".@") : 0;
+    size_t cs = name[lang + terr] == '.' ? strcspn(name + lang + terr, "@") : 0;
+    const char *mod = name + lang + terr + cs;
+    if (strlen(name) > name_max) {
+        return false;
+    }
+    char norm[norm_max + 1];
+    bool has_norm = normalise(name, norm, sizeof(norm));
+    // The normalised codeset, with its '.': norm differs from name only there.
+    const char *ncs = norm + lang + terr;
+    size_t ncslen = has_norm ? strlen(ncs) - strlen(mod) : 0;
+    char cand[norm_max + 1];
+    for (int m = *mod ? 0 : 1; m < 2; m++) {
+        for (int t = terr ? 0 : 1; t < 2; t++) {
+            for (int c = cs ? 0 : 2; c < 3; c++) {
+                if (c == 1 && !has_norm) {
+                    continue;
+                }
+                // ponytail: an empty language gets no shorter names.
+                if (!lang && (m || t || c)) {
+                    continue;
+                }
+                size_t n = 0;
+                memcpy(cand, name, lang + (t ? 0 : terr));
+                n = lang + (t ? 0 : terr);
+                if (c == 0) {
+                    memcpy(cand + n, name + lang + terr, cs);
+                    n += cs;
+                } else if (c == 1) {
+                    memcpy(cand + n, ncs, ncslen);
+                    n += ncslen;
+                }
+                if (!m) {
+                    memcpy(cand + n, mod, strlen(mod));
+                    n += strlen(mod);
+                }
+                cand[n] = '\0';
+                if (fn(cand, arg)) {
+                    return true;
+                }
+            }
+        }
+    }
+    return false;
 }

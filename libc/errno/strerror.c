@@ -7,10 +7,11 @@
 
 #include <errno.h>
 
-const char *const sys_errlist[] = {
-#define E(num, message) [num] = message,
-#include "../../musl/src/errno/__strerror.h"
-#undef E
-};
+/* glibc's English messages (strerror's, libc/locale/messages-en.inc), with
+ * glibc's sys_nerr: one past the last code it names. */
+#define nullptr ((const char *)0)
+#define EN_ERRORS_ONLY
+#define en_errors sys_errlist
+#include "../locale/messages-en.inc"
 
 const int sys_nerr = sizeof(sys_errlist) / sizeof(sys_errlist[0]);

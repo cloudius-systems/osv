@@ -129,6 +129,13 @@ static inline bool osv_codeset_is_utf8(const char *cs, size_t len) noexcept
         (!__builtin_strcmp(kept, "UTF8") || !__builtin_strcmp(kept, "UTF-8"));
 }
 
+// Call fn with each of glibc's candidate names for name (the locale lookup
+// fallback order, also gettext's catalog search order), longest first, until
+// it returns true; return whether one did. Names longer than 255 get none.
+OSV_LOCALE_HIDDEN bool osv_locale_candidates(const char *name,
+                                             bool (*fn)(const char *cand, void *arg),
+                                             void *arg) noexcept;
+
 // Lookups in a validated 3-level table (any wc, including WEOF).
 OSV_LOCALE_HIDDEN int osv_ctype_class(const char *table, uint32_t wc) noexcept;
 OSV_LOCALE_HIDDEN uint32_t osv_ctype_map(const char *table, uint32_t wc) noexcept;

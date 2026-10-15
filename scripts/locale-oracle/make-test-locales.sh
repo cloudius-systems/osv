@@ -16,10 +16,14 @@
 # <out>/arch/usr/lib/locale/locale-archive   the same locales as an archive
 # <out>/default/da_DK.utf8       for the default directory /usr/lib/locale
 # <out>/localedef-version.txt
+# <out>/msg/                     test catalogs (messages/mk-cats.sh; needs msgfmt)
+# <out>/libc-mo/<l>/LC_MESSAGES/libc.mo for the languages of the test locales, and
+#                                <out>/locale.alias: the build host's (tst-locale-messages)
 # modules/tests runs it only for conf_locale=1 test images. It exits 1, with
 # a message, if localedef is missing or cannot compile a locale (glibc's
-# locale sources, the "locales" package, are needed): tst-locale-data on a
-# conf_locale=1 image fails without the data.
+# locale sources, the "locales" package, are needed): tst-locale-data,
+# tst-locale-collate and tst-locale-messages on a conf_locale=1 image fail
+# without the data.
 set -e
 out=$1
 command -v localedef >/dev/null 2>&1 || {
@@ -55,5 +59,19 @@ for f in dir/xx_L1/LC_CTYPE default/da_DK.utf8/LC_CTYPE; do
     [ -s "$tmp/$f" ] || { echo "localedef: no $f" >&2; exit 1; }
 done
 localedef --version | head -1 > "$tmp/localedef-version.txt"
+# Message catalogs for tst-locale-messages (msgfmt from gettext-tools). Since
+# Stage 1d a conf_locale=1 image needs these to exercise the gettext engine;
+# a missing msgfmt is a hard build failure (as localedef is), so a conf1 image
+# cannot ship without them and tst-locale-messages cannot pass vacuously.
+command -v msgfmt >/dev/null 2>&1 || {
+    echo "make-test-locales: no msgfmt; conf_locale=1 test images need gettext-tools for the message catalogs" >&2
+    exit 1
+}
+sh "$(dirname "$0")/messages/mk-cats.sh" "$tmp/msg"
+for l in de en_GB es fr it ja ko nl pl pt_BR ru sv tr zh_CN; do
+    m=/usr/share/locale/$l/LC_MESSAGES/libc.mo
+    [ -f $m ] && mkdir -p "$tmp/libc-mo/$l/LC_MESSAGES" && cp $m "$tmp/libc-mo/$l/LC_MESSAGES/"
+done
+[ -f /usr/share/locale/locale.alias ] && cp /usr/share/locale/locale.alias "$tmp/locale.alias"
 rm -rf "$out"
 mv "$tmp" "$out"
