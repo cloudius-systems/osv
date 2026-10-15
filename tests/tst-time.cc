@@ -772,3 +772,12 @@ TEST(time, strfmon_c_glibc) {
   EXPECT_EQ(-1, strfmon(buf, 4, "%n", 1234.5));
   EXPECT_EQ(E2BIG, errno);
 }
+
+TEST(time, rpmatch_c) {
+  setlocale(LC_ALL, "C");
+  EXPECT_EQ(1, rpmatch("y"));
+  EXPECT_EQ(1, rpmatch("Yes"));
+  EXPECT_EQ(0, rpmatch("n"));
+  EXPECT_EQ(-1, rpmatch("j"));
+  EXPECT_EQ(-1, rpmatch(""));
+}

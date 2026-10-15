@@ -5,6 +5,7 @@
 #include <langinfo.h>
 #include <locale.h>
 #include <string.h>
+#undef nl_langinfo
 const char *__osv_nl_list(nl_item item, unsigned i, locale_t l)
 {
     const char *s = (!l || l == LC_GLOBAL_LOCALE) ? nl_langinfo(item) : nl_langinfo_l(item, l);
