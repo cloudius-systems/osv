@@ -56,6 +56,7 @@ static int nfs_op_unmount(struct mount *mp, int flags)
         return EBUSY;
     }
 
+    release_mp_dentries(mp);
     return 0;
 }
 
