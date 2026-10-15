@@ -14,6 +14,7 @@
 
 #include <stddef.h>
 #include <stdint.h>
+#include <wchar.h>
 
 #define OSV_LOCALE_HIDDEN __attribute__((visibility("hidden")))
 
@@ -39,6 +40,20 @@ struct osv_ctype {
     const uint32_t *strindex;
 };
 
+// The LC_COLLATE tables of a loaded locale (STAGE1-FORMAT-SPEC.md section 6),
+// validated when the category is loaded: every weight index a lookup can reach
+// names a record within the data with rules within the data, and every list
+// ends within the data in an entry that always matches, so collate.cc reads
+// them without checks. Words are host-endian and 4-byte aligned.
+struct osv_collate {
+    uint32_t nrules;                    // levels; 0: byte and code point order
+    const unsigned char *rules;         // nrules rule bytes per section: 2 backward, 4 position
+    const unsigned char *table_mb;      // 256 int32_t by first byte
+    const unsigned char *weight_mb, *extra_mb, *indirect_mb;
+    const char *table_wc;               // 3-level table of int32_t (osv_table_word)
+    const unsigned char *weight_wc, *extra_wc, *indirect_wc;
+};
+
 // One validated category of a named locale: a category file, or its slice of
 // the locale archive. Mapped read-only and kept for the life of the process.
 struct osv_locale_data {
@@ -47,6 +62,7 @@ struct osv_locale_data {
     uint32_t nstrings;
     int cat;
     osv_ctype ctype;    // LC_CTYPE only
+    osv_collate collate;    // LC_COLLATE only
     // LC_CTYPE: the three byte tables, copied (see osv_ctype).
     uint16_t class_copy[384];
     int32_t toupper_copy[384], tolower_copy[384];
@@ -117,9 +133,23 @@ static inline bool osv_codeset_is_utf8(const char *cs, size_t len) noexcept
 OSV_LOCALE_HIDDEN int osv_ctype_class(const char *table, uint32_t wc) noexcept;
 OSV_LOCALE_HIDDEN uint32_t osv_ctype_map(const char *table, uint32_t wc) noexcept;
 OSV_LOCALE_HIDDEN int osv_ctype_width(const char *table, uint32_t wc) noexcept;
+// The int32_t entry for wc of a validated 3-level table of words, or 0.
+OSV_LOCALE_HIDDEN uint32_t osv_table_word(const char *table, uint32_t wc) noexcept;
 // The class or map table of a locale named name (CLASS_NAMES, MAP_NAMES), or
 // null.
 OSV_LOCALE_HIDDEN const char *osv_ctype_find(const osv_ctype *c, const char *name,
                                              bool map) noexcept;
+
+// strcoll, strxfrm, wcscoll and wcsxfrm of a loaded LC_COLLATE with
+// nrules > 0 (collate.cc). strcoll and wcscoll return -1, 0 or 1. strxfrm and
+// wcsxfrm return the length of the whole transform; they write it with its
+// terminator if it is shorter than n, else only its first n units.
+OSV_LOCALE_HIDDEN int osv_strcoll(const osv_collate *c, const char *a, const char *b) noexcept;
+OSV_LOCALE_HIDDEN size_t osv_strxfrm(const osv_collate *c, char *dest, const char *src,
+                                     size_t n) noexcept;
+OSV_LOCALE_HIDDEN int osv_wcscoll(const osv_collate *c, const wchar_t *a,
+                                  const wchar_t *b) noexcept;
+OSV_LOCALE_HIDDEN size_t osv_wcsxfrm(const osv_collate *c, wchar_t *dest, const wchar_t *src,
+                                     size_t n) noexcept;
 
 #endif

@@ -11,6 +11,11 @@
 //   scripts/locale-oracle/time-diff/build.sh    (builds time-diff/fuzz-locale-data)
 //   fuzz-locale-data <iterations> <rng-seed> <locale-dir>... [--archive <locale-archive>]
 //
+// For the LC_COLLATE paths (Stage 1c), build with collate.cc instead:
+//   g++ -std=gnu++17 -g -O1 -fsanitize=address,undefined -fno-sanitize-recover=all
+//       -DOSV_COLLATE_HOST -Ilibc/locale scripts/locale-oracle/fuzz-locale-data.cc
+//       libc/locale/locale-data.cc libc/locale/collate.cc -o fuzz-locale-data
+//
 // build.sh compiles OSv's strftime.c, strptime.c, strfmon.c and rpmatch.c
 // for Linux (their names prefixed osv_) with the loader and this file, which
 // supplies the two functions those files read the locale through
@@ -36,6 +41,8 @@
 // Bit flips cannot make a long string, so one input in eight is a category
 // with string items pointed at new strings appended to it (runs of a byte,
 // random bytes, chains of locale conversions, ERA lists) up to 6000 bytes.
+// An accepted LC_CTYPE or LC_COLLATE is also used through OSv's lookups
+// (classes, maps, widths; strcoll, strxfrm, wcscoll, wcsxfrm).
 
 #include "locale-data.h"
 
@@ -99,6 +106,7 @@ struct seed {
 std::vector<seed> seeds;
 unsigned long accepted, rejected, inputs;
 unsigned long last_found;    // categories an archive input yielded
+unsigned long collate_used;  // accepted LC_COLLATE inputs driven through the collation functions
 volatile unsigned long sink;
 
 char *read_file(const std::string &path, size_t *size)
@@ -375,6 +383,52 @@ void read_items(const osv_locale_data &d)
         for (int b = 0; b < 32; b++) {
             probe(1u << b);
             probe((1u << b) - 1);
+        }
+    }
+    // An accepted LC_COLLATE (Stage 1c): the collation functions on strings
+    // that reach every first byte, every list entry kind, invalid UTF-8,
+    // backward runs and long position counts, and wide strings over every
+    // level-1 slot of the table and the boundary values; a read outside the
+    // data is an ASan report.
+    if (d.cat == 3 && d.collate.nrules) {
+        const osv_collate *c = &d.collate;
+        collate_used++;
+        static std::vector<std::string> strs;
+        static std::vector<std::wstring> wstrs;
+        if (strs.empty()) {
+            for (int b = 1; b < 256; b++) {
+                strs.push_back(std::string(1, char(b)));
+                for (int t : { 0x80, 0x9f, 0xa0, 0xbf, 0xc0, 0x41, 0xff }) {
+                    strs.push_back(std::string(1, char(b)) + char(t) + char(t) + char(t));
+                }
+            }
+            for (const char *x : { "ch", "Ch", "cH", "aa", "dz", "lj", "\xcc\x81\xcc\x80 A",
+                                   "a\xcc\x81-\xcc\x80" "b", "\xe4\xb8\x80-", "\xc3\xa9\xc3\xa8",
+                                   "\xf4\x8f\xbf\xbf", "\xf0\x9f\x98\x80x" }) {
+                strs.push_back(x);
+            }
+            strs.push_back(std::string(300, '-') + "a" + std::string(5000, '\x01') + "b");
+            for (uint32_t cp = 0; cp < 0x110000; cp += 0x1f3) {
+                wstrs.push_back(std::wstring(1, wchar_t(cp ? cp : 1)) + L"a\u0301");
+            }
+            for (uint32_t e : { 0x10ffffu, 0x110000u, 0x7fffffffu, 0x80000000u, 0xffffffffu }) {
+                wstrs.push_back(std::wstring(2, wchar_t(e)));
+            }
+            for (int b = 0; b < 32; b++) {
+                wstrs.push_back(std::wstring(1, wchar_t(1u << b)) + wchar_t((1u << b) - 1));
+            }
+        }
+        char buf[64];
+        wchar_t wbuf[16];
+        for (size_t i = 0; i < strs.size(); i++) {
+            const std::string &x = strs[i], &y = strs[(i * 7 + 3) % strs.size()];
+            acc += osv_strcoll(c, x.c_str(), y.c_str()) + 1;
+            acc += osv_strxfrm(c, buf, x.c_str(), sizeof buf);
+        }
+        for (size_t i = 0; i < wstrs.size(); i++) {
+            const std::wstring &x = wstrs[i], &y = wstrs[(i * 5 + 1) % wstrs.size()];
+            acc += osv_wcscoll(c, x.c_str(), y.c_str()) + 1;
+            acc += osv_wcsxfrm(c, wbuf, x.c_str(), 16);
         }
     }
     sink += acc;
@@ -750,6 +804,7 @@ void deterministic()
         if (s.cat != 0 && s.cat != 3) {
             negative(s, "truncated by one byte", [](char *, size_t &sz) { sz -= 1; });
         }
+        // (Stage 1c: LC_COLLATE's truncation is tested with its tables below.)
         negative(s, "nstrings huge", [](char *b, size_t &) { wr(b + 4, 0xffffffff); });
         negative(s, "nstrings past the end", [](char *b, size_t &sz) { wr(b + 4, sz / 4); });
         // The fewest items glibc 2.41 accepts (measured): LC_CTYPE 86, the
@@ -796,6 +851,108 @@ void deterministic()
             negative(s, "shift1 32", [&](char *b, size_t &) { wr(b + item(b, mo), 32); });
             negative(s, "mask3 huge", [&](char *b, size_t &) { wr(b + item(b, co) + 16, 0xfffff); });
             ctype_work(s);
+        }
+        if (s.cat == 3 && rd(s.buf + rd(s.buf + 8))) {
+            // Stage 1c: the LC_COLLATE tables are parsed (locale-data.cc
+            // collate_tables), so each of these must be rejected.
+            auto item = [](char *b, uint32_t i) { return rd(b + 8 + 4 * size_t(i)); };
+            // The first byte with a list, and its list's first entry.
+            int lb = -1;
+            for (int k = 0; k < 256 && lb < 0; k++) {
+                if (int32_t(rd(s.buf + item(s.buf, 2) + 4 * k)) < 0) {
+                    lb = k;
+                }
+            }
+            negative(s, "truncated by one byte", [](char *, size_t &sz) { sz -= 1; });
+            negative(s, "nrules 33", [&](char *b, size_t &) { wr(b + item(b, 0), 33); });
+            negative(s, "nrules huge", [&](char *b, size_t &) { wr(b + item(b, 0), 0x7fffffff); });
+            negative(s, "tablemb past end", [&](char *b, size_t &sz) { wr(b + 16, sz - 512); });
+            negative(s, "tablemb misaligned", [&](char *b, size_t &) { wr(b + 16, item(b, 2) + 2); });
+            negative(s, "weight index past weightmb", [&](char *b, size_t &sz) {
+                wr(b + item(b, 2) + 4 * 'a', sz);
+            });
+            negative(s, "rulesets at end", [&](char *b, size_t &sz) { wr(b + 12, sz); });
+            negative(s, "weight record at end", [&](char *b, size_t &sz) {
+                wr(b + item(b, 2) + 4 * 'a', sz - item(b, 3));
+            });
+            // A record whose last level's weights run past the end: the last
+            // nrules bytes of the file are its lengths (0 ... 0, 255). The
+            // CODESET item, which ends the file, is moved to an empty string
+            // (TABLEMB[0]'s zero bytes) so only the record is wrong.
+            negative(s, "weight record's last level past end", [&](char *b, size_t &sz) {
+                uint32_t nr = rd(b + item(b, 0));
+                wr(b + 8 + 4 * 18, item(b, 2));
+                memset(b + sz - nr, 0, nr);
+                b[sz - 1] = char(0xff);
+                wr(b + item(b, 2) + 4 * 'a', uint32_t(sz - nr - item(b, 3)));
+            });
+            negative(s, "list offset past end", [&](char *b, size_t &sz) {
+                wr(b + item(b, 2) + 4 * 'a', 0u - uint32_t(sz));
+            });
+            negative(s, "list offset misaligned", [&](char *b, size_t &) {
+                wr(b + item(b, 2) + 4 * 'a', 0u - 6u);
+            });
+            if (lb >= 0) {
+                size_t e = item(s.buf, 4) + (0u - rd(s.buf + item(s.buf, 2) + 4 * lb));
+                negative(s, "list entry length past end", [&, e](char *b, size_t &) {
+                    b[e + 4] = char(0xff);
+                    // and every later entry of the list unterminated
+                    for (size_t k = e + 5; k + 4 < s.size && k < e + 4096; k++) {
+                        b[k] = char(0xff);
+                    }
+                });
+                negative(s, "range indirect past end", [&, e](char *b, size_t &) {
+                    wr(b + e, 0x80000001u);
+                    b[e + 4] = 1;
+                    b[e + 5] = 0x01;
+                    b[e + 6] = char(0xff);
+                });
+                negative(s, "range inverted", [&, e](char *b, size_t &) {
+                    wr(b + e, 0xffffffffu);
+                    b[e + 4] = 1;
+                    b[e + 5] = char(0xbf);
+                    b[e + 6] = char(0x80);
+                });
+                negative(s, "range differs before its last unit", [&, e](char *b, size_t &) {
+                    wr(b + e, 0xffffffffu);
+                    b[e + 4] = 2;
+                    b[e + 5] = char(0x80);
+                    b[e + 6] = char(0x80);
+                    b[e + 7] = char(0x81);
+                    b[e + 8] = char(0x81);
+                });
+                negative(s, "list unit 0", [&, e](char *b, size_t &) {
+                    wr(b + e, 0);
+                    b[e + 4] = 1;
+                    b[e + 5] = 0;
+                });
+            }
+            negative(s, "tablewc header past end", [&](char *b, size_t &sz) { wr(b + 8 + 4 * 9, sz - 8); });
+            negative(s, "tablewc n1 huge", [&](char *b, size_t &) { wr(b + item(b, 9) + 4, 0x7fffffff); });
+            // The LC_COLLATE wide table is validated by table_ok, the same
+            // routine the Stage 1a fix round gave a work budget. This stack
+            // re-merge must keep passing that budget for the collate twc call
+            // (a dropped arg fails to compile at conf1 - the build is the
+            // compile-time gate); the ctype-work negatives below exercise the
+            // budget/cap at runtime through the same table_ok code path and
+            // fail if the cap or budget is removed (verified by a planted
+            // defect). n1 huge above and the m2/offset checks below cover the
+            // collate twc dimensions.
+            negative(s, "tablewc level-1 offset past end", [&](char *b, size_t &sz) {
+                wr(b + item(b, 9) + 20, sz);
+            });
+            negative(s, "wide weight index past weightwc", [&](char *b, size_t &sz) {
+                size_t t = item(b, 9);
+                uint32_t o3 = rd(b + t + rd(b + t + 20));
+                wr(b + t + o3 + 4 * 'a', uint32_t(sz));
+            });
+            negative(s, "wide list offset past end", [&](char *b, size_t &sz) {
+                size_t t = item(b, 9);
+                uint32_t o3 = rd(b + t + rd(b + t + 20));
+                wr(b + t + o3 + 4 * 'a', 0u - uint32_t(sz));
+            });
+            negative(s, "weightwc past end", [&](char *b, size_t &sz) { wr(b + 8 + 4 * 10, sz - 4); });
+            negative(s, "indirectmb misaligned", [&](char *b, size_t &) { wr(b + 8 + 4 * 5, item(b, 5) + 1); });
         }
         // A word item moved off alignment, and a string with no NUL.
         const char *t = types[s.cat];
@@ -845,7 +1002,35 @@ void random_input(std::mt19937_64 &rng)
                 idx_end = s.size;
             }
             // LC_CTYPE: half the time a word of a table header or a level-1/2
-            // offset of a table (the tables are parsed).
+            // offset of a table (Stage 1a-2: the tables are parsed).
+            // LC_COLLATE (Stage 1c): half the time a TABLEMB entry, a word
+            // of the wide table's header or level 1/2/3, or a word of a list.
+            // The seed may be mutated already, so every read is checked; the
+            // caller checks the returned offset.
+            if (s.cat == 3 && n >= 19 && idx_end == 8 + 4 * size_t(n) && rng() % 2) {
+                auto rdw = [&](size_t off) -> size_t { return off + 4 <= s.size ? rd(s.buf + off) : 0; };
+                auto it = [&](uint32_t i) { return rdw(8 + 4 * size_t(i)); };
+                size_t t = it(9);
+                switch (rng() % 4) {
+                case 0:
+                    return it(2) + 4 * (rng() % 256);
+                case 1: {
+                    size_t l2 = t + rdw(t + 20) + 4 * (rng() % 64);
+                    if (rng() % 2) {
+                        return t + 4 * (rng() % 6);
+                    }
+                    size_t l3 = t + rdw(l2) + 4 * (rng() % 64);
+                    return l3 & ~size_t(3);
+                }
+                case 2: {
+                    int32_t v = int32_t(rdw(it(2) + 4 * (0xc0 + rng() % 64)));
+                    size_t e = v < 0 ? it(4) + (0u - uint32_t(v)) : it(4);
+                    return (e & ~size_t(3)) + 4 * (rng() % 32);
+                }
+                default:
+                    return (it(rng() % 2 ? 11 : 4) & ~size_t(3)) + 4 * (rng() % 4096);
+                }
+            }
             if (s.cat == 0 && n > 12 && idx_end == 8 + 4 * size_t(n) && rng() % 2) {
                 uint32_t i = rng() % 3 ? 72 + rng() % (n > 72 ? n - 72 : 1) : 12;
                 if (i >= n) {
@@ -1037,8 +1222,8 @@ void through_files(std::mt19937_64 &rng, int count)
     unsigned long ok = 0, enoent = 0;
     for (int i = 0; i < count; i++) {
         seed &s = seeds[rng() % seeds.size()];
-        if (s.cat <= 0 || s.cat == 3) {
-            continue;   // small categories only; their codeset item gates loading
+        if (s.cat <= 0 || (s.cat == 3 && rng() % 8)) {
+            continue;   // mostly small categories; their codeset item gates loading
         }
         std::string dir = std::string(tmpl) + "/xx_YY" + std::to_string(i) + ".utf8";
         mkdir(dir.c_str(), 0755);
@@ -1206,6 +1391,8 @@ int main(int argc, char **argv)
     printf("consumers: %lu LC_TIME, %lu LC_MONETARY, %lu LC_MESSAGES inputs, %lu with an item of "
            "2048 bytes or more\n", consumed[LC_TIME], consumed[LC_MONETARY], consumed[LC_MESSAGES],
            long_items);
+    printf("LC_COLLATE accepted and collated: %lu (deterministic, file and random inputs)\n",
+           collate_used);
     printf("SUMMARY: %d failures\n", fails);
     for (seed &s : seeds) {
         free(s.buf);

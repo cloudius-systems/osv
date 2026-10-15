@@ -24,8 +24,12 @@ gcc $S -c -o o/fmdiff.o fmdiff.c
 gcc $S -o fmd o/fmdiff.o o/strfmon.o o/shim.o -lm
 gcc $F -c -o o/rpmatch.o src/rpmatch.c
 # The fuzz harness supplies the shim's locale functions itself (no shim.o).
+# Since Stage 1c the merged harness also drives LC_COLLATE (osv_strcoll etc.),
+# so it links collate.cc built with -DOSV_COLLATE_HOST (which compiles out the
+# OSv libc entry points and leaves the osv_ host functions the harness calls).
 X="-std=gnu++17 $S -I$T/libc/locale"
 g++ $X -c -o o/locale-data.o $T/libc/locale/locale-data.cc
+g++ $X -DOSV_COLLATE_HOST -c -o o/collate.o $T/libc/locale/collate.cc
 g++ $X -c -o o/fuzz.o ../fuzz-locale-data.cc
-g++ $S -o fuzz-locale-data o/fuzz.o o/locale-data.o o/strftime.o o/strptime.o o/strfmon.o o/rpmatch.o -lm
+g++ $S -o fuzz-locale-data o/fuzz.o o/locale-data.o o/collate.o o/strftime.o o/strptime.o o/strfmon.o o/rpmatch.o -lm
 nm o/sfdiff.o | grep -q ' U strftime_l$' && nm o/sfdiff.o | grep -q ' U osv___strftime_l$'

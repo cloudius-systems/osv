@@ -562,6 +562,199 @@ bool ctype_tables(osv_locale_data *d)
     return true;
 }
 
+// ---- LC_COLLATE tables ----------------------------------------------------
+
+// Validation of a compiled LC_COLLATE (STAGE1-FORMAT-SPEC.md section 6). It
+// follows every path collate.cc's lookups can take: each first byte's entry,
+// each wide table entry, each list to its closing entry, each range's indirect
+// entries, each weight index's record and rules. The work is capped
+// (localedef's files need under a million steps; the cap is 8 million).
+struct collate_check {
+    const char *b;
+    uint64_t size;
+    uint32_t nrules;
+    uint64_t rules, wmb, emb, imb, wwc, ewc, iwc;
+    uint64_t budget;
+
+    bool spend(uint64_t n)
+    {
+        if (n > budget) {
+            return false;
+        }
+        budget -= n;
+        return true;
+    }
+    bool in(uint64_t off, uint64_t len) const
+    {
+        return off <= size && len <= size - off;
+    }
+    uint32_t w(uint64_t off) const
+    {
+        return word(b + off);
+    }
+    // The section's rules and the record of weight index idx: per level a
+    // length byte (word, wide) and that many bytes (words).
+    bool weight(uint32_t idx, bool wide)
+    {
+        uint64_t sec = idx >> 24;
+        if (!spend(nrules) || !in(rules, (sec + 1) * nrules)) {
+            return false;
+        }
+        uint64_t p = wide ? wwc + 4 * uint64_t(idx & 0xffffff) : wmb + (idx & 0xffffff);
+        for (uint32_t l = 0; l < nrules; l++) {
+            if (!in(p, wide ? 4 : 1)) {
+                return false;
+            }
+            p += wide ? 4 + 4 * uint64_t(w(p)) : 1 + uint64_t(uint8_t(b[p]));
+        }
+        return p <= size;
+    }
+    // count indirect entries from first: each a weight index.
+    bool indirect(bool wide, uint64_t first, uint64_t count)
+    {
+        uint64_t off = (wide ? iwc : imb) + 4 * first;
+        if (!spend(count) || !in(off, 4 * count)) {
+            return false;
+        }
+        for (uint64_t k = 0; k < count; k++) {
+            uint32_t x = w(off + 4 * k);
+            if (int32_t(x) < 0 || !weight(x, wide)) {
+                return false;
+            }
+        }
+        return true;
+    }
+    // Unit k (byte or word) of an entry's sequence at p.
+    uint32_t unit(uint64_t p, uint64_t k, bool wide) const
+    {
+        return wide ? w(p + 4 * k) : uint8_t(b[p + k]);
+    }
+    // The list at p: entries { int32 i, length (byte, padded to 4; wide: word),
+    // then length units (i >= 0) or two sequences "from" and "to" (i < 0) }
+    // up to an entry with i >= 0 and length 0, which always matches. No unit
+    // is 0 (a string's terminator never matches one), and a range differs
+    // only in its last unit.
+    bool list(uint64_t p, bool wide)
+    {
+        uint64_t u = wide ? 4 : 1, hdr = wide ? 8 : 5;
+        for (;;) {
+            if (!spend(1) || !in(p, hdr)) {
+                return false;
+            }
+            int32_t i = int32_t(w(p));
+            uint64_t len = wide ? w(p + 4) : uint8_t(b[p + 4]);
+            uint64_t seqs = i >= 0 ? 1 : 2;
+            if (!in(p + hdr, seqs * len * u) || !spend(seqs * len)) {
+                return false;
+            }
+            for (uint64_t k = 0; k < seqs * len; k++) {
+                if (!unit(p + hdr, k, wide)) {
+                    return false;
+                }
+            }
+            if (i >= 0) {
+                if (!weight(uint32_t(i), wide)) {
+                    return false;
+                }
+                if (!len) {
+                    return true;
+                }
+            } else {
+                if (!len) {
+                    return false;
+                }
+                for (uint64_t k = 0; k + 1 < len; k++) {
+                    if (unit(p + hdr, k, wide) != unit(p + hdr, len + k, wide)) {
+                        return false;
+                    }
+                }
+                uint32_t lo = unit(p + hdr, len - 1, wide), hi = unit(p + hdr, 2 * len - 1, wide);
+                if (lo > hi || !indirect(wide, 0u - uint32_t(i), uint64_t(hi - lo) + 1)) {
+                    return false;
+                }
+            }
+            p += hdr + seqs * len * u;
+            if (!wide) {
+                p = emb + ((p - emb + 3) & ~uint64_t(3));
+            }
+        }
+    }
+    // A TABLEMB or TABLEWC value: a weight index, or a list's negated offset.
+    bool value(uint32_t v, bool wide)
+    {
+        if (int32_t(v) >= 0) {
+            return weight(v, wide);
+        }
+        uint64_t off = 0u - v;
+        return wide ? list(ewc + 4 * off, true) : off % 4 == 0 && list(emb + off, false);
+    }
+};
+
+// Fill d->collate from a validated LC_COLLATE; false if its tables are not
+// sound. NRULES 0 (a locale compiled from C) has no tables to read.
+bool collate_tables(osv_locale_data *d)
+{
+    const char *b = d->base;
+    auto item = [&](uint32_t i) { return uint64_t(word(b + 8 + 4 * size_t(i))); };
+    osv_collate &c = d->collate;
+    memset(&c, 0, sizeof(c));
+    // _NL_COLLATE_NRULES; localedef writes at most 32 levels (measured).
+    c.nrules = word(b + item(0));
+    if (c.nrules > 32) {
+        return false;
+    }
+    if (!c.nrules) {
+        return true;
+    }
+    collate_check k{b, d->size, c.nrules, item(1), item(3), item(4), item(5), item(10),
+                    item(11), item(12), 1u << 23};
+    uint64_t tmb = item(2), twc = item(9);
+    // table_ok gained a work budget in the Stage 1a fix round; give the
+    // LC_COLLATE wide table (a 3-level TABLEWC, same format as LC_CTYPE's)
+    // the same bound so a crafted table cannot make validation superlinear.
+    uint64_t twc_work = max_ctype_work;
+    if (tmb % 4 || k.emb % 4 || k.imb % 4 || k.wwc % 4 || k.ewc % 4 || k.iwc % 4 ||
+        !k.in(tmb, 256 * 4) || !table_ok(b, d->size, twc, 4, &twc_work)) {
+        return false;
+    }
+    for (int i = 0; i < 256; i++) {
+        if (!k.value(k.w(tmb + 4 * i), false)) {
+            return false;
+        }
+    }
+    // A code point without an entry has weight index 0.
+    if (!k.weight(0, true)) {
+        return false;
+    }
+    const char *t = b + twc;
+    uint32_t n1 = word(t + 4), m2 = word(t + 12), m3 = word(t + 16);
+    for (uint32_t i = 0; i < n1; i++) {
+        uint32_t o2 = word(t + 20 + 4 * size_t(i));
+        for (uint32_t j = 0; o2 && j <= m2; j++) {
+            uint32_t o3 = word(t + o2 + 4 * size_t(j));
+            if (o3 && !k.spend(uint64_t(m3) + 1)) {
+                return false;
+            }
+            for (uint32_t q = 0; o3 && q <= m3; q++) {
+                if (!k.value(word(t + o3 + 4 * size_t(q)), true)) {
+                    return false;
+                }
+            }
+        }
+    }
+    auto at = [&](uint64_t off) { return reinterpret_cast<const unsigned char *>(b + off); };
+    c.rules = at(k.rules);
+    c.table_mb = at(tmb);
+    c.weight_mb = at(k.wmb);
+    c.extra_mb = at(k.emb);
+    c.indirect_mb = at(k.imb);
+    c.table_wc = b + twc;
+    c.weight_wc = at(k.wwc);
+    c.extra_wc = at(k.ewc);
+    c.indirect_wc = at(k.iwc);
+    return true;
+}
+
 // The level-3 entry for wc of a validated table, or null.
 const char *leaf(const char *t, uint32_t wc, unsigned shift3, unsigned unit)
 {
@@ -590,10 +783,15 @@ int osv_ctype_class(const char *t, uint32_t wc) noexcept
     return p ? (word(p) >> (wc & 31)) & 1 : 0;
 }
 
-uint32_t osv_ctype_map(const char *t, uint32_t wc) noexcept
+uint32_t osv_table_word(const char *t, uint32_t wc) noexcept
 {
     const char *p = t ? leaf(t, wc, 0, 4) : nullptr;
-    return p ? wc + word(p) : wc;
+    return p ? word(p) : 0;
+}
+
+uint32_t osv_ctype_map(const char *t, uint32_t wc) noexcept
+{
+    return wc + osv_table_word(t, wc);
 }
 
 int osv_ctype_width(const char *t, uint32_t wc) noexcept
@@ -666,7 +864,7 @@ bool osv_locale_check(int cat, const char *base, size_t size, osv_locale_data *o
     out->size = uint32_t(size);
     out->nstrings = n;
     out->cat = cat;
-    return cat != 0 || ctype_tables(out);
+    return cat == 0 ? ctype_tables(out) : cat != 3 || collate_tables(out);
 }
 
 bool osv_locale_archive_find(const char *a, size_t size, const char *name, int cat,
