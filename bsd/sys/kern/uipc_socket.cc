@@ -127,6 +127,7 @@
 #include <bsd/sys/net/vnet.h>
 
 #include <osv/zcopy.hh>
+#include <osv/net_channel.hh>
 
 #define uipc_d(...) tprintf_d("uipc_socket", __VA_ARGS__)
 
