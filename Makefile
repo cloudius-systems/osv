@@ -59,9 +59,32 @@ ifeq ($(conf_zfs),openzfs)
 # and applied here before the OpenZFS sources are compiled, so we never maintain an
 # OpenZFS fork.  The stamp file makes this idempotent.
 openzfs_patch_stamp := modules/open_zfs/openzfs/.osv-patches-applied
-$(shell if [ -d modules/open_zfs/openzfs/module ] && [ ! -f $(openzfs_patch_stamp) ]; then \
-	git -C modules/open_zfs/openzfs apply --whitespace=nowarn $(addprefix ../patches/,$(notdir $(wildcard modules/open_zfs/patches/*.patch))) 2>/dev/null \
-	&& touch $(openzfs_patch_stamp); fi)
+openzfs_patches := $(addprefix ../patches/,$(notdir $(wildcard modules/open_zfs/patches/*.patch)))
+# Apply the OSv edits to the pristine submodule tree.  A failure here must stop
+# the build rather than be discarded, for two reasons that compound:
+#   - git apply is not all-or-nothing across several patch files in one
+#     invocation: it can modify the files of the earlier patches and then reject
+#     a later one, leaving a partially patched OpenZFS tree behind.
+#   - the exit status of a $(shell ...) is invisible to make, so on its own it
+#     stops nothing; with the diagnostic sent to /dev/null as well there is no
+#     indication at all, and the build goes on to compile that tree.  The result
+#     is an OpenZFS built with only some of the OSv platform edits, which fails
+#     at run time (a missing edit shows up as a null call in the guest) with
+#     nothing in the build output pointing back to the cause.
+# So keep the message, and require an explicit sentinel from the recipe: reaching
+# it means both the apply and the stamp succeeded.  Today a single patch file is
+# applied and the partial-apply window is narrow, but this is what makes adding
+# further patches to the series safe.
+ifeq (,$(wildcard $(openzfs_patch_stamp)))
+ifneq (,$(wildcard modules/open_zfs/openzfs/module))
+ifneq (,$(openzfs_patches))
+openzfs_patch_out := $(shell git -C modules/open_zfs/openzfs apply --whitespace=nowarn $(openzfs_patches) 2>&1 && touch $(openzfs_patch_stamp) && echo __osv_patch_ok__)
+ifneq (__osv_patch_ok__,$(lastword $(openzfs_patch_out)))
+$(error Failed to apply the OSv OpenZFS patches to modules/open_zfs/openzfs: $(openzfs_patch_out). The submodule tree may be partially patched; restore it with "git -C modules/open_zfs/openzfs checkout -- . && git -C modules/open_zfs/openzfs clean -fd" before retrying)
+endif
+endif
+endif
+endif
 # The OpenZFS object lists + conf_zfs=openzfs flags are included further
 # below (after bsd_zfs defines the shared `solaris` list), from
 # modules/open_zfs/open_zfs_sources.mk.
