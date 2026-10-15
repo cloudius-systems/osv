@@ -802,18 +802,56 @@ page_range* page_range_allocator::alloc(size_t size, bool contiguous)
     return &pr;
 }
 
+// Return the byte offset of the first page-aligned page within the physical
+// range [base, base+size) that lies on NUMA node `node`, or (size_t)-1 if the
+// range has no memory on that node.  Uses the SRAT memory ranges to intersect
+// directly rather than probing page by page, so a multi-hundred-MB free range
+// costs a handful of comparisons.
+static size_t node_offset_within(uint64_t base, size_t size, int node)
+{
+    uint64_t end = base + size;
+    uint64_t best = end;   // lowest on-node start found so far
+    for (auto& r : numa::memory_ranges()) {
+        if ((int)r.node != node) {
+            continue;
+        }
+        uint64_t lo = std::max(base, r.base);
+        uint64_t hi = std::min(end, r.base + r.length);
+        if (lo < hi) {
+            // Align the intersection start up to a page; must still leave room
+            // for one page inside both the free range and the node's range.
+            uint64_t start = align_up(lo, (uint64_t)page_size);
+            if (start + page_size <= hi && start < best) {
+                best = start;
+            }
+        }
+    }
+    return best == end ? (size_t)-1 : (size_t)(best - base);
+}
+
 page_range* page_range_allocator::alloc_page_from_node(int node)
 {
-    // Find a free range whose memory lies on the requested NUMA node, then
-    // carve a single page from its front (mirroring alloc()).  This is a
-    // best-effort preference: a linear scan over the free lists, returning the
-    // first range on the node.  Returns nullptr if none is found, so the caller
-    // can fall back to a node-agnostic allocation.
+    // Carve a single page physically on NUMA node `node` from the free lists.
+    //
+    // A free range may straddle a node boundary: OSv's boot allocator coalesces
+    // physically adjacent memory, and node N and node N+1 are usually adjacent
+    // in physical space, so one free range can begin on a low node and extend
+    // into a higher one.  Classifying a range only by its base address would
+    // therefore make a higher node's memory invisible (it lives inside a range
+    // whose base is on a lower node).  Instead, for each free range we find the
+    // first page-aligned offset within it that lies on `node`, then carve there,
+    // splitting the range into up-to-three pieces (prefix / the page / suffix).
+    //
+    // Best-effort: a linear scan over the free lists returning the first match,
+    // and nullptr if the node has no free memory so the caller can fall back.
     page_range* found = nullptr;
+    size_t found_off = 0;   // byte offset of the on-node page within *found
     for_each(0, [&] (page_range& pr) {
-        auto phys = mmu::virt_to_phys(static_cast<void*>(&pr));
-        if (numa::node_of_phys(phys) == node) {
+        auto base = mmu::virt_to_phys(static_cast<void*>(&pr));
+        size_t off = node_offset_within(base, pr.size, node);
+        if (off != (size_t)-1) {
             found = &pr;
+            found_off = off;
             return false;   // stop iterating
         }
         return true;
@@ -824,14 +862,24 @@ page_range* page_range_allocator::alloc_page_from_node(int node)
 
     auto& pr = *found;
     remove(pr);
-    if (pr.size > page_size) {
-        auto& np = *new (static_cast<void*>(&pr) + page_size)
-                        page_range(pr.size - page_size);
-        insert(np);
-        pr.size = page_size;
+    char* v = static_cast<char*>(static_cast<void*>(&pr));
+    // Suffix after the carved page stays free.
+    size_t tail = pr.size - found_off - page_size;
+    if (tail) {
+        insert(*new (v + found_off + page_size) page_range(tail));
     }
-    set_bits(pr, false);
-    return &pr;
+    // Prefix before the carved page stays free.
+    page_range* ret;
+    if (found_off) {
+        pr.size = found_off;
+        insert(pr);
+        ret = new (v + found_off) page_range(page_size);
+    } else {
+        pr.size = page_size;
+        ret = &pr;
+    }
+    set_bits(*ret, false);
+    return ret;
 }
 
 page_range* page_range_allocator::alloc_aligned(size_t size, size_t offset,
@@ -1328,13 +1376,19 @@ struct page_batch {
 // Single thread is created to help filling the L2-pool.
 class l2 {
 public:
-    l2()
-        : _max(sched::cpus.size() * (l1::max / page_batch::nr_pages))
+    // node == -1 means the node-agnostic global pool (single-node / non-NUMA
+    // systems, and the fallback pool). node >= 0 is a per-NUMA-node pool whose
+    // refill() prefers pages physically local to that node.
+    explicit l2(int node = -1)
+        : _node(node)
+        , _max(sched::cpus.size() * (l1::max / page_batch::nr_pages))
         , _nr(0)
         , _watermark_lo(_max * 1 / 4)
         , _watermark_hi(_max * 3 / 4)
         , _stack(_max)
-        , _fill_thread(sched::thread::make([=] { fill_thread(); }, sched::thread::attr().name("page_pool_l2")))
+        , _fill_thread(sched::thread::make([=] { fill_thread(); },
+              sched::thread::attr().name(std::string("page_pool_l2_") +
+                  (node < 0 ? std::string("g") : std::to_string(node)))))
     {
        _fill_thread->start();
     }
@@ -1411,6 +1465,7 @@ public:
     void dec_nr() { _nr.fetch_sub(1, std::memory_order_relaxed); }
 
 private:
+    int _node;
     size_t _max;
     std::atomic<size_t> _nr;
     size_t _watermark_lo;
@@ -1420,6 +1475,7 @@ private:
 };
 
 std::atomic<unsigned int> l1_initialized_cnt{};
+static void init_node_l2_pools();   // defined below; called from the cpu notifier
 PERCPU(l1*, percpu_l1);
 static sched::cpu::notifier _notifier([] () {
     *percpu_l1 = new l1(sched::cpu::current());
@@ -1429,6 +1485,10 @@ static sched::cpu::notifier _notifier([] () {
     // N per-cpu threads for L1 page pool, 1 thread for L2 page pool
     // Switch to smp_allocator only when all the N + 1 threads are ready
     if (smp_allocator_cnt++ == sched::cpus.size()) {
+        // All CPUs are up and NUMA topology is known; bring up the per-node
+        // L2 pools before flipping smp_allocator so the first SMP allocations
+        // already draw node-local pages.
+        init_node_l2_pools();
         smp_allocator = true;
     }
 });
@@ -1438,6 +1498,37 @@ static inline l1& get_l1()
 }
 
 class l2 global_l2;
+
+// Per-NUMA-node L2 pools. On a single-node/non-NUMA system this is just
+// global_l2 (node_l2 stays empty and get_l2() returns global_l2), preserving
+// the original behavior. On a multi-node system each node gets its own L2
+// whose refill() prefers node-local pages, and each CPU draws from its node's
+// pool so allocations stay local; a drained node falls back to any page.
+static std::vector<l2*> node_l2;
+
+static void init_node_l2_pools()
+{
+    if (!numa::available() || numa::nr_nodes() <= 1) {
+        return;   // single pool (global_l2) is enough
+    }
+    node_l2.resize(numa::nr_nodes());
+    for (unsigned n = 0; n < numa::nr_nodes(); n++) {
+        node_l2[n] = new l2((int)n);
+    }
+}
+
+// Return the L2 pool for the calling CPU's NUMA node, or the global pool when
+// per-node pools are not in use.
+static inline l2& get_l2()
+{
+    if (!node_l2.empty()) {
+        unsigned node = numa::node_of_cpu(sched::cpu::current()->id);
+        if (node < node_l2.size() && node_l2[node]) {
+            return *node_l2[node];
+        }
+    }
+    return global_l2;
+}
 
 // Percpu thread for L1 page pool
 void l1::fill_thread()
@@ -1477,7 +1568,8 @@ void l1::refill()
     SCOPE_LOCK(preempt_lock);
     auto& pbuf = get_l1();
     if (pbuf.nr + page_batch::nr_pages < pbuf.max / 2) {
-        auto* pb = global_l2.alloc_page_batch();
+        auto& l2pool = get_l2();
+        auto* pb = l2pool.alloc_page_batch();
         if (pb) {
             // Other threads might have filled the array while we waited for
             // the page batch.  Make sure there is enough room to add the pages
@@ -1487,7 +1579,7 @@ void l1::refill()
                     pbuf.push(page);
                 }
             } else {
-                global_l2.free_page_batch(pb);
+                l2pool.free_page_batch(pb);
             }
         }
     }
@@ -1508,7 +1600,7 @@ void l1::unfill()
         for (size_t i = 0 ; i < page_batch::nr_pages; i++) {
             pb->pages[i] = pbuf.pop();
         }
-        global_l2.free_page_batch(pb);
+        get_l2().free_page_batch(pb);
     }
 }
 
@@ -1590,7 +1682,16 @@ void l2::refill()
             }
             size_t got = 0;
             for (; got < page_batch::nr_pages; got++) {
-                page_range *pr = free_page_ranges.alloc(page_size);
+                page_range *pr = nullptr;
+                if (_node >= 0) {
+                    // Prefer a page physically local to this L2's NUMA node;
+                    // fall back to any page so a drained node still makes
+                    // progress (correctness over strict locality).
+                    pr = free_page_ranges.alloc_page_from_node(_node);
+                }
+                if (!pr) {
+                    pr = free_page_ranges.alloc(page_size);
+                }
                 if (!pr) {
                     // Out of memory mid-batch. A page_batch is only usable
                     // when completely filled: the last slot doubles as the
