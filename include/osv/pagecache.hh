@@ -39,7 +39,7 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep<0> ptep);
  * sync() — flush all dirty pages in [start, end) for the file described by fp.
  * Throws on I/O error.  Used by VOP_FSYNC implementations.
  */
-void sync(vfs_file* fp, off_t start, off_t end);
+int sync(vfs_file* fp, off_t start, off_t end);
 
 /*
  * writeback_inode() — flush dirty write-cache pages for a specific (dev, ino)
