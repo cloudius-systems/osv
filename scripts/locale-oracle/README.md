@@ -45,3 +45,7 @@ alnum and alpha 19038, blank 13, cntrl 3, digit 0, graph 819503, lower 1191, pri
 139321, space 2, upper 645, xdigit 0, towupper 97, towlower 96, wcwidth 822617. Most come from
 unassigned code points, which glibc treats as non-printable with width -1 and musl prints. musl 1.2.1
 equals 1.2.6 except for wcwidth (240 code points), and musl's C locale equals its C.UTF-8.
+
+`gen-ctype-sample.py ../../libc/locale/ctype-utf8.inc d-glibc-C.txt d-glibc-C.UTF-8.txt >
+../../tests/tst-locale-ctype-sample.h` writes the expected values tst-locale-ctype checks: 0..0x2ff,
+every run boundary of the generated tables, and 0x110000, 0x7fffffff and WEOF, in C and C.UTF-8.

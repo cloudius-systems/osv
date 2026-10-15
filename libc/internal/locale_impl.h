@@ -18,6 +18,16 @@ typedef struct __locale_struct *__locale_t;
 
 typedef __locale_t locale_t;
 
+/* Is LC_CTYPE of l (NULL or LC_GLOBAL_LOCALE: the thread's current locale)
+ * UTF-8? Defined in libc/locale/locale.cc. */
+#ifdef __cplusplus
+extern "C" __attribute__((visibility("hidden"))) bool __osv_ctype_utf8(locale_t) noexcept;
+#define OSV_CUR_UTF8 (__osv_ctype_utf8(nullptr))
+#else
+__attribute__((visibility("hidden"))) _Bool __osv_ctype_utf8(locale_t);
+#define OSV_CUR_UTF8 (__osv_ctype_utf8(0))
+#endif
+
 extern __thread locale_t __current_locale;
 #define CURRENT_LOCALE (__current_locale)
 
@@ -26,6 +36,14 @@ extern __thread locale_t __current_locale;
 
 extern locale_t __c_locale_ptr;
 #define C_LOCALE (__c_locale_ptr)
-#define UTF8_LOCALE (__c_locale_ptr) // This should point to different locale struct but for now to get things going
+
+/* A static C.UTF-8 locale object (musl's fwide() binds UTF-8 streams to it).
+ * Defined in libc/locale/locale.cc. */
+#ifdef __cplusplus
+extern "C" __attribute__((visibility("hidden"))) locale_t __osv_utf8_locale(void) noexcept;
+#else
+__attribute__((visibility("hidden"))) locale_t __osv_utf8_locale(void);
+#endif
+#define UTF8_LOCALE (__osv_utf8_locale())
 
 #endif
