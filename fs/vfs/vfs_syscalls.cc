@@ -430,25 +430,37 @@ sys_lseek(struct file *fp, off_t off, int type, off_t *origin)
 	}
 
 	vp = fp->f_dentry->d_vnode;
-	int error = EINVAL;
+	int error = 0;
+	off_t base = 0;
 	vn_lock(vp);
 	switch (type) {
+	case SEEK_SET:
+		break;
 	case SEEK_CUR:
-		off = fp->f_offset + off;
+		base = fp->f_offset;
 		break;
 	case SEEK_END:
-		off = vp->v_size + off;
+		/* The filesystem, not v_size, knows the size. */
+		if (vp->v_mount->m_flags & MNT_NONAMECACHE) {
+			struct vattr va = {};
+			error = VOP_GETATTR(vp, &va);
+			if (!error && va.va_size < 0)
+				error = EIO; /* a server size is untrusted */
+			if (!error)
+				vp->v_size = va.va_size;
+		}
+		base = vp->v_size;
 		break;
 	default:
-		if (type != SEEK_SET)
-			return EINVAL;
+		error = EINVAL;
 	}
-	if (off >= 0) {
+	if (!error && (__builtin_add_overflow(base, off, &off) || off < 0))
+		error = EINVAL;
+	if (!error)
 		error = VOP_SEEK(vp, fp, fp->f_offset, off);
-		if (!error) {
-			*origin      = off;
-			fp->f_offset = off;
-		}
+	if (!error) {
+		*origin      = off;
+		fp->f_offset = off;
 	}
 	vn_unlock(vp);
 	return error;
