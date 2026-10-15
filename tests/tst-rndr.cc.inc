@@ -25,6 +25,10 @@ struct features_type { bool rndr = true; };
 static features_type features() { return {}; }
 }
 struct device {};
+#include <fcntl.h>
+#define IO_NONBLOCK 0x0008
+struct random_device_priv { bool urandom; };
+static random_device_priv* to_priv(device*) { static random_device_priv p{}; return &p; }
 struct uio { long uio_resid; uint8_t* out; };
 static int uiomove(const void* p, int n, uio* u) {
     memcpy(u->out, p, n); u->out += n; u->uio_resid -= n; return 0;
