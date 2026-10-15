@@ -1163,6 +1163,7 @@ musl += locale/localeconv.o
 musl += locale/strcoll.o
 libc += locale/strfmon.o
 $(out)/libc/locale/strfmon.o: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include
+libc += locale/rpmatch.o
 libc += locale/strtod_l.o
 libc += locale/strtof_l.o
 libc += locale/strtold_l.o
