@@ -181,46 +181,13 @@ bdev_write(struct device *dev, struct uio *uio, int ioflags)
 int
 physio(struct device *dev, struct uio *uio, int ioflags)
 {
-	struct bio *bio;
-	int ret;
-
+	if (uio->uio_offset + uio->uio_resid > dev->size)
+		return EIO;
 	if (uio->uio_offset < 0)
 		return EINVAL;
 	if (uio->uio_resid == 0)
 		return 0;
-    
-	while (uio->uio_resid > 0) {
-		struct iovec *iov = uio->uio_iov;
 
-		if (!iov->iov_len)
-			continue;
-
-		bio = alloc_bio();
-		if (!bio)
-			return ENOMEM;
-
-		if (uio->uio_rw == UIO_READ)
-			bio->bio_cmd = BIO_READ;
-		else
-			bio->bio_cmd = BIO_WRITE;
-
-		bio->bio_dev = dev;
-		bio->bio_data = iov->iov_base;
-		bio->bio_offset = uio->uio_offset;
-		bio->bio_bcount = uio->uio_resid;
-
-		dev->driver->devops->strategy(bio);
-
-		ret = bio_wait(bio);
-		destroy_bio(bio);
-		if (ret)
-			return ret;
-
-	        uio->uio_iov++;
-        	uio->uio_iovcnt--;
-        	uio->uio_resid -= iov->iov_len;
-        	uio->uio_offset += iov->iov_len;
-	}
-
-	return 0;
+	return bdev_strategy_rw(dev, uio,
+	    uio->uio_rw == UIO_READ ? BIO_READ : BIO_WRITE);
 }
