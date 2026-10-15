@@ -212,6 +212,15 @@ inline u64 rdmsr(u32 index) {
     return lo | ((u64)hi << 32);
 }
 
+// Read a performance-monitoring counter.  "counter" is the RDPMC index: general
+// counters are 0,1,..; fixed counters are (1u<<30)|n.  Requires the counter to
+// be enabled and (for CPL>0) CR4.PCE set; OSv runs at CPL0 so PCE is optional.
+inline u64 rdpmc(u32 counter) {
+    u32 lo, hi;
+    asm volatile ("rdpmc" : "=a"(lo), "=d"(hi) : "c"(counter));
+    return lo | ((u64)hi << 32);
+}
+
 inline void wrmsr(u32 index, u64 data) {
     u32 lo = data, hi = data >> 32;
     asm volatile ("wrmsr" : : "c"(index), "a"(lo), "d"(hi));
