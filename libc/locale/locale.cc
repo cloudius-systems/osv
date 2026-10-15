@@ -636,3 +636,15 @@ char *__nl_langinfo(nl_item item) noexcept
     return __nl_langinfo_l(item, current_locale());
 }
 weak_alias(__nl_langinfo, nl_langinfo);
+
+// String i of a list item (ERA, ALT_DIGITS: consecutive NUL-terminated
+// strings) for libc/time/strftime.c and strptime.c; nullptr past the data.
+// A built-in locale's list is its single string.
+extern "C" OSV_HIDDEN
+const char *__osv_nl_list(nl_item item, unsigned i, locale_t l) noexcept
+{
+    if (!l || l == LC_GLOBAL_LOCALE) {
+        l = current_locale();
+    }
+    return i ? nullptr : __nl_langinfo_l(item, l);
+}
