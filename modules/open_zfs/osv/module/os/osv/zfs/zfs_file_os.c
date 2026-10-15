@@ -20,9 +20,10 @@
  */
 
 int
-zfs_file_open(const char *path, int flags, int mode, zfs_file_t **fpp)
+zfs_file_open(const char *path, int flags, int mode, cred_t *cr,
+    zfs_file_t **fpp)
 {
-	(void) path; (void) flags; (void) mode; (void) fpp;
+	(void) path; (void) flags; (void) mode; (void) cr; (void) fpp;
 	/* OSv does not support zpool.cache file access yet */
 	return (SET_ERROR(ENOTSUP));
 }

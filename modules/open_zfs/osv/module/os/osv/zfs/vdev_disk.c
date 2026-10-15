@@ -41,8 +41,9 @@ vdev_disk_rele(vdev_t *vd)
 
 static int
 vdev_disk_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
-    uint64_t *logical_ashift, uint64_t *physical_ashift)
+    uint64_t *logical_ashift, uint64_t *physical_ashift, cred_t *cr)
 {
+	(void) cr;
 	struct vdev_disk *dvd;
 	int error;
 	char *device_name;
