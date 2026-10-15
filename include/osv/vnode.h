@@ -161,6 +161,7 @@ typedef int (*vnop_readlink_t)  (struct vnode *, struct uio *);
 typedef int (*vnop_symlink_t)   (struct vnode *, char *, char *);
 typedef int (*vnop_create_open_t) (struct vnode *, const char *, int, mode_t,
 				    struct vnode **, void **);
+typedef int (*vnop_access_t)	(struct vnode *, int);
 
 /*
  * vnode operations
@@ -202,6 +203,13 @@ struct vnops {
 	 * does not truncate before an open the filesystem may refuse.
 	 */
 	vnop_create_open_t	vop_create_open;
+	/*
+	 * Optional. Decides VREAD/VWRITE/VEXEC access in place of the v_mode
+	 * checks of vn_access(), returning 0 or a positive errno. The VFS
+	 * rejects VWRITE on a read-only mount with EROFS before calling it.
+	 * vp may be locked or unlocked.
+	 */
+	vnop_access_t		vop_access;
 };
 
 /*
