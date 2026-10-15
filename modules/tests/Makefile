@@ -226,6 +226,7 @@ endif
 tests += testrunner.so
 
 tests += tst-libaio.so
+tests += tst-ramfs-unlink-race.so
 tests += tst-rlimit.so
 tests += tst-close-range.so
 tests += tst-numa.so
