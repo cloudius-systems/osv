@@ -275,9 +275,16 @@ static ssize_t vstrfmon_l(char *s, size_t n, locale_t loc, const char *fmt, va_l
 		char *num = malloc(k + 1);
 		if (!num) return -1;
 		snprintf(num, k + 1, "%.*Lf", (int)rp, x);
-		char *dot = strchr(num, '.');
+		/* snprintf's radix is the global LC_NUMERIC decimal point (Stage 1b
+		 * printf honours LC_NUMERIC), not necessarily '.'; split on the string
+		 * it actually used so a non-'.' radix (fr_FR ',') is not counted as a
+		 * digit. The fraction is reassembled with the LC_MONETARY point below. */
+		const char *rdx = __nl_langinfo_l((LC_NUMERIC << 16) | 0, 0);
+		if (!rdx || !*rdx) rdx = ".";
+		char *dot = rp > 0 ? strstr(num, rdx) : 0;
+		size_t rdxl = strlen(rdx);
 		size_t ilen = dot ? (size_t)(dot - num) : (size_t)k;
-		size_t flen = dot ? k - ilen - 1 : 0, pad = 0;
+		size_t flen = dot ? k - ilen - rdxl : 0, pad = 0;
 		if (have_lp) {
 			size_t want = lp + nseps(lp, g) * chars(ts, sl);
 			size_t have = ilen + nseps(ilen, g) * chars(ts, sl);
@@ -299,7 +306,7 @@ static ssize_t vstrfmon_l(char *s, size_t n, locale_t loc, const char *fmt, va_l
 		group(val + pad + glen, num, ilen, g, ts, sl);
 		if (dot) {
 			memcpy(val + pad + glen, dp, dl);
-			memcpy(val + pad + glen + dl, dot + 1, flen);
+			memcpy(val + pad + glen + dl, dot + rdxl, flen);
 		}
 		free(num);
 
