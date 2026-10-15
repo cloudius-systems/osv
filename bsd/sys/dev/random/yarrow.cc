@@ -41,6 +41,7 @@ __FBSDID("$FreeBSD$");
 
 #include <dev/random/hash.h>
 #include <dev/random/random_adaptors.h>
+#include <dev/random/randomdev.h>
 #include <dev/random/randomdev_soft.h>
 #include <dev/random/yarrow.h>
 
@@ -62,6 +63,8 @@ static struct random_state {
 	u_int gengateinterval;	/* Pg */
 	u_int bins;		/* Pt/t */
 	u_int outputblocks;	/* count output blocks for gates */
+	int cur;		/* unread bytes in genval */
+	uint8_t genval[KEYSIZE];	/* partial output block */
 	u_int slowoverthresh;	/* slow pool overthreshhold reseed count */
 	struct pool {
 		struct source {
@@ -136,6 +139,9 @@ random_process_event(struct harvest *event)
 	}
 #endif
 
+	/* Serialize pool updates with explicit reseeds and output. */
+	mtx_lock(&random_reseed_mtx);
+
 	/* Accumulate the event into the appropriate pool */
 	pl = random_state.which;
 	source = &random_state.pool[pl].source[event->source];
@@ -154,15 +160,20 @@ random_process_event(struct harvest *event)
 	}
 
 	/* if any fast source over threshhold, reseed */
-	if (overthreshhold[FAST])
+	if (overthreshhold[FAST]) {
 		reseed(FAST);
+		randomdev_unblock();
+	}
 
 	/* if enough slow sources are over threshhold, reseed */
-	if (overthreshhold[SLOW] >= random_state.slowoverthresh)
+	if (overthreshhold[SLOW] >= random_state.slowoverthresh) {
 		reseed(SLOW);
+		randomdev_unblock();
+	}
 
 	/* Invert the fast/slow pool selector bit */
 	random_state.which = !random_state.which;
+	mtx_unlock(&random_reseed_mtx);
 }
 
 void
@@ -256,8 +267,10 @@ reseed(u_int fastslow)
 	printf("Yarrow: %s reseed\n", fastslow == FAST ? "fast" : "slow");
 #endif
 
-	/* The reseed task must not be jumped on */
-	mtx_lock(&random_reseed_mtx);
+	/* Caller holds random_reseed_mtx. Discard pre-reseed output before
+	 * installing the new key, including a snapshot-copied partial block. */
+	random_state.cur = 0;
+	memset(random_state.genval, 0, sizeof(random_state.genval));
 
 	/* 1. Hash the accumulated entropy into v[0] */
 
@@ -320,21 +333,13 @@ reseed(u_int fastslow)
 
 	/* 7. Dump to seed file */
 	/* XXX Not done here yet */
-
-	/* Unblock the device if it was blocked due to being unseeded */
-	randomdev_unblock();
-
-	/* Release the reseed mutex */
-	mtx_unlock(&random_reseed_mtx);
 }
 
 /* Internal function to return processed entropy from the PRNG */
 int
 random_yarrow_read(void *buf, int count)
 {
-	static int cur = 0;
 	static int gate = 1;
-	static uint8_t genval[KEYSIZE];
 	size_t tomove;
 	int i;
 	int retval;
@@ -355,23 +360,23 @@ random_yarrow_read(void *buf, int count)
 		retval = 0;
 		for (i = 0; i < count; i += BLOCKSIZE) {
 			increment_counter();
-			randomdev_encrypt(&random_state.key, random_state.counter.byte, genval, BLOCKSIZE);
+			randomdev_encrypt(&random_state.key, random_state.counter.byte, random_state.genval, BLOCKSIZE);
 			tomove = MIN(count - i, BLOCKSIZE);
-			memcpy((char *)buf + i, genval, tomove);
+			memcpy((char *)buf + i, random_state.genval, tomove);
 			if (++random_state.outputblocks >= random_state.gengateinterval) {
 				generator_gate();
 				random_state.outputblocks = 0;
 			}
 			retval += (int)tomove;
-			cur = 0;
+			random_state.cur = 0;
 		}
 	}
 	else {
-		if (!cur) {
+		if (!random_state.cur) {
 			increment_counter();
-			randomdev_encrypt(&random_state.key, random_state.counter.byte, genval, BLOCKSIZE);
-			memcpy(buf, genval, (size_t)count);
-			cur = BLOCKSIZE - count;
+			randomdev_encrypt(&random_state.key, random_state.counter.byte, random_state.genval, BLOCKSIZE);
+			memcpy(buf, random_state.genval, (size_t)count);
+			random_state.cur = BLOCKSIZE - count;
 			if (++random_state.outputblocks >= random_state.gengateinterval) {
 				generator_gate();
 				random_state.outputblocks = 0;
@@ -379,9 +384,9 @@ random_yarrow_read(void *buf, int count)
 			retval = count;
 		}
 		else {
-			retval = MIN(cur, count);
-			memcpy(buf, &genval[BLOCKSIZE - cur], (size_t)retval);
-			cur -= retval;
+			retval = MIN(random_state.cur, count);
+			memcpy(buf, &random_state.genval[BLOCKSIZE - random_state.cur], (size_t)retval);
+			random_state.cur -= retval;
 		}
 	}
 	mtx_unlock(&random_reseed_mtx);
@@ -407,6 +412,12 @@ generator_gate(void)
 void
 random_yarrow_reseed(void)
 {
+	mtx_lock(&random_reseed_mtx);
+	/* Preserve partial entropy accumulation until a threshold seeds us. */
+	if (!random_adaptor->seeded) {
+		mtx_unlock(&random_reseed_mtx);
+		return;
+	}
 #ifdef RANDOM_DEBUG
 	int i;
 
@@ -419,5 +430,8 @@ random_yarrow_reseed(void)
 		printf(" %d", random_state.pool[SLOW].source[i].bits);
 	printf("\n");
 #endif
+	/* An explicit rekey does not establish that any entropy was collected.
+	 * Only threshold-triggered reseeds in random_process_event may unblock. */
 	reseed(SLOW);
+	mtx_unlock(&random_reseed_mtx);
 }
