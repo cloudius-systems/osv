@@ -273,6 +273,7 @@ tests += tst-ramfs-unlink-race.so
 tests += tst-rlimit.so
 tests += tst-close-range.so
 tests += tst-numa-mempolicy.so
+tests += tst-numa-alloc.so
 tests += tst-numa.so
 tests += tst-random-flush.so
 tests += tst-signalfd.so
