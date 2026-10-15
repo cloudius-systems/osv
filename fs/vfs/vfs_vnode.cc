@@ -98,8 +98,9 @@ vn_hash(struct mount *mp, uint64_t ino)
 }
 
 /*
- * Returns locked vnode for specified mount point and path.
- * vn_lock() will increment the reference count of vnode.
+ * Returns the vnode for the specified mount point and inode with a new
+ * reference, or nullptr. The vnode is NOT locked: the caller takes v_lock
+ * after dropping VNODE_LOCK (see vget()).
  *
  * Locking: VNODE_LOCK must be held.
  */
@@ -112,8 +113,6 @@ vn_lookup(struct mount *mp, uint64_t ino)
 	LIST_FOREACH(vp, &vnode_table[vn_hash(mp, ino)], v_link) {
 		if (vp->v_mount == mp && vp->v_ino == ino) {
 			vp->v_refcnt++;
-			mutex_lock(&vp->v_lock);
-			vp->v_nrlocks++;
 			return vp;
 		}
 	}
@@ -183,6 +182,16 @@ vget(struct mount *mp, uint64_t ino, struct vnode **vpp)
 	vp = vn_lookup(mp, ino);
 	if (vp) {
 		VNODE_UNLOCK();
+		/*
+		 * Lock it only after dropping VNODE_LOCK. vput() and other
+		 * holders of v_lock take VNODE_LOCK, so sleeping on v_lock
+		 * with VNODE_LOCK held can deadlock. The reference taken in
+		 * vn_lookup() keeps the vnode alive: a vnode is unhashed
+		 * under VNODE_LOCK in the same step that drops its last
+		 * reference, so a hashed vnode always has one.
+		 */
+		mutex_lock(&vp->v_lock);
+		vp->v_nrlocks++;
 		*vpp = vp;
 		return 1;
 	}
