@@ -41,6 +41,11 @@
 
 #include <atomic>
 #include <chrono>
+#include <clocale>
+#include <cstdlib>
+#include <cstring>
+#include <monetary.h>
+#include <string>
 
 // gcc tests/tst-time.cc -lstdc++  -lboost_unit_test_framework -lboost_filesystem -o /tmp/a
 //#define BOOST_TEST_DYN_LINK //ONLY FOR LINUX
@@ -695,4 +700,75 @@ TEST(time, timespec_get) {
 
 TEST(time, difftime) {
   ASSERT_EQ(1.0, difftime(1, 0));
+}
+
+// OSv's strftime, strptime and strfmon in the C locale, as glibc 2.41's
+// (measured; the same at conf_locale=0 and 1). Each case is one where musl's
+// strftime, which OSv used before, gives a different result.
+static std::string fmt_tm(const char *f, int year)
+{
+  struct tm t;
+  memset(&t, 0, sizeof(t));
+  t.tm_year = year - 1900;
+  t.tm_mon = 6;
+  t.tm_mday = 5;
+  t.tm_hour = 13;
+  t.tm_min = 4;
+  t.tm_sec = 3;
+  t.tm_yday = 185;
+  t.tm_zone = "UTC";
+  char buf[128];
+  size_t n = strftime(buf, sizeof(buf), f, &t);
+  return n ? std::string(buf, n) : std::string("<0>");
+}
+
+TEST(time, strftime_c_glibc) {
+  setlocale(LC_ALL, "C");
+  EXPECT_STREQ("12345", fmt_tm("%Y", 12345));     // musl "+12345"
+  EXPECT_STREQ("12345-07-05", fmt_tm("%F", 12345));
+  EXPECT_STREQ("-5", fmt_tm("%Y", -5));           // musl "-005"
+  EXPECT_STREQ("-1", fmt_tm("%C", -5));           // musl "00"
+  EXPECT_STREQ("95", fmt_tm("%y", -5));           // musl "05"
+  EXPECT_STREQ("1", fmt_tm("%Y", 1));             // musl "0001"
+  EXPECT_STREQ("13", fmt_tm("%k", 2026));         // musl: not a conversion
+  EXPECT_STREQ(" 1", fmt_tm("%l", 2026));
+  EXPECT_STREQ("pm", fmt_tm("%P", 2026));
+  EXPECT_STREQ("SUN", fmt_tm("%^a", 2026));
+  EXPECT_STREQ("JUL", fmt_tm("%#b", 2026));
+  EXPECT_STREQ("    7", fmt_tm("%_5m", 2026));    // musl " 7"
+  EXPECT_STREQ("00005", fmt_tm("%05e", 2026));
+  EXPECT_STREQ("%q", fmt_tm("%q", 2026));         // musl 0: unknown conversions are copied
+  EXPECT_STREQ("  %5q", fmt_tm("%5q", 2026));
+  EXPECT_STREQ("%", fmt_tm("%", 2026));
+  EXPECT_STREQ("Sun Jul  5 13:04:03 1", fmt_tm("%c", 1));
+}
+
+TEST(time, strptime_c_glibc) {
+  setlocale(LC_ALL, "C");
+  struct tm t;
+  memset(&t, 0, sizeof(t));
+  // glibc reads at most 4 digits for %Y.
+  const char *e = strptime("12345-07-05", "%Y", &t);
+  EXPECT_TRUE(e != nullptr);
+  EXPECT_STREQ("5-07-05", e ? e : "");
+  EXPECT_EQ(1234 - 1900, t.tm_year);
+  memset(&t, 0, sizeof(t));
+  e = strptime(" 1:04 PM", "%l:%M %p", &t);     // musl: no %l
+  EXPECT_TRUE(e != nullptr && !*e);
+  EXPECT_EQ(13, t.tm_hour);
+  memset(&t, 0, sizeof(t));
+  // glibc's strptime has no %P: the call fails.
+  EXPECT_TRUE(strptime("13:04 pm", "%k:%M %P", &t) == nullptr);
+}
+
+TEST(time, strfmon_c_glibc) {
+  setlocale(LC_ALL, "C");
+  char buf[64];
+  EXPECT_EQ(8, strfmon(buf, sizeof(buf), "%n", -1234.5));
+  EXPECT_STREQ("-1234.50", buf);
+  EXPECT_EQ(14, strfmon(buf, sizeof(buf), "%#10n", 1.0));
+  EXPECT_STREQ("          1.00", buf);
+  errno = 0;
+  EXPECT_EQ(-1, strfmon(buf, 4, "%n", 1234.5));
+  EXPECT_EQ(E2BIG, errno);
 }
