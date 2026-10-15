@@ -38,13 +38,14 @@ __FBSDID("$FreeBSD$");
 
 #include <osv/sched.hh>
 #include <osv/trace.hh>
+#include <osv/mmu.hh>
 
 static inline void critical_enter()  { sched::preempt_disable(); }
 static inline void critical_exit() { sched::preempt_enable(); }
 
 #include <sys/buf_ring.h>
 
-//#include <netinet6/ip6_var.h>
+#include <netinet6/ip6_var.h>
 
 /*********************************************************************
  *  Static functions prototypes
@@ -575,7 +576,7 @@ ena_rx_cleanup(struct ena_ring *rx_ring)
 		if (do_if_input != 0) {
 			ena_log_io(adapter->pdev, DBG,
 			    "calling if_input() with mbuf %p", mbuf);
-			bool fast_path = ifp->if_classifier.post_packet(mbuf);
+			bool fast_path = if_net_channel_input(ifp, mbuf);
 			if (!fast_path) {
 				(*ifp->if_input)(ifp, mbuf);
 			} else {

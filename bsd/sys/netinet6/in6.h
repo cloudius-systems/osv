@@ -154,7 +154,7 @@ extern const struct in6_addr in6mask128;
  * Macros started with IPV6_ADDR is KAME local
  */
 #ifdef _KERNEL	/* XXX nonstandard */
-#if _BYTE_ORDER == _BIG_ENDIAN
+#if BYTE_ORDER == BIG_ENDIAN
 #define IPV6_ADDR_INT32_ONE	1
 #define IPV6_ADDR_INT32_TWO	2
 #define IPV6_ADDR_INT32_MNL	0xff010000
@@ -163,7 +163,7 @@ extern const struct in6_addr in6mask128;
 #define IPV6_ADDR_INT16_ULL	0xfe80
 #define IPV6_ADDR_INT16_USL	0xfec0
 #define IPV6_ADDR_INT16_MLL	0xff02
-#elif _BYTE_ORDER == _LITTLE_ENDIAN
+#elif BYTE_ORDER == LITTLE_ENDIAN
 #define IPV6_ADDR_INT32_ONE	0x01000000
 #define IPV6_ADDR_INT32_TWO	0x02000000
 #define IPV6_ADDR_INT32_MNL	0x000001ff
@@ -355,13 +355,20 @@ extern const struct in6_addr in6addr_linklocal_allv2routers;
 	 (IN6_IS_ADDR_MC_LINKLOCAL(a)) ||	\
 	 (IN6_IS_ADDR_MC_INTFACELOCAL(a)))
 
+static inline time_t ifa6_get_time_second(void)
+{
+    struct timeval tv;
+    getmicrotime(&tv);
+    return (time_t)tv.tv_sec;
+}
+
 #define IFA6_IS_DEPRECATED(a) \
 	((a)->ia6_lifetime.ia6t_pltime != ND6_INFINITE_LIFETIME && \
-	 (u_int32_t)((time_second - (a)->ia6_updatetime)) > \
+	 (u_int32_t)((ifa6_get_time_second() - (a)->ia6_updatetime)) >   \
 	 (a)->ia6_lifetime.ia6t_pltime)
 #define IFA6_IS_INVALID(a) \
 	((a)->ia6_lifetime.ia6t_vltime != ND6_INFINITE_LIFETIME && \
-	 (u_int32_t)((time_second - (a)->ia6_updatetime)) > \
+	 (u_int32_t)((ifa6_get_time_second() - (a)->ia6_updatetime)) >  \
 	 (a)->ia6_lifetime.ia6t_vltime)
 #endif /* _KERNEL */
 
@@ -378,104 +385,19 @@ struct route_in6 {
 };
 #endif
 
-/*
- * Options for use with [gs]etsockopt at the IPV6 level.
- * First word of comment is data type; bool is stored in int.
+
+#include <netinet6/__in6.h>
+
+/* IPV6 socket options defined in FreeBSD but not Linux/Musl
+ *
+ * These options might eventually just get removed...
  */
-/* no hdrincl */
-#if 0 /* the followings are relic in IPv4 and hence are disabled */
-#define IPV6_OPTIONS		1  /* buf/ip6_opts; set/get IP6 options */
-#define IPV6_RECVOPTS		5  /* bool; receive all IP6 opts w/dgram */
-#define IPV6_RECVRETOPTS	6  /* bool; receive IP6 opts for response */
-#define IPV6_RECVDSTADDR	7  /* bool; receive IP6 dst addr w/dgram */
-#define IPV6_RETOPTS		8  /* ip6_opts; set/get IP6 options */
-#endif
-#define IPV6_SOCKOPT_RESERVED1	3  /* reserved for future use */
-#define IPV6_UNICAST_HOPS	4  /* int; IP6 hops */
-#define IPV6_MULTICAST_IF	9  /* u_int; set/get IP6 multicast i/f  */
-#define IPV6_MULTICAST_HOPS	10 /* int; set/get IP6 multicast hops */
-#define IPV6_MULTICAST_LOOP	11 /* u_int; set/get IP6 multicast loopback */
-#define IPV6_JOIN_GROUP		12 /* ipv6_mreq; join a group membership */
-#define IPV6_LEAVE_GROUP	13 /* ipv6_mreq; leave a group membership */
-#define IPV6_PORTRANGE		14 /* int; range to choose for unspec port */
-#define ICMP6_FILTER		18 /* icmp6_filter; icmp6 filter */
-/* RFC2292 options */
-#ifdef _KERNEL
-#define IPV6_2292PKTINFO	19 /* bool; send/recv if, src/dst addr */
-#define IPV6_2292HOPLIMIT	20 /* bool; hop limit */
-#define IPV6_2292NEXTHOP	21 /* bool; next hop addr */
-#define IPV6_2292HOPOPTS	22 /* bool; hop-by-hop option */
-#define IPV6_2292DSTOPTS	23 /* bool; destinaion option */
-#define IPV6_2292RTHDR		24 /* bool; routing header */
-#define IPV6_2292PKTOPTIONS	25 /* buf/cmsghdr; set/get IPv6 options */
-#endif
-
-#define IPV6_CHECKSUM		26 /* int; checksum offset for raw socket */
-#define IPV6_V6ONLY		27 /* bool; make AF_INET6 sockets v6 only */
-#ifndef _KERNEL
-#define IPV6_BINDV6ONLY		IPV6_V6ONLY
-#endif
-
-#if 1 /* IPSEC */
-#define IPV6_IPSEC_POLICY	28 /* struct; get/set security policy */
-#endif /* IPSEC */
-
-#define IPV6_FAITH		29 /* bool; accept FAITH'ed connections */
-
-#if 1 /* IPV6FIREWALL */
-#define IPV6_FW_ADD		30 /* add a firewall rule to chain */
-#define IPV6_FW_DEL		31 /* delete a firewall rule from chain */
-#define IPV6_FW_FLUSH		32 /* flush firewall rule chain */
-#define IPV6_FW_ZERO		33 /* clear single/all firewall counter(s) */
-#define IPV6_FW_GET		34 /* get entire firewall rule chain */
-#endif
-
-/* new socket options introduced in RFC3542 */
-#define IPV6_RTHDRDSTOPTS	35 /* ip6_dest; send dst option before rthdr */
-
-#define IPV6_RECVPKTINFO	36 /* bool; recv if, dst addr */
-#define IPV6_RECVHOPLIMIT	37 /* bool; recv hop limit */
-#define IPV6_RECVRTHDR		38 /* bool; recv routing header */
-#define IPV6_RECVHOPOPTS	39 /* bool; recv hop-by-hop option */
-#define IPV6_RECVDSTOPTS	40 /* bool; recv dst option after rthdr */
-#ifdef _KERNEL
-#define IPV6_RECVRTHDRDSTOPTS	41 /* bool; recv dst option before rthdr */
-#endif
-
-#define IPV6_USE_MIN_MTU	42 /* bool; send packets at the minimum MTU */
-#define IPV6_RECVPATHMTU	43 /* bool; notify an according MTU */
-
-#define IPV6_PATHMTU		44 /* mtuinfo; get the current path MTU (sopt),
-				      4 bytes int; MTU notification (cmsg) */
-#if 0 /*obsoleted during 2292bis -> 3542*/
-#define IPV6_REACHCONF		45 /* no data; ND reachability confirm
-				      (cmsg only/not in of RFC3542) */
-#endif
-
-/* more new socket options introduced in RFC3542 */
-#define IPV6_PKTINFO		46 /* in6_pktinfo; send if, src addr */
-#define IPV6_HOPLIMIT		47 /* int; send hop limit */
-#define IPV6_NEXTHOP		48 /* bsd_sockaddr; next hop addr */
-#define IPV6_HOPOPTS		49 /* ip6_hbh; send hop-by-hop option */
-#define IPV6_DSTOPTS		50 /* ip6_dest; send dst option befor rthdr */
-#define IPV6_RTHDR		51 /* ip6_rthdr; send routing header */
-#if 0
-#define IPV6_PKTOPTIONS		52 /* buf/cmsghdr; set/get IPv6 options */
-				   /* obsoleted by RFC3542 */
-#endif
-
-#define IPV6_RECVTCLASS		57 /* bool; recv traffic class values */
-
-#define IPV6_AUTOFLOWLABEL	59 /* bool; attach flowlabel automagically */
-
-#define IPV6_TCLASS		61 /* int; send traffic class value */
-#define IPV6_DONTFRAG		62 /* bool; disable IPv6 fragmentation */
-
-#define IPV6_PREFER_TEMPADDR	63 /* int; prefer temporary addresses as
-				    * the source address.
-				    */
-
-#define	IPV6_BINDANY		64 /* bool: allow bind to any address */
+#define IPV6_BINDANY            (IPV6_XOPTS_START + 0)
+#define IPV6_RECVRTHDRDSTOPTS   (IPV6_XOPTS_START + 1)
+#define IPV6_FAITH              (IPV6_XOPTS_START + 2)
+#define IPV6_PREFER_TEMPADDR    (IPV6_XOPTS_START + 3)
+#define IPV6_PORTRANGE          (IPV6_XOPTS_START + 4)
+#define IPV6_2292NEXTHOP        (IPV6_XOPTS_START + 5)
 
 /*
  * The following option is private; do not use it from user applications.
@@ -669,6 +591,9 @@ typedef	__socklen_t	socklen_t;
 
 __BEGIN_DECLS
 struct cmsghdr;
+
+
+extern void ip6_init2(void *);
 
 extern int inet6_option_space(int);
 extern int inet6_option_init(void *, struct cmsghdr **, int);
