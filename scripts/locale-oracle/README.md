@@ -49,3 +49,29 @@ equals 1.2.6 except for wcwidth (240 code points), and musl's C locale equals it
 `gen-ctype-sample.py ../../libc/locale/ctype-utf8.inc d-glibc-C.txt d-glibc-C.UTF-8.txt >
 ../../tests/tst-locale-ctype-sample.h` writes the expected values tst-locale-ctype checks: 0..0x2ff,
 every run boundary of the generated tables, and 0x110000, 0x7fffffff and WEOF, in C and C.UTF-8.
+
+## strftime, strptime and strfmon
+
+Written from experiments with glibc 2.41 and the bytes of its compiled files; no glibc source read.
+Each has a host differential that builds the OSv source for Linux and compares it with glibc over
+the same locale (C and C.UTF-8, or compiled data with `LOCPATH`), and a negative control (a mutant
+that the differential must catch):
+
+- `time-diff/build.sh` builds `libc/time/strftime.c`, `strptime.c` and `libc/locale/strfmon.c` for
+  Linux with the shims in `time-diff/shim/` (their public names prefixed `osv_`);
+  the harnesses call glibc directly. It takes the files from the tree it is in (`OSV_TREE`
+  overrides).
+  - `sfd d <locale>...` (`sfdiff.c`): strftime and wcsftime, every conversion character 32..126 with
+    17 flag sets, 9 widths and the E/O modifiers on 12 dates, multi-conversion formats, buffer sizes
+    0..11, and conversion characters U+0080..U+10FFFF: 455196 cases per locale.
+  - `spd <locale>...` (`spdiff.c`): strptime round trips of every conversion's glibc output, with and
+    without flags and E/O, and a fixed list of edge inputs, into a zeroed and a preset tm.
+  - `fmd <locale>...` (`fmdiff.c`): strfmon_l, 16 flag sets x 6 widths x 5 left x 5 right
+    precisions x n/i on 14 values, error formats, buffer sizes 0..39, and 1e308 (311 digits) at
+    buffer sizes around its length.
+
+glibc behaviours that were measured and reproduced (each surprising enough to note): wcsftime's
+`%Z` ignores `#` and, with `-`, its width; a `%EY` pad flag sticks to later era years in the same
+call; strptime's names and formats keep a "locale or C" state decided by the first differing match;
+after one `%O` number falls back to ASCII digits every later `%O` fails; strfmon counts the field
+width in bytes, and with `+` `%i` uses the national sign position.
