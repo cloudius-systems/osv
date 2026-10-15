@@ -2,6 +2,7 @@
 #define _STDIO_IMPL_H
 
 #include <stdio.h>
+#include <wchar.h>
 #include "../internal/libc.h"
 #include <pthread.h>
 
@@ -22,6 +23,9 @@ __BEGIN_DECLS
 #define F_ERR 32
 #define F_SVB 64
 #define F_APP 128
+/* OSv: a wide-buffer stream (swprintf, swscanf, open_wmemstream): wide
+ * characters go through the wput/wget/wunget hooks and are never converted. */
+#define F_WBUF 256
 
 /*
  * Note: this structure is layed out so that the fields which are accessed
@@ -63,6 +67,15 @@ struct __FILE_s {
 	bool no_locking;
 	mutex_t mutex;
 	locale_t locale;
+
+	/* OSv: wide-character hooks of an F_WBUF stream; wget and wunget are
+	 * NULL on a write-only one */
+	wint_t (*wput)(wchar_t, FILE *);
+	wint_t (*wget)(FILE *);
+	wint_t (*wunget)(wint_t, FILE *);
+	/* OSv: [wpb_lo, wpb_hi) is ungetwc() pushback on a byte-backed stream;
+	 * a non-ASCII character there is 0xff followed by its 4 wchar_t bytes. */
+	unsigned char *wpb_lo, *wpb_hi;
 };
 
 hidden FILE **__ofl_lock(void);

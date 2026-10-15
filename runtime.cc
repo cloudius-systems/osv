@@ -372,7 +372,7 @@ static struct __locale_struct c_locale = {
     c_locale_array + 128, // __ctype_b
     c_tolower_array + 128, // __ctype_tolower
     c_toupper_array + 128, // __ctype_toupper
-    { }, // __names
+    { "C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C", "C" }, // __names
 };
 
 locale_t __c_locale_ptr = &c_locale;
@@ -382,57 +382,6 @@ void* __stack_chk_guard = reinterpret_cast<void*>(0x12345678abcdefull);
 extern "C" OSV_LIBC_API
 void __stack_chk_fail(void) {
     abort("__stack_chk_fail(): Stack overflow detected. Aborting.\n");
-}
-
-namespace {
-    bool all_categories(int category_mask)
-    {
-	return (category_mask | (1 << LC_ALL)) == (1 << __LC_LAST) - 1;
-    }
-}
-
-struct __locale_data {
-    const void *values[0];
-};
-
-#define _NL_ITEM(category, index)   (((category) << 16) | (index))
-#define _NL_ITEM_CATEGORY(item)     ((int) (item) >> 16)
-#define _NL_ITEM_INDEX(item)        ((int) (item) & 0xffff)
-
-#define _NL_CTYPE_CLASS  0
-#define _NL_CTYPE_TOUPPER 1
-#define _NL_CTYPE_TOLOWER 3
-
-extern "C" OSV_LIBC_API
-__locale_t __newlocale(int category_mask, const char *locale, locale_t base)
-    __THROW
-{
-    if (category_mask == 1 << LC_ALL) {
-        category_mask = ((1 << __LC_LAST) - 1) & ~(1 << LC_ALL);
-    }
-    assert(locale);
-    if (base == &c_locale) {
-        base = NULL;
-    }
-    if ((base == NULL || all_categories(category_mask))
-            && (category_mask == 0 || strcmp(locale, "C") == 0)) {
-        return &c_locale;
-    }
-    struct __locale_struct result = base ? *base : c_locale;
-    if (category_mask == 0) {
-        auto result_ptr = new __locale_struct;
-        *result_ptr = result;
-        auto ctypes = result_ptr->__locales[LC_CTYPE]->values;
-        result_ptr->__ctype_b = (const unsigned short *)
-	            ctypes[_NL_ITEM_INDEX(_NL_CTYPE_CLASS)] + 128;
-        result_ptr->__ctype_tolower = (const int *)
-	            ctypes[_NL_ITEM_INDEX(_NL_CTYPE_TOLOWER)] + 128;
-        result_ptr->__ctype_toupper = (const int *)
-	            ctypes[_NL_ITEM_INDEX(_NL_CTYPE_TOUPPER)] + 128;
-        return result_ptr;
-    }
-    errno = ENOENT;
-    return nullptr;
 }
 
 OSV_LIBC_API

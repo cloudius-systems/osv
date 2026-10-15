@@ -26,6 +26,7 @@
 // PLUS some minor tweaks (mostly macros) that adapt it to run with boost unit framework
 // instead of Google's test framework
 
+#include <locale.h>
 #include <wctype.h>
 
 #include <dlfcn.h>
@@ -49,9 +50,17 @@ namespace utf = boost::unit_test;
 #define GTEST_LOG_(I) std::cout
 #define GTEST_SKIP() std::cout
 
+// Bionic is always UTF-8; OSv, like glibc, starts in a strict C locale with
+// no wide classes or case maps above 0x7f. Run in C.UTF-8 as bionic does,
+// and pass newlocale() a mask (LC_ALL is a category, not a mask).
+struct utf8_global {
+  utf8_global() { setlocale(LC_ALL, "C.UTF-8"); }
+};
+BOOST_GLOBAL_FIXTURE(utf8_global);
+
 class UtfLocale {
  public:
-  UtfLocale() : l(newlocale(LC_ALL, "C.UTF-8", nullptr)) {}
+  UtfLocale() : l(newlocale(LC_ALL_MASK, "C.UTF-8", nullptr)) {}
   ~UtfLocale() { freelocale(l); }
   locale_t l;
 };
