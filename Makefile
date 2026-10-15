@@ -1161,6 +1161,13 @@ libc += locale/intl.o
 libc += locale/locale.o
 ifeq ($(conf_locale),1)
 libc += locale/locale-data.o
+# LC_NUMERIC in printf, scanf and strtod: every file that includes
+# libc/internal/osv-numeric.h (without the flag it is C's stub)
+libc += locale/numeric.o
+osv-numeric-users := locale/numeric.o stdio/vfprintf.o stdio/vfwprintf.o stdio/vfscanf.o \
+	stdio/vfwscanf.o internal/floatscan.o internal/intscan.o stdlib/strtod.o \
+	locale/strtod_l.o locale/strtof_l.o locale/strtold_l.o
+$(addprefix $(out)/libc/, $(osv-numeric-users)): CFLAGS += -DOSV_CONF_LOCALE=1
 $(out)/libc/locale/locale.o: CXXFLAGS += -DOSV_CONF_LOCALE=1
 $(out)/libc/locale/locale-data.o: CXXFLAGS += -std=gnu++17
 # A loaded locale's LC_CTYPE tables (wide classes, maps, widths; byte tables
@@ -1694,11 +1701,11 @@ musl += stdio/vasprintf.o
 libc += stdio/vdprintf.o
 libc += stdio/vfprintf.o
 $(out)/libc/stdio/vfprintf.o: COMMON += -Wno-maybe-uninitialized
-musl += stdio/vfscanf.o
-$(out)/musl/src/stdio/vfscanf.o: COMMON += -Wno-maybe-uninitialized
-musl += stdio/vfwprintf.o
-musl += stdio/vfwscanf.o
-$(out)/musl/src/stdio/vfwscanf.o: COMMON += -Wno-maybe-uninitialized
+libc += stdio/vfscanf.o
+$(out)/libc/stdio/vfscanf.o: COMMON += -Wno-maybe-uninitialized
+libc += stdio/vfwprintf.o
+libc += stdio/vfwscanf.o
+$(out)/libc/stdio/vfwscanf.o: COMMON += -Wno-maybe-uninitialized
 musl += stdio/vprintf.o
 musl += stdio/vscanf.o
 libc += stdio/vsnprintf.o
