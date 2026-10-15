@@ -34,6 +34,7 @@
 #include <cstdlib>
 #include <cstring>
 #include <ctime>
+#include <locale>
 #include <string>
 #include <thread>
 
@@ -50,6 +51,11 @@
 
 #ifndef _NL_ITEM
 #define _NL_ITEM(cat, idx) (((cat) << 16) | (idx))
+#endif
+#ifdef __OSV__
+// glibc's <ctype.h> declares these; OSv's does not, though it exports them.
+extern "C" const int32_t **__ctype_toupper_loc(void);
+extern "C" const int32_t **__ctype_tolower_loc(void);
 #endif
 #ifndef LC_IDENTIFICATION
 #define LC_IDENTIFICATION 12    // glibc's numbering (OSv's <locale.h> lacks the name)
@@ -324,6 +330,66 @@ static void test_strfmon()
     setlocale(LC_ALL, "C");
 }
 
+// Per-locale LC_CTYPE, expectations from glibc 2.41.
+static void test_ctype()
+{
+    set_locpath("dir");
+    setlocale(LC_ALL, "tr_TR.UTF-8");
+    wctrans_t up = wctrans("toupper"), lo = wctrans("tolower");
+    report(towupper('i') == 0x130 && towlower('I') == 0x131 && towctrans('i', up) == 0x130 &&
+           towctrans(0x130, lo) == 'i' && towupper(0x131) == 'I',
+           "tr_TR dotted and dotless i: towupper(i) " + std::to_string(towupper('i')));
+    // Built with -fno-builtin-toupper -fno-builtin-tolower: GCC otherwise
+    // assumes C's results (at -O1 it printed 105 and compared it != 'i').
+    int ui = toupper('i'), lI = tolower('I'), ua = toupper('a');
+    int ti = (*__ctype_toupper_loc())['i'];
+    report(ui == 'i' && lI == 'I' && ua == 'A' && ti == 'i',
+           "tr_TR byte toupper(i) = i (glibc): " + std::to_string(ui) + " " + std::to_string(lI) +
+           " " + std::to_string(ua) + " " + std::to_string(ti));
+    report(!isalpha(0xe9) && iswalpha(0xe9), "tr_TR byte ctype is C's, wide is Unicode");
+    // The descriptor stays bound to the locale of the call.
+    setlocale(LC_ALL, "C.UTF-8");
+    report(towctrans('i', up) == 0x130 && towupper('i') == 'I', "wctrans bound at the call");
+    setlocale(LC_ALL, "ja_JP.UTF-8");
+    wctype_t jh = wctype("jhira"), jk = wctype("jkata"), jd = wctype("jdigit");
+    wctrans_t tk = wctrans("tojkata"), th = wctrans("tojhira");
+    report(jh && jk && jd && wctype("jkanji") && wctype("jspace") && iswctype(0x3042, jh) &&
+           !iswctype(0x30a2, jh) && iswctype(0x30a2, jk) && iswctype(0xff11, jd) &&
+           towctrans(0x3042, tk) == 0x30a2 && towctrans(0x30a2, th) == 0x3042,
+           "ja_JP jhira jkata jdigit, tojkata tojhira");
+    report(wcwidth(0x3042) == 2 && wcwidth('a') == 1 && wcwidth(0x110000) == -1,
+           "ja_JP wcwidth");
+    setlocale(LC_ALL, "C");
+    report(!wctype("jhira") && !wctrans("tojkata") && wctype("alpha") && iswctype(0x3042, jh) &&
+           wcwidth(0x3042) == -1, "C: no jhira; an old descriptor still works");
+    locale_t tr = newlocale(LC_ALL_MASK, "tr_TR.UTF-8", nullptr);
+    report(tr && towupper_l('i', tr) == 0x130 && towlower_l('I', tr) == 0x131 &&
+           toupper_l('i', tr) == 'i' && toupper('i') == 'I', "towupper_l/toupper_l in tr_TR");
+    if (tr) {
+        locale_t old = uselocale(tr);
+        report(towupper('i') == 0x130 && (*__ctype_toupper_loc())['i'] == 'i',
+               "uselocale(tr_TR): towupper and __ctype_toupper_loc follow");
+        uselocale(old);
+        freelocale(tr);
+    }
+    report(towupper('i') == 'I', "back in C");
+    // libstdc++'s std::ctype<char> copies the locale (duplocale) and reads
+    // its byte tables from the object itself (glibc 2.41: 'i' stays 'i').
+    try {
+        std::locale cxx("tr_TR.UTF-8");
+        const std::ctype<char> &ct = std::use_facet<std::ctype<char>>(cxx);
+        char up = ct.toupper('i'), lo = ct.tolower('I'), ua = ct.toupper('a');
+        report(up == 'i' && lo == 'I' && ua == 'A',
+               std::string("std::ctype<char> tr_TR toupper(i) ") + up + " tolower(I) " + lo +
+               " toupper(a) " + ua);
+    } catch (const std::exception &e) {
+        report(false, std::string("std::locale tr_TR.UTF-8: ") + e.what());
+    }
+    std::locale cxxc("C");
+    report(std::use_facet<std::ctype<char>>(cxxc).toupper('i') == 'I', "std::ctype<char> C");
+    setlocale(LC_ALL, "C");
+}
+
 static void test_composite_env()
 {
     set_locpath("dir");
@@ -504,6 +570,7 @@ int main()
         test_fallback();
         test_rpmatch();
         test_strfmon();
+        test_ctype();
         test_composite_env();
         test_newlocale_lifetimes();
         test_archive_default();

@@ -340,6 +340,43 @@ void read_items(const osv_locale_data &d)
     }
     acc += *osv_locale_item(&d, int(d.nstrings)) + *osv_locale_item(&d, 0xffff) +
         *osv_locale_item(&d, -1);
+    // An accepted LC_CTYPE: its byte tables and every class, map
+    // and width table are used through OSv's own lookups, at code points that
+    // reach every level-1 slot and a spread of level-2/3 slots, and the
+    // boundary values; a lookup outside the data is an ASan report.
+    if (d.cat == 0) {
+        const osv_ctype &c = d.ctype;
+        for (int i = -128; i < 256; i++) {
+            acc += c.class_b[i] + uint32_t(c.toupper_b[i]) + uint32_t(c.tolower_b[i]);
+        }
+        static const uint32_t edge[] = { 0x10ffff, 0x110000, 0x7fffffff, 0xffffffff, 0xfffffffe };
+        auto probe = [&](uint32_t cp) {
+            for (int k = 0; k < 12; k++) {
+                acc += osv_ctype_class(c.cls[k], cp);
+            }
+            acc += osv_ctype_map(c.toupper, cp) + osv_ctype_map(c.tolower, cp) +
+                osv_ctype_width(c.width, cp);
+            const char *p = c.class_names;
+            for (uint32_t k = 0; k < c.nclass; k++, p += strlen(p) + 1) {
+                acc += osv_ctype_class(osv_ctype_find(&c, p, false), cp);
+            }
+            p = c.map_names;
+            for (uint32_t k = 0; k < c.nmap; k++, p += strlen(p) + 1) {
+                acc += osv_ctype_map(osv_ctype_find(&c, p, true), cp);
+            }
+        };
+        for (uint32_t cp = 0; cp < 0x110000; cp += 0x1f3) {
+            probe(cp);
+        }
+        for (uint32_t e : edge) {
+            probe(e);
+        }
+        // Any shift: a code point with every high bit pattern.
+        for (int b = 0; b < 32; b++) {
+            probe(1u << b);
+            probe((1u << b) - 1);
+        }
+    }
     sink += acc;
     consume(d);
 }
@@ -483,6 +520,103 @@ void negative(const seed &s, const char *what, F f)
     free(b);
 }
 
+// Validation work: many classes, each pointing at one large table (n1 * (mask2
+// + 1) entries; a single table may have 1 << 22). Each table alone is valid;
+// the file as a whole must be rejected by the file's budget or the class
+// cap, and quickly. Also 64 small classes (at the cap, accepted).
+void ctype_work(const seed &s)
+{
+    auto item = [](const char *b, uint32_t i) { return rd(b + 8 + 4 * size_t(i)); };
+    auto build = [&](uint32_t nclass, uint32_t n1, uint32_t m2, size_t *size) {
+        uint32_t n = rd(s.buf + 4);
+        std::string img(s.buf, s.size);
+        while (img.size() % 4) {
+            img.push_back('\0');
+        }
+        // The table: shift1 31, n1 level-1 entries (offset 0: no entry, so
+        // only n1 * (mask2 + 1) is checked by the size rule, but the
+        // level-2 arrays exist so each entry is visited).
+        uint32_t t = img.size();
+        std::string tab(20 + 4 * size_t(n1), '\0');
+        wr(&tab[0], 31);
+        wr(&tab[4], n1);
+        wr(&tab[8], 16);
+        wr(&tab[12], m2);
+        wr(&tab[16], 0);
+        uint32_t l2 = tab.size();
+        tab.append(4 * (size_t(m2) + 1), '\0');
+        for (uint32_t i = 0; i < n1; i++) {
+            wr(&tab[20 + 4 * size_t(i)], l2);
+        }
+        img += tab;
+        // Class names: nclass names "c0".."cN", then an empty one.
+        uint32_t names = img.size();
+        for (uint32_t i = 0; i < nclass; i++) {
+            img += "c" + std::to_string(i);
+            img.push_back('\0');
+        }
+        img.push_back('\0');
+        while (img.size() % 4) {
+            img.push_back('\0');
+        }
+        // A new index: the old items, then nclass class items at the end,
+        // CLASS_OFFSET pointing at them, MAP_OFFSET and the maps unchanged.
+        uint32_t co = img.size();
+        img.append(4, '\0');
+        uint32_t nn = n + nclass;
+        std::string idx(4 * size_t(nn), '\0');
+        for (uint32_t i = 0; i < n; i++) {
+            wr(&idx[4 * i], item(s.buf, i));
+        }
+        for (uint32_t i = 0; i < nclass; i++) {
+            wr(&idx[4 * (n + i)], t);
+        }
+        wr(&img[co], n);
+        wr(&idx[4 * 17], co);
+        wr(&idx[4 * 10], names);
+        // Move everything past the index by the growth of the index.
+        uint32_t grow = 4 * nclass;
+        std::string out = img.substr(0, 8) + idx + img.substr(8 + 4 * size_t(n));
+        wr(&out[4], nn);
+        for (uint32_t i = 0; i < nn; i++) {
+            wr(&out[8 + 4 * i], rd(&out[8 + 4 * i]) + grow);
+        }
+        // Offsets inside the tables are relative to the table: unchanged.
+        char *b = static_cast<char *>(malloc(out.size()));
+        memcpy(b, out.data(), out.size());
+        *size = out.size();
+        return b;
+    };
+    struct {
+        uint32_t nclass, n1, m2;
+        bool want;
+        const char *what;
+    } cases[] = {
+        { 1, 32, 0xffff, true, "1 class on a 1<<21-entry table accepted" },
+        { 2, 32, 0xffff, false, "2 classes on one 1<<21-entry table rejected (file budget)" },
+        { 60, 32, 0xffff, false, "60 classes on one 1<<21-entry table rejected (file budget)" },
+        { 20000, 64, 0xffff, false, "20000 classes on one 1<<22-entry table rejected" },
+        { 64, 1, 0, true, "64 small classes accepted" },
+        { 65, 1, 0, false, "65 classes rejected (class cap)" },
+    };
+    for (auto &c : cases) {
+        size_t size;
+        char *b = build(c.nclass, c.n1, c.m2, &size);
+        seed t = s;
+        t.buf = b;
+        struct timespec t0, t1;
+        clock_gettime(CLOCK_MONOTONIC, &t0);
+        bool ok = run(t, size);
+        clock_gettime(CLOCK_MONOTONIC, &t1);
+        double ms = (t1.tv_sec - t0.tv_sec) * 1e3 + (t1.tv_nsec - t0.tv_nsec) / 1e6;
+        expect(ok == c.want && ms < 2000, s.what + ": " + c.what + " (" + std::to_string(ms) +
+               " ms, " + (ok ? "accepted" : "rejected") + ")");
+        printf("ctype-work %s: %s %s in %.1f ms\n", s.what.c_str(), c.what,
+               ok ? "accepted" : "rejected", ms);
+        free(b);
+    }
+}
+
 // Hostile data through the consumers (long monetary strings, nesting
 // locale formats): each
 // category is accepted, and the consumers must neither leave their buffers
@@ -610,9 +744,9 @@ void deterministic()
         });
         negative(s, "size 7", [](char *, size_t &sz) { sz = 7; });
         negative(s, "truncated to the index", [n](char *, size_t &sz) { sz = 8 + 4 * n; });
-        // LC_CTYPE and LC_COLLATE end in internal tables OSv does not read
-        // (only their offsets are checked), so a lost last byte shows only
-        // in the other categories.
+        // LC_COLLATE ends in internal tables OSv does not read (only their
+        // offsets are checked), so a lost last byte shows only in the other
+        // categories (LC_CTYPE: below, with its tables).
         if (s.cat != 0 && s.cat != 3) {
             negative(s, "truncated by one byte", [](char *, size_t &sz) { sz -= 1; });
         }
@@ -624,6 +758,45 @@ void deterministic()
             wr(b + 4, s.cat == 0 ? 85 : strlen(types[s.cat]) - 1);
         });
         negative(s, "last offset past end", [n](char *b, size_t &sz) { wr(b + 8 + 4 * (n - 1), sz + 1); });
+        if (s.cat == 0) {
+            // The LC_CTYPE tables are parsed, so each of these
+            // must be rejected. item(i): its offset; tab(i): its 3-level
+            // table header.
+            auto item = [](char *b, uint32_t i) { return rd(b + 8 + 4 * size_t(i)); };
+            uint32_t co = rd(s.buf + item(s.buf, 17)), mo = rd(s.buf + item(s.buf, 18));
+            negative(s, "truncated by one byte", [](char *, size_t &sz) { sz -= 1; });
+            negative(s, "class table n1 huge", [&](char *b, size_t &) { wr(b + item(b, co) + 4, 0x7fffffff); });
+            negative(s, "map table level-1 offset past end", [&](char *b, size_t &sz) {
+                wr(b + item(b, mo) + 20, sz);
+            });
+            negative(s, "width level-2 offset past end", [&](char *b, size_t &sz) {
+                size_t t = item(b, 12);
+                uint32_t o2 = rd(b + t + 20);
+                wr(b + t + o2, sz - t);
+            });
+            negative(s, "class level-3 offset misaligned", [&](char *b, size_t &) {
+                size_t t = item(b, co);
+                uint32_t o2 = rd(b + t + 20);
+                wr(b + t + o2, rd(b + t + o2) + 2);
+            });
+            negative(s, "class table header past end", [&](char *b, size_t &sz) {
+                wr(b + 8 + 4 * size_t(co), sz - 8);
+            });
+            negative(s, "class table misaligned", [&](char *b, size_t &) {
+                wr(b + 8 + 4 * size_t(co), item(b, co) + 2);
+            });
+            negative(s, "byte class table past end", [&](char *b, size_t &sz) { wr(b + 8, sz - 100); });
+            negative(s, "byte toupper misaligned", [&](char *b, size_t &) { wr(b + 12, item(b, 1) + 1); });
+            negative(s, "class offset past nstrings", [&](char *b, size_t &) { wr(b + item(b, 17), n); });
+            negative(s, "map offset below 19", [&](char *b, size_t &) { wr(b + item(b, 18), 3); });
+            negative(s, "class names unterminated", [&](char *b, size_t &sz) {
+                wr(b + 8 + 40, sz - 1);
+                b[sz - 1] = 'x';
+            });
+            negative(s, "shift1 32", [&](char *b, size_t &) { wr(b + item(b, mo), 32); });
+            negative(s, "mask3 huge", [&](char *b, size_t &) { wr(b + item(b, co) + 16, 0xfffff); });
+            ctype_work(s);
+        }
         // A word item moved off alignment, and a string with no NUL.
         const char *t = types[s.cat];
         for (uint32_t i = 0; i < n && i < strlen(t); i++) {
@@ -670,6 +843,28 @@ void random_input(std::mt19937_64 &rng)
             size_t idx_end = 8 + 4 * size_t(n);
             if (idx_end > s.size) {
                 idx_end = s.size;
+            }
+            // LC_CTYPE: half the time a word of a table header or a level-1/2
+            // offset of a table (the tables are parsed).
+            if (s.cat == 0 && n > 12 && idx_end == 8 + 4 * size_t(n) && rng() % 2) {
+                uint32_t i = rng() % 3 ? 72 + rng() % (n > 72 ? n - 72 : 1) : 12;
+                if (i >= n) {
+                    i = 12;
+                }
+                size_t t = rd(s.buf + 8 + 4 * size_t(i));
+                if (t % 4 == 0 && t + 20 <= s.size) {
+                    uint32_t n1 = rd(s.buf + t + 4);
+                    size_t k = rng() % 3;
+                    if (k == 0 || !n1 || n1 > 0x10000) {
+                        return t + 4 * (rng() % 5);
+                    }
+                    size_t l1 = t + 20 + 4 * (rng() % n1);
+                    if (k == 1 || l1 + 4 > s.size) {
+                        return l1;
+                    }
+                    size_t o2 = rd(s.buf + l1);
+                    return o2 && t + o2 + 4 <= s.size ? ((t + o2) & ~size_t(3)) + 4 * (rng() % 16) : l1;
+                }
             }
             return (rng() % (idx_end / 4)) * 4;
         }

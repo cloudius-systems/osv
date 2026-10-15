@@ -36,8 +36,9 @@
 // up in glibc-format locale data (libc/locale/locale-data.cc): LOCPATH, the
 // locale archive, /usr/lib/locale. A loaded category's __locales[cat] points
 // at its data and its name is reported as requested, as glibc reports it.
-// Only UTF-8 locales load, so a loaded LC_CTYPE is UTF-8, and C.UTF-8's
-// tables answer classification, case mapping and widths.
+// Only UTF-8 locales load, so a loaded LC_CTYPE is UTF-8; its own byte and
+// wide tables then answer classification, case mapping and widths
+// (wctype.cc, ctype-byte.cc).
 
 #include <errno.h>
 #include <langinfo.h>
@@ -236,15 +237,29 @@ void get_data(const struct __locale_struct *l, struct __locale_data *data[NCAT])
 }
 
 // Set l's names and data; a built-in LC_CTYPE gets the UTF-8 marker, and a
-// loaded one (always UTF-8) is non-null as the marker test needs.
+// loaded one (always UTF-8) is non-null as the marker test needs. The byte
+// tables in the struct (__ctype_b, __ctype_toupper, __ctype_tolower) are the
+// loaded LC_CTYPE's, else C's: libstdc++'s std::ctype<char> reads these
+// fields of a duplocale()d object directly, not through __ctype_b_loc().
 void set_locale(struct __locale_struct *l, const char *const names[NCAT],
                 struct __locale_data *const data[NCAT])
 {
     memcpy(l->__names, names, sizeof(l->__names));
     memcpy(l->__locales, data, sizeof(l->__locales));
+    l->__ctype_b = __c_locale_ptr->__ctype_b;
+    l->__ctype_toupper = __c_locale_ptr->__ctype_toupper;
+    l->__ctype_tolower = __c_locale_ptr->__ctype_tolower;
     if (!data[LC_CTYPE]) {
         l->__locales[LC_CTYPE] = ctype_marker(names[LC_CTYPE]);
     }
+#if OSV_CONF_LOCALE
+    else {
+        const osv_ctype &c = reinterpret_cast<const osv_locale_data *>(data[LC_CTYPE])->ctype;
+        l->__ctype_b = c.class_b;
+        l->__ctype_toupper = c.toupper_b;
+        l->__ctype_tolower = c.tolower_b;
+    }
+#endif
 }
 
 struct __locale_struct make_global()
@@ -550,6 +565,21 @@ bool __osv_ctype_utf8(locale_t l) noexcept
         l = current_locale();
     }
     return l->__locales[LC_CTYPE] != nullptr;
+}
+
+extern "C" OSV_HIDDEN
+const void *__osv_ctype_data(locale_t l) noexcept
+{
+#if OSV_CONF_LOCALE
+    if (!l || l == LC_GLOBAL_LOCALE) {
+        l = current_locale();
+    }
+    struct __locale_data *d = l->__locales[LC_CTYPE];
+    return d && d != reinterpret_cast<struct __locale_data *>(&utf8_marker) ? d : nullptr;
+#else
+    (void)l;
+    return nullptr;
+#endif
 }
 
 extern "C" OSV_HIDDEN

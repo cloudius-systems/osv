@@ -79,7 +79,7 @@ glibc 2.41 (Debian 13); no glibc source was read.
   `item-types.py` classifies them, prints the type strings, and fails if they differ from
   `locale-data.cc` or from `langinfo-builtin.inc`'s types for C and C.UTF-8.
 
-## Time, money, rpmatch, lookup fallback
+## Time, money, rpmatch, lookup fallback, per-locale LC_CTYPE
 
 Written from experiments with glibc 2.41 and the bytes of its compiled files; no glibc source read.
 Each part has a host differential that builds the OSv source for Linux and compares it with glibc
@@ -100,19 +100,22 @@ control (a mutant that the differential must catch):
     buffer sizes around its length.
 - `time-diff/fbdiff.cc`: which locale glibc's `newlocale()` and OSv's `osv_locale_load()` find for a
   name (the directory fallback that drops the modifier and the territory).
+- `ctype-diff.cc`: OSv's LC_CTYPE table lookups against glibc for every code point 0..0x10ffff (and
+  three beyond): every class and map the locale names, the 12 standard classes, towupper, towlower,
+  wcwidth, and the byte tables.
 
-glibc behaviours that were measured and reproduced (each surprising enough to note): wcsftime's
-`%Z` ignores `#` and, with `-`, its width; a `%EY` pad flag sticks to later era years in the same
-call; strptime's names and formats keep a "locale or C" state decided by the first differing match;
-after one `%O` number falls back to ASCII digits every later `%O` fails; strfmon counts the field
-width in bytes, and with `+` `%i` uses the national sign position.
+The LC_CTYPE table format is described in `libc/locale/locale-data.h`. glibc behaviours that were
+measured and reproduced (each surprising enough to note): wcsftime's `%Z` ignores `#` and, with `-`,
+its width; a `%EY` pad flag sticks to later era years in the same call; strptime's names and formats
+keep a "locale or C" state decided by the first differing match; after one `%O` number falls back to
+ASCII digits every later `%O` fails; strfmon counts the field width in bytes, and with `+` `%i` uses
+the national sign position.
 
 Differences from glibc 2.41 that remain:
 - A locale that is not UTF-8 is ENOENT on OSv; glibc loads it (`xx_L1@euro` in fbdiff).
 - `nl_langinfo` of an LC_CTYPE word item: glibc returns the 32-bit word with the next 4 file bytes in
   the upper half; OSv returns the word alone.
 - Collation is byte order. Transliteration in named locales is not supported.
-- A loaded locale's LC_CTYPE answers from C.UTF-8's tables (classes, case maps, widths).
 - strfmon with a locale string longer than glibc's internal limit: glibc truncates the field (a
   3000-byte `mon_decimal_point` gives 198 bytes), OSv returns the whole amount or E2BIG.
 - `localeconv()->decimal_point` follows LC_NUMERIC, while printf and strtod still use ".".
