@@ -106,6 +106,18 @@ arc_default_max(uint64_t min, uint64_t allmem)
 	else
 		size = allmem / 8;
 
+	/*
+	 * OSv: the ARC and the application share one physical address space.
+	 * Cap the default at half of RAM for guests > 2 GiB so a large app
+	 * (e.g. PostgreSQL with multi-GiB shared_buffers plus many backends)
+	 * always keeps at least half the guest's memory and a checkpoint burst
+	 * cannot drive the guest OOM.  ZFS_MODULE_PARAM is a no-op on OSv, so
+	 * zfs_arc_max cannot yet override this at boot; a future cmdline wiring
+	 * could.
+	 */
+	if (allmem > (2ULL << 30))
+		size = MIN(size, allmem / 2);
+
 	return (MAX(size, min));
 }
 
