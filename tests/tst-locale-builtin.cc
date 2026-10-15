@@ -9,8 +9,10 @@
 // installed (Debian/Ubuntu libc-bin, Fedora glibc) and no other locale.
 //
 // Every expectation below was taken from glibc 2.42, and this test passes
-// there too (build it on Linux with g++ -std=c++17 and run it with LOCPATH
-// pointing at an empty directory and LOCALE_ARCHIVE unset).
+// there too (build it on Linux with g++ -std=c++17 and run it). It sets
+// LOCPATH to a directory that does not exist, so glibc, and OSv built with
+// conf_locale=1, use neither a locale archive nor any locale directory but
+// /usr/lib/locale, which holds no locale this test names.
 //
 //   C and POSIX (reported as "C"), codeset ANSI_X3.4-1968;
 //   C.<codeset>[@modifier] with a UTF-8 codeset, reported as requested,
@@ -471,6 +473,7 @@ int main()
                            "LC_ADDRESS", "LC_TELEPHONE", "LC_MEASUREMENT", "LC_IDENTIFICATION" }) {
         unsetenv(v);
     }
+    setenv("LOCPATH", "/nonexistent-locpath", 1);
     test_names();
     test_codeset();
     test_composite();

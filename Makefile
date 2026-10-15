@@ -1157,9 +1157,16 @@ musl += locale/catgets.o
 libc += locale/catopen.o
 libc += locale/intl.o
 libc += locale/locale.o
+ifeq ($(conf_locale),1)
+libc += locale/locale-data.o
+$(out)/libc/locale/locale.o: CXXFLAGS += -DOSV_CONF_LOCALE=1
+$(out)/libc/locale/locale-data.o: CXXFLAGS += -std=gnu++17
+endif
 libc += locale/ctype-utf8.o
 libc += locale/wctype.o
+ifneq ($(conf_locale),1)
 musl += locale/localeconv.o
+endif
 musl += locale/strcoll.o
 libc += locale/strfmon.o
 $(out)/libc/locale/strfmon.o: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include

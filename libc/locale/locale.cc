@@ -31,9 +31,17 @@
 //
 // The global locale and the C locale object are never freed. Locale names
 // are interned and never freed either, so a returned name stays valid.
+//
+// With conf_locale=1 (OSV_CONF_LOCALE) a name that is not built in is looked
+// up in glibc-format locale data (libc/locale/locale-data.cc): LOCPATH, the
+// locale archive, /usr/lib/locale. A loaded category's __locales[cat] points
+// at its data and its name is reported as requested, as glibc reports it.
+// Only UTF-8 locales load, so a loaded LC_CTYPE is UTF-8, and C.UTF-8's
+// tables answer classification, case mapping and widths.
 
 #include <errno.h>
 #include <langinfo.h>
+#include <limits.h>
 #include <locale.h>
 #include <stdint.h>
 #include <stdlib.h>
@@ -44,6 +52,8 @@
 
 #include "libc/internal/locale_impl.h"
 #include "libc/internal/libc.h"
+
+#include "locale-data.h"
 
 // glibc's category numbering (LC_ALL is 6; LC_PAPER..LC_IDENTIFICATION 7..12).
 enum { NCAT = 13 };
@@ -106,52 +116,43 @@ const char *intern(const char *name, size_t len)
 
 const char *c_name = "C";
 
-bool ascii_alnum(char ch)
-{
-    return (ch >= 'a' && ch <= 'z') || (ch >= 'A' && ch <= 'Z') ||
-        (ch >= '0' && ch <= '9');
-}
-
-char ascii_upper(char ch)
-{
-    return ch >= 'a' && ch <= 'z' ? ch - 'a' + 'A' : ch;
-}
-
-// Does a requested codeset name the UTF-8 that glibc's C.UTF-8 uses? glibc
-// accepts it when two spellings agree: the codeset reduced to its letters and
-// digits is "utf8" (case-insensitive), and the codeset with only letters,
-// digits and "_-.,:" kept, upper-cased, is "UTF8" or "UTF-8". So "UTF-8",
-// "utf8" and "UTF+8" match, and "U-T-F-8" and "utf_8" do not.
 bool codeset_is_utf8(const char *cs, size_t len)
 {
-    char norm[5], kept[6];
-    size_t n = 0, k = 0;
-    for (size_t i = 0; i < len; i++) {
-        char ch = cs[i];
-        if (ascii_alnum(ch)) {
-            if (n == sizeof(norm) - 1) {
-                return false;
-            }
-            norm[n++] = ascii_upper(ch);
-        }
-        if (ascii_alnum(ch) || ch == '_' || ch == '-' || ch == '.' ||
-            ch == ',' || ch == ':') {
-            if (k == sizeof(kept) - 1) {
-                return false;
-            }
-            kept[k++] = ascii_upper(ch);
-        }
-    }
-    norm[n] = '\0';
-    kept[k] = '\0';
-    return !strcmp(norm, "UTF8") &&
-        (!strcmp(kept, "UTF8") || !strcmp(kept, "UTF-8"));
+    return osv_codeset_is_utf8(cs, len);    // locale-data.h
 }
 
-// Resolve one category's locale name. On success store the name to report
-// in *out and return 0; otherwise return an errno value.
-int resolve(const char *name, size_t len, const char **out)
+#if OSV_CONF_LOCALE
+// Load category cat of a locale that is not built in.
+int load(int cat, const char *name, size_t len, const char **out,
+         struct __locale_data **data)
 {
+    char buf[name_max + 1];
+    memcpy(buf, name, len);
+    buf[len] = '\0';
+    const osv_locale_data *d = osv_locale_load(cat, buf);
+    if (!d) {
+        return errno;
+    }
+    const char *s = intern(name, len);
+    if (!s) {
+        return ENOMEM;
+    }
+    *out = s;
+    *data = reinterpret_cast<struct __locale_data *>(const_cast<osv_locale_data *>(d));
+    return 0;
+}
+#endif
+
+// A built-in name not C: is it C.<UTF-8 codeset>[@modifier]?
+bool builtin_utf8(const char *name, size_t len);
+
+// Resolve category cat's locale name. On success store the name to report
+// in *out, the loaded data (or null for a built-in locale) in *data, and
+// return 0; otherwise return an errno value.
+int resolve(int cat, const char *name, size_t len, const char **out,
+            struct __locale_data **data)
+{
+    *data = nullptr;
     if (len > name_max) {
         return EINVAL;
     }
@@ -166,6 +167,24 @@ int resolve(const char *name, size_t len, const char **out)
         *out = c_name;
         return 0;
     }
+    if (!builtin_utf8(name, len)) {
+#if OSV_CONF_LOCALE
+        return load(cat, name, len, out, data);
+#else
+        (void)cat;
+        return ENOENT;
+#endif
+    }
+    const char *s = intern(name, len);
+    if (!s) {
+        return ENOMEM;
+    }
+    *out = s;
+    return 0;
+}
+
+bool builtin_utf8(const char *name, size_t len)
+{
     // language[_territory][.codeset][@modifier], split as glibc splits it:
     // the language ends at '_', '.' or '@', the territory at '.' or '@', the
     // codeset at '@'. C.UTF-8 is the language "C" with any territory and
@@ -175,7 +194,7 @@ int resolve(const char *name, size_t len, const char **out)
         p++;
     }
     if (p - name != 1 || name[0] != 'C') {
-        return ENOENT;
+        return false;
     }
     if (p < end && *p == '_') {
         while (p < end && *p != '.' && *p != '@') {
@@ -183,21 +202,13 @@ int resolve(const char *name, size_t len, const char **out)
         }
     }
     if (p == end || *p != '.') {
-        return ENOENT;
+        return false;
     }
     const char *cs = ++p;
     while (p < end && *p != '@') {
         p++;
     }
-    if (p == cs || !codeset_is_utf8(cs, p - cs)) {
-        return ENOENT;
-    }
-    const char *s = intern(name, len);
-    if (!s) {
-        return ENOMEM;
-    }
-    *out = s;
-    return 0;
+    return p != cs && codeset_is_utf8(cs, p - cs);
 }
 
 bool name_is_utf8(const char *name)
@@ -213,6 +224,27 @@ struct __locale_data *ctype_marker(const char *ctype_name)
 {
     return name_is_utf8(ctype_name) ?
         reinterpret_cast<struct __locale_data *>(&utf8_marker) : nullptr;
+}
+
+// The loaded data of each category of l (null: built in) into data[].
+void get_data(const struct __locale_struct *l, struct __locale_data *data[NCAT])
+{
+    for (int i = 0; i < NCAT; i++) {
+        data[i] = l->__locales[i] == reinterpret_cast<struct __locale_data *>(&utf8_marker) ?
+            nullptr : l->__locales[i];
+    }
+}
+
+// Set l's names and data; a built-in LC_CTYPE gets the UTF-8 marker, and a
+// loaded one (always UTF-8) is non-null as the marker test needs.
+void set_locale(struct __locale_struct *l, const char *const names[NCAT],
+                struct __locale_data *const data[NCAT])
+{
+    memcpy(l->__names, names, sizeof(l->__names));
+    memcpy(l->__locales, data, sizeof(l->__locales));
+    if (!data[LC_CTYPE]) {
+        l->__locales[LC_CTYPE] = ctype_marker(names[LC_CTYPE]);
+    }
 }
 
 struct __locale_struct make_global()
@@ -268,9 +300,11 @@ const char *env_name(int cat)
     return "C";
 }
 
-// Fill names[] for the categories in mask from name, which may be composite
-// or empty. Return 0 or an errno value; names[] is only valid on success.
-int resolve_all(int mask, const char *name, const char *names[NCAT])
+// Fill names[] and data[] for the categories in mask from name, which may be
+// composite or empty. Return 0 or an errno value; names[] and data[] are only
+// valid on success.
+int resolve_all(int mask, const char *name, const char *names[NCAT],
+                struct __locale_data *data[NCAT])
 {
     if (strchr(name, ';') || !strncmp(name, "LC_", 3)) {
         // Composite: "LC_X=v;LC_Y=w;..." naming every category exactly
@@ -296,12 +330,14 @@ int resolve_all(int mask, const char *name, const char *names[NCAT])
             const char *semi = strchr(v, ';');
             size_t vlen = semi ? size_t(semi - v) : strlen(v);
             const char *out;
-            int err = resolve(v, vlen, &out);
+            struct __locale_data *d;
+            int err = resolve(cat, v, vlen, &out, &d);
             if (err) {
                 return err;
             }
             if (mask & (1 << cat)) {
                 names[cat] = out;
+                data[cat] = d;
             }
             seen[cat] = true;
             p = semi ? semi + 1 : v + vlen;
@@ -318,7 +354,7 @@ int resolve_all(int mask, const char *name, const char *names[NCAT])
             continue;
         }
         const char *n = *name ? name : env_name(i);
-        int err = resolve(n, strlen(n), &names[i]);
+        int err = resolve(i, n, strlen(n), &names[i], &data[i]);
         if (err) {
             return err;
         }
@@ -389,19 +425,20 @@ char *setlocale(int category, const char *name) noexcept
             all_name(&g) : g.__names[category]);
     }
     const char *names[NCAT];
+    struct __locale_data *data[NCAT];
     memcpy(names, g.__names, sizeof(names));
+    get_data(&g, data);
     int mask = category == LC_ALL ? all_mask : 1 << category;
     if (category != LC_ALL && (strchr(name, ';') || strchr(name, '='))) {
         errno = ENOENT;
         return nullptr;
     }
-    int err = resolve_all(mask, name, names);
+    int err = resolve_all(mask, name, names, data);
     if (err) {
         errno = err;
         return nullptr;
     }
-    memcpy(g.__names, names, sizeof(names));
-    g.__locales[LC_CTYPE] = ctype_marker(names[LC_CTYPE]);
+    set_locale(&g, names, data);
     return const_cast<char *>(category == LC_ALL ?
         all_name(&g) : g.__names[category]);
 }
@@ -424,16 +461,18 @@ locale_t __newlocale(int mask, const char *name, locale_t base) noexcept
         base = nullptr;
     }
     const char *names[NCAT];
+    struct __locale_data *data[NCAT];
     {
         SCOPE_LOCK(locale_mutex);
         const struct __locale_struct *from = base ? base : __c_locale_ptr;
         memcpy(names, from->__names, sizeof(names));
+        get_data(from, data);
         for (int i = 0; i < NCAT; i++) {
             if (!names[i]) {
                 names[i] = c_name;
             }
         }
-        int err = resolve_all(mask, name, names);
+        int err = resolve_all(mask, name, names, data);
         if (err) {
             errno = err;
             return nullptr;
@@ -457,8 +496,7 @@ locale_t __newlocale(int mask, const char *name, locale_t base) noexcept
         }
         *l = *__c_locale_ptr;
     }
-    memcpy(l->__names, names, sizeof(names));
-    l->__locales[LC_CTYPE] = ctype_marker(names[LC_CTYPE]);
+    set_locale(l, names, data);
     return l;
 }
 weak_alias(__newlocale, newlocale);
@@ -599,6 +637,12 @@ char *__nl_langinfo_l(nl_item item, locale_t l) noexcept
     if (idx == 0xffff) {
         return const_cast<char *>(name);    // _NL_LOCALE_NAME(cat)
     }
+#if OSV_CONF_LOCALE
+    struct __locale_data *data = l->__locales[cat];
+    if (data && data != reinterpret_cast<struct __locale_data *>(&utf8_marker)) {
+        return osv_locale_item(reinterpret_cast<const osv_locale_data *>(data), idx);
+    }
+#endif
     if (cat == LC_CTYPE) {
         if (item == CODESET) {
             return const_cast<char *>(utf8 ? "UTF-8" : "ANSI_X3.4-1968");
@@ -646,5 +690,65 @@ const char *__osv_nl_list(nl_item item, unsigned i, locale_t l) noexcept
     if (!l || l == LC_GLOBAL_LOCALE) {
         l = current_locale();
     }
+#if OSV_CONF_LOCALE
+    int cat = item >> 16;
+    if (cat >= 0 && cat < NCAT && cat != LC_ALL) {
+        struct __locale_data *data = l->__locales[cat];
+        if (data && data != reinterpret_cast<struct __locale_data *>(&utf8_marker)) {
+            return osv_locale_list(reinterpret_cast<const osv_locale_data *>(data),
+                                   item & 0xffff, i);
+        }
+    }
+#endif
     return i ? nullptr : __nl_langinfo_l(item, l);
 }
+
+#if OSV_CONF_LOCALE
+// localeconv(): the LC_NUMERIC and LC_MONETARY values of the thread's current
+// locale (glibc follows uselocale() here too), C's for a built-in category.
+// One static buffer, overwritten by each call, as glibc's (not thread-safe).
+// musl's localeconv.o is not built with conf_locale=1.
+namespace {
+
+struct lconv lconv_buf;
+
+char *str(const struct __locale_struct *l, int cat, int idx)
+{
+    return __nl_langinfo_l(NL_ITEM(cat, idx), const_cast<locale_t>(l));
+}
+
+// A byte item; glibc reports "not given" (-1 in the data) as CHAR_MAX.
+char byte(const struct __locale_struct *l, int cat, int idx)
+{
+    char c = *str(l, cat, idx);
+    return c == char(-1) ? CHAR_MAX : c;
+}
+
+} // namespace
+
+extern "C" OSV_LIBC_API
+struct lconv *localeconv() noexcept
+{
+    const struct __locale_struct *l = current_locale();
+    struct lconv &c = lconv_buf;
+    c.decimal_point = str(l, LC_NUMERIC, 0);
+    c.thousands_sep = str(l, LC_NUMERIC, 1);
+    c.grouping = str(l, LC_NUMERIC, 2);
+    char **m[] = { &c.int_curr_symbol, &c.currency_symbol, &c.mon_decimal_point,
+        &c.mon_thousands_sep, &c.mon_grouping, &c.positive_sign, &c.negative_sign };
+    for (int i = 0; i < 7; i++) {
+        *m[i] = str(l, LC_MONETARY, i);
+    }
+    char *b[] = { &c.int_frac_digits, &c.frac_digits, &c.p_cs_precedes, &c.p_sep_by_space,
+        &c.n_cs_precedes, &c.n_sep_by_space, &c.p_sign_posn, &c.n_sign_posn };
+    for (int i = 0; i < 8; i++) {
+        *b[i] = byte(l, LC_MONETARY, 7 + i);
+    }
+    char *ib[] = { &c.int_p_cs_precedes, &c.int_p_sep_by_space, &c.int_n_cs_precedes,
+        &c.int_n_sep_by_space, &c.int_p_sign_posn, &c.int_n_sign_posn };
+    for (int i = 0; i < 6; i++) {
+        *ib[i] = byte(l, LC_MONETARY, 16 + i);
+    }
+    return &c;
+}
+#endif
