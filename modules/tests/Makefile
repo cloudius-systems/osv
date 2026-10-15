@@ -407,6 +407,9 @@ common-boost-tests := tst-vfs.so tst-libc-locking.so misc-fs-stress.so \
 	tst-seek.so tst-ctype.so tst-wctype.so tst-string.so tst-time.so tst-dax.so \
 	tst-net_if_test.so tst-tcp-v6.so tst-tcp-v6-smoke.so tst-ipv6-internet.so tst-ifaddr-dump.so
 
+common-boost-tests += tst-rename-failure.so
+internal-api-tests += tst-rename-failure.so
+
 boost-tests := $(common-boost-tests)
 
 rofs-only-boost-tests := rofs/tst-stdio.so
