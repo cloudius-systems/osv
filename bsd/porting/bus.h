@@ -107,7 +107,7 @@ static inline int
 device_delete_child(device_t dev, device_t child)
 {
     printf("Implement me, line %s:%d\n",__FILE__,  __LINE__);
-    return NULL;
+    return 0;
 }
         
 // The two function below aim just at printing device information in

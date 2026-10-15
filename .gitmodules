@@ -17,7 +17,7 @@
 	url = https://github.com/cloudius-systems/musl
 [submodule "musl_1.2.1"]
 	path = musl_1.2.1
-	url = https://github.com/osvunikernel/musl
+	url = https://git.musl-libc.org/git/musl
 [submodule "kbuild"]
 	path = kbuild
 	url = https://github.com/osvunikernel/kbuild-standalone.git

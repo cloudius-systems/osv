@@ -21,6 +21,9 @@
 #define __OSV_TO_FUNCTION_SYS_unlinkat      unlinkat
 #define __OSV_TO_FUNCTION_SYS_mkdir         mkdir
 #define __OSV_TO_FUNCTION_SYS_mkdirat       mkdirat
+/* musl 1.2.x's tmpnam/tempnam probe with readlink instead of lstat. */
+#define __OSV_TO_FUNCTION_SYS_readlink      readlink
+#define __OSV_TO_FUNCTION_SYS_readlinkat    readlinkat
 
 #undef __syscall
 #define __syscall(sys_number, ...) (__OSV_TO_FUNCTION_##sys_number(__VA_ARGS__) < 0 ? -errno : 0)
