@@ -22,8 +22,9 @@
 extern "C" void __osv_run_atfork_child();
 
 sched::thread *fork_thread(void *caller_ret, void *caller_sp,
-                           void **out_stack_to_free)
+                           void *resume_ctx, void **out_stack_to_free)
 {
+    (void)resume_ctx;   // aarch64 uses caller_sp bias-copy (same-VA is x86-64)
     auto parent = sched::thread::current();
     auto parent_pinned_cpu = parent->pinned() ? sched::cpu::current() : nullptr;
 
