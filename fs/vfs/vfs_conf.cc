@@ -63,6 +63,10 @@ extern struct vfsops zfs_vfsops;
 extern struct vfsops virtiofs_vfsops;
 #endif
 extern struct vfsops ext_vfsops;
+#if CONF_fs_9p_tcp
+extern struct vfsops p9_vfsops;
+extern int p9_init(void);
+#endif
 
 extern int ramfs_init(void);
 extern int rofs_init(void);
@@ -95,5 +99,8 @@ const struct vfssw vfssw[] = {
 	{"virtiofs", 	virtiofs_init, 	&virtiofs_vfsops},
 #endif
 	{"ext",		ext_init,	&ext_vfsops},
+#if CONF_fs_9p_tcp
+	{"9p",		p9_init,	&p9_vfsops},
+#endif
 	{nullptr,	fs_noop,	nullptr},
 };
