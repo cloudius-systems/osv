@@ -298,6 +298,7 @@ tests += tst-fork-file-mmap.so
 tests += tst-locale-builtin.so
 tests += tst-locale-ctype.so
 tests += misc-ctype-dump.so
+tests += tst-dentry-rename-child.so
 internal-api-tests += tst-random-flush.so
 tests += tst-umount-release.so
 internal-api-tests += tst-umount-release.so
