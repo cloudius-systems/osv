@@ -36,7 +36,7 @@
 // codeset does not match the name). Every file is validated completely before
 // any item is used: no item read leaves the data. The consumers bound what
 // the strings may cost (strfmon, strftime and strptime: libc/locale/strfmon.c,
-// libc/time/).
+// libc/time/), and LC_CTYPE validation has a work cap.
 //
 // Trust: LOCPATH and the data come from the image's command line,
 // environment or file system, the application's own trust (OSv has no
@@ -251,6 +251,8 @@ const osv_locale_data *cache_find(const char *key, int cat)
     return nullptr;
 }
 
+void point_byte_tables(osv_locale_data *d);
+
 // Set when cache_add() fails, so the load reports ENOMEM (under cache_mutex).
 bool cache_nomem;
 
@@ -263,6 +265,9 @@ const osv_locale_data *cache_add(const char *key, int cat, const osv_locale_data
         return nullptr;
     }
     e->data = d;
+    if (cat == 0) {
+        point_byte_tables(&e->data);    // at the entry's copies, not d's
+    }
     e->cat = cat;
     memcpy(e->key, key, len + 1);
     e->next = cache;
@@ -421,7 +426,193 @@ const osv_locale_data *from_dirs_fallback(int cat, const char *locpath, const ch
     return nullptr;
 }
 
+// ---- LC_CTYPE tables ------------------------------------------------------
+
+// The validation work of one LC_CTYPE: the classes and maps it may name, and
+// the level-2 entries checked over all its tables. glibc 2.41's files have
+// at most 19 classes and 5 maps (measured); the caps keep a hostile file
+// from holding both locale locks for seconds.
+constexpr uint32_t max_classes = 64, max_maps = 64;
+constexpr uint64_t max_ctype_work = 1u << 22;
+
+// Validate the 3-level table at offset off (unit: entry bytes of level 3;
+// bits: entries are words of 32 class bits). Every offset it holds must lead
+// to an array that lies within the data. The level-2 entries it may have
+// (n1 * (mask2 + 1)) are taken from *work, the file's budget.
+bool table_ok(const char *base, size_t size, uint32_t off, unsigned unit, uint64_t *work)
+{
+    if (off % 4 || size < 20 || off > size - 20) {
+        return false;
+    }
+    const char *t = base + off;
+    uint32_t s1 = word(t), n1 = word(t + 4), s2 = word(t + 8), m2 = word(t + 12),
+             m3 = word(t + 16);
+    if (s1 > 31 || s2 > 31 || n1 > 0x10000 || m2 > 0xffff || m3 > 0xffff ||
+        uint64_t(n1) * (m2 + 1) > (1u << 22) || 20 + 4 * uint64_t(n1) > size - off) {
+        return false;
+    }
+    if (uint64_t(n1) * (m2 + 1) > *work) {
+        return false;
+    }
+    *work -= uint64_t(n1) * (m2 + 1);
+    for (uint32_t i = 0; i < n1; i++) {
+        uint32_t o2 = word(t + 20 + 4 * size_t(i));
+        if (!o2) {
+            continue;
+        }
+        if (o2 % 4 || uint64_t(off) + o2 + 4 * (uint64_t(m2) + 1) > size) {
+            return false;
+        }
+        for (uint32_t j = 0; j <= m2; j++) {
+            uint32_t o3 = word(t + o2 + 4 * size_t(j));
+            if (o3 && ((unit > 1 && o3 % 4) ||
+                       uint64_t(off) + o3 + unit * (uint64_t(m3) + 1) > size)) {
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+// The nth name of a list (consecutive NUL-terminated strings ended by an
+// empty one) starting at offset off, checked to end within the data.
+uint32_t list_count(const char *base, size_t size, uint32_t off)
+{
+    uint32_t n = 0;
+    for (size_t p = off; p < size && base[p]; n++) {
+        const char *z = static_cast<const char *>(memchr(base + p, 0, size - p));
+        if (!z) {
+            return UINT32_MAX;
+        }
+        p = z - base + 1;
+        if (p >= size) {
+            return UINT32_MAX;
+        }
+    }
+    return off < size ? n : UINT32_MAX;
+}
+
+const char *const std_class_names[12] = {
+    "alnum", "alpha", "blank", "cntrl", "digit", "graph",
+    "lower", "print", "punct", "space", "upper", "xdigit",
+};
+
+// Point the byte-table pointers at d's own copies (again after d is copied).
+void point_byte_tables(osv_locale_data *d)
+{
+    d->ctype.class_b = d->class_copy + 128;
+    d->ctype.toupper_b = d->toupper_copy + 128;
+    d->ctype.tolower_b = d->tolower_copy + 128;
+}
+
+// Fill d->ctype from a validated LC_CTYPE; false if its tables are not sound.
+bool ctype_tables(osv_locale_data *d)
+{
+    const char *b = d->base;
+    size_t size = d->size;
+    osv_ctype &c = d->ctype;
+    memset(&c, 0, sizeof(c));
+    auto item = [&](uint32_t i) { return word(b + 8 + 4 * size_t(i)); };
+    // _NL_CTYPE_CLASS (0), TOUPPER (1), TOLOWER (3): 384 entries from -128.
+    uint32_t cb = item(0), ub = item(1), lb = item(3);
+    if (cb % 2 || cb > size || size - cb < 384 * 2 || ub % 4 || ub > size ||
+        size - ub < 384 * 4 || lb % 4 || lb > size || size - lb < 384 * 4) {
+        return false;
+    }
+    memcpy(d->class_copy, b + cb, sizeof(d->class_copy));
+    memcpy(d->toupper_copy, b + ub, sizeof(d->toupper_copy));
+    memcpy(d->tolower_copy, b + lb, sizeof(d->tolower_copy));
+    point_byte_tables(d);
+    // _NL_CTYPE_CLASS_NAMES (10), MAP_NAMES (11), WIDTH (12),
+    // CLASS_OFFSET (17), MAP_OFFSET (18).
+    c.class_offset = word(b + item(17));
+    c.map_offset = word(b + item(18));
+    c.nclass = list_count(b, size, item(10));
+    c.nmap = list_count(b, size, item(11));
+    if (c.nclass > max_classes || c.nmap > max_maps ||
+        uint64_t(c.class_offset) + c.nclass > d->nstrings ||
+        uint64_t(c.map_offset) + c.nmap > d->nstrings ||
+        c.class_offset < 19 || c.map_offset < 19) {
+        return false;
+    }
+    c.class_names = b + item(10);
+    c.map_names = b + item(11);
+    c.base = b;
+    c.strindex = reinterpret_cast<const uint32_t *>(b + 8);
+    uint64_t work = max_ctype_work;
+    if (!table_ok(b, size, item(12), 1, &work)) {
+        return false;
+    }
+    c.width = b + item(12);
+    for (uint32_t k = 0; k < c.nclass; k++) {
+        if (!table_ok(b, size, item(c.class_offset + k), 4, &work)) {
+            return false;
+        }
+    }
+    for (uint32_t k = 0; k < c.nmap; k++) {
+        if (!table_ok(b, size, item(c.map_offset + k), 4, &work)) {
+            return false;
+        }
+    }
+    for (int k = 0; k < 12; k++) {
+        c.cls[k] = osv_ctype_find(&c, std_class_names[k], false);
+    }
+    c.toupper = osv_ctype_find(&c, "toupper", true);
+    c.tolower = osv_ctype_find(&c, "tolower", true);
+    return true;
+}
+
+// The level-3 entry for wc of a validated table, or null.
+const char *leaf(const char *t, uint32_t wc, unsigned shift3, unsigned unit)
+{
+    uint32_t s1 = word(t), n1 = word(t + 4), s2 = word(t + 8), m2 = word(t + 12),
+             m3 = word(t + 16);
+    uint32_t i1 = wc >> s1;
+    if (i1 >= n1) {
+        return nullptr;
+    }
+    uint32_t o2 = word(t + 20 + 4 * size_t(i1));
+    if (!o2) {
+        return nullptr;
+    }
+    uint32_t o3 = word(t + o2 + 4 * size_t((wc >> s2) & m2));
+    if (!o3) {
+        return nullptr;
+    }
+    return t + o3 + unit * size_t((wc >> shift3) & m3);
+}
+
 } // namespace
+
+int osv_ctype_class(const char *t, uint32_t wc) noexcept
+{
+    const char *p = t ? leaf(t, wc, 5, 4) : nullptr;
+    return p ? (word(p) >> (wc & 31)) & 1 : 0;
+}
+
+uint32_t osv_ctype_map(const char *t, uint32_t wc) noexcept
+{
+    const char *p = t ? leaf(t, wc, 0, 4) : nullptr;
+    return p ? wc + word(p) : wc;
+}
+
+int osv_ctype_width(const char *t, uint32_t wc) noexcept
+{
+    const char *p = t ? leaf(t, wc, 0, 1) : nullptr;
+    return p && static_cast<unsigned char>(*p) != 0xff ? static_cast<unsigned char>(*p) : -1;
+}
+
+const char *osv_ctype_find(const osv_ctype *c, const char *name, bool map) noexcept
+{
+    const char *p = map ? c->map_names : c->class_names;
+    uint32_t n = map ? c->nmap : c->nclass, first = map ? c->map_offset : c->class_offset;
+    for (uint32_t k = 0; k < n; k++, p += strlen(p) + 1) {
+        if (!strcmp(p, name)) {
+            return c->base + c->strindex[first + k];
+        }
+    }
+    return nullptr;
+}
 
 bool osv_locale_check(int cat, const char *base, size_t size, osv_locale_data *out) noexcept
 {
@@ -475,7 +666,7 @@ bool osv_locale_check(int cat, const char *base, size_t size, osv_locale_data *o
     out->size = uint32_t(size);
     out->nstrings = n;
     out->cat = cat;
-    return true;
+    return cat != 0 || ctype_tables(out);
 }
 
 bool osv_locale_archive_find(const char *a, size_t size, const char *name, int cat,

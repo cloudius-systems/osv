@@ -17,6 +17,28 @@
 
 #define OSV_LOCALE_HIDDEN __attribute__((visibility("hidden")))
 
+// The LC_CTYPE tables of a loaded locale, validated when the category is
+// loaded so every lookup stays in the data.
+// A 3-level table is: uint32_t shift1, n1, shift2, mask2, mask3, then n1
+// offsets (from the table) of level-2 arrays of mask2 + 1 offsets of level-3
+// arrays of mask3 + 1 entries: words of class bits, int32_t case deltas, or
+// width bytes (0xff: -1). An offset 0 is "no entry".
+struct osv_ctype {
+    // __ctype_b, __ctype_toupper, __ctype_tolower, indexable -128..255. They
+    // point into copies (bytes[]) in the cache entry, not into the mapped
+    // file: OSv's own kernel code calls toupper() (ACPICA at power-off),
+    // after vfs_exit() has unmounted the file systems the file is on.
+    const uint16_t *class_b;
+    const int32_t *toupper_b, *tolower_b;
+    const char *cls[12];                // alnum .. xdigit (wctype.cc order), or null
+    const char *toupper, *tolower;      // map tables, or null
+    const char *width;
+    const char *class_names, *map_names;    // consecutive NUL-terminated names
+    uint32_t class_offset, map_offset, nclass, nmap;
+    const char *base;
+    const uint32_t *strindex;
+};
+
 // One validated category of a named locale: a category file, or its slice of
 // the locale archive. Mapped read-only and kept for the life of the process.
 struct osv_locale_data {
@@ -24,6 +46,10 @@ struct osv_locale_data {
     uint32_t size;
     uint32_t nstrings;
     int cat;
+    osv_ctype ctype;    // LC_CTYPE only
+    // LC_CTYPE: the three byte tables, copied (see osv_ctype).
+    uint16_t class_copy[384];
+    int32_t toupper_copy[384], tolower_copy[384];
 };
 
 // Find, map and validate category cat (glibc numbering, LC_ALL excluded) of
@@ -86,5 +112,14 @@ static inline bool osv_codeset_is_utf8(const char *cs, size_t len) noexcept
     return !__builtin_strcmp(norm, "UTF8") &&
         (!__builtin_strcmp(kept, "UTF8") || !__builtin_strcmp(kept, "UTF-8"));
 }
+
+// Lookups in a validated 3-level table (any wc, including WEOF).
+OSV_LOCALE_HIDDEN int osv_ctype_class(const char *table, uint32_t wc) noexcept;
+OSV_LOCALE_HIDDEN uint32_t osv_ctype_map(const char *table, uint32_t wc) noexcept;
+OSV_LOCALE_HIDDEN int osv_ctype_width(const char *table, uint32_t wc) noexcept;
+// The class or map table of a locale named name (CLASS_NAMES, MAP_NAMES), or
+// null.
+OSV_LOCALE_HIDDEN const char *osv_ctype_find(const osv_ctype *c, const char *name,
+                                             bool map) noexcept;
 
 #endif
