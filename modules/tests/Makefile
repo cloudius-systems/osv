@@ -266,6 +266,7 @@ tests += tst-mmx-fpu.so tst-tls-desc.so tst-tls-pie-desc.so libtls_desc.so
 endif
 
 tests += testrunner.so
+tests += tst-inotify.so
 
 tests += tst-libaio.so
 tests += tst-ramfs-unlink-race.so
