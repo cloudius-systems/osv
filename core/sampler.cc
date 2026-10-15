@@ -159,6 +159,7 @@ void start_sampler(config new_config) throw()
 
     trace_sampler_tick.enable(true);
     trace_sampler_tick.backtrace(true);
+    trace_sampler_tick.interrupt_backtrace(true);
 
     _n_cpus = sched::cpus.size();
     _config = new_config;
