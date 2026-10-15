@@ -50,12 +50,41 @@ equals 1.2.6 except for wcwidth (240 code points), and musl's C locale equals it
 ../../tests/tst-locale-ctype-sample.h` writes the expected values tst-locale-ctype checks: 0..0x2ff,
 every run boundary of the generated tables, and 0x110000, 0x7fffffff and WEOF, in C and C.UTF-8.
 
-## strftime, strptime, strfmon and rpmatch
+## Named locales (conf_locale=1)
+
+`libc/locale/locale-data.cc` reads the category files and the locale archive glibc's `localedef`
+writes. It was written from a format specification of the files and from running programs against
+glibc 2.41 (Debian 13); no glibc source was read.
+
+- `make-test-locales.sh <out>` compiles the test locales with the build host's `localedef`:
+  en_US en_GB de_DE fr_FR es_ES it_IT pt_BR nl_NL sv_SE pl_PL ru_RU ja_JP zh_CN ko_KR as
+  `<out>/dir/<l>.utf8` and as an archive, plus a Latin-1 locale and da_DK.utf8 for the default
+  directory. modules/tests puts them in the test image under `/usr/share/osv-locale-test` and
+  `/usr/lib/locale`.
+- `tests/misc-locale-dump.cc <name>` prints every langinfo item (its own list: the installed
+  `<langinfo.h>` enum with the measured types), `localeconv()`, `strftime`
+  of 38 conversions on 3 dates and `strptime` round trips of `%c %x %X`. Run it on Linux with
+  `LOCPATH=<out>/dir` (and with the archive installed as `/usr/lib/locale/locale-archive`), and on
+  OSv with `--env=LOCPATH=/usr/share/osv-locale-test/dir` (and without, for the archive). Compare
+  the `@ ` lines.
+- `tests/tst-locale-data.cc` passes on glibc with `OSV_LOCALE_TEST_DATA=<out>`, and on OSv.
+- `fuzz-locale-data.cc` fuzzes the loader on Linux under ASan and UBSan, and feeds every accepted
+  LC_TIME, LC_MONETARY and LC_MESSAGES to OSv's strftime, wcsftime, strptime, strfmon, localeconv's
+  reads and rpmatch (`time-diff/build.sh` builds it; usage in the file).
+- `item-types/item-types.sh <out> <scratch>` re-derives the item tables of `locale-data.cc`
+  (`item_types`, `min_items`, `codeset_item`) by measurement: `item-dump.c` records what
+  `nl_langinfo_l()` returns for every item of C, C.UTF-8, the test locales and every UTF-8 locale
+  the host's localedef compiles (a word, or a pointer and the bytes there), `item-min.sh` the fewest
+  items glibc accepts, `item-names.sh` the item names of the installed `<langinfo.h>`; then
+  `item-types.py` classifies them, prints the type strings, and fails if they differ from
+  `locale-data.cc` or from `langinfo-builtin.inc`'s types for C and C.UTF-8.
+
+## Time, money, rpmatch, lookup fallback
 
 Written from experiments with glibc 2.41 and the bytes of its compiled files; no glibc source read.
-Each has a host differential that builds the OSv source for Linux and compares it with glibc over
-the same locale (C and C.UTF-8, or compiled data with `LOCPATH`), and a negative control (a mutant
-that the differential must catch):
+Each part has a host differential that builds the OSv source for Linux and compares it with glibc
+over the same compiled data (`make-test-locales.sh` output, `LOCPATH=<out>/dir`), and a negative
+control (a mutant that the differential must catch):
 
 - `time-diff/build.sh` builds `libc/time/strftime.c`, `strptime.c`, `libc/locale/strfmon.c` and
   `rpmatch.c` for Linux with the shims in `time-diff/shim/` (their public names prefixed `osv_`);
@@ -69,9 +98,22 @@ that the differential must catch):
   - `fmd <locale>...` (`fmdiff.c`): strfmon_l, 16 flag sets x 6 widths x 5 left x 5 right
     precisions x n/i on 14 values, error formats, buffer sizes 0..39, and 1e308 (311 digits) at
     buffer sizes around its length.
+- `time-diff/fbdiff.cc`: which locale glibc's `newlocale()` and OSv's `osv_locale_load()` find for a
+  name (the directory fallback that drops the modifier and the territory).
 
 glibc behaviours that were measured and reproduced (each surprising enough to note): wcsftime's
 `%Z` ignores `#` and, with `-`, its width; a `%EY` pad flag sticks to later era years in the same
 call; strptime's names and formats keep a "locale or C" state decided by the first differing match;
 after one `%O` number falls back to ASCII digits every later `%O` fails; strfmon counts the field
 width in bytes, and with `+` `%i` uses the national sign position.
+
+Differences from glibc 2.41 that remain:
+- A locale that is not UTF-8 is ENOENT on OSv; glibc loads it (`xx_L1@euro` in fbdiff).
+- `nl_langinfo` of an LC_CTYPE word item: glibc returns the 32-bit word with the next 4 file bytes in
+  the upper half; OSv returns the word alone.
+- Collation is byte order. Transliteration in named locales is not supported.
+- A loaded locale's LC_CTYPE answers from C.UTF-8's tables (classes, case maps, widths).
+- strfmon with a locale string longer than glibc's internal limit: glibc truncates the field (a
+  3000-byte `mon_decimal_point` gives 198 bytes), OSv returns the whole amount or E2BIG.
+- `localeconv()->decimal_point` follows LC_NUMERIC, while printf and strtod still use ".".
+- glibc's gmtime sets tm_zone "GMT", musl's "UTC" (misc-locale-dump uses localtime with TZ=UTC0).
