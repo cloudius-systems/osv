@@ -38,7 +38,8 @@
 // at its data and its name is reported as requested, as glibc reports it.
 // Only UTF-8 locales load, so a loaded LC_CTYPE is UTF-8; its own byte and
 // wide tables then answer classification, case mapping and widths
-// (wctype.cc, ctype-byte.cc).
+// (wctype.cc, ctype-byte.cc), and a loaded LC_COLLATE's tables collation
+// (collate.cc).
 
 #include <errno.h>
 #include <langinfo.h>
@@ -576,6 +577,20 @@ const void *__osv_ctype_data(locale_t l) noexcept
     }
     struct __locale_data *d = l->__locales[LC_CTYPE];
     return d && d != reinterpret_cast<struct __locale_data *>(&utf8_marker) ? d : nullptr;
+#else
+    (void)l;
+    return nullptr;
+#endif
+}
+
+extern "C" OSV_HIDDEN
+const void *__osv_collate_data(locale_t l) noexcept
+{
+#if OSV_CONF_LOCALE
+    if (!l || l == LC_GLOBAL_LOCALE) {
+        l = current_locale();
+    }
+    return l->__locales[LC_COLLATE];
 #else
     (void)l;
     return nullptr;

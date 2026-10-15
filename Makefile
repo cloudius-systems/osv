@@ -1184,16 +1184,22 @@ libc += locale/wctype.o
 ifneq ($(conf_locale),1)
 musl += locale/localeconv.o
 endif
+ifneq ($(conf_locale),1)
 musl += locale/strcoll.o
+musl += locale/strxfrm.o
+musl += locale/wcscoll.o
+musl += locale/wcsxfrm.o
+else
+# A loaded locale's LC_COLLATE (strcoll, strxfrm, wcscoll, wcsxfrm and _l).
+libc += locale/collate.o
+$(out)/libc/locale/collate.o: CXXFLAGS += -std=gnu++17
+endif
 libc += locale/strfmon.o
 $(out)/libc/locale/strfmon.o: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include
 libc += locale/rpmatch.o
 libc += locale/strtod_l.o
 libc += locale/strtof_l.o
 libc += locale/strtold_l.o
-musl += locale/strxfrm.o
-musl += locale/wcscoll.o
-musl += locale/wcsxfrm.o
 
 musl += math/__cos.o
 musl += math/__cosdf.o

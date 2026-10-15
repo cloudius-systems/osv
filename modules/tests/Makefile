@@ -236,6 +236,7 @@ tests += misc-ctype-dump.so
 tests += tst-locale-data.so
 tests += tst-locale-numeric.so
 tests += misc-locale-dump.so
+tests += tst-locale-collate.so
 internal-api-tests += tst-random-flush.so
 
 # Named locales (conf_locale=1, which reaches this Makefile via the
@@ -250,6 +251,9 @@ conf_locale ?= 0
 $(out)/tests/tst-locale-data.o: CXXFLAGS += -std=gnu++17 -DOSV_CONF_LOCALE=$(conf_locale) \
 	-fno-builtin-toupper -fno-builtin-tolower
 $(out)/tests/tst-locale-numeric.o: CXXFLAGS += -std=gnu++17 -DOSV_CONF_LOCALE=$(conf_locale)
+# tst-locale-collate.inc is glibc's expected output (generated on Linux by
+# scripts/locale-oracle/collate/gen-collate-expected.c).
+$(out)/tests/tst-locale-collate.o: CXXFLAGS += -std=gnu++17 -I$(src)/tests -DOSV_CONF_LOCALE=$(conf_locale)
 ifeq ($(conf_locale),1)
 locale-test-data := $(out)/tests/locale-data
 locale-test-stamp := $(locale-test-data)/.stamp
