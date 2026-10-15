@@ -7,8 +7,8 @@
 # Compile the test locales with the build host's localedef (glibc's locales
 # package) for an OSv test image built with conf_locale=1:
 #   make-test-locales.sh <out>
-# <out>/dir/<l>.utf8             the 14 default locales and tr_TR fa_IR ar_SA my_MM,
-#                                directory form (LOCPATH)
+# <out>/dir/<l>.utf8             the 14 default locales and tr_TR fa_IR ar_SA my_MM
+#                                cs_CZ fr_CA, directory form (LOCPATH)
 # <out>/dir/de_DE.ISO-8859-1     UTF-8 data under a Latin-1 name (codeset mismatch)
 # <out>/fb/de.utf8 de@euro de_AT de_CH.utf8@euro   sv_SE it_IT fr_FR es_ES data under
 #                                shorter names (the lookup fallback order)
@@ -30,9 +30,11 @@ tmp=$out.tmp
 rm -rf "$tmp"
 mkdir -p "$tmp/dir" "$tmp/arch/usr/lib/locale" "$tmp/default"
 # The 14 default locales, then tr_TR (case mapping) and fa_IR ar_SA my_MM
-# (alternative digits, right-to-left formats), which are not default locales.
+# (alternative digits, right-to-left formats), which are not default locales,
+# and cs_CZ (the contraction "ch") and fr_CA (backward accents) for collation
+# (Stage 1c).
 for l in en_US en_GB de_DE fr_FR es_ES it_IT pt_BR nl_NL sv_SE pl_PL ru_RU ja_JP zh_CN ko_KR \
-         tr_TR fa_IR ar_SA my_MM; do
+         tr_TR fa_IR ar_SA my_MM cs_CZ fr_CA; do
     localedef -i $l -f UTF-8 "$tmp/dir/$l.utf8" >/dev/null 2>&1 || {
         echo "make-test-locales: localedef -i $l failed (are glibc's locale sources installed?)" >&2
         exit 1
