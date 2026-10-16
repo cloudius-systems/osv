@@ -243,14 +243,24 @@ internal-api-tests += tst-random-flush.so
 # Named locales (conf_locale=1, which reaches this Makefile via the
 # environment like conf_zfs): tst-locale-data checks either mode. With
 # conf_locale=1 the test locales are compiled with the build host's
-# localedef and go into the image under /usr/share/osv-locale-test and
-# /usr/lib/locale; the build fails if they cannot be made (tst-locale-data
-# would otherwise test nothing). With conf_locale=0 no data is built.
+# localedef and go into the image under /usr/share/osv-locale-test (LOCPATH)
+# and, when the locale-data module is NOT in the image, /usr/lib/locale; the
+# build fails if they cannot be made (tst-locale-data would otherwise test
+# nothing). With conf_locale=0 no data is built.
 conf_locale ?= 0
+# conf_locale_data is set (14/full/none) only when the locale-data module is in
+# the image. Then that module owns /usr/lib/locale (the shipped data), so the
+# test harness does NOT also ship its own archive and da_DK there, and
+# tst-locale-data runs its shipped-data checks (OSV_LOCALE_SHIPPED).
+conf_locale_data ?=
+locale-shipped := $(if $(filter 14 full,$(conf_locale_data)),1,0)
 # -fno-builtin-to{upper,lower}: GCC otherwise folds comparisons of their
 # results with the C locale's range (tr_TR's toupper('i') is 'i').
 $(out)/tests/tst-locale-data.o: CXXFLAGS += -std=gnu++17 -DOSV_CONF_LOCALE=$(conf_locale) \
-	-fno-builtin-toupper -fno-builtin-tolower
+	-DOSV_LOCALE_SHIPPED=$(locale-shipped) -fno-builtin-toupper -fno-builtin-tolower
+# tst-locale-builtin assumes the default directory holds no named locale; the
+# locale-data module ships the 14 there, so tell it (OSV_LOCALE_SHIPPED).
+$(out)/tests/tst-locale-builtin.o: CXXFLAGS += -std=gnu++17 -DOSV_LOCALE_SHIPPED=$(locale-shipped)
 $(out)/tests/tst-locale-numeric.o: CXXFLAGS += -std=gnu++17 -DOSV_CONF_LOCALE=$(conf_locale)
 # tst-locale-collate.inc is glibc's expected output (generated on Linux by
 # scripts/locale-oracle/collate/gen-collate-expected.c).
@@ -431,8 +441,10 @@ usr.manifest: build_all_tests $(lastword $(MAKEFILE_LIST)) usr.manifest.skel $(l
 		echo "/usr/share/osv-locale-test/dir/**: ./tests/locale-data/dir/**"; \
 		echo "/usr/share/osv-locale-test/fb/**: ./tests/locale-data/fb/**"; \
 		echo "/usr/share/osv-locale-test/localedef-version.txt: ./tests/locale-data/localedef-version.txt"; \
-		echo "/usr/lib/locale/locale-archive: ./tests/locale-data/arch/usr/lib/locale/locale-archive"; \
-		echo "/usr/lib/locale/da_DK.utf8/**: ./tests/locale-data/default/da_DK.utf8/**"; \
+		if [ "$(locale-shipped)" != 1 ]; then \
+			echo "/usr/lib/locale/locale-archive: ./tests/locale-data/arch/usr/lib/locale/locale-archive"; \
+			echo "/usr/lib/locale/da_DK.utf8/**: ./tests/locale-data/default/da_DK.utf8/**"; \
+		fi; \
 	fi >> $@
 	@if [ -d $(locale-test-data)/msg ]; then \
 		echo "/usr/share/osv-locale-test/msg/**: ./tests/locale-data/msg/**"; \

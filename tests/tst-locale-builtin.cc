@@ -64,6 +64,14 @@ enum {
 
 static int tests, fails;
 
+// Set when the locale-data module ships the 14 default locales to the default
+// directory /usr/lib/locale; then en_US/de_DE DO load even with LOCPATH
+// pointing nowhere (the loader always searches the default directory), so the
+// named-locale cases below expect success instead of ENOENT.
+#ifndef OSV_LOCALE_SHIPPED
+#define OSV_LOCALE_SHIPPED 0
+#endif
+
 static void report(bool ok, const std::string &what)
 {
     tests++;
@@ -113,8 +121,15 @@ static void test_names()
         { "C.UTF:8", nullptr, ENOENT },
         { "C..utf8", nullptr, ENOENT },
         { " C", nullptr, ENOENT },
+#if OSV_LOCALE_SHIPPED
+        // The locale-data module ships these to /usr/lib/locale, which the
+        // loader searches even when LOCPATH points nowhere.
+        { "en_US.UTF-8", "en_US.UTF-8", 0 },
+        { "de_DE.UTF-8", "de_DE.UTF-8", 0 },
+#else
         { "en_US.UTF-8", nullptr, ENOENT },
         { "de_DE.UTF-8", nullptr, ENOENT },
+#endif
         { "xx_YY.UTF-8", nullptr, ENOENT },
         { "UTF-8", nullptr, ENOENT },
         { "..", nullptr, EINVAL },
@@ -245,7 +260,13 @@ static void test_environment()
         { {{ "LC_ALL", "C.UTF-8" }}, "C.UTF-8", "C.UTF-8", "C.UTF-8" },
         { {{ "LANG", "C.UTF-8" }, { "LC_NUMERIC", "C" }}, "*", "C.UTF-8", "C" },
         { {{ "LC_ALL", "POSIX" }, { "LANG", "C.UTF-8" }}, "C", "C", "C" },
+#if OSV_LOCALE_SHIPPED
+        // The locale-data module ships de_DE.UTF-8, so LANG=de_DE.UTF-8 loads
+        // it (all categories) instead of falling back to C.
+        { {{ "LANG", "de_DE.UTF-8" }}, "de_DE.UTF-8", "de_DE.UTF-8", "de_DE.UTF-8" },
+#else
         { {{ "LANG", "de_DE.UTF-8" }}, nullptr, "C", "C" },
+#endif
         { {{ "LANG", "" }, { "LC_ALL", "" }}, "C", "C", "C" },
         { {{ nullptr, nullptr }}, "C", "C", "C" },
     };
