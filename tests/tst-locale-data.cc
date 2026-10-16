@@ -89,6 +89,10 @@ static std::string show(const char *s)
     return s ? std::string("\"") + s + "\"" : "NULL";
 }
 
+#ifndef OSV_LOCALE_SHIPPED
+#define OSV_LOCALE_SHIPPED 0
+#endif
+
 static bool exists(const std::string &p)
 {
     struct stat st;
@@ -261,9 +265,13 @@ static void test_fallback()
         report(ok, std::string("fallback ") + c[0] + " -> " + show(r) + " " + show(title) +
                " want " + show(c[1]));
     }
-    // The archive does not fall back.
+    // The archive does not synthesize a locale by fallback. de_AT is absent
+    // from the test harness archive (and the 14-locale module archive); the
+    // full module archive has de_AT as a real entry, so this harness-layout
+    // assertion is skipped when the module ships the data (test_shipped owns
+    // the module archive checks).
     set_locpath(nullptr);
-    if (exists("/usr/lib/locale/locale-archive")) {
+    if (!OSV_LOCALE_SHIPPED && exists("/usr/lib/locale/locale-archive")) {
         expect_set(LC_ALL, "de_AT.UTF-8", nullptr, ENOENT, "archive no fallback");
     }
     setlocale(LC_ALL, "C");
@@ -531,7 +539,14 @@ static void test_archive_default()
                    "archive de_DE.UTF-8");
             expect_set(LC_ALL, "ja_JP.utf8", "ja_JP.utf8", 0, "archive");
             expect_set(LC_ALL, "ja_JP.UTF+8", "ja_JP.UTF+8", 0, "archive");
-            expect_set(LC_ALL, "de_DE.UTF-8@euro", nullptr, ENOENT, "archive");
+            // de_DE.UTF-8@euro is ENOENT only when de_DE is NOT also a default
+            // directory: the archive holds no @euro entry and does not fall
+            // back. With the locale-data module de_DE.utf8 IS a default dir, so
+            // the directory fallback drops @euro and finds it (as glibc does);
+            // test_shipped covers that layout.
+            if (!OSV_LOCALE_SHIPPED) {
+                expect_set(LC_ALL, "de_DE.UTF-8@euro", nullptr, ENOENT, "archive");
+            }
             expect_set(LC_ALL, "de_DE.ISO-8859-1", nullptr, ENOENT, "archive");
             expect_set(LC_ALL, "xx_YY.UTF-8", nullptr, ENOENT, "archive");
         }
@@ -547,8 +562,67 @@ static void test_archive_default()
         set_locpath("dir");
         expect_set(LC_ALL, "da_DK.UTF-8", "da_DK.UTF-8", 0, "LOCPATH then default dir");
         set_locpath(nullptr);
-    } else {
+    } else if (!OSV_LOCALE_SHIPPED) {
+        // The harness ships da_DK to the default dir; its absence is a FAIL
+        // only in that layout. The locale-data module ships the 14 default
+        // locales, not da_DK, so this check does not apply when it owns
+        // /usr/lib/locale (test_shipped exercises the default dir instead).
         skip("no /usr/lib/locale/da_DK.utf8");
+    }
+    setlocale(LC_ALL, "C");
+}
+
+// Stage 2: the 14 default locales served from the SHIPPED module data in the
+// default directory /usr/lib/locale (dir and archive), with LOCPATH empty, so
+// nothing comes from the test harness's LOCPATH tree. Only built when the
+// locale-data module provides /usr/lib/locale (OSV_LOCALE_SHIPPED); a missing
+// locale is then a FAIL (the module did not install it), not a SKIP.
+static void test_shipped()
+{
+    static const char *const defaults[14] = {
+        "en_US.UTF-8", "en_GB.UTF-8", "de_DE.UTF-8", "fr_FR.UTF-8", "es_ES.UTF-8",
+        "it_IT.UTF-8", "pt_BR.UTF-8", "nl_NL.UTF-8", "sv_SE.UTF-8", "pl_PL.UTF-8",
+        "ru_RU.UTF-8", "ja_JP.UTF-8", "zh_CN.UTF-8", "ko_KR.UTF-8",
+    };
+    // Empty LOCPATH: the loader uses only the archive and /usr/lib/locale.
+    set_locpath(nullptr);
+    for (const char *n : defaults) {
+        setlocale(LC_ALL, "C");
+        errno = 0;
+        const char *r = setlocale(LC_ALL, n);
+        report(r && !strcmp(r, n), std::string("shipped default locale ") + n + " = " + show(r) +
+               (r ? "" : " errno " + std::to_string(errno)));
+    }
+    // de_DE.UTF-8 from the shipped data alone: the German answers of
+    // nl_langinfo, strcoll and strftime (empty LOCPATH, default directory).
+    setlocale(LC_ALL, "C");
+    const char *r = setlocale(LC_ALL, "de_DE.UTF-8");
+    report(r && !strcmp(r, "de_DE.UTF-8"), "shipped de_DE.UTF-8 setlocale = " + show(r));
+    if (r) {
+        // nl_langinfo: German day name, decimal comma, Euro currency symbol.
+        report(!strcmp(nl_langinfo(DAY_1), "Sonntag") &&
+               !strcmp(nl_langinfo(ABMON_1), "Jan") &&
+               !strcmp(nl_langinfo(RADIXCHAR), ",") &&
+               !strcmp(nl_langinfo(CRNCYSTR), "+\u20ac"),
+               std::string("shipped de_DE nl_langinfo: DAY_1 ") + show(nl_langinfo(DAY_1)) +
+               " RADIXCHAR " + show(nl_langinfo(RADIXCHAR)) + " CRNCYSTR " + show(nl_langinfo(CRNCYSTR)));
+        // strcoll: German sorts a-umlaut with a (so "Apfel" < "Apfela" < "Apple"
+        // and "a" < "\u00e4" < "b"), which the C locale does not.
+        report(strcoll("a", "\u00e4") < 0 && strcoll("\u00e4", "b") < 0 && strcoll("z", "\u00e4") > 0,
+               "shipped de_DE strcoll a < a-umlaut < b < z");
+        // strftime: German month and day names.
+        struct tm tm = {};
+        tm.tm_year = 125; tm.tm_mon = 0; tm.tm_mday = 5; tm.tm_wday = 0;  // Sun 2025-01-05
+        char buf[128];
+        strftime(buf, sizeof buf, "%A %d. %B %Y", &tm);
+        report(!strcmp(buf, "Sonntag 05. Januar 2025"), std::string("shipped de_DE strftime ") +
+               show(buf));
+    }
+    // The archive holds the same 14 (named <name>.utf8 inside it).
+    if (exists("/usr/lib/locale/locale-archive")) {
+        expect_set(LC_ALL, "ja_JP.utf8", "ja_JP.utf8", 0, "shipped archive ja_JP.utf8");
+    } else {
+        report(false, "shipped: no /usr/lib/locale/locale-archive from the module");
     }
     setlocale(LC_ALL, "C");
 }
@@ -574,6 +648,9 @@ int main()
         test_composite_env();
         test_newlocale_lifetimes();
         test_archive_default();
+    }
+    if (OSV_CONF_LOCALE && OSV_LOCALE_SHIPPED) {
+        test_shipped();
     }
     printf("SUMMARY: %d tests, %d failures, %d skipped\n", tests, fails, skips);
     return fails ? 1 : 0;
