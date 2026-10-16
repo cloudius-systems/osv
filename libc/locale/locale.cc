@@ -25,8 +25,9 @@
 // newlocale(). The empty name selects each category from LC_ALL, then
 // LC_<category>, then LANG, then "C".
 //
-// OSv's multibyte conversion is UTF-8 in every locale and MB_CUR_MAX is 4, as
-// before; only the names, codesets and nl_langinfo() items follow the locale.
+// Multibyte conversion follows LC_CTYPE: in C only bytes 0..0x7f are
+// characters and MB_CUR_MAX is 1; in C.UTF-8 it is UTF-8 and MB_CUR_MAX is 6
+// (libc/multibyte/multibyte.cc). __locales[LC_CTYPE] marks a UTF-8 LC_CTYPE.
 //
 // The global locale and the C locale object are never freed. Locale names
 // are interned and never freed either, so a returned name stays valid.
@@ -204,12 +205,23 @@ bool name_is_utf8(const char *name)
     return name && strcmp(name, "C") != 0;
 }
 
+// __locales[LC_CTYPE] is this marker when LC_CTYPE is a UTF-8 locale, else
+// null; __osv_ctype_utf8() tests it without a string compare.
+struct { int utf8; } utf8_marker = { 1 };
+
+struct __locale_data *ctype_marker(const char *ctype_name)
+{
+    return name_is_utf8(ctype_name) ?
+        reinterpret_cast<struct __locale_data *>(&utf8_marker) : nullptr;
+}
+
 struct __locale_struct make_global()
 {
     struct __locale_struct g = *__c_locale_ptr;
     for (int i = 0; i < NCAT; i++) {
         g.__names[i] = c_name;
     }
+    g.__locales[LC_CTYPE] = nullptr;
     return g;
 }
 
@@ -217,6 +229,26 @@ struct __locale_struct &global_locale()
 {
     static struct __locale_struct g = make_global();
     return g;
+}
+
+const char *utf8_name = "C.UTF-8";
+
+struct __locale_struct make_utf8()
+{
+    struct __locale_struct u = *__c_locale_ptr;
+    for (int i = 0; i < NCAT; i++) {
+        u.__names[i] = utf8_name;
+    }
+    u.__locales[LC_CTYPE] = ctype_marker(utf8_name);
+    return u;
+}
+
+// The object musl's fwide() binds a stream to when it is oriented in a
+// UTF-8 locale (UTF8_LOCALE).
+struct __locale_struct &utf8_locale()
+{
+    static struct __locale_struct u = make_utf8();
+    return u;
 }
 
 const char *env_name(int cat)
@@ -331,7 +363,7 @@ const char *all_name(const struct __locale_struct *l)
 
 bool is_static(locale_t l)
 {
-    return l == __c_locale_ptr || l == &global_locale();
+    return l == __c_locale_ptr || l == &global_locale() || l == &utf8_locale();
 }
 
 // The locale a thread is using: its uselocale() object, or the global one.
@@ -369,6 +401,7 @@ char *setlocale(int category, const char *name) noexcept
         return nullptr;
     }
     memcpy(g.__names, names, sizeof(names));
+    g.__locales[LC_CTYPE] = ctype_marker(names[LC_CTYPE]);
     return const_cast<char *>(category == LC_ALL ?
         all_name(&g) : g.__names[category]);
 }
@@ -425,6 +458,7 @@ locale_t __newlocale(int mask, const char *name, locale_t base) noexcept
         *l = *__c_locale_ptr;
     }
     memcpy(l->__names, names, sizeof(names));
+    l->__locales[LC_CTYPE] = ctype_marker(names[LC_CTYPE]);
     return l;
 }
 weak_alias(__newlocale, newlocale);
@@ -470,6 +504,27 @@ locale_t __uselocale(locale_t l) noexcept
     return old;
 }
 weak_alias(__uselocale, uselocale);
+
+extern "C" OSV_HIDDEN
+bool __osv_ctype_utf8(locale_t l) noexcept
+{
+    if (!l || l == LC_GLOBAL_LOCALE) {
+        l = current_locale();
+    }
+    return l->__locales[LC_CTYPE] != nullptr;
+}
+
+extern "C" OSV_HIDDEN
+locale_t __osv_utf8_locale() noexcept
+{
+    return &utf8_locale();
+}
+
+extern "C" OSV_LIBC_API
+size_t __ctype_get_mb_cur_max() noexcept
+{
+    return __osv_ctype_utf8(nullptr) ? 6 : 1;
+}
 
 // ---- nl_langinfo ----------------------------------------------------------
 
@@ -549,12 +604,13 @@ char *__nl_langinfo_l(nl_item item, locale_t l) noexcept
             return const_cast<char *>(utf8 ? "UTF-8" : "ANSI_X3.4-1968");
         }
         if (item == NL_ITEM(LC_CTYPE, 13)) {    // _NL_CTYPE_MB_CUR_MAX
-            return reinterpret_cast<char *>(uintptr_t(utf8 ? MB_CUR_MAX : 1));
+            return reinterpret_cast<char *>(uintptr_t(
+                __osv_ctype_utf8(l) ? 6 : 1));
         }
         return const_cast<char *>("");
     }
     if (cat == LC_COLLATE) {
-        // _NL_COLLATE_NRULES is 0 for both built-in locales; the rest are
+        // _NL_COLLATE_NRULES is 0 for both of OSv's locales; the rest are
         // glibc's internal collation tables, which OSv does not have.
         return idx == 0 ? reinterpret_cast<char *>(uintptr_t(0)) :
             const_cast<char *>("");
