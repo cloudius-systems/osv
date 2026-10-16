@@ -4,18 +4,23 @@
 # This work is open source software, licensed under the terms of the
 # BSD license as described in the LICENSE file in the top-level directory.
 #
-# Generate libc/locale/ctype-utf8.inc: glibc's C.UTF-8 wide-character
-# classes, case mappings and widths, from a gen-ctype-oracle dump of that
-# locale (measured on glibc 2.41, see README.md).
-# Usage: gen-ctype-tables.py d-glibc-C.UTF-8.txt > libc/locale/ctype-utf8.inc
+# Generate ctype-utf8.inc: glibc's C.UTF-8 wide-character classes, case
+# mappings and widths, from the committed range summary s-glibc-C.UTF-8.txt
+# (ctype-summary.py output, measured on glibc 2.41; see README.md). The
+# summary is a lossless build input: gen-ctype-dump.py reconstructs the full
+# per-code-point dump from it byte-for-byte.
 #
-# Layouts (lookups in libc/locale/ctype-utf8.cc):
-#   class tables: sorted uint32 lo << 11 | (n - 1), the run lo .. lo+n-1
-#     (n <= 2048, longer runs are split);
-#   case tables: sorted {lo << 11 | alt << 10 | (n - 1), delta}: the n code
-#     points lo, lo+s, ... (s = 2 if alt else 1) map to cp + delta;
-#   width table: sorted uint32 lo << 2 | (width + 1), each entry starting a
-#     run that lasts to the next entry; it covers 0..0x10ffff.
+# Usage: gen-ctype-tables.py s-glibc-C.UTF-8.txt > ctype-utf8.inc
+#
+# Runtime layout (lookups in libc/locale/ctype-utf8.cc), two sorted tables:
+#   ctype_lo[]/ctype_val[]: one entry per maximal run over 0..0x10ffff where
+#     the 12-bit class mask and the width are both constant. ctype_lo is the
+#     run's first code point (sorted, ascending, covering 0..0x10ffff with no
+#     gaps); ctype_val packs (class_mask | (width + 1) << 12) in 14 bits. A
+#     run reaches to the next entry's ctype_lo (the last to 0x10ffff). One
+#     std::upper_bound answers all 12 iswctype classes and wcwidth.
+#   case_upper[]/case_lower[]: {lo << 11 | alt << 10 | (n - 1), delta}; the n
+#     code points lo, lo + s, ... (s = 2 if alt else 1) map to cp + delta.
 import sys
 
 NAMES = ['alnum', 'alpha', 'blank', 'cntrl', 'digit', 'graph',
@@ -23,33 +28,69 @@ NAMES = ['alnum', 'alpha', 'blank', 'cntrl', 'digit', 'graph',
 NCP = 0x110000
 
 
-def load(path):
-    rows = []
-    with open(path) as f:
-        for cp, line in enumerate(f):
-            c, bits, up, lo, w = line.split()
-            assert int(c, 16) == cp, line
-            rows.append((int(bits, 16), int(up, 16), int(lo, 16), int(w)))
-    assert len(rows) == NCP, len(rows)
-    return rows
+def load_summary(path):
+    """Reconstruct per-code-point (class_mask, towupper, towlower, width) from
+    an s-glibc range summary. Width 1 is the complement of the -1/0/2 ranges."""
+    mask = [0] * NCP
+    toup = list(range(NCP))
+    tolo = list(range(NCP))
+    width = [1] * NCP
+    cur = None
+    for line in open(path):
+        if line.startswith('  '):
+            f = line.split()
+            lo, hi = (int(x, 16) for x in f[0].split('-'))
+            kind, arg = cur
+            if kind == 'class':
+                bit = 1 << arg
+                for cp in range(lo, hi + 1):
+                    mask[cp] |= bit
+            elif kind == 'toupper':
+                d = int(f[1])
+                for cp in range(lo, hi + 1):
+                    toup[cp] = cp + d
+            elif kind == 'tolower':
+                d = int(f[1])
+                for cp in range(lo, hi + 1):
+                    tolo[cp] = cp + d
+            elif kind == 'width':
+                for cp in range(lo, hi + 1):
+                    width[cp] = arg
+            continue
+        h = line.split()
+        if h[0] == 'class':
+            cur = ('class', NAMES.index(h[1]))
+        elif h[0] == 'toupper':
+            cur = ('toupper', None)
+        elif h[0] == 'tolower':
+            cur = ('tolower', None)
+        elif h[0] == 'width':
+            cur = ('width', None if h[1] == 'all' else int(h[1]))
+        else:
+            sys.exit('unexpected summary line: ' + line)
+    return mask, toup, tolo, width
 
 
-def class_runs(rows, i):
+def unified_runs(mask, width):
+    """[(lo, packed)] maximal runs where (class mask, width) is constant."""
     out = []
+    prev = None
     for cp in range(NCP):
-        if rows[cp][0] >> i & 1:
-            if out and out[-1][0] + out[-1][1] == cp and out[-1][1] < 2048:
-                out[-1][1] += 1
-            else:
-                out.append([cp, 1])
+        w = width[cp]
+        assert -1 <= w <= 2, (cp, w)
+        packed = (mask[cp] & 0xfff) | ((w + 1) << 12)
+        if packed != prev:
+            out.append((cp, packed))
+            prev = packed
     return out
 
 
-def case_runs(rows, j):
-    """[lo, n, alt, delta] runs; alt runs step by 2 (alternating case pairs)."""
+def case_runs(col):
+    """[lo, n, alt, delta] runs for a case map column (col[cp] is the mapped
+    value); alt runs step by 2 (alternating case pairs)."""
     out = []
     for cp in range(NCP):
-        d = rows[cp][j] - cp
+        d = col[cp] - cp
         if d == 0:
             continue
         if out:
@@ -66,52 +107,32 @@ def case_runs(rows, j):
     return out
 
 
-def width_runs(rows):
-    out = []
-    for cp in range(NCP):
-        w = rows[cp][3]
-        assert -1 <= w <= 2, (cp, w)
-        if not out or out[-1][1] != w:
-            out.append((cp, w))
-    return out
-
-
-def emit(rows):
-    o = ['// Generated by scripts/locale-oracle/gen-ctype-tables.py from a dump of',
-         '// glibc 2.41 C.UTF-8 (Debian 13), see scripts/locale-oracle/README.md.',
-         '// Do not edit.']
-    stats = []
-    for i, n in enumerate(NAMES):
-        rs = class_runs(rows, i)
-        o.append('static const uint32_t cls_%s[%d] = {' % (n, len(rs)))
-        vals = ['0x%x' % (lo << 11 | (k - 1)) for lo, k in rs]
-        o += ['    ' + ', '.join(vals[k:k + 8]) + ',' for k in range(0, len(vals), 8)]
-        o.append('};')
-        stats.append('%s %d' % (n, len(rs)))
-    o.append('static const uint32_t *const cls_tab[12] = {')
-    o.append('    ' + ', '.join('cls_' + n for n in NAMES) + ',')
+def emit(mask, toup, tolo, width):
+    o = ['// Generated by scripts/locale-oracle/gen-ctype-tables.py from',
+         '// scripts/locale-oracle/s-glibc-C.UTF-8.txt (glibc 2.41 C.UTF-8,',
+         '// Debian 13), see scripts/locale-oracle/README.md. Do not edit.']
+    runs = unified_runs(mask, width)
+    o.append('static const uint32_t ctype_lo[%d] = {' % len(runs))
+    vals = ['0x%x' % lo for lo, _ in runs]
+    o += ['    ' + ', '.join(vals[k:k + 10]) + ',' for k in range(0, len(vals), 10)]
     o.append('};')
-    o.append('static const uint32_t cls_len[12] = {')
-    o.append('    ' + ', '.join('sizeof(cls_%s) / 4' % n for n in NAMES) + ',')
+    o.append('static const uint16_t ctype_val[%d] = {' % len(runs))
+    vals = ['0x%x' % v for _, v in runs]
+    o += ['    ' + ', '.join(vals[k:k + 12]) + ',' for k in range(0, len(vals), 12)]
     o.append('};')
-    for j, n in ((1, 'upper'), (2, 'lower')):
-        rs = case_runs(rows, j)
+    stats = ['ctype %d' % len(runs)]
+    for col, n in ((toup, 'upper'), (tolo, 'lower')):
+        rs = case_runs(col)
         o.append('static const struct casemap case_%s[%d] = {' % (n, len(rs)))
         for lo, k, alt, d in rs:
             o.append('    {0x%x, %d},' % (lo << 11 | alt << 10 | (k - 1), d))
         o.append('};')
         stats.append('case_%s %d' % (n, len(rs)))
-    rs = width_runs(rows)
-    o.append('static const uint32_t width_tab[%d] = {' % len(rs))
-    vals = ['0x%x' % (lo << 2 | (w + 1)) for lo, w in rs]
-    o += ['    ' + ', '.join(vals[k:k + 8]) + ',' for k in range(0, len(vals), 8)]
-    o.append('};')
-    stats.append('width %d' % len(rs))
     print('\n'.join(o))
     print('entries: ' + ', '.join(stats), file=sys.stderr)
 
 
 if __name__ == '__main__':
     if len(sys.argv) != 2:
-        sys.exit('usage: gen-ctype-tables.py <gen-ctype-oracle C.UTF-8 dump>')
-    emit(load(sys.argv[1]))
+        sys.exit('usage: gen-ctype-tables.py <s-glibc-C.UTF-8.txt>')
+    emit(*load_summary(sys.argv[1]))

@@ -12,6 +12,12 @@
 //   translit-c.inc  by scripts/locale-oracle/gen-translit.py
 // scripts/locale-oracle/check-tables.cc proves they reproduce the measured
 // output for every code point.
+//
+// The classes and widths share one sorted run table: ctype_lo[i] is the
+// first code point of run i, which reaches to ctype_lo[i+1] (the last run to
+// 0x10ffff), and ctype_val[i] packs the run's 12-bit class mask with its
+// width (bits 12-13 hold width + 1). One binary search answers all 12
+// iswctype classes and wcwidth. Case maps stay as their own run tables.
 
 #include <stddef.h>
 #include <stdint.h>
@@ -26,11 +32,13 @@ struct casemap {
 #include "ctype-utf8.inc"
 #include "translit-c.inc"
 
-template <size_t N>
-const uint32_t* last_le(const uint32_t (&t)[N], uint32_t key)
+// The ctype_val entry whose run contains wc (wc <= 0x10ffff; the table
+// covers 0..0x10ffff with no gaps, so this is always valid).
+uint16_t ctype_lookup(uint32_t wc)
 {
-    auto p = std::upper_bound(t, t + N, key);
-    return p == t ? nullptr : p - 1;
+    constexpr size_t N = sizeof(ctype_lo) / sizeof(*ctype_lo);
+    auto p = std::upper_bound(ctype_lo, ctype_lo + N, wc);
+    return ctype_val[(p - ctype_lo) - 1];
 }
 
 uint32_t casemap_lookup(const casemap* t, size_t n, wint_t wc)
@@ -57,16 +65,13 @@ uint32_t casemap_lookup(const casemap* t, size_t n, wint_t wc)
 
 #define HIDDEN extern "C" __attribute__((visibility("hidden")))
 
-// cls is a wctype() value: 1 alnum .. 12 xdigit, in the order of cls_tab.
+// cls is a wctype() value: 1 alnum .. 12 xdigit, bit cls-1 of the class mask.
 HIDDEN int __osv_utf8_iswctype(wint_t wc, int cls)
 {
     if (cls < 1 || cls > 12 || wc > 0x10ffff) {
         return 0;
     }
-    const uint32_t* t = cls_tab[cls - 1];
-    const uint32_t* e = t + cls_len[cls - 1];
-    auto p = std::upper_bound(t, e, uint32_t(wc << 11 | 0x7ff));
-    return p != t && wc - (p[-1] >> 11) <= (p[-1] & 0x7ff);
+    return (ctype_lookup(uint32_t(wc)) >> (cls - 1)) & 1;
 }
 
 HIDDEN wint_t __osv_utf8_towupper(wint_t wc)
@@ -84,7 +89,7 @@ HIDDEN int __osv_utf8_wcwidth(wchar_t wc)
     if (uint32_t(wc) > 0x10ffff) {
         return -1;
     }
-    return int(*last_le(width_tab, uint32_t(wc) << 2 | 3) & 3) - 1;
+    return int(ctype_lookup(uint32_t(wc)) >> 12) - 1;
 }
 
 // What glibc's C locale writes on a wide stream for wc >= 0x80: false when
