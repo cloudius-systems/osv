@@ -2321,6 +2321,26 @@ $(out)/gen/include/ctype-data.h: $(out)/gen-ctype-data
 $(out)/gen-ctype-data: gen-ctype-data.cc
 	$(call quiet, $(HOST_CXX) -o $@ $^, HOST_CXX $@)
 
+# The locale tables (classes/case/width, C-locale transliteration, langinfo
+# builtins) are generated into $(out)/gen/include/ from committed inputs, like
+# ctype-data.h above, rather than committed. The generated .inc are order-only
+# prerequisites of the objects that #include them (the quote-form #include
+# falls through to -isystem $(out)/gen/include).
+$(out)/libc/locale/ctype-utf8.o: | $(out)/gen/include/ctype-utf8.inc $(out)/gen/include/translit-c.inc
+$(out)/libc/locale/locale.o: | $(out)/gen/include/langinfo-builtin.inc
+
+$(out)/gen/include/ctype-utf8.inc: scripts/locale-oracle/s-glibc-C.UTF-8.txt scripts/locale-oracle/gen-ctype-tables.py
+	$(makedir)
+	$(call quiet, scripts/locale-oracle/gen-ctype-tables.py $< > $@, GEN gen/include/ctype-utf8.inc)
+
+$(out)/gen/include/translit-c.inc: scripts/locale-oracle/tr-glibc-C.txt scripts/locale-oracle/gen-translit.py
+	$(makedir)
+	$(call quiet, scripts/locale-oracle/gen-translit.py $< > $@, GEN gen/include/translit-c.inc)
+
+$(out)/gen/include/langinfo-builtin.inc: scripts/locale-oracle/oracle-C.txt scripts/locale-oracle/oracle-C.UTF-8.txt scripts/gen-langinfo-builtin.py
+	$(makedir)
+	$(call quiet, scripts/gen-langinfo-builtin.py scripts/locale-oracle/oracle-C.txt scripts/locale-oracle/oracle-C.UTF-8.txt > $@, GEN gen/include/langinfo-builtin.inc)
+
 ################################################################################
 
 
