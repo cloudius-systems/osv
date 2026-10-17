@@ -239,6 +239,7 @@ tests += tst-ramfs-unlink-race.so
 tests += tst-rlimit.so
 tests += tst-close-range.so
 tests += tst-numa.so
+tests += tst-pthread-cleanup.so
 tests += tst-random-flush.so
 tests += tst-dentry-rename-child.so
 internal-api-tests += tst-random-flush.so

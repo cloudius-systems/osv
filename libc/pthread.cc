@@ -1011,8 +1011,16 @@ int pthread_condattr_getpshared(const pthread_condattr_t *__restrict, int *__res
     return EINVAL;
 }
 
+static __thread struct __ptcb *cleanup_stack;
+
 void pthread_exit(void *retval)
 {
+    // Run the cleanup handlers that were pushed and not popped, innermost first
+    while (cleanup_stack) {
+        auto cb = cleanup_stack;
+        cleanup_stack = cb->__next;
+        cb->__f(cb->__x);
+    }
     auto t = pthread::from_libc(current_pthread);
     t->_retval = retval;
     t->_thread->exit();
@@ -1261,5 +1269,25 @@ int pthread_attr_getaffinity_np(const pthread_attr_t *attr, size_t cpusetsize,
     return 0;
 }
 
-extern "C" void _pthread_cleanup_push(struct __ptcb *cb, void (*f)(void *), void *x) {} //TODO: Check if it can be stubbed like this
-extern "C" void _pthread_cleanup_pop(struct __ptcb *cb, int run) {} //TODO: Check if it can be stubbed like this
+// POSIX thread-cancellation cleanup handlers. musl's pthread.h ships the real
+// pthread_cleanup_push/pop macros to applications, so these must honor the
+// normal pop(run != 0) path and invoke the handler; a no-op silently skips
+// unlocks and frees on normal thread exit. The handlers are kept on a
+// per-thread intrusive stack via __ptcb::__next, which pthread_exit() also
+// walks. (Cancellation itself is a no-op on OSv, so only the explicit-run
+// path matters here.)
+extern "C" void _pthread_cleanup_push(struct __ptcb *cb, void (*f)(void *), void *x)
+{
+    cb->__f = f;
+    cb->__x = x;
+    cb->__next = cleanup_stack;
+    cleanup_stack = cb;
+}
+
+extern "C" void _pthread_cleanup_pop(struct __ptcb *cb, int run)
+{
+    cleanup_stack = cb->__next;
+    if (run) {
+        cb->__f(cb->__x);
+    }
+}
