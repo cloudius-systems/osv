@@ -1,0 +1,74 @@
+Reject crafted group descriptors and a zero mkfs block size
+
+Backport of three memory-safety fixes from the Aladdin-R-D/lwext4 fork
+(https://github.com/Aladdin-R-D/lwext4), carried until lwext4 or the
+osvunikernel fork picks them up.  The error codes are normalized here to
+match ext4_extent.c (EIO for a corrupt on-disk value found at mount,
+EINVAL for a bad mkfs argument) rather than the fork's ENXIO/EFAULT/ENOMEM.
+
+- 2f5714d42 (out-of-bounds write in the block and inode bitmap init):
+  bit_max and inodes_per_group come straight from the group descriptor
+  and superblock, so a crafted image can drive ext4_bmap_bit_set() and
+  the memset() past the end of the one-block bitmap buffer.  Bound both
+  against the block size before touching the buffer.  Not covered by the
+  extent/superblock checks already in this PR.
+- 1d32b2f17 (NULL dereference in ext4_dir_en_get_name_len): guard the
+  directory entry pointer in this hot untrusted dir-read helper.
+- fa299459e (division by zero in create_fs_aux_info): reject a zero
+  block size before dividing by it in the mkfs path.
+
+Applies to osvunikernel/lwext4 6f6d8f7c509da696e71e80cc5a59abfc48e4971b.
+
+diff --git a/include/ext4_dir.h b/include/ext4_dir.h
+index 1111111..2222222 100644
+--- a/include/ext4_dir.h
++++ b/include/ext4_dir.h
+@@ -123,6 +123,9 @@ static inline uint16_t ext4_dir_en_get_name_len(struct ext4_sblock *sb,
+ static inline uint16_t ext4_dir_en_get_name_len(struct ext4_sblock *sb,
+ 						struct ext4_dir_en *de)
+ {
++	if (de == NULL)
++		return 0;
++
+ 	uint16_t v = de->name_len;
+ 
+ 	if ((ext4_get32(sb, rev_level) == 0) &&
+diff --git a/src/ext4_fs.c b/src/ext4_fs.c
+index 3333333..4444444 100644
+--- a/src/ext4_fs.c
++++ b/src/ext4_fs.c
+@@ -329,6 +329,10 @@ static int ext4_fs_init_block_bitmap(struct ext4_block_group_ref *bg_ref)
+ 	} else { /* For META_BG_BLOCK_GROUPS */
+ 		bit_max += ext4_bg_num_gdb(sb, bg_ref->index);
+ 	}
++
++	if ((bit_max >> 3) > block_size)
++		return EIO;
++
+ 	for (bit = 0; bit < bit_max; bit++)
+ 		ext4_bmap_bit_set(block_bitmap.data, bit);
+ 
+@@ -400,6 +404,9 @@ static int ext4_fs_init_inode_bitmap(struct ext4_block_group_ref *bg_ref)
+ 	uint32_t block_size = ext4_sb_get_block_size(sb);
+ 	uint32_t inodes_per_group = ext4_get32(sb, inodes_per_group);
+ 
++	if (((inodes_per_group + 7) / 8) > block_size)
++		return EIO;
++
+ 	memset(b.data, 0, (inodes_per_group + 7) / 8);
+ 
+ 	uint32_t start_bit = inodes_per_group;
+diff --git a/src/ext4_mkfs.c b/src/ext4_mkfs.c
+index 5555555..6666666 100644
+--- a/src/ext4_mkfs.c
++++ b/src/ext4_mkfs.c
+@@ -148,6 +148,9 @@ static bool has_superblock(struct ext4_mkfs_info *info, uint32_t bgid)
+ static int create_fs_aux_info(struct fs_aux_info *aux_info,
+ 			      struct ext4_mkfs_info *info)
+ {
++	if (info->block_size == 0)
++		return EINVAL;
++
+ 	aux_info->first_data_block = (info->block_size > 1024) ? 0 : 1;
+ 	aux_info->len_blocks = info->len / info->block_size;
+ 	aux_info->inode_table_blocks = EXT4_DIV_ROUND_UP(info->inodes_per_group *
