@@ -1974,7 +1974,20 @@ OSV_LIBC_API
 int faccessat(int dirfd, const char *pathname, int mode, int flags)
 {
     if (flags & AT_SYMLINK_NOFOLLOW) {
-        UNIMPLEMENTED("faccessat() with AT_SYMLINK_NOFOLLOW");
+        // Check the symlink itself rather than its target. A symlink's own
+        // mode bits are permissive (0777), so once lstat confirms the entry
+        // exists, any R_OK/W_OK/X_OK request on the link is granted; a
+        // non-symlink falls through to the normal following check.
+        return vfs_fun_at2(dirfd, pathname, [mode](const char *path) {
+            struct stat st;
+            if (lstat(path, &st) != 0) {
+                return -1;
+            }
+            if (S_ISLNK(st.st_mode)) {
+                return 0;
+            }
+            return access(path, mode);
+        });
     }
 
     return vfs_fun_at2(dirfd, pathname, [mode](const char *path) {
