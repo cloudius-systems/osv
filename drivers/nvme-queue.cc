@@ -152,10 +152,15 @@ void queue_pair::map_prps(nvme_sq_entry_t* cmd, struct bio* bio, u64 datasize)
     if (num_of_pages == 2) {
         cmd->rw.common.prp2 = first_page_start + NVME_PAGESIZE; //2nd page start
     } else if (num_of_pages > 2) {
-        // Allocate PRP list as the request is larger than 8K
-        // For now we can only accomodate datasize <= 2MB so single page
-        // should be exactly enough to map up to 512 pages of the request data
-        assert(num_of_pages / 512 == 0);
+        // Allocate a single-page PRP list for a request larger than 8K. prp1
+        // covers the first page, so the list holds the remaining num_of_pages-1
+        // entries. One page holds NVME_PAGESIZE/sizeof(u64) entries, so the list
+        // maps up to that many + 1 pages. max_io_size caps a transfer at
+        // (page_size << 9) = 2 MiB, i.e. 512 aligned or 513 unaligned pages,
+        // which fits exactly; the old assert tripped one page early at 512 and
+        // panicked on any 2 MiB-aligned request.
+        const int prp_list_capacity = NVME_PAGESIZE / sizeof(u64) + 1;
+        assert(num_of_pages <= prp_list_capacity);
         u64* prp_list = nullptr;
         _free_prp_lists.pop(prp_list);
         if (!prp_list) { // No free pre-allocated ones, so allocate new one
