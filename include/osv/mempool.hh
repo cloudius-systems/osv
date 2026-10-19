@@ -24,6 +24,7 @@
 #include <boost/lockfree/stack.hpp>
 #include <boost/lockfree/policies.hpp>
 #include <osv/kernel_config_memory_jvm_balloon.h>
+#include <osv/kernel_config_fork.h>
 
 extern "C" void thread_mark_emergency();
 
@@ -70,6 +71,26 @@ private:
     // should get called with the preemption lock taken
     void free_same_cpu(free_object* obj, unsigned cpu_id);
     void free_different_cpu(free_object* obj, unsigned obj_cpu, unsigned cur_cpu);
+#if CONF_fork
+    // CONF_fork: cross-CPU pool-page reclaim safety.  Under fork(), a page
+    // emptied by free_same_cpu is NOT returned to page_pool inline (that could
+    // recycle a page the lock-free cross-CPU garbage queue still links into --
+    // the page-level UAF).  It stays a fully-free page on _free; the genuinely
+    // excess empties are released back to page_pool only from the per-CPU
+    // collect_garbage() flush point, AFTER every incoming garbage sink has been
+    // drained (the quiescent point where no MPSC link references any pool page).
+    void flush_empty_pages(unsigned cpu_id);
+    // Flush every malloc pool's surplus empty pages (defined after malloc_pools
+    // so the array type is complete); called from collect_garbage().
+    static void flush_all_empty_pages(unsigned cpu_id);
+    // Per-CPU count of fully-free pages retained on _free (nalloc == 0).
+    dynamic_percpu<unsigned> _nr_empty;
+    // Retain at most this many empty pages per CPU per pool before flushing the
+    // excess back to page_pool.  Bounds retention so a bursty free storm cannot
+    // pin unbounded memory (which is what turns a naive "never reclaim" into an
+    // OOM-then-fault).
+    static constexpr unsigned max_retained_empty = 4;
+#endif
 private:
     unsigned _size;
 

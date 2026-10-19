@@ -20,6 +20,10 @@
 #include <osv/aligned_new.hh>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 
 namespace async {
 
@@ -148,11 +152,20 @@ public:
             }
         }
 
+#if CONF_fork
+        fork_arena::kernel_heap_scope kh;
+#endif
         return *new percpu_timer_task(*this);
     }
 
     void fire_once(callback_t&& callback)
     {
+#if CONF_fork
+        // Task nodes are touched by the async worker with preempt_lock held
+        // (preemption disabled); a COW arena page there would fault illegally.
+        // Force the identity kernel heap so fork() never COW-protects them.
+        fork_arena::kernel_heap_scope kh;
+#endif
         auto task = new one_shot_task(std::move(callback));
 
 #if CONF_lazy_stack_invariant

@@ -19,10 +19,32 @@
 #include <sys/refcount.h>
 #include <osv/mutex.h>
 #include <osv/waitqueue.hh>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 
 OSV_LIBSOLARIS_API struct bio *
 alloc_bio(void)
 {
+#if CONF_fork
+	// A bio is a kernel I/O descriptor handed off across the fork COW address
+	// space boundary: a forked process (e.g. PostgreSQL's startup process doing
+	// recovery/checkpoint on ZFS) allocates it here while issuing a synchronous
+	// read/write, but the SINGLE block-device completion thread (virtio-blk
+	// req_done, running in AS0) reads it back -- bio_done, bio_caller1 (the
+	// zio), bio_flags -- to complete the I/O.  If the bio landed in the per-AS
+	// COW fork arena, the AS0 completion thread would read a DIFFERENT physical
+	// copy than the submitter wrote: it would fetch a stale bio_caller1/bio_done
+	// and drive completion (zio_interrupt -> zio_done -> cv_broadcast) against
+	// the wrong zio, so the real waiter's zio_wait() is never woken -- all vCPUs
+	// go idle and PostgreSQL never reaches "ready to accept connections".
+	// Allocate the bio on the identity kernel heap (mapped verbatim in every
+	// address space) so the submitter and the AS0 completion thread share ONE
+	// coherent bio.  Same rule as the shipped virtio-blk blk_req / virtio-net
+	// net_req cross-AS fixes.
+	fork_arena::kernel_heap_scope kh;
+#endif
 	auto *b = new (std::nothrow) bio();
 	if (!b)
 		return nullptr;

@@ -80,6 +80,14 @@ $(out)/tests/tst-reloc.so: $(src)/tests/tst-reloc.c
 
 $(out)/tests/lib-circular-reloc1.so: $(src)/tests/lib-circular-reloc1.cc
 $(out)/tests/lib-circular-reloc2.so: $(src)/tests/lib-circular-reloc2.cc
+
+# tst-fork-vislookup is LINKED against libforksym.so so its forksym_fn_* calls
+# go through the executable PLT (lazy resolve in a forked child).
+$(out)/tests/tst-fork-vislookup.so: \
+		$(out)/tests/tst-fork-vislookup.o \
+		$(out)/tests/libforksym.so
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ tests/tst-fork-vislookup.o $(LIBS) tests/libforksym.so, LD tests/tst-fork-vislookup.so)
+
 $(out)/tests/tst-elf-circular-reloc.so: \
 		$(out)/tests/tst-elf-circular-reloc.o \
 		$(out)/tests/lib-circular-reloc1.so \
@@ -124,6 +132,8 @@ conf_zfs ?= bsd
 
 zfs-only-tests := tst-readdir.so tst-fallocate.so tst-fs-link.so \
 	tst-concurrent-read.so tst-solaris-taskq.so tst-zfs-crucible-stress.so
+	tst-concurrent-read.so tst-solaris-taskq.so tst-zfs-crucible-stress.so \
+	tst-fork-zfs-write.so
 
 # ZFS tests that drive the OpenZFS userspace C API (libzfs / libzfs_core) via
 # dlopen("libzfs.so").  Those libraries are only built in conf_zfs=openzfs; in
@@ -134,6 +144,7 @@ zfs-only-tests := tst-readdir.so tst-fallocate.so tst-fs-link.so \
 zfs-openzfs-only-tests := tst-zfs-recordsize.so tst-zfs-direct-io.so \
 	tst-zfs-encryption.so misc-zfs-db-sim.so tst-zfs-trim.so misc-zfs-mmap-bench.so
 zfs-openzfs-only-tests += tst-zfs-nested-umount.so
+	tst-zfs-encryption.so tst-zfs-db-sim.so tst-zfs-trim.so misc-zfs-mmap-bench.so
 
 # OpenZFS user-space libraries needed by the dlopen("libzfs.so") tests above.
 # libsolaris.so is already resident as the mounted fs driver, so only these six.
@@ -173,6 +184,26 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 	misc-ctxsw.so tst-read.so tst-symlink.so tst-openat.so \
 	tst-eventfd.so tst-remove.so misc-wake.so tst-epoll.so misc-lfring.so \
 	tst-sig-dfl-ignore.so \
+	tst-fork.so tst-execve.so payload-exit7.so \
+	tst-fork-cow.so tst-fork-deep.so tst-pgfork.so tst-fork-preempt.so \
+	tst-fork-pltgot.so \
+	tst-fork-symlookup.so \
+	tst-fork-vislookup.so \
+	libforksym.so \
+	tst-fork-child-mmap.so \
+	tst-fork-file-mmap.so \
+	tst-fork-socket.so \
+	tst-fork-conn-socket.so \
+	tst-fork-posix-shm.so \
+	tst-fork-shared-write.so \
+	tst-fork-shared-catalog.so \
+	tst-fork-serial.so \
+	tst-fork-sigchld-latch.so \
+	tst-fork-arena-freelist.so \
+	tst-fork-irq-cow.so \
+	tst-fork-shared-race.so \
+	tst-fork-timer-park-stress.so \
+	tst-fork-urandom.so \
 	misc-fsx.so tst-sleep.so tst-resolve.so tst-except.so \
 	misc-tcp-sendonly.so tst-tcp-nbwrite.so misc-tcp-hash-srv.so \
 	misc-loadbalance.so misc-scheduler.so tst-console.so tst-app.so \
@@ -209,6 +240,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 	tst-tls-gold.so tst-tls-pie.so tst-tls-pie-dlopen.so \
 	tst-sigaction.so tst-syscall.so tst-ifaddrs.so tst-getdents.so \
 	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so \
+	tst-netlink.so misc-zfs-io.so misc-zfs-arc.so tst-zfs-crucible-stress.so \
 	tst-fs-bench.so tst-pthread-create.so \
 	misc-futex-perf.so misc-syscall-perf.so tst-brk.so tst-reloc.so \
 	misc-vdso-perf.so tst-string-utils.so tst-elf-circular-reloc.so \
@@ -222,6 +254,10 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 # are already appended to zfs-only-tests (hence to specific-fs-tests for
 # fs_type=zfs) under the same conf_zfs=openzfs guard above, so they must NOT be
 # added to the unconditional tests list here as well or they build and run twice.
+# dlopen libzfs.so / libzfs_core.so, which conf_zfs=bsd does not build).
+ifeq ($(conf_zfs),openzfs)
+tests += $(zfs-openzfs-only-tests)
+endif
 
 
 #This is a list of the tests that interact with the internal C++ or C

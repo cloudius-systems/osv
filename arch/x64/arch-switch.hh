@@ -14,6 +14,9 @@
 #include <osv/kernel_config_threads_default_kernel_stack_size.h>
 #include <osv/kernel_config_syscall_stack_size.h>
 #include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 #include <string.h>
 #include "tls-switch.hh"
 
@@ -139,6 +142,36 @@ void thread::switch_to()
         // the thread_state (heap) are identically mapped in every AS, so the
         // instruction fetch across the mov-to-cr3 and the %c[rip] load are
         // valid before and after the CR3 write.
+        // [fork-stack] latent lost-wakeup / COW-fault fix (see the block that
+        // this replaces below).  The old code re-tested `switch_as` and did the
+        // FPU-control-word reload in C++ AFTER this asm returned.  The compiler
+        // spills `switch_as` (and the fpucw/mxcsr locals) to %rbp-relative
+        // stack slots, and %rbp here already points at the INCOMING fork
+        // child's stack under the just-loaded child CR3.  So the post-swap
+        // `if (switch_as)` re-read (`mov -0x50(%rbp),%rdx; cmp %rdx,-0x48(%rbp)`)
+        // and the else-branch's `movzwl -0x52(%rbp)` / `mov %ax,-0x34(%rbp)`
+        // touch the child's COW stack in this irq-off, non-preemptable window:
+        // a COW write-fault there trips assert(preemptable()) (arch/x64/mmu.cc:38),
+        // or a mis-read `switch_as` takes the wrong branch and #GPs on garbage
+        // MXCSR -> the resumed child NEVER runs again (lost wakeup: a forked PG
+        // backend parks in switch_to and is never rescheduled -> boot/DROP
+        // DATABASE hang).  Dormant when the surrounding code compiles like
+        // c8f9c82b; near-certain once kill()'s layout shifts the fork timing.
+        //
+        // Fix: do the whole FPU-control-word restore INSIDE this asm, right at
+        // the `1:` resume, from a KERNEL-IDENTITY-MAPPED static (RIP-relative
+        // .rodata, same VA->phys in every AS, never COW).  No %rbp-relative
+        // (stack) read or write happens after the CR3 swap, so there is nothing
+        // to COW-fault or mis-read.  The canonical control words are correct for
+        // every OSv thread (issue #1020; switch_to does no fxsave/fxrstor, so no
+        // per-thread FPU data is preserved across a switch regardless), so this
+        // is semantically identical to the fldcw(fpucw)/ldmxcsr(mxcsr) below for
+        // the AS-crossing case.  The switch_as asm therefore RETURNS to C++
+        // already-FPU-restored; the shared post-asm reload runs only for the
+        // non-switch (same-AS) path, whose %rbp is the outgoing==incoming stack
+        // and is safe.
+        static const unsigned short canon_fpucw = 0x37f;
+        static const unsigned int   canon_mxcsr = 0x1f80;
         asm volatile
             ("mov %%rbp, %c[rbp](%0) \n\t"
              "movq $1f, %c[rip](%0) \n\t"
@@ -148,13 +181,18 @@ void thread::switch_to()
              "mov %2, %%cr3 \n\t"
              "jmpq *%c[rip](%1) \n\t"
              "1: \n\t"
+             "emms \n\t"
+             "fldcw %3 \n\t"
+             "ldmxcsr %4 \n\t"
              :
              : "a"(&old->_state), "c"(&this->_state), "d"(new_cr3),
+               "m"(canon_fpucw), "m"(canon_mxcsr),
                [rsp]"i"(offsetof(thread_state, rsp)),
                [rbp]"i"(offsetof(thread_state, rbp)),
                [rip]"i"(offsetof(thread_state, rip))
              : "rbx", "rsi", "rdi", "r8", "r9",
                "r10", "r11", "r12", "r13", "r14", "r15", "memory");
+        return;
     } else
 #endif
     asm volatile
@@ -172,8 +210,12 @@ void thread::switch_to()
            [rip]"i"(offsetof(thread_state, rip))
          : "rbx", "rdx", "rsi", "rdi", "r8", "r9",
            "r10", "r11", "r12", "r13", "r14", "r15", "memory");
-    // As the catch-all solution, reset FPU state and more specifically
-    // its status word. For details why we need it please see issue #1020.
+    // Same-AS (non-fork-crossing) path only: the AS-crossing switch_as case
+    // above already ran emms + the identity FPU restore INSIDE its asm and
+    // returned, so nothing here reads the incoming child's COW stack.  Here
+    // %rbp is the (same) resumed thread's stack under an unchanged CR3, so the
+    // fpucw/mxcsr rbp-relative reloads are safe.  This is the ONLY path for
+    // conf_fork=0 (no switch_as), keeping that build byte-identical to before.
     asm volatile ("emms");
     processor::fldcw(fpucw);
     processor::ldmxcsr(mxcsr);
@@ -210,6 +252,18 @@ void thread::init_stack()
         stack.size = CONF_threads_default_kernel_stack_size;
     }
     if (!stack.begin) {
+#if CONF_fork
+        // The kernel thread stack must live in the identity kernel heap, never
+        // the COW fork arena: OSv runs kernel code (incl. context switches with
+        // preemption/irqs off) on it, where a COW write fault is illegal, and
+        // the thread REAPER frees it from AS0 in ~thread -> stack.deleter ->
+        // free(begin).  An arena-resident stack has a VA that is COW-private to
+        // the forked child and unmapped/divergent in the reaper's AS, so the
+        // reaper's free() faults on an arena address (0x3000..) -> page fault in
+        // ~thread.  Force it onto the shared identity heap, like the TCB/TLS and
+        // syscall stacks below.
+        fork_arena::kernel_heap_scope kh;
+#endif
         stack.begin = malloc(stack.size);
         stack.deleter = stack.default_deleter;
     } else {
@@ -230,8 +284,15 @@ void thread::init_stack()
 
     if (is_app()) {
         //
-        // Allocate TINY syscall call stack
-        void* tiny_syscall_stack_begin = malloc(TINY_SYSCALL_STACK_SIZE);
+        // Allocate TINY syscall call stack (identity heap, not the fork arena:
+        // the kernel runs syscalls on it and must not COW-fault it).
+        void* tiny_syscall_stack_begin;
+        {
+#if CONF_fork
+            fork_arena::kernel_heap_scope kh;
+#endif
+            tiny_syscall_stack_begin = malloc(TINY_SYSCALL_STACK_SIZE);
+        }
         assert(tiny_syscall_stack_begin);
         //
         // The top of the stack needs to be 16 bytes lower to make space for
@@ -311,7 +372,18 @@ void thread::setup_tcb()
     assert(align_check(user_tls_size, (size_t)64));
 
     auto total_tls_size = kernel_tls_size + user_tls_size;
-    void* p = aligned_alloc(64, total_tls_size + sizeof(*_tcb));
+    // The TLS block must live in the identity kernel heap, never the fork
+    // arena: it holds __thread variables accessed from every context including
+    // preemption/interrupt-disabled ones, so it must be plain-writable in every
+    // address space and must never become a copy-on-write page (a COW fault
+    // with preemption off is illegal).  Force the kernel heap for this alloc.
+    void* p;
+    {
+#if CONF_fork
+        fork_arena::kernel_heap_scope kh;
+#endif
+        p = aligned_alloc(64, total_tls_size + sizeof(*_tcb));
+    }
     // First goes user TLS data
     if (user_tls_size) {
         memcpy(p, user_tls_data, user_tls_size);
@@ -355,8 +427,15 @@ void thread::setup_large_syscall_stack()
     assert(is_app());
     assert(GET_SYSCALL_STACK_TYPE_INDICATOR() == TINY_SYSCALL_STACK_INDICATOR);
     //
-    // Allocate LARGE syscall stack
-    void* large_syscall_stack_begin = malloc(LARGE_SYSCALL_STACK_SIZE);
+    // Allocate LARGE syscall stack (identity heap, not the fork arena: the
+    // kernel runs syscalls on it and must never COW-fault it).
+    void* large_syscall_stack_begin;
+    {
+#if CONF_fork
+        fork_arena::kernel_heap_scope kh;
+#endif
+        large_syscall_stack_begin = malloc(LARGE_SYSCALL_STACK_SIZE);
+    }
     void* large_syscall_stack_top = large_syscall_stack_begin + LARGE_SYSCALL_STACK_DEPTH;
     //
     // Copy all of the tiny stack to the are of last 1024 bytes of large stack.

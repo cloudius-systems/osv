@@ -1,0 +1,58 @@
+From 89a818ffa91ef3da2f620a98d2ec1eb47b38741d Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Tue, 12 May 2026 09:43:13 -0400
+Subject: [PATCH 10/19] zfs: clarify that zio_crypt_os.c is superseded by
+ zio_crypt_impl.c
+
+The ENOTSUP stubs in zio_crypt_os.c were created during the initial port
+to satisfy the linker before the real implementation existed.  The file is
+not compiled (not listed in openzfs_sources.mk).
+
+The real AES-256-GCM pipeline is in zio_crypt_impl.c, an OSv-adapted copy
+of the Linux port (module/os/linux/zfs/zio_crypt.c) compiled as part of
+openzfs-osv.  Update the file header to make this relationship explicit and
+prevent the stubs from being accidentally re-introduced into the build.
+
+(cherry picked from commit 7c081719733670651b509795cb7c2f3167c99122)
+---
+ module/os/osv/zfs/zio_crypt_os.c | 23 ++++++++++++++++-------
+ 1 file changed, 16 insertions(+), 7 deletions(-)
+
+diff --git a/module/os/osv/zfs/zio_crypt_os.c b/module/os/osv/zfs/zio_crypt_os.c
+index ef3c6af7c..75599c779 100644
+--- a/module/os/osv/zfs/zio_crypt_os.c
++++ b/module/os/osv/zfs/zio_crypt_os.c
+@@ -1,14 +1,23 @@
+ // SPDX-License-Identifier: CDDL-1.0
+ /*
+- * ZFS encryption stubs for OSv.
++ * ZFS encryption OS-specific stubs for OSv.
+  *
+- * OSv does not support encrypted ZFS datasets.  These stubs provide the
+- * symbol definitions required to link libsolaris.so without undefined
+- * references.  Any attempt to use an encrypted dataset will fail with
+- * ENOTSUP at the point the operation is attempted.
++ * NOTE: This file is NOT compiled.  It is kept as a reference only.
+  *
+- * The void encode/decode helpers are no-ops that zero the output buffer
+- * so that callers that call them unconditionally do not read garbage.
++ * OSv ZFS encryption is fully implemented via zio_crypt_impl.c, which is
++ * an OSv-adapted copy of the Linux port (module/os/linux/zfs/zio_crypt.c).
++ * That file provides the real AES-256-GCM encrypt/decrypt pipeline using
++ * the ICP (Illumos Crypto Provider) — the same crypto layer already
++ * compiled for ZFS checksumming (module/icp/).
++ *
++ * zio_crypt_impl.c is listed in openzfs_sources.mk under openzfs-osv and
++ * replaces the entire role of both this file and the platform-independent
++ * module/zfs/zio_crypt.c.  The OSv adaptations relative to the Linux port
++ * are described at the top of zio_crypt_impl.c.
++ *
++ * The stubs below (returning ENOTSUP) were created during the initial port
++ * to satisfy the linker before the real implementation existed.  They are
++ * superseded by zio_crypt_impl.c and must NOT be added to the build.
+  */
+ 
+ #include <sys/types.h>
+-- 
+2.53.0
+

@@ -1,0 +1,96 @@
+From 9b366621bf9a4bcc607c53dcd57f5099ee80c933 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Tue, 2 Jun 2026 10:47:19 -0400
+Subject: [PATCH 16/19] zfs: derive vdev ashift from device block size; fix
+ multi-iov uiocopy
+
+Two OSv-platform fixes uncovered by ZFS-on-Crucible:
+
+vdev_disk_open() hardcoded ashift=9 (512-byte alignment), ignoring the
+device's logical block size.  Crucible regions use 4096-byte blocks and
+reject sub-block I/O with EINVAL, so ZFS's 512-aligned label/uberblock
+writes faulted the vdev and suspended the pool during zpool_create.
+Derive ashift from device->block_size (defaults to 512, so plain virtio
+disks are unaffected).
+
+zfs_uiocopy() only cloned the iovec array when iovcnt == 1.  For
+multi-iov writes it left the clone pointing at the caller's iov array;
+uiomove() then advanced and zeroed the caller's iovecs while uio_resid
+was untouched, so the next zfs_uioskip() walked off the array and
+corrupted the write (holes that read back as zeros).  Clone every iovec.
+
+(cherry picked from commit 216569e3da03a0f56ba555ab5655c7f5fa838312)
+---
+ module/os/osv/zfs/spl_uio.c   | 28 ++++++++++++++++++++++------
+ module/os/osv/zfs/vdev_disk.c | 11 ++++++++++-
+ 2 files changed, 32 insertions(+), 7 deletions(-)
+
+diff --git a/module/os/osv/zfs/spl_uio.c b/module/os/osv/zfs/spl_uio.c
+index 60b42d2c7..6e04d7c12 100644
+--- a/module/os/osv/zfs/spl_uio.c
++++ b/module/os/osv/zfs/spl_uio.c
+@@ -20,17 +20,33 @@ zfs_uiocopy(void *p, size_t n, zfs_uio_rw_t rw, zfs_uio_t *uio,
+     size_t *cbytes)
+ {
+ 	struct uio uio_clone;
+-	struct iovec iov_clone;
+ 	int error;
+ 
+ 	ASSERT3U(zfs_uio_rw(uio), ==, rw);
+ 
+-	/* Clone the uio for non-destructive copy */
+-	uio_clone = *(GET_UIO_STRUCT(uio));
+-	if (zfs_uio_iovcnt(uio) == 1) {
+-		iov_clone = *(GET_UIO_STRUCT(uio)->uio_iov);
+-		uio_clone.uio_iov = &iov_clone;
++	/*
++	 * Clone the uio for a NON-DESTRUCTIVE copy.  The struct uio is shallow
++	 * copied first (iov pointer, iovcnt, offset, resid).  The iovec array
++	 * MUST also be cloned: uiomove() advances iov_base and zeros iov_len
++	 * on each iovec it touches, so if we reuse the caller's iov array, the
++	 * caller is left with all-zero iov_len entries while uio_resid still
++	 * reflects the un-consumed amount.  A subsequent zfs_uioskip() then
++	 * walks off the end of the array (every iov it sees has iov_len == 0,
++	 * triggering the "advance pointer; iovcnt--" branch repeatedly) and
++	 * reads/scribbles on memory past the iov[] into uio_resid going wildly
++	 * negative — which is exactly the corruption observed when cpiod
++	 * writes 14 KiB files into ZFS and the resulting on-disk file has
++	 * holes that read back as zeros.
++	 *
++	 * Allocate a private iovec array on the stack and copy each entry.
++	 */
++	int iovcnt = zfs_uio_iovcnt(uio);
++	struct iovec iov_clone[iovcnt];
++	for (int i = 0; i < iovcnt; i++) {
++		iov_clone[i] = GET_UIO_STRUCT(uio)->uio_iov[i];
+ 	}
++	uio_clone = *(GET_UIO_STRUCT(uio));
++	uio_clone.uio_iov = iov_clone;
+ 
+ 	error = uiomove(p, n, &uio_clone);
+ 	*cbytes = zfs_uio_resid(uio) - uio_clone.uio_resid;
+diff --git a/module/os/osv/zfs/vdev_disk.c b/module/os/osv/zfs/vdev_disk.c
+index 82d996046..846d934dc 100644
+--- a/module/os/osv/zfs/vdev_disk.c
++++ b/module/os/osv/zfs/vdev_disk.c
+@@ -77,7 +77,16 @@ vdev_disk_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
+ 	}
+ 
+ 	*max_psize = *psize = dvd->device->size;
+-	*logical_ashift = highbit64(MAX(DEV_BSIZE, SPA_MINBLOCKSIZE)) - 1;
++	/*
++	 * Derive ashift from the device's logical block size.  Devices that
++	 * reject sub-block I/O (e.g. Crucible's 4096-byte regions, whose
++	 * write_sync/read_sync return EINVAL for unaligned offsets or lengths)
++	 * would otherwise see ZFS issue 512-aligned label/uberblock writes that
++	 * fail, suspending the pool during zpool_create.  device->block_size
++	 * defaults to 512, so plain virtio disks still get ashift=9.
++	 */
++	*logical_ashift = highbit64(MAX(MAX(dvd->device->block_size, DEV_BSIZE),
++	    SPA_MINBLOCKSIZE)) - 1;
+ 	*physical_ashift = *logical_ashift;
+ 
+ 	return (0);
+-- 
+2.53.0
+

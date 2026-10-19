@@ -37,6 +37,11 @@
 #include <osv/dbg-alloc.hh>
 #include <osv/migration-lock.hh>
 #include <osv/export.h>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#include <osv/wait_record.hh>
+#endif
 
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
@@ -167,6 +172,17 @@ void pool::collect_garbage()
             memory::pool::from_object(obj)->free_same_cpu(obj, cpu_id);
         }
     }
+#if CONF_fork
+    // Every incoming garbage sink for this CPU is now drained: no lock-free
+    // cross-CPU queue link references any pool object.  This is the ONLY safe
+    // point to hand emptied pool pages back to page_pool -- do it now for every
+    // malloc pool, releasing each pool's surplus retained-empty pages.  (Only
+    // the malloc_pools are cross-CPU-freed through the garbage sinks; other
+    // pools, if any, retain their empties until they too are collected here.)
+    if (fork_arena::ready()) {
+        pool::flush_all_empty_pages(cpu_id);
+    }
+#endif
 }
 
 static void garbage_collector_fn()
@@ -254,6 +270,14 @@ void* pool::alloc()
         auto it = _free->begin();
         page_header *header = &(*it);
         free_object* obj = header->local_free;
+#if CONF_fork
+        // CONF_fork: keep the retained-empty count honest.  A page leaving the
+        // fully-free state (nalloc 0 -> 1) is no longer an empty page, so the
+        // per-CPU empty tally must drop with it (see flush_empty_pages).
+        if (fork_arena::ready() && header->nalloc == 0 && *_nr_empty) {
+            --(*_nr_empty);
+        }
+#endif
         ++header->nalloc;
         header->local_free = obj->next;
         if (!header->local_free) {
@@ -317,6 +341,36 @@ void pool::free_same_cpu(free_object* obj, unsigned cpu_id)
     trace_pool_free_same_cpu(this, object);
 
     page_header* header = to_header(obj);
+#if CONF_fork
+    // CONF_fork: never return a pool page to page_pool from here.  Returning it
+    // inline can recycle a page whose objects the lock-free cross-CPU garbage
+    // queue still links into (a producer's in-flight free_object::next store,
+    // or the consumer's _poll_list look-ahead) -- an 8-byte stale pointer store
+    // into the recycled page: the page-level UAF that corrupts ZFS metadata /
+    // the page_range_allocator free-list.  Instead we complete the free onto
+    // local_free so the page stays fully-free on _free, and count it as an
+    // empty page.  collect_garbage() flushes the excess back to page_pool only
+    // after draining every incoming sink, when no queue link can reference it.
+    if (fork_arena::ready()) {
+        bool was_empty = (header->nalloc == 0);
+        --header->nalloc;
+        if (!header->local_free) {
+            // Page had no free object (it was fully allocated and off _free):
+            // return it to _free.  nalloc>0 -> front (partial), ==0 -> back.
+            if (header->nalloc) {
+                _free->push_front(*header);
+            } else {
+                _free->push_back(*header);
+            }
+        }
+        obj->next = header->local_free;
+        header->local_free = obj;
+        if (header->nalloc == 0 && !was_empty) {
+            ++(*_nr_empty);
+        }
+        return;
+    }
+#endif
     if (!--header->nalloc && have_full_pages()) {
         if (header->local_free) {
             _free->erase(_free->iterator_to(*header));
@@ -338,6 +392,35 @@ void pool::free_same_cpu(free_object* obj, unsigned cpu_id)
         header->local_free = obj;
     }
 }
+
+#if CONF_fork
+// CONF_fork: release excess fully-free pages retained on this CPU's _free list
+// back to page_pool.  Called from collect_garbage() with preempt_lock held,
+// AFTER every incoming garbage sink for this CPU has been drained -- so no
+// lock-free cross-CPU queue link references any pool object, and freeing a page
+// here cannot leave a dangling intrusive pointer.  We keep max_retained_empty
+// empty pages per CPU per pool for fast reuse and free only the surplus.
+void pool::flush_empty_pages(unsigned cpu_id)
+{
+    while (*_nr_empty > max_retained_empty) {
+        // A fully-free page has nalloc == 0 and sits at the back of _free (empties
+        // are pushed to the back).  Find one and evict it.
+        if (_free->empty()) {
+            break;
+        }
+        page_header* header = &_free->back();
+        if (header->nalloc != 0) {
+            // Back is not empty (all retained empties already gone): nothing to do.
+            break;
+        }
+        _free->erase(_free->iterator_to(*header));
+        --(*_nr_empty);
+        DROP_LOCK(preempt_lock) {
+            untracked_free_page(header);
+        }
+    }
+}
+#endif
 
 void pool::free_different_cpu(free_object* obj, unsigned obj_cpu, unsigned cur_cpu)
 {
@@ -390,6 +473,17 @@ private:
 
 malloc_pool malloc_pools[ilog2_roundup_constexpr(page_size) + 1]
     __attribute__((init_priority((int)init_prio::malloc_pools)));
+
+#if CONF_fork
+// Defined here, where malloc_pool is a complete type, so collect_garbage() can
+// release every malloc pool's surplus retained-empty pages back to page_pool.
+void pool::flush_all_empty_pages(unsigned cpu_id)
+{
+    for (auto& p : malloc_pools) {
+        p.flush_empty_pages(cpu_id);
+    }
+}
+#endif
 
 struct mark_smp_allocator_intialized {
     mark_smp_allocator_intialized() {
@@ -987,6 +1081,23 @@ static void* mapped_malloc_large(size_t size, size_t offset)
     void* obj = mmu::map_anon(nullptr, size, mmu::mmap_populate, mmu::perm_read | mmu::perm_write);
     size_t* ret_header = static_cast<size_t*>(obj);
     *ret_header = size;
+#if CONF_fork
+    // A large allocation made under fork_arena::kernel_heap_scope (force_kernel_heap)
+    // must be coherent across every fork address space, just like the small-object
+    // identity heap.  But map_anon() lands in the COW-cloned app mmap slot, so a
+    // forked child would get a private copy.  The prime case is ZFS's 8 MB ARC
+    // buf_hash_table / dbuf hash arrays (vmem_zalloc at module init): a forked
+    // PostgreSQL process inserting an arc_buf_hdr writes its COW copy while the
+    // AS0 txg_sync / dp_sync_taskq threads read the original (empty) array and
+    // NULL-deref in buf_hash_remove.  Register the range as fork-shared so
+    // clone_address_space maps it verbatim (never COW) in every child.  Such ZFS
+    // allocations live for the life of the pool; a stale range entry after free
+    // is harmless (clone only shares present PTEs).
+    if (fork_arena::force_kernel_heap) {
+        mmu::add_fork_shared_module_range(reinterpret_cast<uintptr_t>(obj),
+                                          reinterpret_cast<uintptr_t>(obj) + size);
+    }
+#endif
     return obj + offset;
 }
 
@@ -1009,9 +1120,38 @@ static void* malloc_large(size_t size, size_t alignment, bool block = true, bool
     size += offset;
     size = align_up(size, page_size);
 
+#if CONF_fork
+    // Fork COW-coherence for LARGE kernel allocations.  A large allocation made
+    // under fork_arena::kernel_heap_scope (force_kernel_heap) -- e.g. a ZFS
+    // zio_buf / ARC buffer / vmem block -- must be coherent across EVERY fork
+    // address space, exactly like the small-object identity heap.  The two
+    // map_anon()-based paths below (the huge-and-non-contiguous shortcut and the
+    // non-contiguous fallback) land the buffer in the CURRENT thread's COW-cloned
+    // app mmap slot (VA 0x2000..).  When a forked PostgreSQL backend makes that
+    // allocation, the VA exists only in that child's page tables; the AS0
+    // txg_sync / zio-completion threads and sibling backends that later touch
+    // db_data fault "outside application" (the sustained-write WALL-3 crashes:
+    // arc_release NULL-deref, dbuf UAF, range-tree corruption, and the
+    // memcpy-into-db_data fault this was root-caused from).  The free_page_ranges
+    // path below returns memory from the linear map (phys_mem 0x4000.., a shared
+    // kernel PML4 slot mapped verbatim in every AS, coherent regardless of
+    // physical contiguity), so force that path and never fall back to map_anon.
+    // We keep contiguous==false so a fragmented heap still satisfies the request
+    // out of the linear map (the returned VA is coherent either way); we only
+    // suppress the app-slot map_anon fallback.
+    bool force_identity = fork_arena::force_kernel_heap;
+    if (force_identity) {
+        block = true;   // wait for linear-map memory rather than map_anon
+    }
+#endif
+
     // Use mmap if requested memory greater than "huge page" size
     // and does not need to be contiguous
-    if (size >= mmu::huge_page_size && !contiguous) {
+    if (size >= mmu::huge_page_size && !contiguous
+#if CONF_fork
+        && !force_identity
+#endif
+        ) {
         void* obj = mapped_malloc_large(size, offset);
         trace_memory_malloc_large(obj, requested_size, size, alignment);
         return obj;
@@ -1032,7 +1172,11 @@ static void* malloc_large(size_t size, size_t alignment, bool block = true, bool
                 obj += offset;
                 trace_memory_malloc_large(obj, requested_size, size, alignment);
                 return obj;
-            } else if (!contiguous) {
+            } else if (!contiguous
+#if CONF_fork
+                       && !force_identity
+#endif
+                       ) {
                 // If we failed to get contiguous memory allocation and
                 // the caller does not require one let us use map-based allocation
                 // which we do after the loop below
@@ -1144,6 +1288,42 @@ void reclaimer_waiters::wait(size_t bytes)
     if (curr == reclaimer_thread._thread.get()) {
         oom();
      }
+
+#if CONF_fork
+    // Fork COW-coherence for the reclaimer waiter node.  wait_node is normally a
+    // stack local pushed into _waiters and later dereferenced (and its owner
+    // woken / owner-field cleared) by the AS0 reclaimer thread in wake_waiters().
+    // When the waiting thread is a forked PostgreSQL backend, its stack lives at
+    // a same-VA-but-COW-private address; the AS0 reclaimer walking _waiters reads
+    // its OWN physical copy of that stack VA -> stale/garbage wait_node ->
+    // general-protection fault in wake_waiters().  This is the same cross-AS
+    // stack-resident-list-node hazard already handled for condvar/mutex
+    // wait_records (see coherent_wait_record).  For a fork-child waiter, place
+    // the wait_node on the identity kernel heap (coherent VA in every AS); AS0
+    // and the non-fork initial process keep the zero-overhead stack fast path.
+    // (Forked backends started blocking here once large ZFS kmem allocations
+    // were routed to the linear map under memory pressure.)
+    if (fork_child_needs_heap_wait_record()) {
+        wait_node *wr;
+        {
+            fork_arena::kernel_heap_scope kh;
+            wr = new wait_node();
+        }
+        wr->owner = curr;
+        wr->bytes = bytes;
+        _waiters.push_back(*wr);
+        reclaimer_thread.wake();
+        sched::thread::wait_until(&free_page_ranges_lock, [&] { return !wr->owner; });
+        // wr->owner was cleared by the waker under free_page_ranges_lock (held
+        // here), and erase() in wake_waiters() already removed it from _waiters,
+        // so the node is no longer referenced -- safe to free.
+        {
+            fork_arena::kernel_heap_scope kh;
+            delete wr;
+        }
+        return;
+    }
+#endif
 
     wait_node wr;
     wr.owner = curr;
@@ -1971,8 +2151,68 @@ static inline void untracked_free_page(void *v)
     page_pool::l1::free_page(v);
 }
 
+#if CONF_fork
+// [fork-stack / CONF_fork] Bounded per-CPU page-reclaim quarantine.
+//
+// Corruptor #2 is the page-path sibling of corruptor #1.  The small-object
+// pool's lock-free MPSC cross-CPU garbage queue
+// (lockfree::unordered_queue_mpsc) links freed objects through an intrusive
+// free_object::next stored INSIDE the object's backing page:
+//   push(): item->next = _head; CAS(_head, item)      // 8-byte 0x500-alias store
+//   pop():  _poll_list = r->next                       // consumer look-ahead
+// A pool backing page can be returned to page_pool (via pool::flush_empty_pages
+// -> untracked_free_page, or after the page is recycled and re-grabbed by
+// pool::add_page) while a push()/pop() from the drain window still touches an
+// object in it.  The 8-byte next-link store then lands in a page that page_pool
+// has already recycled into a live object (a ZFS abd chunk, a range_tree btree
+// leaf, a thread TCB/TLS block -- all 4096B alloc_page pages), corrupting it:
+// the observed wild writes (offset 64 / 1128, value = page's own mem_area::page
+// alias) into range_tree metadata, ARC read buffers (EIO), and the s_current TLS
+// slot.  Corruptor #1's fix deferred the pool's own page release to a drained
+// point, but a producer's concurrent push (and the consumer's _poll_list
+// look-ahead) leaves a residual window this closes.
+//
+// Fix: never hand a freed page straight back to page_pool for immediate reuse.
+// Park it in a bounded per-CPU ring for PGQUAR_DEPTH subsequent frees, so any
+// in-flight MPSC next-link store drains harmlessly onto a page that is not yet a
+// live object before the page is recycled.  Bounded (PGQUAR_DEPTH pages per CPU),
+// so a bursty free storm cannot pin unbounded memory (which a naive
+// never-reclaim would turn into OOM-then-fault).  Gated under CONF_fork; with
+// conf_fork=0 free_page is byte-identical to stock OSv.
+static constexpr unsigned PGQUAR_DEPTH = 512;   // 512 pages * 4K = 2 MiB per CPU
+struct pgquar { void* ring[PGQUAR_DEPTH] = {}; unsigned head = 0; unsigned filled = 0; };
+static PERCPU(pgquar, percpu_pgquar);
+static inline void free_page_quarantined(void* v)
+{
+    void* evict = nullptr;
+    WITH_LOCK(preempt_lock) {
+        auto* q = &*percpu_pgquar;
+        if (q->filled == PGQUAR_DEPTH) {
+            evict = q->ring[q->head];   // oldest parked page; safe to recycle now
+        }
+        q->ring[q->head] = v;
+        q->head = (q->head + 1) % PGQUAR_DEPTH;
+        if (q->filled < PGQUAR_DEPTH) {
+            q->filled++;
+        }
+    }
+    if (evict) {
+        untracked_free_page(evict);
+    }
+}
+#endif
+
 void free_page(void* v)
 {
+#if CONF_fork
+    if (fork_arena::ready()) {
+        free_page_quarantined(v);
+#if CONF_memory_tracker
+        tracker_forget(v);
+#endif
+        return;
+    }
+#endif
     untracked_free_page(v);
 #if CONF_memory_tracker
     tracker_forget(v);
@@ -2053,6 +2293,30 @@ static inline void* std_malloc(size_t size, size_t alignment)
     if ((ssize_t)size < 0)
         return libc_error_ptr<void *>(ENOMEM);
     void *ret;
+#if CONF_fork
+    // Fork isolation: route APPLICATION allocations to the app-slot fork arena
+    // (an ordinary COW-able anonymous mapping) instead of the identity-mapped
+    // mempool heap, so a forked child's private address space isolates the
+    // whole app heap.  Only app threads route here (kernel allocations keep
+    // using the identity heap); the decision is by caller (is_app) at malloc
+    // time, while free()/realloc() decide purely by address, so a buffer
+    // allocated by an app thread and freed by a kernel thread (or vice versa)
+    // is always handled by the allocator that owns its address range.
+    if (smp_allocator && fork_arena::ready() && !fork_arena::force_kernel_heap &&
+        sched::cpu::current()->app_thread.load(std::memory_order_relaxed)) {
+        ret = fork_arena::alloc(size, alignment);
+        if (ret) {
+#if CONF_memory_tracker
+            memory::tracker_remember(ret, size);
+#endif
+            return ret;
+        }
+        // Arena could not serve it (too large / exhausted): fall through to the
+        // normal heap.  Such an allocation is not COW-isolated, but huge
+        // allocations already go to app-slot mmap, and exhaustion is a
+        // correctness-preserving fallback, not corruption.
+    }
+#endif
     size_t minimum_size = std::max(size, memory::pool::min_object_size);
     if (smp_allocator && size <= memory::pool::max_object_size && alignment <= minimum_size) {
         unsigned n = ilog2_roundup(minimum_size);
@@ -2099,6 +2363,11 @@ void* calloc(size_t nmemb, size_t size)
 
 static size_t object_size(void *object)
 {
+#if CONF_fork
+    if (fork_arena::contains(object)) {
+        return fork_arena::usable_size(object);
+    }
+#endif
     if (!mmu::is_linear_mapped(object, 0)) {
         size_t offset = memory::large_object_offset(object);
         size_t* ret_header = static_cast<size_t*>(object);
@@ -2155,6 +2424,15 @@ void free(void* object)
     }
 #if CONF_memory_tracker
     memory::tracker_forget(object);
+#endif
+
+#if CONF_fork
+    // Fork-arena allocations live below phys_mem (so is_linear_mapped() is
+    // false for them); dispatch them by address range BEFORE the linear-map
+    // check so they never fall into the large/mmap free path.
+    if (fork_arena::contains(object)) {
+        return fork_arena::free(object);
+    }
 #endif
 
     if (!mmu::is_linear_mapped(object, 0)) {

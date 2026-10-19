@@ -11,6 +11,8 @@
 #include <sys/types.h>
 #include <osv/app.hh>
 
+namespace mmu { struct address_space; }
+
 // fork() emulation on OSv.
 //
 // OSv is a single-address-space unikernel with no MMU-enforced process
@@ -44,6 +46,20 @@ void adopt_execed_app(shared_app_t app);
 // ordering is what makes the wait*() lookup race-free.  Sets up the child's
 // exit hook so the parent's waitpid() can reap it.
 void register_child(pid_t child_pid, pid_t parent_pid);
+
+// Map/unmap a fork child's pid <-> its address space.  Lets getpid() report a
+// per-child pid and lets kill(pid, SIGURG) route the latch-wakeup handler into
+// the target child's address space.
+void register_pid(pid_t pid, mmu::address_space *as);
+void unregister_pid(pid_t pid, mmu::address_space *as);
+
+// The pid of the process the current thread belongs to (a fork child's distinct
+// pid, or OSV_PID for the top-level app / kernel).  getpid() routes here.
+pid_t pid_for_current();
+
+// The address space of the live fork child with pid @pid, or nullptr if @pid is
+// not a live fork child (unknown, or the top-level app).
+mmu::address_space *as_for_pid(pid_t pid);
 
 // Record that child @child_pid exited with @status (encoded WIFEXITED-style),
 // wake any waiter, and raise SIGCHLD to the parent.  Called from the child's

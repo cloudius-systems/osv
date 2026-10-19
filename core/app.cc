@@ -21,6 +21,10 @@
 #include <osv/wait_record.hh>
 #include "libc/pthread.hh"
 #include <osv/kernel_config_core_namespaces.h>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 
 using namespace boost::range;
 
@@ -155,6 +159,20 @@ shared_app_t application::run_and_join(const std::string& command,
     return app;
 }
 
+#if CONF_fork
+// Allocate the application_runtime AND its shared_ptr control block on the
+// identity kernel heap (make_shared co-allocates both in one block).  Called
+// from the application ctor's init list; the kernel_heap_scope forces the
+// allocation off the COW fork arena so the runtime is byte-identical in every
+// address space (see the note at _runtime's initializer).
+static std::shared_ptr<application_runtime>
+make_identity_heap_runtime(application& app)
+{
+    fork_arena::kernel_heap_scope kh;
+    return std::make_shared<application_runtime>(app);
+}
+#endif
+
 application::application(const std::string& command,
                      const std::vector<std::string>& args,
                      bool new_program,
@@ -164,7 +182,22 @@ application::application(const std::string& command,
     : _args(args)
     , _command(command)
     , _termination_requested(false)
+#if CONF_fork
+    // The application_runtime (and the shared_ptr control block below) MUST
+    // live on the identity kernel heap, not the COW fork arena.  Every forked
+    // backend thread's _app_runtime points at this object, and
+    // application::get_current() (run in the fork()'ing thread's ctor for each
+    // new backend) dereferences runtime->app.  If the runtime lands in the
+    // arena (VA 0x3000..) it is COW-cloned per address space; across fork/reap
+    // cycles the forking thread reads a DIVERGENT arena copy whose `app`
+    // reference has been clobbered to garbage -> get_shared() faults on a wild
+    // application*.  Route it to the identity heap so it is byte-identical in
+    // every address space.  (See pg-dsm-fix.txt: same rule as the DSM registry
+    // nodes, mbufs, thread stack, etc.)
+    , _runtime(make_identity_heap_runtime(*this))
+#else
     , _runtime(new application_runtime(*this))
+#endif
     , _joiner(nullptr)
     , _terminated(false)
     , _post_main(post_main)

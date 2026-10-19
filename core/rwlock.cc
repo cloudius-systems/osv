@@ -11,6 +11,16 @@
 #include <osv/rwlock.h>
 #include <osv/export.h>
 
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+// [fork-stack / CONF_fork] Declared in core/lfmutex.cc.  True when a cross-
+// address-space wake of a stack-resident waiter is possible: EITHER the caller
+// runs in a forked-child (non-AS0) address space, OR any child AS is live (the
+// AS0 parent could be woken by a child).  See include/osv/wait_record.hh.
+bool fork_child_needs_heap_wait_record();
+#endif
+
 using namespace sched;
 
 //This read-write lock implementation is a 2nd version and aims to improve
@@ -130,6 +140,27 @@ void rwlock::rlock()
     //We have failed to acquire the lock for reading and bumped the pending readers count
     //Let us wait until wunlock() or downgrade() wakes us and bumps the _readers
     //by (READER_LOCK_INC - 1) on our behalf
+#if CONF_fork
+    // [fork-stack / CONF_fork] Place the read-waiter on the identity kernel heap
+    // (not this thread's COW-private stack) when a cross-AS wake is possible, so
+    // an AS0 writer's wake_pending_readers() dereferences the SAME physical
+    // object.  The waiter (this thread) owns and frees it after waking.  AS0-only
+    // default OSv keeps the zero-overhead on-stack fast path.
+    if (fork_child_needs_heap_wait_record()) {
+        lockfree::linked_item<thread*> *rw;
+        {
+            fork_arena::kernel_heap_scope kh;
+            rw = new lockfree::linked_item<thread*>(thread::current());
+        }
+        _read_waiters.push(rw);
+        std::atomic<thread*> *value = reinterpret_cast<std::atomic<thread*>*>(&rw->value);
+        thread::wait_until( [value] {
+            return value->load(std::memory_order_acquire) == nullptr;
+        });
+        delete rw;
+        return;
+    }
+#endif
     lockfree::linked_item<thread*> read_waiter(thread::current());
     _read_waiters.push(&read_waiter);
     std::atomic<thread*> *value = reinterpret_cast<std::atomic<thread*>*>(&read_waiter.value);

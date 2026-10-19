@@ -1,0 +1,44 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Mon, 20 Jul 2026 20:30:00 +0000
+Subject: [PATCH 27/27] zfs: advertise TRIM support on OSv vdev_disk
+
+zpool trim and autotrim reported trim operations are not supported by
+this device because vdev_disk_open() on OSv never set vd->vdev_has_trim,
+so the ZFS trim layer skipped the vdev.  OSv has no API to query a
+device discard capability up front, so enable it optimistically: the
+ZIO_TYPE_TRIM path already maps to BIO_DISCARD in vdev_disk_io_start(),
+virtio-blk with VIRTIO_BLK_F_DISCARD reclaims the space, and devices
+without discard have their BIO_DISCARD rejected ENOTSUP (mapped in
+vdev_disk_bio_done so the trim layer records unsupported rather than
+faulting the vdev).  Verified: on a virtio-blk drive with discard=unmap,
+zpool trim completes 100%; without discard the pool stays ONLINE and
+data verifies.  Phase D Tier 3.
+
+Signed-off-by: Greg Burd <greg@burd.me>
+---
+--- a/module/os/osv/zfs/vdev_disk.c
++++ b/module/os/osv/zfs/vdev_disk.c
+@@ -89,6 +89,22 @@
+ 	    SPA_MINBLOCKSIZE)) - 1;
+ 	*physical_ashift = *logical_ashift;
+ 
++	/*
++	 * Advertise TRIM support so the ZFS trim layer will issue
++	 * ZIO_TYPE_TRIM (mapped to BIO_DISCARD in vdev_disk_io_start).  OSv
++	 * has no API to query a device's discard capability up front, so we
++	 * optimistically enable it: devices that actually support DISCARD
++	 * (virtio-blk with VIRTIO_BLK_F_DISCARD) reclaim space, and devices
++	 * that do not have their BIO_DISCARD rejected with ENOTSUP, which
++	 * vdev_disk_bio_done() maps so the trim layer records it as
++	 * unsupported instead of faulting the vdev.  Without this,
++	 * vdev_has_trim stays false and 'zpool trim' always reports
++	 * 'trim operations are not supported by this device'.
++	 */
++	vd->vdev_has_trim = B_TRUE;
++	/* Secure/discard-zeroes semantics are not guaranteed on OSv. */
++	vd->vdev_has_securetrim = B_FALSE;
++
+ 	return (0);
+ }
+ 

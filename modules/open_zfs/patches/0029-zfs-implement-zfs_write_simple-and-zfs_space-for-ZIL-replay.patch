@@ -1,0 +1,161 @@
+From 0000000000000000000000000000000000000000 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Sun, 26 Jul 2026 14:40:00 +0000
+Subject: [PATCH 29/29] zfs: implement zfs_write_simple + zfs_space on OSv so
+ ZIL replay works (sync=standard durability)
+
+[#1423 / OpenZFS]  The OSv platform layer left zfs_write_simple() and
+zfs_space() as ENOTSUP stubs.  Both are used by ZIL replay, which runs on
+pool import after a crash when the dataset has sync=standard (the ZIL active,
+here on a SLOG vdev):
+
+  * zfs_replay_write()    (TX_WRITE)    -> zfs_write_simple()
+  * zfs_replay_truncate() (TX_TRUNCATE) -> zfs_space(F_FREESP)
+
+With the stubs, a crash with sync=standard then re-import logged
+"ZFS replay transaction error 95 [ENOTSUP], dataset ..., txtype 9/10" and
+dropped every logged intent-log record, so the ZIL provided no durability;
+an earlier build variant instead SPL-PANICked in abd_alloc_linear
+(VERIFY3U(size <= SPA_MAXBLOCKSIZE)) reading a garbage record size out of a
+log block whose replay it could not complete.  Either way a sync=standard
+pool was not usably crash-recoverable through the ZIL on OSv.
+
+Implement both the OSv way, reusing the platform-independent primitives that
+already work here:
+
+  * zfs_write_simple(zp, data, len, pos, resid): build a one-iovec struct uio
+    over the caller's kernel buffer (UIO_WRITE, offset=pos, resid=len), wrap
+    it in a zfs_uio_t, and call the common zfs_write(zp, &zuio, O_SYNC, NULL)
+    -- the same shape zfs_vop_write() uses, and the same intent as FreeBSD's
+    vn_rdwr(UIO_SYSSPACE, IO_SYNC).  Refresh the OSv vnode's cached vp->v_size
+    from zp->z_size on success (as zfs_vop_write does) so a replay write that
+    extends the file stays read-coherent.  zfsvfs->z_replay_eof is set by the
+    caller for the whole-block dmu_sync case.
+
+  * zfs_space(zp, cmd, bfp, flag, offset, cr): validate F_FREESP, refuse a
+    read-only dataset and a negative length, check ACE_WRITE_DATA, then
+    delegate to the already-present zfs_freesp(zp, off, len, flag, TRUE)
+    (module/os/osv/zfs/zfs_znode_os.c) -- identical to the FreeBSD zfs_space.
+
+After this, a sync=standard raidz pool re-imports cleanly after a kill -9
+(no replay error, no panic), ZIL TX_WRITE/TX_TRUNCATE records replay, PG
+completes crash recovery, and a checkpointed row survives crash+reboot on the
+sync=standard pool.  Single-process correctness fix (no fork/COW dependency);
+correct for every config.
+
+Signed-off-by: Greg Burd <greg@burd.me>
+---
+--- a/module/os/osv/zfs/zfs_vnops_os.c
++++ b/module/os/osv/zfs/zfs_vnops_os.c
+@@ -627,23 +627,104 @@
+ 	return (SET_ERROR(ENOTSUP));
+ }
+ 
++/*
++ * zfs_space -- free/truncate a byte range of a file (F_FREESP).  Used by ZIL
++ * replay (zfs_replay_truncate for TX_TRUNCATE records) and by ftruncate.  Left
++ * as an ENOTSUP stub during bring-up, which made ZIL replay of a truncate
++ * record fail ("ZFS replay transaction error 95 ... txtype 10") and abort the
++ * rest of the log.  Implement it via the already-present zfs_freesp() (same
++ * shape as the FreeBSD zfs_space): validate F_FREESP, refuse read-only, then
++ * delegate to zfs_freesp(off, len).
++ */
+ int
+ zfs_space(znode_t *zp, int cmd, struct flock *bfp, int flag,
+     offset_t offset, cred_t *cr)
+ {
+-	(void) zp; (void) cmd; (void) bfp; (void) flag;
+-	(void) offset; (void) cr;
+-	return (SET_ERROR(ENOTSUP));
++	(void) offset;
++	zfsvfs_t	*zfsvfs = ZTOZSB(zp);
++	uint64_t	off, len;
++	int		error;
++
++	if ((error = zfs_enter_verify_zp(zfsvfs, zp, FTAG)) != 0)
++		return (error);
++
++	if (cmd != F_FREESP) {
++		zfs_exit(zfsvfs, FTAG);
++		return (SET_ERROR(EINVAL));
++	}
++
++	if (zfs_is_readonly(zfsvfs)) {
++		zfs_exit(zfsvfs, FTAG);
++		return (SET_ERROR(EROFS));
++	}
++
++	if (bfp->l_len < 0) {
++		zfs_exit(zfsvfs, FTAG);
++		return (SET_ERROR(EINVAL));
++	}
++
++	if ((error = zfs_zaccess(zp, ACE_WRITE_DATA, 0, B_FALSE, cr, NULL))) {
++		zfs_exit(zfsvfs, FTAG);
++		return (error);
++	}
++
++	off = bfp->l_start;
++	len = bfp->l_len; /* 0 means from off to end of file */
++
++	error = zfs_freesp(zp, off, len, flag, TRUE);
++
++	zfs_exit(zfsvfs, FTAG);
++	return (error);
+ }
+ 
+ /* zfs_setsecattr is defined in common zfs_vnops.c */
+ 
++/*
++ * zfs_write_simple -- write @len bytes of @data at @pos into znode @zp,
++ * synchronously, from kernel space.  Used by ZIL replay (zfs_replay_write for
++ * TX_WRITE records) to re-apply logged writes on pool import after a crash.
++ *
++ * Left as an ENOTSUP stub during early bring-up, so a crash with sync=standard
++ * (ZIL active on the SLOG) logged a "ZFS replay transaction error 95" and
++ * dropped every logged write -- the ZIL provided no durability.  Implement it
++ * the OSv way: build a one-iovec struct uio over the caller's buffer, wrap it
++ * in a zfs_uio_t, and call the platform-independent zfs_write() with O_SYNC
++ * (matching FreeBSD's vn_rdwr(UIO_SYSSPACE, IO_SYNC) shape).  zfsvfs->z_replay_eof
++ * is set by the caller (zfs_replay_write) so a whole-block dmu_sync replay
++ * write reduces the EOF correctly.
++ */
+ int
+ zfs_write_simple(znode_t *zp, const void *data, size_t len,
+     loff_t pos, size_t *resid)
+ {
+-	(void) zp; (void) data; (void) len; (void) pos; (void) resid;
+-	return (SET_ERROR(ENOTSUP));
++	struct iovec iov;
++	struct uio uio_s;
++	zfs_uio_t zuio;
++	int error;
++
++	iov.iov_base = (void *)(uintptr_t)data;
++	iov.iov_len = len;
++
++	uio_s.uio_iov = &iov;
++	uio_s.uio_iovcnt = 1;
++	uio_s.uio_offset = (off_t)pos;
++	uio_s.uio_resid = (ssize_t)len;
++	uio_s.uio_rw = UIO_WRITE;
++
++	zfs_uio_init(&zuio, &uio_s);
++	error = zfs_write(zp, &zuio, O_SYNC, NULL);
++
++	if (resid != NULL)
++		*resid = (size_t)uio_s.uio_resid;
++
++	/* Keep the OSv vnode's cached size coherent with the ZFS logical size,
++	 * exactly as zfs_vop_write does after a file-extending write. */
++	if (error == 0) {
++		vnode_t *vp = ZTOV(zp);
++		if (vp != NULL && vp->v_type == VREG)
++			vp->v_size = (off_t)zp->z_size;
++	}
++	return (error);
+ }
+ 
+ /* ------------------------------------------------------------------ */
+-- 
+2.43.0

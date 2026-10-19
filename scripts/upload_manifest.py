@@ -247,7 +247,7 @@ def main():
         '/zpool.so export osv') % console
     piddir = tempfile.mkdtemp(prefix='osv-upload-')
     pidfile = os.path.join(piddir, 'qemu.pid')
-    osv = subprocess.Popen('cd ../..; scripts/run.py -k --kernel-path build/last/%s --arch=%s --vnc none -m 512 -c1 -i "%s" --block-device-cache writeback -s -e "%s" --forward tcp:127.0.0.1:%s-:10000 --pass-args=\"-pidfile %s\"' % (zfs_builder_name,arch,image_path,zfs_builder_cmd,upload_port,pidfile), shell=True, stdout=subprocess.PIPE)
+    osv = subprocess.Popen('cd ../..; scripts/run.py -k --kernel-path build/last/%s --arch=%s --vnc none -m 4G -c1 -i "%s" --block-device-cache writeback -s -e "%s" --forward tcp:127.0.0.1:%s-:10000 --pass-args=\"-pidfile %s\"' % (zfs_builder_name,arch,image_path,zfs_builder_cmd,upload_port,pidfile), shell=True, stdout=subprocess.PIPE)
 
     # A failed upload leaves cpiod waiting for a connection that will not
     # come, so QEMU would never exit. Kill it and fail the build instead.

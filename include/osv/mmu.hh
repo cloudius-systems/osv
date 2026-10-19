@@ -132,6 +132,13 @@ public:
     anon_vma(addr_range range, unsigned perm, unsigned flags);
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
+#if CONF_fork
+    ~anon_vma();
+    // Re-key the shared-anon page provider to this vma's current start VA
+    // (needed after allocate() relocates a searched mapping).  No-op unless
+    // this is an anonymous MAP_SHARED vma.
+    void update_shared_base();
+#endif
 };
 
 class file_vma : public vma {
@@ -394,6 +401,11 @@ struct address_space;
 // The kernel / initial-application address space ("AS0").  Always valid.
 address_space *kernel_address_space();
 
+// The address space the current thread runs in (a fork child's private AS, or
+// AS0 for the kernel and the non-fork application).  The mmu allocation/query
+// path resolves its vma_list / vma_range_set through this.
+address_space *current_address_space();
+
 // Physical address of an address_space's page-table root (value for CR3).
 phys pt_root_phys(address_space *as);
 
@@ -402,6 +414,13 @@ phys pt_root_phys(address_space *as);
 // MAP_SHARED / shm VMAs are mapped to the same physical pages (truly shared).
 // The kernel half of the page table is shared with the parent.
 address_space *clone_address_space(address_space *parent);
+
+// Register a writable segment of an in-app-slot kernel module (e.g.
+// libsolaris.so / OpenZFS) so it is SHARED verbatim -- never COW -- across every
+// fork child address space.  Such modules live in the COW-cloned app slot but
+// hold global kernel state that AS0 kernel threads and forked app threads must
+// see identically.  Called by the ELF loader for each writable PT_LOAD segment.
+void add_fork_shared_module_range(uintptr_t start, uintptr_t end);
 
 // Tear down a child address_space (frees its private page tables + VMAs).
 // Never call on the kernel address space.

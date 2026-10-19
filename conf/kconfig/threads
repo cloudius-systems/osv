@@ -7,34 +7,20 @@ config lazy_stack
   def_bool $(shell,grep -q ^conf_lazy_stack=1 conf/base.mk && echo y || echo n)
 
 config fork
-  prompt "Include fork()/vfork() support (thread-backed, off by default)"
+  prompt "Include fork()/vfork() support (per-child address space, off by default)"
   def_bool $(shell,[ "$conf_fork" = 1 ] && echo y || echo n)
   help
-    Enable OSv's thread-backed fork()/vfork()/execve()/waitpid() emulation.
-    A forked child is a new OSv thread that resumes at the fork() call site on
-    a private copy of the caller's stack; the child still SHARES the parent's
-    heap and global variables (OSv remains a single-address-space unikernel -
-    there is no per-child memory isolation).  See documentation/fork.md for
-    exactly what works and what does not.  It is OFF by default: with this
-    disabled, none of the fork code is compiled in and OSv behaves exactly as
-    before (fork() returns ENOSYS).  Enable it only for workloads that require
-    fork() (e.g. fork()+exec() to spawn a helper program).
+    Enable OSv's thread-backed fork()/vfork()/execve()/waitpid() emulation,
+    including the per-child address space with copy-on-write needed to give a
+    forked child private memory.  This changes OSv's usual single-address-space
+    model (address-space switches on context switch between fork children), so
+    it is OFF by default: with this disabled, none of the fork code is compiled
+    in and OSv behaves exactly as before (fork() returns ENOSYS).  Enable it
+    only for workloads that require fork() (e.g. multi-process programs).
 
 config lazy_stack_invariant
   prompt "Check lazy stack invariant"
   def_bool $(shell,grep -q ^conf_lazy_stack_invariant=1 conf/base.mk && echo y || echo n)
-
-config sched_load_balance_ms
-  prompt "Scheduler load-balancer interval (ms)"
-  int
-  default 10
-  help
-    How often each CPU's load balancer runs, in milliseconds.  It is the only
-    mechanism that spreads runnable threads across CPUs, so a smaller value
-    disperses a thread fan-out (e.g. a server spawning a worker per connection)
-    onto idle CPUs faster, at the cost of more frequent balancing passes.  10ms
-    is a good default; raise it to reduce balancing overhead on workloads that
-    do not fan out.
 
 config threads_default_kernel_stack_size
   prompt "Kernel thread default stack size"
@@ -64,6 +50,18 @@ config syscall_stack_size
   hex
   default $(shell,if [ $mode = "debug" ]; then echo 0x2000 ; else echo 0x800; fi)
 endif
+
+config sched_load_balance_ms
+  prompt "Scheduler load-balancer interval (ms)"
+  int
+  default 10
+  help
+    How often each CPU's load balancer runs, in milliseconds.  It is the only
+    mechanism that spreads runnable threads across CPUs, so a smaller value
+    disperses a thread fan-out (e.g. a server spawning a worker per connection)
+    onto idle CPUs faster, at the cost of more frequent balancing passes.  10ms
+    is a good default; raise it to reduce balancing overhead on workloads that
+    do not fan out.
 
 config sched_wake_pull
   prompt "Idle-CPU pull work-stealing"

@@ -1,0 +1,414 @@
+From 0a046d59512ed8090f081d3c47ed5c1cf8b1ef36 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Sat, 9 May 2026 08:00:29 -0400
+Subject: [PATCH 05/19] zfs: add vop_cache, zfs_freesp, and pagecache-bridge
+ for file-backed mmap
+MIME-Version: 1.0
+Content-Type: text/plain; charset=UTF-8
+Content-Transfer-Encoding: 8bit
+
+Three related OSv platform-layer additions that enable correct file-backed
+MAP_SHARED across multiple virtual address ranges:
+
+1. zfs_vop_cache (zfs_vnops_os.c)
+   Implements the vop_cache hook so OSv's pagecache uses the regular
+   read_cache path (same as ROFS) rather than the broken ARC bridge.
+   Each page fault calls zfs_read() to fill a page, then registers it
+   in the shared pagecache via osv_pagecache_map_page().  Subsequent
+   faults at the same {dev,ino,offset} from any VMA hit the shared page.
+
+   The extern declarations use __attribute__((visibility("default"))) to
+   override -fvisibility=hidden applied to libsolaris objects, allowing
+   the dynamic linker to resolve them from loader.elf at load time.
+
+2. zfs_vfsops.c: remove ZFS_ID from m_fsid
+   OSv's pagecache routes IS_ZFS() files through the ARC bridge, which
+   requires arc_share_buf() — a static function not exported by OpenZFS
+   2.x.  By not setting ZFS_ID in m_fsid.__val[1], ZFS files take the
+   regular read_cache path fed by zfs_vop_cache().
+
+3. zfs_freesp + helpers (zfs_znode_os.c)
+   Port of zfs_extend, zfs_free_range, zfs_trunc, and zfs_freesp from
+   the FreeBSD OSv layer.  Required by zfs_vop_truncate() for ftruncate()
+   support on ZFS files (e.g. shm_open + ftruncate).
+
+Tested: tests/tst-shm-consistency.so — 30/30 PASS (was 28 PASS, 2 SKIP)
+        tests/tst-zfs-direct-io.so   — 9/9 PASS
+(cherry picked from commit 6625dfd300b1e2fc280e00837d9943bb4f742092)
+---
+ module/os/osv/zfs/zfs_vfsops.c   |  20 ++-
+ module/os/osv/zfs/zfs_vnops_os.c |  86 +++++++++++--
+ module/os/osv/zfs/zfs_znode_os.c | 207 +++++++++++++++++++++++++++++++
+ 3 files changed, 291 insertions(+), 22 deletions(-)
+
+diff --git a/module/os/osv/zfs/zfs_vfsops.c b/module/os/osv/zfs/zfs_vfsops.c
+index 20ee4303e..e8e5f9c7d 100644
+--- a/module/os/osv/zfs/zfs_vfsops.c
++++ b/module/os/osv/zfs/zfs_vfsops.c
+@@ -504,25 +504,23 @@ zfs_domount(struct mount *mp, const char *osname)
+ 	mp->vfs_data = zfsvfs;
+ 
+ 	/*
+-	 * Compute the filesystem ID from the objset GUID.
+-	 * We use the same encoding as FreeBSD: the lower 56 bits of
+-	 * the GUID go in val[0], the upper bits shifted down with the
+-	 * fs-type byte in the low byte of val[1].
++	 * Build a 64-bit filesystem ID from the objset GUID.
+ 	 *
+ 	 * OSv's struct mount uses m_fsid (== vfs_fsid via the macro in
+ 	 * vfs.h), which is a fsid_t { int32_t val[2]; }.
+-	 */
+-	/*
+-	 * Build a 64-bit filesystem ID that is reassembled as:
++	 *
++	 * st_dev is reassembled as:
+ 	 *   st_dev = (uint32_t)__val[0] | ((uint32_t)__val[1] << 32)
+ 	 *
+-	 * The upper byte of __val[1] (bits [63:56] of st_dev) must equal
+-	 * ZFS_ID (6ULL<<56) so that pagecache's IS_ZFS() macro returns true.
++	 * We do NOT set ZFS_ID in the upper byte.  OSv's pagecache routes
++	 * IS_ZFS() files to the ARC bridge path which requires arc_share_buf()
++	 * wrappers not available in OpenZFS 2.x.  By leaving ZFS_ID clear,
++	 * ZFS files use the regular read_cache path (same as ROFS) which is
++	 * fed by zfs_vop_cache() → zfs_read() → ARC internally.
+ 	 */
+ 	fsid_guid = dmu_objset_fsid_guid(zfsvfs->z_os);
+ 	mp->m_fsid.__val[0] = (int32_t)(fsid_guid & 0xFFFFFFFF);
+-	mp->m_fsid.__val[1] = (int32_t)(((fsid_guid >> 32) & 0x00FFFFFF) |
+-	    (ZFS_ID >> 32));
++	mp->m_fsid.__val[1] = (int32_t)(fsid_guid >> 32);
+ 
+ 	/*
+ 	 * Set feature flags (FUID / system-attributes) based on the
+diff --git a/module/os/osv/zfs/zfs_vnops_os.c b/module/os/osv/zfs/zfs_vnops_os.c
+index 10c84c4cd..7a0895877 100644
+--- a/module/os/osv/zfs/zfs_vnops_os.c
++++ b/module/os/osv/zfs/zfs_vnops_os.c
+@@ -1067,7 +1067,7 @@ zfs_vop_getattr(struct vnode *vp, struct vattr *vap)
+ 
+ 	/*
+ 	 * Build st_dev from the filesystem ID stored at mount time.
+-	 * The upper byte encodes ZFS_ID so that IS_ZFS(st_dev) is true.
++	 * ZFS_ID is NOT encoded here; see zfs_domount() comment for rationale.
+ 	 */
+ 	{
+ 		struct mount *mp = vp->v_mount;
+@@ -1163,18 +1163,82 @@ zfs_vop_link(struct vnode *tdvp, struct vnode *svp, char *name)
+ }
+ 
+ /*
+- * zfs_vop_cache is set to NULL in the vnops table below.
++ * C-linkage helpers from core/pagecache.cc.
++ * Used below by zfs_vop_cache() to register pages in OSv's read_cache.
++ */
++extern __attribute__((visibility("default"))) void osv_pagecache_map_page(void *key, void *page);
++extern __attribute__((visibility("default"))) void *osv_alloc_page(void);
++extern __attribute__((visibility("default"))) void osv_free_page(void *p);
++
++/*
++ * zfs_vop_cache — populate one page of a ZFS file into OSv's pagecache.
+  *
+- * OSv's pagecache has two file-mmap paths:
+- *   vop_cache != NULL → map_file_mmap (pagecache ARC bridge)
+- *   vop_cache == NULL → default_file_mmap (map_file_page_read)
++ * Called by vfs_file::read_page_from_cache() when a MAP_SHARED or MAP_PRIVATE
++ * read fault misses the pagecache.  The uio carries:
++ *   uio_iov->iov_base  — pointer to the pagecache::hashkey for this page
++ *   uio_offset         — byte offset of the page (page-aligned)
++ *   uio_resid          — mmu::page_size (4096)
+  *
+- * The ARC bridge path requires va_fsid to carry ZFS_ID so that IS_ZFS()
+- * returns true, and requires arc_share_buf() to be wired into OpenZFS 2.x.
+- * Neither is currently implemented for OSv.  The direct-read path
+- * (default_file_mmap / map_file_page_read) calls zfs_read() per page fault
+- * and is backed by ZFS's own ARC, so correctness and caching are preserved.
++ * We read the page via zfs_read() (which is ARC-backed) into a newly
++ * allocated physical page, register it with the pagecache via
++ * osv_pagecache_map_page(), then set uio_resid = 0 to signal success.
++ *
++ * Multiple file_vma objects for the same file+offset share the same physical
++ * page because pagecache::get() checks read_cache first and returns the
++ * existing cached_page when found — this is what makes MAP_SHARED work.
++ *
++ * Note: ZFS_ID is NOT set in m_fsid so IS_ZFS() returns false.  This routes
++ * ZFS files through the regular read_cache path (not the ARC bridge path),
++ * avoiding arc_share_buf() which is a static-internal function in OpenZFS 2.x.
+  */
++static int
++zfs_vop_cache(struct vnode *vp, struct file *fp, struct uio *uio)
++{
++	znode_t *zp = VTOZ(vp);
++	zfsvfs_t *zfsvfs = ZTOZSB(zp);
++	zfs_uio_t zuio;
++	void *page;
++	struct iovec iov;
++	struct uio read_uio;
++	int error;
++
++	if (vp->v_type != VREG)
++		return (EINVAL);
++	if (uio->uio_offset < 0 || uio->uio_offset >= (off_t)vp->v_size)
++		return (0);
++	if (uio->uio_resid != PAGE_SIZE || uio->uio_offset % PAGE_SIZE)
++		return (EINVAL);
++
++	page = osv_alloc_page();
++	if (!page)
++		return (ENOMEM);
++	memset(page, 0, PAGE_SIZE);
++
++	iov.iov_base = page;
++	iov.iov_len  = PAGE_SIZE;
++	read_uio.uio_iov    = &iov;
++	read_uio.uio_iovcnt = 1;
++	read_uio.uio_offset = uio->uio_offset;
++	read_uio.uio_resid  = PAGE_SIZE;
++	read_uio.uio_rw     = UIO_READ;
++
++	if ((error = zfs_enter_verify_zp(zfsvfs, zp, FTAG)) != 0) {
++		osv_free_page(page);
++		return (error);
++	}
++	zfs_uio_init(&zuio, &read_uio);
++	error = zfs_read(zp, &zuio, 0, kcred);
++	zfs_exit(zfsvfs, FTAG);
++
++	if (error) {
++		osv_free_page(page);
++		return (error);
++	}
++
++	osv_pagecache_map_page(uio->uio_iov->iov_base, page);
++	uio->uio_resid = 0;
++	return (0);
++}
+ 
+ /*
+  * zfs_vop_fallocate — not yet implemented.
+@@ -1257,7 +1321,7 @@ struct vnops zfs_vnops = {
+ 	zfs_vop_inactive,	/* inactive */
+ 	zfs_vop_truncate,	/* truncate */
+ 	zfs_vop_link,		/* link   */
+-	NULL,			/* cache  (see comment above) */
++	zfs_vop_cache,		/* cache  */
+ 	zfs_vop_fallocate,	/* fallocate */
+ 	zfs_vop_readlink,	/* readlink */
+ 	zfs_vop_symlink,	/* symlink */
+diff --git a/module/os/osv/zfs/zfs_znode_os.c b/module/os/osv/zfs/zfs_znode_os.c
+index 59b5bd752..aa4f8fe0e 100644
+--- a/module/os/osv/zfs/zfs_znode_os.c
++++ b/module/os/osv/zfs/zfs_znode_os.c
+@@ -520,3 +520,210 @@ zfs_mknode(znode_t *dzp, vattr_t *vap, dmu_tx_t *tx, cred_t *cr,
+ 
+ 	ZFS_OBJ_HOLD_EXIT(zfsvfs, obj);
+ }
++
++/*
++ * Extend a file to 'end' bytes.  Expands block size if needed and
++ * updates z_size + SA.
++ */
++static int
++zfs_extend(znode_t *zp, uint64_t end)
++{
++	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
++	dmu_tx_t *tx;
++	zfs_locked_range_t *lr;
++	uint64_t newblksz;
++	int error;
++
++	lr = zfs_rangelock_enter(&zp->z_rangelock, 0, UINT64_MAX, RL_WRITER);
++
++	if (end <= zp->z_size) {
++		zfs_rangelock_exit(lr);
++		return (0);
++	}
++
++	tx = dmu_tx_create(zfsvfs->z_os);
++	dmu_tx_hold_sa(tx, zp->z_sa_hdl, B_FALSE);
++	zfs_sa_upgrade_txholds(tx, zp);
++	if (end > zp->z_blksz &&
++	    (!ISP2(zp->z_blksz) || zp->z_blksz < zfsvfs->z_max_blksz)) {
++		if (zp->z_blksz > zp->z_zfsvfs->z_max_blksz) {
++			ASSERT(!ISP2(zp->z_blksz));
++			newblksz = MIN(end, 1 << highbit64(zp->z_blksz));
++		} else {
++			newblksz = MIN(end, zp->z_zfsvfs->z_max_blksz);
++		}
++		dmu_tx_hold_write(tx, zp->z_id, 0, newblksz);
++	} else {
++		newblksz = 0;
++	}
++
++	error = dmu_tx_assign(tx, DMU_TX_WAIT);
++	if (error) {
++		dmu_tx_abort(tx);
++		zfs_rangelock_exit(lr);
++		return (error);
++	}
++
++	if (newblksz)
++		zfs_grow_blocksize(zp, newblksz, tx);
++
++	zp->z_size = end;
++	VERIFY0(sa_update(zp->z_sa_hdl, SA_ZPL_SIZE(zp->z_zfsvfs),
++	    &zp->z_size, sizeof (zp->z_size), tx));
++	vnode_pager_setsize(ZTOV(zp), end);
++
++	zfs_rangelock_exit(lr);
++	dmu_tx_commit(tx);
++	return (0);
++}
++
++/*
++ * Free a byte range within a file.
++ */
++static int
++zfs_free_range(znode_t *zp, uint64_t off, uint64_t len)
++{
++	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
++	zfs_locked_range_t *lr;
++	int error;
++
++	lr = zfs_rangelock_enter(&zp->z_rangelock, off, len, RL_WRITER);
++
++	if (off >= zp->z_size) {
++		zfs_rangelock_exit(lr);
++		return (0);
++	}
++
++	if (off + len > zp->z_size)
++		len = zp->z_size - off;
++
++	error = dmu_free_long_range(zfsvfs->z_os, zp->z_id, off, len);
++	if (error == 0)
++		vnode_pager_setsize(ZTOV(zp), off);
++
++	zfs_rangelock_exit(lr);
++	return (error);
++}
++
++/*
++ * Truncate a file to 'end' bytes.
++ */
++static int
++zfs_trunc(znode_t *zp, uint64_t end)
++{
++	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
++	vnode_t *vp = ZTOV(zp);
++	dmu_tx_t *tx;
++	zfs_locked_range_t *lr;
++	int error;
++	sa_bulk_attr_t bulk[2];
++	int count = 0;
++
++	lr = zfs_rangelock_enter(&zp->z_rangelock, 0, UINT64_MAX, RL_WRITER);
++
++	if (end >= zp->z_size) {
++		zfs_rangelock_exit(lr);
++		return (0);
++	}
++
++	error = dmu_free_long_range(zfsvfs->z_os, zp->z_id, end,
++	    DMU_OBJECT_END);
++	if (error) {
++		zfs_rangelock_exit(lr);
++		return (error);
++	}
++
++	tx = dmu_tx_create(zfsvfs->z_os);
++	dmu_tx_hold_sa(tx, zp->z_sa_hdl, B_FALSE);
++	zfs_sa_upgrade_txholds(tx, zp);
++	dmu_tx_mark_netfree(tx);
++	error = dmu_tx_assign(tx, DMU_TX_WAIT);
++	if (error) {
++		dmu_tx_abort(tx);
++		zfs_rangelock_exit(lr);
++		return (error);
++	}
++
++	zp->z_size = end;
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_SIZE(zfsvfs),
++	    NULL, &zp->z_size, sizeof (zp->z_size));
++	if (end == 0) {
++		zp->z_pflags &= ~ZFS_SPARSE;
++		SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_FLAGS(zfsvfs),
++		    NULL, &zp->z_pflags, 8);
++	}
++	VERIFY0(sa_bulk_update(zp->z_sa_hdl, bulk, count, tx));
++	dmu_tx_commit(tx);
++
++	vnode_pager_setsize(vp, end);
++	zfs_rangelock_exit(lr);
++	return (0);
++}
++
++/*
++ * Free space in a file — implements ftruncate(2) for ZFS on OSv.
++ *
++ *	IN:	zp	- znode of file to free data in.
++ *		off	- start of range (new EOF when len == 0)
++ *		len	- length (0 means truncate to off)
++ *		flag	- current file open mode flags (unused on OSv)
++ *		log	- TRUE if this action should be logged
++ *
++ *	RETURN:	0 on success, error code on failure
++ */
++int
++zfs_freesp(znode_t *zp, uint64_t off, uint64_t len, int flag, boolean_t log)
++{
++	dmu_tx_t *tx;
++	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
++	zilog_t *zilog = zfsvfs->z_log;
++	uint64_t mode;
++	uint64_t mtime[2], ctime[2];
++	sa_bulk_attr_t bulk[3];
++	int count = 0;
++	int error;
++
++	if ((error = sa_lookup(zp->z_sa_hdl, SA_ZPL_MODE(zfsvfs), &mode,
++	    sizeof (mode))) != 0)
++		return (error);
++
++	if (off > zp->z_size) {
++		error = zfs_extend(zp, off + len);
++		if (error == 0 && log)
++			goto log;
++		else
++			return (error);
++	}
++
++	if (len == 0) {
++		error = zfs_trunc(zp, off);
++	} else {
++		if ((error = zfs_free_range(zp, off, len)) == 0 &&
++		    off + len > zp->z_size)
++			error = zfs_extend(zp, off + len);
++	}
++	if (error || !log)
++		return (error);
++log:
++	tx = dmu_tx_create(zfsvfs->z_os);
++	dmu_tx_hold_sa(tx, zp->z_sa_hdl, B_FALSE);
++	zfs_sa_upgrade_txholds(tx, zp);
++	error = dmu_tx_assign(tx, DMU_TX_WAIT);
++	if (error) {
++		dmu_tx_abort(tx);
++		return (error);
++	}
++
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_MTIME(zfsvfs), NULL, mtime, 16);
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_CTIME(zfsvfs), NULL, ctime, 16);
++	SA_ADD_BULK_ATTR(bulk, count, SA_ZPL_FLAGS(zfsvfs),
++	    NULL, &zp->z_pflags, 8);
++	zfs_tstamp_update_setup(zp, CONTENT_MODIFIED, mtime, ctime);
++	error = sa_bulk_update(zp->z_sa_hdl, bulk, count, tx);
++	ASSERT0(error);
++
++	zfs_log_truncate(zilog, tx, TX_TRUNCATE, zp, off, len);
++
++	dmu_tx_commit(tx);
++	return (0);
++}
+-- 
+2.53.0
+

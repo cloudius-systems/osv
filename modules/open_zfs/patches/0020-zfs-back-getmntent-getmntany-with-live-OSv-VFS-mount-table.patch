@@ -1,0 +1,166 @@
+From ce86406376b2a097d93abab7c50dd749f48f35b1 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Mon, 20 Jul 2026 15:48:53 +0000
+Subject: [PATCH] zfs: back getmntent/getmntany with live OSv VFS mount table
+
+zfs_unmount()/zfs destroy/zpool export decide whether a dataset needs
+unmounting by looking it up via libzfs_mnttab_find() ->
+libzfs_mnttab_update() -> getmntent().  On OSv the getmntent/getmntany
+stubs in libzfs_util_os.c always returned EOF, so datasets auto-mounted
+by the kernel (zfs_domount at pool/dataset create time, not through
+libzfs do_mount) were invisible.  The objset therefore stayed owned and
+destroy/export failed with EBUSY / dataset is busy.
+
+Replace the stubs with an implementation that enumerates the real VFS
+mounts via osv::current_mounts() (exported from the kernel), filtered to
+ZFS.  Paired with the patch 0004 change making MNTTAB=/etc/mnttab openable
+so libzfs_mnttab_find() actually reaches getmntany().
+
+Copyright (C) 2026 Greg Burd.
+
+---
+ lib/libzfs/os/osv/libzfs_mnttab_os.cc | 106 ++++++++++++++++++++++++++
+ lib/libzfs/os/osv/libzfs_util_os.c    |  17 -----
+ 2 files changed, 106 insertions(+), 17 deletions(-)
+ create mode 100644 lib/libzfs/os/osv/libzfs_mnttab_os.cc
+
+diff --git a/lib/libzfs/os/osv/libzfs_mnttab_os.cc b/lib/libzfs/os/osv/libzfs_mnttab_os.cc
+new file mode 100644
+index 000000000..ec2e016d5
+--- /dev/null
++++ b/lib/libzfs/os/osv/libzfs_mnttab_os.cc
+@@ -0,0 +1,106 @@
++// SPDX-License-Identifier: CDDL-1.0
++/*
++ * OSv getmntent/getmntany backed by the live VFS mount table.
++ *
++ * On OSv there is no /etc/mnttab or /proc/mounts stream, so the original
++ * stubs always returned EOF.  That broke zfs_unmount()/zfs destroy/zpool
++ * export: libzfs decides whether a dataset needs unmounting by looking it
++ * up via libzfs_mnttab_find() -> libzfs_mnttab_update() -> getmntent().
++ * With the stub returning EOF, kernel auto-mounted datasets (mounted by
++ * zfs_domount() at pool/dataset create time, not through libzfs do_mount)
++ * were invisible, so the objset stayed owned and destroy/export failed
++ * with EBUSY / "dataset is busy".
++ *
++ * This shim enumerates the real VFS mounts through osv::current_mounts()
++ * and hands them to libzfs one struct mnttab at a time, filtered to ZFS.
++ * The per-FILE* iteration state is keyed off the FILE* the caller passed
++ * to fopen(MNTTAB); we take a fresh snapshot on the first getmntent() for
++ * a given stream (detected by a position reset).
++ */
++#include <osv/mount.h>
++#include <string.h>
++#include <stdlib.h>
++#include <stdio.h>
++#include <vector>
++#include <string>
++
++extern "C" {
++#include <sys/mnttab.h>
++
++struct osv_mnt_iter {
++	std::vector<osv::mount_desc> snap;
++	size_t idx;
++	std::vector<std::string> keep; // backing storage for returned char*
++};
++
++/* One iterator per process is enough for libzfs' usage pattern. */
++static __thread osv_mnt_iter *g_iter = nullptr;
++
++static void fill(struct mnttab *mp, osv_mnt_iter *it, const osv::mount_desc &m)
++{
++	it->keep.push_back(m.special);
++	mp->mnt_special = (char *)it->keep.back().c_str();
++	it->keep.push_back(m.path);
++	mp->mnt_mountp = (char *)it->keep.back().c_str();
++	it->keep.push_back(m.type);
++	mp->mnt_fstype = (char *)it->keep.back().c_str();
++	it->keep.push_back(m.options);
++	mp->mnt_mntopts = (char *)it->keep.back().c_str();
++}
++
++static osv_mnt_iter *ensure_iter(void)
++{
++	if (!g_iter) {
++		g_iter = new osv_mnt_iter();
++		g_iter->snap = osv::current_mounts();
++		g_iter->idx = 0;
++	}
++	return g_iter;
++}
++
++/*
++ * getmntent: return the next ZFS mount, or -1 (EOF) when exhausted.
++ * libzfs opens a fresh FILE* per scan; we (re)snapshot when idx wraps.
++ */
++int getmntent(FILE *fp, struct mnttab *mp)
++{
++	(void) fp;
++	osv_mnt_iter *it = ensure_iter();
++	while (it->idx < it->snap.size()) {
++		const osv::mount_desc &m = it->snap[it->idx++];
++		if (m.type != "zfs")
++			continue;
++		fill(mp, it, m);
++		return (0);
++	}
++	/* exhausted: reset so the next fopen()/scan starts fresh */
++	delete g_iter;
++	g_iter = nullptr;
++	return (-1);
++}
++
++int getmntany(FILE *fp, struct mnttab *mp, struct mnttab *mpref)
++{
++	(void) fp;
++	/* fresh snapshot for a targeted lookup */
++	std::vector<osv::mount_desc> snap = osv::current_mounts();
++	for (auto &m : snap) {
++		if (m.type != "zfs")
++			continue;
++		if (mpref && mpref->mnt_special &&
++		    m.special != mpref->mnt_special)
++			continue;
++		if (mpref && mpref->mnt_mountp &&
++		    m.path != mpref->mnt_mountp)
++			continue;
++		/* leak these small strings; libzfs strdup's them immediately */
++		mp->mnt_special = strdup(m.special.c_str());
++		mp->mnt_mountp  = strdup(m.path.c_str());
++		mp->mnt_fstype  = strdup(m.type.c_str());
++		mp->mnt_mntopts = strdup(m.options.c_str());
++		return (0);
++	}
++	return (-1);
++}
++
++} // extern "C"
+diff --git a/lib/libzfs/os/osv/libzfs_util_os.c b/lib/libzfs/os/osv/libzfs_util_os.c
+index 3fcee722c..97b7a0daa 100644
+--- a/lib/libzfs/os/osv/libzfs_util_os.c
++++ b/lib/libzfs/os/osv/libzfs_util_os.c
+@@ -82,20 +82,3 @@ zfs_userns(zfs_handle_t *zhp, const char *nspath, int attach)
+ 	return (-1);
+ }
+ 
+-/*
+- * getmntent implementation for OSv (no /proc/self/mounts).
+- * libzfs_mnttab_update() calls this; we always return EOF.
+- */
+-int
+-getmntent(FILE *fp, struct mnttab *mp)
+-{
+-	(void) fp, (void) mp;
+-	return (-1); /* EOF */
+-}
+-
+-int
+-getmntany(FILE *fp, struct mnttab *mp, struct mnttab *mpref)
+-{
+-	(void) fp, (void) mp, (void) mpref;
+-	return (-1); /* not found */
+-}
+-- 
+2.47.0
+

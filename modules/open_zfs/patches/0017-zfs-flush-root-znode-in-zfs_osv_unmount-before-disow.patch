@@ -1,0 +1,62 @@
+From f8841c6db82531529eee7de5063f57bd66ef1701 Mon Sep 17 00:00:00 2001
+From: Greg Burd <greg@burd.me>
+Date: Sat, 6 Jun 2026 11:39:02 -0400
+Subject: [PATCH 17/19] zfs: flush root znode in zfs_osv_unmount before
+ disowning objset
+
+zfs_mount() takes a hold on the root znode and wires it to the mount's
+root vnode. On FreeBSD/Linux the generic VFS reclaims that vnode --
+running vop_inactive, which destroys the SA handle -- before
+VFS_UNMOUNT. OSv's VFS does not, so the root znode kept its bonus-buffer
+dnode hold, which pinned the shared dnode-block dbuf. Its async eviction
+never fired, the objset's os_dnodes list never drained, and a later
+spa_export's spa_evicting_os_wait() blocked forever during zpool destroy.
+
+Reclaim the root znode in zfs_osv_unmount exactly as vop_inactive would
+on the last reference, before dmu_objset_disown.
+
+(cherry picked from commit 62b5291b868108781331f7393c2e6c8081e9da0d)
+---
+ module/os/osv/zfs/zfs_vfsops.c | 26 ++++++++++++++++++++++++++
+ 1 file changed, 26 insertions(+)
+
+diff --git a/module/os/osv/zfs/zfs_vfsops.c b/module/os/osv/zfs/zfs_vfsops.c
+index 6925c08ed..e30201431 100644
+--- a/module/os/osv/zfs/zfs_vfsops.c
++++ b/module/os/osv/zfs/zfs_vfsops.c
+@@ -671,6 +671,32 @@ zfs_osv_unmount(struct mount *mp, int flags)
+ 	 */
+ 	txg_wait_synced(dmu_objset_pool(zfsvfs->z_os), 0);
+ 
++	/*
++	 * Release the root znode before disowning the objset.
++	 *
++	 * zfs_mount() takes a hold on the root znode (zfs_zget of
++	 * zfsvfs->z_root) and wires it to the mount's root vnode.  On
++	 * FreeBSD/Linux the generic VFS reclaims that vnode -- running
++	 * vop_inactive, which destroys the znode's SA handle -- before
++	 * VFS_UNMOUNT is called.  OSv's VFS does not, so without this the
++	 * root znode keeps its bonus-buffer (dnode) hold.  That hold pins
++	 * the shared dnode-block dbuf, so its async eviction never fires,
++	 * the objset's os_dnodes list never drains, and a later
++	 * spa_export's spa_evicting_os_wait() blocks forever.  Drop it
++	 * here exactly as vop_inactive would on the last reference.
++	 */
++	struct vnode *rootvp =
++	    (mp->m_root != NULL) ? mp->m_root->d_vnode : NULL;
++	if (rootvp != NULL && rootvp->v_data != NULL) {
++		znode_t *rzp = VTOZ(rootvp);
++		rootvp->v_data = NULL;
++		rzp->z_vnode = NULL;
++		if (rzp->z_sa_hdl != NULL)
++			zfs_zinactive(rzp);
++		else
++			zfs_znode_free(rzp);
++	}
++
+ 	dmu_objset_disown(zfsvfs->z_os, B_TRUE, zfsvfs);
+ 
+ 	zfs_exit(zfsvfs, FTAG);
+-- 
+2.53.0
+

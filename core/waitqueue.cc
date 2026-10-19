@@ -18,26 +18,28 @@ namespace sched {
 void wait_object<waitqueue>::arm()
 {
     auto& fifo = _wq._waiters_fifo;
+    wait_record *wrp = &record();
     if (!fifo.oldest) {
-        fifo.oldest = &_wr;
+        fifo.oldest = wrp;
     } else {
-        fifo.newest->next = &_wr;
+        fifo.newest->next = wrp;
     }
-    fifo.newest = &_wr;
+    fifo.newest = wrp;
 }
 
 void wait_object<waitqueue>::disarm()
 {
     auto& fifo = _wq._waiters_fifo;
-    if (_wr.woken()) {
+    wait_record *wrp = &record();
+    if (wrp->woken()) {
         return;
     }
     // wr is still in the linked list, so remove it:
     wait_record** pnext = &fifo.oldest;
     wait_record* newest = nullptr;
     while (*pnext) {
-        if (&_wr == *pnext) {
-            *pnext = _wr.next;
+        if (wrp == *pnext) {
+            *pnext = wrp->next;
             if (!*pnext) {
                 fifo.newest = newest;
             }
