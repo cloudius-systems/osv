@@ -1161,9 +1161,33 @@ void cpu::donate_to_puller()
         return;
     }
     // Pick the least-recently-runnable migratable thread (tail of the tree),
-    // same selection as load_balance().
+    // same selection as load_balance(), but NEVER donate a fork timer-parked
+    // thread via the wake-pull IPI.
     auto i = std::find_if(runqueue.rbegin(), runqueue.rend(),
-            [](thread& t) { return t._migration_lock_counter == 0; });
+            [](thread& t) {
+                if (t._migration_lock_counter != 0) {
+                    return false;
+                }
+#if CONF_fork
+                // A fork timer-parked thread's sched::timer nodes live on its
+                // private (per-address-space COW) stack; their coherence relies
+                // on the park machinery RESUMING them in the thread's OWN
+                // address space on switch-in (cpu::unpark_timers).  The
+                // wake-pull steal moves the thread cross-cpu from THIS IPI
+                // handler (running in whatever AS the victim holds), which
+                // races that AS-local resume and can leave a freed timer_base
+                // linked in a per-cpu timer list; the next timer IRQ then walks
+                // the dangling node in timer_set::expire() (reads _time at
+                // offset 0x30 off a near-null node) and faults in
+                // non-preemptable IRQ context.  The timer-driven load balancer
+                // (a thread, not an IPI) still rebalances such threads; only the
+                // opportunistic IPI steal of a parked thread is skipped.
+                if (t._timers_parked) {
+                    return false;
+                }
+#endif
+                return true;
+            });
     if (i == runqueue.rend()) {
         return;
     }
