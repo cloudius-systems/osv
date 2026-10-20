@@ -6,6 +6,24 @@
  */
 
 #include <osv/net_channel.hh>
+#include <osv/fork_arena.hh>
+
+#if CONF_fork
+// The poller/epoll/classifier structures below are populated by APPLICATION
+// threads (a PG backend adding its connection socket to epoll) but WALKED by
+// the virtio-net RX path (net_channel::wake_pollers, classifier::post_packet)
+// running in a kernel thread / IRQ context in AS0 with preemption disabled.
+// If their RCU vectors / hashtable nodes lived in the COW fork arena, those
+// arena VAs are not mapped in the RX thread's address space -> the RX walk
+// takes a page fault while !preemptable() -> "Assertion failed:
+// sched::preemptable() (page_fault)".  Force every such allocation onto the
+// shared identity kernel heap so the RX path sees the same nodes in every AS,
+// the same rule already applied to struct file, ramfs nodes and the signal
+// waiters list (see fork_arena.hh).
+#define NET_SHARED_KH fork_arena::kernel_heap_scope _net_kh
+#else
+#define NET_SHARED_KH do {} while (0)
+#endif
 #include <osv/poll.h>
 #include <bsd/sys/sys/mbuf.h>
 #include <bsd/sys/net/if_var.h>
@@ -66,6 +84,7 @@ void net_channel::wake_pollers()
 void net_channel::add_poller(pollreq& pr)
 {
     WITH_LOCK(_pollers_mutex) {
+        NET_SHARED_KH;
         auto old = _pollers.read_by_owner();
         std::unique_ptr<std::vector<pollreq*>> neww{new std::vector<pollreq*>};
         if (old) {
@@ -80,6 +99,7 @@ void net_channel::add_poller(pollreq& pr)
 void net_channel::del_poller(pollreq& pr)
 {
     WITH_LOCK(_pollers_mutex) {
+        NET_SHARED_KH;
         auto old = _pollers.read_by_owner();
         std::unique_ptr<std::vector<pollreq*>> neww{new std::vector<pollreq*>};
         if (old) {
@@ -95,6 +115,7 @@ void net_channel::add_epoll(const epoll_ptr& ep)
 {
 #if CONF_core_epoll
     WITH_LOCK(_pollers_mutex) {
+        NET_SHARED_KH;
         if (!_epollers.owner_find(ep)) {
             _epollers.insert(ep);
         }
@@ -106,6 +127,7 @@ void net_channel::del_epoll(const epoll_ptr& ep)
 {
 #if CONF_core_epoll
     WITH_LOCK(_pollers_mutex) {
+        NET_SHARED_KH;
         auto i = _epollers.owner_find(ep);
         if (i) {
             _epollers.erase(i);
@@ -121,6 +143,7 @@ classifier::classifier()
 void classifier::add(const ipv4_tcp_conn_id& id, net_channel* channel)
 {
     WITH_LOCK(_mtx) {
+        NET_SHARED_KH;
         _ipv4_tcp_channels.emplace(id, channel);
     }
 }
@@ -140,6 +163,7 @@ void classifier::remove(const ipv4_tcp_conn_id& id)
 void classifier::add(const ipv6_tcp_conn_id& id, net_channel* channel)
 {
     WITH_LOCK(_mtx) {
+        NET_SHARED_KH;
         _ipv6_tcp_channels.emplace(id, channel);
     }
 }

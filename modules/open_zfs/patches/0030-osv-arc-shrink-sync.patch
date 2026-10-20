@@ -1,0 +1,47 @@
+Subject: [PATCH] zfs: add arc_reduce_target_size_shrink_sync for OSv hard-mode reclaim
+
+The parent-tracked OSv platform source zfs_initialize_osv.c calls
+arc_reduce_target_size_shrink_sync() from the hard-mode ARC shrinker
+(osv_arc_lowmem): it must return only after real memory has been evicted,
+unlike the plain noshrink variant which only lowers the target. Defined here
+AFTER patch 0009 provides arc_reduce_target_size_noshrink(); anchored on the
+unique arc_reclaim_needed() site so it always lands after noshrink's definition.
+This block previously lived in 0001-osv-openzfs-upstream-file-edits.patch
+alongside a duplicate arc_reduce_target_size_noshrink() that collided with
+0009's copy; the duplicate was removed and only this unique helper kept.
+--- a/module/zfs/arc.c
++++ b/module/zfs/arc.c
+@@ -4806,8 +4806,33 @@
+ 
++/*
++ * OSv: synchronous hard-mode shrink.  Lower the target and kick eviction the
++ * same way arc_reduce_target_size_noshrink() does, then block until the
++ * requested amount has actually been evicted.  Called only from the hard-mode
++ * ARC shrinker (OSv reclaimer about to OOM), which needs real freed memory
++ * before it returns, not just a lowered target.  lax=B_TRUE returns early once
++ * the ARC stops overflowing; use_reserve=B_FALSE.  The eviction waiter is
++ * fork-COW-coherent (identity heap) and the OSv reclaimer thread may block.
++ */
++uint64_t
++arc_reduce_target_size_shrink_sync(uint64_t to_free)
++{
++	uint64_t asize_before = aggsum_value(&arc_sums.arcstat_size);
++	uint64_t requested = arc_reduce_target_size_noshrink(to_free);
++
++	if (requested == 0)
++		return (0);
++
++	arc_wait_for_eviction(requested, B_TRUE, B_FALSE);
++
++	uint64_t asize_after = aggsum_value(&arc_sums.arcstat_size);
++	return (asize_before > asize_after ?
++	    (asize_before - asize_after) : 0);
++}
++
+ /*
+  * Determine if the system is under memory pressure and is asking
+  * to reclaim memory. A return value of B_TRUE indicates that the system
+  * is under memory pressure and that the arc should adjust accordingly.
+  */
+ boolean_t
+ arc_reclaim_needed(void)

@@ -28,6 +28,7 @@
 #include <osv/trace.hh>
 #include <osv/net_trace.hh>
 #include <osv/net_channel.hh>
+#include <osv/fork_arena.hh>
 
 #include <osv/device.h>
 #include <osv/ioctl.h>
@@ -922,6 +923,16 @@ inline int net::txq::try_xmit_one_locked(void* _req)
 
 inline int net::txq::xmit_prep(mbuf* m_head, void*& cooky)
 {
+#if CONF_fork
+    // The net_req crosses address-space boundaries: an app-thread backend
+    // allocates it here on the TX submit path, but txq::gc() (which delete's
+    // it) runs later from a different thread/AS as the host completes the send.
+    // If it landed in the COW fork arena (VA 0x3000..) the GC's free() would
+    // read a divergent/garbage chunk header (magic mismatch) in the reaping
+    // AS.  Force it onto the identity kernel heap so free() by address works
+    // from any AS (same rule as mbufs, thread stacks, the app runtime).
+    fork_arena::kernel_heap_scope kh;
+#endif
     net_req* req = new net_req(m_head);
     mbuf* m;
 

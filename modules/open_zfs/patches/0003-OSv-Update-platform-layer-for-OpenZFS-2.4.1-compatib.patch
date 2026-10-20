@@ -711,32 +711,6 @@ index 000000000..efdb80c19
 +++ b/include/os/osv/zfs/sys/zpl.h
 @@ -0,0 +1 @@
 +/* OSv stub - don't remove */
-diff --git a/include/sys/mntent.h b/include/sys/mntent.h
-index e67c05e75..9450b5813 100644
---- a/include/sys/mntent.h
-+++ b/include/sys/mntent.h
-@@ -77,7 +77,7 @@
- #ifdef __linux__
- #define	MNTOPT_SETUID	"suid"		/* Both setuid and devices allowed */
- #define	MNTOPT_NOSETUID	"nosuid"	/* Neither setuid nor devices allowed */
--#elif defined(__FreeBSD__)
-+#elif defined(__FreeBSD__) || defined(__OSV__)
- #define	MNTOPT_SETUID	"setuid"	/* Set uid allowed */
- #define	MNTOPT_NOSETUID	"nosetuid"	/* Set uid not allowed */
- #else
-diff --git a/module/icp/illumos-crypto.c b/module/icp/illumos-crypto.c
-index bff9780a5..813202d77 100644
---- a/module/icp/illumos-crypto.c
-+++ b/module/icp/illumos-crypto.c
-@@ -24,7 +24,7 @@
-  * Copyright (c) 2017, Datto, Inc. All rights reserved.
-  */
- 
--#ifdef _KERNEL
-+#if defined(_KERNEL) && defined(__linux__)
- #include <linux/module.h>
- #include <linux/kernel.h>
- #include <linux/init.h>
 diff --git a/module/os/osv/zfs/abd_os.c b/module/os/osv/zfs/abd_os.c
 index 5d1d08893..a9110a52a 100644
 --- a/module/os/osv/zfs/abd_os.c
@@ -1005,48 +979,3 @@ index ac2f9b1bd..70a24d244 100644
  
  int
  zfs_write_simple(znode_t *zp, const void *data, size_t len,
-diff --git a/module/zcommon/zfs_fletcher.c b/module/zcommon/zfs_fletcher.c
-index 133217f4b..72d60cd9c 100644
---- a/module/zcommon/zfs_fletcher.c
-+++ b/module/zcommon/zfs_fletcher.c
-@@ -914,7 +914,7 @@ zio_abd_checksum_func_t fletcher_4_abd_ops = {
- 
- #define	IMPL_FMT(impl, i)	(((impl) == (i)) ? "[%s] " : "%s ")
- 
--#if defined(__linux__)
-+#if defined(__linux__) || defined(__OSV__)
- 
- static int
- fletcher_4_param_get(char *buffer, zfs_kernel_param_t *unused)
-diff --git a/module/zfs/zfs_fuid.c b/module/zfs/zfs_fuid.c
-index 7f786c00b..0f56ab81c 100644
---- a/module/zfs/zfs_fuid.c
-+++ b/module/zfs/zfs_fuid.c
-@@ -384,7 +384,7 @@ zfs_fuid_map_ids(znode_t *zp, cred_t *cr, uid_t *uidp, uid_t *gidp)
- 	    cr, ZFS_GROUP);
- }
- 
--#ifdef __FreeBSD__
-+#if defined(__FreeBSD__) || defined(__OSV__)
- uid_t
- zfs_fuid_map_id(zfsvfs_t *zfsvfs, uint64_t fuid,
-     cred_t *cr, zfs_fuid_type_t type)
-diff --git a/module/zstd/zstd-in.c b/module/zstd/zstd-in.c
-index fb56b19fe..efb0ab47c 100644
---- a/module/zstd/zstd-in.c
-+++ b/module/zstd/zstd-in.c
-@@ -42,8 +42,10 @@
- #define	ZSTD_LIB_DICTBUILDER 0
- #define	ZSTD_LIB_DEPRECATED 0
- #define	ZSTD_NOBENCH
-+#define	DEBUGLEVEL 0
- 
--#include "common/debug.c"
-+/* debug.c is not needed when DEBUGLEVEL=0 */
-+/* #include "common/debug.c" */
- #include "common/entropy_common.c"
- #include "common/error_private.c"
- #include "common/fse_decompress.c"
--- 
-2.53.0
-

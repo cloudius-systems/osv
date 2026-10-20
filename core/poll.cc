@@ -58,6 +58,8 @@
 #define dbg_d(...) tprintf_d("poll", __VA_ARGS__)
 
 #include <osv/trace.hh>
+#include <osv/kernel_config_fork.h>
+#include <osv/fork_arena.hh>
 TRACEPOINT(trace_poll_drain, "fd=%p", file*);
 TRACEPOINT(trace_poll_wake, "fd=%p, events=0x%x", file*, int);
 TRACEPOINT(trace_poll, "_pfd=%p, _nfds=%lu, _timeout=%d", struct pollfd *, nfds_t, int);
@@ -184,7 +186,15 @@ void poll_install(struct pollreq* p)
         auto fp = entry->fp.get();
         assert(fp);
 
-        /* Allocate a link */
+        /* Allocate a link.  A poll_link is added to fp->f_poll_list by an
+         * application backend (its address space) but the list is walked and
+         * woken by the virtio-net RX path from a different thread/AS; its
+         * boost intrusive hook must therefore be coherent in every AS, so keep
+         * it on the shared identity kernel heap, not the per-AS COW fork arena
+         * (same rule as the net_channel poller/epoll nodes and net_req). */
+#if CONF_fork
+        fork_arena::kernel_heap_scope _poll_kh;
+#endif
         std::unique_ptr<poll_link> pl{new poll_link};
 
         /* Save a reference to request on current file structure.
