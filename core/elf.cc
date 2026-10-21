@@ -423,23 +423,72 @@ void file::load_segment(const Elf64_Phdr& phdr)
 
     unsigned perm = get_segment_mmap_permissions(phdr);
 
-    // Under CONF_fork, eagerly POPULATE writable file-backed segments.  Such a
-    // segment holds .data/.got/.got.plt, which the dynamic linker RELOCATES in
-    // memory at load (object::relocate / relocate_pltgot rewrite the GOT with
-    // this object's base, the resolver trampoline pointer and jump-slot
-    // targets).  Those writes diverge the page from its on-disk contents.  If a
-    // relocated page is demand-paged (not resident) when fork() clones the
-    // address space, the child inherits an EMPTY leaf PTE and its first access
-    // re-reads the ORIGINAL, unrelocated bytes from the file (pltgot[1]=0, raw
-    // jump slots) -- so the child's lazy PLT resolver dereferences a NULL
-    // elf::object and faults (the resolve_pltgot fork-coherence bug).  Pinning
-    // the whole writable segment resident at load makes clone_address_space
-    // COW-share the RELOCATED pages, so every fork child reads the correct GOT.
+    // Under CONF_fork, eagerly POPULATE every file-backed segment at load.
+    //
+    // Two distinct fork hazards make the on-demand (lazy) mapping of a
+    // file-backed PT_LOAD segment unsafe once the program fork()s:
+    //
+    //  1. WRITABLE segments (.data/.got/.got.plt) are RELOCATED in memory at
+    //     load (object::relocate / relocate_pltgot rewrite the GOT with this
+    //     object's base, the resolver trampoline pointer and jump-slot
+    //     targets).  Those writes diverge the page from its on-disk contents.
+    //     If a relocated page is demand-paged (not resident) when fork() clones
+    //     the address space, the child inherits an EMPTY leaf PTE and its first
+    //     access re-reads the ORIGINAL, unrelocated bytes from the file
+    //     (pltgot[1]=0, raw jump slots) -- the child's lazy PLT resolver then
+    //     dereferences a NULL elf::object and faults (the resolve_pltgot
+    //     fork-coherence bug).
+    //
+    //  2. READ-ONLY exec/rodata segments (.text/.rodata) are byte-identical to
+    //     the file, so they have no relocation-divergence problem -- but when
+    //     the executable lives on a DEMAND-PAGED backing store (ROFS) a forked
+    //     child that touches a page not yet resident takes a page fault whose
+    //     servicing must READ FROM DISK (rofs_read_blocks -> blocking
+    //     virtio-blk I/O) and/or acquire the AS-wide vmas write lock.  Both can
+    //     BLOCK and reschedule.  That fault can be NESTED inside another
+    //     in-flight fork/COW fault (exception_depth >= 2), where no reschedule
+    //     is allowed, so the reschedule trips assert(exception_depth <= 1) in
+    //     reschedule_from_interrupt (seen as the "ROFS-demand-page-nested-in-
+    //     fork-fault" wall: a forked PostgreSQL backend touching a cold .text
+    //     page aborts the unikernel -- reproduced on an fs=rofs_with_zfs
+    //     conf_fork=1 image).  The fs=ramfs image sidesteps this by baking
+    //     .text into the loader so nothing is ever demand-paged; we instead PIN
+    //     the whole segment resident at load so no fork child ever takes a
+    //     demand fault on it.  (A pure fs=zfs root, where the whole image is one
+    //     ZFS pool, happens not to hit the abort in practice because the
+    //     postmaster warms most .text through the ZFS ARC before forking, but
+    //     pinning closes the race there too and is correct for any backing fs.)
+    //
+    // Populating the WHOLE segment resident at load makes clone_address_space
+    // COW-share already-present pages, so every fork child resolves .text/.data
+    // accesses against a present PTE -- no demand read, no nested blocking
+    // fault, and writable pages carry the correct RELOCATED contents.  This is
+    // load-time work (preemptable, not at nested exception depth) so it is
+    // safe.  Gated on CONF_fork: the non-fork build is byte-identical.
+    //
+    // CAVEATS (do not read this as an absolute guarantee):
+    //  - populate is BEST-EFFORT: map_file does not fail if a page cannot be
+    //    populated and populate::page swallows an allocation failure, so under
+    //    memory pressure a page can still be left demand-paged.  It removes the
+    //    fault in the common case, it does not make the fault impossible.
+    //  - It covers only objects loaded through THIS path: the main executable
+    //    and every shared library present at load/DT_NEEDED time (so all of
+    //    PostgreSQL's .so's, which the postmaster loads BEFORE forking).  A
+    //    library a CHILD dlopen()s AFTER fork is mapped only in that child and
+    //    is NOT covered here; the same nested-fault class can recur for it.
+    //    That is a latent gap, not something this change introduces, and PG's
+    //    pre-fork load order avoids it.  The deeper fix is to make the nested
+    //    blocking fault safe (relax/handle assert(exception_depth <= 1)); this
+    //    populate is the smaller, more upstreamable step.
+    //  - COST direction: this pins the whole RO text+rodata (and the writable
+    //    segments as before) resident for the object's lifetime and does the
+    //    read I/O synchronously at load.  The cost scales with binary+library
+    //    size, NOT with child count (children COW-share the resident pages).
+    //    Fine for a ~50 MB postgres under a multi-GiB guest; weigh it for a very
+    //    large executable in a memory-tight guest or a cold-boot-latency path.
     unsigned populate = 0;
 #if CONF_fork
-    if (perm & mmu::perm_write) {
-        populate = mmu::mmap_populate;
-    }
+    populate = mmu::mmap_populate;
 #endif
     auto flag = mmu::mmap_fixed | (mlocked() ? mmu::mmap_populate : populate);
     mmu::map_file(_base + vstart, filesz, flag, perm, _f, align_down(phdr.p_offset, mmu::page_size));
