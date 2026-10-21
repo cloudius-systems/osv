@@ -8,6 +8,7 @@
 #include <osv/fork.hh>
 #include <osv/kernel_config_fork.h>
 #include <errno.h>
+#include <stdlib.h>   // getenv (OSV_FORK_FD_REAP gate)
 #include <signal.h>
 #include <sys/wait.h>
 #include <unordered_map>
@@ -51,6 +52,15 @@ extern "C" void fork_snapshot_open_fds(
 // (under gfdt_lock).  Used to release a shared fd slot once its last inheriting
 // fork child is done with it, so the fd can be reused.
 extern "C" void fork_clear_gfdt_slot_if(int fd, struct file *fp);
+
+// Provided by fs/vfs/kern_descrip.cc: close an fd an exited fork child opened
+// for ITSELF after fork and never closed (null the shared gfdt slot + fdrop).
+// Called by the reaper (release_inherited_fds) so these private fds do not leak
+// in the shared table across backend churn.  Closes ONLY if gfdt[fd] still holds
+// @fp (identity-keyed: a dup2 onto the same number after the child exited leaves
+// a different file there, which the reaper must not touch).
+extern "C" void fork_reap_close_child_opened_fd(int fd, struct file *fp);
+
 
 namespace osv {
 namespace fork {
@@ -121,7 +131,10 @@ std::unordered_map<mmu::address_space *,
 // clears the slot.  A slot NOT in this set is still owned by the top-level app,
 // so a child closing its inherited copy must never clear it.
 std::unordered_map<int, struct file *> g_owner_released_fds;
-std::unordered_map<mmu::address_space *, std::unordered_map<int, char>> g_child_opened_fds;
+// Value is the file* the child installed at that fd, so reap closes the slot
+// ONLY if it still holds that exact file -- never a file a parent/sibling dup2'd
+// onto the same number after the child exited (identity-keyed, not number-keyed).
+std::unordered_map<mmu::address_space *, std::unordered_map<int, struct file *>> g_child_opened_fds;
 
 // ---- fork per-child signal dispositions ----------------------------------
 //
@@ -181,36 +194,52 @@ static void release_inherited_fds(mmu::address_space *child_as)
 {
     std::unordered_map<int, struct file *> held;
     std::unordered_map<int, struct file *> to_clear;
+    std::unordered_map<int, struct file *> opened;   // fd -> file* this child opened after fork
     {
         SCOPE_LOCK(g_fd_lock);
         auto it = g_inherited_fds.find(child_as);
         if (it == g_inherited_fds.end()) {
-            return;
-        }
-        held = std::move(it->second);
-        g_inherited_fds.erase(it);
-        g_child_opened_fds.erase(child_as);
-        // For any fd this child was the LAST live inheritor of AND that the
-        // top-level owner already relinquished (g_owner_released_fds), collect
-        // it to clear the slot AFTER releasing g_fd_lock (gfdt_lock must not
-        // nest inside g_fd_lock).  A slot the owner still holds is left intact.
-        // Evaluated against the REMAINING children.
-        for (auto &kv : held) {
-            auto orel = g_owner_released_fds.find(kv.first);
-            if (orel == g_owner_released_fds.end() || orel->second != kv.second) {
-                continue;   // owner still holds this slot: leave it
+            // Even with no inherited fds, a child may have opened its own fds
+            // after fork; still reclaim those below.
+            auto oit = g_child_opened_fds.find(child_as);
+            if (oit != g_child_opened_fds.end()) {
+                opened = std::move(oit->second);
+                g_child_opened_fds.erase(oit);
             }
-            bool other_holds = false;
-            for (auto &c : g_inherited_fds) {
-                auto o = c.second.find(kv.first);
-                if (o != c.second.end() && o->second == kv.second) {
-                    other_holds = true;
-                    break;
+            if (opened.empty()) {
+                return;
+            }
+            // fall through to close the child-opened fds (held/to_clear empty)
+        } else {
+            held = std::move(it->second);
+            g_inherited_fds.erase(it);
+            auto oit = g_child_opened_fds.find(child_as);
+            if (oit != g_child_opened_fds.end()) {
+                opened = std::move(oit->second);
+                g_child_opened_fds.erase(oit);
+            }
+            // For any fd this child was the LAST live inheritor of AND that the
+            // top-level owner already relinquished (g_owner_released_fds), collect
+            // it to clear the slot AFTER releasing g_fd_lock (gfdt_lock must not
+            // nest inside g_fd_lock).  A slot the owner still holds is left intact.
+            // Evaluated against the REMAINING children.
+            for (auto &kv : held) {
+                auto orel = g_owner_released_fds.find(kv.first);
+                if (orel == g_owner_released_fds.end() || orel->second != kv.second) {
+                    continue;   // owner still holds this slot: leave it
                 }
-            }
-            if (!other_holds) {
-                to_clear[kv.first] = kv.second;
-                g_owner_released_fds.erase(orel);
+                bool other_holds = false;
+                for (auto &c : g_inherited_fds) {
+                    auto o = c.second.find(kv.first);
+                    if (o != c.second.end() && o->second == kv.second) {
+                        other_holds = true;
+                        break;
+                    }
+                }
+                if (!other_holds) {
+                    to_clear[kv.first] = kv.second;
+                    g_owner_released_fds.erase(orel);
+                }
             }
         }
     }
@@ -219,6 +248,31 @@ static void release_inherited_fds(mmu::address_space *child_as)
     }
     for (auto &kv : held) {
         fdrop(kv.second);
+    }
+    // Close the fds this backend opened ITSELF after fork.  OSv keeps one shared
+    // global fd table (gfdt); a reaped backend used to leave these installed --
+    // on real Linux the whole fd table is closed at process exit, but here the
+    // reaper only dropped INHERITED refs and merely forgot the child-opened
+    // set.  That leaks a handful of fds per backend into gfdt, and across
+    // sustained connection/backend churn (or autovacuum's per-cycle worker
+    // forks) gfdt fills to FDMAX -> pipe()/accept() fail with EMFILE and the
+    // guest wedges (reboot-resettable).  Close each here exactly as the
+    // backend's own close() would: null the shared slot iff it still points at
+    // that file, then drop the reference.  These fds are private to the exited
+    // backend (opened after its fork snapshot), so nulling the slot cannot tear
+    // an fd out from under the parent or a sibling.
+    //
+    // Gated on OSV_FORK_FD_REAP (default ON; set =0 to reproduce the old leak
+    // for an A/B).  The env is read once and cached.
+    static int reap_enabled = -1;
+    if (reap_enabled < 0) {
+        const char *e = getenv("OSV_FORK_FD_REAP");
+        reap_enabled = (e && e[0] == '0') ? 0 : 1;
+    }
+    if (reap_enabled) {
+        for (auto &kv : opened) {
+            fork_reap_close_child_opened_fd(kv.first, kv.second);
+        }
     }
 }
 
@@ -232,7 +286,7 @@ static void release_inherited_fds(mmu::address_space *child_as)
 // new fd for itself.  Records it so the child's later close() of it nulls the
 // shared slot normally (it is the child's own fd), distinct from a numeric
 // handle to one of the parent's fds.
-extern "C" void fork_child_opened_fd(int fd)
+extern "C" void fork_child_opened_fd(int fd, struct file *fp)
 {
     mmu::address_space *child_as = current_child_as();
     if (!child_as) {
@@ -240,7 +294,13 @@ extern "C" void fork_child_opened_fd(int fd)
     }
     fork_arena::kernel_heap_scope kh;
     SCOPE_LOCK(g_fd_lock);
-    g_child_opened_fds[child_as][fd] = 1;
+    // Record the file* the caller just installed at this fd (passed in, not
+    // looked up -- looking it up under gfdt_lock here would nest gfdt_lock
+    // inside g_fd_lock and invert the order fork_owner_close_inherited_fd uses,
+    // a deadlock).  The reaper later closes the slot only if it STILL holds
+    // this exact file, so a dup2 onto the same number after the child exits is
+    // never torn out.
+    g_child_opened_fds[child_as][fd] = fp;
 }
 
 // Called by fdclose() (fs/vfs/kern_descrip.cc) for a fork child closing an fd
