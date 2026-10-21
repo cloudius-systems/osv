@@ -316,6 +316,12 @@ std::atomic<int> live_child_address_spaces{0};
 // own private copied stack (see fork_thread), so stack pages are simply shared
 // writable.  MAP_SHARED pages are likewise shared writable (sharing preserved).
 // These "share, don't COW" address ranges are passed in via cow_share_ranges.
+// Both range sets are coalesced into sorted, disjoint intervals (see
+// coalesce_cow_ranges) BEFORE the clone walk reads them, so membership is a
+// binary search rather than a linear scan -- clone_pt_level0 queries them once
+// per 4K leaf (hundreds of thousands of times per fork of a large address
+// space), and a live-thread count in the hundreds made the old O(ranges)
+// scan the dominant fork cost (O(leaf_pages x ranges)).
 struct cow_range { uintptr_t start, end; };
 static const std::vector<cow_range> *cow_share_ranges;
 // Ranges (the FORKING thread's live stack) that must be PRIVATIZED into the
@@ -326,6 +332,61 @@ static const std::vector<cow_range> *cow_share_ranges;
 // lets the child resume on the parent's exact rsp/rbp (same-VA stack) while
 // having private stack memory -- see arch/x64/fork.cc.
 static const std::vector<cow_range> *cow_privatize_ranges;
+
+// Sort a cow_range vector by start and merge overlapping or touching intervals
+// into disjoint, ascending intervals, in place.  Called once per fork on each
+// range set after it is fully built and before the clone walk reads it, so the
+// per-leaf membership test (range_covers below) can binary-search.  Merging is
+// required for the binary search to be exact: the raw set may contain
+// overlapping ranges (e.g. the forking thread's own stack appears in both the
+// privatize set and -- via with_all_threads -- the share set), and the stacks
+// of threads are not guaranteed disjoint from other shared ranges.
+static void coalesce_cow_ranges(std::vector<cow_range> &v)
+{
+    if (v.size() < 2) return;
+    std::sort(v.begin(), v.end(),
+              [](const cow_range &a, const cow_range &b) {
+                  return a.start < b.start;
+              });
+    size_t w = 0;
+    for (size_t r = 1; r < v.size(); r++) {
+        if (v[r].start <= v[w].end) {
+            // Overlapping or adjacent: extend the current merged interval.
+            if (v[r].end > v[w].end) v[w].end = v[r].end;
+        } else {
+            v[++w] = v[r];
+        }
+    }
+    v.resize(w + 1);
+}
+
+// Debug invariant checked at the publish point: coalesce_cow_ranges merges any
+// overlapping OR TOUCHING intervals (it extends while next.start <= cur.end), so
+// a coalesced set is sorted by start and STRICTLY disjoint (next.start >
+// prev.end).  range_covers' binary search assumes exactly this.  assert()-only.
+static bool ranges_sorted_disjoint(const std::vector<cow_range> &v)
+{
+    for (size_t i = 1; i < v.size(); i++) {
+        if (v[i].start <= v[i - 1].end) return false;
+    }
+    return true;
+}
+
+// Membership test against a coalesced (sorted, disjoint) range vector: find the
+// last interval whose start is <= va and check va < its end.  O(log ranges).
+static bool range_covers(const std::vector<cow_range> *ranges, uintptr_t va)
+{
+    if (!ranges || ranges->empty()) return false;
+    // upper_bound on start gives the first interval with start > va; the one
+    // before it (if any) is the only candidate that can contain va.
+    auto it = std::upper_bound(ranges->begin(), ranges->end(), va,
+                               [](uintptr_t v, const cow_range &r) {
+                                   return v < r.start;
+                               });
+    if (it == ranges->begin()) return false;
+    --it;
+    return va < it->end;
+}
 
 // ---- fork: writable segments of in-app-slot kernel modules -----------------
 //
@@ -349,20 +410,12 @@ static mutex fork_shared_module_lock;
 
 static bool addr_is_shared(uintptr_t va)
 {
-    if (!cow_share_ranges) return false;
-    for (auto &r : *cow_share_ranges) {
-        if (va >= r.start && va < r.end) return true;
-    }
-    return false;
+    return range_covers(cow_share_ranges, va);
 }
 
 static bool addr_is_privatize(uintptr_t va)
 {
-    if (!cow_privatize_ranges) return false;
-    for (auto &r : *cow_privatize_ranges) {
-        if (va >= r.start && va < r.end) return true;
-    }
-    return false;
+    return range_covers(cow_privatize_ranges, va);
 }
 
 // The parent must hold vma_list_mutex for write while this runs.  base_virt is
@@ -601,6 +654,20 @@ address_space *clone_address_space(address_space *parent)
                 share_ranges.push_back({s, s + si.size});
             }
         });
+        // Coalesce both range sets into sorted, disjoint intervals so the
+        // per-4K-leaf membership test in clone_pt_level0 is a binary search
+        // (range_covers) instead of a linear scan.  With hundreds of live
+        // threads the old linear scan, run once per mapped leaf page, was the
+        // dominant fork cost.  This runs under the lock but is pure in-place
+        // work on the pre-reserved vectors (no malloc, no fault).
+        coalesce_cow_ranges(share_ranges);
+        coalesce_cow_ranges(privatize_ranges);
+        // Invariant the per-leaf membership proof relies on: after coalescing,
+        // each set is sorted by start and strictly disjoint (no overlap, no
+        // touch), so range_covers' binary search is exact.  Cheap O(ranges)
+        // guard, once per fork (assert stays live in the kernel build).
+        assert(ranges_sorted_disjoint(share_ranges));
+        assert(ranges_sorted_disjoint(privatize_ranges));
         cow_share_ranges = &share_ranges;
         cow_privatize_ranges = &privatize_ranges;
 
