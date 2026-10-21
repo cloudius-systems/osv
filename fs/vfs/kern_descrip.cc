@@ -30,7 +30,7 @@ using namespace osv;
 // fork() fd-inheritance hooks (libc/process/fork.cc): record a child's own
 // post-fork fd allocation, and query whether a child owns @fd.  Declared here
 // (before _fdalloc/fdclose) so both can call them.
-extern "C" void fork_child_opened_fd(int fd);
+extern "C" void fork_child_opened_fd(int fd, struct file *fp);
 extern "C" bool fork_child_owns_fd(int fd);
 #endif
 
@@ -73,7 +73,7 @@ int _fdalloc(struct file *fp, int *newfd, int min_fd)
         // close() of it nulls the shared slot normally (its own fd), as opposed
         // to a numeric handle onto one of the parent's fds (which the child
         // must not null on OSv's single shared fd table).
-        fork_child_opened_fd(fd);
+        fork_child_opened_fd(fd, fp);
 #endif
         return 0;
     }
@@ -169,6 +169,33 @@ int fdclose(int fd)
 
     return 0;
 }
+
+#if CONF_fork
+// Close an fd that an exited fork child (backend) opened for ITSELF after fork
+// and never closed.  Called by the reaper (release_inherited_fds) so these
+// private fds do not leak in the shared gfdt across backend churn.  Plain
+// close semantics on the shared table: read the slot, null it, drop the
+// reference.  The fd was private to the exited backend, so nulling the slot
+// cannot disturb the parent or a sibling.
+extern "C" void fork_reap_close_child_opened_fd(int fd, struct file *fp)
+{
+    if (fd < 0 || fd >= FDMAX || fp == nullptr) {
+        return;
+    }
+    struct file *cur = nullptr;
+    WITH_LOCK(gfdt_lock) {
+        cur = gfdt[fd].read_by_owner();
+        if (cur != fp) {
+            // Slot was closed, freed, or reused for a DIFFERENT file (e.g. a
+            // dup2 onto this number after the child exited): not ours to close.
+            return;
+        }
+        gfdt[fd].assign(nullptr);
+    }
+    fdrop(fp);
+}
+
+#endif
 
 #if CONF_fork
 // Null gfdt[fd] iff it currently holds @fp.  Used by fork's inherited-fd
