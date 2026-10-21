@@ -131,7 +131,6 @@ rofs-only-tests := rofs/tst-chdir.so rofs/tst-symlink.so rofs/tst-readdir.so \
 conf_zfs ?= bsd
 
 zfs-only-tests := tst-readdir.so tst-fallocate.so tst-fs-link.so \
-	tst-concurrent-read.so tst-solaris-taskq.so tst-zfs-crucible-stress.so
 	tst-concurrent-read.so tst-solaris-taskq.so tst-zfs-crucible-stress.so \
 	tst-fork-zfs-write.so
 
@@ -142,9 +141,9 @@ zfs-only-tests := tst-readdir.so tst-fallocate.so tst-fs-link.so \
 # manifests only for conf_zfs=openzfs (appended to zfs-only-tests and tests
 # below), so a conf_zfs=bsd test run does not include them.
 zfs-openzfs-only-tests := tst-zfs-recordsize.so tst-zfs-direct-io.so \
-	tst-zfs-encryption.so misc-zfs-db-sim.so tst-zfs-trim.so misc-zfs-mmap-bench.so
+	tst-zfs-encryption.so misc-zfs-db-sim.so tst-zfs-db-sim.so tst-zfs-trim.so \
+	misc-zfs-mmap-bench.so
 zfs-openzfs-only-tests += tst-zfs-nested-umount.so
-	tst-zfs-encryption.so tst-zfs-db-sim.so tst-zfs-trim.so misc-zfs-mmap-bench.so
 
 # OpenZFS user-space libraries needed by the dlopen("libzfs.so") tests above.
 # libsolaris.so is already resident as the mounted fs driver, so only these six.
@@ -199,6 +198,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 	tst-fork-shared-catalog.so \
 	tst-fork-serial.so \
 	tst-fork-sigchld-latch.so \
+	tst-fork-fdleak.so \
 	tst-fork-arena-freelist.so \
 	tst-fork-irq-cow.so \
 	tst-fork-shared-race.so \
