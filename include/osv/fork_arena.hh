@@ -33,50 +33,58 @@
 // parent is unaffected.  virt_to_phys() already walks the page table for
 // addresses below phys_mem, so arena pages remain DMA-usable.
 //
-// The allocator is a simple segregated free-list.  ALL of its bookkeeping
-// (per-size-class free-list heads, the bump pointer) lives in kernel BSS, NOT
-// inside arena pages -- so managing the arena never faults an arena page and
-// never recurses back into malloc (the recursive-fault trap the first arena
-// prototype hit during fork's own page-table work).
+// WHOLE-ARENA PER-AS WINDOWS (leak #2 cure).  Every live address space owns one
+// disjoint VA window in a single 512 GiB application slot (slot 97).  There is
+// NO shared global bump: each AS bump-carves inside its own window and recycles
+// through its own per-class free-list.  A window VA identifies its owning AS by
+// pure BSS arithmetic, so a foreign free() is an arithmetic no-op that never
+// reads the chunk header -- no pointer is ever recycled across address spaces,
+// and the whole window is reclaimed wholesale by destroy_address_space on reap.
+// ALL of the allocator's bookkeeping lives in kernel BSS, NOT inside arena
+// pages -- so managing the arena never faults an arena page and never recurses
+// back into malloc.
 // -----------------------------------------------------------------------------
 namespace fork_arena {
 
-// Fixed base and size of the arena's app-slot VA reservation.  Slot 96
-// (96 << 39) is clear of the ELF load slot (32) and the default mmap hole
-// (which grows up from slot 64).
+// Legacy shared-arena constants.  Slot 96 (96 << 39) held the retired shared
+// global bump; it is used ONLY by the C2 negative-control build
+// (-DFORK_SHARED_BUMP=1), which reintroduces the shared bump to prove the probe
+// can fire.  The shipped cure carves nothing here.
 constexpr uintptr_t arena_base = 96ull << 39;   // 0x300000000000
-// DEFAULT arena size.  EAGERLY populated (mmap_populate) at init -- committed
-// RAM at boot, NOT lazily faulted (eager backing is load-bearing: alloc() can
-// run IRQs-off, where a demand fault would abort; see init()).  Overridable at
-// boot via the --fork-arena-size-mb loader option.  Growing it delays (does not
-// fix) the arena
-// VA-exhaustion -> identity-heap fallback leak under unbounded fork churn, at a
-// cost of that many extra MiB of committed boot RAM.
-constexpr size_t    arena_size = 512ull << 20;  // 512 MiB default (committed at boot)
-// arena_base + effective size (set in init() from --fork-arena-size-mb, else
-// arena_base + arena_size).  Use this (g_end), not arena_size, for bounds; it is
-// 0 until init() runs, so contains() correctly rejects any pointer before ready.
-extern uintptr_t g_end;
+constexpr size_t    arena_size = 512ull << 20;  // 512 MiB (shared-bump control only)
 
-// Set the requested arena size in MiB (clamped to [default .. 4096] in init()).
-// Called by the loader from the --fork-arena-size-mb cmdline option BEFORE
-// init() runs; read from the cmdline, not getenv, because init() runs before
-// the application environment exists.  mb==0 keeps the default.
+// Per-AS window slot: a single 512 GiB application slot carved into one
+// disjoint window per AS.  contains() uses the whole slot range (a cheap range
+// test on the free/realloc dispatch path); the per-AS window inside it is
+// decided by BSS arithmetic in free().
+constexpr uintptr_t win_slot_base = 97ull << 39;   // 0x308000000000
+constexpr uintptr_t win_slot_end  = 98ull << 39;   // 0x310000000000
+
+// Set the requested PER-AS WINDOW size in MiB (clamped to [512 .. 2048] in
+// init(): the floor is the historical arena size, the cap is one AS's share of
+// the 512 GiB window slot).  Called by the loader from the --fork-arena-size-mb
+// cmdline option BEFORE init() runs; read from the cmdline, not getenv, because
+// init() runs before the application environment exists.  mb==0 keeps the
+// default.  SEMANTIC CHANGE from the shared-arena era: this sizes each AS's
+// PRIVATE VA window (no committed boot RAM), not a shared eagerly-populated
+// arena.
 void set_size_mb(unsigned long mb);
 
-// One-time setup: reserve the arena VA as an anonymous app-slot mapping.  Call
-// once, after the SMP allocator is up, before the application runs.  Idempotent.
+// One-time setup: resolve the per-AS window size (and, for the control build,
+// reserve the shared arena).  Call once, after the SMP allocator is up, before
+// the application runs.  Idempotent.
 void init();
 
-// True once init() has reserved the arena and routing is live.
+// True once init() has run and routing is live.
 bool ready();
 
 // Per-thread "force kernel heap" depth.  While > 0, an app thread's
 // allocations are routed to the normal identity kernel heap instead of the
 // arena.  Kernel entry points that allocate structures which MUST be visible
-// at the same VA in every address space (thread objects, wait_records, ...)
-// wrap those allocations in a kernel_heap_scope so a forked child does not get
-// a COW-private copy of a globally-shared kernel object.
+// at the same VA in every address space (thread objects, wait_records, FILE
+// structs on the shared stdio open-file list, ...) wrap those allocations in a
+// kernel_heap_scope so a forked child does not get a COW-private copy of a
+// globally-shared kernel object.
 //
 // VOLATILE is load-bearing, not decoration.  GCC models the C library
 // allocators (malloc/aligned_alloc/...) as builtins that neither read nor
@@ -96,11 +104,22 @@ struct kernel_heap_scope {
     ~kernel_heap_scope() { --force_kernel_heap; }
 };
 
-// True if `p` points inside the arena (an arena allocation).  Cheap range test.
+// True if `p` points inside the arena (an arena allocation).  Cheap range test
+// over the per-AS window slot (97) and the legacy shared-arena slot (96).  Slot
+// 96 is unused by the shipped cure (nothing is carved there), so the extra
+// compare is a harmless constant cost that lets the C2 negative-control build
+// (-DFORK_SHARED_BUMP=1, which DOES carve slot 96) dispatch its frees here
+// without a cross-translation-unit define.
 static inline bool contains(const void *p)
 {
     auto a = reinterpret_cast<uintptr_t>(p);
-    return a >= arena_base && a < g_end;
+    if (a >= win_slot_base && a < win_slot_end) {
+        return true;
+    }
+    if (a >= arena_base && a < arena_base + arena_size) {
+        return true;
+    }
+    return false;
 }
 
 // Allocate `size` bytes with `alignment` from the arena; nullptr if it cannot
