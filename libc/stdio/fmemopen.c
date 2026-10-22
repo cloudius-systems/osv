@@ -5,6 +5,12 @@
 #include <inttypes.h>
 #include "libc.h"
 
+/* LEAK #2 stdio read-path fix: scope the FILE+buffer onto the identity heap so
+ * a cross-AS fflush(NULL) walk never derefs a FILE in a reaped-AS arena window.
+ * See libc/stdio/__fdopen.c / core/fork_arena.cc.  No-ops in a non-fork build. */
+extern void fork_kernel_heap_push(void);
+extern void fork_kernel_heap_pop(void);
+
 struct cookie {
 	size_t pos, len, size;
 	unsigned char *buf;
@@ -93,7 +99,9 @@ FILE *fmemopen(void *restrict buf, size_t size, const char *restrict mode)
 		return 0;
 	}
 
+	fork_kernel_heap_push();
 	f = malloc(sizeof *f + (buf?0:size));
+	fork_kernel_heap_pop();
 	if (!f) return 0;
 	memset(&f->f, 0, sizeof f->f);
 	f->f.cookie = &f->c;

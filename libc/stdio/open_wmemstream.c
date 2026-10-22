@@ -33,6 +33,14 @@
 #include <stdlib.h>
 #include "libc.h"
 
+/* LEAK #2 stdio read-path fix: scope the FILE+buffer onto the identity heap so
+ * a cross-AS fflush(NULL) walk never derefs a FILE in a reaped-AS arena window.
+ * See libc/stdio/__fdopen.c / core/fork_arena.cc.  The growable output buffer
+ * (*bufp) is left on the arena (shortcut: never on ofl_head nor in the cross-AS
+ * fflush(NULL) deref path).  No-ops in a non-fork build. */
+extern void fork_kernel_heap_push(void);
+extern void fork_kernel_heap_pop(void);
+
 struct cookie {
 	wchar_t **bufp;
 	size_t *sizep;
@@ -123,7 +131,10 @@ FILE *open_wmemstream(wchar_t **bufp, size_t *sizep)
 	struct wms_FILE *f;
 	wchar_t *buf;
 
-	if (!(f=malloc(sizeof *f))) return 0;
+	fork_kernel_heap_push();
+	f = malloc(sizeof *f);
+	fork_kernel_heap_pop();
+	if (!f) return 0;
 	if (!(buf=malloc(sizeof *buf))) {
 		free(f);
 		return 0;
