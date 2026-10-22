@@ -967,9 +967,16 @@ objects += arch/$(arch)/firmware.o
 objects += arch/$(arch)/hypervisor.o
 objects += arch/$(arch)/interrupt.o
 objects += arch/$(arch)/clone.o
+# core/fork_arena.o is linked in every build: with conf_fork=0 it only
+# provides the no-op fork_kernel_heap_push/pop that libc and BSD code call.
+objects += core/fork_arena.o
 ifeq ($(conf_fork),1)
 objects += arch/$(arch)/fork.o
-objects += core/fork_arena.o
+# Per-file flags for the fork-arena C2 validation build.  EMPTY in the
+# shipped build (no probe, no shared-bump control).  Set fork_arena_cflags
+# on the make command line to compile the diagnostic probe in
+# (-DFORK_C2_PROBE_DEFAULT=1) or the negative control (-DFORK_SHARED_BUMP=1).
+$(out)/core/fork_arena.o: CXXFLAGS += $(fork_arena_cflags)
 endif
 ifeq ($(conf_drivers_pci),1)
 objects += arch/$(arch)/pci.o

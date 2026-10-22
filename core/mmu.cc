@@ -3241,8 +3241,9 @@ error munmap(const void *addr, size_t length)
 error msync(const void* addr, size_t length, int flags)
 {
 #if CONF_fork
-    // Writeback bookkeeping is kernel memory: keep msync's allocations off
-    // the fork arena, as vm_fault() does.
+    // Writeback bookkeeping is kernel memory.  More to the point, a fork
+    // arena allocation can map a new arena region, which takes this address
+    // space's vma lock for write, and we hold it for read here: deadlock.
     fork_arena::kernel_heap_scope kh;
 #endif
     SCOPE_LOCK(cur_vma_list_mutex().for_read());
