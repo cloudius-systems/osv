@@ -830,7 +830,15 @@ int kill(pid_t pid, int sig)
                 actions[sigidx].sa_handler = SIG_DFL;
             }
             if (sa.sa_flags & SA_SIGINFO) {
-                sa.sa_sigaction(sig, nullptr, nullptr);
+                // A SA_SIGINFO handler may dereference its siginfo (e.g.
+                // PostgreSQL 19's pqsignal wrapper_handler reads info->si_pid);
+                // passing nullptr faults it.  Supply a minimal zeroed siginfo
+                // with just si_signo set (sender pid/uid unknown == 0), the
+                // same shape sigtimedwait()/the sync path already build.
+                siginfo_t si;
+                memset(&si, 0, sizeof(si));
+                si.si_signo = sig;
+                sa.sa_sigaction(sig, &si, nullptr);
             } else {
                 sa.sa_handler(sig);
             }
