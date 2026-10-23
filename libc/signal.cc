@@ -453,8 +453,17 @@ int kill(pid_t pid, int sig)
                 signal_actions[sigidx].sa_handler = SIG_DFL;
             }
             if (sa.sa_flags & SA_SIGINFO) {
-                // FIXME: proper second (siginfo) and third (context) arguments (See example in call_signal_handler)
-                sa.sa_sigaction(sig, nullptr, nullptr);
+                // A SA_SIGINFO handler may dereference its siginfo argument
+                // (POSIX lets it read si_signo, si_pid, si_uid, ...).  Passing
+                // nullptr faults such a handler, so hand it a minimal zeroed
+                // siginfo with si_signo set, the same shape the synchronous
+                // signal path and sigtimedwait() already build.  The sender
+                // pid/uid are unknown here and read back as 0.  (The third,
+                // context, argument is still null; no handler we run reads it.)
+                siginfo_t si;
+                memset(&si, 0, sizeof(si));
+                si.si_signo = sig;
+                sa.sa_sigaction(sig, &si, nullptr);
             } else {
                 sa.sa_handler(sig);
             }
