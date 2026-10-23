@@ -2595,6 +2595,14 @@ static long io_uring_setup_impl(unsigned entries, struct io_uring_params *params
          *   RW_CUR_POS      - offset -1 uses the file's current position.
          *   FAST_POLL       - POLL_ADD-backed readiness for pollable ops (A2-3).
          *   SQPOLL_NONFIXED - SQPOLL works without pre-registered files.
+         *   EXT_ARG         - io_uring_enter(GETEVENTS) honors a struct
+         *                     io_uring_getevents_arg timed wait (ts +
+         *                     min_wait_usec), fully implemented in the enter
+         *                     path.  liburing's io_uring_submit_and_wait_timeout
+         *                     checks this bit before using the EXT_ARG wait form;
+         *                     without it, liburing falls back to inserting a
+         *                     TIMEOUT SQE per wait -- a slower, SQE-consuming path
+         *                     PostgreSQL's io_uring backend would otherwise take.
          *   CQE_SKIP        - IOSQE_CQE_SKIP_SUCCESS is honored at completion.
          *   NATIVE_WORKERS  - real persistent io-wq worker pool (A2-1).
          * SINGLE_MMAP is deliberately NOT advertised: we allocate the SQ ring,
@@ -2606,6 +2614,7 @@ static long io_uring_setup_impl(unsigned entries, struct io_uring_params *params
                            | IORING_FEAT_RW_CUR_POS
                            | IORING_FEAT_FAST_POLL
                            | IORING_FEAT_SQPOLL_NONFIXED
+                           | IORING_FEAT_EXT_ARG
                            | IORING_FEAT_CQE_SKIP
                            | IORING_FEAT_NATIVE_WORKERS;
 
