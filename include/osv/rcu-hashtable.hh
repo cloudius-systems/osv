@@ -9,6 +9,8 @@
 #define RCU_HASHTABLE_HH_
 
 #include <osv/rcu.hh>
+#include <osv/fork_arena.hh>
+#include <osv/kernel_config_fork.h>
 #include <vector>
 
 namespace osv {
@@ -300,6 +302,12 @@ void rcu_hashtable<T, Hash>::erase(iterator i)
 template <typename T, typename Hash>
 void rcu_hashtable<T, Hash>::resize(size_t new_size)
 {
+#if CONF_fork
+    // [T-NET-WEDGE] This table may be an RX-path classifier/arp cache read from
+    // AS0 with preemption disabled; keep its bucket array off the COW fork arena
+    // even if resize() runs in an app (backend) thread.
+    fork_arena::kernel_heap_scope _rht_kh;
+#endif
     rcu_hashtable n(new_size, _hash);
     owner_for_each([&] (const T& item) {
         n.insert(item);

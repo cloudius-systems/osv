@@ -35,6 +35,8 @@
 #include <osv/ioctl.h>
 #include <osv/trace.hh>
 #include <osv/rcu.hh>
+#include <osv/fork_arena.hh>
+#include <osv/kernel_config_fork.h>
 #include <functional>
 
 #include <bsd/porting/netport.h>
@@ -1343,6 +1345,19 @@ in_lltable_new(const struct bsd_sockaddr *l3addr, u_int flags)
 {
 	struct in_llentry *lle;
 
+#if CONF_fork
+	// [T-NET-WEDGE] A struct llentry is a SHARED kernel object: it is walked by
+	// the netisr RX thread (in_arpinput) and the callout dispatcher (arptimer)
+	// in AS0, and by other PG backends' address spaces.  It also embeds the
+	// arptimer callout (lle->lle_timer.la_timer) that callout_reset() inserts
+	// into the global AS0 callout set.  arpresolve() runs in the app (backend)
+	// thread's send() context, so a plain malloc() here lands in that backend's
+	// COW fork arena -- a VA that is COW-private per child and not coherently
+	// mapped in AS0/other ASes.  Cross-AS deref then page-faults in the net
+	// stack (arpresolve / netisr / callout_compare).  Force the shared identity
+	// kernel heap, the same rule uma_stub.cc applies to mbufs.
+	fork_arena::kernel_heap_scope _lle_kh;
+#endif
 	lle = (in_llentry *)malloc(sizeof(struct in_llentry));
 	if (lle == NULL)		/* NB: caller generates msg */
 		return NULL;

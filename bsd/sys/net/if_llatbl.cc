@@ -25,6 +25,8 @@
  * SUCH DAMAGE.
  */
 #include <bsd/porting/netport.h>
+#include <osv/fork_arena.hh>
+#include <osv/kernel_config_fork.h>
 #include <bsd/porting/uma_stub.h>
 #include <sys/cdefs.h>
 
@@ -210,6 +212,12 @@ lltable_init(struct ifnet *ifp, int af)
 	struct lltable *llt;
 	int i;
 
+#if CONF_fork
+	// [T-NET-WEDGE] The lltable is a shared kernel object linked into the global
+	// V_lltables list and walked from AS0 (netisr/callout) and every backend AS.
+	// Keep it off the COW fork arena -- see in_lltable_new().
+	fork_arena::kernel_heap_scope _llt_kh;
+#endif
 	llt = (struct lltable *)malloc(sizeof(struct lltable));
 
 	llt->llt_af = af;

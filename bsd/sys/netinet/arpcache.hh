@@ -17,6 +17,8 @@
 #include <osv/types.h>
 #include <osv/mutex.h>
 #include <osv/sched.hh>
+#include <osv/fork_arena.hh>
+#include <osv/kernel_config_fork.h>
 
 #include <boost/optional.hpp>
 #include <functional>
@@ -74,6 +76,13 @@ struct arp_cache {
                 }
                 _entries.erase(i);
             }
+#if CONF_fork
+            // [T-NET-WEDGE] This RCU hashtable is read lock-free by arp_cache::
+            // lookup() from AS0 (netisr) and every backend AS.  add() is reached
+            // from the app TX path, so emplace's node would land in the COW fork
+            // arena and be unmapped in other ASes.  Pin nodes to the kernel heap.
+            fork_arena::kernel_heap_scope _arp_kh;
+#endif
             _entries.emplace(ip, mac, flags);
         }
     }

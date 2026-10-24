@@ -85,6 +85,8 @@
 
 #include <osv/poll.h>
 #include <osv/net_channel.hh>
+#include <osv/fork_arena.hh>
+#include <osv/kernel_config_fork.h>
 
 /*
  * TCP protocol interface to socket abstraction.
@@ -1595,7 +1597,12 @@ tcp_attach(struct socket *so)
 	so->so_rcv.sb_flags |= SB_AUTOSIZE;
 	so->so_snd.sb_flags |= SB_AUTOSIZE;
 	INP_INFO_WLOCK(&V_tcbinfo);
-	inp = new inpcb(so, &V_tcbinfo);
+	{
+#if CONF_fork
+		fork_arena::kernel_heap_scope _inp_kh;  // [T-NET-WEDGE] PCB shared across ASes; keep off COW arena
+#endif
+		inp = new inpcb(so, &V_tcbinfo);
+	}
 #ifdef INET6
 	if (inp->inp_vflag & INP_IPV6PROTO) {
 		inp->inp_vflag |= INP_IPV6;

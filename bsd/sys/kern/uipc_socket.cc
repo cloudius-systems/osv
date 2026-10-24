@@ -109,6 +109,8 @@
 #include <cinttypes>
 
 #include <bsd/porting/netport.h>
+#include <osv/fork_arena.hh>
+#include <osv/kernel_config_fork.h>
 #include <bsd/porting/uma_stub.h>
 #include <bsd/porting/sync_stub.h>
 #include <bsd/porting/synch.h>
@@ -242,9 +244,24 @@ soalloc(struct vnet *vnet)
 {
 	struct socket *so;
 
+#if CONF_fork
+	// [T-NET-WEDGE] A struct socket is a shared kernel object: the netisr RX
+	// path (tcp_input/udp_input) in AS0 and other PG backends dereference it
+	// (so_options, so_pcb, socket buffers) for every inbound segment.  soalloc()
+	// runs in the app socket()/accept() context, so a plain `new` lands in the
+	// backend's COW fork arena -- a VA unmapped in AS0/other ASes -> cross-AS
+	// page fault in tcp_input.  Force the identity kernel heap.
+	{
+		fork_arena::kernel_heap_scope _so_kh;
+		so = new socket{};
+	}
+	if (so == NULL)
+		return (NULL);
+#else
 	so = new socket{};
 	if (so == NULL)
 		return (NULL);
+#endif
 	uipc_d("soalloc() so=%" PRIx64, (uint64_t)so);
 	TAILQ_INIT(&so->so_aiojobq);
 	mtx_lock(&so_global_mtx);

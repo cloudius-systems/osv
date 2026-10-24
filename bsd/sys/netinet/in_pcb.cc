@@ -38,6 +38,8 @@
 #include <sys/cdefs.h>
 
 #include <bsd/porting/netport.h>
+#include <osv/fork_arena.hh>
+#include <osv/kernel_config_fork.h>
 #include <bsd/porting/uma_stub.h>
 #include <bsd/porting/callout.h>
 #include <bsd/sys/sys/eventhandler.h>
@@ -210,6 +212,9 @@ in_pcblbgroup_alloc(struct inpcblbgrouphead *hdr, u_char vflag,
 	size_t bytes;
 
 	bytes = __offsetof(struct inpcblbgroup, il_inp) + sizeof(inpcblbgroup::il_inp[0]) * size;
+#if CONF_fork
+	fork_arena::kernel_heap_scope _grp_kh;  // [T-NET-WEDGE] LB group linked into shared hash; keep off COW arena
+#endif
 	grp = (struct inpcblbgroup *)malloc(bytes);
 	if (!grp)
 		return (NULL);
@@ -1844,6 +1849,11 @@ in_pcbinshash_internal(struct inpcb *inp)
 	 * If none exists, malloc one and tack it on.
 	 */
 	if (phd == NULL) {
+#if CONF_fork
+		// [T-NET-WEDGE] inpcbport is linked into the shared ipi_porthashbase and
+		// walked/removed from AS0 and other backends; keep it off the COW arena.
+		fork_arena::kernel_heap_scope _phd_kh;
+#endif
 		phd = (inpcbport *)malloc(sizeof(struct inpcbport));
 		if (phd == NULL) {
 			return (ENOBUFS); /* XXX */

@@ -5,6 +5,8 @@
 
 #include <bsd/uipc_syscalls.h>
 #include <osv/debug.h>
+#include <osv/fork_arena.hh>
+#include <osv/kernel_config_fork.h>
 #include <osv/export.h>
 #include "libc/af_local.h"
 
@@ -12,9 +14,23 @@
 
 #define sock_d(...)		tprintf_d("socket-api", __VA_ARGS__);
 
+#if CONF_fork
+// [T-NET-WEDGE] Pin every kernel allocation made while servicing a socket
+// syscall onto the shared identity kernel heap (not the calling backend's
+// COW fork arena), so sockets/PCBs/llentries/poll nodes are coherently
+// mapped in AS0 (netisr/callout/poll_wake) and every other backend AS.
+// Chasing each malloc site individually does not converge (socket, inpcb,
+// inpcbport, lbgroup, poll_link, pollreq, llentry, callout node, ... all
+// land in the arena); one scope at the syscall boundary covers them all.
+#define NET_SYSCALL_KH fork_arena::kernel_heap_scope _net_sys_kh
+#else
+#define NET_SYSCALL_KH do {} while (0)
+#endif
+
 extern "C" OSV_LIBC_API
 int socketpair(int domain, int type, int protocol, int sv[2])
 {
+	NET_SYSCALL_KH;
 	int error;
 
 	sock_d("socketpair(domain=%d, type=%d, protocol=%d)", domain, type,
@@ -36,6 +52,7 @@ int socketpair(int domain, int type, int protocol, int sv[2])
 extern "C" OSV_LIBC_API
 int getsockname(int sockfd, struct bsd_sockaddr *addr, socklen_t *addrlen)
 {
+	NET_SYSCALL_KH;
 	int error;
 
 	sock_d("getsockname(sockfd=%d, ...)", sockfd);
@@ -53,6 +70,7 @@ int getsockname(int sockfd, struct bsd_sockaddr *addr, socklen_t *addrlen)
 extern "C" OSV_LIBC_API
 int getpeername(int sockfd, struct bsd_sockaddr *addr, socklen_t *addrlen)
 {
+	NET_SYSCALL_KH;
 	int error;
 
 	sock_d("getpeername(sockfd=%d, ...)", sockfd);
@@ -70,6 +88,7 @@ int getpeername(int sockfd, struct bsd_sockaddr *addr, socklen_t *addrlen)
 extern "C" OSV_LIBC_API
 int accept4(int fd, struct bsd_sockaddr *__restrict addr, socklen_t *__restrict len, int flg)
 {
+	NET_SYSCALL_KH;
 	int fd2, error;
 
 	sock_d("accept4(fd=%d, ..., flg=%d)", fd, flg);
@@ -87,6 +106,7 @@ int accept4(int fd, struct bsd_sockaddr *__restrict addr, socklen_t *__restrict 
 extern "C" OSV_LIBC_API
 int accept(int fd, struct bsd_sockaddr *__restrict addr, socklen_t *__restrict len)
 {
+	NET_SYSCALL_KH;
 	int fd2, error;
 
 	sock_d("accept(fd=%d, ...)", fd);
@@ -104,6 +124,7 @@ int accept(int fd, struct bsd_sockaddr *__restrict addr, socklen_t *__restrict l
 extern "C" OSV_LIBC_API
 int bind(int fd, const struct bsd_sockaddr *addr, socklen_t len)
 {
+	NET_SYSCALL_KH;
 	int error;
 
 	sock_d("bind(fd=%d, ...)", fd);
@@ -121,6 +142,7 @@ int bind(int fd, const struct bsd_sockaddr *addr, socklen_t len)
 extern "C" OSV_LIBC_API
 int connect(int fd, const struct bsd_sockaddr *addr, socklen_t len)
 {
+	NET_SYSCALL_KH;
 	int error;
 
 	sock_d("connect(fd=%d, ...)", fd);
@@ -138,6 +160,7 @@ int connect(int fd, const struct bsd_sockaddr *addr, socklen_t len)
 extern "C" OSV_LIBC_API
 int listen(int fd, int backlog)
 {
+	NET_SYSCALL_KH;
 	int error;
 
 	sock_d("listen(fd=%d, backlog=%d)", fd, backlog);
@@ -156,6 +179,7 @@ extern "C" OSV_LIBC_API
 ssize_t recvfrom(int fd, void *__restrict buf, size_t len, int flags,
 		struct bsd_sockaddr *__restrict addr, socklen_t *__restrict alen)
 {
+	NET_SYSCALL_KH;
 	int error;
 	ssize_t bytes;
 
@@ -175,6 +199,7 @@ ssize_t recvfrom(int fd, void *__restrict buf, size_t len, int flags,
 extern "C" OSV_LIBC_API
 ssize_t recv(int fd, void *buf, size_t len, int flags)
 {
+	NET_SYSCALL_KH;
 	int error;
 	ssize_t bytes;
 
@@ -193,6 +218,7 @@ ssize_t recv(int fd, void *buf, size_t len, int flags)
 extern "C" OSV_LIBC_API
 ssize_t recvmsg(int fd, struct l_msghdr *msg, int flags)
 {
+	NET_SYSCALL_KH;
 	ssize_t bytes;
 	int error;
 
@@ -212,6 +238,7 @@ extern "C" OSV_LIBC_API
 ssize_t sendto(int fd, const void *buf, size_t len, int flags,
     const struct bsd_sockaddr *addr, socklen_t alen)
 {
+	NET_SYSCALL_KH;
 	int error;
 	ssize_t bytes;
 
@@ -231,6 +258,7 @@ ssize_t sendto(int fd, const void *buf, size_t len, int flags,
 extern "C" OSV_LIBC_API
 ssize_t send(int fd, const void *buf, size_t len, int flags)
 {
+	NET_SYSCALL_KH;
 	int error;
 	ssize_t bytes;
 
@@ -249,6 +277,7 @@ ssize_t send(int fd, const void *buf, size_t len, int flags)
 extern "C" OSV_LIBC_API
 ssize_t sendmsg(int fd, const struct l_msghdr *msg, int flags)
 {
+	NET_SYSCALL_KH;
 	ssize_t bytes;
 	int error;
 
@@ -268,6 +297,7 @@ extern "C" OSV_LIBC_API
 int getsockopt(int fd, int level, int optname, void *__restrict optval,
 		socklen_t *__restrict optlen)
 {
+	NET_SYSCALL_KH;
 	int error;
 
 	sock_d("getsockopt(fd=%d, level=%d, optname=%d)", fd, level, optname);
@@ -285,6 +315,7 @@ int getsockopt(int fd, int level, int optname, void *__restrict optval,
 extern "C" OSV_LIBC_API
 int setsockopt(int fd, int level, int optname, const void *optval, socklen_t optlen)
 {
+	NET_SYSCALL_KH;
 	int error;
 
 	sock_d("setsockopt(fd=%d, level=%d, optname=%d, (*(int)optval)=%d, optlen=%d)",
@@ -303,6 +334,7 @@ int setsockopt(int fd, int level, int optname, const void *optval, socklen_t opt
 extern "C" OSV_LIBC_API
 int shutdown(int fd, int how)
 {
+	NET_SYSCALL_KH;
 	int error;
 
 	sock_d("shutdown(fd=%d, how=%d)", fd, how);
@@ -326,6 +358,7 @@ int shutdown(int fd, int how)
 extern "C" OSV_LIBC_API
 int socket(int domain, int type, int protocol)
 {
+	NET_SYSCALL_KH;
 	int s, error;
 
 	sock_d("socket(domain=%d, type=%d, protocol=%d)", domain, type, protocol);

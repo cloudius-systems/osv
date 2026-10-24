@@ -69,6 +69,8 @@
 #endif
 #include <bsd/sys/netinet/udp.h>
 #include <bsd/sys/netinet/udp_var.h>
+#include <osv/fork_arena.hh>
+#include <osv/kernel_config_fork.h>
 
 /*
  * UDP protocol implementation.
@@ -1363,7 +1365,12 @@ udp_attach(struct socket *so, int proto, struct thread *td)
 	if (error)
 		return (error);
 	INP_INFO_WLOCK(&V_udbinfo);
-	inp = new inpcb(so, &V_udbinfo);
+	{
+#if CONF_fork
+		fork_arena::kernel_heap_scope _inp_kh;  // [T-NET-WEDGE] PCB shared across ASes; keep off COW arena
+#endif
+		inp = new inpcb(so, &V_udbinfo);
+	}
 
 	inp->inp_vflag |= INP_IPV4;
 	inp->inp_ip_ttl = V_ip_defttl;

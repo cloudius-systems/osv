@@ -17,6 +17,8 @@ using namespace osv::clock::literals;
 #include <bsd/porting/callout.h>
 #include <bsd/porting/netport.h>
 #include <bsd/porting/sync_stub.h>
+#include <osv/fork_arena.hh>
+#include <osv/kernel_config_fork.h>
 
 TRACEPOINT(trace_callout_init, "C=%p", void *);
 TRACEPOINT(trace_callout_reset, "C=%p to_ticks=%d fn=%p arg=%p", void *, uint64_t, void *, void *);
@@ -55,6 +57,14 @@ namespace callouts {
 
     void add_callout(callout *c)
     {
+#if CONF_fork
+        // [T-NET-WEDGE] The std::set node is allocated here; callout_reset() on
+        // the ARP/lle timer runs in the backend (app) thread, so a default
+        // allocation lands in that backend's COW fork arena.  The dispatcher
+        // walks this set in AS0 and would fault on an arena-private node.  Pin
+        // the node to the identity kernel heap so the set is coherent in AS0.
+        fork_arena::kernel_heap_scope _co_kh;
+#endif
         _callouts.insert(c);
     }
 
