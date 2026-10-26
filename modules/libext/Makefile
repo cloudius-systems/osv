@@ -3,7 +3,7 @@ include ../common.gmk
 module_out := $(out)/modules/libext
 
 CXXFLAGS = -fPIC -std=gnu++11 $(INCLUDES) -I../lwext4/upstream/lwext4/include -I../lwext4/upstream/lwext4/build_lib_only/include \
-	 -D_KERNEL -D_GNU_SOURCE -Wall -fno-exceptions -fno-rtti -O2
+	 -D_KERNEL -D_GNU_SOURCE -Wall -fno-exceptions -fno-rtti -O2 $(RA_FLAGS)
 
 # the build target executable:
 TARGET = libext
