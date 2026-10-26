@@ -630,6 +630,30 @@ static int sys_ioctl(unsigned int fd, unsigned int command, unsigned long arg)
 }
 #endif
 
+#define __NR_sys_fcntl __NR_fcntl
+// The fcntl system call passes its third argument in a full register, and
+// for the lock commands it is a pointer. Read it as unsigned long and hand
+// fcntl() the type the command defines, so its variadic read matches.
+#if CONF_syscall_sys_fcntl
+static int sys_fcntl(int fd, int cmd, unsigned long arg)
+{
+    switch (cmd) {
+    case F_GETLK:
+    case F_SETLK:
+    case F_SETLKW:
+        return fcntl(fd, cmd, reinterpret_cast<struct flock *>(arg));
+    case F_DUPFD:
+    case F_DUPFD_CLOEXEC:
+    case F_SETFD:
+    case F_SETFL:
+    case F_SETOWN:
+        return fcntl(fd, cmd, static_cast<int>(arg));
+    default:
+        return fcntl(fd, cmd);
+    }
+}
+#endif
+
 struct sys_sigset {
     const sigset_t *ss;     /* Pointer to signal set */
     size_t          ss_len; /* Size (in bytes) of object pointed to by 'ss' */
