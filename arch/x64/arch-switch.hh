@@ -285,6 +285,16 @@ void thread::setup_tcb()
     _tcb->tls_base = p + user_tls_size;
 
     _tcb->app_tcb = 0;
+    _tcb->reserved0 = 0;
+    _tcb->reserved1 = 0;
+    // Install the psABI guards.  Applications compiled with -fstack-protector
+    // read the canary straight from %fs:0x28, so an uninitialised slot here is
+    // read as a canary by the very first stack-protected function the app calls.
+    // The value is process-wide on purpose: fork() children resume mid-frame on
+    // the parent's stack and must see the value the parent spilled (see
+    // arch-tls.hh and arch/x64/fork.cc).
+    _tcb->stack_guard = tcb_guard_value();
+    _tcb->pointer_guard = tcb_guard_value();
 }
 
 void thread::setup_large_syscall_stack()
