@@ -285,7 +285,8 @@ randomdev_flush_reseed(void)
 	random_harvestq_flush();
 
 #if defined(RANDOM_YARROW)
-	/* This ultimately calls randomdev_unblock() */
+	/* Rekey without changing the seeded gate; the flush above may have
+	 * seeded it only if enough credited entropy was processed. */
 	random_yarrow_reseed();
 #endif
 #if defined(RANDOM_FORTUNA)
