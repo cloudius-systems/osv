@@ -35,7 +35,21 @@ public:
     explicit waiter(sched::thread *t) : t(t) { };
 
     inline void wake() {
-        t.load(std::memory_order_relaxed)->wake_with_from_mutex([&] { t.store(nullptr, std::memory_order_release); });
+        // A wait_record left linked in a condvar/mutex queue can be stale: it
+        // may already be woken (wake() stores null below), or its backing
+        // thread pointer may not be resolvable in the waker's address space,
+        // reading as null or a tiny-integer remnant.  Dereferencing it faults,
+        // and on the preemption-disabled wake path that fault aborts the whole
+        // instance.  Skip a thread pointer that is null or an obviously invalid
+        // low value (no sched::thread lives in the first page); a real thread
+        // lives high in the address space.  This is deliberately narrow -- only
+        // clearly-bogus pointers are dropped -- so it never discards a
+        // legitimate wake.
+        sched::thread *w = t.load(std::memory_order_relaxed);
+        if (reinterpret_cast<uintptr_t>(w) < 0x1000UL) {
+            return;
+        }
+        w->wake_with_from_mutex([&] { t.store(nullptr, std::memory_order_release); });
     }
 
     inline void wait() const {
