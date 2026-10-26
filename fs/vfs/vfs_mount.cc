@@ -144,6 +144,7 @@ sys_mount(const char *dev, const char *dir, const char *fsname, int flags, const
         goto err1;
     }
     mp->m_count = 0;
+    mp->m_lookups = 0;
     mp->m_op = fs->vs_op;
     mp->m_flags = flags;
     mp->m_dev = device;
@@ -268,6 +269,32 @@ found:
         goto out;
     }
 
+    /*
+     * Refuse while the mount has users. A lookup between vfs_findroot()
+     * and its first dentry reference holds m_lookups. Open files, the
+     * working directory, file mappings that keep their file, submounts
+     * (through m_covered) and any other held dentry reference the root
+     * dentry through the dentry parent chain, so m_root->d_refcnt is
+     * above the mount's own reference. Raising it from 1 requires a
+     * vfs_findroot() pin, which needs mount_lock, so a value of 1 read
+     * here with no pins cannot change under us. vfs_putroot() drops pins
+     * without mount_lock; the acquire load pairs with its release.
+     *
+     * Not every holder has a dentry: the page cache keeps a bare vnode
+     * reference for dirty shared pages after munmap() and close(). Only
+     * filesystems that check m_count themselves (bsd ZFS, NFS) refuse
+     * that case; ext, openzfs and virtiofs do not.
+     *
+     * MNT_FORCE keeps its existing meaning: unmount_rootfs() relies on it
+     * at shutdown, when loaded objects still hold their files open.
+     */
+    if (!(flags & MNT_FORCE) &&
+        (__atomic_load_n(&mp->m_lookups, __ATOMIC_ACQUIRE) != 0 ||
+         dentry_refcnt(mp->m_root) > 1)) {
+        error = EBUSY;
+        goto out;
+    }
+
     if ((error = VFS_UNMOUNT(mp, flags)) != 0)
         goto out;
     mount_list.remove(mp);
@@ -387,6 +414,10 @@ count_match(const char *path, char *mount_root)
  * @path: full path.
  * @mp: mount point to return.
  * @root: pointer to root directory in path.
+ *
+ * On success the mount is pinned against unmount until the caller
+ * calls vfs_putroot(). Callers hold a dentry of the mount before
+ * releasing the pin if they keep using it.
  */
 int
 vfs_findroot(const char *path, struct mount **mp, char **root)
@@ -411,8 +442,31 @@ vfs_findroot(const char *path, struct mount **mp, char **root)
     *root = (char *)(path + max_len);
     if (**root == '/')
         (*root)++;
+    /* Relaxed: mount_lock orders this against the check in sys_umount2(). */
+    __atomic_fetch_add(&m->m_lookups, 1, __ATOMIC_RELAXED);
     *mp = m;
     return 0;
+}
+
+/*
+ * Release a pin taken by vfs_findroot(). The caller must not touch mp
+ * afterwards unless it holds a dentry of the mount.
+ *
+ * Only taking a pin needs mount_lock. sys_umount2() holds mount_lock
+ * across its check and VFS_UNMOUNT(), so no pin can be taken in between,
+ * and a decrement racing the check can only make it see a count that is
+ * too high (a spurious EBUSY on a mount that is just being released),
+ * never one that is too low. The release here pairs with the acquire load
+ * in sys_umount2(): a check that reads zero is ordered after this
+ * lookup's last use of mp and after any dentry reference it took before
+ * releasing the pin, so the unmount either sees that reference or cannot
+ * free mp under the lookup.
+ */
+void
+vfs_putroot(struct mount *mp)
+{
+    int old = __atomic_fetch_sub(&mp->m_lookups, 1, __ATOMIC_RELEASE);
+    assert(old > 0);
 }
 
 /*
