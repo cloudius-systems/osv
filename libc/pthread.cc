@@ -150,7 +150,24 @@ namespace pthread_private {
 #if CONF_lazy_stack
         unsigned stack_flags = mmu::mmap_stack;
 #else
-        unsigned stack_flags = mmu::mmap_populate;
+        // mmap_stack (not just mmap_populate) is load-bearing under CONF_fork:
+        // clone_address_space() decides which pages to SHARE (never COW) vs
+        // COW-protect, and it identifies a live thread's stack two ways -- the
+        // vma's mmap_stack flag, and thread_map membership via
+        // with_all_threads().  A pthread's stack vma is created here (map_anon)
+        // BEFORE the sched::thread is constructed and inserted into thread_map,
+        // so there is a window in which the stack vma exists but its owning
+        // thread is not yet in the map.  A fork() racing that window walks the
+        // parent vmas, sees this stack vma, finds no owning thread, and -- with
+        // only mmap_populate set -- fails to add it to share_ranges, so
+        // clone_pt_level0 COW-write-protects the PARENT's live stack page.
+        // When the new thread is first scheduled, thread_main's return-address
+        // push writes that page with preemption+irqs OFF -> a COW write fault
+        // in a non-preemptable context -> assert(sched::preemptable()).  Tagging
+        // the vma mmap_stack makes clone_address_space share it on the flag
+        // alone, independent of thread_map, closing both the create and the
+        // exit (thread removed from map, stack not yet unmapped) windows.
+        unsigned stack_flags = mmu::mmap_populate | mmu::mmap_stack;
 #endif
         void *addr = mmu::map_anon(nullptr, size, stack_flags, mmu::perm_rw);
         mmu::mprotect(addr, attr.guard_size, 0);
