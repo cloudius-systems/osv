@@ -350,6 +350,31 @@ public:
     using duration = thread_runtime::duration;
     unsigned _priority = 0;
     duration _time_slice = duration::zero();
+
+    // Total time this thread ran since starting this slice.
+    duration _run_time = duration::zero();
+
+    void reset_slice() {
+        _run_time = duration::zero();
+    }
+
+    bool has_slice() const {
+        // If the priority is 0 we don't schedule the thread according
+        // to SCHED_RR and therefore also don't respect the time slice.
+        if (_priority <= 0) {
+            return false;
+        }
+
+        return _time_slice != duration::zero();
+    }
+
+    bool has_remaining() const {
+        return _time_slice > _run_time;
+    }
+
+    duration remaining() const {
+        return _time_slice - _run_time;
+    }
 };
 
 // "tau" controls the length of the history we consider for scheduling,
@@ -694,6 +719,8 @@ public:
      * With time_slice == 0, the real-time scheduling policy matches POSIX's
      * "SCHED_FIFO" policy. With time_slice > 0, it matches POSIX's "SCHED_RR"
      * policy.
+     *
+     * Note: The time_slice should be set before the thread is started.
      */
     void set_realtime_time_slice(thread_realtime::duration time_slice);
     /**
