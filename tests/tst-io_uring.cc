@@ -199,6 +199,7 @@ static void test_io_uring_features(void)
     assert(p.features & IORING_FEAT_SUBMIT_STABLE);
     assert(p.features & IORING_FEAT_NATIVE_WORKERS);  /* A2-1 io-wq pool */
     assert(p.features & IORING_FEAT_CQE_SKIP);        /* CQE_SKIP_SUCCESS */
+    assert(p.features & IORING_FEAT_EXT_ARG);         /* A2-12 getevents_arg timed wait */
 
     /* SINGLE_MMAP is deliberately NOT advertised (3 separate regions). */
     assert(!(p.features & IORING_FEAT_SINGLE_MMAP));
