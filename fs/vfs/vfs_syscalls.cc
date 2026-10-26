@@ -838,9 +838,12 @@ sys_rename(char *src, char *dest)
 
 	error = VOP_RENAME(dvp1, vp1, sname, dvp2, vp2, dname);
 
-	dentry_move(dp1, ddp2, dname);
-	if (dp2)
-		dentry_remove(dp2);
+	/* Touch the dentry cache only if the filesystem renamed the entry. */
+	if (!error) {
+		dentry_move(dp1, ddp2, dname);
+		if (dp2)
+			dentry_remove(dp2);
+	}
 
  err3:
 	vn_unlock(dvp2);
