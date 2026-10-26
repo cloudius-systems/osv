@@ -230,6 +230,12 @@ tests += tst-rlimit.so
 tests += tst-close-range.so
 tests += tst-numa.so
 tests += tst-random-flush.so
+tests += tst-fork.so
+tests += tst-execve.so
+tests += payload-exit7.so
+tests += tst-fork-cow.so
+tests += tst-fork-deep.so
+tests += tst-fork-file-mmap.so
 internal-api-tests += tst-random-flush.so
 
 # Tests with special compilation parameters needed...
