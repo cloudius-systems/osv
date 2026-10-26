@@ -11,6 +11,9 @@
 
 #include <unordered_map>
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
+#include <new>
 
 #include <osv/drivers_config.h>
 
@@ -25,23 +28,49 @@ namespace numa {
 
 static bool s_available = false;
 static unsigned s_nr_nodes = 1;
-// Map from a raw APIC id to the NUMA node it belongs to (from SRAT).
-static std::unordered_map<uint32_t, unsigned> s_apic_to_node;
-// Map from a sched cpu id to its NUMA node (resolved via APIC id).
-static std::unordered_map<unsigned, unsigned> s_cpu_to_node;
-// SLIT distance matrix, row-major, s_nr_nodes x s_nr_nodes; empty if no SLIT.
-static std::vector<uint8_t> s_distances;
-static std::vector<mem_range> s_mem_ranges;
+struct topology {
+    // Retain the inverse mapping: SLIT rows use raw PXM, never dense IDs.
+    std::vector<uint32_t> domains;
+    std::unordered_map<uint32_t, unsigned> apic_to_node;
+    std::unordered_map<unsigned, unsigned> cpu_to_node;
+    std::vector<uint8_t> distances;
+    std::vector<mem_range> mem_ranges;
+};
+static topology s_topology;
 static bool s_initialized = false;
 
 unsigned nr_nodes() { return s_nr_nodes; }
 bool available() { return s_available; }
-const std::vector<mem_range>& memory_ranges() { return s_mem_ranges; }
+const std::vector<mem_range>& memory_ranges() { return s_topology.mem_ranges; }
 
 unsigned node_of_cpu(unsigned cpu_id)
 {
-    auto it = s_cpu_to_node.find(cpu_id);
-    return it == s_cpu_to_node.end() ? 0 : it->second;
+    auto it = s_topology.cpu_to_node.find(cpu_id);
+    return it == s_topology.cpu_to_node.end() ? 0 : it->second;
+}
+
+int node_of_phys(uint64_t phys)
+{
+    for (const auto& range : s_topology.mem_ranges) {
+        if (phys >= range.base && phys - range.base < range.length) {
+            return int(range.node);
+        }
+    }
+    return -1;
+}
+
+bool cpu_node_known(unsigned cpu_id)
+{
+    return s_topology.cpu_to_node.find(cpu_id) != s_topology.cpu_to_node.end();
+}
+
+bool raw_domain(unsigned node, uint32_t& domain)
+{
+    if (node >= s_topology.domains.size()) {
+        return false;
+    }
+    domain = s_topology.domains[node];
+    return true;
 }
 
 unsigned distance(unsigned from, unsigned to)
@@ -49,8 +78,8 @@ unsigned distance(unsigned from, unsigned to)
     if (from == to) {
         return 10;   // ACPI convention: 10 == local.
     }
-    if (!s_distances.empty() && from < s_nr_nodes && to < s_nr_nodes) {
-        return s_distances[from * s_nr_nodes + to];
+    if (!s_topology.distances.empty() && from < s_nr_nodes && to < s_nr_nodes) {
+        return s_topology.distances[from * s_nr_nodes + to];
     }
     return 20;       // Default remote distance when no SLIT is present.
 }
@@ -58,94 +87,174 @@ unsigned distance(unsigned from, unsigned to)
 #if CONF_drivers_acpi
 using boost::intrusive::get_parent_from_member;
 
-// Record the (apic id -> node) mapping and track the highest node seen.
-static void record_cpu_affinity(uint32_t apic_id, unsigned node, unsigned& max_node)
-{
-    s_apic_to_node[apic_id] = node;
-    max_node = std::max(max_node, node);
-}
-
-static void parse_srat()
+static bool parse_srat(topology& t)
 {
     char sig[] = ACPI_SIG_SRAT;
     ACPI_TABLE_HEADER* header;
     if (AcpiGetTable(sig, 0, &header) != AE_OK) {
-        return;   // No SRAT: leave the single-node fallback in place.
+        return false;   // No SRAT: leave the single-node fallback in place.
     }
     auto srat = get_parent_from_member(header, &ACPI_TABLE_SRAT::Header);
-    void* sub = srat + 1;
-    void* end = static_cast<void*>(srat) + srat->Header.Length;
-    unsigned max_node = 0;
+    if (srat->Header.Length < sizeof(ACPI_TABLE_SRAT) ||
+        srat->Header.Length > max_srat_bytes) {
+        return false;   // Truncated SRAT header: nothing safe to walk.
+    }
+    // Walk with a byte cursor: void* arithmetic is a non-standard GNU extension,
+    // and a byte cursor makes the bounds checks below straightforward.
+    auto* base = reinterpret_cast<char*>(srat);
+    auto* cur = base + sizeof(ACPI_TABLE_SRAT);
+    auto* end = base + srat->Header.Length;
+    std::unordered_map<uint32_t, unsigned> apic_to_node;
+    std::vector<mem_range> mem_ranges;
+    auto record_domain = [&](uint32_t domain) {
+        if (std::find(t.domains.begin(), t.domains.end(), domain) == t.domains.end()) {
+            if (t.domains.size() == max_nodes) {
+                return false;
+            }
+            t.domains.push_back(domain);
+        }
+        return true;
+    };
+    auto record_cpu_affinity = [&](uint32_t apic_id, unsigned node) {
+        if (!record_domain(node)) {
+            return false;
+        }
+        auto entry = apic_to_node.emplace(apic_id, node);
+        return entry.second || entry.first->second == node;
+    };
 
-    while (sub < end) {
-        auto s = static_cast<ACPI_SUBTABLE_HEADER*>(sub);
-        if (s->Length == 0) {
-            break;   // Guard against a malformed zero-length subtable.
+    // Stage the topology until every entry has been checked. A malformed tail
+    // must not publish a partial CPU/memory map.
+    while (cur < end) {
+        if (size_t(end - cur) < sizeof(ACPI_SUBTABLE_HEADER)) {
+            return false;
+        }
+        auto s = reinterpret_cast<ACPI_SUBTABLE_HEADER*>(cur);
+        if (s->Length < sizeof(ACPI_SUBTABLE_HEADER) || s->Length > size_t(end - cur)) {
+            return false;   // Malformed: zero/short length, or subtable overruns SRAT.
         }
         switch (s->Type) {
         case ACPI_SRAT_TYPE_CPU_AFFINITY: {
+            if (s->Length < sizeof(ACPI_SRAT_CPU_AFFINITY)) {
+                return false;
+            }
             auto a = get_parent_from_member(s, &ACPI_SRAT_CPU_AFFINITY::Header);
             if (a->Flags & ACPI_SRAT_CPU_ENABLED) {
                 unsigned node = a->ProximityDomainLo |
                     (a->ProximityDomainHi[0] << 8) |
                     (a->ProximityDomainHi[1] << 16) |
-                    (a->ProximityDomainHi[2] << 24);
-                record_cpu_affinity(a->ApicId, node, max_node);
+                    (uint32_t(a->ProximityDomainHi[2]) << 24);
+                if (!record_cpu_affinity(a->ApicId, node)) {
+                    return false;
+                }
             }
             break;
         }
         case ACPI_SRAT_TYPE_X2APIC_CPU_AFFINITY: {
+            if (s->Length < sizeof(ACPI_SRAT_X2APIC_CPU_AFFINITY)) {
+                return false;
+            }
             auto a = get_parent_from_member(s, &ACPI_SRAT_X2APIC_CPU_AFFINITY::Header);
             if (a->Flags & ACPI_SRAT_CPU_ENABLED) {
-                record_cpu_affinity(a->ApicId, a->ProximityDomain, max_node);
+                if (!record_cpu_affinity(a->ApicId, a->ProximityDomain)) {
+                    return false;
+                }
             }
             break;
         }
         case ACPI_SRAT_TYPE_MEMORY_AFFINITY: {
+            if (s->Length < sizeof(ACPI_SRAT_MEM_AFFINITY)) {
+                return false;
+            }
             auto m = get_parent_from_member(s, &ACPI_SRAT_MEM_AFFINITY::Header);
             if (m->Flags & ACPI_SRAT_MEM_ENABLED) {
-                s_mem_ranges.push_back(mem_range{
+                if (!record_domain(m->ProximityDomain) || m->Length == 0 ||
+                    m->Length > UINT64_MAX - m->BaseAddress) {
+                    return false;
+                }
+                mem_ranges.push_back(mem_range{
                     m->BaseAddress, m->Length, m->ProximityDomain,
                     (m->Flags & ACPI_SRAT_MEM_HOT_PLUGGABLE) != 0});
-                max_node = std::max(max_node, (unsigned)m->ProximityDomain);
             }
             break;
         }
         default:
             break;
         }
-        sub = static_cast<void*>(sub) + s->Length;
+        cur += s->Length;
     }
 
-    if (!s_apic_to_node.empty() || !s_mem_ranges.empty()) {
-        s_available = true;
-        s_nr_nodes = max_node + 1;
+    if (t.domains.empty()) {
+        return false;
     }
+    std::sort(t.domains.begin(), t.domains.end());
+    auto dense = [&](uint32_t raw) {
+        return unsigned(std::lower_bound(t.domains.begin(), t.domains.end(), raw)
+                        - t.domains.begin());
+    };
+    for (auto& entry : apic_to_node) {
+        entry.second = dense(entry.second);
+    }
+    std::sort(mem_ranges.begin(), mem_ranges.end(),
+              [](const mem_range& a, const mem_range& b) { return a.base < b.base; });
+    uint64_t end_address = 0;
+    for (auto& range : mem_ranges) {
+        if (range.base < end_address) {
+            return false; // No ambiguous physical ownership, even within one node.
+        }
+        end_address = range.base + range.length; // Validated above.
+        range.node = dense(range.node);
+    }
+    t.apic_to_node = std::move(apic_to_node);
+    t.mem_ranges = std::move(mem_ranges);
+    return true;
 }
 
-static void parse_slit()
+static void parse_slit(topology& t)
 {
     char sig[] = ACPI_SIG_SLIT;
     ACPI_TABLE_HEADER* header;
     if (AcpiGetTable(sig, 0, &header) != AE_OK) {
         return;
     }
-    auto slit = get_parent_from_member(header, &ACPI_TABLE_SLIT::Header);
-    uint64_t n = slit->LocalityCount;
-    // Only trust SLIT if it agrees with the node count we saw in SRAT.
-    if (n == 0 || n != s_nr_nodes) {
+    constexpr size_t fixed_size = offsetof(ACPI_TABLE_SLIT, Entry);
+    if (header->Length < fixed_size) {
         return;
     }
-    s_distances.assign(slit->Entry, slit->Entry + n * n);
+    auto slit = get_parent_from_member(header, &ACPI_TABLE_SLIT::Header);
+    uint64_t n = slit->LocalityCount;
+    // LocalityCount is a raw-domain extent, not the compact node count.
+    if (n == 0 || t.domains.back() >= n) {
+        return;
+    }
+    // Guard against a malformed/truncated SLIT: the n*n entries must actually
+    // fit within the table's declared length (and n*n must not overflow).
+    if (n > (header->Length - fixed_size) / n) {
+        return;
+    }
+    auto count = t.domains.size();
+    std::vector<uint8_t> distances(count * count);
+    for (size_t from = 0; from < count; ++from) {
+        for (size_t to = 0; to < count; ++to) {
+            auto value = slit->Entry[uint64_t(t.domains[from]) * n + t.domains[to]];
+            // ACPI 6.5 section 5.2.17: diagonal 10, 0..9 reserved,
+            // 255 unreachable. Off-diagonal 10 is not forbidden.
+            if ((from == to && value != 10) || value < 10) {
+                return;
+            }
+            distances[from * count + to] = value;
+        }
+    }
+    t.distances = std::move(distances);
 }
 
 // Resolve the (apic id -> node) map into a (sched cpu id -> node) map.
-static void resolve_cpus()
+static void resolve_cpus(topology& t)
 {
     for (auto* c : sched::cpus) {
-        auto it = s_apic_to_node.find(c->arch.apic_id);
-        if (it != s_apic_to_node.end()) {
-            s_cpu_to_node[c->id] = it->second;
+        auto it = t.apic_to_node.find(c->arch.apic_id);
+        if (it != t.apic_to_node.end()) {
+            t.cpu_to_node[c->id] = it->second;
         }
     }
 }
@@ -159,17 +268,26 @@ void init()
     s_initialized = true;
 
 #if CONF_drivers_acpi
-    parse_srat();
-    if (s_available) {
-        parse_slit();
-        resolve_cpus();
+    try {
+        topology pending;
+        if (parse_srat(pending)) {
+            parse_slit(pending);
+            resolve_cpus(pending);
+            // All allocations have completed. Boot-only publication, not a
+            // protocol for concurrent readers or runtime reinitialization.
+            s_topology = std::move(pending);
+            s_nr_nodes = s_topology.domains.size();
+            s_available = true;
+        }
+    } catch (const std::bad_alloc&) {
+        // Synthetic/unknown topology is preferable to a partial firmware map.
     }
 #endif
 
     if (s_available) {
         debugf("NUMA: %u node(s), %zu CPU(s) mapped, %zu memory range(s)%s\n",
-               s_nr_nodes, s_cpu_to_node.size(), s_mem_ranges.size(),
-               s_distances.empty() ? ", no SLIT" : "");
+               s_nr_nodes, s_topology.cpu_to_node.size(), s_topology.mem_ranges.size(),
+               s_topology.distances.empty() ? ", no SLIT" : "");
     } else {
         debugf("NUMA: no SRAT, assuming a single flat node\n");
     }
