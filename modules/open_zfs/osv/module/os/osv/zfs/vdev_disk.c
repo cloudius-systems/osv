@@ -105,6 +105,22 @@ vdev_disk_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 	/* Secure/discard-zeroes semantics are not guaranteed on OSv. */
 	vd->vdev_has_securetrim = B_FALSE;
 
+	/*
+	 * Report the vdev as solid state.  OSv has no equivalent of Linux's
+	 * blk_queue_nonrot() -- struct device carries no rotational bit -- and
+	 * every storage backend OSv virtualises (virtio-blk, NVMe, ide/ahci)
+	 * is flash or hypervisor-backed on the platforms OSv targets.
+	 *
+	 * Leaving this at the B_FALSE default makes vdev_queue_aggregate()
+	 * apply the rotating-disk trades: the 1 MiB zfs_vdev_aggregation_limit
+	 * instead of the 128 KiB non-rotating cap, and closing write gaps up
+	 * to zfs_vdev_write_gap_limit by pulling in blocks the workload never
+	 * dirtied.  Both spend extra device bytes to save a seek, so on flash
+	 * they are write amplification with nothing to amortise it.
+	 * vdev_file.c reports non-rotating for the same reason.
+	 */
+	vd->vdev_nonrot = B_TRUE;
+
 	return (0);
 }
 
