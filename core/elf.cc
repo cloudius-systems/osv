@@ -1546,8 +1546,21 @@ program::program(void* addr)
           "libcrypt.so.1",
           "libutil.so",
     };
-    auto ml = new modules_list();
-    ml->objects.push_back(_core.get());
+    modules_list *ml;
+    {
+#if CONF_fork
+        // The object-list vector (modules_list::objects) is read by forked
+        // children under rcu_read_lock (object_containing_addr), which runs
+        // with preemption DISABLED.  Keep its backing store on the shared
+        // identity kernel heap (resident at the same VA in every address
+        // space) instead of the per-AS COW fork arena, so the non-preemptable
+        // read in a child cannot take a not-present fault on an arena page the
+        // child's clone did not capture.
+        fork_arena::kernel_heap_scope kh;
+#endif
+        ml = new modules_list();
+        ml->objects.push_back(_core.get());
+    }
     for (auto name : supplied_modules) {
         _files[name] = _core;
     }
@@ -1651,10 +1664,19 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         // with one exception: the kernel needs to remain at the end of the
         // list - We want it to behave like a library, not the main program.
         auto old_modules = _modules_rcu.read_by_owner();
-        std::unique_ptr<modules_list> new_modules (
-                new modules_list(*old_modules));
-        new_modules->objects.insert(
-                std::prev(new_modules->objects.end()), ef.get());
+        std::unique_ptr<modules_list> new_modules;
+        {
+#if CONF_fork
+            // Identity heap, not the COW arena: forked children walk this
+            // vector under rcu_read_lock (preemption off) via
+            // object_containing_addr.  Both the copy ctor and insert() grow the
+            // backing store, so wrap both.
+            fork_arena::kernel_heap_scope kh;
+#endif
+            new_modules.reset(new modules_list(*old_modules));
+            new_modules->objects.insert(
+                    std::prev(new_modules->objects.end()), ef.get());
+        }
         new_modules->adds++;
         _modules_rcu.assign(new_modules.release());
         osv::rcu_dispose(old_modules);
@@ -1762,10 +1784,18 @@ void program::remove_object(object *ef)
     if (_files[ef->soname()].expired())
         _files.erase(ef->soname());
     auto old_modules = _modules_rcu.read_by_owner();
-    std::unique_ptr<modules_list> new_modules (
-            new modules_list(*old_modules));
-    new_modules->objects.erase(std::find(
-            new_modules->objects.begin(), new_modules->objects.end(), ef));
+    std::unique_ptr<modules_list> new_modules;
+    {
+#if CONF_fork
+        // Identity heap, not the COW arena (same reason as add_object): the new
+        // modules_list and its copied objects vector are read by forked
+        // children under rcu_read_lock with preemption off.
+        fork_arena::kernel_heap_scope kh;
+#endif
+        new_modules.reset(new modules_list(*old_modules));
+        new_modules->objects.erase(std::find(
+                new_modules->objects.begin(), new_modules->objects.end(), ef));
+    }
     new_modules->subs++;
     _modules_rcu.assign(new_modules.release());
     osv::rcu_dispose(old_modules);
@@ -2011,6 +2041,13 @@ ulong program::register_dtv(object* obj)
     SCOPE_LOCK(_module_index_list_mutex);
     auto list = _module_index_list_rcu.read_by_owner();
     if (!list) {
+#if CONF_fork
+        // Identity heap, not the COW arena: this DTV index vector is read by
+        // forked children under rcu_read_lock (preemption off) in tls_object()
+        // on the first dynamic-TLS access of a module.  Keep its backing store
+        // resident at the same VA in every address space.
+        fork_arena::kernel_heap_scope kh;
+#endif
         _module_index_list_rcu.assign(new std::vector<object*>({obj}));
         return 0;
     }
@@ -2019,8 +2056,14 @@ ulong program::register_dtv(object* obj)
         *i = obj;
         return i - list->begin();
     } else {
-        auto newlist = new std::vector<object*>(*list);
-        newlist->push_back(obj);
+        std::vector<object*> *newlist;
+        {
+#if CONF_fork
+            fork_arena::kernel_heap_scope kh;
+#endif
+            newlist = new std::vector<object*>(*list);
+            newlist->push_back(obj);
+        }
         _module_index_list_rcu.assign(newlist);
         osv::rcu_dispose(list);
         return newlist->size() - 1;
