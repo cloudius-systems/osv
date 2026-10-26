@@ -8,6 +8,7 @@
 #include "drivers/virtio-rng.hh"
 #include "drivers/random.hh"
 
+#include <osv/drivers_config.h>
 #include <osv/mmu.hh>
 #include <algorithm>
 #include <iterator>
@@ -49,6 +50,7 @@ rng::rng(virtio_device& dev)
     _queue = get_virt_queue(0);
 
     interrupt_factory int_factory;
+#if CONF_drivers_pci
     int_factory.register_msi_bindings = [this](interrupt_manager &msi) {
         msi.easy_register( {{ 0, [=] { this->_queue->disable_interrupts(); }, this->_thread.get() }});
     };
@@ -58,6 +60,24 @@ rng::rng(virtio_device& dev)
             [=] { return this->ack_irq(); },
             [=] { this->handle_irq(); });
     };
+#endif
+#if CONF_drivers_mmio
+#ifdef __aarch64__
+    int_factory.create_spi_edge_interrupt = [this]() {
+        return new spi_interrupt(
+            gic::irq_type::IRQ_TYPE_EDGE,
+            _dev.get_irq(),
+            [=] { return this->ack_irq(); },
+            [=] { this->handle_irq(); });
+    };
+#else
+    int_factory.create_gsi_edge_interrupt = [this]() {
+        return new gsi_edge_interrupt(
+            _dev.get_irq(),
+            [=] { if (this->ack_irq()) this->handle_irq(); });
+    };
+#endif
+#endif
     _dev.register_interrupt(int_factory);
 
     // Step 8
@@ -135,6 +155,9 @@ void rng::refill()
         wait_for_queue(_queue, &vring::used_ring_not_empty);
 
         _queue->get_buf_elem(&len);
+        if (len > remaining) {
+            abort("virtio-rng: used length %u exceeds submitted capacity %zu", len, remaining);
+        }
         _queue->get_buf_finalize();
     }
     copy_n(buf.begin(), len, back_inserter(_entropy));
