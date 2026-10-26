@@ -998,6 +998,14 @@ struct cpu : private timer_base::client {
     timer_list timers;
     timer_base preemption_timer;
     thread* idle_thread;
+    // Adaptive idle-spin window: how many spin iterations this CPU polls
+    // incoming_wakeups before halting.  Written only by this CPU in do_idle
+    // (jumped to the cap on a caught wake, walked down after a run of genuine
+    // halts), so no atomic needed.  0 = uninitialized; seeded to the cap on
+    // first idle entry.  idle_halt_streak counts consecutive genuine halts so a
+    // single stray halt on a busy CPU does not collapse the window.
+    unsigned idle_spin_window = 0;
+    unsigned idle_halt_streak = 0;
     // if true, cpu is now polling incoming_wakeups_mask
     std::atomic<bool> idle_poll = { false };
     // there is a data dependency between next two fields
