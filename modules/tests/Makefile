@@ -222,6 +222,7 @@ internal-api-tests := tst-app.so tst-async.so tst-bsd-evh.so \
 ifeq ($(arch),x64)
 tests += tst-mmx-fpu.so tst-tls-desc.so tst-tls-pie-desc.so libtls_desc.so
 tests += tst-tls-pie-dlopen-desc.so tst-tls-pie-dlopen-desc-needed.so libtls_desc_user.so
+tests += tst-tls-dlopen-gd.so libtls_gd.so libtls_gd_user.so
 endif
 
 tests += testrunner.so
@@ -333,6 +334,23 @@ $(out)/tests/libtls_desc_user.so: \
 		$(out)/tests/libtls_desc.so
 	$(makedir)
 	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(LIBS) tests/libtls_desc.so, LD tests/libtls_desc_user.so)
+
+# tst-tls-dlopen-gd.so is linked with libtls_gd.so, which accesses its
+# thread-local variable only through __tls_get_addr() so it has no static TLS
+# block, and dlopen()s libtls_gd_user.so, which accesses the same variable
+# through a TLS descriptor.
+$(out)/tests/libtls_gd.o: CXXFLAGS += -mtls-dialect=gnu
+$(out)/tests/libtls_gd_user.so: CXXFLAGS += -mtls-dialect=gnu2
+$(out)/tests/libtls_gd_user.so: \
+		$(src)/tests/libtls_gd_user.cc \
+		$(out)/tests/libtls_gd.so
+	$(makedir)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(LIBS) tests/libtls_gd.so, LD tests/libtls_gd_user.so)
+$(out)/tests/tst-tls-dlopen-gd.so: \
+		$(src)/tests/tst-tls-dlopen-gd.cc \
+		$(out)/tests/libtls_gd.so
+	$(makedir)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -pthread -shared -o $@ $< tests/libtls_gd.so, CXX tests/tst-tls-dlopen-gd.cc)
 
 $(out)/tests/libtls_gold.so: COMMON += -fuse-ld=gold
 $(out)/tests/libtls_gold.so: $(out)/tests/libtls.o

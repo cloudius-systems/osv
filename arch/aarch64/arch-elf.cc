@@ -118,11 +118,19 @@ void object::arch_relocate_tls_desc(u32 sym, void *addr, Elf64_Sxword addend)
     // threads that already exist, so it needs to be accessed using a dynamic
     // TLS descriptor, otherwise a static one. What matters is the ELF which
     // defines the variable, not the one accessing it.
+    // The same is true when a dlopen()-ed ELF accesses a variable of an ELF
+    // which was not dlopen()-ed but has no static TLS block (because it
+    // accesses its own thread-local variables only via __tls_get_addr()):
+    // allocating a static TLS block for it now would not add it to the
+    // static TLS of the threads that already exist. The kernel and the
+    // executable always have their TLS in static TLS.
     symbol_module sm;
     bool dynamic;
     if (sym) {
         sm = symbol(sym);
-        dynamic = sm.obj->_dlopen_ed;
+        dynamic = sm.obj->_dlopen_ed ||
+            (_dlopen_ed && !sm.obj->_static_tls && !sm.obj->is_core() &&
+             !sm.obj->is_dynamically_linked_executable());
     } else {
         dynamic = _dlopen_ed;
     }
