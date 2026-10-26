@@ -153,12 +153,6 @@ ifeq (,$(wildcard $(out)/gen/config/kernel_conf.mk))
 endif
 include $(out)/gen/config/kernel_conf.mk
 endif
-# kconfig offers fork only on x86_64 (conf/kconfig/threads), but a conf_fork=1
-# given on the command line overrides kernel_conf.mk and would still pull the
-# fork objects into the object lists below.
-ifneq ($(arch),x64)
-override conf_fork := 0
-endif
 #
 # This parameter can be passed in to the build command to specify name of
 # a drivers profile. The drivers profile allows to build custom kernel with
