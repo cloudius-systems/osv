@@ -1075,6 +1075,25 @@ int writeback_inode(dev_t dev, ino_t ino, off_t start, off_t end)
 
     SCOPE_LOCK(write_lock);
 
+    /*
+     * The write cache only ever holds pages faulted in through a writable
+     * MAP_SHARED mapping (see the single insert() call site, reached solely
+     * from the mmap write-fault path).  A file written with write()/pwrite()
+     * has no pages here, so its dirty set is empty.  Without this guard the
+     * loops below still walk every page in [start,end) doing a hash lookup
+     * that always misses -- an O(file-size) scan on every fsync() that flushes
+     * nothing.  Skip it when the cache holds no write pages at all: an empty
+     * cache cannot contain a dirty page for this inode, so there is nothing to
+     * promote, collect, or write back.
+     */
+    if (write_cache.empty())
+        return 0;
+    /* ponytail: whole-cache empty guard removes the O(file-size) scan for the
+     * write()/pwrite() case (no writable mmap pages anywhere).  A large file
+     * with a few dirty mmap pages elsewhere in the guest still scans its whole
+     * range; add a per-inode dirty-offset index if a mixed mmap+write workload
+     * ever needs that. */
+
     /* Phase 1: promote PTE-dirty pages to software-dirty.  clear_dirty()
      * writes the PTE only when the dirty bit was set (mapping preserved),
      * so an empty to_flush means no PTE changed and the flush below can be
