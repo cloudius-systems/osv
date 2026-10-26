@@ -63,6 +63,8 @@
 #include "libc/network/__dns.hh"
 #include <processor.hh>
 #include <dlfcn.h>
+#include <sys/stat.h>
+#include <fcntl.h>
 #include <osv/string_utils.hh>
 
 using namespace osv;
@@ -480,8 +482,15 @@ static void stop_all_remaining_app_threads()
 
 static int load_fs_library(const char* fs_library_path, std::function<int()> on_load_fun = nullptr)
 {
-    // Load and initialize filesystem driver
-    if (dlopen(fs_library_path, RTLD_LAZY)) {
+    // Load and initialize filesystem driver.  RTLD_GLOBAL is load-bearing for
+    // the ZFS case: the userspace tools (/zpool.so, /zfs.so) are linked only
+    // against libzfs.so + libc and resolve their nvpair/nvlist/fnvlist symbols
+    // (~60 of them) against libsolaris.so at runtime.  Loading libsolaris with
+    // RTLD_LOCAL leaves those symbols invisible to a later dlopen of the tools,
+    // so zpool.so loads with dozens of "ignoring missing symbol nvpair_*" and
+    // then cannot talk to the kernel ("/dev/zfs not found").  RTLD_GLOBAL puts
+    // libsolaris's exports in the global scope so the tools resolve correctly.
+    if (dlopen(fs_library_path, RTLD_LAZY | RTLD_GLOBAL)) {
         if (on_load_fun) {
            return on_load_fun();
         } else {
@@ -552,6 +561,40 @@ void* do_main_thread(void *_main_args)
     }
     boot_time.event("drivers loaded");
 
+    // Preload the ZFS library WITHOUT mounting a ZFS root, BEFORE the root-mount
+    // block.  Used by the ZFS builder, and by any image whose root filesystem
+    // is NOT zfs (e.g. fs=ramfs) but which still wants to create/import a ZFS
+    // *data* pool at runtime.  This must run before opt_mount's unmount/pivot
+    // dance: after that, dlopen of /usr/lib/fs/libsolaris.so from the bootfs
+    // ramfs fails to open (the path is no longer resolvable), which is why the
+    // fs=zfs path (which dlopens libsolaris inside the mount block, before the
+    // pivot) works while a later preload did not.  libsolaris.so alone is not
+    // enough: the in-kernel ZFS control device /dev/zfs must also exist, else
+    // zpool/zfs commands fail with "/dev/zfs not found".  So also run
+    // zfsdev_init() (as load_zfs_library_and_mount_zfs_root does for fs=zfs)
+    // and create an empty /etc/mnttab (as the in-tree zfs bench harness does)
+    // so a ramfs-root image can bring up a ZFS data pool on a local disk.
+    //
+    // The ZFS builder boots with --noinit and initializes the control device
+    // itself from its own bootfs tool, so only bring the device up here when
+    // the image runs its normal init.
+    if (opt_preload_zfs_library) {
+        bool init_zfsdev = opt_init;
+        if (load_fs_library(libsolaris_path, [init_zfsdev]() {
+                if (init_zfsdev) {
+                    zfsdev::zfsdev_init();
+                    mkdir("/etc", 0755);
+                    int fd = creat("/etc/mnttab", 0644);
+                    if (fd >= 0)
+                        close(fd);
+                }
+                return 0;
+            })) {
+            fprintf(stderr, "Failed to preload ZFS library. Powering off.\n");
+            osv::poweroff();
+        }
+    }
+
     if (opt_mount) {
         unmount_devfs();
 
@@ -605,13 +648,7 @@ void* do_main_thread(void *_main_args)
         }
     }
 
-    //This option is only used by ZFS builder
-    if (opt_preload_zfs_library) {
-        if (load_fs_library(libsolaris_path)) {
-            fprintf(stderr, "Failed to preload ZFS library. Powering off.\n");
-            osv::poweroff();
-        }
-    }
+    // (ZFS preload moved earlier, before the root-mount block.)
 
 #if CONF_networking_stack
     bool has_if = false;

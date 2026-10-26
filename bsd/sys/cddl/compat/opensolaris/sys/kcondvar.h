@@ -50,6 +50,12 @@ typedef enum {
 int cv_timedwait(kcondvar_t *cv, mutex_t *mutex, clock_t tmo);
 // OpenZFS variant: absolute deadline (see bsd/porting/netport1.cc).
 int openzfs_cv_timedwait(kcondvar_t *cv, mutex_t *mutex, clock_t abstime);
+// OpenZFS hires variant: nanosecond-precision timed wait.  deadline_ns is an
+// absolute gethrtime() (wall-clock, CLOCK_REALTIME) deadline when absolute!=0, else a relative
+// nanosecond delay.  Used by cv_timedwait_hires so the ZIL commit-batch window
+// (sub-millisecond) is honored instead of being rounded to zero by ticks.
+int openzfs_cv_timedwait_hires(kcondvar_t *cv, mutex_t *mutex,
+    long long deadline_ns, int absolute);
 
 #ifdef __cplusplus
 }
