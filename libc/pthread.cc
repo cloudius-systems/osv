@@ -1261,5 +1261,26 @@ int pthread_attr_getaffinity_np(const pthread_attr_t *attr, size_t cpusetsize,
     return 0;
 }
 
-extern "C" void _pthread_cleanup_push(struct __ptcb *cb, void (*f)(void *), void *x) {} //TODO: Check if it can be stubbed like this
-extern "C" void _pthread_cleanup_pop(struct __ptcb *cb, int run) {} //TODO: Check if it can be stubbed like this
+// POSIX thread-cancellation cleanup handlers. musl's pthread.h ships the real
+// pthread_cleanup_push/pop macros to applications, so these must honor the
+// normal pop(run != 0) path and invoke the handler; a no-op silently skips
+// unlocks and frees on normal thread exit. The handlers are kept on a
+// per-thread intrusive stack via __ptcb::__next. (Cancellation itself is a
+// no-op on OSv, so only the explicit-run path matters here.)
+static __thread struct __ptcb *cleanup_stack;
+
+extern "C" void _pthread_cleanup_push(struct __ptcb *cb, void (*f)(void *), void *x)
+{
+    cb->__f = f;
+    cb->__x = x;
+    cb->__next = cleanup_stack;
+    cleanup_stack = cb;
+}
+
+extern "C" void _pthread_cleanup_pop(struct __ptcb *cb, int run)
+{
+    cleanup_stack = cb->__next;
+    if (run) {
+        cb->__f(cb->__x);
+    }
+}
