@@ -128,7 +128,7 @@ devfs_lookup(struct vnode *dvp, char *name, struct vnode **vpp)
 {
 	struct devinfo info;
 	struct vnode *vp;
-	int error, i;
+	int error;
 
 	DPRINTF(("devfs_lookup:%s\n", name));
 
@@ -137,7 +137,6 @@ devfs_lookup(struct vnode *dvp, char *name, struct vnode **vpp)
 	if (*name == '\0')
 		return ENOENT;
 
-	i = 0;
 	error = 0;
 	info.cookie = 0;
 	for (;;) {
@@ -147,7 +146,6 @@ devfs_lookup(struct vnode *dvp, char *name, struct vnode **vpp)
 		}
 		if (!strncmp(info.name, name, MAXDEVNAME))
 			break;
-		i++;
 	}
 	if (vget(dvp->v_mount, inode_count++, &vp)) {
 		/* found in cache */
