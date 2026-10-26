@@ -230,7 +230,9 @@ tests += tst-rlimit.so
 tests += tst-close-range.so
 tests += tst-numa.so
 tests += tst-random-flush.so
+tests += tst-random-vfs.so
 internal-api-tests += tst-random-flush.so
+internal-api-tests += tst-random-vfs.so
 
 # Tests with special compilation parameters needed...
 $(out)/tests/tst-mmap.so: COMMON += -Wl,-z,now

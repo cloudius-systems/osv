@@ -37,6 +37,11 @@ public:
 
 void randomdev_init();
 
+// Best-effort rekey after a suspected resume; timing is neither entropy nor a
+// clone-uniqueness guarantee. No-op before device initialization; an unseeded
+// generator still needs credited entropy before it can serve reads.
+void reseed_on_resume();
+
 }
 
 #endif
