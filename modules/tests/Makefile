@@ -136,6 +136,7 @@ zfs-only-tests += $(zfs-openzfs-only-tests)
 endif
 
 ext-only-tests := tst-readdir.so tst-concurrent-read.so tst-fs-link.so
+ext-only-tests += tst-ext-readlink.so
 ext-only-tests += tst-ext4-rw.so
 
 specific-fs-tests := $($(fs_type)-only-tests)
