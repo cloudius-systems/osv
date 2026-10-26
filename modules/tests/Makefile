@@ -125,6 +125,7 @@ zfs-only-tests := tst-readdir.so tst-fallocate.so tst-fs-link.so \
 # below), so a conf_zfs=bsd test run does not include them.
 zfs-openzfs-only-tests := tst-zfs-recordsize.so tst-zfs-direct-io.so \
 	tst-zfs-encryption.so misc-zfs-db-sim.so tst-zfs-trim.so misc-zfs-mmap-bench.so
+zfs-openzfs-only-tests += tst-zfs-nested-umount.so
 
 # OpenZFS user-space libraries needed by the dlopen("libzfs.so") tests above.
 # libsolaris.so is already resident as the mounted fs driver, so only these six.
@@ -151,6 +152,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 	tst-epoll-pwait2.so \
 	tst-splice.so \
 	tst-fs-syscalls.so \
+	tst-vfs-mount-pins.so \
 	tst-prctl.so \
 	tst-mmap-file-cow.so \
 	tst-membarrier.so \
@@ -218,6 +220,43 @@ internal-api-tests := tst-app.so tst-async.so tst-bsd-evh.so \
 	tst-sem-timed-wait.so tst-small-malloc.so tst-solaris-taskq.so \
 	tst-threadcomplete.so tst-tracepoint.so tst-unordered-ring-mpsc.so \
 	tst-vfs.so tst-wait-for.so tst-without-namespace.so
+internal-api-tests += tst-vfs-mount-pins.so
+tests += tst-vfs-remote.so
+internal-api-tests += tst-vfs-remote.so
+
+# The 9P client (fs/9p) is in the kernel only with conf_fs_9p=1 and its TCP
+# transport only with conf_fs_9p_tcp=1 (conf/kconfig/fs). Like conf_zfs, a
+# value given to scripts/build reaches this Makefile via the environment
+# (scripts/build exports every name=value build argument). A kernel
+# configured through menuconfig or conf_dot_file has them only in
+# kernel_conf.mk, which the config step writes before modules are built, so
+# when neither the environment nor the command line sets one, read just that
+# one from there; including the whole file would override other environment
+# values such as conf_hide_symbols. The tests call p9:: functions in the
+# kernel, so they are also internal-API tests.
+p9-kernel-conf := $(out)/gen/config/kernel_conf.mk
+ifeq ($(origin conf_fs_9p),undefined)
+conf_fs_9p := $(shell sed -n 's/^conf_fs_9p=//p' $(p9-kernel-conf) 2>/dev/null)
+endif
+ifeq ($(origin conf_fs_9p_tcp),undefined)
+conf_fs_9p_tcp := $(shell sed -n 's/^conf_fs_9p_tcp=//p' $(p9-kernel-conf) 2>/dev/null)
+endif
+ifeq ($(conf_fs_9p),1)
+tests += tst-9p-wire.so
+internal-api-tests += tst-9p-wire.so
+tests += tst-9p-session-state.so
+internal-api-tests += tst-9p-session-state.so
+tests += tst-9p-session.so
+internal-api-tests += tst-9p-session.so
+endif
+ifeq ($(conf_fs_9p_tcp),1)
+tests += tst-9p-tcp.so
+internal-api-tests += tst-9p-tcp.so
+endif
+ifeq ($(conf_fs_9p_tcp),1)
+tests += tst-9p-fs.so
+internal-api-tests += tst-9p-fs.so
+endif
 
 ifeq ($(arch),x64)
 tests += tst-mmx-fpu.so tst-tls-desc.so tst-tls-pie-desc.so libtls_desc.so
