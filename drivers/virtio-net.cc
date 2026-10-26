@@ -18,7 +18,9 @@
 
 #include <string>
 #include <string.h>
+#include <stdlib.h>
 #include <map>
+#include <algorithm>
 #include <errno.h>
 #include <osv/debug.h>
 
@@ -136,10 +138,13 @@ static int if_transmit(struct ifnet* ifp, struct mbuf* m_head)
 inline int net::xmit(struct mbuf* buff)
 {
     //
-    // We currently have only a single TX queue. Select a proper TXq here when
-    // we implement a multi-queue.
+    // Select a Tx queue by CPU id so that transmits from different CPUs use
+    // independent rings and do not serialize on one queue.  With a single
+    // queue pair (_nqp == 1) this always selects queue 0, i.e. the original
+    // behaviour.
     //
-    return _txq.xmit(buff);
+    unsigned qidx = sched::cpu::current()->id % _nqp;
+    return _txqs[qidx]->xmit(buff);
 }
 
 inline int net::txq::xmit(mbuf* buff)
@@ -186,9 +191,13 @@ static void if_getinfo(struct ifnet* ifp, struct if_data* out_data)
 
 void net::fill_stats(struct if_data* out_data) const
 {
-    // We currently support only a single Tx/Rx queue so no iteration so far
-    fill_qstats(_rxq, out_data);
-    fill_qstats(_txq, out_data);
+    // Aggregate the per-queue statistics across all Rx/Tx queue pairs.
+    for (auto& rxq : _rxqs) {
+        fill_qstats(*rxq, out_data);
+    }
+    for (auto& txq : _txqs) {
+        fill_qstats(*txq, out_data);
+    }
 }
 
 void net::fill_qstats(const struct rxq& rxq, struct if_data* out_data) const
@@ -203,15 +212,16 @@ void net::fill_qstats(const struct rxq& rxq, struct if_data* out_data) const
 
 void net::fill_qstats(const struct txq& txq, struct if_data* out_data) const
 {
-    assert(!out_data->ifi_oerrors && !out_data->ifi_obytes && !out_data->ifi_opackets);
+    // Called once per Tx queue and accumulated, so every field must add rather
+    // than overwrite (with multiqueue there is more than one Tx queue).
     out_data->ifi_opackets       += txq.stats.tx_packets;
     out_data->ifi_obytes         += txq.stats.tx_bytes;
     out_data->ifi_oerrors        += txq.stats.tx_err + txq.stats.tx_drops;
-    out_data->ifi_oworker_kicks   = txq.stats.tx_worker_kicks;
-    out_data->ifi_oworker_wakeups = txq.stats.tx_worker_wakeups;
-    out_data->ifi_oworker_packets = txq.stats.tx_worker_packets;
-    out_data->ifi_okicks          = txq.stats.tx_kicks;
-    out_data->ifi_oqueue_is_full  = txq.stats.tx_hw_queue_is_full;
+    out_data->ifi_oworker_kicks  += txq.stats.tx_worker_kicks;
+    out_data->ifi_oworker_wakeups += txq.stats.tx_worker_wakeups;
+    out_data->ifi_oworker_packets += txq.stats.tx_worker_packets;
+    out_data->ifi_okicks         += txq.stats.tx_kicks;
+    out_data->ifi_oqueue_is_full += txq.stats.tx_hw_queue_is_full;
     out_data->ifi_owakeup_stats   = txq.stats.tx_wakeup_stats;
 }
 
@@ -220,7 +230,9 @@ bool net::ack_irq()
     auto isr = _dev.read_and_ack_isr();
 
     if (isr) {
-        _rxq.vqueue->disable_interrupts();
+        // Only used on the shared single-interrupt (MMIO/legacy) path, where
+        // there is a single queue pair; disable the Rx queue's interrupts.
+        _rxqs[0]->vqueue->disable_interrupts();
         return true;
     } else {
         return false;
@@ -239,17 +251,11 @@ void net::init()
 
 net::net(virtio_device& dev)
     : virtio_driver(dev),
-    _pre_init(this),
-    _rxq(get_virt_queue(0), [this] { this->receiver(); }),
-    _txq(this, get_virt_queue(1))
+    _pre_init(this)
 {
     _driver_name = "virtio-net";
     virtio_i("VIRTIO NET INSTANCE");
     _id = _instance++;
-
-    sched::thread* poll_task = _rxq.poll_task.get();
-
-    poll_task->set_priority(sched::thread::priority_infinity);
 
     // Please look at the section 5.1.6.1 of virtio specification for explanation
     if (_dev.is_modern()) {
@@ -257,6 +263,62 @@ net::net(virtio_device& dev)
     }
     else {
         _hdr_size = _mergeable_bufs ? sizeof(net_hdr_mrg_rxbuf) : sizeof(net_hdr);
+    }
+
+    //
+    // Decide the number of Rx/Tx queue pairs to use.  With VIRTIO_NET_F_MQ the
+    // device advertises max_virtqueue_pairs and lays out the virtqueues as
+    // rx[i]=2*i, tx[i]=2*i+1, ctrl=2*nqp.  probe_virt_queues() (run from init()
+    // via _pre_init) has already created every virtqueue the device exposes, so
+    // _num_queues tells us how many actually exist.  We use one queue pair per
+    // vCPU, bounded by what the device advertises, what was probed, and the
+    // shared MSI-X vector budget (2 vectors per pair).  When F_MQ is absent this
+    // collapses to a single pair - identical to the original driver.
+    unsigned nqp = 1;
+    // Activating more than one queue pair requires the control virtqueue to
+    // send CTRL_MQ_VQ_PAIRS_SET, so multiqueue is gated on both features.
+    if (get_guest_feature_bit(VIRTIO_NET_F_MQ) &&
+        get_guest_feature_bit(VIRTIO_NET_F_CTRL_VQ) &&
+        _config.max_virtqueue_pairs > 1) {
+        nqp = std::min<unsigned>(_config.max_virtqueue_pairs, sched::cpus.size());
+        // Number of pairs the probed virtqueues can support: N pairs need
+        // 2*N data queues plus one control queue.
+        unsigned probed_pairs = _num_queues > 1 ? (_num_queues - 1) / 2 : 1;
+        nqp = std::min(nqp, probed_pairs);
+        if (nqp < 1) {
+            nqp = 1;
+        }
+        // Cap against the shared MSI-X vector budget (2 vectors per pair).
+        unsigned vec_pairs = reserve_msix_vectors(2 * nqp) / 2;
+        if (vec_pairs < 1) {
+            vec_pairs = 1;
+        }
+        nqp = std::min(nqp, vec_pairs);
+    }
+    _nqp = nqp;
+    // Per the virtio spec the control virtqueue always sits at index
+    // 2*max_virtqueue_pairs (based on the device's advertised maximum), which
+    // is not the same as 2*_nqp when we activate fewer pairs than advertised.
+    if (get_guest_feature_bit(VIRTIO_NET_F_CTRL_VQ)) {
+        unsigned max_pairs = _config.max_virtqueue_pairs > 1 ?
+            _config.max_virtqueue_pairs : 1;
+        int ctrl_idx = 2 * max_pairs;
+        if ((unsigned)ctrl_idx < _num_queues) {
+            _ctrl_vq_idx = ctrl_idx;
+        }
+    }
+
+    // Build the Rx/Tx queue pairs.  Each Rx queue gets its own poll thread; each
+    // Tx queue its own xmitter.
+    for (unsigned i = 0; i < _nqp; i++) {
+        auto* rx_vq = get_virt_queue(2 * i);
+        auto* tx_vq = get_virt_queue(2 * i + 1);
+        assert(rx_vq && tx_vq);
+        _rxqs.push_back(std::unique_ptr<rxq>(
+            new rxq(rx_vq, [this, i] { this->receiver(this->_rxqs[i].get()); })));
+        _txqs.push_back(std::unique_ptr<txq, aligned_new_deleter<txq>>(
+            aligned_new<txq>(this, tx_vq)));
+        _rxqs[i]->poll_task->set_priority(sched::thread::priority_infinity);
     }
 
     //initialize the BSD interface _if
@@ -277,7 +339,7 @@ net::net(virtio_device& dev)
     _ifn->if_qflush = if_qflush;
     _ifn->if_init = if_init;
     _ifn->if_getinfo = if_getinfo;
-    IFQ_SET_MAXLEN(&_ifn->if_snd, _txq.vqueue->size());
+    IFQ_SET_MAXLEN(&_ifn->if_snd, _txqs[0]->vqueue->size());
 
     _ifn->if_capabilities = 0;
 
@@ -297,30 +359,63 @@ net::net(virtio_device& dev)
 
     _ifn->if_capenable = _ifn->if_capabilities | IFCAP_HWSTATS;
 
-    //Start the polling thread before attaching it to the Rx interrupt
-    poll_task->start();
-    _txq.start();
+    //Start the polling threads before attaching them to the Rx interrupts
+    for (unsigned i = 0; i < _nqp; i++) {
+        _rxqs[i]->poll_task->start();
+        _txqs[i]->start();
+    }
 
     ether_ifattach(_ifn, _config.mac);
 
+    // Pin each Rx poll thread to a distinct CPU (round-robin) so that with
+    // multiqueue the per-queue receivers run in parallel across CPUs instead of
+    // contending for one.  With a single queue pair this pins to CPU 0, which
+    // matches the priority_infinity single-thread behaviour of the original
+    // driver closely enough and keeps its Rx work on one CPU.
+    for (unsigned i = 0; i < _nqp; i++) {
+        sched::thread::pin(_rxqs[i]->poll_task.get(), sched::cpus[i % sched::cpus.size()]);
+    }
+
     interrupt_factory int_factory;
 #if CONF_drivers_pci
-    int_factory.register_msi_bindings = [this,poll_task](interrupt_manager &msi) {
-       msi.easy_register({
-           { 0, [&] { this->_rxq.vqueue->disable_interrupts(); }, poll_task },
-           { 1, [&] { this->_txq.vqueue->disable_interrupts(); }, nullptr }
-       });
+    // One MSI-X vector per data virtqueue.  setup_queue() maps virtqueue index
+    // i -> MSI-X entry i (1:1), so the entry numbers are the virtqueue indices
+    // rx[i]=2*i and tx[i]=2*i+1.  Each Rx vector wakes that queue's poll thread;
+    // Tx vectors just disable the queue's interrupts (Tx completion is reaped by
+    // the xmitter/gc path, as in the original single-queue driver).
+    int_factory.register_msi_bindings = [this](interrupt_manager &msi) {
+        std::vector<msix_binding> bindings;
+        bindings.reserve(2 * _nqp);
+        for (unsigned i = 0; i < _nqp; i++) {
+            auto* rx = _rxqs[i].get();
+            auto* tx = _txqs[i].get();
+            sched::thread* poll = rx->poll_task.get();
+            bindings.push_back({ (unsigned)(2 * i),
+                                 [rx] { rx->vqueue->disable_interrupts(); }, poll });
+            bindings.push_back({ (unsigned)(2 * i + 1),
+                                 [tx] { tx->vqueue->disable_interrupts(); }, nullptr });
+        }
+        if (!msi.easy_register(bindings)) {
+            // Vector allocation is bounded by reserve_msix_vectors() above, so
+            // this should not happen; if it does, fail loudly rather than run
+            // with queues whose completions are never serviced.
+            net_e("virtio-net: failed to register %d MSI-X vectors", 2 * _nqp);
+            abort();
+        }
     };
 
-    int_factory.create_pci_interrupt = [this,poll_task](pci::device &pci_dev) {
+    int_factory.create_pci_interrupt = [this](pci::device &pci_dev) {
         return new pci_interrupt(
             pci_dev,
             [=] { return this->ack_irq(); },
-            [=] { poll_task->wake_with_irq_disabled(); });
+            [=] { this->_rxqs[0]->poll_task->wake_with_irq_disabled(); });
     };
 #endif
 
 #if CONF_drivers_mmio
+    // The MMIO transport has a single shared interrupt line, so multiqueue Rx
+    // steering is not available there; _nqp is 1 on that path.
+    sched::thread* poll_task = _rxqs[0]->poll_task.get();
 #ifdef __aarch64__
     int_factory.create_spi_edge_interrupt = [this,poll_task]() {
         return new spi_interrupt(
@@ -340,7 +435,18 @@ net::net(virtio_device& dev)
 
     _dev.register_interrupt(int_factory);
 
-    fill_rx_ring();
+    // Tell the device how many queue pairs we will actually use.  Must happen
+    // after the queues and their interrupts are set up and before we start
+    // feeding the Rx rings.
+    if (_nqp > 1 && _ctrl_vq_idx >= 0) {
+        if (!set_vq_pairs(_nqp)) {
+            net_w("virtio-net: CTRL_MQ_VQ_PAIRS_SET(%d) not acked by device", _nqp);
+        }
+    }
+
+    for (unsigned i = 0; i < _nqp; i++) {
+        fill_rx_ring(_rxqs[i].get());
+    }
 
     // Step 8
     add_dev_status(VIRTIO_CONFIG_S_DRIVER_OK);
@@ -383,6 +489,18 @@ void net::read_config()
     _guest_tso4 = get_guest_feature_bit(VIRTIO_NET_F_GUEST_TSO4);
     _host_tso4 = get_guest_feature_bit(VIRTIO_NET_F_HOST_TSO4);
     _guest_ufo = get_guest_feature_bit(VIRTIO_NET_F_GUEST_UFO);
+
+    // With VIRTIO_NET_F_MQ the device advertises how many Rx/Tx queue pairs it
+    // supports; read it so the constructor can decide how many to use.  Default
+    // to a single pair otherwise.
+    _config.max_virtqueue_pairs = 1;
+    if (get_guest_feature_bit(VIRTIO_NET_F_MQ)) {
+        virtio_conf_read(offsetof(net_config, max_virtqueue_pairs),
+                         &_config.max_virtqueue_pairs,
+                         sizeof(_config.max_virtqueue_pairs));
+        net_i("Multiqueue: device advertises %d queue pairs",
+              _config.max_virtqueue_pairs);
+    }
 
     net_i("Features: %s=%d,%s=%d", "Status", _status, "TSO_ECN", _tso_ecn);
     net_i("Features: %s=%d,%s=%d", "Host TSO ECN", _host_tso_ecn, "CSUM", _csum);
@@ -459,13 +577,34 @@ bool net::bad_rx_csum(struct mbuf* m, struct net_hdr* hdr)
     return false;
 }
 
-void net::receiver()
+bool net::batch_wakes_enabled()
 {
-    vring* vq = _rxq.vqueue;
+    // Cached: cannot change after boot; the receiver reads it once.
+    static const bool enabled = [] {
+        const char* v = getenv("OSV_NET_BATCH_WAKE");
+        return !(v && v[0] == '0');
+    }();
+    return enabled;
+}
+
+void net::receiver(struct rxq* rxq)
+{
+    vring* vq = rxq->vqueue;
     std::vector<iovec> packet;
     u64 rx_drops = 0, rx_packets = 0, csum_ok = 0;
     u64 csum_err = 0, rx_bytes = 0;
     static const u16 refill_thresh = 16;
+    // Coalesce the per-packet channel wakes issued while draining one RX pass
+    // into one wake per channel, flushed together at the end of the pass, so
+    // the scheduler's per-target-CPU IPI coalescing collapses the wakeup IPIs.
+    // Runtime toggle for A/B; default on.
+    net_channel_wake_batch wake_batch;
+    const bool batch_wakes = net::batch_wakes_enabled();
+    // Slow-path (non-classified) packets are deferred to after the drain's
+    // rcu_read_lock is released: if_input() runs the full BSD stack (tcp_input
+    // etc.) which may demand-fault a page, and page_fault asserts preemptable()
+    // -- illegal under the rcu_read_lock the batch path holds across the drain.
+    std::vector<mbuf*> slow_path;
 
     while (1) {
 
@@ -473,8 +612,8 @@ void net::receiver()
         virtio_driver::wait_for_queue(vq, &vring::used_ring_not_empty);
         trace_virtio_net_rx_wake();
 
-        _rxq.stats.rx_bh_wakeups++;
-        _rxq.update_wakeup_stats(rx_packets);
+        rxq->stats.rx_bh_wakeups++;
+        rxq->update_wakeup_stats(rx_packets);
 
         u32 len;
         int nbufs;
@@ -485,12 +624,27 @@ void net::receiver()
         // truncating it.
         net_hdr_mrg_rxbuf* mhdr;
 
+        // When batching wakes we hold one rcu_read_lock across the whole drain
+        // pass and the wake flush, because the net_channel pointers we record
+        // are rcu_dispose()d on connection teardown and must stay valid until
+        // flushed.  When not batching, post_packet() takes its own lock per
+        // packet as before.
+        if (batch_wakes) {
+            osv::rcu_read_lock.lock();
+        }
+
+        // With batching, bound each pass so the queued wakes are flushed and
+        // preemption comes back regularly even under sustained input, and do
+        // not refill the ring inside the pass (that would let the device keep
+        // it non-empty forever); refill once after the unlock instead.
+        unsigned budget = 64;
         while (void* buffer = vq->get_buf_elem(&len)) {
 
             vq->get_buf_finalize();
 
-            if (vq->effective_avail_ring_count() >= refill_thresh)
-                fill_rx_ring();
+            if (!batch_wakes &&
+                vq->effective_avail_ring_count() >= refill_thresh)
+                fill_rx_ring(rxq);
 
             // Bad packet/buffer - discard and continue to the next one
             if (len < _hdr_size + ETHER_HDR_LEN) {
@@ -539,9 +693,17 @@ void net::receiver()
             rx_packets++;
             rx_bytes += m_head->M_dat.MH.MH_pkthdr.len;
 
-            bool fast_path = _ifn->if_classifier.post_packet(m_head);
+            bool fast_path = batch_wakes
+                ? _ifn->if_classifier.post_packet(m_head, wake_batch)
+                : _ifn->if_classifier.post_packet(m_head);
             if (!fast_path) {
-                (*_ifn->if_input)(_ifn, m_head);
+                if (batch_wakes) {
+                    // Cannot call if_input() here: we hold rcu_read_lock and the
+                    // BSD input path may fault.  Defer to after unlock (below).
+                    slow_path.push_back(m_head);
+                } else {
+                    (*_ifn->if_input)(_ifn, m_head);
+                }
             }
 
             trace_virtio_net_rx_packet(_ifn->if_index, rx_bytes);
@@ -550,14 +712,33 @@ void net::receiver()
             // passing the packet up the network stack.
             if ((_ifn->if_drv_flags & IFF_DRV_RUNNING) == 0)
                 break;
+
+            if (batch_wakes && --budget == 0)
+                break;
+        }
+
+        if (batch_wakes) {
+            // One wake per distinct connection touched this pass; the flushed
+            // wakes run back-to-back so wake_impl() coalesces the wakeup IPIs
+            // per destination CPU.  Still under the drain's rcu_read_lock.
+            wake_batch.flush();
+            osv::rcu_read_lock.unlock();
+            // Now preemptable again: run the deferred slow-path packets up the
+            // stack (tcp_input may fault, which is fine outside the rcu lock).
+            for (mbuf* m : slow_path) {
+                (*_ifn->if_input)(_ifn, m);
+            }
+            slow_path.clear();
+            if (vq->effective_avail_ring_count() >= refill_thresh)
+                fill_rx_ring(rxq);
         }
 
         // Update the stats
-        _rxq.stats.rx_drops      += rx_drops;
-        _rxq.stats.rx_packets    += rx_packets;
-        _rxq.stats.rx_csum       += csum_ok;
-        _rxq.stats.rx_csum_err   += csum_err;
-        _rxq.stats.rx_bytes      += rx_bytes;
+        rxq->stats.rx_drops      += rx_drops;
+        rxq->stats.rx_packets    += rx_packets;
+        rxq->stats.rx_csum       += csum_ok;
+        rxq->stats.rx_csum_err   += csum_err;
+        rxq->stats.rx_bytes      += rx_bytes;
     }
 }
 
@@ -637,11 +818,11 @@ unsigned* net::rx_buffer_refcnt(void* frame)
     return reinterpret_cast<unsigned*>(base + buf_bytes - sizeof(unsigned));
 }
 
-void net::fill_rx_ring()
+void net::fill_rx_ring(struct rxq* rxq)
 {
     trace_virtio_net_fill_rx_ring(_ifn->if_index);
     int added = 0;
-    vring* vq = _rxq.vqueue;
+    vring* vq = rxq->vqueue;
 
     int size_in_pages = _use_large_buffers ? LARGE_BUFFER_SIZE_IN_PAGES : 1;
     // Reserve sizeof(unsigned) at the tail of every buffer for that buffer's
@@ -929,6 +1110,51 @@ void net::txq::gc()
     vqueue->get_buf_gc();
 }
 
+// Send VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET on the control virtqueue to tell the
+// device how many Rx/Tx queue pairs the guest will use.  The control queue is
+// used only here at init and has no dedicated interrupt thread, so we submit
+// the request and poll the used ring synchronously for the device's ACK.
+bool net::set_vq_pairs(u16 pairs)
+{
+    vring* vq = get_virt_queue(_ctrl_vq_idx);
+    if (!vq) {
+        return false;
+    }
+
+    struct {
+        net_ctrl_hdr hdr;
+        net_ctrl_mq mq;
+        net_ctrl_ack ack;
+    } cmd;
+    cmd.hdr.class_t = VIRTIO_NET_CTRL_MQ;
+    cmd.hdr.cmd = VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET;
+    cmd.mq.virtqueue_pairs = pairs;
+    cmd.ack = VIRTIO_NET_ERR;
+
+    vq->init_sg();
+    vq->add_out_sg(&cmd.hdr, sizeof(cmd.hdr));
+    vq->add_out_sg(&cmd.mq, sizeof(cmd.mq));
+    vq->add_in_sg(&cmd.ack, sizeof(cmd.ack));
+
+    if (!vq->add_buf(&cmd)) {
+        return false;
+    }
+    vq->kick();
+
+    // The control queue is quiescent at init; busy-wait briefly for the reply.
+    u32 len;
+    for (int spins = 0; spins < 100000; spins++) {
+        if (vq->used_ring_not_empty()) {
+            vq->get_buf_elem(&len);
+            vq->get_buf_finalize();
+            break;
+        }
+        sched::thread::yield();
+    }
+
+    return cmd.ack == VIRTIO_NET_OK;
+}
+
 u64 net::get_driver_features()
 {
     auto base = virtio_driver::get_driver_features();
@@ -942,6 +1168,12 @@ u64 net::get_driver_features()
                  | (1 << VIRTIO_NET_F_HOST_TSO4)  \
                  | (1 << VIRTIO_NET_F_GUEST_ECN)
                  | (1 << VIRTIO_NET_F_GUEST_UFO)
+                 // Multiqueue and its control channel.  VIRTIO_NET_F_MQ lets the
+                 // device steer received flows across several Rx queues;
+                 // VIRTIO_NET_F_CTRL_VQ is required to send the
+                 // CTRL_MQ_VQ_PAIRS_SET command that activates them.
+                 | (1 << VIRTIO_NET_F_CTRL_VQ)
+                 | (1 << VIRTIO_NET_F_MQ)
             );
 }
 
