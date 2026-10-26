@@ -113,17 +113,16 @@ bool object::arch_relocate_jump_slot(symbol_module& sym, void *addr, Elf64_Sxwor
 void object::arch_relocate_tls_desc(u32 sym, void *addr, Elf64_Sxword addend)
 {
     // Determine if static or dynamic access
-    // In general, TLS access of a symbol in a dynamically opened ELF (dlopen()-ed)
-    // needs to be handled using a dynamic TLS descriptor, otherwise a static one
-    bool dynamic = false;
+    // A thread-local variable defined in a dlopen()-ed ELF (or in a DT_NEEDED
+    // dependency loaded by dlopen()) has no place in the static TLS of the
+    // threads that already exist, so it needs to be accessed using a dynamic
+    // TLS descriptor, otherwise a static one. What matters is the ELF which
+    // defines the variable, not the one accessing it.
     symbol_module sm;
+    bool dynamic;
     if (sym) {
         sm = symbol(sym);
-        // In some cases symbol in the same dlopen()-ed ELF may be relocated via
-        // a symbol table and we need to handle it using a dynamic descriptor
-        if (sm.obj->module_index() == _module_index) {
-            dynamic = _dlopen_ed;
-        }
+        dynamic = sm.obj->_dlopen_ed;
     } else {
         dynamic = _dlopen_ed;
     }
@@ -141,7 +140,8 @@ void object::arch_relocate_tls_desc(u32 sym, void *addr, Elf64_Sxword addend)
         if (sym) {
             mo->module = sm.obj->module_index();
             mo->offset = (size_t)sm.symbol->st_value + addend;
-            elf_debug("arch_relocate_tls_desc: dynamic access, self, sym:%d, module:%d, offset:%lu\n", sym, mo->module, mo->offset);
+            elf_debug("arch_relocate_tls_desc: dynamic access, %s, sym:%d, module:%d, offset:%lu\n",
+                _module_index == sm.obj->module_index() ? "self" : "other shared lib", sym, mo->module, mo->offset);
         } else {
             mo->module = _module_index;
             mo->offset = addend;

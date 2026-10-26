@@ -26,7 +26,8 @@ __thread int v2 = 234;
 extern __thread int ex1;
 extern __thread int ex2;
 #else
-// The library to dlopen(). It defines ex1, ex3 and external_library().
+// The library to dlopen(). It provides external_library(), and ex1 and ex3
+// are defined either in it or in one of its DT_NEEDED dependencies.
 #ifndef __DLOPEN_LIB__
 #define __DLOPEN_LIB__ "/tests/libtls.so"
 #endif

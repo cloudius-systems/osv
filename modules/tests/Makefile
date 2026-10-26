@@ -221,7 +221,7 @@ internal-api-tests := tst-app.so tst-async.so tst-bsd-evh.so \
 
 ifeq ($(arch),x64)
 tests += tst-mmx-fpu.so tst-tls-desc.so tst-tls-pie-desc.so libtls_desc.so
-tests += tst-tls-pie-dlopen-desc.so
+tests += tst-tls-pie-dlopen-desc.so tst-tls-pie-dlopen-desc-needed.so libtls_desc_user.so
 endif
 
 tests += testrunner.so
@@ -250,6 +250,7 @@ $(out)/tests/tst-tls-desc.so: COMMON += -fuse-ld=bfd
 $(out)/tests/tst-tls-pie-desc.so: COMMON += -fuse-ld=bfd
 $(out)/tests/tst-tls-pie-dlopen.so: COMMON += -fuse-ld=bfd
 $(out)/tests/tst-tls-pie-dlopen-desc.so: COMMON += -fuse-ld=bfd
+$(out)/tests/tst-tls-pie-dlopen-desc-needed.so: COMMON += -fuse-ld=bfd
 
 $(out)/tests/tst-dlfcn.so: COMMON += -rdynamic -ldl
 
@@ -303,8 +304,11 @@ $(out)/tests/tst-tls-pie-dlopen.so: \
 	$(makedir)
 	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -export-dynamic -pthread -fpie -o $@ $< $(LIBS), LD tests/tst-tls-pie-dlopen.so)
 
-# Like tst-tls-pie-dlopen.so, but dlopen() libtls_desc.so, which uses TLS
-# descriptors regardless of the compiler's default TLS dialect.
+# Like tst-tls-pie-dlopen.so, but dlopen() libraries that use TLS descriptors
+# regardless of the compiler's default TLS dialect. tst-tls-pie-dlopen-desc.so
+# dlopen()s libtls_desc.so, which accesses its own thread-local variables.
+# tst-tls-pie-dlopen-desc-needed.so dlopen()s libtls_desc_user.so, which
+# accesses thread-local variables defined in its DT_NEEDED libtls_desc.so.
 $(out)/tests/tst-tls-pie-dlopen-desc.o: CXXFLAGS:=$(subst -fPIC,-fpie,$(CXXFLAGS)) -D__DLOPEN__=1 -D__DLOPEN_LIB__='"/tests/libtls_desc.so"'
 $(out)/tests/tst-tls-pie-dlopen-desc.o: $(src)/tests/tst-tls.cc
 	$(makedir)
@@ -313,6 +317,22 @@ $(out)/tests/tst-tls-pie-dlopen-desc.so: \
 		$(out)/tests/tst-tls-pie-dlopen-desc.o
 	$(makedir)
 	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -export-dynamic -pthread -fpie -o $@ $< $(LIBS), LD tests/tst-tls-pie-dlopen-desc.so)
+
+$(out)/tests/tst-tls-pie-dlopen-desc-needed.o: CXXFLAGS:=$(subst -fPIC,-fpie,$(CXXFLAGS)) -D__DLOPEN__=1 -D__DLOPEN_LIB__='"/tests/libtls_desc_user.so"'
+$(out)/tests/tst-tls-pie-dlopen-desc-needed.o: $(src)/tests/tst-tls.cc
+	$(makedir)
+	$(call quiet, $(CXX) $(CXXFLAGS) -c -o $@ $<, CXX tests/tst-tls.cc => tests/tst-tls-pie-dlopen-desc-needed.o)
+$(out)/tests/tst-tls-pie-dlopen-desc-needed.so: \
+		$(out)/tests/tst-tls-pie-dlopen-desc-needed.o
+	$(makedir)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -export-dynamic -pthread -fpie -o $@ $< $(LIBS), LD tests/tst-tls-pie-dlopen-desc-needed.so)
+
+$(out)/tests/libtls_desc_user.so: CXXFLAGS += -mtls-dialect=gnu2
+$(out)/tests/libtls_desc_user.so: \
+		$(src)/tests/libtls_user.cc \
+		$(out)/tests/libtls_desc.so
+	$(makedir)
+	$(call quiet, cd $(out); $(CXX) $(CXXFLAGS) $(LDFLAGS) -shared -o $@ $< $(LIBS) tests/libtls_desc.so, LD tests/libtls_desc_user.so)
 
 $(out)/tests/libtls_gold.so: COMMON += -fuse-ld=gold
 $(out)/tests/libtls_gold.so: $(out)/tests/libtls.o

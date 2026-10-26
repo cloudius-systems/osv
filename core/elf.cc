@@ -1148,7 +1148,9 @@ void object::load_needed(std::vector<std::shared_ptr<object>>& loaded_objects)
     auto needed = dynamic_str_array(DT_NEEDED);
     for (auto lib : needed) {
         elf_debug("Loading DT_NEEDED object: %s \n", lib);
-        auto obj = _prog.load_object(lib, rpath, loaded_objects);
+        // A dependency newly loaded for a dlopen()-ed object is itself
+        // loaded by dlopen(), e.g., its TLS cannot be in static TLS.
+        auto obj = _prog.load_object(lib, rpath, loaded_objects, _dlopen_ed);
         if (obj) {
             // Keep a reference to the needed object, so it won't be
             // unloaded until this object is unloaded.
