@@ -34,6 +34,7 @@ static void report(bool ok, const char *msg)
 
 #ifdef __OSV__
 extern "C" int vfs_findroot(char *path, struct mount **mp, char **root);
+extern "C" void vfs_putroot(struct mount *mp);
 
 int check_zfs_refcnt_behavior(void)
 {
@@ -49,6 +50,7 @@ int check_zfs_refcnt_behavior(void)
         return -1;
     }
     old_mcount = mp->m_count;
+    vfs_putroot(mp);
 
     // Use mkstemp to capture path of a temporary file used later
     snprintf(file, 64, "%sfileXXXXXX", mount_path);
@@ -105,7 +107,9 @@ int check_zfs_refcnt_behavior(void)
     }
 
     /* Must be equal */
-    return !(old_mcount == mp->m_count);
+    ret = !(old_mcount == mp->m_count);
+    vfs_putroot(mp);
+    return ret;
 }
 #endif
 
