@@ -159,6 +159,9 @@ typedef int (*vnop_cache_t) (struct vnode *, struct file *, struct uio *);
 typedef int (*vnop_fallocate_t) (struct vnode *, int, loff_t, loff_t);
 typedef int (*vnop_readlink_t)  (struct vnode *, struct uio *);
 typedef int (*vnop_symlink_t)   (struct vnode *, char *, char *);
+typedef int (*vnop_create_open_t) (struct vnode *, const char *, int, mode_t,
+				    struct vnode **, void **);
+typedef int (*vnop_access_t)	(struct vnode *, int);
 
 /*
  * vnode operations
@@ -187,6 +190,26 @@ struct vnops {
 	vnop_fallocate_t	vop_fallocate;
 	vnop_readlink_t		vop_readlink;
 	vnop_symlink_t		vop_symlink;
+	/*
+	 * Optional. Create `name` in the locked directory and open it, in one
+	 * step. flags are fflags() with O_CREAT; without O_EXCL an existing
+	 * file is opened instead. On success *vpp is a VREG vnode on dvp's
+	 * mount, locked and referenced, and *datap the open context that
+	 * becomes the file's f_data; VOP_OPEN is not called. On error the
+	 * caller owns nothing and ignores *vpp and *datap. If the VFS then
+	 * fails, it calls VOP_CLOSE once, with vp locked, f_data set and no
+	 * f_dentry. A filesystem that provides it applies O_TRUNC itself, here
+	 * and in VOP_OPEN, with the effects of VOP_TRUNCATE(vp, 0): the VFS
+	 * does not truncate before an open the filesystem may refuse.
+	 */
+	vnop_create_open_t	vop_create_open;
+	/*
+	 * Optional. Decides VREAD/VWRITE/VEXEC access in place of the v_mode
+	 * checks of vn_access(), returning 0 or a positive errno. The VFS
+	 * rejects VWRITE on a read-only mount with EROFS before calling it.
+	 * vp may be locked or unlocked.
+	 */
+	vnop_access_t		vop_access;
 };
 
 /*

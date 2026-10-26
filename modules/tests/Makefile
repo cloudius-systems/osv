@@ -125,6 +125,7 @@ zfs-only-tests := tst-readdir.so tst-fallocate.so tst-fs-link.so \
 # below), so a conf_zfs=bsd test run does not include them.
 zfs-openzfs-only-tests := tst-zfs-recordsize.so tst-zfs-direct-io.so \
 	tst-zfs-encryption.so misc-zfs-db-sim.so tst-zfs-trim.so misc-zfs-mmap-bench.so
+zfs-openzfs-only-tests += tst-zfs-nested-umount.so
 
 # OpenZFS user-space libraries needed by the dlopen("libzfs.so") tests above.
 # libsolaris.so is already resident as the mounted fs driver, so only these six.
@@ -151,6 +152,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 	tst-epoll-pwait2.so \
 	tst-splice.so \
 	tst-fs-syscalls.so \
+	tst-vfs-mount-pins.so \
 	tst-prctl.so \
 	tst-mmap-file-cow.so \
 	tst-membarrier.so \
@@ -218,6 +220,9 @@ internal-api-tests := tst-app.so tst-async.so tst-bsd-evh.so \
 	tst-sem-timed-wait.so tst-small-malloc.so tst-solaris-taskq.so \
 	tst-threadcomplete.so tst-tracepoint.so tst-unordered-ring-mpsc.so \
 	tst-vfs.so tst-wait-for.so tst-without-namespace.so
+internal-api-tests += tst-vfs-mount-pins.so
+tests += tst-vfs-remote.so
+internal-api-tests += tst-vfs-remote.so
 
 ifeq ($(arch),x64)
 tests += tst-mmx-fpu.so tst-tls-desc.so tst-tls-pie-desc.so libtls_desc.so
