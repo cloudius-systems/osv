@@ -1105,7 +1105,6 @@ libc += internal/intscan.o
 libc += internal/libc.o
 libc += internal/shgetc.o
 
-musl += ctype/__ctype_get_mb_cur_max.o
 musl += ctype/__ctype_tolower_loc.o
 musl += ctype/__ctype_toupper_loc.o
 musl += ctype/isalnum.o
@@ -1120,27 +1119,12 @@ musl += ctype/isprint.o
 musl += ctype/ispunct.o
 musl += ctype/isspace.o
 musl += ctype/isupper.o
-musl += ctype/iswalnum.o
-musl += ctype/iswalpha.o
-musl += ctype/iswblank.o
-musl += ctype/iswcntrl.o
-musl += ctype/iswctype.o
-musl += ctype/iswdigit.o
-musl += ctype/iswgraph.o
-musl += ctype/iswlower.o
-musl += ctype/iswprint.o
-musl += ctype/iswpunct.o
-musl += ctype/iswspace.o
-musl += ctype/iswupper.o
-musl += ctype/iswxdigit.o
 musl += ctype/isxdigit.o
 musl += ctype/toascii.o
+ifneq ($(conf_locale),1)
 musl += ctype/tolower.o
 musl += ctype/toupper.o
-musl += ctype/towctrans.o
-musl += ctype/wcswidth.o
-musl += ctype/wctrans.o
-musl += ctype/wcwidth.o
+endif
 
 musl += dirent/alphasort.o
 musl += dirent/scandir.o
@@ -1164,30 +1148,67 @@ environ_musl += string/strchrnul.c
 
 musl += ctype/__ctype_b_loc.o
 
-musl += errno/strerror.o
+# strerror, strerror_l, strsignal, gai_strerror, regerror: glibc's English
+# text, translated through the "libc" message domain with conf_locale=1
+# (libc/locale/messages.cc); sys_errlist holds the same text.
 libc += errno/strerror.o
+libc += locale/messages.o
 
 musl += locale/catclose.o
-musl += locale/__mo_lookup.o
-$(out)/musl/src/locale/__mo_lookup.o: CFLAGS += $(cc-hide-flags-$(conf_hide_symbols))
-musl += locale/pleval.o
+# __mo_lookup.o and pleval.o (musl's gettext internals) are dead since
+# Stage 1d: gettext.cc owns .mo lookup and plural evaluation in both configs
+# (conf0's intl.c stub is a msgid passthrough). Dropped. catopen/catgets/
+# catclose stay: they are the POSIX catgets API, unrelated to gettext.
 musl += locale/catgets.o
 libc += locale/catopen.o
-libc += locale/duplocale.o
-libc += locale/freelocale.o
-libc += locale/intl.o
-libc += locale/langinfo.o
+libc += locale/locale.o
+ifeq ($(conf_locale),1)
+# gettext (gettext.cc, .mo catalogs and plural expressions in mo.cc); with
+# conf_locale=0 the intl.c stub returns the msgid.
+libc += locale/gettext.o
+libc += locale/mo.o
+$(out)/libc/locale/messages.o: CXXFLAGS += -DOSV_CONF_LOCALE=1
+libc += locale/locale-data.o
+# LC_NUMERIC in printf, scanf and strtod: every file that includes
+# libc/internal/osv-numeric.h (without the flag it is C's stub)
+libc += locale/numeric.o
+osv-numeric-users := locale/numeric.o stdio/vfprintf.o stdio/vfwprintf.o stdio/vfscanf.o \
+	stdio/vfwscanf.o internal/floatscan.o internal/intscan.o stdlib/strtod.o \
+	locale/strtod_l.o locale/strtof_l.o locale/strtold_l.o
+$(addprefix $(out)/libc/, $(osv-numeric-users)): CFLAGS += -DOSV_CONF_LOCALE=1
+$(out)/libc/locale/locale.o: CXXFLAGS += -DOSV_CONF_LOCALE=1
+$(out)/libc/locale/locale-data.o: CXXFLAGS += -std=gnu++17
+# A loaded locale's LC_CTYPE tables (wide classes, maps, widths; byte tables
+# in ctype-byte.cc, which serves C and C.UTF-8 from musl's renamed objects).
+$(out)/libc/locale/wctype.o: CXXFLAGS += -DOSV_CONF_LOCALE=1
+libc += locale/ctype-byte.o
+# (hidden: they are not part of OSv's ABI; ctype-byte.cc exports the real names)
+$(out)/musl/src/ctype/__ctype_b_loc.o: CFLAGS += -D__ctype_b_loc=__osv_musl_ctype_b_loc -fvisibility=hidden
+$(out)/musl/src/ctype/__ctype_toupper_loc.o: CFLAGS += -D__ctype_toupper_loc=__osv_musl_ctype_toupper_loc -fvisibility=hidden
+$(out)/musl/src/ctype/__ctype_tolower_loc.o: CFLAGS += -D__ctype_tolower_loc=__osv_musl_ctype_tolower_loc -fvisibility=hidden
+endif
+libc += locale/ctype-utf8.o
+libc += locale/wctype.o
+ifneq ($(conf_locale),1)
 musl += locale/localeconv.o
-libc += locale/setlocale.o
+libc += locale/intl.o
+endif
+ifneq ($(conf_locale),1)
 musl += locale/strcoll.o
-musl += locale/strfmon.o
+musl += locale/strxfrm.o
+musl += locale/wcscoll.o
+musl += locale/wcsxfrm.o
+else
+# A loaded locale's LC_COLLATE (strcoll, strxfrm, wcscoll, wcsxfrm and _l).
+libc += locale/collate.o
+$(out)/libc/locale/collate.o: CXXFLAGS += -std=gnu++17
+endif
+libc += locale/strfmon.o
+$(out)/libc/locale/strfmon.o: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include
+libc += locale/rpmatch.o
 libc += locale/strtod_l.o
 libc += locale/strtof_l.o
 libc += locale/strtold_l.o
-musl += locale/strxfrm.o
-libc += locale/uselocale.o
-musl += locale/wcscoll.o
-musl += locale/wcsxfrm.o
 
 musl += math/__cos.o
 musl += math/__cosdf.o
@@ -1477,24 +1498,18 @@ musl += signal/siginterrupt.o
 musl += signal/sigrtmin.o
 musl += signal/sigrtmax.o
 
-musl += multibyte/btowc.o
+libc += multibyte/multibyte.o
 musl += multibyte/internal.o
 musl += multibyte/mblen.o
 musl += multibyte/mbrlen.o
-musl += multibyte/mbrtowc.o
 musl += multibyte/mbsinit.o
-musl += multibyte/mbsnrtowcs.o
 libc += multibyte/__mbsnrtowcs_chk.o
-musl += multibyte/mbsrtowcs.o
 libc += multibyte/__mbsrtowcs_chk.o
 musl += multibyte/mbstowcs.o
 libc += multibyte/__mbstowcs_chk.o
-musl += multibyte/mbtowc.o
-musl += multibyte/wcrtomb.o
 musl += multibyte/wcsnrtombs.o
 musl += multibyte/wcsrtombs.o
 musl += multibyte/wcstombs.o
-musl += multibyte/wctob.o
 musl += multibyte/wctomb.o
 
 $(out)/libc/multibyte/mbsrtowcs.o: CFLAGS += -Imusl/src/multibyte
@@ -1535,7 +1550,6 @@ musl += network/if_indextoname.o
 $(out)/musl/src/network/if_indextoname.o: CFLAGS += --include libc/syscall_to_function.h --include libc/network/__socket.h -Wno-stringop-truncation
 musl += network/if_nametoindex.o
 $(out)/musl/src/network/if_nametoindex.o: CFLAGS += --include libc/syscall_to_function.h --include libc/network/__socket.h -Wno-stringop-truncation
-musl += network/gai_strerror.o
 musl += network/h_errno.o
 musl += network/getservbyname_r.o
 musl += network/getservbyname.o
@@ -1626,7 +1640,7 @@ libc += stdio/fgetc.o
 musl += stdio/fgetln.o
 musl += stdio/fgetpos.o
 musl += stdio/fgets.o
-musl += stdio/fgetwc.o
+libc += stdio/fgetwc.o
 musl += stdio/fgetws.o
 musl += stdio/fileno.o
 libc += stdio/flockfile.o
@@ -1636,8 +1650,8 @@ $(out)/musl/src/stdio/fopen.o: CFLAGS += --include libc/syscall_to_function.h
 musl += stdio/fprintf.o
 libc += stdio/fputc.o
 musl += stdio/fputs.o
-musl += stdio/fputwc.o
-musl += stdio/fputws.o
+libc += stdio/fputwc.o
+libc += stdio/fputws.o
 musl += stdio/fread.o
 libc += stdio/__fread_chk.o
 musl += stdio/freopen.o
@@ -1696,16 +1710,16 @@ $(out)/musl/src/stdio/tmpfile.o: CFLAGS += --include libc/syscall_to_function.h
 musl += stdio/tmpnam.o
 $(out)/musl/src/stdio/tmpnam.o: CFLAGS += --include libc/syscall_to_function.h -Wno-incompatible-pointer-types
 musl += stdio/ungetc.o
-musl += stdio/ungetwc.o
+libc += stdio/ungetwc.o
 musl += stdio/vasprintf.o
 libc += stdio/vdprintf.o
 libc += stdio/vfprintf.o
 $(out)/libc/stdio/vfprintf.o: COMMON += -Wno-maybe-uninitialized
-musl += stdio/vfscanf.o
-$(out)/musl/src/stdio/vfscanf.o: COMMON += -Wno-maybe-uninitialized
-musl += stdio/vfwprintf.o
-musl += stdio/vfwscanf.o
-$(out)/musl/src/stdio/vfwscanf.o: COMMON += -Wno-maybe-uninitialized
+libc += stdio/vfscanf.o
+$(out)/libc/stdio/vfscanf.o: COMMON += -Wno-maybe-uninitialized
+libc += stdio/vfwprintf.o
+libc += stdio/vfwscanf.o
+$(out)/libc/stdio/vfwscanf.o: COMMON += -Wno-maybe-uninitialized
 musl += stdio/vprintf.o
 musl += stdio/vscanf.o
 libc += stdio/vsnprintf.o
@@ -1805,7 +1819,6 @@ musl += string/strrchr.o
 musl += string/strsep.o
 libc += string/stresep.o
 libc_to_hide += string/stresep.o
-musl += string/strsignal.o
 musl += string/strspn.o
 musl += string/strstr.o
 musl += string/strtok.o
@@ -1872,11 +1885,12 @@ musl += time/gmtime_r.o
 musl += time/localtime.o
 musl += time/localtime_r.o
 musl += time/mktime.o
-musl += time/strftime.o
-musl += time/strptime.o
+libc += time/strftime.o
+$(out)/libc/time/strftime.o: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include
+libc += time/strptime.o
+$(out)/libc/time/strptime.o: pre-include-api = -isystem include/api/internal_musl_headers -isystem musl/src/include
 musl += time/time.o
 musl += time/timegm.o
-musl += time/wcsftime.o
 musl += time/ftime.o
 $(out)/libc/time/ftime.o: CFLAGS += -Ilibc/include
 
@@ -1903,7 +1917,9 @@ musl += regex/regcomp.o
 $(out)/musl/src/regex/regcomp.o: CFLAGS += -UNDEBUG
 musl += regex/regexec.o
 $(out)/musl/src/regex/regexec.o: CFLAGS += -UNDEBUG
-musl += regex/regerror.o
+# In the C locale glibc's regex and fnmatch take each high byte as one character.
+$(out)/musl/src/regex/fnmatch.o $(out)/musl/src/regex/regcomp.o \
+$(out)/musl/src/regex/regexec.o: CFLAGS += -Dmbtowc=__osv_mbtowc_cu
 musl += regex/tre-mem.o
 $(out)/musl/src/regex/tre-mem.o: CFLAGS += -UNDEBUG
 
@@ -2161,6 +2177,8 @@ linker_archives_options = --whole-archive $(libstdc++.a) $(libgcc_eh.a) $(boost-
 musl += locale/iconv.o
 musl += locale/iconv_close.o
 endif
+# iconv decodes UTF-8 as Unicode only (libc/multibyte/multibyte.cc).
+$(out)/musl/src/locale/iconv.o: CFLAGS += -Dmbrtowc=__osv_mbrtowc_unicode
 
 ifeq ($(arch),aarch64)
 def_symbols = --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base)

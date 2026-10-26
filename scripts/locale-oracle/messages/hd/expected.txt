@@ -1,0 +1,28 @@
+# Copyright (C) 2026 Greg Burd. This work is open source software, licensed under the terms of the
+# BSD license as described in the LICENSE file in the top-level directory.
+# script<TAB>label or glibc-output fragment: an allowed (documented) OSv departure from glibc
+# A plural expression dividing by zero: glibc raises SIGFPE (the probe dies); OSv uses n != 1.
+rules6.sh	n/0 
+rules6.sh	n%0 
+rules6.sh	(n-n)/(n-n)
+rules5.sh	div0
+rules5.sh	mod0
+rules5.sh	rc=136
+rules2.sh	plural division by zero
+# glibc keeps a found translation after LANGUAGE changes until textdomain/setlocale/bindings
+# change; OSv reads LANGUAGE on every call.
+rules.sh	LANGUAGE changes after first call
+rules2.sh	LANGUAGE changed, then setlocale LM same
+rules2.sh	LANGUAGE changed, then bindtextdomain
+rules10.sh	setlocale LA same name
+rules10.sh	textdomain(NULL)
+rules10.sh	newlocale+uselocale same name
+rules10.sh	ngettext after gettext
+rules10.sh	ngettext n first
+rules10.sh	setlocale(LM, NULL) query
+rules10.sh	dcgettext other category
+rules10.sh	other domain same msgid
+# A codeset bound with bind_textdomain_codeset that is not UTF-8: glibc converts, OSv (1d:
+# UTF-8 only) returns the msgid.
+rules2.sh	bind ISO-8859-1/ASCII
+rules.sh	UTF-8 catalog bound to ISO-8859-1
