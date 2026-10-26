@@ -163,6 +163,10 @@ extern int tick;
     #define INET (1)
 #endif
 
+#if defined(CONF_INET6) && (CONF_INET6 != 0)
+    #define INET6 (1)
+#endif
+
 #ifdef _KERNEL
 
 #define panic(...) do { tprintf_e("bsd-panic", __VA_ARGS__); \
