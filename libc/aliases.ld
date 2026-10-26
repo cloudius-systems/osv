@@ -48,7 +48,6 @@ __strndup = strndup;
 __stpcpy = stpcpy;
 __stpncpy = stpncpy;
 __strdup = strdup;
-strerrordesc_np = strerror;
 
 /* time */
 __gmtime_r = gmtime_r;
