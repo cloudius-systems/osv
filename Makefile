@@ -1105,7 +1105,6 @@ libc += internal/intscan.o
 libc += internal/libc.o
 libc += internal/shgetc.o
 
-musl += ctype/__ctype_get_mb_cur_max.o
 musl += ctype/__ctype_tolower_loc.o
 musl += ctype/__ctype_toupper_loc.o
 musl += ctype/isalnum.o
@@ -1120,27 +1119,10 @@ musl += ctype/isprint.o
 musl += ctype/ispunct.o
 musl += ctype/isspace.o
 musl += ctype/isupper.o
-musl += ctype/iswalnum.o
-musl += ctype/iswalpha.o
-musl += ctype/iswblank.o
-musl += ctype/iswcntrl.o
-musl += ctype/iswctype.o
-musl += ctype/iswdigit.o
-musl += ctype/iswgraph.o
-musl += ctype/iswlower.o
-musl += ctype/iswprint.o
-musl += ctype/iswpunct.o
-musl += ctype/iswspace.o
-musl += ctype/iswupper.o
-musl += ctype/iswxdigit.o
 musl += ctype/isxdigit.o
 musl += ctype/toascii.o
 musl += ctype/tolower.o
 musl += ctype/toupper.o
-musl += ctype/towctrans.o
-musl += ctype/wcswidth.o
-musl += ctype/wctrans.o
-musl += ctype/wcwidth.o
 
 musl += dirent/alphasort.o
 musl += dirent/scandir.o
@@ -1173,19 +1155,17 @@ $(out)/musl/src/locale/__mo_lookup.o: CFLAGS += $(cc-hide-flags-$(conf_hide_symb
 musl += locale/pleval.o
 musl += locale/catgets.o
 libc += locale/catopen.o
-libc += locale/duplocale.o
-libc += locale/freelocale.o
 libc += locale/intl.o
-libc += locale/langinfo.o
+libc += locale/locale.o
+libc += locale/ctype-utf8.o
+libc += locale/wctype.o
 musl += locale/localeconv.o
-libc += locale/setlocale.o
 musl += locale/strcoll.o
 musl += locale/strfmon.o
 libc += locale/strtod_l.o
 libc += locale/strtof_l.o
 libc += locale/strtold_l.o
 musl += locale/strxfrm.o
-libc += locale/uselocale.o
 musl += locale/wcscoll.o
 musl += locale/wcsxfrm.o
 
@@ -1477,24 +1457,18 @@ musl += signal/siginterrupt.o
 musl += signal/sigrtmin.o
 musl += signal/sigrtmax.o
 
-musl += multibyte/btowc.o
+libc += multibyte/multibyte.o
 musl += multibyte/internal.o
 musl += multibyte/mblen.o
 musl += multibyte/mbrlen.o
-musl += multibyte/mbrtowc.o
 musl += multibyte/mbsinit.o
-musl += multibyte/mbsnrtowcs.o
 libc += multibyte/__mbsnrtowcs_chk.o
-musl += multibyte/mbsrtowcs.o
 libc += multibyte/__mbsrtowcs_chk.o
 musl += multibyte/mbstowcs.o
 libc += multibyte/__mbstowcs_chk.o
-musl += multibyte/mbtowc.o
-musl += multibyte/wcrtomb.o
 musl += multibyte/wcsnrtombs.o
 musl += multibyte/wcsrtombs.o
 musl += multibyte/wcstombs.o
-musl += multibyte/wctob.o
 musl += multibyte/wctomb.o
 
 $(out)/libc/multibyte/mbsrtowcs.o: CFLAGS += -Imusl/src/multibyte
@@ -1626,7 +1600,7 @@ libc += stdio/fgetc.o
 musl += stdio/fgetln.o
 musl += stdio/fgetpos.o
 musl += stdio/fgets.o
-musl += stdio/fgetwc.o
+libc += stdio/fgetwc.o
 musl += stdio/fgetws.o
 musl += stdio/fileno.o
 libc += stdio/flockfile.o
@@ -1636,8 +1610,8 @@ $(out)/musl/src/stdio/fopen.o: CFLAGS += --include libc/syscall_to_function.h
 musl += stdio/fprintf.o
 libc += stdio/fputc.o
 musl += stdio/fputs.o
-musl += stdio/fputwc.o
-musl += stdio/fputws.o
+libc += stdio/fputwc.o
+libc += stdio/fputws.o
 musl += stdio/fread.o
 libc += stdio/__fread_chk.o
 musl += stdio/freopen.o
@@ -1696,7 +1670,7 @@ $(out)/musl/src/stdio/tmpfile.o: CFLAGS += --include libc/syscall_to_function.h
 musl += stdio/tmpnam.o
 $(out)/musl/src/stdio/tmpnam.o: CFLAGS += --include libc/syscall_to_function.h -Wno-incompatible-pointer-types
 musl += stdio/ungetc.o
-musl += stdio/ungetwc.o
+libc += stdio/ungetwc.o
 musl += stdio/vasprintf.o
 libc += stdio/vdprintf.o
 libc += stdio/vfprintf.o
@@ -1903,6 +1877,9 @@ musl += regex/regcomp.o
 $(out)/musl/src/regex/regcomp.o: CFLAGS += -UNDEBUG
 musl += regex/regexec.o
 $(out)/musl/src/regex/regexec.o: CFLAGS += -UNDEBUG
+# In the C locale glibc's regex and fnmatch take each high byte as one character.
+$(out)/musl/src/regex/fnmatch.o $(out)/musl/src/regex/regcomp.o \
+$(out)/musl/src/regex/regexec.o: CFLAGS += -Dmbtowc=__osv_mbtowc_cu
 musl += regex/regerror.o
 musl += regex/tre-mem.o
 $(out)/musl/src/regex/tre-mem.o: CFLAGS += -UNDEBUG
@@ -2161,6 +2138,8 @@ linker_archives_options = --whole-archive $(libstdc++.a) $(libgcc_eh.a) $(boost-
 musl += locale/iconv.o
 musl += locale/iconv_close.o
 endif
+# iconv decodes UTF-8 as Unicode only (libc/multibyte/multibyte.cc).
+$(out)/musl/src/locale/iconv.o: CFLAGS += -Dmbrtowc=__osv_mbrtowc_unicode
 
 ifeq ($(arch),aarch64)
 def_symbols = --defsym=OSV_KERNEL_VM_BASE=$(kernel_vm_base)
@@ -2341,6 +2320,26 @@ $(out)/gen/include/ctype-data.h: $(out)/gen-ctype-data
 
 $(out)/gen-ctype-data: gen-ctype-data.cc
 	$(call quiet, $(HOST_CXX) -o $@ $^, HOST_CXX $@)
+
+# The locale tables (classes/case/width, C-locale transliteration, langinfo
+# builtins) are generated into $(out)/gen/include/ from committed inputs, like
+# ctype-data.h above, rather than committed. The generated .inc are order-only
+# prerequisites of the objects that #include them (the quote-form #include
+# falls through to -isystem $(out)/gen/include).
+$(out)/libc/locale/ctype-utf8.o: | $(out)/gen/include/ctype-utf8.inc $(out)/gen/include/translit-c.inc
+$(out)/libc/locale/locale.o: | $(out)/gen/include/langinfo-builtin.inc
+
+$(out)/gen/include/ctype-utf8.inc: scripts/locale-oracle/s-glibc-C.UTF-8.txt scripts/locale-oracle/gen-ctype-tables.py
+	$(makedir)
+	$(call quiet, scripts/locale-oracle/gen-ctype-tables.py $< > $@, GEN gen/include/ctype-utf8.inc)
+
+$(out)/gen/include/translit-c.inc: scripts/locale-oracle/tr-glibc-C.txt scripts/locale-oracle/gen-translit.py
+	$(makedir)
+	$(call quiet, scripts/locale-oracle/gen-translit.py $< > $@, GEN gen/include/translit-c.inc)
+
+$(out)/gen/include/langinfo-builtin.inc: scripts/locale-oracle/oracle-C.txt scripts/locale-oracle/oracle-C.UTF-8.txt scripts/gen-langinfo-builtin.py
+	$(makedir)
+	$(call quiet, scripts/gen-langinfo-builtin.py scripts/locale-oracle/oracle-C.txt scripts/locale-oracle/oracle-C.UTF-8.txt > $@, GEN gen/include/langinfo-builtin.inc)
 
 ################################################################################
 
