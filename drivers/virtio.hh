@@ -104,6 +104,16 @@ public:
 
     size_t get_vring_alignment() { return _dev.get_vring_alignment();}
 
+    // Reserve up to `want` MSI-X vectors from a process-wide budget and return
+    // how many are actually available.  The x86-64 IDT has only 224 usable
+    // vectors (32..255) shared by every device, so a high-vCPU guest with
+    // several multiqueue virtio devices can exhaust them and crash at boot.
+    // Drivers that scale their queue count with the vCPU count (for example
+    // virtio-blk multiqueue) call this to cap the number of queues they arm
+    // with an interrupt, so the total stays within the budget and every device
+    // still gets at least one vector.  Returns 0 only if the pool is empty.
+    static unsigned reserve_msix_vectors(unsigned want);
+
 protected:
     // Actual drivers should implement this on top of the basic ring features
     virtual u64 get_driver_features() { return 1 << VIRTIO_RING_F_INDIRECT_DESC | 1 << VIRTIO_RING_F_EVENT_IDX; }
