@@ -1,3 +1,31 @@
+/*
+ * Copyright © 2005-2020 Rich Felker, et al.
+ *
+ * Permission is hereby granted, free of charge, to any person obtaining
+ * a copy of this software and associated documentation files (the
+ * "Software"), to deal in the Software without restriction, including
+ * without limitation the rights to use, copy, modify, merge, publish,
+ * distribute, sublicense, and/or sell copies of the Software, and to
+ * permit persons to whom the Software is furnished to do so, subject to
+ * the following conditions:
+ *
+ * The above copyright notice and this permission notice shall be
+ * included in all copies or substantial portions of the Software.
+ *
+ * THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND,
+ * EXPRESS OR IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF
+ * MERCHANTABILITY, FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT.
+ * IN NO EVENT SHALL THE AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY
+ * CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER IN AN ACTION OF CONTRACT,
+ * TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
+ * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
+ *
+ * Modified for OSv from musl src/stdio/vfprintf.c. With conf_locale=1
+ * (OSV_CONF_LOCALE) the LC_NUMERIC decimal point, the ' flag's grouping
+ * and glibc's I flag (LC_CTYPE outdigits) are applied as glibc 2.41 does
+ * (measured: scripts/locale-oracle/numeric-diff); with conf_locale=0 every
+ * locale's numeric items are C's, so the output is unchanged.
+ */
 #include "stdio_impl.h"
 #include <errno.h>
 #include <ctype.h>
@@ -10,6 +38,7 @@
 #include <inttypes.h>
 #include <math.h>
 #include <float.h>
+#include "osv-numeric.h"
 
 /* Some useful macros */
 
@@ -155,6 +184,54 @@ static void pad(FILE *f, char c, int w, int l, int fl)
 	out(f, pad, l);
 }
 
+/* How a number's digits are written: the locale's items, glibc's I flag
+ * (dig: digits from the LC_CTYPE outdigits) and the ' flag's grouping
+ * (grp_left: integer digits still to come, a separator before each group).
+ * extra counts the bytes written beyond one per character. */
+struct numctx {
+	const struct osv_num *n;
+	int dig, grp;
+	long grp_left;
+	long extra;
+};
+
+static void out_mb(FILE *f, const char *s, struct numctx *c)
+{
+	size_t l = strlen(s);
+	if (l > 1 && (f->flags & OSV_F_WCHARS)) {
+		/* for vfwprintf: write characters, count characters */
+		while (*s && !(f->flags & F_ERR)) fputwc(__osv_u8dec(&s), f);
+		return;
+	}
+	out(f, s, l);
+	c->extra += l - __osv_u8chars(s);
+}
+
+static void out_num(FILE *f, const char *s, size_t l, struct numctx *c)
+{
+	if (!c->dig && c->grp_left <= 0) {
+		out(f, s, l);
+		return;
+	}
+	for (; l; s++, l--) {
+		if (c->dig && *s-'0'<10U) out_mb(f, c->n->dig[*s-'0'], c);
+		else out(f, s, 1);
+		if (c->grp_left > 0 && --c->grp_left > 0 && __osv_grp_sep(c->n->grp, c->grp_left))
+			out_mb(f, c->n->ts, c);
+	}
+}
+
+/* pad() with zeros that the I flag converts */
+static void pad_num(FILE *f, int w, int l, int fl, struct numctx *c)
+{
+	if (!c->dig) {
+		pad(f, '0', w, l, fl);
+		return;
+	}
+	if (fl & (LEFT_ADJ | ZERO_PAD) || l >= w) return;
+	for (l = w - l; l; l--) out_mb(f, c->n->dig[0], c);
+}
+
 static const char xdigits[16] = {
 	"0123456789ABCDEF"
 };
@@ -186,7 +263,7 @@ static char *fmt_u(uintmax_t x, char *s)
 typedef char compiler_defines_long_double_incorrectly[9-(int)sizeof(long double)];
 #endif
 
-static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t)
+static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t, struct numctx *c)
 {
 	uint32_t big[(LDBL_MANT_DIG+28)/29 + 1          // mantissa expansion
 		+ (LDBL_MAX_EXP+LDBL_MANT_DIG+28+8)/9]; // exponent expansion
@@ -266,11 +343,16 @@ static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t)
 		pad(f, ' ', w, pl+l, fl);
 		out(f, prefix, pl);
 		pad(f, '0', w, pl+l, fl^ZERO_PAD);
-		out(f, buf, s-buf);
+		if (s-buf > 1 && buf[1] == '.') {
+			out(f, buf, 1);
+			out_mb(f, c->n->dp, c);
+			out(f, buf+2, s-buf-2);
+		} else out(f, buf, s-buf);
 		pad(f, '0', l-(ebuf-estr)-(s-buf), 0, 0);
 		out(f, estr, ebuf-estr);
 		pad(f, ' ', w, pl+l, fl^LEFT_ADJ);
-		return MAX(w, pl+l);
+		if (c->extra > INT_MAX-MAX(w, pl+l)) return -1;
+		return MAX(w, pl+l) + c->extra;
 	}
 	if (p<0) p=6;
 
@@ -376,6 +458,12 @@ static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t)
 	if ((t|32)=='f') {
 		if (e > INT_MAX-l) return -1;
 		if (e>0) l+=e;
+		/* the ' flag groups the integer part of f-style output */
+		if (c->grp) {
+			long ns = __osv_grp_count(c->n->grp, 1 + MAX(e, 0));
+			if (ns > INT_MAX-l) return -1;
+			l += ns;
+		}
 	} else {
 		estr=fmt_u(e<0 ? -e : e, ebuf);
 		while(ebuf-estr<2) *--estr='0';
@@ -388,23 +476,25 @@ static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t)
 	if (l > INT_MAX-pl) return -1;
 	pad(f, ' ', w, pl+l, fl);
 	out(f, prefix, pl);
-	pad(f, '0', w, pl+l, fl^ZERO_PAD);
+	pad_num(f, w, pl+l, fl^ZERO_PAD, c);
 
 	if ((t|32)=='f') {
 		if (a>r) a=r;
+		if (c->grp) c->grp_left = 1 + MAX(e, 0);
 		for (d=a; d<=r; d++) {
 			char *s = fmt_u(*d, buf+9);
 			if (d!=a) while (s>buf) *--s='0';
 			else if (s==buf+9) *--s='0';
-			out(f, s, buf+9-s);
+			out_num(f, s, buf+9-s, c);
 		}
-		if (p || (fl&ALT_FORM)) out(f, ".", 1);
+		c->grp_left = 0;
+		if (p || (fl&ALT_FORM)) out_mb(f, c->n->dp, c);
 		for (; d<z && p>0; d++, p-=9) {
 			char *s = fmt_u(*d, buf+9);
 			while (s>buf) *--s='0';
-			out(f, s, MIN(9,p));
+			out_num(f, s, MIN(9,p), c);
 		}
-		pad(f, '0', p+9, 9, 0);
+		pad_num(f, p+9, 9, 0, c);
 	} else {
 		if (z<=a) z=a+1;
 		for (d=a; d<z && p>=0; d++) {
@@ -412,19 +502,20 @@ static int fmt_fp(FILE *f, long double y, int w, int p, int fl, int t)
 			if (s==buf+9) *--s='0';
 			if (d!=a) while (s>buf) *--s='0';
 			else {
-				out(f, s++, 1);
-				if (p>0||(fl&ALT_FORM)) out(f, ".", 1);
+				out_num(f, s++, 1, c);
+				if (p>0||(fl&ALT_FORM)) out_mb(f, c->n->dp, c);
 			}
-			out(f, s, MIN(buf+9-s, p));
+			out_num(f, s, MIN(buf+9-s, p), c);
 			p -= buf+9-s;
 		}
-		pad(f, '0', p+18, 18, 0);
-		out(f, estr, ebuf-estr);
+		pad_num(f, p+18, 18, 0, c);
+		out_num(f, estr, ebuf-estr, c);
 	}
 
 	pad(f, ' ', w, pl+l, fl^LEFT_ADJ);
 
-	return MAX(w, pl+l);
+	if (c->extra > INT_MAX-MAX(w, pl+l)) return -1;
+	return MAX(w, pl+l) + c->extra;
 }
 
 static int getint(char **s) {
@@ -451,6 +542,11 @@ static int printf_core(FILE *f, const char *fmt, va_list *ap, union arg *nl_arg,
 	int t, pl;
 	wchar_t wc[2], *ws;
 	char mb[4];
+	unsigned ifl;
+	int op;
+	struct osv_num num;
+	int have_num = 0;
+	struct numctx nc;
 
 	for (;;) {
 		/* This error is only specified for snprintf, but since it's
@@ -480,8 +576,15 @@ static int printf_core(FILE *f, const char *fmt, va_list *ap, union arg *nl_arg,
 		}
 
 		/* Read modifier flags */
-		for (fl=0; (unsigned)*s-' '<32 && (FLAGMASK&(1U<<*s-' ')); s++)
-			fl |= 1U<<*s-' ';
+		for (fl=ifl=0; ; s++) {
+			if ((unsigned)*s-' '<32 && (FLAGMASK&(1U<<*s-' ')))
+				fl |= 1U<<*s-' ';
+#if OSV_CONF_LOCALE
+			else if (*s=='I')	/* glibc: digits from LC_CTYPE */
+				ifl = 1;
+#endif
+			else break;
+		}
 
 		/* Read field width */
 		if (*s=='*') {
@@ -538,6 +641,7 @@ static int printf_core(FILE *f, const char *fmt, va_list *ap, union arg *nl_arg,
 		if (!f) continue;
 
 		z = buf + sizeof(buf);
+		op = p;
 		prefix = "-+   0X0x";
 		pl = 0;
 		t = s[-1];
@@ -626,10 +730,61 @@ static int printf_core(FILE *f, const char *fmt, va_list *ap, union arg *nl_arg,
 		case 'e': case 'f': case 'g': case 'a':
 		case 'E': case 'F': case 'G': case 'A':
 			if (xp && p<0) goto overflow;
-			l = fmt_fp(f, arg.f, w, p, fl, t);
+			if (have_num < 1+ifl) __osv_num(&num, 0, ifl), have_num = 1+ifl;
+			nc = (struct numctx){ &num, ifl && num.dig[0] && (t|32)!='a',
+				(fl&GROUPED) && __osv_grouping(&num), 0, 0 };
+			l = fmt_fp(f, arg.f, w, p, fl, t, &nc);
 			if (l<0) goto overflow;
 			continue;
 		}
+
+#if OSV_CONF_LOCALE
+		/* The ' flag groups the digits of d i u o x X (not the precision
+		 * zeros, nor a 0x prefix); I writes d i u in the LC_CTYPE digits.
+		 * The width counts bytes, as glibc's does (characters for
+		 * vfwprintf, OSV_F_WCHARS). */
+		if ((fl & GROUPED || ifl) && strchr("diouxX", s[-1])) {
+			if (have_num < 1+ifl) __osv_num(&num, 0, ifl), have_num = 1+ifl;
+			nc = (struct numctx){ &num, ifl && num.dig[0] && strchr("diu", s[-1]),
+				(fl&GROUPED) && __osv_grouping(&num), 0, 0 };
+			if (nc.dig || nc.grp) {
+				long nd, lz, lb, lc, ns = 0, tot;
+				char *q;
+				if (a == z && p > 0) *--a = '0';
+				nd = z - a;
+				lz = p > nd ? p - nd : 0;
+				lb = lc = nd;
+				if (nc.dig)
+					for (lb = 0, q = a; q < z; q++) lb += strlen(num.dig[*q-'0']);
+				if (nc.grp) {
+					ns = __osv_grp_count(num.grp, nd);
+					lb += ns * (long)strlen(num.ts);
+					lc += ns * __osv_u8chars(num.ts);
+				}
+				/* %'#o: glibc 2.41 adds the alternate form's 0 when the
+				 * precision is at most the grouped number's length, in
+				 * bytes (in characters for vfwprintf), even where the
+				 * precision zeros already lead */
+				if (s[-1] == 'o' && (fl & ALT_FORM) && nc.grp && arg.i)
+					lz = (op > nd ? op - nd : 0) +
+						(op <= ((f->flags & OSV_F_WCHARS) ? lc : lb));
+				if (!(f->flags & OSV_F_WCHARS)) lc = lb;
+				tot = pl + lz + lc;
+				if (tot > INT_MAX) goto overflow;
+				if (w < tot) w = tot;
+				if (w > INT_MAX-cnt) goto overflow;
+				pad(f, ' ', w, tot, fl);
+				out(f, prefix, pl);
+				pad(f, '0', w, tot, fl^ZERO_PAD);
+				pad(f, '0', lz, 0, 0);
+				nc.grp_left = nc.grp ? nd : 0;
+				out_num(f, a, nd, &nc);
+				pad(f, ' ', w, tot, fl^LEFT_ADJ);
+				l = w;
+				continue;
+			}
+		}
+#endif
 
 		if (p < z-a) p = z-a;
 		if (p > INT_MAX-pl) goto overflow;
