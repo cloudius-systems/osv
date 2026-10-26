@@ -712,6 +712,9 @@ public:
       * which could cause the whole system to block. So use at your own peril.
       */
     bool unsafe_stop();
+    bool running() {
+        return _detached_state.get()->st.load(std::memory_order_relaxed) == status::running;
+    }
     void setup_large_syscall_stack();
     void free_tiny_syscall_stack();
 #ifdef __x86_64__
