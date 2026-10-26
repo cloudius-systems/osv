@@ -11,7 +11,6 @@ config lazy_stack
 # it) is implemented only for x86_64.  On other architectures the fork code
 # compiles but does not link, so only offer the option where it can work; this
 # turns a confusing link failure into fork() simply returning ENOSYS.
-if $(arch) = x64
 config fork
   prompt "Include fork()/vfork() support (per-child address space, off by default)"
   def_bool $(shell,[ "$conf_fork" = 1 ] && echo y || echo n)
@@ -23,7 +22,6 @@ config fork
     it is OFF by default: with this disabled, none of the fork code is compiled
     in and OSv behaves exactly as before (fork() returns ENOSYS).  Enable it
     only for workloads that require fork() (e.g. multi-process programs).
-endif
 
 config lazy_stack_invariant
   prompt "Check lazy stack invariant"

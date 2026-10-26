@@ -647,6 +647,7 @@ pid_t fork(void)
     // and post-return rsp (rbp+16).  The child resumes with exactly this
     // context so it continues in fork()'s caller as a normal `ret` would --
     // essential for deep call chains (see osv::fork_resume_ctx, tst-fork-deep).
+#if defined(__x86_64__)
     fork_resume_ctx ctx;
     void **fp = static_cast<void**>(__builtin_frame_address(0));
     asm volatile("movq %%rbx, %0\n\t"
@@ -659,16 +660,29 @@ pid_t fork(void)
     ctx.rbp = reinterpret_cast<unsigned long>(fp[0]);          // caller's rbp
     ctx.rip = reinterpret_cast<unsigned long>(__builtin_return_address(0));
     ctx.rsp = reinterpret_cast<unsigned long>(fp + 2);         // fork rbp + 16
-
-    pid_t parent = getpid();
-
+    void *resume_ctx = &ctx;
     void *caller_ret = reinterpret_cast<void*>(ctx.rip);
     void *caller_sp  = reinterpret_cast<void*>(ctx.rsp);
+#elif defined(__aarch64__)
+    // aarch64 fork_thread does NOT restore callee-saved regs (it starts a
+    // fresh OSv thread and `br`s to caller_ret with a copied stack); it needs
+    // only the caller return address and post-return SP.  __builtin_frame_
+    // address(0) is fork's frame record [x29,x30]; the caller's SP is just
+    // above it (fp + 2 pointers), mirroring x86's fp+16.
+    void **fp = static_cast<void**>(__builtin_frame_address(0));
+    void *resume_ctx = nullptr;
+    void *caller_ret = __builtin_return_address(0);
+    void *caller_sp  = reinterpret_cast<void*>(fp + 2);
+#else
+#error "fork() caller-context capture not implemented for this architecture"
+#endif
+
+    pid_t parent = getpid();
 
     void *stack_to_free = nullptr;
     // POSIX: run pthread_atfork prepare handlers in the parent before forking.
     __osv_run_atfork_prepare();
-    sched::thread *child = fork_thread(caller_ret, caller_sp, &ctx, &stack_to_free);
+    sched::thread *child = fork_thread(caller_ret, caller_sp, resume_ctx, &stack_to_free);
     if (!child) {
         __osv_run_atfork_parent();  // undo prepare-side locking
         errno = ENOMEM;

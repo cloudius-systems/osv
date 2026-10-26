@@ -140,10 +140,62 @@ void switch_to_runtime_page_tables()
     mmu::flush_tlb_all();
 }
 
+#if CONF_fork
+// --- fork COW arch hooks (aarch64) --------------------------------------
+//
+// On aarch64 OSv uses a dual-TTBR split (see arch/aarch64/boot.S TCR_EL1):
+//   TTBR0_EL1 -> 0x0000_0000_0000_0000 .. 0x0000_ffff_ffff_ffff (low half)
+//   TTBR1_EL1 -> 0xffff_0000_0000_0000 .. high half
+// Unlike a hypothetical user/kernel split, OSv maps EVERYTHING it uses in the
+// LOW half (TTBR0): the kernel ELF (OSV_KERNEL_VM_BASE, ~63 GB), the linear
+// physical map (main_mem_area_base 0x400000000000), the application and all
+// mmap VMAs.  The high half (TTBR1) is effectively unused today.  So the fork
+// per-child COW root is a LOW-half (TTBR0) root: page_table_root[0] is the
+// kernel/AS0 TTBR0 root, and a child's private COW root replaces TTBR0 while
+// TTBR1 (page_table_root[1]) stays shared.  This mirrors x86's single-CR3 COW
+// clone, because the aarch64 top-level (L0) slot layout is identical to x86's
+// PML4 layout (kernel ELF in slot 0, app in slots 32..127, phys map in slots
+// 128.., all from the arch-neutral mmu-defs.hh / elf.hh constants), so the
+// generic clone in core/mmu.cc (slots pml4_app_first=1..pml4_app_last=127 COW,
+// slot 0 and 128.. shared) is correct unchanged.
+
+// Virtual pointer to the current thread's low-half (TTBR0) root: the child
+// AS's private COW root when running in a forked child, else the kernel
+// (AS0) TTBR0 root.  Defined in core/mmu.cc.
+pt_element<4> *current_pt_root();
+
+pt_element<4> *get_root_pt(uintptr_t virt)
+{
+    // High half (TTBR1): always the single shared kernel root (unused today,
+    // but keep the static root so any future high-half mapping is shared).
+    if (virt >> 63) {
+        return &page_table_root[1];
+    }
+    // Low half (TTBR0): the current thread's address-space root (per-AS COW
+    // root for a fork child, else the kernel/AS0 TTBR0 root).
+    return current_pt_root();
+}
+
+// Virtual pointer to the kernel (AS0) low-half (TTBR0) root -- the template the
+// per-child COW root is cloned from (core/mmu.cc clone_address_space).
+pt_element<4> *kernel_pml4()
+{
+    return &page_table_root[0];
+}
+
+// Physical address of the kernel (AS0) TTBR0 root -- the TTBR0_EL1 value that
+// maps the kernel ELF + linear phys map.  Used as the shared base for cloned
+// child address spaces and as AS0's pt_root (core/mmu.cc pt_root_phys).
+phys kernel_pt_root_phys()
+{
+    return page_table_root[0].next_pt_addr();
+}
+#else
 pt_element<4> *get_root_pt(uintptr_t virt)
 {
     return &page_table_root[virt >> 63];
 }
+#endif // CONF_fork
 
 bool is_page_fault_insn(unsigned int esr) {
     unsigned int ec = esr >> 26;

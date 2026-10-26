@@ -155,6 +155,7 @@ int execve(const char *path, char *const argv[], char *const envp[])
         // stack, then call a lambda that switches CR3, destroys old_as, and
         // runs the program.  It never returns.
         self->set_address_space(mmu::kernel_address_space());
+#if defined(__x86_64__)
         asm volatile(
             "movq %0, %%rsp \n\t"
             "movq %0, %%rbp \n\t"
@@ -174,6 +175,25 @@ int execve(const char *path, char *const argv[], char *const envp[])
                     execve_run_and_exit(&s_path, &s_args, &s_env, s_have_env);
                 }))
             : "memory");
+#elif defined(__aarch64__)
+        // aarch64 equivalent of the x86 rsp-switch above: move SP (and the
+        // frame pointer x29) to the kernel stack, then branch-with-link to the
+        // same continuation lambda.  Same ordering guarantee (we have left the
+        // child app stack before destroy_address_space frees it).  Only
+        // reached by execve() in a fork child; never returns.
+        asm volatile(
+            "mov sp, %0 \n\t"
+            "mov x29, %0 \n\t"
+            "blr %1 \n\t"
+            : : "r"(sp), "r"(reinterpret_cast<void*>(+[]{
+                    mmu::switch_to_runtime_page_tables();
+                    mmu::destroy_address_space(s_old_as);
+                    execve_run_and_exit(&s_path, &s_args, &s_env, s_have_env);
+                }))
+            : "memory");
+#else
+#error "execve fork-child stack switch not implemented for this architecture"
+#endif
         __builtin_unreachable();
     }
 

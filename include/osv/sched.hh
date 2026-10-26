@@ -962,6 +962,12 @@ public:
     unsigned long get_app_tcb() { return _tcb->app_tcb; }
     void set_app_tcb(unsigned long tcb) { _tcb->app_tcb = tcb; }
 #endif
+#ifdef __aarch64__
+    // On aarch64 the app TLS base lives in _arch, not the TCB: the variant-I
+    // TLS ABI fixes the TCB head size (see arch/aarch64/arch-tls.hh).
+    unsigned long get_app_tcb() { return _arch.app_tcb; }
+    void set_app_tcb(unsigned long tcb) { _arch.app_tcb = tcb; }
+#endif
 private:
 #ifdef __aarch64__
     friend void ::destroy_current_cpu_terminating_thread();

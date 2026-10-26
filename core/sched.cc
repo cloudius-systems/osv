@@ -448,6 +448,24 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
         mmu::flush_tlb_local();
     }
 #ifdef __aarch64__
+#if CONF_fork
+    // Fork timer-park (see the x86 block below and cpu::park_timers): remove the
+    // OUTGOING app thread's app-stack timers from THIS cpu's per-CPU timer list
+    // while its address space is still loaded, so a later timer IRQ in a foreign
+    // address space never dereferences its on-stack timer nodes.  Cheap no-op
+    // until a fork child address space exists.
+    if (p->is_app()) {
+        park_timers(*p);
+    }
+    // Fork COW address-space reload: tell the context switch (arch/aarch64/sched.S)
+    // which TTBR0_EL1 to load when switching INTO n.  Only when n's address space
+    // differs from the outgoing thread's, so the common single-AS case reloads
+    // nothing (and triggers no TLB flush).  Stored in n's thread_state and read
+    // at the stack swap in the asm -- the aarch64 analogue of x86 reloading CR3
+    // at the rsp/rbp swap.  0 means "no address-space change".
+    n->_state.reload_ttbr0 = (n->_current_as != p->_current_as)
+                                 ? mmu::pt_root_phys(n->_current_as) : 0;
+#endif
     switch_data.old_thread_state = &(p->_state);
     switch_data.new_thread_state = &(n->_state);
     return switch_data;
@@ -488,6 +506,13 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
 #ifdef __aarch64__
 extern "C" void destroy_current_cpu_terminating_thread()
 {
+#if CONF_fork
+    // Now running as the thread this reschedule switched IN; its address space
+    // is loaded, so re-inserting its on-stack app timers is safe (foreign-AS
+    // IRQ walks can no longer hit them).  cpu::current() because 'this' from the
+    // scheduling frame is stale after the asm context switch.
+    cpu::current()->unpark_timers(*thread::current());
+#endif
 #endif
     if (cpu::current()->terminating_thread) {
         cpu::current()->terminating_thread->destroy();

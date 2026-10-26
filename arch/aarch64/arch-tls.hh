@@ -19,4 +19,11 @@ struct thread_control_block {
     void *dtv;      // Address of the DTV (Dynamic Thread Vector)
 };
 
+// NOTE: the aarch64 TLS variant-I ABI reserves exactly two words (16 bytes) for
+// the thread_control_block before the thread's TLS block, and the compiler
+// emits every __thread access as tpidr_el0 + 16 + offset.  Do NOT add fields
+// here: growing the TCB shifts every kernel TLS variable (e.g. preempt_counter)
+// and breaks boot (assert in arch_setup_tls).  The app TLS base saved/restored
+// across fork() lives in thread::_arch (arch_thread::app_tcb) instead.
+
 #endif /* ARCH_TLS_HH */
