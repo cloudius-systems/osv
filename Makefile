@@ -2233,6 +2233,15 @@ bootfs_dep += $(out)/modules/libext/libext.so
 else
 ifeq ($(fs),zfs)
 bootfs_dep += $(tools:%=$(out)/%) $(out)/libsolaris.so
+else
+ifeq ($(fs),ramfs)
+# For fs=ramfs, scripts/build passes $(out)/usr.manifest as the bootfs manifest,
+# and that manifest is generated from usr_ramfs.manifest.skel, which lists
+# tools/mount/mount-fs.so and tools/mount/umount.so.  Without these the very
+# first build of a fresh tree races: mkbootfs.py stats a tool nothing ordered
+# and dies with FileNotFoundError.
+bootfs_dep += $(out)/tools/mount/mount-fs.so $(out)/tools/mount/umount.so
+endif
 endif
 endif
 $(out)/bootfs.bin: $(bootfs_dep)
