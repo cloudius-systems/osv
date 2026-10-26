@@ -101,4 +101,27 @@ struct fork_resume_ctx {
 } // namespace osv
 #endif
 
+#ifdef __aarch64__
+namespace osv {
+// aarch64 machine context a forked child must resume with so it continues in
+// fork()'s caller EXACTLY as a normal `ret` from fork() would -- restoring all
+// AAPCS64 callee-saved registers (x19-x28, the frame pointer x29) the caller
+// relies on across the call, plus the stack pointer and the return address
+// (x30).  Same rationale as x86 (see above): fork() does NOT return normally in
+// the child (the child is a separate OSv thread resumed by a trampoline), so
+// unless these are restored the caller resumes with fork()'s internal register
+// values -> a deep call chain keeping live values in callee-saved regs across
+// fork() computes garbage, and saved frame pointers / &locals on the stack must
+// resolve to the SAME virtual addresses (which clone_address_space privatizes
+// into the child as private copies).  Captured at fork() entry; restored by the
+// child trampoline (arch/aarch64/fork.cc).
+struct fork_resume_ctx {
+    unsigned long x19, x20, x21, x22, x23, x24, x25, x26, x27, x28;
+    unsigned long fp;   // x29
+    unsigned long sp;   // caller's stack pointer (parent's exact SP)
+    unsigned long pc;   // x30 / return address into fork()'s caller
+};
+} // namespace osv
+#endif
+
 #endif // OSV_FORK_HH

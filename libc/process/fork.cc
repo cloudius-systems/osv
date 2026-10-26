@@ -664,15 +664,32 @@ pid_t fork(void)
     void *caller_ret = reinterpret_cast<void*>(ctx.rip);
     void *caller_sp  = reinterpret_cast<void*>(ctx.rsp);
 #elif defined(__aarch64__)
-    // aarch64 fork_thread does NOT restore callee-saved regs (it starts a
-    // fresh OSv thread and `br`s to caller_ret with a copied stack); it needs
-    // only the caller return address and post-return SP.  __builtin_frame_
-    // address(0) is fork's frame record [x29,x30]; the caller's SP is just
-    // above it (fp + 2 pointers), mirroring x86's fp+16.
+    // aarch64 SAME-VA fork (mirrors x86): capture the caller's full AAPCS64
+    // callee-saved register context so the child resumes in fork()'s caller
+    // EXACTLY as a normal return would, on the parent's EXACT stack VAs (which
+    // clone_address_space privatizes into the child).  fork() is noinline and
+    // its prologue saved x19-x28/x29/x30 to its own frame, but those registers
+    // STILL hold the caller's values here at the top of fork()'s body (nothing
+    // has reloaded them yet), so reading them directly captures the caller's
+    // context -- the same trick x86 uses for rbx/r12-r15.
+    fork_resume_ctx ctx;
+    asm volatile("str x19, %0\n\t str x20, %1\n\t str x21, %2\n\t str x22, %3\n\t"
+                 "str x23, %4\n\t str x24, %5\n\t str x25, %6\n\t str x26, %7\n\t"
+                 "str x27, %8\n\t str x28, %9\n\t"
+                 : "=m"(ctx.x19), "=m"(ctx.x20), "=m"(ctx.x21), "=m"(ctx.x22),
+                   "=m"(ctx.x23), "=m"(ctx.x24), "=m"(ctx.x25), "=m"(ctx.x26),
+                   "=m"(ctx.x27), "=m"(ctx.x28));
+    // fork's frame record: __builtin_frame_address(0) points at fork's saved
+    // {x29(caller fp), x30(return addr)} pair.  fp[0] = caller's frame pointer;
+    // the caller's SP (where SP was just before `bl fork`) is just above the
+    // frame record, mirroring x86's rbp+16.
     void **fp = static_cast<void**>(__builtin_frame_address(0));
-    void *resume_ctx = nullptr;
-    void *caller_ret = __builtin_return_address(0);
-    void *caller_sp  = reinterpret_cast<void*>(fp + 2);
+    ctx.fp = reinterpret_cast<unsigned long>(fp[0]);          // caller's x29
+    ctx.pc = reinterpret_cast<unsigned long>(__builtin_return_address(0));
+    ctx.sp = reinterpret_cast<unsigned long>(fp + 2);         // caller's SP
+    void *resume_ctx = &ctx;
+    void *caller_ret = reinterpret_cast<void*>(ctx.pc);
+    void *caller_sp  = reinterpret_cast<void*>(ctx.sp);
 #else
 #error "fork() caller-context capture not implemented for this architecture"
 #endif

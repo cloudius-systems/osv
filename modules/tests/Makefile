@@ -337,6 +337,7 @@ tests += tst-fork.so
 tests += tst-execve.so
 tests += payload-exit7.so
 tests += tst-fork-cow.so
+tests += tst-shmin.so
 tests += tst-fork-deep.so
 tests += tst-fork-file-mmap.so
 tests += tst-locale-builtin.so
