@@ -1140,8 +1140,7 @@ ether_resolvemulti(struct ifnet *ifp, struct bsd_sockaddr **llsa,
 		}
 		if (!IN6_IS_ADDR_MULTICAST(&sin6->sin6_addr))
 			return EADDRNOTAVAIL;
-		sdl = malloc(sizeof *sdl, M_IFMADDR,
-		       M_NOWAIT|M_ZERO);
+		sdl = (struct bsd_sockaddr_dl *) calloc(1, sizeof *sdl);
 		if (sdl == NULL)
 			return (ENOMEM);
 		sdl->sdl_len = sizeof *sdl;
@@ -1149,7 +1148,7 @@ ether_resolvemulti(struct ifnet *ifp, struct bsd_sockaddr **llsa,
 		sdl->sdl_index = ifp->if_index;
 		sdl->sdl_type = IFT_ETHER;
 		sdl->sdl_alen = ETHER_ADDR_LEN;
-		e_addr = LLADDR(sdl);
+		e_addr = (u_char*)LLADDR(sdl);
 		ETHER_MAP_IPV6_MULTICAST(&sin6->sin6_addr, e_addr);
 		*llsa = (struct bsd_sockaddr *)sdl;
 		return 0;
