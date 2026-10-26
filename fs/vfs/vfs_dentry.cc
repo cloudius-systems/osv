@@ -37,16 +37,181 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/param.h>
+#include <atomic>
 
 #include <osv/dentry.h>
 #include <osv/vnode.h>
+#include <osv/debug.h>
 #include "vfs.h"
 
 #define DENTRY_BUCKETS 32
 
-static LIST_HEAD(dentry_hash_head, dentry) dentry_hash_table[DENTRY_BUCKETS];
-static LIST_HEAD(fake, dentry) fake;
-static mutex dentry_hash_lock;
+/*
+ * The "fake" chain that dentry_remove() parks unlinked-but-still-referenced
+ * dentries on is just one more chain, so give it a slot in the same array and
+ * it gets a lock by the same rule as every other chain.
+ */
+#define DENTRY_FAKE_INDEX  DENTRY_BUCKETS
+#define DENTRY_CHAINS      (DENTRY_BUCKETS + 1)
+
+static LIST_HEAD(dentry_hash_head, dentry) dentry_hash_table[DENTRY_CHAINS];
+
+/*
+ * LOCK ORDERING RULE (whole VFS):
+ *
+ *     vnode lock (vn_lock)  ->  any dentry chain lock
+ *
+ * and NEVER the reverse.  namei() establishes this direction: it holds
+ * vn_lock(dvp) across dentry_lookup()/dentry_alloc() (vfs_lookup.cc), both of
+ * which take a chain lock inside.  Therefore no code may call anything that
+ * takes a vnode lock while holding a chain lock.  Splitting one lock into
+ * several does not change this: a per-chain lock inverts against vn_lock
+ * exactly as the single global one did.
+ *
+ * Inverting it deadlocks: a namei() holding vn_lock and waiting for a chain
+ * lock, against a thread holding that chain lock and waiting for vn_lock,
+ * leaves neither able to proceed.  Reaching that state needs two distinct
+ * dentries aliasing one vnode, which rename() can produce: sys_rename() holds
+ * vn_lock(vp1) across the destination lookup and the following
+ * dentry_move()/dentry_remove(), and vp1 may be any vnode type.
+ *
+ * A chain lock does not call into the vnode layer.  Keep it that way, and do
+ * not allocate while holding one.  dentry_move() does nest dentry->d_lock
+ * under the chain locks (via dentry_children_remove()); that direction is
+ * consistent at every site, and d_lock is never held while taking a chain
+ * lock.
+ *
+ * MULTI-CHAIN OPERATIONS.  Most sites touch exactly one chain, which is the
+ * point of the split.  Two do not, and both are handled explicitly rather
+ * than assumed independent:
+ *
+ *   - dentry_move() unlinks dp from the chain for its old path, re-inserts it
+ *     on the chain for the new path, and unlinks every child of dp from
+ *     whatever chains they happen to be on.  It therefore takes ALL chain
+ *     locks (dentry_lock_all), in ascending index order.
+ *   - dentry_remove() moves a dentry from its hash chain to the fake chain,
+ *     i.e. two chains, so it locks both, again in ascending index order.
+ *
+ * Ascending-index acquisition is what keeps chain-vs-chain lock order safe.
+ * d_hash_index records which chain a dentry is currently on, so an unlink can
+ * find the right lock without rehashing a d_path that a rename may already
+ * have replaced.
+ */
+static mutex dentry_chain_lock[DENTRY_CHAINS];
+
+/*
+ * OSV_VFS_DENTRY_PERBUCKET=0 : route every chain lock to chain 0's mutex, so
+ * all chains share one lock and the code behaves like the original single
+ * global dentry_hash_lock.  Same-binary A/B for the lock split.  The ordering
+ * fix in drele() is unconditional and is NOT affected by this switch.
+ */
+static bool dentry_perbucket_enabled()
+{
+    static std::atomic<int> cached{-1};
+    int v = cached.load(std::memory_order_relaxed);
+    if (v < 0) {
+        const char *e = getenv("OSV_VFS_DENTRY_PERBUCKET");
+        v = (!e || !e[0]) ? 1 : (e[0] != '0');
+        // Proof of binding: say what the flag resolved to, once.  The default
+        // is the non-inert value, so a dropped --env= would otherwise give
+        // identical behaviour in both arms of an A/B and read as "no effect".
+        debug_early("VFSFLAG OSV_VFS_DENTRY_PERBUCKET");
+        debug_early(e ? "=" : " unset, default ");
+        debug_early(v ? "1\n" : "0\n");
+        cached.store(v, std::memory_order_relaxed);
+    }
+    return v != 0;
+}
+
+static mutex *chain_mutex(unsigned index)
+{
+    return &dentry_chain_lock[dentry_perbucket_enabled() ? index : 0];
+}
+
+#ifdef DEBUG_VFS
+/*
+ * Teeth for the ordering rule above: vn_lock() asserts that the caller does not
+ * already hold any dentry chain lock.  Note that DEBUG_VFS is not enabled in a
+ * default build (see vfs.h), so this only has effect when it is turned on
+ * deliberately.
+ */
+bool vfs_dentry_hash_lock_held(void)
+{
+    for (auto& m : dentry_chain_lock) {
+        if (m.owned()) {
+            return true;
+        }
+    }
+    return false;
+}
+#endif
+
+/*
+ * Chain lock accessors.  Use these, not mutex_lock/unlock directly, so a new
+ * call site cannot bypass the ordering rule above.
+ */
+static void dentry_lock(unsigned index)
+{
+    mutex_lock(chain_mutex(index));
+}
+
+static void dentry_unlock(unsigned index)
+{
+    mutex_unlock(chain_mutex(index));
+}
+
+/*
+ * Lock every chain, ascending.  Used only by dentry_move(), which can touch an
+ * unbounded set of chains (dp's old chain, its new chain, and one per child).
+ * With OSV_VFS_DENTRY_PERBUCKET=0 all indices alias chain 0, so take that
+ * single lock once instead of recursing on it DENTRY_CHAINS times.
+ *
+ * ponytail: lock-all is the coarse option for a rare operation (rename of a
+ * directory with cached children).  If rename ever shows up hot, narrow it to
+ * the union of chains actually touched, collected under d_lock first.
+ */
+static void dentry_lock_all(void)
+{
+    if (!dentry_perbucket_enabled()) {
+        dentry_lock(0);
+        return;
+    }
+    for (unsigned i = 0; i < DENTRY_CHAINS; i++) {
+        dentry_lock(i);
+    }
+}
+
+static void dentry_unlock_all(void)
+{
+    if (!dentry_perbucket_enabled()) {
+        dentry_unlock(0);
+        return;
+    }
+    for (unsigned i = DENTRY_CHAINS; i > 0; i--) {
+        dentry_unlock(i - 1);
+    }
+}
+
+/*
+ * Lock the chain a dentry is currently on, and return its index.
+ *
+ * d_hash_index must be read to know which lock to take, but it is itself only
+ * stable under that lock, and dentry_move()/dentry_remove() can move a dentry
+ * between chains.  So read, lock, then re-check: if the index changed while we
+ * were acquiring, we locked the wrong chain -- drop it and retry.  Converges
+ * because a dentry's chain only changes on rename/unlink, not in a loop.
+ */
+static unsigned dentry_lock_chain_of(struct dentry *dp)
+{
+    for (;;) {
+        unsigned index = dp->d_hash_index;
+        dentry_lock(index);
+        if (dp->d_hash_index == index) {
+            return index;
+        }
+        dentry_unlock(index);
+    }
+}
 
 /*
  * Get the hash value from the mount point and path name.
@@ -95,9 +260,11 @@ dentry_alloc(struct dentry *parent_dp, struct vnode *vp, const char *path)
 
     vn_add_name(vp, dp);
 
-    mutex_lock(&dentry_hash_lock);
-    LIST_INSERT_HEAD(&dentry_hash_table[dentry_hash(mp, path)], dp, d_link);
-    mutex_unlock(&dentry_hash_lock);
+    unsigned index = dentry_hash(mp, path);
+    dentry_lock(index);
+    dp->d_hash_index = index;
+    LIST_INSERT_HEAD(&dentry_hash_table[index], dp, d_link);
+    dentry_unlock(index);
     return dp;
 };
 
@@ -106,15 +273,16 @@ dentry_lookup(struct mount *mp, char *path)
 {
     struct dentry *dp;
 
-    mutex_lock(&dentry_hash_lock);
-    LIST_FOREACH(dp, &dentry_hash_table[dentry_hash(mp, path)], d_link) {
+    unsigned index = dentry_hash(mp, path);
+    dentry_lock(index);
+    LIST_FOREACH(dp, &dentry_hash_table[index], d_link) {
         if (dp->d_mount == mp && !strncmp(dp->d_path, path, PATH_MAX)) {
             dp->d_refcnt++;
-            mutex_unlock(&dentry_hash_lock);
+            dentry_unlock(index);
             return dp;
         }
     }
-    mutex_unlock(&dentry_hash_lock);
+    dentry_unlock(index);
     return nullptr;                /* not found */
 }
 
@@ -127,6 +295,15 @@ static void dentry_children_remove(struct dentry *dp)
             ASSERT(entry);
             ASSERT(entry->d_refcnt > 0);
             LIST_REMOVE(entry, d_link);
+            // The child is still referenced, and its last drele() will
+            // LIST_REMOVE it from d_link again.  Park it on the fake list,
+            // as dentry_remove() does, so that unlink goes through valid
+            // links instead of the stale ones LIST_REMOVE leaves behind.
+            // The caller (dentry_move) holds every chain lock, including
+            // the fake chain's.
+            LIST_INSERT_HEAD(&dentry_hash_table[DENTRY_FAKE_INDEX], entry,
+                d_link);
+            entry->d_hash_index = DENTRY_FAKE_INDEX;
         }
     }
 }
@@ -136,6 +313,12 @@ dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path)
 {
     struct dentry *old_pdp = dp->d_parent;
     char *old_path = dp->d_path;
+    // Duplicate the new path BEFORE taking the chain locks.  strdup() can
+    // block in the page allocator, and dentry_move() takes every chain lock,
+    // which serialises every name lookup in the system; sleeping under them
+    // stalls all VFS name resolution for the duration.  Nothing here needs
+    // the locks.
+    char *new_path = strdup(path);
 
     if (old_pdp) {
         WITH_LOCK(old_pdp->d_lock) {
@@ -152,18 +335,21 @@ dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path)
         }
     }
 
-    WITH_LOCK(dentry_hash_lock) {
-        // Remove all dp's child dentries from the hashtable.
-        dentry_children_remove(dp);
-        // Remove dp with outdated hash info from the hashtable.
-        LIST_REMOVE(dp, d_link);
-        // Update dp.
-        dp->d_path = strdup(path);
-        dp->d_parent = parent_dp;
-        // Insert dp updated hash info into the hashtable.
-        LIST_INSERT_HEAD(&dentry_hash_table[dentry_hash(dp->d_mount, path)],
-            dp, d_link);
-    }
+    // dentry_move touches dp's old chain, dp's new chain, and the chain of
+    // every cached child, so it takes them all (ascending; see the note above).
+    dentry_lock_all();
+    // Remove all dp's child dentries from the hashtable.
+    dentry_children_remove(dp);
+    // Remove dp with outdated hash info from the hashtable.
+    LIST_REMOVE(dp, d_link);
+    // Update dp with the path duplicated above, outside the lock.
+    dp->d_path = new_path;
+    dp->d_parent = parent_dp;
+    // Insert dp updated hash info into the hashtable.
+    unsigned index = dentry_hash(dp->d_mount, path);
+    dp->d_hash_index = index;
+    LIST_INSERT_HEAD(&dentry_hash_table[index], dp, d_link);
+    dentry_unlock_all();
 
     if (old_pdp) {
         drele(old_pdp);
@@ -175,11 +361,24 @@ dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path)
 void
 dentry_remove(struct dentry *dp)
 {
-    mutex_lock(&dentry_hash_lock);
+    // Two chains: the one dp is on, and the fake chain it moves to.  Lock the
+    // current chain first (re-checking the index), then the fake chain if it
+    // is a different one, keeping ascending order.
+    unsigned index = dentry_lock_chain_of(dp);
+    bool need_fake = dentry_perbucket_enabled() && index != DENTRY_FAKE_INDEX;
+    if (need_fake) {
+        // DENTRY_FAKE_INDEX is the highest index, so taking it second is
+        // already ascending order.
+        dentry_lock(DENTRY_FAKE_INDEX);
+    }
     LIST_REMOVE(dp, d_link);
     /* put it on a fake list for drele() to work*/
-    LIST_INSERT_HEAD(&fake, dp, d_link);
-    mutex_unlock(&dentry_hash_lock);
+    LIST_INSERT_HEAD(&dentry_hash_table[DENTRY_FAKE_INDEX], dp, d_link);
+    dp->d_hash_index = DENTRY_FAKE_INDEX;
+    if (need_fake) {
+        dentry_unlock(DENTRY_FAKE_INDEX);
+    }
+    dentry_unlock(index);
 }
 
 void
@@ -188,9 +387,9 @@ dref(struct dentry *dp)
     ASSERT(dp);
     ASSERT(dp->d_refcnt > 0);
 
-    mutex_lock(&dentry_hash_lock);
+    unsigned index = dentry_lock_chain_of(dp);
     dp->d_refcnt++;
-    mutex_unlock(&dentry_hash_lock);
+    dentry_unlock(index);
 }
 
 void
@@ -199,28 +398,59 @@ drele(struct dentry *dp)
     ASSERT(dp);
     ASSERT(dp->d_refcnt > 0);
 
-    mutex_lock(&dentry_hash_lock);
+    unsigned index = dentry_lock_chain_of(dp);
     if (--dp->d_refcnt) {
-        mutex_unlock(&dentry_hash_lock);
+        dentry_unlock(index);
         return;
     }
+    /*
+     * Last reference.  Unlink from the hash chain while still holding the
+     * lock -- that is what makes the drop below safe: once dp is off the
+     * chain, dentry_lookup() can no longer find it, so no other thread can
+     * resurrect it by taking a new reference.  This thread is the sole owner
+     * of dp from here on, and d_refcnt is 0 and stays 0.
+     *
+     * vn_del_name() must NOT be called under a chain lock: it takes the vnode
+     * lock, which inverts the vn_lock -> chain lock order that namei()
+     * establishes (see the ordering note at the top of this file).  Release
+     * first, then touch the vnode.
+     */
     LIST_REMOVE(dp, d_link);
-    vn_del_name(dp->d_vnode, dp);
+    dentry_unlock(index);
 
-    mutex_unlock(&dentry_hash_lock);
+    vn_del_name(dp->d_vnode, dp);
 
     if (dp->d_parent) {
         WITH_LOCK(dp->d_parent->d_lock) {
             // Remove dp from its parent's children list.
             LIST_REMOVE(dp, d_children_link);
         }
+    }
+
+    // Release the vnode before the parent: the parent chain is what keeps
+    // the mount from being unmounted (see sys_umount2()), and vrele() still
+    // uses the mount.
+    vrele(dp->d_vnode);
+
+    if (dp->d_parent) {
         drele(dp->d_parent);
     }
 
-    vrele(dp->d_vnode);
-
     free(dp->d_path);
     free(dp);
+}
+
+int
+dentry_refcnt(struct dentry *dp)
+{
+    // d_refcnt is a plain int written under the dentry chain lock (dref(),
+    // drele(), dentry_lookup()), so the chain lock only makes this read
+    // coherent.  sys_umount2() relies on mount_lock and m_lookups to keep the
+    // value from rising afterwards, not on this lock.
+    unsigned index = dentry_lock_chain_of(dp);
+    int refcnt = dp->d_refcnt;
+    dentry_unlock(index);
+    return refcnt;
 }
 
 void
@@ -228,7 +458,7 @@ dentry_init(void)
 {
     int i;
 
-    for (i = 0; i < DENTRY_BUCKETS; i++) {
+    for (i = 0; i < DENTRY_CHAINS; i++) {
         LIST_INIT(&dentry_hash_table[i]);
     }
 }

@@ -16,5 +16,6 @@
 #define ZFS_ID		(6ULL<<56)
 #define ROFS_ID		(7ULL<<56)
 #define VIRTIOFS_ID	(8ULL<<56)
+#define P9_ID		(9ULL<<56)
 
 #endif /* !_VFS_ID_H */
