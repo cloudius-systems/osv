@@ -28,7 +28,7 @@
  *   vdevs=raidz2:/dev/vblk1,/dev/vblk2,...(raidz2)
  *   qd=8 bs=4096 secs=30 reps=3 impl=openzfs direct=0 nfiles=100000
  * Workloads: seqwrite seqread_cold seqread_warm randread randwrite
- *            mmapread fsync meta compress scrub odirect info
+ *            mmapread fsync syncwrite meta compress scrub odirect info
  */
 extern int osv_run_app(const char *app_path, const char *args[], int args_len);
 extern void zfsdev_init(void);
@@ -43,6 +43,7 @@ extern void zfsdev_init(void);
 #include <unistd.h>
 #include <sys/stat.h>
 #include <sys/mman.h>
+#include <pthread.h>
 
 /* ---- timing (clock_gettime, no std::chrono) ---- */
 static double now_s(void) {
@@ -86,6 +87,8 @@ typedef struct {
     char vdevs[512];   /* single dev, or "raidz2:/dev/vblk1,/dev/vblk2,..." */
     char ds[128];
     unsigned long size_mb, qd, bs, secs_run, reps, nfiles, filesz_mb, direct;
+    unsigned long nofsync;  /* syncwrite: skip fdatasync to isolate write cost */
+    unsigned long threads;  /* syncwrite: concurrent writer threads (default 1) */
     char impl[32];
 } Opts;
 
@@ -118,6 +121,8 @@ static void parse_opts(Opts *o, int start, int ac, char **av) {
         else if (!strcmp(k, "nfiles"))    o->nfiles = parse_ul(v);
         else if (!strcmp(k, "filesz_mb")) o->filesz_mb = parse_ul(v);
         else if (!strcmp(k, "direct"))    o->direct = parse_ul(v);
+        else if (!strcmp(k, "nofsync"))   o->nofsync = parse_ul(v);
+        else if (!strcmp(k, "threads"))   o->threads = parse_ul(v);
     }
 }
 
@@ -360,6 +365,123 @@ static double wl_fsync(const char *ds, const Opts *o, const char *fname) {
     return t > 0 ? n / t : 0;
 }
 
+/*
+ * Single-thread durable-write latency isolate.  One writer, one 8k write then
+ * one fdatasync, in a loop, recording per-op latency.  With no concurrency
+ * there is no lock contention to blame, so the per-op time is pure
+ * write-plus-durability completion latency: virtio-blk submit, the ZFS zio
+ * path, and the completion wakeup that unblocks this thread.  `nofsync=1`
+ * drops the fdatasync to separate write-completion cost from durability cost.
+ * Reports ops/s plus p50/p99 in microseconds.
+ */
+static double wl_syncwrite(const char *ds, const Opts *o, const char *fname,
+                           double *p50us, double *p99us) {
+    char path[256]; snprintf(path, sizeof path, "/%s/%s", ds, fname);
+    unlink(path);
+    int f = open(path, O_CREAT|O_WRONLY|O_LARGEFILE, 0644);
+    if (f < 0) { *p50us=0; *p99us=0; return 0; }
+    size_t bs = o->bs ? o->bs : 8192;
+    char *buf = alloc_buf(bs, o->direct);
+    memset(buf, 0xCD, bs);
+    static double lat[400000]; unsigned long nl = 0;
+    double t0 = now_s(), tend = t0 + (double)o->secs_run;
+    unsigned long n = 0;
+    off_t off = 0;
+    while (now_s() < tend) {
+        double a = now_s();
+        ssize_t w = pwrite(f, buf, bs, off);
+        if (w > 0 && !o->nofsync) fdatasync(f);
+        double b = now_s();
+        if (w <= 0) continue;
+        if (nl < 400000) lat[nl++] = (b-a)*1e6;
+        n++;
+        off += bs;
+        /* keep the file bounded so this stays a write-completion test, not a
+         * space-fill: wrap after ~1 GiB. */
+        if ((unsigned long)off >= (1UL<<30)) off = 0;
+    }
+    double t = now_s() - t0;
+    if (!o->nofsync) fdatasync(f);
+    close(f); free(buf);
+    qsort(lat, nl, sizeof(double), dcmp);
+    *p50us = nl ? lat[(size_t)(nl*0.50)] : 0;
+    *p99us = nl ? lat[(size_t)(nl*0.99)] : 0;
+    return t > 0 ? n / t : 0;
+}
+
+/*
+ * Concurrent durable-write isolate: `threads` writers, each running the
+ * single-writer pwrite+fdatasync loop on its own file.  This reproduces the
+ * WAL-commit-completion serialization a database hits under concurrency without
+ * needing a database: N backends each fdatasync at once, and the interesting
+ * number is whether AGGREGATE ops/s scales with N or plateaus (completions
+ * funnelling through one wakeup path plateau; truly parallel completions scale).
+ * Reports aggregate op/s and the pooled per-op p50/p99 across all threads.
+ */
+struct sw_arg {
+    const char *ds; const Opts *o; int id;
+    double ops; double *lat; unsigned long nl;
+};
+static void *sw_thread(void *p) {
+    struct sw_arg *a = (struct sw_arg *)p;
+    char fname[32]; snprintf(fname, sizeof fname, "sw_mt_%d", a->id);
+    char path[256]; snprintf(path, sizeof path, "/%s/%s", a->ds, fname);
+    unlink(path);
+    int f = open(path, O_CREAT|O_WRONLY|O_LARGEFILE, 0644);
+    if (f < 0) { a->ops = 0; a->nl = 0; return NULL; }
+    size_t bs = a->o->bs ? a->o->bs : 8192;
+    char *buf = alloc_buf(bs, a->o->direct);
+    memset(buf, 0xCD, bs);
+    double t0 = now_s(), tend = t0 + (double)a->o->secs_run;
+    unsigned long n = 0, nl = 0; off_t off = 0;
+    while (now_s() < tend) {
+        double s = now_s();
+        ssize_t w = pwrite(f, buf, bs, off);
+        if (w > 0 && !a->o->nofsync) fdatasync(f);
+        double e = now_s();
+        if (w <= 0) continue;
+        if (nl < 200000) a->lat[nl++] = (e - s) * 1e6;
+        n++; off += bs;
+        if ((unsigned long)off >= (1UL<<30)) off = 0;
+    }
+    double t = now_s() - t0;
+    if (!a->o->nofsync) fdatasync(f);
+    close(f); free(buf);
+    a->ops = t > 0 ? n / t : 0;
+    a->nl = nl;
+    return NULL;
+}
+static double wl_syncwrite_mt(const char *ds, const Opts *o,
+                              double *p50us, double *p99us) {
+    unsigned nthr = o->threads ? (unsigned)o->threads : 1;
+    if (nthr > 256) nthr = 256;
+    pthread_t *tids = calloc(nthr, sizeof *tids);
+    struct sw_arg *args = calloc(nthr, sizeof *args);
+    double *lat = malloc((size_t)nthr * 200000 * sizeof(double));
+    for (unsigned i = 0; i < nthr; i++) {
+        args[i].ds = ds; args[i].o = o; args[i].id = (int)i;
+        args[i].lat = lat + (size_t)i * 200000;
+        pthread_create(&tids[i], NULL, sw_thread, &args[i]);
+    }
+    double agg_ops = 0; unsigned long total_nl = 0;
+    for (unsigned i = 0; i < nthr; i++) {
+        pthread_join(tids[i], NULL);
+        agg_ops += args[i].ops;
+        total_nl += args[i].nl;
+    }
+    /* Pool all threads' latencies for a global p50/p99. */
+    double *all = malloc(total_nl * sizeof(double));
+    unsigned long k = 0;
+    for (unsigned i = 0; i < nthr; i++)
+        for (unsigned long j = 0; j < args[i].nl; j++)
+            all[k++] = args[i].lat[j];
+    qsort(all, total_nl, sizeof(double), dcmp);
+    *p50us = total_nl ? all[(size_t)(total_nl * 0.50)] : 0;
+    *p99us = total_nl ? all[(size_t)(total_nl * 0.99)] : 0;
+    free(all); free(lat); free(args); free(tids);
+    return agg_ops;
+}
+
 static double wl_meta(const char *ds, const Opts *o) {
     char dir[256]; snprintf(dir, sizeof dir, "/%s/meta", ds);
     mkdir(dir, 0755);
@@ -465,6 +587,30 @@ int main(int ac, char **av) {
     } else if (!strcmp(wl, "fsync")) {
         for (unsigned long r=0;r<o.reps;r++) v[r] = wl_fsync(ds,&o,"zil");
         report_stat("fsync_persec", v, o.reps, "fsync/s");
+    } else if (!strcmp(wl, "syncwrite")) {
+        /* single-thread durable-write latency isolate; p50/p99 per op.
+         * nofsync=1 drops the fdatasync to split write vs durability cost.
+         * threads=N runs N concurrent writers to reproduce WAL-commit
+         * completion serialization; aggregate op/s scales iff completions
+         * are truly parallel. */
+        double vp50[MAXREP], vp99[MAXREP];
+        int mt = (o.threads > 1);
+        for (unsigned long r=0;r<o.reps;r++) {
+            if (mt) {
+                v[r] = wl_syncwrite_mt(ds,&o,&vp50[r],&vp99[r]);
+            } else {
+                char fn[16]; snprintf(fn, sizeof fn, "sw%lu", r);
+                v[r] = wl_syncwrite(ds,&o,fn,&vp50[r],&vp99[r]);
+            }
+        }
+        const char *tag = mt ? "_mt" : "";
+        char nm[48];
+        snprintf(nm, sizeof nm, "syncwrite%s%s_persec", o.nofsync?"_nofsync":"", tag);
+        report_stat(nm, v, o.reps, "op/s");
+        snprintf(nm, sizeof nm, "syncwrite%s%s_p50", o.nofsync?"_nofsync":"", tag);
+        report_stat(nm, vp50, o.reps, "us");
+        snprintf(nm, sizeof nm, "syncwrite%s%s_p99", o.nofsync?"_nofsync":"", tag);
+        report_stat(nm, vp99, o.reps, "us");
     } else if (!strcmp(wl, "meta")) {
         for (unsigned long r=0;r<o.reps;r++) v[r] = wl_meta(ds,&o);
         report_stat("meta_opspers", v, o.reps, "ops/s");
