@@ -2236,9 +2236,17 @@ static inline void* std_malloc(size_t size, size_t alignment)
     // time, while free()/realloc() decide purely by address, so a buffer
     // allocated by an app thread and freed by a kernel thread (or vice versa)
     // is always handled by the allocator that owns its address range.
+    // Preemption MUST be on to route to the arena: an allocation taken with
+    // preemption off (e.g. a std::container grown/written while holding
+    // osv::rcu_read_lock on the dladdr / dl_iterate_phdr / modules_get path)
+    // must NOT land in the COW fork arena -- a concurrent fork() COW-protects
+    // the arena page and the non-preemptable write then takes an illegal COW
+    // fault (page_fault asserts preemptable()).  When !preemptable() we fall
+    // through to the identity kernel heap, which is mapped verbatim in every
+    // address space and so is never COW-protected.  This is the single-point,
+    // arch-neutral enforcement of that invariant (fork_arena::alloc has no
+    // other caller), covering modules_get AND every other preempt-off site.
     if (smp_allocator && fork_arena::ready() && !fork_arena::force_kernel_heap &&
-        // Preemption and interrupts on: arena memory may COW-fault, and an
-        // allocation in atomic context must stay on the identity heap.
         sched::preemptable() &&
         arch::irq_enabled() &&
         // The thread's own flag: a migration between cpu::current() and a
