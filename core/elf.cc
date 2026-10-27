@@ -2084,6 +2084,19 @@ void program::free_dtv(object* obj)
 // so we use this function to make a copy the current list of modules.
 program::modules_list program::modules_get() const
 {
+#if CONF_fork
+    // The returned list's `objects` vector is grown here (reserve) and written
+    // (assign) while holding osv::rcu_read_lock -- i.e. with preemption OFF.
+    // On an application thread (e.g. a dladdr()/dl_iterate_phdr() caller) an
+    // unscoped std::vector allocation routes to the COW fork arena (app slot
+    // 97).  A concurrent fork() can then COW-write-protect that arena page, so
+    // the non-preemptable assign() takes an illegal COW write-fault -> abort
+    // (tst-fork-concfork-objlist: "assert(preemptable())" / a wild write at the
+    // win_slot).  Force the identity kernel heap for this vector, exactly as
+    // add_object()/remove_object() already do for the published modules_list,
+    // so it is never a COW page and the non-preemptable write is always safe.
+    fork_arena::kernel_heap_scope kh;
+#endif
     modules_list ret;
 #if CONF_lazy_stack_invariant
     assert(sched::preemptable() && arch::irq_enabled());
