@@ -680,13 +680,23 @@ pid_t fork(void)
                    "=m"(ctx.x23), "=m"(ctx.x24), "=m"(ctx.x25), "=m"(ctx.x26),
                    "=m"(ctx.x27), "=m"(ctx.x28));
     // fork's frame record: __builtin_frame_address(0) points at fork's saved
-    // {x29(caller fp), x30(return addr)} pair.  fp[0] = caller's frame pointer;
-    // the caller's SP (where SP was just before `bl fork`) is just above the
-    // frame record, mirroring x86's rbp+16.
+    // {x29(caller fp), x30(return addr)} pair.  fp[0] = caller's frame pointer.
     void **fp = static_cast<void**>(__builtin_frame_address(0));
     ctx.fp = reinterpret_cast<unsigned long>(fp[0]);          // caller's x29
     ctx.pc = reinterpret_cast<unsigned long>(__builtin_return_address(0));
-    ctx.sp = reinterpret_cast<unsigned long>(fp + 2);         // caller's SP
+    // Caller's SP = the SP in effect just before `bl fork`.  Unlike x86 (where
+    // `call` pushes an 8-byte return address, so caller rsp == rbp + 16), the
+    // aarch64 `bl` pushes NOTHING -- the return address goes in x30 -- so fork's
+    // frame record does NOT sit at a fixed +16 from the caller's SP, and the
+    // x86-style `fp + 2` points 240 bytes INTO fork's own 256-byte frame.  The
+    // caller's SP is fork's incoming (entry) SP, which is exactly the DWARF CFA
+    // of this frame.  __builtin_dwarf_cfa() returns it portably (no hardcoded
+    // frame size).  Restoring the wrong SP shifts the child's whole stack frame:
+    // callee-saved regs (x19-x28, captured as absolute caller values) stay
+    // correct while SP-relative accesses land elsewhere, so a function that
+    // mixes the two -- e.g. test_fork_exec building argv at [sp,#64] but passing
+    // it via x22 -- reads back garbage and faults (strlen on a wild argv[0]).
+    ctx.sp = reinterpret_cast<unsigned long>(__builtin_dwarf_cfa());
     void *resume_ctx = &ctx;
     void *caller_ret = reinterpret_cast<void*>(ctx.pc);
     void *caller_sp  = reinterpret_cast<void*>(ctx.sp);
