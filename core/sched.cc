@@ -2172,6 +2172,20 @@ std::string thread::name() const
 void* thread::setup_tls(ulong module, const void* tls_template,
         size_t init_size, size_t uninit_size)
 {
+#if CONF_fork
+    // Dynamic TLS (dlopen module first-touch) must live on the identity kernel
+    // heap, never the COW fork arena.  This runs in the touching thread's
+    // context; for a fork child (an app thread in its COW address space) the
+    // reallocated _tls vector backing and the per-module TLS block would route
+    // to the arena, and the thread reaper -- running ~thread() in AS0 after
+    // destroy_address_space() unmapped the child's arena window -- would
+    // iterate _tls / free those pointers and page-fault at a COW-arena VA
+    // (0x3080..).  thread::make() already forces the INITIAL _tls/_tcb onto the
+    // identity heap for the same reason; mirror it here for the dynamic path.
+    // The TLS block is per-thread private memory, so the identity heap is
+    // correct and adds no cross-AS sharing (same as the static TLS).
+    fork_arena::kernel_heap_scope kh;
+#endif
     _tls.resize(std::max(module + 1, _tls.size()));
     _tls[module] = new char[init_size + uninit_size];
     update_dtv();
