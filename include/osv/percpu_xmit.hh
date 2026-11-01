@@ -245,6 +245,20 @@ public:
         _mg.create_heap(_all_cpuqs);
     }
 
+    //
+    // Wake CPU0's Tx worker to reap HW completions.  Called from interrupt
+    // context (virtio-PCI Tx MSI-X vector, virtio-MMIO shared IRQ) when the
+    // device posts a Tx completion: the worker may be asleep with the packet
+    // queue empty, so the completion would otherwise go unreaped until the
+    // next outbound packet.  Must not take a sleeping lock in IRQ context, so
+    // it sets PENDING (making has_pending() true, which is what the worker
+    // sleeps on) and wakes CPU0's worker with the IRQ-safe primitive.
+    //
+    void wake_for_reap() {
+        test_and_set_pending();
+        _worker.for_cpu(sched::cpus[0])->me->wake_with_irq_disabled();
+    }
+
     /**
      * Start all CPU-workers
      */
@@ -394,6 +408,15 @@ private:
 
                     // Wake all unwoken waiters before going to sleep
                     wake_waiters_all();
+
+                    // About to sleep with an empty packet queue.  Reap any HW
+                    // Tx completions and arm the completion interrupt with a
+                    // re-check, so we never sleep leaving completions unreaped
+                    // with the interrupt disabled (the lost-wake that stalls
+                    // Tx under sustained load -- permanently on virtio-MMIO,
+                    // intermittently on virtio-PCI).  A completion arriving
+                    // after this wakes us via the Tx IRQ -> wake_for_reap().
+                    _txq->reap_and_rearm();
 
                     // We are going to sleep - release the HW channel
                     unlock_running();
