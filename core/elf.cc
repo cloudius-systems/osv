@@ -263,6 +263,33 @@ file::file(program& prog, ::fileref f, std::string pathname)
 {
     load_elf_header();
     load_program_headers();
+#if CONF_fork
+    // A non-PIE (ET_EXEC) image keeps its writable .data/.bss at the fixed low
+    // virtual addresses the linker chose, which fall in PML4 slot 0 (VA 0 ..
+    // 512 GB).  clone_address_space() SHARES slot 0 verbatim -- it is the
+    // kernel's own slot and is never COW-cloned -- so a fork child and its
+    // parent would share the SAME physical pages for the app's globals: the
+    // child's writes to them silently leak into and corrupt the parent's
+    // address space (no fault, no assert).  Refuse such an image at load with a
+    // clear, actionable error rather than corrupt; it must be relinked as PIE
+    // (-pie) so the loader can place its writable data in a COW-isolated
+    // application slot.  Checked here in the ctor (not set_base) so the throw
+    // unwinds cleanly before the object is wrapped in a shared_ptr whose
+    // partial-construction deleter would run.  The VA bound
+    // (pml4_app_first << 39 == 1 << 39 == 0x8000000000) is arch-independent in
+    // clone_address_space, so this guard holds for x86-64 and aarch64.
+    if (!is_pic()) {
+        for (auto& phdr : _phdrs) {
+            if (phdr.p_type == PT_LOAD && (phdr.p_flags & PF_W) &&
+                phdr.p_vaddr < 0x8000000000ull /* slot 1 start = 512 GB */) {
+                throw osv::invalid_elf_error(
+                    "non-PIE executable [" + pathname + "] has writable data in"
+                    " the shared kernel PML4 slot 0; it cannot be safely"
+                    " fork()ed -- relink as PIE (-pie)");
+            }
+        }
+    }
+#endif
 }
 
 file::~file()
