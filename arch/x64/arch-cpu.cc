@@ -64,6 +64,16 @@ void fpu_state_save_xsave(processor::fpu_state *s) {
 }
 
 extern "C"
+void fpu_state_save_xsaveopt(processor::fpu_state *s) {
+    // XSAVEOPT uses the hardware init/modified-state optimization to skip
+    // writing FPU state components that are in their init state (or unmodified
+    // since the matching XRSTOR), so a thread that touched only a subset of the
+    // x87/SSE/AVX state pays only for what it used.  The save area is restored
+    // by the same XRSTOR (xstate_bv in the header records the live components).
+    processor::xsaveopt(s, -1);
+}
+
+extern "C"
 void fpu_state_save_fxsave(processor::fpu_state *s) {
     processor::fxsave(s);
 }
@@ -89,6 +99,12 @@ void (*resolve_fpu_state_init())(processor::fpu_state *s) {
 extern "C"
 void (*resolve_fpu_state_save())(processor::fpu_state *s) {
     if (processor::features().xsave) {
+        // Prefer XSAVEOPT (CPUID.(EAX=0DH,ECX=1):EAX[0]) when available: it
+        // skips storing FPU components still in init/unmodified state.
+        auto leaf_d1 = processor::cpuid(0x0d, 1);
+        if (leaf_d1.a & 0x1) {
+            return fpu_state_save_xsaveopt;
+        }
         return fpu_state_save_xsave;
     } else {
         return fpu_state_save_fxsave;
