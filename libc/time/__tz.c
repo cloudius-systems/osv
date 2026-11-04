@@ -1,4 +1,5 @@
 #include "time_impl.h"
+#include <ctype.h>
 #include <stdint.h>
 #include <limits.h>
 #include <stdlib.h>
@@ -422,4 +423,23 @@ const char *__tm_to_tzname(const struct tm *tm)
 		p = "";
 	UNLOCK(lock);
 	return p;
+}
+
+int __tzname_to_isdst(const char *restrict *s)
+{
+	size_t len;
+	int isdst = -1;
+	LOCK(lock);
+	if (__tzname[0] && !strncmp(*s, __tzname[0], len = strlen(__tzname[0]))) {
+		isdst = 0;
+		*s += len;
+	} else if (__tzname[1] && !strncmp(*s, __tzname[1], len=strlen(__tzname[1]))) {
+		isdst = 1;
+		*s += len;
+	} else {
+		/* FIXME: is this supposed to be an error? */
+		while (isalpha(**s)) ++*s;
+	}
+	UNLOCK(lock);
+	return isdst;
 }
