@@ -141,6 +141,13 @@ void UpsairsClient::connect()
         if (stopping_) {
             throw ConnectionError("Admission cancelled");
         }
+        // The clean cohort is now the active set (upstream: reconciliation done).
+        for (int i = 0; i < 3; i++) {
+            if (uses_been_active(i)) {
+                auto frame = encode_message(YouHaveBeenActive{upstairs_id_, session_id_});
+                connections_[i]->send_exact(frame.data(), frame.size(), deadline);
+            }
+        }
         for (auto& admitted : admitted_) {
             admitted = true;
         }
@@ -957,16 +964,15 @@ void UpsairsClient::handshake(int downstairs_idx, std::chrono::steady_clock::tim
         throw ConnectionError("Downstairs not connected");
     }
 
-    // Send HereIAm
+    // Offer V14 and V13; the downstairs picks the newest one it shares.
     HereIAm here_msg;
-    here_msg.version = static_cast<uint32_t>(ProtocolVersion::V13);
+    here_msg.version = static_cast<uint32_t>(ProtocolVersion::V14);
     here_msg.upstairs_id = upstairs_id_;
     here_msg.session_id = session_id_;
     here_msg.gen = generation_;
     here_msg.read_only = read_only_;
     here_msg.encrypted = encrypted_;
-    /* No alternate versions advertised - upstairs only speaks V13. */
-    here_msg.alternate_versions.clear();
+    here_msg.alternate_versions = {static_cast<uint32_t>(ProtocolVersion::V13)};
 
     auto frame = encode_message(here_msg);
     conn->send_exact(frame.data(), frame.size(), deadline);
@@ -981,10 +987,12 @@ void UpsairsClient::handshake(int downstairs_idx, std::chrono::steady_clock::tim
         auto yes_msg = YesItsMe::decode(dec);
         if (!dec.at_end()) { throw ConnectionError("Trailing handshake data"); }
 
-        if (yes_msg.version != static_cast<uint32_t>(ProtocolVersion::V13)) {
+        if (yes_msg.version != static_cast<uint32_t>(ProtocolVersion::V14) &&
+            yes_msg.version != static_cast<uint32_t>(ProtocolVersion::V13)) {
             throw std::runtime_error("Version mismatch in YesItsMe: got " +
                                       std::to_string(yes_msg.version));
         }
+        message_version_[downstairs_idx] = yes_msg.version;
 
         /*
          * Upstream Crucible protocol step 2: send PromoteToActive and wait
@@ -1009,8 +1017,8 @@ void UpsairsClient::handshake(int downstairs_idx, std::chrono::steady_clock::tim
                 active.generation != generation_) {
                 throw ConnectionError("Activation identity mismatch");
             }
-            kprintf("[Crucible] downstairs %d active (repair port %u)\n",
-                    downstairs_idx, yes_msg.repair_addr.port);
+            kprintf("[Crucible] downstairs %d active, protocol V%u (repair port %u)\n",
+                    downstairs_idx, yes_msg.version, yes_msg.repair_addr.port);
         } else if (resp_type == MessageType::YouAreNoLongerActive) {
             throw std::runtime_error("Promote rejected: another session is active");
         } else {
@@ -1092,6 +1100,22 @@ void UpsairsClient::query_region_info(int downstairs_idx, std::chrono::steady_cl
         kprintf("[Crucible] region: %lu blocks of %lu bytes (%u extents x %lu)\n",
                 total_blocks_, region_def_.block_size,
                 region_def_.extent_count, region_def_.extent_size);
+    }
+
+    // V14 read-write: the downstairs refuses ExtentVersionsPlease until asked this.
+    if (uses_been_active(downstairs_idx)) {
+        auto ba_frame = encode_message(BeenActivePlease{});
+        conn->send_exact(ba_frame.data(), ba_frame.size(), deadline);
+        auto ba_resp = receive_frame(downstairs_idx);
+        bincode::Decoder ba_dec(ba_resp);
+        auto ba_type = decode_message_type(ba_dec);
+        if (ba_type != MessageType::BeenActive) {
+            throw std::runtime_error("Expected BeenActive, got " +
+                                     std::to_string(static_cast<uint32_t>(ba_type)));
+        }
+        auto ba = BeenActive::decode(ba_dec);
+        if (!ba_dec.at_end()) { throw ConnectionError("Trailing been-active data"); }
+        kprintf("[Crucible] downstairs %d been_active=%d\n", downstairs_idx, ba.been_active);
     }
 
     // Keep metadata for all-three clean-cohort admission, never hash-based freshness.

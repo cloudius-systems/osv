@@ -168,6 +168,11 @@ private:
     std::atomic<int> connected_count_{0};
     std::array<std::atomic<bool>, 3> admitted_;
     std::array<ExtentVersions, 3> versions_;
+    std::array<uint32_t, 3> message_version_{}; // negotiated per downstairs
+    // BeenActive steps run only on V14 read-write connections.
+    bool uses_been_active(int i) const {
+        return !read_only_ && message_version_[i] >= static_cast<uint32_t>(ProtocolVersion::V14);
+    }
     mutex lifecycle_mtx_;
     std::atomic<bool> stopping_{false};
     void disconnect_locked();

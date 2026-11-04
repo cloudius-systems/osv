@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 # Copyright (C) 2026 Greg Burd.
-"""Loopback-only V13 fixture; not a server durability certificate."""
+"""Loopback-only V13/V14 fixture; not a server durability certificate."""
 import ctypes
+import os
 import ctypes.util
 import select
 import socket
@@ -50,6 +51,13 @@ class Peer:
         self.held_read = None
         self.held = threading.Event()
         self.allow_reconnect = threading.Event(); self.allow_reconnect.set()
+        # Negotiation as upstream c8e99148 downstairs: newest common version.
+        self.supported = [14, 13]
+        self.version = None
+        self.step = None
+        self.kinds = []
+        self.been_active = False
+        self.here = None
         self.t = threading.Thread(target=self.run)
         self.t.start()
 
@@ -78,16 +86,39 @@ class Peer:
                         size = struct.unpack('<I', exact(s,4))[0]
                         m = exact(s,size-4)
                         kind = struct.unpack_from('<I',m)[0]
+                        self.kinds.append(kind)
                         if kind == 0:
+                            self.here = m
+                            self.step = None
                             self.identity = m[8:56]
                             self.epoch = struct.unpack_from('<Q',m,56)[0]
-                            self.reply(s,u32(1)+u32(13)+u32(0)+bytes([127,0,0,1])+struct.pack('<H',1))
+                            self.read_only = bool(m[64])
+                            offered = struct.unpack_from('<I',m,4)[0]
+                            nalt = struct.unpack_from('<Q',m,66)[0]
+                            alts = struct.unpack_from('<'+'I'*nalt,m,74)
+                            common = [v for v in self.supported if v == offered or v in alts]
+                            if not common:
+                                self.reply(s,u32(2)+u32(self.supported[0])); break
+                            self.version = max(common)
+                            self.reply(s,u32(1)+u32(self.version)+u32(0)+bytes([127,0,0,1])+struct.pack('<H',1))
                         elif kind == 5:
                             self.reply(s,u32(6)+m[4:60])
                         elif kind == 25:
+                            self.step = 'region'
                             self.reply(s,u32(26)+u64(512)+u64(8)+u32(9)+u32(1)+u64(16)+bytes(16)+bytes([0])+u64(1)+u64(1))
+                        elif kind == 41:
+                            assert self.step == 'region' and self.version >= 14 and not self.read_only, ('BeenActivePlease refused', self.step, self.version)
+                            self.step = 'been_active'
+                            self.reply(s,u32(42)+bytes([2 if self.mode == 'badbeenactive' else self.been_active]))
                         elif kind == 27:
+                            need = 'been_active' if self.version >= 14 and not self.read_only else 'region'
+                            assert self.step == need, ('ExtentVersionsPlease out of order', self.step, need)
+                            self.step = 'running'
                             self.reply(s,u32(28)+vec([self.gen])+vec([self.flush])+u64(1)+bytes([self.dirty])+(b'x' if self.mode == 'admissiontrailing' else b''))
+                        elif kind == 43:
+                            assert self.step == 'running' and self.version >= 14 and not self.read_only, ('YouHaveBeenActive refused', self.step, self.version)
+                            assert m[4:] == self.identity, 'YouHaveBeenActive identity mismatch'
+                            self.been_active = True
                         elif kind in (30,32,36):
                             job = m[52:60]
                             ndep = struct.unpack_from('<Q',m,60)[0]
@@ -189,6 +220,7 @@ class Client:
         self.p.kill(); self.p.wait()
 
 def run(binary, scenario):
+    if scenario == 'v14readonly': os.environ['CRUCIBLE_HOST_READ_ONLY'] = '1'
     peers = [Peer(i) for i in range(3)]
     targets = ['127.0.0.1:'+str(p.port) for p in peers]
     invalid = {
@@ -206,6 +238,15 @@ def run(binary, scenario):
             return
         if scenario == 'admissiontrailing':
             for p in peers: p.mode = scenario
+        if scenario == 'v13peers':
+            for p in peers: p.supported = [13]
+        if scenario == 'mixedversions': peers[0].supported = [13]
+        if scenario == 'v15only':
+            for p in peers: p.supported = [15]
+        if scenario == 'badbeenactive': peers[1].mode = scenario
+        if scenario in ('v15only', 'badbeenactive'):
+            assert c.cmd('c').startswith('error'), 'admitted without a valid V14 negotiation'
+            return
         if scenario == 'divergent': peers[0].flush = 8
         if scenario == 'overflow':
             for p in peers: p.flush = 2**64-2
@@ -227,6 +268,31 @@ def run(binary, scenario):
         assert c.cmd('r') == 'read 0 65'
         if scenario == 'disconnects':
             assert c.cmd('x') == 'both-stopped'
+        elif scenario == 'v14readonly':
+            assert [p.version for p in peers] == [14]*3
+            assert all(p.here[64] == 1 for p in peers), 'HereIAm not read-only'
+            assert c.cmd('w') == 'write 30', 'read-only session accepted a write'
+            for p in peers:
+                assert p.kinds[:4] == [0, 5, 25, 27] and 41 not in p.kinds and 43 not in p.kinds, ('read-only V14 sequence', p.kinds)
+        elif scenario in ('v14', 'v13peers', 'mixedversions'):
+            expect = {'v14': [14]*3, 'v13peers': [13]*3, 'mixedversions': [13, 14, 14]}[scenario]
+            assert [p.version for p in peers] == expect, ('negotiated', [p.version for p in peers])
+            for p in peers:
+                assert struct.unpack_from('<I', p.here, 4)[0] == 14, 'HereIAm does not offer V14'
+                assert p.here[66:] == u64(1)+u32(13), 'HereIAm alternates are not [13]'
+            assert c.cmd('w') == 'write 0'
+            assert c.cmd('f') == 'flush 0'
+            assert c.cmd('r') == 'read 0 66'
+            deadline = time.monotonic() + 2
+            while time.monotonic() < deadline and not all(36 in p.kinds for p in peers): time.sleep(.01)
+            for p in peers:
+                admission = p.kinds[:min(p.kinds.index(k) for k in (30, 32, 36) if k in p.kinds)]
+                if p.version >= 14:
+                    assert admission == [0, 5, 25, 41, 27, 43], ('V14 sequence', admission)
+                    assert p.been_active, 'YouHaveBeenActive not recorded'
+                else:
+                    assert admission == [0, 5, 25, 27], ('V13 sequence', admission)
+                    assert 41 not in p.kinds and 43 not in p.kinds, 'V14 message on a V13 connection'
         elif scenario == 'control':
             assert c.cmd('w') == 'write 0'
             assert c.cmd('f') == 'flush 0'

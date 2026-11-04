@@ -70,10 +70,11 @@ public:
 static constexpr nullopt_t nullopt{};
 
 /**
- * Crucible protocol version.
+ * Crucible protocol versions this upstairs speaks, newest first in HereIAm.
  */
 enum class ProtocolVersion : uint32_t {
-    V13 = 13,  // Current version
+    V13 = 13,  // Remove LastFlushAck
+    V14 = 14,  // Add BeenActivePlease / BeenActive / YouHaveBeenActive
 };
 
 /**

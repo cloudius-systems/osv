@@ -1,7 +1,13 @@
 <!-- Copyright (C) 2026 Greg Burd. -->
 # Crucible admission and failure policy
 
-This client speaks unencrypted Crucible V13. Configure three **numeric IPv4**
+This client speaks unencrypted Crucible message version V14 and falls back to
+V13: `HereIAm` offers 14 with alternate 13 and each downstairs picks the newest
+version it shares (an older or capped downstairs answers 13). On a read-write V14
+connection the client asks `BeenActivePlease` after `RegionInfo` and, once all
+three replicas are admitted, sends `YouHaveBeenActive`; the `been_active` answer
+is logged but not otherwise used. V13 connections and read-only sessions skip
+both steps. Configure three **numeric IPv4**
 addresses (`ip:port`); hostname resolution is not supported because synchronous
 DNS cannot be cancelled safely. Admission has one total five-second steady-clock
 deadline across all three peers: connect and every handshake send/receive share
