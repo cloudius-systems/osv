@@ -87,7 +87,8 @@ extern "C" int kprintf(const char* fmt, ...) {
 int main(int argc, char** argv) {
     if(argc != 4) return 2;
     crucible::Uuid uuid{};
-    crucible::UpsairsClient client({argv[1],argv[2],argv[3]},uuid,512,0,false,false,1);
+    bool read_only = std::getenv("CRUCIBLE_HOST_READ_ONLY") != nullptr;
+    crucible::UpsairsClient client({argv[1],argv[2],argv[3]},uuid,512,0,read_only,false,1);
     std::unique_ptr<crucible::UpsairsClient> reopened;
     char line[80]; unsigned char data[512];
     setvbuf(stdout,nullptr,_IONBF,0);

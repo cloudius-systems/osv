@@ -24,9 +24,9 @@ namespace crucible {
  * discriminant as variant_index, so reordering or inserting variants
  * shifts every subsequent variant's number on the wire.
  *
- * Variants the OSv driver does not currently use (PromoteToActive,
- * YouAreNowActive, ExtentLive*, etc.) are listed for index alignment
- * even though we do not encode/decode them.
+ * Variants the OSv driver does not currently use (ExtentLive*, etc.) are
+ * listed for index alignment even though we do not encode/decode them.
+ * Since V14 upstream only appends variants, so every V13 tag is unchanged.
  */
 enum class MessageType : uint32_t {
     HereIAm                 = 0,
@@ -70,6 +70,10 @@ enum class MessageType : uint32_t {
     WriteUnwritten          = 38,
     WriteUnwrittenAck       = 39,
     ErrorReport             = 40,
+    // Added in V14; upstream pins these tags (wire_tag test, #2043/#2044).
+    BeenActivePlease        = 41,
+    BeenActive              = 42,
+    YouHaveBeenActive       = 43,
 };
 
 /**
@@ -93,7 +97,7 @@ struct SocketAddr {
 struct HereIAm {
     static constexpr MessageType TYPE = MessageType::HereIAm;
 
-    uint32_t version;                          // Protocol version (13)
+    uint32_t version;                          // Newest offered version (14)
     Uuid upstairs_id;                          // Persistent upstairs UUID
     Uuid session_id;                           // Session UUID
     uint64_t gen;                              // Generation number
@@ -293,6 +297,48 @@ struct ExtentVersions {
         msg.dirty_bits    = dec.decode_vec<bool>(
             [&]() { return dec.decode_bool(); });
         return msg;
+    }
+};
+
+/**
+ * BeenActivePlease (V14) - ask whether this region was ever in an active set.
+ * Sent after RegionInfo by a read-write upstairs that negotiated V14.
+ */
+struct BeenActivePlease {
+    static constexpr MessageType TYPE = MessageType::BeenActivePlease;
+
+    void encode(bincode::Encoder& enc) const {
+        enc.encode_u32(static_cast<uint32_t>(TYPE));
+    }
+};
+
+/**
+ * BeenActive (V14) - reply to BeenActivePlease: { been_active: bool }.
+ */
+struct BeenActive {
+    static constexpr MessageType TYPE = MessageType::BeenActive;
+
+    bool been_active;
+
+    static BeenActive decode(bincode::Decoder& dec) {
+        return {dec.decode_bool()};
+    }
+};
+
+/**
+ * YouHaveBeenActive (V14) - tell a running downstairs it is part of an
+ * active set; it persists that.  No reply.
+ */
+struct YouHaveBeenActive {
+    static constexpr MessageType TYPE = MessageType::YouHaveBeenActive;
+
+    Uuid upstairs_id;
+    Uuid session_id;
+
+    void encode(bincode::Encoder& enc) const {
+        enc.encode_u32(static_cast<uint32_t>(TYPE));
+        enc.encode_uuid(upstairs_id);
+        enc.encode_uuid(session_id);
     }
 };
 
