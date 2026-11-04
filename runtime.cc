@@ -103,6 +103,15 @@ static void print_backtrace(void)
 
     len = backtrace_safe(addrs, 128);
 
+    // Print the raw addresses before symbolizing: symbolizing takes the ELF
+    // module lock, which can block forever here (irqs are off and the crash
+    // may have come from inside that lock or the allocator under it), and
+    // then nothing at all would be printed.
+    for (int i = 1; i < len; i++) {
+        debug_ll("0x%016lx\n", addrs[i] - INSTR_SIZE_MIN);
+    }
+    debug_ll("[backtrace symbolized]\n");
+
     /* Start with i=1 to skip abort(const char *)  */
     for (int i = 1; i < len; i++) {
         char name[1024];
