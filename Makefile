@@ -1759,8 +1759,6 @@ musl += stdlib/qsort.o
 # in the build says so.
 musl += stdlib/qsort_nr.o
 $(out)/musl/src/stdlib/qsort.o: COMMON += -Wno-dangling-pointer
-libc += stdlib/qsort_r.o
-$(out)/libc/stdlib/qsort_r.o: COMMON += -Wno-dangling-pointer
 libc += stdlib/strtol.o
 libc += stdlib/strtod.o
 libc += stdlib/wcstol.o
