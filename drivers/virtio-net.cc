@@ -337,7 +337,13 @@ net::net(virtio_device& dev)
             gic::irq_type::IRQ_TYPE_EDGE,
             _dev.get_irq(),
             [=] { return this->ack_irq(); },
-            [=] { poll_task->wake_with_irq_disabled(); });
+            [=] {
+                poll_task->wake_with_irq_disabled();
+                // The shared MMIO IRQ also carries Tx completions, which
+                // ack_irq() does not service (it only quiesces Rx).  Wake
+                // the Tx reaper, as the x86 MMIO handler below does.
+                this->wake_tx_reaper();
+            });
     };
 #else
     int_factory.create_gsi_edge_interrupt = [this,poll_task]() {
