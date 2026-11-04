@@ -2920,26 +2920,41 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
     // is likewise handled by for_read.  Peek the leaf PTE lock-free and skip
     // the exclusive lock unless the leaf is really COW, so shared-anon faults
     // no longer serialize behind the AS-wide writer.
-    if (mmu::is_page_fault_write(ef->get_error()) &&
-            (!cow_peek_enabled() || write_fault_needs_cow_lock(addr))) {
-        PREVENT_STACK_PAGE_FAULT
-        WITH_LOCK(as->vmas_mutex->for_write()) {
-            if (handle_cow_write_fault(addr)) {
-                trace_mmu_vm_fault_ret(addr, ef->get_error());
-                return;
+    bool cow_raced;
+    do {
+        if (mmu::is_page_fault_write(ef->get_error()) &&
+                (!cow_peek_enabled() || write_fault_needs_cow_lock(addr))) {
+            PREVENT_STACK_PAGE_FAULT
+            WITH_LOCK(as->vmas_mutex->for_write()) {
+                if (handle_cow_write_fault(addr)) {
+                    trace_mmu_vm_fault_ret(addr, ef->get_error());
+                    return;
+                }
             }
         }
-    }
 
-    WITH_LOCK(as->vmas_mutex->for_read()) {
-        auto vma = find_intersecting_vma_in(*as->vmas, addr);
-        if (vma == as->vmas->end() || access_fault(*vma, ef->get_error())) {
-            vm_sigsegv(addr, ef);
-            trace_mmu_vm_fault_sigsegv(addr, ef->get_error(), "slow");
-            return;
+        cow_raced = false;
+        WITH_LOCK(as->vmas_mutex->for_read()) {
+            // A fork may have COW-protected the leaf again since we checked it
+            // (another thread resolved the first COW fault, then a fork ran).
+            // vma->fault() must not see a COW leaf: for a private file mapping
+            // it would replace this AS's written private page with the file's
+            // bytes.  The fork holds the lock for write, so this check is
+            // stable while we hold it for read.
+            if (mmu::is_page_fault_write(ef->get_error()) &&
+                    write_fault_needs_cow_lock(addr)) {
+                cow_raced = true;
+                continue;
+            }
+            auto vma = find_intersecting_vma_in(*as->vmas, addr);
+            if (vma == as->vmas->end() || access_fault(*vma, ef->get_error())) {
+                vm_sigsegv(addr, ef);
+                trace_mmu_vm_fault_sigsegv(addr, ef->get_error(), "slow");
+                return;
+            }
+            vma->fault(addr, ef);
         }
-        vma->fault(addr, ef);
-    }
+    } while (cow_raced);
     trace_mmu_vm_fault_ret(addr, ef->get_error());
 #else // !CONF_fork -- original single-address-space fault path
     WITH_LOCK(vma_list_mutex.for_read()) {
