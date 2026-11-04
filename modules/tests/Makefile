@@ -206,6 +206,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-blk-
 	tst-fork-timer-park-stress.so \
 	tst-fork-urandom.so \
 	tst-fork-concfork-objlist.so \
+	tst-fork-lock-noalloc.so \
 	tst-fork-itimer.so \
 	tst-reaper-unblocked.so \
 	tst-fork-wait-teardown.so \
@@ -270,6 +271,7 @@ internal-api-tests := tst-app.so tst-async.so tst-dns-decname.so tst-bsd-evh.so 
 	tst-threadcomplete.so tst-tracepoint.so tst-unordered-ring-mpsc.so \
 	tst-vfs.so tst-wait-for.so tst-without-namespace.so
 internal-api-tests += tst-vfs-mount-pins.so
+internal-api-tests += tst-fork-lock-noalloc.so
 internal-api-tests += tst-reaper-unblocked.so
 
 ifeq ($(arch),x64)
