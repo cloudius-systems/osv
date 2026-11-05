@@ -703,8 +703,10 @@ address_space *clone_address_space(address_space *parent)
         // built AFTER the lock is released.  We must NOT do any write that can
         // COW-fault (e.g. to a kernel .bss global we just write-protected)
         // while holding vmas_mutex for write: the COW fault handler re-acquires
-        // vmas_mutex, which self-deadlocks.  So flush_tlb_all() and the
-        // live_child_address_spaces bump are deferred until after the lock.
+        // vmas_mutex, which self-deadlocks.  So the live_child_address_spaces
+        // bump is deferred until after the lock.  The TLB flush is not: it
+        // runs before the lock is released (see below) and touches only
+        // kernel .bss and the identity heap, which are never COW.
         for (auto &v : *parent->vmas) {
             if (v.size() == 0) {
                 continue;
@@ -723,16 +725,21 @@ address_space *clone_address_space(address_space *parent)
                                 fileref(), 0});
             }
         }
+        // Flush the write-protection out of every CPU's TLB BEFORE releasing
+        // the lock.  Once it is released another thread can COW-fault one of
+        // these pages and give the parent a new frame for it; a CPU still
+        // holding a pre-fork writable TLB entry would then keep writing the
+        // OLD frame, which only the child maps now, and the parent loses those
+        // writes.  (That is how the vma tree lost a relink and a later fork
+        // walked into an erased node.)  It must reach CPUs that are running
+        // kernel threads too: those write this memory as well (the reaper
+        // drops references held in a dead child's thread object).  The
+        // TLB-flush state is kernel .bss and identity heap, never COW, so
+        // this cannot fault under the lock.
+        mmu::flush_tlb_all_cpus();
     } // release vmas_mutex
 
-    // Now that vmas_mutex is released, writes that may hit a copy-on-write
-    // kernel .bss page (the atomic bump; the TLB-flush bookkeeping globals) can
-    // fault and be serviced normally.  Doing them under the write lock would
-    // deadlock (COW fault -> vm_fault -> vmas_mutex for_write, already held).
     live_child_address_spaces.fetch_add(1, std::memory_order_relaxed);
-    // Make the write-protection we applied to the parent's page tables visible
-    // on all CPUs before the parent continues.
-    mmu::flush_tlb_all();
 
     // Build the child's vma_list from the snapshot -- these new vma
     // allocations are free to hit the malloc pool refill path without risking a

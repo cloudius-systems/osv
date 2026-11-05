@@ -69,7 +69,7 @@ inter_processor_interrupt tlb_flush_ipi{IPI_TLB_FLUSH, [] {
         }
 }};
 
-void flush_tlb_all()
+static void do_flush_tlb_all(bool lazy)
 {
     static std::vector<sched::cpu*> ipis(sched::max_cpus);
 
@@ -83,7 +83,7 @@ void flush_tlb_all()
     std::lock_guard<mutex> guard(tlb_flush_mutex);
     tlb_flush_waiter.reset(*sched::thread::current());
     int count;
-    if (sched::thread::current()->is_app()) {
+    if (lazy && sched::thread::current()->is_app()) {
         ipis.clear();
         std::copy_if(sched::cpus.begin(), sched::cpus.end(), std::back_inserter(ipis),
                 [](sched::cpu* c) {
@@ -91,7 +91,12 @@ void flush_tlb_all()
                 return false;
             }
 
-            c->lazy_flush_tlb.store(true, std::memory_order_relaxed);
+            // seq_cst store: this store and the app_thread load below pair
+            // with reschedule's app_thread store and lazy_flush_tlb exchange.
+            // With a relaxed store the load can pass it (x86 store buffer),
+            // and both sides can read the old value: no IPI here and no lazy
+            // flush there, so that CPU runs an app thread on stale TLB entries.
+            c->lazy_flush_tlb.store(true, std::memory_order_seq_cst);
             if (!c->app_thread.load(std::memory_order_seq_cst)) {
                 return false;
             }
@@ -116,6 +121,16 @@ void flush_tlb_all()
             return tlb_flush_pendingconfirms.load() == 0;
     });
     tlb_flush_waiter.clear();
+}
+
+void flush_tlb_all()
+{
+    do_flush_tlb_all(true);
+}
+
+void flush_tlb_all_cpus()
+{
+    do_flush_tlb_all(false);
 }
 
 static pt_element<4> page_table_root __attribute__((init_priority((int)init_prio::pt_root)));

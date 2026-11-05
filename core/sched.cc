@@ -442,7 +442,10 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
     }
 
     if (app_thread.load(std::memory_order_relaxed) != n->_app) { // don't write into a cache line if it can be avoided
-        app_thread.store(n->_app, std::memory_order_relaxed);
+        // seq_cst: pairs with mmu::flush_tlb_all()'s lazy_flush_tlb store
+        // and app_thread load, so one side always sees the other (the
+        // exchange below alone orders this on x86, not in the C++ model).
+        app_thread.store(n->_app, std::memory_order_seq_cst);
     }
     if (lazy_flush_tlb.exchange(false, std::memory_order_seq_cst)) {
         mmu::flush_tlb_local();

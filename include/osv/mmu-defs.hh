@@ -106,6 +106,9 @@ enum {
 void flush_tlb_local();
 /* flush tlb for all */
 void flush_tlb_all();
+/* flush tlb for all, including CPUs that run kernel threads (flush_tlb_all
+   may defer those until they next run an application thread) */
+void flush_tlb_all_cpus();
 
 constexpr size_t page_size_level(unsigned level)
 {
