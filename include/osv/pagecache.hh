@@ -34,6 +34,13 @@ struct arc_hashkey {
 
 bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element<0> pte, bool write, bool shared);
 bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep<0> ptep);
+// fork: register / unregister a child's copies of page-cache PTEs.
+void inherit_mappings(dev_t dev, ino_t ino, const off_t *offsets,
+                      mmu::hw_ptep<0> *pteps, unsigned n);
+void release_mappings(dev_t dev, ino_t ino, const off_t *offsets,
+                      mmu::hw_ptep<0> *pteps, unsigned n);
+void privatize_mapping(dev_t dev, ino_t ino, off_t offset, mmu::hw_ptep<0> ptep,
+                       bool writable);
 
 /*
  * sync() — flush all dirty pages in [start, end) for the file described by fp.
@@ -74,8 +81,21 @@ bool map_owned_read_cached_page(hashkey *key, void *page);
 }
 
 #ifdef __cplusplus
+struct osv_pagecache_audit_result {
+    unsigned long pages;          // cached pages scanned
+    unsigned long slots;          // PTE slots they record
+    unsigned long stale_slots;    // recorded slots that no longer map the page
+    unsigned long stale_flushes;  // drops that skipped such a slot (cumulative)
+};
+
 extern "C" {
 #endif
+
+/*
+ * osv_pagecache_audit() — debug/test view of the PTE slots the page cache has
+ * recorded (all files, or one if dev/ino is non-zero).  See pagecache.cc.
+ */
+void osv_pagecache_audit(dev_t dev, ino_t ino, struct osv_pagecache_audit_result *r);
 
 /*
  * osv_pagecache_writeback_inode() — C-linkage wrapper around
