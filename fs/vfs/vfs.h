@@ -147,6 +147,7 @@ void	 vnode_init(void);
 void	 lookup_init(void);
 
 int     vfs_findroot(const char *path, struct mount **mp, char **root);
+void    vfs_putroot(struct mount *mp);
 int	 vfs_dname_copy(char *dest, const char *src, size_t size);
 
 int	 fs_noop(void);
@@ -157,7 +158,16 @@ void dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path);
 void dentry_remove(struct dentry *dp);
 void dref(struct dentry *dp);
 void drele(struct dentry *dp);
+int dentry_refcnt(struct dentry *dp);
 void dentry_init(void);
+
+#ifdef DEBUG_VFS
+/*
+ * True iff the calling thread holds any dentry chain lock.  Used by vn_lock()
+ * to assert the VFS lock order (vnode lock -> chain lock, never reverse).
+ */
+bool vfs_dentry_hash_lock_held(void);
+#endif
 
 #ifdef DEBUG_VFS
 void	 vnode_dump(void);
