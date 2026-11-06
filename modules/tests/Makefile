@@ -133,6 +133,9 @@ zfs-user-libs := libzfs.so libzfs_core.so libzutil.so libuutil.so libshare.so li
 
 ifeq ($(conf_zfs),openzfs)
 zfs-only-tests += $(zfs-openzfs-only-tests)
+else
+# Regression test for the BSD ZFS ZIL space check in zio_alloc_zil().
+zfs-only-tests += tst-zfs-zil-full.so
 endif
 
 ext-only-tests := tst-readdir.so tst-concurrent-read.so tst-fs-link.so
