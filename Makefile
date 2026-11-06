@@ -895,6 +895,13 @@ drivers += drivers/xenclock.o
 drivers += drivers/xenfront.o drivers/xenfront-xenbus.o drivers/xenfront-blk.o
 drivers += drivers/xenplatform-pci.o
 endif
+ifeq ($(conf_drivers_crucible),1)
+drivers += drivers/crucible-connection.o
+drivers += drivers/crucible-request.o
+drivers += drivers/crucible-hash.o
+drivers += drivers/crucible-client.o
+drivers += drivers/crucible-blk.o
+endif
 endif # x64
 
 ifeq ($(arch),aarch64)
