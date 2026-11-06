@@ -716,6 +716,7 @@ rewind
 rewinddir
 rindex
 rmdir
+rpmatch
 sbrk
 scalbn
 scalbnf
