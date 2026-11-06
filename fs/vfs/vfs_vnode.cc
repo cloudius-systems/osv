@@ -98,8 +98,9 @@ vn_hash(struct mount *mp, uint64_t ino)
 }
 
 /*
- * Returns locked vnode for specified mount point and path.
- * vn_lock() will increment the reference count of vnode.
+ * Returns the vnode for the specified mount point and inode with a new
+ * reference, or nullptr. The vnode is NOT locked: the caller takes v_lock
+ * after dropping VNODE_LOCK (see vget()).
  *
  * Locking: VNODE_LOCK must be held.
  */
@@ -112,8 +113,6 @@ vn_lookup(struct mount *mp, uint64_t ino)
 	LIST_FOREACH(vp, &vnode_table[vn_hash(mp, ino)], v_link) {
 		if (vp->v_mount == mp && vp->v_ino == ino) {
 			vp->v_refcnt++;
-			mutex_lock(&vp->v_lock);
-			vp->v_nrlocks++;
 			return vp;
 		}
 	}
@@ -183,6 +182,16 @@ vget(struct mount *mp, uint64_t ino, struct vnode **vpp)
 	vp = vn_lookup(mp, ino);
 	if (vp) {
 		VNODE_UNLOCK();
+		/*
+		 * Lock it only after dropping VNODE_LOCK. vput() and other
+		 * holders of v_lock take VNODE_LOCK, so sleeping on v_lock
+		 * with VNODE_LOCK held can deadlock. The reference taken in
+		 * vn_lookup() keeps the vnode alive: a vnode is unhashed
+		 * under VNODE_LOCK in the same step that drops its last
+		 * reference, so a hashed vnode always has one.
+		 */
+		mutex_lock(&vp->v_lock);
+		vp->v_nrlocks++;
 		*vpp = vp;
 		return 1;
 	}
@@ -356,7 +365,9 @@ vn_stat(struct vnode *vp, struct stat *st)
 	st->st_mode = mode;
 	st->st_nlink = vap->va_nlink;
 	st->st_blksize = BSIZE;
-	st->st_blocks = vap->va_size / S_BLKSIZE;
+	/* Sparse files: use the filesystem's count when it gives one. */
+	st->st_blocks = (vap->va_mask & AT_NBLOCKS) ? vap->va_nblocks :
+	    vap->va_size / S_BLKSIZE;
 	st->st_uid = vap->va_uid;
 	st->st_gid = vap->va_gid;
 	st->st_dev = vap->va_fsid;
@@ -405,8 +416,9 @@ vn_setmode(struct vnode *vp, mode_t new_mode)
     vattr.va_mode = new_mode;
     vattr.va_mask = AT_MODE;
     vn_lock(vp);
-    vp->v_mode = new_mode;
     int error = VOP_SETATTR(vp, &vattr);
+    if (!error)
+        vp->v_mode = new_mode;
     vn_unlock(vp);
     return error;
 }
@@ -419,21 +431,33 @@ vn_access(struct vnode *vp, int flags)
 {
 	int error = 0;
 
-	if ((flags & VEXEC) && (vp->v_mode & 0111) == 0) {
-		error = EACCES;
-		goto out;
+	/*
+	 * Filesystems that implement vop_access do their own permission check;
+	 * only the read-only mount guard applies here.
+	 */
+	if (vp->v_op->vop_access) {
+		if ((flags & VWRITE) && (vp->v_mount->m_flags & MNT_RDONLY))
+			return EROFS;
+		return vp->v_op->vop_access(vp, flags);
 	}
-	if ((flags & VREAD) && (vp->v_mode & 0444) == 0) {
+	/*
+	 * Fallback for filesystems without vop_access.
+	 * OSv is a single-address-space unikernel: every thread runs with the
+	 * kernel credential (the ZFS platform layer hardwires crgetuid()==0).
+	 * POSIX grants the superuser discretionary access regardless of a
+	 * file's permission bits, so enforcing the read/write mode bits here
+	 * only denies the sole user OSv has -- observed as EACCES when a
+	 * process reopens its own 0600 files on OpenZFS, whose create path can
+	 * report a write-clear mode. VEXEC still requires at least one execute
+	 * bit (matching the superuser rule), and MNT_RDONLY still yields EROFS.
+	 */
+	if ((flags & VEXEC) && (vp->v_mode & 0111) == 0) {
 		error = EACCES;
 		goto out;
 	}
 	if (flags & VWRITE) {
 		if (vp->v_mount->m_flags & MNT_RDONLY) {
 			error = EROFS;
-			goto out;
-		}
-		if ((vp->v_mode & 0222) == 0) {
-			error = EACCES;
 			goto out;
 		}
 	}

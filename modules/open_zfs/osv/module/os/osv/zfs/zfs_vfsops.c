@@ -753,6 +753,16 @@ zfs_osv_unmount(struct mount *mp, int flags)
 	}
 	mutex_exit(&zfsvfs->z_znodes_lock);
 
+	/*
+	 * Release the mount's root and covered dentries, as bsd ZFS does.
+	 * Without this the covered dentry keeps the parent mount busy, so a
+	 * later unforced unmount of the parent gets EBUSY.  Every vnode's
+	 * v_data is NULL by now, so the vrele() of the root vnode finds no
+	 * znode to inactivate.  This is past the point of no return: no
+	 * error path may follow it.
+	 */
+	release_mp_dentries(mp);
+
 	dmu_objset_disown(zfsvfs->z_os, B_TRUE, zfsvfs);
 
 	zfs_exit(zfsvfs, FTAG);

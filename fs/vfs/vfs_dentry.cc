@@ -214,13 +214,30 @@ drele(struct dentry *dp)
             // Remove dp from its parent's children list.
             LIST_REMOVE(dp, d_children_link);
         }
+    }
+
+    // Release the vnode before the parent: the parent chain is what keeps
+    // the mount from being unmounted (see sys_umount2()), and vrele() still
+    // uses the mount.
+    vrele(dp->d_vnode);
+
+    if (dp->d_parent) {
         drele(dp->d_parent);
     }
 
-    vrele(dp->d_vnode);
-
     free(dp->d_path);
     free(dp);
+}
+
+int
+dentry_refcnt(struct dentry *dp)
+{
+    // d_refcnt is a plain int written under dentry_hash_lock (dref(),
+    // drele(), dentry_lookup()), so the lock only makes this read coherent.
+    // sys_umount2() relies on mount_lock and m_lookups to keep the value
+    // from rising afterwards, not on this lock.
+    SCOPE_LOCK(dentry_hash_lock);
+    return dp->d_refcnt;
 }
 
 void
