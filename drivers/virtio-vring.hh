@@ -68,8 +68,15 @@ class virtio_driver;
             VRING_AVAIL_F_NO_INTERRUPT=1
         };
 
-        void disable_interrupt() { _flags.store(VRING_AVAIL_F_NO_INTERRUPT, std::memory_order_relaxed); }
-        void enable_interrupt() { _flags.store(0, std::memory_order_relaxed); }
+        // seq_cst, not relaxed, on both stores: an interrupt handler stores
+        // NO_INTERRUPT and then tries to wake the consumer, whose wake fails
+        // if the consumer is not yet "waiting"; the consumer stores
+        // "waiting" and then 0 here before it rechecks and sleeps.  The
+        // handler's store must not land after ours while its wake missed us,
+        // or a device without EVENT_IDX never interrupts again.  C++ forbids
+        // that only with both stores seq_cst (release is not enough).
+        void disable_interrupt() { _flags.store(VRING_AVAIL_F_NO_INTERRUPT, std::memory_order_seq_cst); }
+        void enable_interrupt() { _flags.store(0, std::memory_order_seq_cst); }
         bool interrupt_on() { return (_flags.load(std::memory_order_relaxed) & VRING_AVAIL_F_NO_INTERRUPT) == 0;}
 
         std::atomic<u16> _flags;
