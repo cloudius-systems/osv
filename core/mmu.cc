@@ -37,6 +37,7 @@
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
 #include <osv/kernel_config_memory_jvm_balloon.h>
+#include <osv/pagecache.hh>
 
 // FIXME: Without this pragma, we get a lot of warnings that I don't know
 // how to explain or fix. For now, let's just ignore them :-(
@@ -366,7 +367,14 @@ static void clone_pt_level0(pt_element<0> *parent_pt, pt_element<0> *child_pt,
             continue;
         }
         uintptr_t va = base_virt + (uintptr_t)i * page_size;
-        if (addr_is_privatize(va)) {
+        if (ppte.sw_bit(pte_pagecache)) {
+            // A page-cache page (already read-only/COW for a private mapping,
+            // or a MAP_SHARED write-cache page): the child maps it as the
+            // parent does, and the page cache learns of the child's slot after
+            // the walk (see child_pagecache_mappings).  Never make it
+            // writable here: writes must reach the page cache through a fault.
+            child_pt[i] = ppte;
+        } else if (addr_is_privatize(va)) {
             // Forking thread's live stack: give the child its OWN physical
             // page (byte-copy of the parent's), mapped at the SAME VA, plain
             // writable (no COW bit, no shared bit).  The parent's PTE is left
@@ -473,6 +481,65 @@ void clone_pt_level<2>(pt_element<2> *parent_pt, pt_element<2> *child_pt,
     }
 }
 
+// Visit the 4K leaf PTEs of [start, end) in a fork child's page table (not the
+// current thread's), skipping unmapped and large ranges.
+template<typename F>
+static void for_each_child_leaf(address_space *as, uintptr_t start,
+                                uintptr_t end, F f)
+{
+    auto pml4 = phys_cast<pt_element<3>>(as->top->next_pt_addr());
+    uintptr_t va = start;
+    while (va < end) {
+        void *v = reinterpret_cast<void*>(va);
+        pt_element<3> e3 = pml4[pt_index(v, 3)];
+        if (e3.empty() || e3.large()) {
+            va = align_down(va, uintptr_t(1) << 39) + (uintptr_t(1) << 39);
+            continue;
+        }
+        pt_element<2> e2 = phys_cast<pt_element<2>>(e3.next_pt_addr())[pt_index(v, 2)];
+        if (e2.empty() || e2.large()) {
+            va = align_down(va, uintptr_t(1) << 30) + (uintptr_t(1) << 30);
+            continue;
+        }
+        pt_element<1> e1 = phys_cast<pt_element<1>>(e2.next_pt_addr())[pt_index(v, 1)];
+        if (e1.empty() || e1.large()) {
+            va = align_down(va, huge_page_size) + huge_page_size;
+            continue;
+        }
+        auto pt = phys_cast<pt_element<0>>(e1.next_pt_addr());
+        f(va, hw_ptep<0>::force(&pt[pt_index(v, 0)]));
+        va += page_size;
+    }
+}
+
+// For each file vma of a fork child, hand the page-cache leaves of its range
+// (pte_pagecache) to @op (pagecache::inherit_mappings or release_mappings),
+// one call per vma.
+static void child_pagecache_mappings(address_space *as,
+        void (*op)(dev_t, ino_t, const off_t *, hw_ptep<0> *, unsigned))
+{
+    std::vector<off_t> offs;
+    std::vector<hw_ptep<0>> pteps;
+    for (auto &v : *as->vmas) {
+        auto *fv = dynamic_cast<file_vma *>(&v);
+        if (!fv) {
+            continue;
+        }
+        offs.clear();
+        pteps.clear();
+        for_each_child_leaf(as, v.start(), v.end(), [&] (uintptr_t va, hw_ptep<0> ptep) {
+            if (ptep.read().sw_bit(pte_pagecache)) {
+                offs.push_back(fv->offset() + (va - v.start()));
+                pteps.push_back(ptep);
+            }
+        });
+        if (!pteps.empty()) {
+            op(fv->file_dev_id(), fv->file_inode(), offs.data(), pteps.data(),
+               pteps.size());
+        }
+    }
+}
+
 address_space *clone_address_space(address_space *parent)
 {
     // The parent's actual PML4 page (array of 512 level-3 entries).
@@ -488,6 +555,7 @@ address_space *clone_address_space(address_space *parent)
     // Share every kernel PML4 slot (0 and 128..511) by copying the parent's
     // entry verbatim (points at the same lower-level tables).  Clone only the
     // application slots (1..127) so their PTEs can diverge under COW.
+    address_space *child = nullptr;
     PREVENT_STACK_PAGE_FAULT
     WITH_LOCK(parent->vmas_mutex->for_write()) {
         // Build the "share, don't COW" ranges: stack VMAs (OSv runs kernel code
@@ -566,7 +634,7 @@ address_space *clone_address_space(address_space *parent)
         mmu::flush_tlb_all();
 
         // Create the child AS with its private PML4 page and vma_list.
-        auto child = new address_space(virt_to_phys(child_pml4_page));
+        child = new address_space(virt_to_phys(child_pml4_page));
 
         // Structurally clone the parent's VMAs into the child's vma_list so
         // the fault path can resolve child faults (permissions, backing).  The
@@ -603,8 +671,11 @@ address_space *clone_address_space(address_space *parent)
             }
             child->vmas->insert(*nv);
         }
-        return child;
     }
+    // The walk copied the parent's page-cache PTEs: register the child's
+    // copies with the page cache (the child has not started yet).
+    child_pagecache_mappings(child, pagecache::inherit_mappings);
+    return child;
 }
 
 // --- fork COW page-table teardown ------------------------------------------
@@ -618,7 +689,8 @@ static void free_child_pt_level0(pt_element<0> *pt)
     for (unsigned i = 0; i < pte_per_page; i++) {
         pt_element<0> e = pt[i];
         if (e.empty()) continue;
-        if (e.writable() && !pte_is_cow(e) && !e.sw_bit(pte_shared)) {
+        if (e.writable() && !pte_is_cow(e) && !e.sw_bit(pte_shared) &&
+                !e.sw_bit(pte_pagecache)) {
             // Child's own COW-copied private page: free it.  (pte_shared pages
             // are jointly-owned stack/MAP_SHARED frames -- never free them.)
             memory::free_page(phys_to_virt(e.addr()));
@@ -664,6 +736,9 @@ void destroy_address_space(address_space *as)
     // parent and must be left alone.
     phys pml4_phys = as->top ? as->top->next_pt_addr() : 0;
     if (pml4_phys) {
+        // Unregister the child's page-cache PTEs (and leave them empty) before
+        // their page-table pages are freed; the cache owns those pages.
+        child_pagecache_mappings(as, pagecache::release_mappings);
         auto pml4 = phys_cast<pt_element<3>>(pml4_phys);
         for (unsigned slot = pml4_app_first; slot <= pml4_app_last; slot++) {
             pt_element<3> e3 = pml4[slot];
@@ -2273,6 +2348,10 @@ static bool handle_cow_write_fault(uintptr_t addr)
     pt_element<0> e0 = pt[i0];
     if (e0.empty()) return false;
     if (!pte_is_cow(e0)) return false;
+    // A page-cache page: copying it here would leave the page cache holding
+    // &pt[i0] as a mapping of its page, and the next drop of that page would
+    // clear this process's private copy.  The vma fault path handles it.
+    if (e0.sw_bit(pte_pagecache)) return false;
 
     // Copy the shared page into a fresh private page.
     void *shared = phys_to_virt(e0.addr());
