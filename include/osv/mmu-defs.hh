@@ -100,6 +100,12 @@ enum {
     // MAP_SHARED / shm): such a page's physical frame is owned jointly, so a
     // child address space must NOT free it on teardown.
     pte_shared = 1,
+    // Software PTE bit tagging a leaf that maps a page-cache page (read cache,
+    // write cache or the zero page), installed by pagecache::get().  The page
+    // cache records the address of every such PTE so it can unmap the page;
+    // the bit tells the fault, fork and teardown paths to go through the page
+    // cache for this leaf instead of treating the frame as process memory.
+    pte_pagecache = 2,
 };
 
 /* flush tlb for the current processor */
