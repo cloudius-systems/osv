@@ -232,6 +232,12 @@ tests += tst-numa.so
 tests += tst-random-flush.so
 internal-api-tests += tst-random-flush.so
 
+# PMU readout controls -- only built when conf_pmu=1 (the facility is
+# CONF-gated; the app links kernel symbols pmu::available()/program()/read()).
+ifeq ($(conf_pmu),1)
+tests += tst-pmu.so
+endif
+
 # Tests with special compilation parameters needed...
 $(out)/tests/tst-mmap.so: COMMON += -Wl,-z,now
 $(out)/tests/tst-elf-permissions.so: COMMON += -Wl,-z,relro
