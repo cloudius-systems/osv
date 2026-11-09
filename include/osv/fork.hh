@@ -13,22 +13,20 @@
 
 // fork() emulation on OSv.
 //
-// OSv is a single-address-space unikernel with no MMU-enforced process
-// isolation, so a true copy-on-write fork() is impossible.  We implement the
-// useful, compatible subset (see documentation/fork.md):
+// See documentation/fork.md for what works and what does not.
 //
-//  * fork() runs the child as an OSv thread that shares the parent's address
-//    space (heap, globals, fds) but gets a PRIVATE COPY of the parent's user
-//    stack, so both parent and child return from fork() with their own local
-//    variables and return address (the classic "fork returns twice").
+//  * fork() runs the child as an OSv thread in its own address space: the
+//    parent's private writable mappings (heap, globals, its own stack) are
+//    copy-on-write in both, MAP_SHARED and SysV shm stay shared, and the
+//    child inherits the parent's fds. Both return from fork() with their own
+//    local variables and return address (the classic "fork returns twice").
 //  * fork()+execve() works: the child execve()s a new program (which OSv runs
 //    as a fresh application/ELF-namespace) and the parent waitpid()s for it.
 //  * waitpid()/wait4() reap the child's exit status; SIGCHLD is raised to the
 //    parent on child exit.
 //
-// It CANNOT provide memory isolation: a child that mutates shared globals/heap
-// expecting a private copy will affect the parent.  fork()-as-memory-snapshot
-// (e.g. Redis BGSAVE) is unsupported.
+// The kernel and its heap are shared by every address space, so a child is
+// isolated from its parent's application memory, not from the kernel.
 
 namespace osv {
 namespace fork {

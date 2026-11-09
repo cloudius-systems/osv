@@ -2,18 +2,20 @@
 
 OSv is a single-address-space unikernel: all threads of all applications share
 one address space, with no MMU-enforced process isolation. This is deliberate,
-it is where OSv's performance comes from. It also means Linux `fork()`, which
-gives the child a **private copy-on-write duplicate of the parent's entire
-address space**, cannot be implemented literally.
+it is where OSv's performance comes from.
 
-OSv instead provides a **thread-backed fork() emulation** that supports the
-common, compatible subset of fork semantics. This document describes what works,
-what does not, and why.
+With `CONFIG_fork` enabled, OSv provides `fork()` as a new OSv thread (the
+"child") that runs in its **own address space**: the parent's private writable
+mappings (heap, globals, stack) become copy-on-write in both, so writes stay
+private to whichever side made them, while `MAP_SHARED` and SysV shared memory
+stay shared. The kernel half of the page tables is shared by every address
+space, so OSv code and the kernel heap look the same from all of them. This
+document describes what works, what does not, and why.
 
 ## Off by default: the `fork` configure flag
 
 All of the fork() machinery - the fork()/vfork()/execve()/waitpid()
-implementations and the private user-stack copy - is gated behind the
+implementations and the per-child address space - is gated behind the
 `CONFIG_fork` kconfig option (make variable `conf_fork`),
 which defaults to **n**. When it is disabled (the default), NONE of this code
 is compiled into the kernel: the fork object files are excluded from the build,
@@ -27,23 +29,28 @@ fork() to those who require it.
 
 - **`fork()` twin return.** `fork()` creates a new OSv thread (the "child") that
   resumes at the `fork()` call site. `fork()` returns the child's pid to the
-  parent and `0` to the child, exactly like Linux. The child runs on a **private
-  copy of the parent's user stack**, so parent and child have independent local
-  variables and call chains after the return.
+  parent and `0` to the child, exactly like Linux. The child gets the parent's
+  user stack at the **same virtual addresses** on private pages, so saved frame
+  pointers, return addresses and pointers into the stack stay valid, and the
+  child can unwind as deep as it likes.
+
+- **Private memory.** The child's writes to its heap, globals and stack are not
+  seen by the parent, and the parent's later writes are not seen by the child.
+  `MAP_SHARED` mappings and SysV shared memory are the same pages in both.
 
 - **`fork()` + `execve()`.** The child calls `execve()`, which launches the
   requested program as a fresh OSv application (its own ELF namespace) and makes
   the child thread that program's driver; a successful `execve()` never returns,
-  as on Linux. The parent is a separate thread and is unaffected.
+  as on Linux. The thread returns to the main address space and the child's
+  address space is freed. The parent is a separate thread and is unaffected.
 
 - **`waitpid()` / `wait4()` / `wait()`.** The parent reaps a child's exit status
   (Linux-encoded, use `WIFEXITED`/`WEXITSTATUS`). `WNOHANG` is supported.
   `SIGCHLD` is raised to the parent when a child exits.
 
-- **`vfork()`.** Maps to `fork()`. Because the child already shares the parent's
-  address space, this actually matches vfork's contract ("the child borrows the
-  parent's memory until it execs or exits") more faithfully than it matches
-  fork's copy contract.
+- **`vfork()`.** Maps to `fork()`: the child gets a copy-on-write address space
+  rather than borrowing the parent's, which a correct vfork() caller cannot tell
+  apart.
 
 - **`_exit()` / `exit()` in a child** ends only that child "process" (thread /
   app) and records its status for the parent, rather than shutting down the
@@ -63,25 +70,17 @@ fork() to those who require it.
   glibc, so they take the clean per-thread-TLS path. (This was the wall stock
   glibc-built PostgreSQL hit; a musl build avoids it.)
 
-- **Memory isolation.** The child shares the parent's heap and global variables
-  (only the stack is copied). A child that **writes** to shared globals or
-  heap-allocated data expecting a private copy will affect the parent. Code that
-  only reads shared state and writes to its own fds or freshly-`malloc`'d memory
-  before `exec`/`_exit` is fine; code that mutates shared state after fork is
-  not. This cannot be fixed without adding process isolation to OSv.
+- **Other threads' stacks.** The stacks of the parent's other threads (and any
+  `mmap(MAP_STACK)` region) are shared with the child, not copied: OSv runs
+  kernel code on thread stacks with interrupts off, where a copy-on-write fault
+  is not allowed. The child is single-threaded and normally never touches them,
+  but a pointer it inherits into another thread's stack sees that thread's live
+  data.
 
-- **`fork()` as a memory snapshot** (e.g. Redis `BGSAVE`, a GC that forks to walk
-  a frozen heap). These rely on the child seeing a *frozen* copy of the parent's
-  memory at fork time. On OSv the child sees live, shared memory. This is a
-  silent behavioral difference (it cannot be detected at the syscall boundary)
-  and is **unsupported**.
-
-- **Stack-internal pointers.** Because the child's stack is a byte copy of the
-  parent's biased to a new address, a pointer stored on the stack that points
-  *into the same stack* still points at the parent's stack in the child. Short
-  child code paths (the fork+exec and fork+work-then-_exit patterns) do not hit
-  this; long-lived divergent children can. A future refinement could scan and
-  fix up such pointers.
+- **Isolation from the kernel.** Copy-on-write separates application memory
+  only. The kernel, its heap and its data structures are shared by every
+  address space, as for any OSv thread: a child is not protected from the
+  kernel, or the kernel from it, the way a Linux process is.
 
 - **`clone()` with namespace-unshare flags** (`CLONE_NEWNS`, `CLONE_NEWPID`,
   etc.) returns `ENOSYS` - there are no namespaces to unshare.
@@ -104,18 +103,24 @@ fork() to those who require it.
   caller's registers for the fork flavor) is a planned follow-up.
 
 - **aarch64.** Not yet offered: `CONFIG_fork` depends on x86-64, so on aarch64
-  `fork()` and `vfork()` return `ENOSYS` whatever `conf_fork` says. The aarch64
-  resume trampoline (`arch/aarch64/fork.cc`) exists, but it uses the x86-64-only
-  `sched::thread::get_app_tcb()`/`set_app_tcb()` and does not build.
+  `fork()` and `vfork()` return `ENOSYS` whatever `conf_fork` says. The per-child
+  address space (page-table root per address space and the context-switch
+  reload) is implemented for x86-64 only, and `arch/aarch64/fork.cc` uses the
+  x86-64-only `sched::thread::get_app_tcb()`/`set_app_tcb()`.
 
 ## Implementation
 
 - `libc/process/fork.cc` - `fork()`/`vfork()`, the child registry, and the
   `waitpid()` backend + `SIGCHLD` notification.
-- `arch/x64/fork.cc` - `fork_thread()`: allocates a fresh stack, copies the
-  parent's current user stack into it, and returns a child thread that installs
-  the copied stack and returns `0` from `fork()`. Reuses the register/
+- `core/mmu.cc` - `mmu::address_space` and `clone_address_space()`: copies the
+  parent's vmas into the child's address space, write-protects private
+  writable pages in both for copy-on-write, and maps the forking thread's
+  stack at the same addresses on private pages.
+- `arch/x64/fork.cc` - `fork_thread()`: creates the child thread in the new
+  address space and has it return `0` from `fork()`. Reuses the register/
   continuation approach of `clone_thread()` (used by `pthread_create`).
+- `arch/x64/arch-switch.hh` - the context switch loads the target thread's
+  page-table root when its address space differs from the current one.
 - `libc/process/execve.cc` - `execve()` via `osv::application::run()`.
 - `libc/process/waitpid.cc` - `wait`/`waitpid`/`wait4`.
 - `runtime.cc` - `exit()` ends a child rather than shutting down OSv.
