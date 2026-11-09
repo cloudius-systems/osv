@@ -40,8 +40,8 @@ int execve(const char *path, char *const argv[], char *const envp[])
 //
 // This makes the common fork()+execve() idiom work: the fork child calls
 // execve(), which starts the new program and the child thread becomes that
-// program's driver.  The parent is unaffected (it is a different thread in the
-// same address space) and can waitpid() on the child.
+// program's driver.  The parent is unaffected (it is a different thread) and
+// can waitpid() on the child.
 //
 // Limitations (documented in documentation/fork.md): the old program's global
 // state is not torn down the way a real address-space replacement would; the
