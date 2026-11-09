@@ -270,6 +270,7 @@ static int decname(char *s, const unsigned char *b, const unsigned char *p)
 {
 	/* Remember jump destinations to detect loops and abort */
 	size_t seen[PACKET_MAX/8/sizeof(size_t)] = { 0 };
+	char *start = s;
 	char *sz = s + HOST_NAME_MAX;
 	const unsigned char *pz = b+512;
 	for (;;) {
@@ -284,8 +285,16 @@ static int decname(char *s, const unsigned char *b, const unsigned char *p)
 			memcpy(s, p+1, *p);
 			s += *p+1;
 			p += *p+1;
-			s[-1] = *p ? '.' : 0;
-		} else return 0;
+			s[-1] = '.';
+		} else {
+			/* End of name. Replace the last label's '.' with the
+			 * terminator, or terminate an empty name. Testing the next
+			 * byte instead misses a name that ends in a compression
+			 * pointer to the root label, leaving s unterminated. */
+			if (s > start) s--;
+			*s = 0;
+			return 0;
+		}
 	}
 }
 
