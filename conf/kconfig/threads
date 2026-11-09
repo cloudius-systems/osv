@@ -9,6 +9,7 @@ config lazy_stack
 config fork
   prompt "Include fork()/vfork() support (thread-backed, off by default)"
   def_bool $(shell,[ "$conf_fork" = 1 ] && echo y || echo n)
+  depends on $(arch) = x64
   help
     Enable OSv's thread-backed fork()/vfork()/execve()/waitpid() emulation.
     A forked child is a new OSv thread that resumes at the fork() call site on
@@ -19,6 +20,9 @@ config fork
     disabled, none of the fork code is compiled in and OSv behaves exactly as
     before (fork() returns ENOSYS).  Enable it only for workloads that require
     fork() (e.g. fork()+exec() to spawn a helper program).
+
+    Only x86_64 is supported, so the option depends on it; on other
+    architectures fork() returns ENOSYS.
 
 config lazy_stack_invariant
   prompt "Check lazy stack invariant"

@@ -103,9 +103,10 @@ fork() to those who require it.
   fork properly (teaching the arch `clone`/`fork` trampoline to restore the
   caller's registers for the fork flavor) is a planned follow-up.
 
-- **aarch64.** Implemented and validated: the stack-copy + `br` resume
-  trampoline works on aarch64 as well as x86-64. `tst-fork` passes
-  10/10 on both architectures.
+- **aarch64.** Not yet offered: `CONFIG_fork` depends on x86-64, so on aarch64
+  `fork()` and `vfork()` return `ENOSYS` whatever `conf_fork` says. The aarch64
+  resume trampoline (`arch/aarch64/fork.cc`) exists, but it uses the x86-64-only
+  `sched::thread::get_app_tcb()`/`set_app_tcb()` and does not build.
 
 ## Implementation
 
