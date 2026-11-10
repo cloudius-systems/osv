@@ -12,6 +12,7 @@
 #include <sys/wait.h>
 #include <unordered_map>
 #include <unordered_set>
+#include <vector>
 #include <memory>
 #include <osv/sched.hh>
 #include <osv/mmu.hh>
@@ -127,8 +128,38 @@ static void inherit_open_fds(mmu::address_space *child_as)
     fork_arena::kernel_heap_scope kh;
     std::unordered_map<int, struct file *> held;
     fork_snapshot_open_fds(&inherit_one_fd, &held);
-    SCOPE_LOCK(g_fd_lock);
-    g_inherited_fds[child_as] = std::move(held);
+    std::vector<struct file *> not_ours;
+    {
+        SCOPE_LOCK(g_fd_lock);
+        // A slot the owner has already closed is kept only for the children
+        // that inherited it (a connection socket a forking server handed to a
+        // running child). Unless the forking process is one of those children,
+        // the slot is not open in it, so the new child must not inherit it. If
+        // it did, every child forked while any such slot is alive would keep
+        // that slot alive, and with overlapping children the slots would never
+        // be freed.
+        mmu::address_space *parent_as = current_child_as();
+        auto pit = parent_as ? g_inherited_fds.find(parent_as) : g_inherited_fds.end();
+        for (auto it = held.begin(); it != held.end();) {
+            auto orel = g_owner_released_fds.find(it->first);
+            bool parent_holds = false;
+            if (pit != g_inherited_fds.end()) {
+                auto h = pit->second.find(it->first);
+                parent_holds = h != pit->second.end() && h->second == it->second;
+            }
+            if (orel != g_owner_released_fds.end() && orel->second == it->second &&
+                    !parent_holds) {
+                not_ours.push_back(it->second);
+                it = held.erase(it);
+            } else {
+                ++it;
+            }
+        }
+        g_inherited_fds[child_as] = std::move(held);
+    }
+    for (auto *fp : not_ours) {
+        fdrop(fp);
+    }
 }
 
 // Drop every remaining inherited reference held by @child_as.  Called on child
