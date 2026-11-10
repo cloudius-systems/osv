@@ -180,6 +180,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 	tst-fork-file-mmap.so \
 	tst-fork-socket.so \
 	tst-fork-conn-socket.so \
+	tst-fork-overlap-sockets.so \
 	tst-fork-arena-freelist.so \
 	misc-fsx.so tst-sleep.so tst-resolve.so tst-except.so \
 	misc-tcp-sendonly.so tst-tcp-nbwrite.so misc-tcp-hash-srv.so \
