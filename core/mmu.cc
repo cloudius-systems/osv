@@ -433,6 +433,67 @@ static std::vector<cow_range> fork_shared_module_ranges;
 static mutex fork_shared_module_lock;
 
 
+// A private page that fork makes copy-on-write is mapped by several address
+// spaces at once.  cow_extra[pfn] counts its mappers beyond the first, so the
+// last one to write or drop the frame keeps or frees it.  Without the count a
+// COW write fault always copied and nothing ever freed the original, which
+// leaked every page a parent wrote after each fork once the child was gone.
+// Allocated at the first fork; frames outside it are never freed (the old
+// behaviour).
+static std::atomic<std::atomic<uint32_t> *> cow_extra{nullptr};
+static size_t cow_extra_n;
+static uintptr_t phys_mem_end;
+static mutex cow_extra_lock;
+
+static void cow_extra_init()
+{
+    if (cow_extra.load(std::memory_order_acquire)) {
+        return;
+    }
+    SCOPE_LOCK(cow_extra_lock);
+    if (cow_extra.load(std::memory_order_relaxed)) {
+        return;
+    }
+    size_t n = phys_mem_end >> page_size_shift;
+    size_t bytes = align_up(n * sizeof(std::atomic<uint32_t>), page_size);
+    void *p = memory::alloc_phys_contiguous_aligned(bytes, page_size);
+    memset(p, 0, bytes);
+    cow_extra_n = n;
+    cow_extra.store(static_cast<std::atomic<uint32_t> *>(p), std::memory_order_release);
+}
+
+static std::atomic<uint32_t> *cow_count(phys pa)
+{
+    auto t = cow_extra.load(std::memory_order_acquire);
+    size_t pfn = pa >> page_size_shift;
+    return (t && pfn < cow_extra_n) ? &t[pfn] : nullptr;
+}
+
+// A fork added a mapper of a COW frame.  Every free of a counted frame
+// happens at zero, so a fresh frame starts at zero; a count left too high
+// keeps the frame allocated until reboot; it never frees a frame in use.
+static void cow_get(phys pa)
+{
+    auto c = cow_count(pa);
+    if (c) {
+        c->fetch_add(1, std::memory_order_acq_rel);
+    }
+}
+
+// Drop one mapper of a COW frame.  Returns true if another address space
+// still maps it, false if the caller was the last and now owns the frame.
+static bool cow_put(phys pa)
+{
+    auto c = cow_count(pa);
+    if (!c) {
+        return true;
+    }
+    uint32_t v = c->load(std::memory_order_acquire);
+    while (v && !c->compare_exchange_weak(v, v - 1, std::memory_order_acq_rel)) {
+    }
+    return v != 0;
+}
+
 static bool addr_is_shared(uintptr_t va)
 {
     if (!cow_share_ranges) return false;
@@ -490,19 +551,47 @@ static void clone_pt_level0(pt_element<0> *parent_pt, pt_element<0> *child_pt,
             if (pte_is_cow(sh)) {
                 sh = pte_mark_cow(sh, false);
             }
+            // Count the child's mapping of a process frame whether or not it
+            // was COW, and never drop it (teardown skips pte_shared leaves).
+            // If a later fork no longer finds this address in a shared range
+            // (a user-supplied thread stack that has since exited), the frame
+            // becomes COW there, and the count must not miss this child.  A
+            // frame the parent already tags pte_shared belongs to its file or
+            // to the shared-anon registry, never to the fork paths: skip it.
+            if (!ppte.sw_bit(pte_shared)) {
+                cow_get(sh.addr());
+            }
             sh.set_writable(true);
             parent_pt[i] = sh;
             sh.set_sw_bit(pte_shared, true);
             child_pt[i] = sh;
+        } else if (ppte.sw_bit(pte_shared)) {
+            // A frame that belongs to its file (a MAP_PRIVATE mapping of a shm
+            // or io_uring object, tagged by the file's map_page()): each side
+            // copies it on its first write, but it is the file's to free, so
+            // it is not counted and the fork paths never free it or write it
+            // in place.  A frame some other address space owns jointly, or a
+            // read-only one, is shared as-is.
+            if (ppte.writable() || pte_is_cow(ppte)) {
+                pt_element<0> cow = pte_mark_cow(ppte, true);
+                parent_pt[i] = cow;
+                child_pt[i] = cow;
+            } else {
+                child_pt[i] = ppte;
+            }
         } else if (ppte.writable() && !pte_is_cow(ppte)) {
             // Private writable page: make it COW (write-protect + cow bit) in
             // BOTH parent and child.
             pt_element<0> cow = pte_mark_cow(ppte, true);
             parent_pt[i] = cow;
             child_pt[i] = cow;
+            cow_get(ppte.addr());
         } else {
             // Read-only or already-COW private page: share the same physical
             // page as-is (stays COW/read-only in the child too).
+            if (pte_is_cow(ppte)) {
+                cow_get(ppte.addr());
+            }
             child_pt[i] = ppte;
         }
     }
@@ -649,6 +738,7 @@ address_space *clone_address_space(address_space *parent)
     // same mutex (and give the child a COW-private copy of kernel vma
     // bookkeeping).  This is the malloc-during-fork recursion trap.
     fork_arena::kernel_heap_scope kh;
+    cow_extra_init();
     // The parent's actual PML4 page (array of 512 level-3 entries).
     phys parent_pml4_phys = parent->top ? parent->top->next_pt_addr()
                                         : kernel_pt_root_phys();
@@ -895,6 +985,10 @@ static void free_child_pt_level0(pt_element<0> *pt)
                 !e.sw_bit(pte_pagecache)) {
             // Child's own COW-copied private page: free it.  (pte_shared pages
             // are jointly-owned stack/MAP_SHARED frames -- never free them.)
+            memory::free_page(phys_to_virt(e.addr()));
+        } else if (pte_is_cow(e) && !e.sw_bit(pte_shared) &&
+                   !e.sw_bit(pte_pagecache) && !cow_put(e.addr())) {
+            // The child was the last mapper of this COW frame.
             memory::free_page(phys_to_virt(e.addr()));
         }
         // else: shared (COW, read-only, or pte_shared) -- leave the frame.
@@ -1566,12 +1660,21 @@ public:
     unpopulate(page_allocator* pops) : _pops(pops) {}
     template<int N>
     bool page(hw_ptep<N> ptep, uintptr_t offset) {
-        void* addr = phys_to_virt(ptep.read().addr());
+        auto old = ptep.read();
+        void* addr = phys_to_virt(old.addr());
         size_t size = pt_level_traits<N>::size::value;
         // Note: we free the page even if it is already marked "not present".
         // evacuate() makes sure we are only called for allocated pages, and
         // not-present may only mean mprotect(PROT_NONE).
-        if (_pops->unmap(addr, offset, ptep)) {
+        bool ours = _pops->unmap(addr, offset, ptep);
+#if CONF_fork
+        // A COW frame another address space still maps is not ours to free.
+        if (ours && pte_is_cow(old) && !old.sw_bit(pte_pagecache) &&
+                !old.sw_bit(pte_shared) && cow_put(old.addr())) {
+            ours = false;
+        }
+#endif
+        if (ours) {
             do_flush = !_tlb_gather.push(addr, size);
         } else {
             do_flush = true;
@@ -2852,6 +2955,22 @@ static bool handle_cow_write_fault(uintptr_t addr)
     // clear this process's private copy.  The vma fault path handles it.
     if (e0.sw_bit(pte_pagecache)) return false;
 
+    // A frame that belongs to its file (pte_shared): copy away from it, and
+    // never write it in place or free it.
+    bool file_owned = e0.sw_bit(pte_shared);
+
+    // Every other address space has dropped this frame: write it in place.
+    // No one can add a mapper meanwhile: that takes a fork of this address
+    // space, and the caller holds its vma lock for write.
+    auto c = cow_count(e0.addr());
+    if (!file_owned && c && c->load(std::memory_order_acquire) == 0) {
+        pt_element<0> npte = pte_mark_cow(e0, false);
+        npte.set_writable(true);
+        pt[i0] = npte;
+        mmu::flush_tlb_all();
+        return true;
+    }
+
     // Copy the shared page into a fresh private page.
     void *shared = phys_to_virt(e0.addr());
     void *priv = memory::alloc_page();
@@ -2864,6 +2983,10 @@ static bool handle_cow_write_fault(uintptr_t addr)
     npte.set_writable(true);
     pt[i0] = npte;
     mmu::flush_tlb_all();
+    if (!file_owned && !cow_put(e0.addr())) {
+        // The other mappers dropped the frame while we copied it.
+        memory::free_page(shared);
+    }
     return true;
 }
 #endif // CONF_fork
@@ -3520,6 +3643,11 @@ bool shm_file::map_page(uintptr_t offset, hw_ptep<0> ptep, pt_element<0> pte, bo
 {
     uintptr_t hp_off = align_down(offset, huge_page_size);
 
+#if CONF_fork
+    // The frame is the object's, not the process's: fork and teardown must
+    // never free it (shm_file::close() does).
+    pte.set_sw_bit(pte_shared, true);
+#endif
     return write_pte(static_cast<char*>(page(hp_off)) + offset - hp_off, ptep, pte);
 }
 
@@ -3528,6 +3656,9 @@ bool shm_file::map_page(uintptr_t offset, hw_ptep<1> ptep, pt_element<1> pte, bo
     uintptr_t hp_off = align_down(offset, huge_page_size);
 
     assert(hp_off == offset);
+#if CONF_fork
+    pte.set_sw_bit(pte_shared, true);
+#endif
 
     return write_pte(static_cast<char*>(page(hp_off)) + offset - hp_off, ptep, pte);
 }
@@ -3622,6 +3753,9 @@ void free_initial_memory_range(uintptr_t addr, size_t size)
         ++addr;
         --size;
     }
+#if CONF_fork
+    phys_mem_end = std::max(phys_mem_end, addr + size);
+#endif
     memory::free_initial_memory_range(phys_cast<void>(addr), size);
 }
 
