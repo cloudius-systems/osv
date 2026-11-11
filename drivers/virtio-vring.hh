@@ -149,7 +149,9 @@ class virtio_driver;
          */
         __attribute__((always_inline)) inline // Necessary because of issue #1029
         void get_buf_finalize(bool update_host = true) {
-            _used_ring_host_head++;
+            // Publish the consumer's cookie/request accesses before producer
+            // GC can recycle the descriptors and publish another request.
+            _used_ring_host_head.fetch_add(1, std::memory_order_release);
 
             trace_vring_get_buf_finalize(this, _used_ring_host_head);
 
@@ -258,9 +260,9 @@ class virtio_driver;
 
         // Position of the next available descriptor
         u16 _avail_head;
-        // Position of the used descriptor we've last seen
-        // from the host used ring
-        u16 _used_ring_host_head;
+        // Single consumer publishes finalized entries; producer GC reads this
+        // with acquire ordering (the implicit atomic loads are seq_cst).
+        std::atomic<u16> _used_ring_host_head;
         // Position of the used descriptor we've last seen
         // used internally for get-add bufs sync
         u16 _used_ring_guest_head;
