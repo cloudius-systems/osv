@@ -16,6 +16,7 @@
 #include <osv/mempool.hh>
 #include <osv/mmu.hh>
 
+#include <cstdio>
 #include <string>
 #include <string.h>
 #include <stdlib.h>
@@ -256,6 +257,11 @@ net::net(virtio_device& dev)
     _driver_name = "virtio-net";
     virtio_i("VIRTIO NET INSTANCE");
     _id = _instance++;
+    if (_id == 0) {
+        // Resolve the receive-path wake batching setting before any receiver
+        // runs and show the value it will use.
+        printf("LEVER net_batch_wake=%d\n", batch_wakes_enabled() ? 1 : 0);
+    }
 
     // Please look at the section 5.1.6.1 of virtio specification for explanation
     if (_dev.is_modern()) {
