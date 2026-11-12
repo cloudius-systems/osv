@@ -185,6 +185,8 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-blk-
 	tst-sig-dfl-ignore.so \
 	tst-pgfork.so tst-fork-preempt.so \
 	tst-fork-cow-lost-write.so \
+	tst-fork-sharedptr-drift.so \
+	tst-fork-thread-unload.so \
 	tst-fork-pltgot.so \
 	tst-fork-symlookup.so \
 	tst-fork-vislookup.so \
