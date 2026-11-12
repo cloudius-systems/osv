@@ -41,6 +41,7 @@
 #include <cstring>
 #include <ctime>
 #include <cmath>
+#include <cerrno>
 
 static int failures = 0;
 #define CHECK(cond, msg) do { \
@@ -151,6 +152,23 @@ static int child_recurse(int depth, uint64_t guard)
 
 int main()
 {
+    // fork() is opt-in (CONFIG_fork). When it is off it returns -1/ENOSYS;
+    // skip cleanly, as tst-fork does, so the default test suite stays green.
+    {
+        errno = 0;
+        pid_t probe = fork();
+        if (probe == -1 && errno == ENOSYS) {
+            printf("SKIP: fork() not enabled (CONFIG_fork off)\n");
+            return 0;
+        }
+        if (probe == 0) {
+            _exit(0);   // the probe fork's child: exit immediately
+        }
+        if (probe > 0) {
+            int st = 0;
+            waitpid(probe, &st, 0);   // reap the probe child
+        }
+    }
     printf("=== tst-fork-preempt ===\n");
 
     pid_t pid = fork();
