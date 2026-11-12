@@ -117,6 +117,13 @@ int main()
         signal(SIGCHLD, SIG_DFL);
         _exit(0);
     }
+    if (pid == -1 && errno == ENOSYS) {
+        // fork() is opt-in (CONFIG_fork); skip as tst-fork does.  The check
+        // is on this fork() rather than a separate probe fork, whose child
+        // would raise a SIGCHLD that could wake the epoll below by itself.
+        printf("SKIP: fork() not enabled (CONFIG_fork off)\n");
+        return 0;
+    }
     if (pid < 0) {
         printf("FAIL: fork() errno=%d\n", errno);
         return 1;
