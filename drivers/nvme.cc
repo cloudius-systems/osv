@@ -170,6 +170,8 @@ driver::driver(pci::device &pci_dev)
                 coalesce_time = (u8)tm;
             }
         }
+        printf("LEVER nvme_int_coalescing=%u,%u\n",
+               coalesce_threshold, coalesce_time);
         if (coalesce_threshold || coalesce_time) {
             set_interrupt_coalescing(coalesce_threshold, coalesce_time);
         }
