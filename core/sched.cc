@@ -209,8 +209,20 @@ cpu::cpu(unsigned _id)
     }
 }
 
+static unsigned idle_spin_max();
+static bool idle_spin_adaptive();
+
 void cpu::init_idle_thread()
 {
+    // The idle-spin settings are cached on first use.  Resolve them here, once,
+    // after the command line's --env has been applied and before any idle
+    // thread runs, and print the values do_idle() will use.
+    static bool levers_printed;
+    if (!levers_printed) {
+        levers_printed = true;
+        printf("LEVER idle_spin_max=%u idle_spin_adaptive=%d\n",
+               idle_spin_max(), idle_spin_adaptive() ? 1 : 0);
+    }
     running_since = osv::clock::uptime::now();
     std::string name = std::string("idle") + std::to_string(id);
     idle_thread = thread::make([this] { idle(); }, thread::attr().pin(this).name(name));
