@@ -45,6 +45,7 @@
 #if CONF_fork
 #include <osv/fork_arena.hh>
 #endif
+#include <cstdio>
 
 // FIXME: Without this pragma, we get a lot of warnings that I don't know
 // how to explain or fix. For now, let's just ignore them :-(
@@ -3026,6 +3027,11 @@ static bool cow_peek_enabled()
         cached.store(v, std::memory_order_relaxed);
     }
     return v != 0;
+}
+
+void print_cow_peek_setting()
+{
+    printf("LEVER mmu_cow_peek=%d\n", cow_peek_enabled() ? 1 : 0);
 }
 
 // Walk the CURRENT address space's page table to the leaf PTE for `addr`.  If

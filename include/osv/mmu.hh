@@ -459,6 +459,11 @@ std::atomic<u64> *as_cpu_mask(address_space *as);
 // x86: the context switch calls this on CPU @cpu right before it loads the
 // page-table root of @as.
 void note_as_loaded(address_space *as, unsigned cpu);
+
+// Resolve OSV_MMU_COW_PEEK and print "LEVER mmu_cow_peek=0|1".  Call once,
+// after the command line's --env options are applied and before the
+// application runs, so the console shows the value the fault path uses.
+void print_cow_peek_setting();
 #endif // CONF_fork
 
 std::string procfs_maps();
