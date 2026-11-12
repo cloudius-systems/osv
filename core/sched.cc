@@ -2437,6 +2437,7 @@ void init_detached_threads_reaper()
         if (e && e[0])
             wake_pull_enabled = (e[0] != '0');
         printf("WAKE_PULL %s\n", wake_pull_enabled ? "ON" : "off");
+        printf("LEVER wake_pull=%d\n", wake_pull_enabled ? 1 : 0);
     }
 #endif
 }
