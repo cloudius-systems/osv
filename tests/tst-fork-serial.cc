@@ -128,6 +128,23 @@ static int reap_verify(pid_t pid, int want)
 
 int main()
 {
+    // fork() is opt-in (CONFIG_fork). When it is off it returns -1/ENOSYS;
+    // skip cleanly, as tst-fork does, so the default test suite stays green.
+    {
+        errno = 0;
+        pid_t probe = fork();
+        if (probe == -1 && errno == ENOSYS) {
+            printf("SKIP: fork() not enabled (CONFIG_fork off)\n");
+            return 0;
+        }
+        if (probe == 0) {
+            _exit(0);   // the probe fork's child: exit immediately
+        }
+        if (probe > 0) {
+            int st = 0;
+            waitpid(probe, &st, 0);   // reap the probe child
+        }
+    }
     // Unbuffered: a fork child's _exit does not flush shared stdio on OSv.
     setvbuf(stdout, nullptr, _IONBF, 0);
     printf("=== tst-fork-serial ===\n");
