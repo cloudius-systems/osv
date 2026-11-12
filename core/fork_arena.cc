@@ -17,6 +17,7 @@
 #include <osv/spinlock.h>
 #include <osv/mutex.h>
 #include <atomic>
+#include <cstdio>
 #include <cstring>
 #include <cstdlib>
 #include <osv/sched.hh>
@@ -429,6 +430,9 @@ void init()
     // THE CURE: no shared arena to pre-map.  Each AS lazily maps its own window
     // in win_region_sz increments on first carve.  This also removes the fixed
     // boot-RAM commit the shared arena required.
+    // Resolve OSV_FORK_ARENA_RECLAIM now, before the application allocates, and
+    // show the value every later allocation will use.
+    printf("LEVER fork_arena_reclaim=%d\n", reclaim_on() ? 1 : 0);
     g_ready.store(true, std::memory_order_release);
 }
 
