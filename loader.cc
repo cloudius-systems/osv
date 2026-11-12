@@ -777,6 +777,7 @@ void* do_main_thread(void *_main_args)
     // here (a kernel thread, irqs on, heap up) so the arena's own map_anon()
     // cannot recurse through an app malloc.
     fork_arena::init();
+    mmu::print_cow_peek_setting();
 #endif
 
     // run each payload in order

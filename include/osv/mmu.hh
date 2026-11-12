@@ -425,6 +425,11 @@ void add_fork_shared_module_range(uintptr_t start, uintptr_t end);
 // Tear down a child address_space (frees its private page tables + VMAs).
 // Never call on the kernel address space.
 void destroy_address_space(address_space *as);
+
+// Resolve OSV_MMU_COW_PEEK and print "LEVER mmu_cow_peek=0|1".  Call once,
+// after the command line's --env options are applied and before the
+// application runs, so the console shows the value the fault path uses.
+void print_cow_peek_setting();
 #endif // CONF_fork
 
 std::string procfs_maps();
