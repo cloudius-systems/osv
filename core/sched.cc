@@ -278,6 +278,10 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
     }
     thread* p = thread::current();
 
+    if (p->_realtime.has_slice()) {
+        p->_realtime._run_time += interval;
+    }
+
     const auto p_status = p->_detached_state->st.load();
     assert(p_status != thread::status::queued);
 
@@ -297,8 +301,18 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
         } else if (!called_from_yield) {
             auto &t = *runqueue.begin();
             if (p->_realtime._priority > 0) {
-                // Only switch to a higher-priority realtime thread
-                if (t._realtime._priority <= p->_realtime._priority) {
+                // If the threads have the same realtime priority, then only reschedule
+                // if the currently executed thread has exceeded its time slice (if any).
+                if (t._realtime._priority == p->_realtime._priority &&
+                    ((!p->_realtime.has_slice() || p->_realtime.has_remaining()))) {
+#ifdef __aarch64__
+                    return switch_data;
+#else
+                    return;
+#endif
+                // Otherwise, don't switch to a lower-priority realtime thread,
+                // no matter how much time slice was used by the running thread.
+                } else if (t._realtime._priority < p->_realtime._priority) {
 #ifdef __aarch64__
                     return switch_data;
 #else
@@ -338,15 +352,27 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
         p->_detached_state->st.store(thread::status::queued);
 
         if (!called_from_yield) {
-            // POSIX requires that if a real-time thread doesn't yield but
-            // rather is preempted by a higher-priority thread, it be
-            // reinserted into the runqueue first, not last, among its equals.
-            enqueue_first_equal(*p);
+            if (p->_realtime.has_slice() && !p->_realtime.has_remaining()) {
+                // The real-time thread has exceeded it's time slice, enqueue
+                // it at the end among its equals and reset the time slice.
+                enqueue(*p);
+                p->_realtime.reset_slice();
+            } else {
+                // POSIX requires that if a real-time thread doesn't yield but
+                // rather is preempted by a higher-priority thread, it be
+                // reinserted into the runqueue first, not last, among its equals.
+                enqueue_first_equal(*p);
+            }
         }
 
         trace_sched_preempt();
         p->stat_preemptions.incr();
     } else {
+        // p is no longer running, if it has a realtime slice reset it.
+        if (p->_realtime.has_slice()) {
+            p->_realtime.reset_slice();
+        }
+
         // p is no longer running, so we'll switch to a different thread.
         // Return the runtime p borrowed for hysteresis.
         p->_runtime.hysteresis_run_stop();
@@ -394,6 +420,9 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
         } else {
             preemption_timer.set_with_irq_disabled(now + preempt_after);
         }
+    } else if (n->_realtime.has_slice()) {
+        assert(n->_realtime.has_remaining());
+        preemption_timer.set_with_irq_disabled(now + n->_realtime.remaining());
     }
 
     if (app_thread.load(std::memory_order_relaxed) != n->_app) { // don't write into a cache line if it can be avoided
@@ -922,10 +951,6 @@ unsigned thread::realtime_priority() const
 
 void thread::set_realtime_time_slice(thread_realtime::duration time_slice)
 {
-    if (time_slice > 0) {
-        WARN_ONCE("set_realtime_time_slice() used but real-time time slices"
-                " not yet supported");
-    }
     _realtime._time_slice = time_slice;
 }
 
