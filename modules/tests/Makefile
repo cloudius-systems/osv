@@ -331,6 +331,7 @@ internal-api-tests += tst-fork-stack-frag.so
 tests += tst-fork-kheap-headerless.so
 internal-api-tests += tst-fork-kheap-headerless.so
 tests += tst-fork-vma-split.so
+tests += tst-fork-cow-mt.so
 tests += tst-fork-hugepage-exit.so
 tests += tst-fork-pipe-blocks.so
 tests += tst-fork-window-tlb.so
