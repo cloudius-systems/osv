@@ -1,0 +1,72 @@
+From: Greg Burd <greg@burd.me>
+Subject: [PATCH] arc: allocate the eviction waiter from the heap
+
+arc_wait_for_eviction() puts its waiter on the caller's stack and links it
+on the global arc_evict_waiters list; the arc_evict thread unlinks and
+signals it.  On OSv with fork enabled, a forked process's stack is private
+to that process's address space, at a virtual address its parent also
+uses, so the evict thread, running in the kernel's address space, reaches
+a different object at that address.  Allocate the waiter with kmem_alloc,
+which every address space maps identically.
+
+---
+diff --git a/module/zfs/arc.c b/module/zfs/arc.c
+index 29044e1e4..260465e30 100644
+--- a/module/zfs/arc.c
++++ b/module/zfs/arc.c
+@@ -5237,9 +5237,16 @@ arc_wait_for_eviction(uint64_t amount, boolean_t lax, boolean_t use_reserve)
+ 	case ARC_OVF_SEVERE:
+ 	default:
+ 	{
+-		arc_evict_waiter_t aw;
+-		list_link_init(&aw.aew_node);
+-		cv_init(&aw.aew_cv, NULL, CV_DEFAULT, NULL);
++		/*
++		 * The arc_evict thread unlinks and signals this waiter.  On OSv
++		 * a forked process's stack is private to its address space at
++		 * a VA its parent also uses, so a waiter on that stack is not
++		 * the object the evict thread sees.  Allocate it from the
++		 * kernel heap, which every address space maps the same way.
++		 */
++		arc_evict_waiter_t *aw = kmem_alloc(sizeof (*aw), KM_SLEEP);
++		list_link_init(&aw->aew_node);
++		cv_init(&aw->aew_cv, NULL, CV_DEFAULT, NULL);
+ 
+ 		uint64_t last_count = 0;
+ 		mutex_enter(&arc_evict_lock);
+@@ -5256,16 +5263,16 @@ arc_wait_for_eviction(uint64_t amount, boolean_t lax, boolean_t use_reserve)
+ 		 * case arc_evict_state_impl() may have deferred
+ 		 * wakeups (but still incremented arc_evict_count).
+ 		 */
+-		aw.aew_count = MAX(last_count, arc_evict_count) + amount;
++		aw->aew_count = MAX(last_count, arc_evict_count) + amount;
+ 
+-		list_insert_tail(&arc_evict_waiters, &aw);
++		list_insert_tail(&arc_evict_waiters, aw);
+ 
+ 		arc_set_need_free();
+ 
+ 		DTRACE_PROBE3(arc__wait__for__eviction,
+ 		    uint64_t, amount,
+ 		    uint64_t, arc_evict_count,
+-		    uint64_t, aw.aew_count);
++		    uint64_t, aw->aew_count);
+ 
+ 		/*
+ 		 * We will be woken up either when arc_evict_count reaches
+@@ -5274,11 +5281,12 @@ arc_wait_for_eviction(uint64_t amount, boolean_t lax, boolean_t use_reserve)
+ 		 * In case of "false" wakeup, we will still be on the list.
+ 		 */
+ 		do {
+-			cv_wait(&aw.aew_cv, &arc_evict_lock);
+-		} while (list_link_active(&aw.aew_node));
++			cv_wait(&aw->aew_cv, &arc_evict_lock);
++		} while (list_link_active(&aw->aew_node));
+ 		mutex_exit(&arc_evict_lock);
+ 
+-		cv_destroy(&aw.aew_cv);
++		cv_destroy(&aw->aew_cv);
++		kmem_free(aw, sizeof (*aw));
+ 	}
+ 	}
+ }
