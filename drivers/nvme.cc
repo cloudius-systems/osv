@@ -227,14 +227,36 @@ void driver::enable_write_cache()
     }
 }
 
+unsigned int driver::io_queues_count()
+{
+    unsigned int count = NVME_QUEUE_PER_CPU_ENABLED ? sched::cpus.size() : 1;
+    // Reserve one MSI-X vector for the admin queue; never create more IO
+    // queues than the device's MSI-X table can back (see io_queues_count()
+    // declaration). Degrades to fewer queues than CPUs, which make_request()
+    // already handles via (cpu id % _io_queues.size()).
+    unsigned int max_io = _dev.msix_get_num_entries() - 1;
+    if (count > max_io)
+        count = max_io;
+    // The interrupt vectors are shared by every device, and devices probe one
+    // after another: take at most half of what is still free (one of which is
+    // the admin vector), so the controllers and NICs probed after this one
+    // still get vectors.  An instance with several NVMe controllers and many
+    // CPUs otherwise runs out of vectors part way through a later controller.
+    unsigned int share = idt.available_vectors() / 2;
+    if (share < 2)
+        share = 2;
+    if (count > share - 1)
+        count = share - 1;
+    if (count < 1)
+        count = 1;
+    return count;
+}
+
 void driver::create_io_queues()
 {
     u16 ret;
-    if (NVME_QUEUE_PER_CPU_ENABLED) {
-        set_number_of_queues(sched::cpus.size(), &ret);
-    } else {
-        set_number_of_queues(1, &ret);
-    }
+    unsigned int nqueues = _msix_vectors.size() - 1;
+    set_number_of_queues(nqueues, &ret);
     assert(ret >= 1);
 
     nvme_controller_cap_t cap;
@@ -242,8 +264,10 @@ void driver::create_io_queues()
 
     int qsize = (NVME_IO_QUEUE_SIZE < cap.mqes) ? NVME_IO_QUEUE_SIZE : cap.mqes + 1;
     if (NVME_QUEUE_PER_CPU_ENABLED) {
-        for(sched::cpu* cpu : sched::cpus) {
-            int qid = cpu->id + 1;
+        for (sched::cpu* cpu : sched::cpus) {
+            unsigned int qid = cpu->id + 1;
+            if (qid > nqueues)
+                break;
             create_io_queue(qid, qsize, cpu);
         }
     } else {
@@ -378,7 +402,10 @@ int driver::create_io_queue(int qid, int qsize, sched::cpu* cpu, int qprio)
 
     _io_queues.push_back(std::move(queue));
 
-    register_io_interrupt(iv, qid - 1, cpu);
+    // Without its interrupt the queue's first command would wait forever.
+    if (!register_io_interrupt(iv, qid - 1, cpu)) {
+        abort("nvme%d: no interrupt vector for IO queue %d\n", _id, qid);
+    }
 
     //According to the NVMe spec, the completion queue (CQ) needs to be created before the submission queue (SQ)
     _admin_queue->submit_and_return_on_completion((nvme_sq_entry_t*)&cmd_cq);
@@ -480,12 +507,14 @@ void driver::enable_msix()
     assert(_dev.is_msix());
 
     unsigned int vectors_num = 1; //at least for admin
-    if (NVME_QUEUE_PER_CPU_ENABLED) {
-        vectors_num += sched::cpus.size();
-    } else {
-        vectors_num += 1;
-    }
+    vectors_num += io_queues_count();
 
+    // io_queues_count() already caps the IO queues to the MSI-X budget, so this
+    // request always fits the device's table. Assert it so a future change to
+    // the queue-sizing math cannot silently start asking for more vectors than
+    // the device (and OSv's IDT) can back.  create_io_queues() takes the queue
+    // count from the size of _msix_vectors: io_queues_count() changes once the
+    // admin vector is registered.
     assert(vectors_num <= _dev.msix_get_num_entries());
     _msix_vectors = std::vector<std::unique_ptr<msix_vector>>(vectors_num);
 }
