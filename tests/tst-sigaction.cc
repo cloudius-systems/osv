@@ -13,7 +13,14 @@
 static int global = 0;
 void test_handler(int sig, siginfo_t *info, void *ucontext)
 {
-    printf("test_handler called, sig=%d, global=%d\n", sig, global);
+    // A SA_SIGINFO handler is entitled to read its siginfo.  OSv's kill()
+    // delivery path used to pass nullptr here, which faulted; dereferencing
+    // info makes this test fail on that bug (not-present read of NULL) and
+    // pass once the kernel supplies a real siginfo.
+    assert(info != nullptr);
+    assert(info->si_signo == sig);
+    printf("test_handler called, sig=%d, si_signo=%d, global=%d\n",
+           sig, info->si_signo, global);
     global = 1;
 }
 

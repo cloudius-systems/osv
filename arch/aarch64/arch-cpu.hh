@@ -43,6 +43,11 @@ struct dtv {
 struct arch_thread {
     struct dtv _dtv;
     char exception_stack[CONF_threads_default_exception_stack_size] __attribute__((aligned(16)));
+    // App TLS base (tpidr_el0) if the app installed its own via arch_prctl; 0
+    // otherwise.  Lives here, NOT in the TCB, because the aarch64 variant-I TLS
+    // ABI fixes the TCB head at 16 bytes (see arch-tls.hh).  Saved in the parent
+    // and restored in the fork child (arch/aarch64/fork.cc).
+    unsigned long app_tcb = 0;
 };
 
 struct arch_fpu {

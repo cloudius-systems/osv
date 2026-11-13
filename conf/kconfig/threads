@@ -6,9 +6,35 @@ config lazy_stack
   prompt "Use lazy stack"
   def_bool $(shell,grep -q ^conf_lazy_stack=1 conf/base.mk && echo y || echo n)
 
+config fork
+  prompt "Include fork()/vfork() support (thread-backed, off by default)"
+  def_bool $(shell,[ "$conf_fork" = 1 ] && echo y || echo n)
+  help
+    Enable OSv's thread-backed fork()/vfork()/execve()/waitpid() emulation.
+    A forked child is a new OSv thread that resumes at the fork() call site in
+    its own copy-on-write address space: its writes to heap, globals and stack
+    stay private, while MAP_SHARED and SysV shared memory stay shared.  See
+    documentation/fork.md for exactly what works and what does not.  It is
+    OFF by default: with this disabled, none of the fork code is compiled in
+    and OSv behaves exactly as before (fork() returns ENOSYS).  Enable it only
+    for workloads that require fork() (e.g. fork()+exec() to spawn a helper
+    program).
+
 config lazy_stack_invariant
   prompt "Check lazy stack invariant"
   def_bool $(shell,grep -q ^conf_lazy_stack_invariant=1 conf/base.mk && echo y || echo n)
+
+config sched_load_balance_ms
+  prompt "Scheduler load-balancer interval (ms)"
+  int
+  default 10
+  help
+    How often each CPU's load balancer runs, in milliseconds.  It is the only
+    mechanism that spreads runnable threads across CPUs, so a smaller value
+    disperses a thread fan-out (e.g. a server spawning a worker per connection)
+    onto idle CPUs faster, at the cost of more frequent balancing passes.  10ms
+    is a good default; raise it to reduce balancing overhead on workloads that
+    do not fan out.
 
 config threads_default_kernel_stack_size
   prompt "Kernel thread default stack size"
@@ -38,3 +64,19 @@ config syscall_stack_size
   hex
   default $(shell,if [ $mode = "debug" ]; then echo 0x2000 ; else echo 0x800; fi)
 endif
+
+config sched_wake_pull
+  prompt "Idle-CPU pull work-stealing"
+  def_bool y
+  help
+    Let an idle CPU pull one runnable thread from the busiest CPU (via an IPI
+    that the busiest CPU services in its own context) instead of waiting for
+    the 100ms timer-driven load balancer to notice the imbalance.  This
+    disperses a single-waker fan-out -- e.g. one network RX thread waking a
+    worker per request -- across idle CPUs immediately, which the timer
+    balancer cannot do for a wake/run/block cycle that never accumulates a
+    visible runqueue.  Self-throttling: only idle CPUs ask, one outstanding
+    request per victim, so the IPI rate is bounded by the idle-CPU count, not
+    the wake rate.  Enabled at runtime by default; set OSV_WAKE_PULL=0 in the
+    environment at boot to disable it (for example to compare against the
+    timer-only balancer).

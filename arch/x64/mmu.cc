@@ -69,7 +69,7 @@ inter_processor_interrupt tlb_flush_ipi{IPI_TLB_FLUSH, [] {
         }
 }};
 
-void flush_tlb_all()
+static void do_flush_tlb_all(bool lazy)
 {
     static std::vector<sched::cpu*> ipis(sched::max_cpus);
 
@@ -83,7 +83,7 @@ void flush_tlb_all()
     std::lock_guard<mutex> guard(tlb_flush_mutex);
     tlb_flush_waiter.reset(*sched::thread::current());
     int count;
-    if (sched::thread::current()->is_app()) {
+    if (lazy && sched::thread::current()->is_app()) {
         ipis.clear();
         std::copy_if(sched::cpus.begin(), sched::cpus.end(), std::back_inserter(ipis),
                 [](sched::cpu* c) {
@@ -91,7 +91,12 @@ void flush_tlb_all()
                 return false;
             }
 
-            c->lazy_flush_tlb.store(true, std::memory_order_relaxed);
+            // seq_cst store: this store and the app_thread load below pair
+            // with reschedule's app_thread store and lazy_flush_tlb exchange.
+            // With a relaxed store the load can pass it (x86 store buffer),
+            // and both sides can read the old value: no IPI here and no lazy
+            // flush there, so that CPU runs an app thread on stale TLB entries.
+            c->lazy_flush_tlb.store(true, std::memory_order_seq_cst);
             if (!c->app_thread.load(std::memory_order_seq_cst)) {
                 return false;
             }
@@ -118,16 +123,51 @@ void flush_tlb_all()
     tlb_flush_waiter.clear();
 }
 
+void flush_tlb_all()
+{
+    do_flush_tlb_all(true);
+}
+
+void flush_tlb_all_cpus()
+{
+    do_flush_tlb_all(false);
+}
+
 static pt_element<4> page_table_root __attribute__((init_priority((int)init_prio::pt_root)));
 
+#if CONF_fork
+// Virtual pointer to the current thread's PML4 (child AS's private PML4 when
+// running in a forked child, else the kernel PML4).  Defined in core/mmu.cc.
+pt_element<4> *current_pt_root();
+
+pt_element<4> *get_root_pt(uintptr_t virt __attribute__((unused))) {
+    return current_pt_root();
+}
+
+// Virtual pointer to the kernel (AS0) PML4.
+pt_element<4> *kernel_pml4() {
+    return &page_table_root;
+}
+#else
 pt_element<4> *get_root_pt(uintptr_t virt __attribute__((unused))) {
     return &page_table_root;
 }
+#endif // CONF_fork
 
 void switch_to_runtime_page_tables()
 {
     processor::write_cr3(page_table_root.next_pt_addr());
 }
+
+#if CONF_fork
+// Physical address of the kernel (AS0) PML4 -- the CR3 value that maps OSv
+// text/data + the identity/phys ranges.  Used as the shared base for cloned
+// child address spaces and as AS0's pt_root.
+phys kernel_pt_root_phys()
+{
+    return page_table_root.next_pt_addr();
+}
+#endif // CONF_fork
 
 enum {
     page_fault_prot  = 1ul << 0,

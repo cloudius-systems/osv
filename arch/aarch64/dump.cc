@@ -15,10 +15,10 @@ void dump_registers(exception_frame* ef)
 {
     char name[1024];
 
-    osv::lookup_name_demangled(
-        reinterpret_cast<void *>(ef->elr), name, sizeof(name));
+    // Registers first, symbol last: symbolizing takes the ELF module lock and
+    // can block forever in a crash context (see print_backtrace).
     debug_ll("[registers]\n");
-    debug_ll("PC: 0x%016lx <%s>\n", ef->elr, name);
+    debug_ll("PC: 0x%016lx\n", ef->elr);
     debug_ll("X00: 0x%016lx X01: 0x%016lx X02: 0x%016lx\n", ef->regs[0], ef->regs[1], ef->regs[2]);
     debug_ll("X03: 0x%016lx X04: 0x%016lx X05: 0x%016lx\n", ef->regs[3], ef->regs[4], ef->regs[5]);
     debug_ll("X06: 0x%016lx X07: 0x%016lx X08: 0x%016lx\n", ef->regs[6], ef->regs[7], ef->regs[8]);
@@ -31,4 +31,7 @@ void dump_registers(exception_frame* ef)
     debug_ll("X27: 0x%016lx X28: 0x%016lx X29: 0x%016lx\n", ef->regs[27], ef->regs[28], ef->regs[29]);
     debug_ll("X30: 0x%016lx SP:  0x%016lx ESR: 0x%016lx\n", ef->regs[30], ef->sp, ef->esr);
     debug_ll("PSTATE: 0x%016lx\n", ef->spsr);
+    osv::lookup_name_demangled(
+        reinterpret_cast<void *>(ef->elr), name, sizeof(name));
+    debug_ll("PC: <%s>\n", name);
 }
