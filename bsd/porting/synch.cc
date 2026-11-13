@@ -16,6 +16,18 @@
 #include <bsd/porting/synch.h>
 #include <bsd/porting/sync_stub.h>
 #include <bsd/sys/sys/param.h>
+#include <osv/kernel_config_fork.h>
+#include <memory>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+// The waiter and the _evlist node are touched by wakeup() from whatever
+// address space the waker runs in.  A forked process's stack and heap arena
+// are private to its own copy-on-write address space, so both must live on
+// the kernel heap, which every address space maps identically.
+#define SYNCH_KH() fork_arena::kernel_heap_scope _synch_kh
+#else
+#define SYNCH_KH() do {} while (0)
+#endif
 
 TRACEPOINT(trace_synch_msleep, "chan=%p mtx=%p timo_hz=%d", void *, void *, int);
 TRACEPOINT(trace_synch_msleep_wait, "chan=%p timo_hz=%d", void *, int);
@@ -37,6 +49,7 @@ public:
 
     static synch_port* instance() {
         if (_instance == nullptr) {
+            SYNCH_KH();
             _instance = new synch_port();
         }
         return (_instance);
@@ -68,7 +81,12 @@ int synch_port::_msleep(void *chan, struct mtx *mtx,
     mutex_t *wait_lock = nullptr;
 
     // Init the wait
-    synch_thread wait;
+    std::unique_ptr<synch_thread> waitp;
+    {
+        SYNCH_KH();
+        waitp.reset(new synch_thread);
+    }
+    synch_thread& wait = *waitp;
     wait._thread = sched::thread::current();
     wait._awake.store(false, std::memory_order_release);
 
@@ -78,7 +96,10 @@ int synch_port::_msleep(void *chan, struct mtx *mtx,
 
     if (chan) {
         mutex_lock(&_lock);
-        _evlist.insert(std::make_pair(chan, &wait));
+        {
+            SYNCH_KH();
+            _evlist.insert(std::make_pair(chan, &wait));
+        }
         mutex_unlock(&_lock);
     }
 
