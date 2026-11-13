@@ -282,6 +282,8 @@ endif
 tests += tst-blk-inflight.so
 internal-api-tests += tst-blk-inflight.so
 internal-api-tests += tst-fork-pagecache-ptes.so
+tests += tst-fork-xcpu-free.so
+internal-api-tests += tst-fork-xcpu-free.so
 tests += tst-fork-pthread-self.so
 
 # tst-pmu calls the kernel's x64 PMU readout, which only conf_pmu=1 builds.
