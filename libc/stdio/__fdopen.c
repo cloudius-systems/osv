@@ -6,6 +6,16 @@
 #include <string.h>
 #include "libc.h"
 
+/* LEAK #2 stdio read-path fix: a FILE struct (and its inline buffer) goes on
+ * the shared stdio open-file list (ofl_head) and is dereferenced cross-AS by
+ * fflush(NULL) during a sibling backend's flush.  If it were in a fork COW
+ * arena window (mapped in one AS only), that deref faults in a reaped/other AS.
+ * Scope the FILE+buffer allocation onto the identity heap (shared verbatim in
+ * every AS) so the cross-AS deref is always coherent.  Covers fopen (-> this)
+ * too.  See core/fork_arena.cc.  No-ops in a non-fork build. */
+extern void fork_kernel_heap_push(void);
+extern void fork_kernel_heap_pop(void);
+
 FILE *__fdopen(int fd, const char *mode)
 {
 	FILE *f;
@@ -17,8 +27,11 @@ FILE *__fdopen(int fd, const char *mode)
 		return 0;
 	}
 
-	/* Allocate FILE+buffer or fail */
-	if (!(f=malloc(sizeof *f + UNGET + BUFSIZ))) return 0;
+	/* Allocate FILE+buffer or fail -- on the identity heap (see above) */
+	fork_kernel_heap_push();
+	f = malloc(sizeof *f + UNGET + BUFSIZ);
+	fork_kernel_heap_pop();
+	if (!f) return 0;
 
 	/* Zero-fill only the struct, not the buffer */
 	memset(f, 0, sizeof *f);

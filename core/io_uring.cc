@@ -33,6 +33,7 @@
 #include <osv/debug.hh>
 #include <osv/export.h>
 #include <osv/mmu.hh>
+#include <osv/kernel_config_fork.h>
 #include <osv/mempool.hh>
 #include <osv/sched.hh>
 #include <osv/clock.hh>
@@ -2274,6 +2275,10 @@ bool io_uring_file::map_page(uintptr_t offset, mmu::hw_ptep<0> ptep,
     if (!_ctx) return false;
     void *base = region_base(_ctx, (off_t)offset);
     if (!base) return false;
+#if CONF_fork
+    // The ring's frames are the ring's: fork and teardown must never free them.
+    pte.set_sw_bit(mmu::pte_shared, true);
+#endif
     return mmu::write_pte(base, ptep, pte);
 }
 
@@ -2283,6 +2288,9 @@ bool io_uring_file::map_page(uintptr_t offset, mmu::hw_ptep<1> ptep,
     if (!_ctx) return false;
     void *base = region_base(_ctx, (off_t)offset);
     if (!base) return false;
+#if CONF_fork
+    pte.set_sw_bit(mmu::pte_shared, true);
+#endif
     return mmu::write_pte(base, ptep, pte);
 }
 

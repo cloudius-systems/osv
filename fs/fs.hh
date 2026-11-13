@@ -13,6 +13,7 @@
 #include <cstdint>
 #include <boost/intrusive_ptr.hpp>
 #include <osv/file.h>
+#include <osv/fork_arena.hh>
 #include <utility>
 
 static inline void intrusive_ptr_add_ref(file *fp)
@@ -48,6 +49,18 @@ template <class file_type, typename... args>
 fileref
 make_file(args&&... a)
 {
+#if CONF_fork
+    // A struct file is shared kernel infrastructure: fork() inherits open
+    // files, so parent and child must see the SAME file object at the SAME VA,
+    // with a shared refcount/offset.  If it were allocated in the COW fork
+    // arena, the child's first write to it (an f_count bump on any file op, an
+    // offset update, or a refcount bump inside file_vma::fault while servicing
+    // a demand fault) would take a COW write fault -- fatal when nested inside
+    // the page-fault handler.  Force it onto the identity kernel heap so it is
+    // shared verbatim across every address space, exactly like thread objects
+    // and wait_records (see fork_arena.hh).
+    fork_arena::kernel_heap_scope kh;
+#endif
     file* fp = new (std::nothrow) file_type(std::forward<args>(a)...);
     if (!fp) {
         throw ENOMEM;

@@ -15,6 +15,7 @@
 #include <osv/kernel_config_memory_debug.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/fork_arena.hh>
 
 void* uma_zone::cache::alloc()
 {
@@ -53,6 +54,20 @@ void * uma_zalloc_arg(uma_zone_t zone, void *udata, int flags)
             size += UMA_ITEM_HDR_LEN;
         }
 
+#if CONF_fork
+        // UMA backs the BSD network stack: mbufs, clusters, tcpcb/socket
+        // structures, etc.  A PG backend (app thread) allocates an mbuf on the
+        // TCP SEND path to queue its query response; the mbuf is then read and
+        // dropped by the virtio-net RX/timer threads (net_channel::process_queue
+        // -> tcp_input -> sbdrop) running in AS0.  If the mbuf lived in the
+        // backend's COW fork arena, its VA is not mapped in the RX thread's AS
+        // -> the send-buffer mbuf chain looks inconsistent (sb_cc disagrees with
+        // the chain) and tcp_input's sbdrop hits panic("sbdrop").  Force every
+        // UMA slab onto the shared identity kernel heap so the network stack
+        // sees the same buffers in every address space.  (The per-CPU cache
+        // above is already identity-mapped kernel memory.)
+        fork_arena::kernel_heap_scope kh;
+#endif
         /*
          * Because alloc_page is faster than our malloc in the current implementation,
          * (if it ever change, we should revisit), it is worth it to take an alternate

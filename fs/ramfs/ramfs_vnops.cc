@@ -45,6 +45,9 @@
 #include <osv/file.h>
 #include <osv/mount.h>
 #include <osv/vnode_attr.h>
+#include <osv/fork_arena.hh>
+#include <osv/contiguous_alloc.hh>
+#include <osv/mmu-defs.hh>
 
 #include "ramfs.h"
 
@@ -72,6 +75,14 @@ ramfs_allocate_node(const char *name, int type)
 {
     struct ramfs_node *np;
 
+    // A ramfs node is the in-memory inode: shared filesystem state inherited
+    // across fork().  Keep it (and its name + segment map) on the identity
+    // kernel heap, not the COW fork arena -- otherwise the child's first write
+    // to it (e.g. the rn_atime update set_times_to_now() does on every read)
+    // takes a COW write fault nested inside the page-fault handler (fatal).
+#if CONF_fork
+    fork_arena::kernel_heap_scope kh;
+#endif
     np = (ramfs_node *) malloc(sizeof(struct ramfs_node));
     if (np == NULL)
         return NULL;
@@ -362,9 +373,37 @@ ramfs_enlarge_data_buffer(struct ramfs_node *np, size_t desired_length)
     assert(new_total_segment_size >= desired_length);
 
     auto new_segment_size = np->rn_owns_buf ? new_total_segment_size - np->rn_total_segments_size : new_total_segment_size;
+#if CONF_fork
+    // The segment data buffer is SHARED filesystem state: a fork parent
+    // (postmaster) and its children (backends) read and write the SAME ramfs
+    // file, and one backend enlarges a file another then read()s.  It MUST be
+    // reachable at the same VA in every address space.  A plain malloc() of a
+    // large (>= 2 MiB) segment falls through the fork arena to malloc_large's
+    // map_anon() path -- an APP-SLOT (VA < 0x400000000000) anonymous mapping
+    // that lives ONLY in the enlarging backend's private COW address space.  A
+    // sibling backend has no VMA/PTE there, so its read()'s uiomove memcpy
+    // faults on an unmapped app-slot source page (the PG-on-OSv bulk-load
+    // "page fault outside application" in ramfs read/write).  A kernel_heap_
+    // scope does NOT help: it only skips the fork arena; malloc_large still
+    // uses app-slot map_anon for huge non-contiguous requests.  So allocate the
+    // buffer as physically-contiguous IDENTITY-mapped memory (VA >=
+    // 0x400000000000, in the kernel PML4 slots clone_address_space() shares
+    // verbatim across every AS).  Plain free() on it dispatches by address to
+    // free_large (identity path), so the existing free(data) sites are correct
+    // from any address space.
+    char *seg_data = np->rn_owns_buf || np->rn_total_segments_size == 0
+        ? (char*) memory::alloc_phys_contiguous_aligned(new_segment_size, mmu::page_size)
+        : (char*) malloc(new_segment_size);
+    // Also keep the segment-map node (inserted below) on the identity kernel
+    // heap so every AS shares one file segment map -- same rule as the ramfs
+    // node itself (ramfs_allocate_node).
+    fork_arena::kernel_heap_scope kh;
+#else
+    char *seg_data = (char*) malloc(new_segment_size);
+#endif
     ramfs_file_segment new_segment = {
         .size = new_segment_size,
-        .data = (char*) malloc(new_segment_size)
+        .data = seg_data
     };
     if (!new_segment.data)
         return EIO;
