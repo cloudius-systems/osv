@@ -1513,8 +1513,11 @@ ena_init(void *arg)
 
 	if (!ENA_FLAG_ISSET(ENA_FLAG_DEV_UP, adapter)) {
 		ENA_LOCK_LOCK();
-		ena_up(adapter);
+		int rc = ena_up(adapter);
 		ENA_LOCK_UNLOCK();
+		if (rc != 0) {
+			printf("ena: cannot bring the device up: %d\n", rc);
+		}
 	}
 }
 
@@ -1523,15 +1526,27 @@ ena_ioctl(if_t ifp, u_long command, caddr_t data)
 {
 	int rc = 0;
 
+	struct ena_adapter *adapter = static_cast<ena_adapter*>(ifp->if_softc);
+
 	switch (command) {
 	case SIOCSIFFLAGS:
+		/*
+		 * Only ena_up() may set IFF_DRV_RUNNING: it allocates the TX/RX
+		 * rings first.  Setting the flag here without them let the first
+		 * transmit (e.g. a DHCP discover) index an unallocated TX ring.
+		 */
+		ENA_LOCK_LOCK();
 		if (ifp->if_flags & IFF_UP) {
-			ifp->if_drv_flags |= IFF_DRV_RUNNING;
-	                ena_log(adapter->pdev, INFO, "device is UP");
+			if (!ENA_FLAG_ISSET(ENA_FLAG_DEV_UP, adapter)) {
+				rc = ena_up(adapter);
+				if (rc != 0) {
+					printf("ena: cannot bring the device up: %d\n", rc);
+				}
+			}
 		} else {
-			ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
-	                ena_log(adapter->pdev, INFO, "device is DOWN");
+			ena_down(adapter);
 		}
+		ENA_LOCK_UNLOCK();
 		break;
 
 	case SIOCADDMULTI:
