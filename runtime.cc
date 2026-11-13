@@ -7,6 +7,8 @@
 
 #include <osv/drivers_config.h>
 #include <osv/sched.hh>
+#include <osv/fork.hh>
+#include <osv/kernel_config_fork.h>
 #include <osv/elf.hh>
 #include <stdlib.h>
 #include <cstring>
@@ -68,6 +70,17 @@
 #include <osv/pid.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
+
+#if !CONF_fork
+// When fork() is not compiled in (CONFIG_fork=n, the default), restore the
+// historical fork/vfork/wait4 stubs.  With fork enabled these live in
+// libc/process/fork.cc and libc/process/waitpid.cc instead.
+extern "C" OSV_LIBC_API int vfork() { WARN_STUBBED(); errno = ENOSYS; return -1; }
+extern "C" OSV_LIBC_API int fork()  { WARN_STUBBED(); errno = ENOSYS; return -1; }
+extern "C" OSV_LIBC_API pid_t wait4(pid_t, int *, int, struct rusage *) {
+    WARN_STUBBED(); errno = ECHILD; return -1;
+}
+#endif
 
 // cxxabi.h from gcc 10 and earlier used to say that __cxa_finalize returns
 // an int, while it should return void (and does so on gcc 11). To allow us
@@ -210,25 +223,14 @@ int getpagesize()
     return 4096;
 }
 
-OSV_LIBC_API
-int vfork()
-{
-    WARN_STUBBED();
-    return -1;
-}
-
-OSV_LIBC_API
-int fork()
-{
-    WARN_STUBBED();
-    return -1;
-}
-
+// OSv runs one process and has no sessions or process groups, so there is
+// nothing to detach from: the caller already leads its only session. Report
+// success, with the session id equal to the pid as on Linux. Daemons and
+// servers (PostgreSQL's postmaster, for one) treat a failing setsid() as fatal.
 OSV_LIBC_API
 pid_t setsid(void)
 {
-    WARN_STUBBED();
-    return -1;
+    return OSV_PID;
 }
 
 NO_SYS(OSV_LIBC_API int execvp(const char *, char *const []));
@@ -359,7 +361,21 @@ LFS64(posix_fallocate) __attribute__((nothrow));
 OSV_LIBC_API
 int getpid()
 {
+#if CONF_fork
+    // Under fork(), each child "process" reports its own distinct pid (the
+    // child pid fork() returned to the parent), so pid-keyed IPC works -- most
+    // importantly PostgreSQL's cross-backend latch wakeup, which compares a
+    // latch's owner_pid to getpid() to choose local (own self-pipe) vs
+    // cross-process wakeup (kill(owner_pid, SIGURG) -> the target's SIGURG
+    // handler pokes ITS self-pipe).  With one shared pid every backend sees
+    // owner_pid == MyProcPid, so a cross-backend SetLatch takes the LOCAL path
+    // and pokes the caller's own pipe -- the waiting backend is never woken and
+    // a heavyweight-lock wait wedges forever (0 tps, no failure).  The
+    // top-level app / kernel (AS0) still reports OSV_PID.
+    return osv::fork::pid_for_current();
+#else
     return OSV_PID;
+#endif
 }
 
 //    WCTDEF(alnum), WCTDEF(alpha), WCTDEF(blank), WCTDEF(cntrl),
@@ -514,6 +530,18 @@ int pclose(FILE *stream)
 
 void exit(int status)
 {
+#if CONF_fork
+    // On OSv exit() historically shuts down the whole unikernel.  But a fork()
+    // child (or an exec'd child app) is a "process" that must exit on its own
+    // without taking the machine down.  If the current thread is a registered
+    // fork child, record its status for the parent's waitpid() and end just
+    // this thread; only the top-level application's exit() shuts OSv down.
+    if (osv::fork::exit_current_child(status)) {
+        // recorded + notified parent; terminate only this child thread
+        sched::thread::exit(); // noreturn: ends only this child thread
+        // not reached
+    }
+#endif
     debugf("program exited with status %ld\n", status);
     osv::shutdown();
 }
@@ -736,14 +764,6 @@ char *tmpnam_r(char *s)
 
 OSV_LIBC_API
 pid_t wait3(int *status, int options, struct rusage *usage)
-{
-    WARN_STUBBED();
-    errno = ECHILD;
-    return -1;
-}
-
-OSV_LIBC_API
-pid_t wait4(pid_t pid, int *status, int options, struct rusage *usage)
 {
     WARN_STUBBED();
     errno = ECHILD;
