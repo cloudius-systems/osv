@@ -30,6 +30,9 @@
 #include <api/time.h>
 #include <osv/rwlock.h>
 #include <osv/export.h>
+#include <osv/fork_arena.hh>
+#include <osv/kernel_config_fork.h>
+#include <osv/elf.hh>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
 #include <osv/kernel_config_threads_default_pthread_stack_size.h>
@@ -276,9 +279,72 @@ int pthread_atfork(void (*prepare)(void), void (*parent)(void),
     return 0;
 }
 
+// atfork handlers registered via pthread_atfork()/__register_atfork().  glibc
+// and musl register these internally (e.g. to reset the malloc arena lock in
+// the child), so fork() must actually run them.  Stored here and invoked by
+// osv::fork::run_atfork_* from libc/process/fork.cc.
+namespace {
+struct atfork_entry {
+    void (*prepare)(void);
+    void (*parent)(void);
+    void (*child)(void);
+};
+mutex atfork_lock;
+std::vector<atfork_entry> atfork_handlers;
+}
+
+// The atfork handler list is populated by register_atfork() on an app thread
+// (musl registers PostgreSQL's handlers), so without this its std::vector
+// backing store lands in the COW fork arena and a forked child reads a
+// DIVERGENT copy -> __osv_run_atfork_prepare() calls a garbage handler pointer
+// -> SIGSEGV.  Force the vector's (re)allocations onto the identity kernel heap
+// so every address space shares ONE coherent list -- same rule as the epoll /
+// DSM-registry / application_runtime fixes.
+#if CONF_fork
+#define ATFORK_KH() fork_arena::kernel_heap_scope _atfork_kh
+#else
+#define ATFORK_KH() do {} while (0)
+#endif
+
+// A handler is safe to call only if its code still belongs to a loaded ELF
+// object.  Apps run via osv::run() (zpool.so/zfs.so at boot) register atfork
+// handlers and then exit, leaving dead entries in this process-global list.
+static inline bool atfork_handler_live(void (*fn)(void))
+{
+    if (!fn) return false;
+    return elf::get_program()->object_containing_addr(
+               reinterpret_cast<const void*>(fn)) != nullptr;
+}
+
+extern "C" void __osv_run_atfork_prepare()
+{
+    // POSIX: prepare handlers run in LIFO (reverse registration) order.
+    SCOPE_LOCK(atfork_lock);
+    for (auto it = atfork_handlers.rbegin(); it != atfork_handlers.rend(); ++it) {
+        if (atfork_handler_live(it->prepare)) it->prepare();
+    }
+}
+extern "C" void __osv_run_atfork_parent()
+{
+    SCOPE_LOCK(atfork_lock);
+    for (auto &h : atfork_handlers) {
+        if (atfork_handler_live(h.parent)) h.parent();
+    }
+}
+extern "C" void __osv_run_atfork_child()
+{
+    SCOPE_LOCK(atfork_lock);
+    for (auto &h : atfork_handlers) {
+        if (atfork_handler_live(h.child)) h.child();
+    }
+}
+
 extern "C" int register_atfork(void (*prepare)(void), void (*parent)(void),
                                 void (*child)(void), void *__dso_handle)
 {
+    SCOPE_LOCK(atfork_lock);
+    ATFORK_KH();
+    atfork_handlers.push_back({prepare, parent, child});
     return 0;
 }
 

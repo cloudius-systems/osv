@@ -8,6 +8,10 @@
 #include <osv/debug.hh>
 #include <signal.h>
 #include "console-multiplexer.hh"
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 
 // Set with set_fp(), each console is only open on one "file" object (which
 // might, in turn, be referred by multiple file descriptors).
@@ -75,6 +79,23 @@ void console_multiplexer::write_ll(const char *str, size_t len)
 
 void console_multiplexer::write(const char *str, size_t len)
 {
+#if CONF_fork
+    // The console/tsm screen (this->_ldisc, the tsm_screen `con` and its
+    // lines[]/cells[]) is SHARED kernel infrastructure: it lives in the
+    // identity mempool and is read/written from every address space (each
+    // forked process writes its own stderr through it).  tsm (re)allocates
+    // screen lines lazily DURING a write (scroll/scrollback/resize).  Without
+    // this guard, a write issued by a fork-child APP thread routes those
+    // mallocs to the COW fork arena, so the shared `con->lines[y]` ends up
+    // pointing at arena memory that is COW-private to that child -- and the
+    // NEXT console write from another address space dereferences a line pointer
+    // that resolves to a foreign/unmapped page and faults (NULL con->lines[y]).
+    // Force every allocation done under the console lock onto the identity
+    // kernel heap so the tsm state is coherent across all address spaces --
+    // the same discipline used for struct file, thread objects and signal
+    // waiters (see fork_arena.hh).  Inert (no-op) on the non-fork path.
+    fork_arena::kernel_heap_scope kh;
+#endif
     if (!_started) {
         WITH_LOCK(_early_lock) {
             write_ll(str, len);
