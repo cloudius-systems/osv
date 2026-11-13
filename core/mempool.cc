@@ -1094,12 +1094,13 @@ static void* malloc_large(size_t size, size_t alignment, bool block = true, bool
     // path below returns memory from the linear map (phys_mem 0x4000.., a shared
     // kernel PML4 slot mapped verbatim in every AS, coherent regardless of
     // physical contiguity), so force that path and never fall back to map_anon.
-    // We keep contiguous==false so a fragmented heap still satisfies the request
-    // out of the linear map (the returned VA is coherent either way); we only
-    // suppress the app-slot map_anon fallback.
     bool force_identity = fork_arena::force_kernel_heap;
     if (force_identity) {
         block = true;   // wait for linear-map memory rather than map_anon
+        // A non-contiguous alloc() skips the free list below the request's
+        // order, which can hold every range that fits; with no map_anon
+        // fallback the caller would then wait forever with memory free.
+        contiguous = true;
     }
 #endif
 
