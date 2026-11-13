@@ -53,6 +53,8 @@ public:
 
     unsigned register_handler(std::function<void ()> handler);
     void unregister_handler(unsigned vector);
+    // Number of MSI vectors register_handler() can still hand out.
+    unsigned available_vectors();
 
     /* invoke_interrupt returns false if unhandled */
     bool invoke_interrupt(unsigned int id);

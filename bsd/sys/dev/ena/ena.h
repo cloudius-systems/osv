@@ -440,6 +440,8 @@ struct ena_adapter {
 
 	/* MSI-X */
 	int msix_vecs;
+	/* IO vectors reserved at attach and not yet claimed by ena_up() */
+	int reserved_io_vecs;
 
 	uint32_t max_mtu;
 

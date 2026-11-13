@@ -57,6 +57,14 @@ public:
     explicit interrupt_manager(pci::function* dev);
     ~interrupt_manager();
 
+    // Interrupt vectors a device can still claim: those free now, minus
+    // those reserved for devices that claim theirs later (reserve_vectors())
+    // and a few for interrupts registered after driver probe (the console).
+    static unsigned available_vectors();
+    // Promise n vectors to a device that will claim them later; a negative
+    // n releases a promise.
+    static void reserve_vectors(int n);
+
     ////////////////////
     // Easy Interface //
     ////////////////////

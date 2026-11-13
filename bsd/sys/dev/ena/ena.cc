@@ -1159,6 +1159,10 @@ ena_enable_msix(struct ena_adapter *adapter)
 
 	adapter->msix_vecs = msix_vecs;
 	ENA_FLAG_SET_ATOMIC(ENA_FLAG_MSIX_ENABLED, adapter);
+	/* The IO vectors are claimed only at ifup (ena_request_io_irq()):
+	 * reserve them now so devices probed after this one leave them free. */
+	adapter->reserved_io_vecs = msix_vecs - ENA_ADMIN_MSIX_VEC;
+	interrupt_manager::reserve_vectors(adapter->reserved_io_vecs);
 
 	return (0);
 }
@@ -1230,6 +1234,8 @@ ena_request_io_irq(struct ena_adapter *adapter)
 
 	interrupt_manager _msi(adapter->pdev);
 
+	interrupt_manager::reserve_vectors(-adapter->reserved_io_vecs);
+	adapter->reserved_io_vecs = 0;
 	auto vec_num = adapter->msix_vecs - 1;
 	std::vector<msix_vector*> assigned = _msi.request_vectors(vec_num);
 	if (assigned.size() != vec_num) {
@@ -1313,6 +1319,8 @@ ena_disable_msix(struct ena_adapter *adapter)
 		adapter->pdev->msix_disable();
 	}
 
+	interrupt_manager::reserve_vectors(-adapter->reserved_io_vecs);
+	adapter->reserved_io_vecs = 0;
 	adapter->msix_vecs = 0;
 }
 
@@ -1878,6 +1886,11 @@ ena_calc_max_io_queue_num(pci::device *pdev, struct ena_com_dev *ena_dev,
 	max_num_io_queues = min_t(uint32_t, max_num_io_queues, io_tx_cq_num);
 	/* 1 IRQ for mgmnt and 1 IRQ for each TX/RX pair */
 	max_num_io_queues = min_t(uint32_t, max_num_io_queues, pdev->msix_get_num_entries() - 1);
+	/* The interrupt vectors are shared with every other device: use only
+	 * what is still free (admin + IO). */
+	unsigned free_vectors = interrupt_manager::available_vectors();
+	if (free_vectors > 1)
+		max_num_io_queues = min_t(uint32_t, max_num_io_queues, free_vectors - 1);
 
 	return (max_num_io_queues);
 }

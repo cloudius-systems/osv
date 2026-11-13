@@ -9,6 +9,7 @@
 #include <stddef.h>
 #include <osv/msi.hh>
 #include <osv/trace.hh>
+#include <atomic>
 
 TRACEPOINT(trace_msix_interrupt, "vector=0x%02x", unsigned);
 TRACEPOINT(trace_msix_migrate, "vector=0x%02x cpu_id=0x%x",
@@ -16,6 +17,23 @@ TRACEPOINT(trace_msix_migrate, "vector=0x%02x cpu_id=0x%x",
 
 using namespace pci;
 using namespace processor;
+
+// Vectors promised by reserve_vectors(), and the ones the serial console
+// (IRQ4) and keyboard (IRQ1) register after the drivers have probed.
+static std::atomic<int> reserved_vectors{0};
+static constexpr unsigned late_vectors = 2;
+
+unsigned interrupt_manager::available_vectors()
+{
+    unsigned held = reserved_vectors.load() + late_vectors;
+    unsigned free = idt.available_vectors();
+    return free > held ? free - held : 0;
+}
+
+void interrupt_manager::reserve_vectors(int n)
+{
+    reserved_vectors += n;
+}
 
 msix_vector::msix_vector(pci::function* dev)
     : _dev(dev)
