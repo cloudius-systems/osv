@@ -27,6 +27,9 @@
 
 #include <osv/sched.hh>
 #include <osv/numa.hh>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 #include <osv/barrier.hh>
 #include "arch.hh"
 #include "arch-setup.hh"
@@ -206,6 +209,9 @@ static void usage()
         "  --rootfs=arg          root filesystem to use (zfs, rofs, ramfs or virtiofs)\n"
         "  --assign-net          assign virtio network to the application\n"
         "  --maxnic=arg          maximum NIC number\n"
+        "  --fork-arena-size-mb=arg  per-AS fork COW arena window in MiB (default 2048,\n"
+        "                        floor 512, cap 2048; private VA per address space, NOT\n"
+        "                        committed boot RAM; RAM tracks live heap, freed on reap)\n"
         "  --norandom            don't initialize any random device\n"
         "  --noshutdown          continue running after main() returns\n"
         "  --power-off-on-abort  use poweroff instead of halt if it's aborted\n"
@@ -280,6 +286,22 @@ static void parse_options(int loader_argc, char** loader_argv)
         opt_maxnic = true;
         maxnic = options::extract_option_int_value(options_values, "maxnic", handle_parse_error);
     }
+
+#if CONF_fork
+    if (options::option_value_exists(options_values, "fork-arena-size-mb")) {
+        // Set the PER-AS fork COW arena WINDOW size.  SEMANTIC CHANGE from the
+        // shared-arena era: this sizes each address space's PRIVATE VA window in
+        // the per-AS-window arena (no shared, eagerly-committed boot RAM); RAM
+        // still tracks live heap and is freed wholesale on reap.  Read here
+        // (before fork_arena::init() runs) because init() precedes the app
+        // environment, so an env var would be invisible to it.
+        auto mb = options::extract_option_int_value(options_values,
+                      "fork-arena-size-mb", handle_parse_error);
+        if (mb > 0) {
+            fork_arena::set_size_mb((unsigned long)mb);
+        }
+    }
+#endif
 
 #if CONF_tracepoints
     if (extract_option_flag(options_values, "trace-backtrace")) {
@@ -747,6 +769,15 @@ void* do_main_thread(void *_main_args)
         commands.insert(commands.begin(),
                  init_commands.begin(), init_commands.end());
     }
+
+#if CONF_fork
+    // Reserve the fork heap arena before launching the application, so app
+    // allocations route to an app-slot COW-able region (see core/fork_arena.cc)
+    // and a forked child's private address space isolates its whole heap.  Done
+    // here (a kernel thread, irqs on, heap up) so the arena's own map_anon()
+    // cannot recurse through an app malloc.
+    fork_arena::init();
+#endif
 
     // run each payload in order
     // Our parse_command_line() leaves at the end of each command a delimiter,

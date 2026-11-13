@@ -29,6 +29,10 @@
 #include <osv/export.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 #include <string.h>
 
 typedef float runtime_t;
@@ -68,6 +72,10 @@ namespace elf {
     struct tls_data;
 }
 
+namespace mmu {
+    struct address_space;
+}
+
 namespace osv {
 
 class application;
@@ -82,6 +90,12 @@ namespace sched {
 
 class thread;
 class thread_handle;
+
+// Allocate raw storage for a thread object.  Forces the identity-mapped kernel
+// heap (never the fork arena) so the object's VA is coherent across every
+// address space -- the scheduler dereferences thread objects cross-AS.  Freed
+// with the ordinary free() (address-range dispatch handles the kernel heap).
+void *alloc_thread_storage(size_t align, size_t size);
 struct cpu;
 class timer;
 class timer_list;
@@ -509,7 +523,26 @@ public:
         // Note that avoiding new() is is not *really* important because
         // sizeof(thread) very large (over 20 KB) and would get a 4096-byte
         // alignment anyway, even if we allocated it with normal new.
-        void *p = aligned_alloc(alignof(thread), sizeof(thread));
+        //
+        // The thread object MUST live in the identity-mapped kernel heap, not
+        // the fork arena: the scheduler dereferences it from every address
+        // space (a fork child's AS and the parent's AS0), so its VA must resolve
+        // to the same physical page everywhere.  An arena (COW, app-slot)
+        // allocation would give each address space a private copy -- corrupting
+        // cross-AS scheduling.  alloc_thread_storage() forces the kernel heap.
+        //
+        // The SAME is true of every allocation the thread CONSTRUCTOR makes:
+        // _detached_state (scheduler status/cpu), _wakeup_link's
+        // lockless_queue_helper (touched by wake_impl with preemption off), the
+        // _tls vector, etc.  All are dereferenced by the scheduler cross-AS
+        // with preemption disabled, where a COW page fault is illegal.  So run
+        // the whole construction under a kernel_heap_scope, not just the object
+        // storage -- one guard covers alloc_thread_storage() and every
+        // sub-allocation the constructor performs.
+#if CONF_fork
+        fork_arena::kernel_heap_scope kh;
+#endif
+        void *p = alloc_thread_storage(alignof(thread), sizeof(thread));
         if (!p) {
             return nullptr;
         }
@@ -876,8 +909,19 @@ private:
     std::vector<char*> _tls;
     bool _app;
     std::shared_ptr<osv::application_runtime> _app_runtime;
+#if CONF_fork
+    // Current address space (Stage 2 fork COW).  The arch context switch loads
+    // this AS's page-table root (CR3) when it differs from the outgoing
+    // thread's.  Defaults to the kernel address space (AS0); a forked child's
+    // thread is moved into its private child address space.
+    mmu::address_space *_current_as;
+#endif
 public:
     void destroy();
+#if CONF_fork
+    mmu::address_space *address_space() const { return _current_as; }
+    void set_address_space(mmu::address_space *as) { _current_as = as; }
+#endif
 #ifdef __x86_64__
     unsigned long get_app_tcb() { return _tcb->app_tcb; }
     void set_app_tcb(unsigned long tcb) { _tcb->app_tcb = tcb; }
@@ -902,6 +946,14 @@ private:
 public:
     std::atomic<thread *> _joiner;
     bi::set_member_hook<> _runqueue_link;
+    // Intrusive link for the detached-thread reaper's zombie list.  Intrusive
+    // (no node allocation) is REQUIRED: add_zombie() runs from thread
+    // termination paths that may have preemption disabled, and -- with the fork
+    // arena -- from an application thread whose malloc would route a std::list
+    // node into the child's COW-private arena page (incoherent to the reaper in
+    // AS0).  A hook inside the thread object (identity kernel heap) sidesteps
+    // both: no allocation, coherent cross-address-space.
+    bi::list_member_hook<> _zombie_link;
     // see cpu class
     lockless_queue_link<thread> _wakeup_link;
     static unsigned long _s_idgen;

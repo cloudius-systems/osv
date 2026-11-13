@@ -149,9 +149,15 @@ ifneq ($(MAKECMDGOALS),menuconfig)
 # Include the kernel configuration file if present, otherwise generate a default one
 ifeq (,$(wildcard $(out)/gen/config/kernel_conf.mk))
     $(info Generating default kernel configuration file)
-    $(shell make -f conf/Makefile -j1 config 1>/dev/null)
+    $(shell make -f conf/Makefile -j1 config conf_fork=$(conf_fork) 1>/dev/null)
 endif
 include $(out)/gen/config/kernel_conf.mk
+endif
+# kconfig offers fork only on x86_64 (conf/kconfig/threads), but a conf_fork=1
+# given on the command line overrides kernel_conf.mk and would still pull the
+# fork objects into the object lists below.
+ifneq ($(arch),x64)
+override conf_fork := 0
 endif
 #
 # This parameter can be passed in to the build command to specify name of
@@ -961,6 +967,17 @@ objects += arch/$(arch)/firmware.o
 objects += arch/$(arch)/hypervisor.o
 objects += arch/$(arch)/interrupt.o
 objects += arch/$(arch)/clone.o
+# core/fork_arena.o is linked in every build: with conf_fork=0 it only
+# provides the no-op fork_kernel_heap_push/pop that libc and BSD code call.
+objects += core/fork_arena.o
+ifeq ($(conf_fork),1)
+objects += arch/$(arch)/fork.o
+# Per-file flags for the fork-arena C2 validation build.  EMPTY in the
+# shipped build (no probe, no shared-bump control).  Set fork_arena_cflags
+# on the make command line to compile the diagnostic probe in
+# (-DFORK_C2_PROBE_DEFAULT=1) or the negative control (-DFORK_SHARED_BUMP=1).
+$(out)/core/fork_arena.o: CXXFLAGS += $(fork_arena_cflags)
+endif
 ifeq ($(conf_drivers_pci),1)
 objects += arch/$(arch)/pci.o
 objects += arch/$(arch)/msi.o
@@ -1565,11 +1582,20 @@ musl += prng/srand48.o
 libc += random.o
 
 libc += process/execve.o
+ifeq ($(conf_fork),1)
+libc += process/fork.o
+endif
 musl += process/execle.o
 musl += process/execv.o
 musl += process/execl.o
 libc += process/waitpid.o
+# When fork() is enabled, our waitpid.cc provides wait()/waitpid()/wait4()
+# backed by the fork() child registry, superseding musl's process/wait.o.
+# When fork() is disabled, waitpid.cc provides only the ECHILD waitpid() stub,
+# so keep musl's wait.o for wait()/wait4().
+ifneq ($(conf_fork),1)
 musl += process/wait.o
+endif
 
 musl += setjmp/$(musl_arch)/setjmp.o
 musl += setjmp/$(musl_arch)/longjmp.o

@@ -189,6 +189,15 @@ SRC=`pwd`
 arch=`expr $OUT : '.*\.\(.*\)'`
 mode=`expr $OUT : '.*/\(.*\)\..*'`
 
+# The ZFS image builder boots this build's kernel. With conf_fork=1 that
+# kernel populates its 512 MiB fork arena at boot, so a 512M builder VM
+# runs out of memory; give it 1G then. zfs_builder_mem overrides both.
+if grep -qs '^conf_fork=1' "$OUT"/gen/config/kernel_conf.mk; then
+	export zfs_builder_mem=${zfs_builder_mem:-1G}
+else
+	export zfs_builder_mem=${zfs_builder_mem:-512}
+fi
+
 # Set "modules" according to the image= or modules= parameters, or some
 # defaults (with same rules as in our old makefile)
 case $arch in
@@ -383,7 +392,7 @@ create_zfs_filesystem() {
 			console='--console=serial'
 			zfs_builder_name='zfs_builder-stripped.elf'
 		fi
-		"$SRC"/scripts/run.py -k --kernel-path $zfs_builder_name --arch=$qemu_arch --vnc none -m 512 -c1 -i ${image_path} --block-device-cache writeback \
+		"$SRC"/scripts/run.py -k --kernel-path $zfs_builder_name --arch=$qemu_arch --vnc none -m $zfs_builder_mem -c1 -i ${image_path} --block-device-cache writeback \
 			-s -e "${console} --norandom --nomount --noinit --preload-zfs-library /tools/mkfs.so ${device_path}; /zfs.so set compression=off osv"
 	fi
 }

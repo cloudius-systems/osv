@@ -6,6 +6,7 @@
  */
 
 #include <osv/sched.hh>
+#include <osv/mmu.hh>
 #include <list>
 #include <osv/mutex.h>
 #include <osv/rwlock.h>
@@ -24,6 +25,10 @@
 #include <unordered_map>
 #include <osv/wait_record.hh>
 #include <osv/preempt-lock.hh>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 #include <osv/app.hh>
 #include <osv/symbols.hh>
 #include <osv/stubbing.hh>
@@ -133,6 +138,19 @@ std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority
 
 namespace sched {
 
+void *alloc_thread_storage(size_t align, size_t size)
+{
+#if CONF_fork
+    // Force the identity kernel heap: a thread object is dereferenced by the
+    // scheduler from every address space, so it must not land in the COW fork
+    // arena (which would give each address space a private copy).
+    fork_arena::kernel_heap_scope kh;
+    return aligned_alloc(align, size);
+#else
+    return aligned_alloc(align, size);
+#endif
+}
+
 class thread::reaper {
 public:
     reaper();
@@ -140,7 +158,11 @@ public:
     void add_zombie(thread* z);
 private:
     mutex _mtx;
-    std::list<thread*> _zombies;
+    // Intrusive zombie list (no node allocation on add_zombie -- see the
+    // _zombie_link comment in sched.hh).
+    bi::list<thread,
+             bi::member_hook<thread, bi::list_member_hook<>, &thread::_zombie_link>,
+             bi::constant_time_size<false>> _zombies;
     thread_unique_ptr _thread;
 };
 
@@ -397,7 +419,10 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
     }
 
     if (app_thread.load(std::memory_order_relaxed) != n->_app) { // don't write into a cache line if it can be avoided
-        app_thread.store(n->_app, std::memory_order_relaxed);
+        // seq_cst: pairs with mmu::flush_tlb_all()'s lazy_flush_tlb store
+        // and app_thread load, so one side always sees the other (the
+        // exchange below alone orders this on x86, not in the C++ model).
+        app_thread.store(n->_app, std::memory_order_seq_cst);
     }
     if (lazy_flush_tlb.exchange(false, std::memory_order_seq_cst)) {
         mmu::flush_tlb_local();
@@ -1087,6 +1112,12 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
     , _joiner(nullptr)
 {
     trace_thread_create(this);
+#if CONF_fork
+    // Inherit the creating thread's address space (AS0 for the very first
+    // threads).  fork() reassigns the child thread to its private child AS.
+    _current_as = sched::s_current ? sched::s_current->_current_as
+                                   : mmu::kernel_address_space();
+#endif
 
     if (!main && sched::s_current) {
         auto app = application::get_current().get();
@@ -1859,7 +1890,7 @@ void thread::reaper::reap()
         WITH_LOCK(_mtx) {
             wait_until(_mtx, [=] { return !_zombies.empty(); });
             while (!_zombies.empty()) {
-                auto z = _zombies.front();
+                auto z = &_zombies.front();
                 _zombies.pop_front();
                 z->join();
                 z->_cleanup();
@@ -1872,7 +1903,11 @@ void thread::reaper::add_zombie(thread* z)
 {
     assert(z->_attr._detached);
     WITH_LOCK(_mtx) {
-        _zombies.push_back(z);
+        // Intrusive push -- no allocation, so this is safe from a
+        // preemption-disabled thread-termination context and coherent across
+        // address spaces even when the terminating thread is a fork child
+        // running in its COW address space (see _zombie_link in sched.hh).
+        _zombies.push_back(*z);
         _thread->wake();
     }
 }
