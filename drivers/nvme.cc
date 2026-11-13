@@ -237,6 +237,16 @@ unsigned int driver::io_queues_count()
     unsigned int max_io = _dev.msix_get_num_entries() - 1;
     if (count > max_io)
         count = max_io;
+    // The interrupt vectors are shared by every device, and devices probe one
+    // after another: take at most half of what is still free (one of which is
+    // the admin vector), so the controllers and NICs probed after this one
+    // still get vectors.  An instance with several NVMe controllers and many
+    // CPUs otherwise runs out of vectors part way through a later controller.
+    unsigned int share = idt.available_vectors() / 2;
+    if (share < 2)
+        share = 2;
+    if (count > share - 1)
+        count = share - 1;
     if (count < 1)
         count = 1;
     return count;
@@ -245,7 +255,7 @@ unsigned int driver::io_queues_count()
 void driver::create_io_queues()
 {
     u16 ret;
-    unsigned int nqueues = io_queues_count();
+    unsigned int nqueues = _msix_vectors.size() - 1;
     set_number_of_queues(nqueues, &ret);
     assert(ret >= 1);
 
@@ -392,7 +402,10 @@ int driver::create_io_queue(int qid, int qsize, sched::cpu* cpu, int qprio)
 
     _io_queues.push_back(std::move(queue));
 
-    register_io_interrupt(iv, qid - 1, cpu);
+    // Without its interrupt the queue's first command would wait forever.
+    if (!register_io_interrupt(iv, qid - 1, cpu)) {
+        abort("nvme%d: no interrupt vector for IO queue %d\n", _id, qid);
+    }
 
     //According to the NVMe spec, the completion queue (CQ) needs to be created before the submission queue (SQ)
     _admin_queue->submit_and_return_on_completion((nvme_sq_entry_t*)&cmd_cq);
@@ -499,7 +512,9 @@ void driver::enable_msix()
     // io_queues_count() already caps the IO queues to the MSI-X budget, so this
     // request always fits the device's table. Assert it so a future change to
     // the queue-sizing math cannot silently start asking for more vectors than
-    // the device (and OSv's IDT) can back.
+    // the device (and OSv's IDT) can back.  create_io_queues() takes the queue
+    // count from the size of _msix_vectors: io_queues_count() changes once the
+    // admin vector is registered.
     assert(vectors_num <= _dev.msix_get_num_entries());
     _msix_vectors = std::vector<std::unique_ptr<msix_vector>>(vectors_num);
 }

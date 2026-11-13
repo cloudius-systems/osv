@@ -80,6 +80,8 @@ public:
      */
     unsigned register_handler(std::function<void ()> post_eoi);
     void unregister_handler(unsigned vector);
+    // Number of vectors register_interrupt_handler() can still hand out.
+    unsigned available_vectors();
 
 private:
     enum {

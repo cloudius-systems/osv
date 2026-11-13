@@ -1846,6 +1846,11 @@ ena_calc_max_io_queue_num(pci::device *pdev, struct ena_com_dev *ena_dev,
 	max_num_io_queues = min_t(uint32_t, max_num_io_queues, io_tx_cq_num);
 	/* 1 IRQ for mgmnt and 1 IRQ for each TX/RX pair */
 	max_num_io_queues = min_t(uint32_t, max_num_io_queues, pdev->msix_get_num_entries() - 1);
+	/* The interrupt vectors are shared with every other device (e.g. NVMe
+	 * controllers probed before this one): use only what is still free. */
+	unsigned free_vectors = idt.available_vectors();
+	if (free_vectors > 1)
+		max_num_io_queues = min_t(uint32_t, max_num_io_queues, free_vectors - 1);
 
 	return (max_num_io_queues);
 }
