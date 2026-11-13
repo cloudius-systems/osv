@@ -235,7 +235,17 @@ tests += tst-rlimit.so
 tests += tst-close-range.so
 tests += tst-numa.so
 tests += tst-random-flush.so
+tests += tst-fork.so
+tests += tst-execve.so
+tests += payload-exit7.so
+tests += tst-fork-cow.so
+tests += tst-fork-deep.so
+tests += tst-fork-file-mmap.so
+tests += tst-fork-pagecache-ptes.so
 internal-api-tests += tst-random-flush.so
+internal-api-tests += tst-fork-pagecache-ptes.so
+tests += tst-fork-xcpu-free.so
+internal-api-tests += tst-fork-xcpu-free.so
 
 # Tests with special compilation parameters needed...
 $(out)/tests/tst-mmap.so: COMMON += -Wl,-z,now
