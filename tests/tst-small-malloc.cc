@@ -8,6 +8,10 @@
 #include <stdlib.h>
 #include <cassert>
 #include <osv/trace-count.hh>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 
 // Since gcc 15, there is a new optimization ("builtin-malloc") where the
 // compiler can see that the return value of malloc() isn't saved, and
@@ -31,6 +35,17 @@ void test_aligned_alloc(size_t alignment, size_t size) {
 }
 
 int main() {
+    // With CONF_fork, application malloc() is served by the fork arena, not
+    // by malloc_pools, so the memory_malloc_mempool/page counts below do not
+    // apply. The alignment checks in the loop still run.
+    bool arena_routed = false;
+#if CONF_fork
+    void *probe = malloc(8);
+    dont_optimize = probe;
+    arena_routed = fork_arena::contains(probe);
+    free(probe);
+#endif
+
     tracepoint_counter *memory_malloc_mempool_counter = nullptr,
             *memory_malloc_page_counter = nullptr;
 
@@ -72,6 +87,12 @@ int main() {
         // Expects full page allocations
         test_malloc(1025);
         test_aligned_alloc(2048, 1027);
+    }
+
+    if (arena_routed) {
+        printf("SKIP: app malloc is served by the fork arena (CONF_fork), "
+               "mempool/page tracepoint counts do not apply\n");
+        return 0;
     }
 
     // Verify correct number of allocations above were handled by malloc_pool

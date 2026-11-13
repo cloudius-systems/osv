@@ -184,7 +184,15 @@ void poll_install(struct pollreq* p)
         auto fp = entry->fp.get();
         assert(fp);
 
-        /* Allocate a link */
+        /* Allocate a link.  A poll_link is added to fp->f_poll_list by an
+         * application backend (its address space) but the list is walked and
+         * woken by the virtio-net RX path from a different thread/AS; its
+         * boost intrusive hook must therefore be coherent in every AS, so keep
+         * it on the shared identity kernel heap, not the per-AS COW fork arena
+         * (same rule as the net_channel poller/epoll nodes and net_req). */
+#if CONF_fork
+        fork_arena::kernel_heap_scope _poll_kh;
+#endif
         std::unique_ptr<poll_link> pl{new poll_link};
 
         /* Save a reference to request on current file structure.
@@ -243,7 +251,15 @@ void poll_uninstall(struct pollreq* p)
 int do_poll(std::vector<poll_file>& pfd, file::timeout_t _timeout)
 {
     int nr_events;
+#if CONF_fork
+    // pollreq is referenced by poll_link::_req on the socket's
+    // poll list and dereferenced by poll_wake() in AS0 (netisr RX).  poll_link
+    // is already pinned to the kernel heap; pin pollreq the same way.
+    unique_ptr<pollreq> p;
+    { fork_arena::kernel_heap_scope _pr_kh; p.reset(new pollreq); }
+#else
     unique_ptr<pollreq> p{new pollreq};
+#endif
     sched::timer tmr(*sched::thread::current());
 
     p->_nfds = pfd.size();

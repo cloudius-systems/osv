@@ -1,0 +1,125 @@
+/*
+ * Copyright (C) 2026 Greg Burd
+ *
+ * This work is open source software, licensed under the terms of the
+ * BSD license as described in the LICENSE file in the top-level directory.
+ */
+
+#ifndef OSV_FORK_HH
+#define OSV_FORK_HH
+
+#include <sys/types.h>
+#include <osv/app.hh>
+
+namespace mmu { struct address_space; }
+
+// fork() emulation on OSv.
+//
+// See documentation/fork.md for what works and what does not.
+//
+//  * fork() runs the child as an OSv thread in its own address space: the
+//    parent's private writable mappings (heap, globals, its own stack) are
+//    copy-on-write in both, MAP_SHARED and SysV shm stay shared, and the
+//    child inherits the parent's fds. Both return from fork() with their own
+//    local variables and return address (the classic "fork returns twice").
+//  * fork()+execve() works: the child execve()s a new program (which OSv runs
+//    as a fresh application/ELF-namespace) and the parent waitpid()s for it.
+//  * waitpid()/wait4() reap the child's exit status; SIGCHLD is raised to the
+//    parent on child exit.
+//
+// The kernel and its heap are shared by every address space, so a child is
+// isolated from its parent's application memory, not from the kernel.
+
+namespace osv {
+namespace fork {
+
+// Called by execve() to record the application it launched, so that when this
+// (child) thread later exits, waitpid() in the parent can report the exec'd
+// program's exit status under the child's pid.
+void adopt_execed_app(shared_app_t app);
+
+// Register a fork() child of @parent_pid with child pid @child_pid.  Called in
+// the PARENT before the child thread is started, so the entry is present in the
+// registry by the time the parent (or the child's exit path) looks it up; this
+// ordering is what makes the wait*() lookup race-free.  Sets up the child's
+// exit hook so the parent's waitpid() can reap it.
+void register_child(pid_t child_pid, pid_t parent_pid);
+
+// Map/unmap a fork child's pid <-> its address space.  Lets getpid() report a
+// per-child pid and lets kill(pid, SIGURG) route the latch-wakeup handler into
+// the target child's address space.
+void register_pid(pid_t pid, mmu::address_space *as);
+void unregister_pid(pid_t pid, mmu::address_space *as);
+
+// The pid of the process the current thread belongs to (a fork child's distinct
+// pid, or OSV_PID for the top-level app / kernel).  getpid() routes here.
+pid_t pid_for_current();
+
+// The address space of the live fork child with pid @pid, or nullptr if @pid is
+// not a live fork child (unknown, or the top-level app).
+mmu::address_space *as_for_pid(pid_t pid);
+
+// Record that child @child_pid exited with @status (encoded WIFEXITED-style),
+// wake any waiter, and raise SIGCHLD to the parent.  Called from the child's
+// exit path.
+void child_exited(pid_t child_pid, int status);
+
+// waitpid(2)/wait4(2) backend: block (unless WNOHANG) for a child of the
+// current thread to exit, reap it, and return its pid.  Returns -1/ECHILD if
+// the caller has no matching children.
+pid_t wait_child(pid_t pid, int *status, int options);
+
+// If the current thread is a fork() child (or an exec'd child app), record its
+// exit @status for the parent's waitpid(), notify the parent (SIGCHLD), and
+// return true so exit() ends only this thread instead of shutting down OSv.
+// Returns false for the top-level application (exit() shuts down as before).
+bool exit_current_child(int status);
+
+} // namespace fork
+} // namespace osv
+
+// The syscall/libc entry points.
+extern "C" pid_t fork(void);
+extern "C" pid_t vfork(void);
+
+#ifdef __x86_64__
+namespace osv {
+// x86-64 machine context a forked child must resume with so it continues in
+// fork()'s caller EXACTLY as a normal `ret` from fork() would -- restoring all
+// callee-saved registers (rbx, rbp, r12-r15) the caller relies on across the
+// call, plus rsp and the return address.  fork() jmps past its own epilogue
+// (the child is a different thread), so unless these are restored the caller
+// resumes with fork()'s internal register values -> a deep call chain that
+// keeps live values in callee-saved regs across fork() (e.g. an accumulator)
+// computes garbage.  Captured at fork() entry, where the regs still hold the
+// caller's values; restored by the child trampoline (arch/x64/fork.cc).
+struct fork_resume_ctx {
+    unsigned long rbx, rbp, r12, r13, r14, r15, rsp, rip;
+};
+} // namespace osv
+#endif
+
+#ifdef __aarch64__
+namespace osv {
+// aarch64 machine context a forked child must resume with so it continues in
+// fork()'s caller EXACTLY as a normal `ret` from fork() would -- restoring all
+// AAPCS64 callee-saved registers (x19-x28, the frame pointer x29) the caller
+// relies on across the call, plus the stack pointer and the return address
+// (x30).  Same rationale as x86 (see above): fork() does NOT return normally in
+// the child (the child is a separate OSv thread resumed by a trampoline), so
+// unless these are restored the caller resumes with fork()'s internal register
+// values -> a deep call chain keeping live values in callee-saved regs across
+// fork() computes garbage, and saved frame pointers / &locals on the stack must
+// resolve to the SAME virtual addresses (which clone_address_space privatizes
+// into the child as private copies).  Captured at fork() entry; restored by the
+// child trampoline (arch/aarch64/fork.cc).
+struct fork_resume_ctx {
+    unsigned long x19, x20, x21, x22, x23, x24, x25, x26, x27, x28;
+    unsigned long fp;   // x29
+    unsigned long sp;   // caller's stack pointer (parent's exact SP)
+    unsigned long pc;   // x30 / return address into fork()'s caller
+};
+} // namespace osv
+#endif
+
+#endif // OSV_FORK_HH

@@ -6,6 +6,7 @@
  */
 
 #include <osv/sched.hh>
+#include <osv/mmu.hh>
 #include <list>
 #include <osv/mutex.h>
 #include <osv/rwlock.h>
@@ -24,12 +25,18 @@
 #include <unordered_map>
 #include <osv/wait_record.hh>
 #include <osv/preempt-lock.hh>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 #include <osv/app.hh>
+#include <osv/kernel_config_sched_load_balance_ms.h>
 #include <osv/symbols.hh>
 #include <osv/stubbing.hh>
 #include <algorithm>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_sched_wake_pull.h>
 
 MAKE_SYMBOL(sched::thread::current);
 MAKE_SYMBOL(sched::cpu::current);
@@ -72,6 +79,18 @@ TRACEPOINT(trace_thread_create, "thread=%p", thread*);
 
 std::vector<cpu*> cpus __attribute__((init_priority((int)init_prio::cpus)));
 
+#if CONF_sched_wake_pull
+// Idle-CPU PULL (work-stealing) runtime toggle (see cpu::try_pull_from_busiest
+// / init reaper).  When on, an idle CPU pulls a runnable thread from the
+// busiest CPU instead of the timer-driven load balancer waiting a full tick to
+// notice the imbalance.  Default on; set env OSV_WAKE_PULL=0 to disable.
+bool wake_pull_enabled = true;
+// Only pull from a victim whose runqueue is deeper than this (queued work
+// beyond the one thread it is running) so we never disturb a lightly-loaded
+// machine and never fight the victim over its last runnable thread.
+static constexpr unsigned wake_pull_min_depth = 2;
+#endif
+
 thread __thread * s_current;
 cpu __thread * current_cpu;
 
@@ -81,6 +100,15 @@ bool __thread need_reschedule = false;
 elf::tls_data tls;
 
 inter_processor_interrupt wakeup_ipi{IPI_WAKEUP, [] {}};
+
+#if CONF_sched_wake_pull
+// Idle-CPU PULL: an idle CPU IPIs the busiest CPU to donate one runnable
+// thread.  The handler runs on the victim (busiest) CPU in its own interrupt
+// context, so the migration bookkeeping touches only the victim's own per-CPU
+// state -- same-CPU-safe, exactly like load_balance()'s source-side migration.
+inter_processor_interrupt sched_pull_ipi{IPI_SCHED_PULL,
+    [] { cpu::current()->donate_to_puller(); }};
+#endif
 
 constexpr float cmax = 0x1P63;
 constexpr float cinitial = 0x1P-63;
@@ -133,6 +161,19 @@ std::list<cpu::notifier*> cpu::notifier::_notifiers __attribute__((init_priority
 
 namespace sched {
 
+void *alloc_thread_storage(size_t align, size_t size)
+{
+#if CONF_fork
+    // Force the identity kernel heap: a thread object is dereferenced by the
+    // scheduler from every address space, so it must not land in the COW fork
+    // arena (which would give each address space a private copy).
+    fork_arena::kernel_heap_scope kh;
+    return aligned_alloc(align, size);
+#else
+    return aligned_alloc(align, size);
+#endif
+}
+
 class thread::reaper {
 public:
     reaper();
@@ -140,7 +181,11 @@ public:
     void add_zombie(thread* z);
 private:
     mutex _mtx;
-    std::list<thread*> _zombies;
+    // Intrusive zombie list (no node allocation on add_zombie -- see the
+    // _zombie_link comment in sched.hh).
+    bi::list<thread,
+             bi::member_hook<thread, bi::list_member_hook<>, &thread::_zombie_link>,
+             bi::constant_time_size<false>> _zombies;
     thread_unique_ptr _thread;
 };
 
@@ -164,8 +209,20 @@ cpu::cpu(unsigned _id)
     }
 }
 
+static unsigned idle_spin_max();
+static bool idle_spin_adaptive();
+
 void cpu::init_idle_thread()
 {
+    // The idle-spin settings are cached on first use.  Resolve them here, once,
+    // after the command line's --env has been applied and before any idle
+    // thread runs, and print the values do_idle() will use.
+    static bool levers_printed;
+    if (!levers_printed) {
+        levers_printed = true;
+        printf("LEVER idle_spin_max=%u idle_spin_adaptive=%d\n",
+               idle_spin_max(), idle_spin_adaptive() ? 1 : 0);
+    }
     running_since = osv::clock::uptime::now();
     std::string name = std::string("idle") + std::to_string(id);
     idle_thread = thread::make([this] { idle(); }, thread::attr().pin(this).name(name));
@@ -397,18 +454,63 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
     }
 
     if (app_thread.load(std::memory_order_relaxed) != n->_app) { // don't write into a cache line if it can be avoided
-        app_thread.store(n->_app, std::memory_order_relaxed);
+        // seq_cst: pairs with mmu::flush_tlb_all()'s lazy_flush_tlb store
+        // and app_thread load, so one side always sees the other (the
+        // exchange below alone orders this on x86, not in the C++ model).
+        app_thread.store(n->_app, std::memory_order_seq_cst);
     }
     if (lazy_flush_tlb.exchange(false, std::memory_order_seq_cst)) {
         mmu::flush_tlb_local();
     }
 #ifdef __aarch64__
+#if CONF_fork
+    // Fork timer-park (see the x86 block below and cpu::park_timers): remove the
+    // OUTGOING app thread's app-stack timers from THIS cpu's per-CPU timer list
+    // while its address space is still loaded, so a later timer IRQ in a foreign
+    // address space never dereferences its on-stack timer nodes.  Cheap no-op
+    // until a fork child address space exists.
+    if (p->is_app()) {
+        park_timers(*p);
+    }
+    // Fork COW address-space reload: tell the context switch (arch/aarch64/sched.S)
+    // which TTBR0_EL1 to load when switching INTO n.  Only when n's address space
+    // differs from the outgoing thread's, so the common single-AS case reloads
+    // nothing (and triggers no TLB flush).  Stored in n's thread_state and read
+    // at the stack swap in the asm -- the aarch64 analogue of x86 reloading CR3
+    // at the rsp/rbp swap.  0 means "no address-space change".
+    n->_state.reload_ttbr0 = (n->_current_as != p->_current_as)
+                                 ? mmu::pt_root_phys(n->_current_as) : 0;
+#endif
     switch_data.old_thread_state = &(p->_state);
     switch_data.new_thread_state = &(n->_state);
     return switch_data;
 }
 #else
+#if CONF_fork
+    // Fork timer-park: remove the OUTGOING app thread's app-stack timers from
+    // THIS cpu's per-CPU timer list before we switch (its address space is
+    // still loaded, so its on-stack timer nodes are valid to walk here).  We
+    // park on EVERY app-thread switch-out, not just AS-crossing ones: the
+    // per-CPU timer list is walked from IRQ context in whatever AS the CPU
+    // holds, so it must only ever contain the CURRENTLY-running app thread's
+    // app-stack timers (plus kernel/identity timers, which are valid in every
+    // AS).  An app thread's timers left in the list after it stops running
+    // would be dereferenced through a foreign AS on the next timer IRQ -> a
+    // wild page fault in non-preemptable context (arch/x64/mmu.cc:38).  Kernel
+    // threads (!is_app) keep identity-memory timers, so they are never parked.
+    // See cpu::park_timers.
+    if (p->is_app()) {
+        park_timers(*p);
+    }
+#endif
     n->switch_to();
+#if CONF_fork
+    // We are now running as the thread that this reschedule scheduled OUT
+    // earlier and is now resuming; its own address space is loaded.  Re-insert
+    // its parked app-stack timers (safe -- its AS is current).  cpu::current()
+    // because 'this' is stale after switch_to.
+    cpu::current()->unpark_timers(*thread::current());
+#endif
 #endif
 
     // Note: after the call to n->switch_to(), we should no longer use any of
@@ -419,6 +521,13 @@ void cpu::reschedule_from_interrupt(bool called_from_yield,
 #ifdef __aarch64__
 extern "C" void destroy_current_cpu_terminating_thread()
 {
+#if CONF_fork
+    // Now running as the thread this reschedule switched IN; its address space
+    // is loaded, so re-inserting its on-stack app timers is safe (foreign-AS
+    // IRQ walks can no longer hit them).  cpu::current() because 'this' from the
+    // scheduling frame is stale after the asm context switch.
+    cpu::current()->unpark_timers(*thread::current());
+#endif
 #endif
     if (cpu::current()->terminating_thread) {
         cpu::current()->terminating_thread->destroy();
@@ -467,16 +576,109 @@ void cpu::send_wakeup_ipi()
     }
 }
 
+// Idle spin-before-halt count.  A CPU with no runnable thread spins polling
+// incoming_wakeups before halting via arch::wait_for_interrupt (a VM-exit under
+// KVM).  For a request/reply server (e.g. one OS process per connection) each
+// blocked worker is, on average, re-woken by the next request a short time
+// later; if the spin is long enough to catch that wake, the halt and its
+// wake-IPI round-trip -- several VM-exits per request -- are avoided entirely,
+// which raises throughput at the guest's exit-rate ceiling.  A longer spin,
+// however, burns cycles on a genuinely idle system, so this is opt-in: the
+// default preserves the historical 10000-iteration behavior byte-for-byte and
+// a server image raises it via the OSV_IDLE_SPIN environment variable.
+//
+// A FIXED spin count is the wrong control: too short and a to-be-rewoken
+// thread's vCPU halts just before its wake, forcing the expensive IPI/VM-exit;
+// too long and it burns cycles when genuinely idle.  Instead we adapt the
+// window per CPU from recent history, like Linux's adaptive KVM halt-polling
+// (halt_poll_ns) but on the *guest* side, so it works even where the host does
+// not halt-poll.  The asymmetry is the whole point (measured: symmetric x2//2
+// with a low floor loses badly to the fixed count on a busy workload, because
+// a busy CPU that halts occasionally decays and then spends LESS time polled
+// than the fixed count -> MORE wake IPIs, not fewer):
+//   - CAUGHT a wake mid-spin -> the CPU is wake-heavy; JUMP the window straight
+//     to the cap so it stays fully polled and keeps suppressing wake IPIs.  A
+//     busy CPU snaps back to the cap the instant it catches one wake.
+//   - HALTED without catching a wake -> maybe genuinely idle, but a single halt
+//     on a busy CPU is normal (the fixed-count baseline halts often too), so do
+//     NOT collapse the window on one halt.  Only after several CONSECUTIVE
+//     halts (idle_halt_streak) does the CPU look truly idle; then shrink the
+//     window by a modest step toward the floor so it stops burning cycles and
+//     the host can reclaim the vCPU.  Any caught wake resets the streak.
+// Bounded by a floor (>0, so we always poll a little and give send_wakeup_ipi's
+// idle_poll handshake a chance to suppress the IPI) and a cap (idle_spin_max).
+//
+// OSV_IDLE_SPIN overrides the cap.  The default cap (100000) is well above the
+// historical fixed 10000: a wake-heavy CPU grows to the cap and stays there,
+// which on a request/reply workload is a large throughput win (measured +55-66%
+// on a 32-writer durable-write isolate vs the old 10000), while a genuinely
+// idle CPU still decays to the floor and halts (measured: adaptive burns ~1/3
+// the idle CPU of the fixed 10000), so the high cap costs nothing when idle.
+// OSV_IDLE_SPIN_ADAPTIVE=0 pins the window at the cap (the old fixed-count
+// behavior at whatever OSV_IDLE_SPIN / the default is).
+static unsigned idle_spin_max()
+{
+    static unsigned n = []{
+        const char* e = getenv("OSV_IDLE_SPIN");
+        unsigned v = e ? (unsigned)strtoul(e, nullptr, 10) : 100000;
+        return v ? v : 100000;
+    }();
+    return n;
+}
+static bool idle_spin_adaptive()
+{
+    static bool a = []{
+        const char* e = getenv("OSV_IDLE_SPIN_ADAPTIVE");
+        return !(e && strtoul(e, nullptr, 10) == 0);
+    }();
+    return a;
+}
+// Window floor: a genuinely-idle CPU decays to this many spin iterations before
+// halting -- small enough not to burn cycles, >0 so the idle_poll handshake
+// still has a chance to suppress a wake IPI.
+static constexpr unsigned idle_spin_floor = 256;
+// Consecutive genuine halts before we start shrinking the window.  A busy CPU
+// halts occasionally (so does the fixed-count baseline); only a run of pure
+// halts means "truly idle", so we do not collapse a wake-heavy CPU on a single
+// stray halt.  Once the streak is reached, each further halt HALVES the window
+// so a truly idle CPU decays from the cap to the floor in a handful of halts.
+static constexpr unsigned idle_shrink_after = 4;
+
 void cpu::do_idle()
 {
+    const unsigned cap = idle_spin_max();
+    const bool adaptive = idle_spin_adaptive();
+    // Per-CPU adaptive window persists across idle entries; seed at the cap so
+    // the very first idle behaves like the historical fixed count until
+    // history accumulates.
+    if (idle_spin_window == 0) {
+        idle_spin_window = cap;
+    }
     do {
+        unsigned spin_count = adaptive ? idle_spin_window : cap;
         idle_poll_lock_type idle_poll_lock{*this};
+#if CONF_sched_wake_pull
+        // Idle-CPU PULL: we have no work; ask the busiest CPU to donate one
+        // runnable thread (no-op unless wake_pull_enabled).  Fire once per idle
+        // entry -- not per spin iteration -- so the IPI rate stays bounded by
+        // the number of idle CPUs, never the wake rate.  The donated thread
+        // arrives via incoming_wakeups and is picked up by the spin loop below.
+        try_pull_from_busiest();
+#endif
         WITH_LOCK(idle_poll_lock) {
-            // spin for a bit before halting
-            for (unsigned ctr = 0; ctr < 10000; ++ctr) {
+            // spin for a bit before halting; catching a wake here avoids the
+            // halt/wake VM-exit round-trip (see idle_spin_max above).
+            for (unsigned ctr = 0; ctr < spin_count; ++ctr) {
                 // FIXME: can we pull threads from loaded cpus?
                 handle_incoming_wakeups();
                 if (!runqueue.empty()) {
+                    // Caught a wake mid-spin: wake-heavy.  Jump straight to the
+                    // cap and reset the halt streak so this CPU stays fully
+                    // polled and keeps the wake IPI suppressed.
+                    if (adaptive) {
+                        idle_spin_window = cap;
+                        idle_halt_streak = 0;
+                    }
                     return;
                 }
             }
@@ -487,7 +689,25 @@ void cpu::do_idle()
         std::unique_lock<irq_lock_type> guard(irq_lock);
         handle_incoming_wakeups();
         if (!runqueue.empty()) {
+            // A wake landed after the spin but before we committed to halting:
+            // still "caught" -- jump to cap, reset streak.
+            if (adaptive) {
+                idle_spin_window = cap;
+                idle_halt_streak = 0;
+            }
             return;
+        }
+        // About to halt without a runnable thread.  Count it; only after a run
+        // of consecutive genuine halts do we treat the CPU as truly idle and
+        // shrink the window toward the floor (a single halt on a busy CPU is
+        // normal and must NOT collapse the window).
+        if (adaptive) {
+            if (idle_halt_streak < idle_shrink_after) {
+                ++idle_halt_streak;
+            } else {
+                unsigned w = idle_spin_window / 2;
+                idle_spin_window = w < idle_spin_floor ? idle_spin_floor : w;
+            }
         }
         guard.release();
         arch::wait_for_interrupt(); // this unlocks irq_lock
@@ -549,7 +769,19 @@ void cpu::handle_incoming_wakeups()
                     // perform renormalizations which we missed while sleeping.
                     t._runtime.update_after_sleep();
                     enqueue(t);
+#if CONF_fork
+                    // A parked fork thread's timers must be resumed in ITS OWN
+                    // address space (on switch-in, via cpu::unpark_timers), not
+                    // here -- this runs in whatever AS the waking CPU holds, and
+                    // resume_timers() would walk the thread's on-stack timer
+                    // nodes through a foreign AS and fault.  Skip the resume for
+                    // a parked thread; unpark_timers does it when it runs.
+                    if (!t._timers_parked) {
+                        t.resume_timers();
+                    }
+#else
                     t.resume_timers();
+#endif
                 }
             }
         }
@@ -711,6 +943,12 @@ void thread::pin(thread *t, cpu *target_cpu)
             case status::waking:
                 trace_sched_migrate(t, target_cpu->id);
                 t->stat_migrations.incr();
+#if CONF_fork
+                // Migrating a possibly-parked thread: unlink it from its
+                // (source == this) cpu's parked list first, so it never stays
+                // linked on a foreign cpu's list after the move.
+                cpu::unlink_parked(*t);
+#endif
                 t->suspend_timers();
                 t->_runtime.export_runtime();
                 t->_detached_state->_cpu = target_cpu;
@@ -727,6 +965,9 @@ void thread::pin(thread *t, cpu *target_cpu)
                 current_cpu->runqueue.erase(current_cpu->runqueue.iterator_to(*t));
                 trace_sched_migrate(t, target_cpu->id);
                 t->stat_migrations.incr();
+#if CONF_fork
+                cpu::unlink_parked(*t);
+#endif
                 t->suspend_timers();
                 t->_runtime.export_runtime();
                 t->_detached_state->_cpu = target_cpu;
@@ -792,57 +1033,222 @@ void thread::unpin()
     helper->join();
 }
 
+// The load balancer is the only mechanism that spreads threads across CPUs:
+// thread::start() places a new thread on its creator's CPU and thread::wake()
+// re-wakes a blocked thread on the CPU it last ran on, so neither disperses
+// work by itself.  Running once every 100ms and migrating a single thread per
+// wakeup is far too slow for a workload that fans out many threads from one
+// parent (e.g. a server that forks or spawns a worker per connection): the
+// workers pile onto the few CPUs they were started/woken on while the rest of
+// the machine sits idle, and a 1-thread-per-100ms drip cannot catch up under a
+// high request rate.  So this runs more often (the interval is configurable via
+// CONF_sched_load_balance_ms), and on each pass keeps migrating the
+// most-migratable queued thread to the least-loaded CPU until this CPU is no
+// longer meaningfully more loaded than that CPU -- the load difference itself
+// is the terminator, so a pass drains the whole imbalance (which can be larger
+// than the CPU count) rather than a single thread of it.
 void cpu::load_balance()
 {
     notifier::fire();
     timer tmr(*thread::current());
     while (true) {
-        tmr.set(osv::clock::uptime::now() + 100_ms);
+        tmr.set(osv::clock::uptime::now() + std::chrono::milliseconds(CONF_sched_load_balance_ms));
         thread::wait_until([&] { return tmr.expired(); });
         if (runqueue.empty()) {
             continue;
         }
-        auto min = *std::min_element(cpus.begin(), cpus.end(),
-                [](cpu* c1, cpu* c2) { return c1->load() < c2->load(); });
-        if (min == this) {
-            continue;
-        }
-        // This CPU is temporarily running one extra thread (this thread),
-        // so don't migrate a thread away if the difference is only 1.
-        if (min->load() >= (load() - 1)) {
-            continue;
-        }
-#if CONF_lazy_stack_invariant
-        assert(!thread::current()->is_app());
-#endif
-        WITH_LOCK(irq_lock) {
-            auto i = std::find_if(runqueue.rbegin(), runqueue.rend(),
-                    [](thread& t) { return t._migration_lock_counter == 0; });
-            if (i == runqueue.rend()) {
-                continue;
+        // Each thread we migrate this pass is queued on its destination CPU but
+        // has not yet been dequeued there, so cpu::load() (runqueue.size()) does
+        // not yet reflect it.  Track the migrations we have queued per CPU so
+        // both the least-loaded selection and the stop condition use an
+        // effective load (current load + pending arrivals); otherwise the same
+        // destination would keep looking least-loaded and we would pile the
+        // whole imbalance onto one CPU instead of spreading it.
+        std::vector<unsigned> pending(cpus.size(), 0);
+        // The load difference is the real terminator (see below); this only
+        // caps a pathological storm if loads never converge.  It is generous
+        // (many times the CPU count) so a genuinely large imbalance still
+        // drains in one pass.
+        unsigned migrated = 0;
+        const unsigned max_migrations_per_pass = cpus.size() * 8;
+        while (migrated < max_migrations_per_pass) {
+            auto min = *std::min_element(cpus.begin(), cpus.end(),
+                    [&pending](cpu* c1, cpu* c2) {
+                        return c1->load() + pending[c1->id] <
+                               c2->load() + pending[c2->id];
+                    });
+            if (min == this) {
+                break;
             }
-            auto& mig = *i;
-            trace_sched_migrate(&mig, min->id);
-            runqueue.erase(std::prev(i.base()));  // i.base() returns off-by-one
-            // we won't race with wake(), since we're not thread::waiting
-            assert(mig._detached_state->st.load() == thread::status::queued);
-            mig._detached_state->st.store(thread::status::waking);
-            mig.suspend_timers();
-            mig._detached_state->_cpu = min;
-            // Convert the CPU-local runtime measure to a globally meaningful
-            // measure
-            mig._runtime.export_runtime();
-            mig.remote_thread_local_var(::percpu_base) = min->percpu_base;
-            mig.remote_thread_local_var(current_cpu) = min;
-            mig.stat_migrations.incr();
-            min->incoming_wakeups[id].push_back(mig);
-            min->incoming_wakeups_mask.set(id);
-            // FIXME: avoid if the cpu is alive and if the priority does not
-            // FIXME: warrant an interruption
-            min->send_wakeup_ipi();
+            // This CPU is temporarily running one extra thread (this thread),
+            // so don't migrate a thread away if the difference is only 1.
+            if (min->load() + pending[min->id] >= (load() - 1)) {
+                break;
+            }
+#if CONF_lazy_stack_invariant
+            assert(!thread::current()->is_app());
+#endif
+            WITH_LOCK(irq_lock) {
+                auto i = std::find_if(runqueue.rbegin(), runqueue.rend(),
+                        [](thread& t) { return t._migration_lock_counter == 0; });
+                if (i == runqueue.rend()) {
+                    break;
+                }
+                auto& mig = *i;
+                trace_sched_migrate(&mig, min->id);
+                runqueue.erase(std::prev(i.base()));  // i.base() returns off-by-one
+                // we won't race with wake(), since we're not thread::waiting
+                assert(mig._detached_state->st.load() == thread::status::queued);
+                mig._detached_state->st.store(thread::status::waking);
+#if CONF_fork
+                // A preempted (queued) app thread may be parked on THIS cpu's list
+                // (park_timers runs on every app-thread switch-out).  Unlink it here,
+                // on its owning (source) cpu, before it migrates to `min`, so it is
+                // never left linked on a foreign cpu's parked list.
+                cpu::unlink_parked(mig);
+#endif
+                mig.suspend_timers();
+                mig._detached_state->_cpu = min;
+                // Convert the CPU-local runtime measure to a globally meaningful
+                // measure
+                mig._runtime.export_runtime();
+                mig.remote_thread_local_var(::percpu_base) = min->percpu_base;
+                mig.remote_thread_local_var(current_cpu) = min;
+                mig.stat_migrations.incr();
+                min->incoming_wakeups[id].push_back(mig);
+                min->incoming_wakeups_mask.set(id);
+                // FIXME: avoid if the cpu is alive and if the priority does not
+                // FIXME: warrant an interruption
+                min->send_wakeup_ipi();
+                pending[min->id]++;
+            }
+            migrated++;
         }
     }
 }
+
+#if CONF_sched_wake_pull
+// Idle-CPU PULL (work-stealing).  Called from the idle path when this CPU has
+// an empty runqueue and is about to poll/halt.  Instead of waiting for the
+// timer-driven load_balance() to notice an imbalance a full tick later (too
+// slow for a wake/run/block cycle that never accumulates a visible runqueue),
+// the IDLE CPU pulls immediately: it asks the busiest CPU to donate one
+// runnable thread to it.
+//
+// This is self-throttling by construction: only idle CPUs ask, and the moment a
+// CPU receives donated work it is no longer idle and stops asking.  The IPI
+// rate is bounded by the number of idle CPUs (one outstanding request each via
+// the single pull_donate_to slot), not by the wake rate -- so it cannot build
+// into a per-wake IPI storm.  All runqueue mutation happens on the owning
+// (victim) CPU in its own IPI context, so it is same-CPU-safe, exactly like
+// load_balance()'s source-side migration.
+//
+// Returns true if a donate request was sent (caller can keep polling for the
+// donated thread to arrive via incoming_wakeups).
+bool cpu::try_pull_from_busiest()
+{
+    if (!wake_pull_enabled) {
+        return false;
+    }
+    // Only pull when genuinely idle.
+    if (!runqueue.empty()) {
+        return false;
+    }
+    // Find the busiest CPU by runqueue depth.  Bounded scan over cpus[].
+    cpu* busiest = nullptr;
+    unsigned best = wake_pull_min_depth;
+    for (cpu* c : cpus) {
+        if (c == this) {
+            continue;
+        }
+        unsigned d = c->load();
+        if (d >= best) {
+            best = d;
+            busiest = c;
+        }
+    }
+    if (!busiest) {
+        return false;   // nobody is backed up -- nothing to steal
+    }
+    // Publish our request on the victim.  If the victim already has an
+    // outstanding donate request (from another idle CPU), leave it -- one at a
+    // time keeps the pull rate low and avoids two idle CPUs fighting for the
+    // same victim on the same tick.
+    cpu* expected = nullptr;
+    if (!busiest->pull_donate_to.compare_exchange_strong(
+            expected, this, std::memory_order_acq_rel)) {
+        return false;
+    }
+    sched_pull_ipi.send(busiest);
+    return true;
+}
+
+// IPI handler on the victim (busiest) CPU: donate one migratable runnable
+// thread to the CPU that requested it (pull_donate_to).  Runs in the victim's
+// own interrupt context (irq already disabled), so touching this CPU's own
+// runqueue and the donated thread's per-CPU timer/runtime state is safe --
+// byte-identical bookkeeping to load_balance()'s source-side migration.
+void cpu::donate_to_puller()
+{
+    cpu* dst = pull_donate_to.exchange(nullptr, std::memory_order_acq_rel);
+    if (!dst || dst == this) {
+        return;
+    }
+    // Only donate if we still have queued work beyond the running thread; do
+    // not hand off our last runnable thread and go idle ourselves.
+    if (runqueue.size() < wake_pull_min_depth) {
+        return;
+    }
+    // Pick the least-recently-runnable migratable thread (tail of the tree),
+    // same selection as load_balance(), but NEVER donate a fork timer-parked
+    // thread via the wake-pull IPI.
+    auto i = std::find_if(runqueue.rbegin(), runqueue.rend(),
+            [](thread& t) {
+                if (t._migration_lock_counter != 0) {
+                    return false;
+                }
+#if CONF_fork
+                // A fork timer-parked thread's sched::timer nodes live on its
+                // private (per-address-space COW) stack; their coherence relies
+                // on the park machinery RESUMING them in the thread's OWN
+                // address space on switch-in (cpu::unpark_timers).  The
+                // wake-pull steal moves the thread cross-cpu from THIS IPI
+                // handler (running in whatever AS the victim holds), which
+                // races that AS-local resume and can leave a freed timer_base
+                // linked in a per-cpu timer list; the next timer IRQ then walks
+                // the dangling node in timer_set::expire() (reads _time at
+                // offset 0x30 off a near-null node) and faults in
+                // non-preemptable IRQ context.  The timer-driven load balancer
+                // (a thread, not an IPI) still rebalances such threads; only the
+                // opportunistic IPI steal of a parked thread is skipped.
+                if (t._timers_parked) {
+                    return false;
+                }
+#endif
+                return true;
+            });
+    if (i == runqueue.rend()) {
+        return;
+    }
+    auto& mig = *i;
+    trace_sched_migrate(&mig, dst->id);
+    runqueue.erase(std::prev(i.base()));
+    assert(mig._detached_state->st.load() == thread::status::queued);
+    mig._detached_state->st.store(thread::status::waking);
+    mig.suspend_timers();
+    mig._detached_state->_cpu = dst;
+    mig._runtime.export_runtime();
+    mig.remote_thread_local_var(::percpu_base) = dst->percpu_base;
+    mig.remote_thread_local_var(current_cpu) = dst;
+    mig.stat_migrations.incr();
+    dst->incoming_wakeups[id].push_back(mig);
+    dst->incoming_wakeups_mask.set(id);
+    // Force the IPI to the requester: it is idle-polling / possibly halted in
+    // wait_for_interrupt(), and send_wakeup_ipi() would suppress the IPI to an
+    // idle_poll CPU -> the donated thread would sit unnoticed = a lost wakeup.
+    wakeup_ipi.send(dst);
+}
+#endif // CONF_sched_wake_pull
 
 cpu::notifier::notifier(std::function<void ()> cpu_up)
     : _cpu_up(cpu_up)
@@ -1087,6 +1493,12 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
     , _joiner(nullptr)
 {
     trace_thread_create(this);
+#if CONF_fork
+    // Inherit the creating thread's address space (AS0 for the very first
+    // threads).  fork() reassigns the child thread to its private child AS.
+    _current_as = sched::s_current ? sched::s_current->_current_as
+                                   : mmu::kernel_address_space();
+#endif
 
     if (!main && sched::s_current) {
         auto app = application::get_current().get();
@@ -1309,6 +1721,14 @@ void thread::destroy()
 // waking state.
 void thread::wake_impl(detached_state* st, unsigned allowed_initial_states_mask)
 {
+    // Defend against a null detached_state: a wait_record whose backing thread
+    // is not resolvable in the waker's address space can yield a null st here.
+    // Dereferencing it would fault, and on a preemption-disabled wake path that
+    // fault aborts the instance (assert(preemptable()) in page_fault).  Skip
+    // the wake.
+    if (!st) {
+        return;
+    }
     status old_status = status::waiting;
     trace_sched_wake(st->t);
     while (!st->st.compare_exchange_weak(old_status, status::waking)) {
@@ -1455,6 +1875,26 @@ void thread::stop_wait()
 void thread::complete()
 {
     run_exit_notifiers();
+#if CONF_fork
+    // If this thread was parked (its app-stack timers removed from the per-CPU
+    // list and it is linked on some cpu::parked_threads), drop it from the
+    // parked list now -- while it still runs on its own cpu in its own address
+    // space.  Otherwise the reaper would later destroy it with a live
+    // _parked_link, and the next rearm_park_timer() walk would dereference a
+    // freed thread.  Erase from the OWNING cpu's list (t._parked_cpu), which
+    // migration keeps in sync; it is this cpu in the common case.  Its timers
+    // are all being torn down anyway, so no wakeup is lost.
+    if (_parked_link.is_linked()) {
+        auto *c = _parked_cpu;
+        assert(c);
+        c->parked_threads.erase(c->parked_threads.iterator_to(*this));
+        _parked_cpu = nullptr;
+        _timers_parked = false;
+        c->rearm_park_timer();
+    } else {
+        _timers_parked = false;
+    }
+#endif
 
     //The logic below only applies when running statically
     //linked executables or dynamically linked ones launched by the
@@ -1547,6 +1987,141 @@ void timer_base::client::resume_timers()
     _timers_need_reload = false;
     cpu::current()->timers.resume(_active_timers);
 }
+
+#if CONF_fork
+osv::clock::uptime::time_point timer_base::client::earliest_active_deadline() const
+{
+    auto best = osv::clock::uptime::time_point::max();
+    for (auto& t : _active_timers) {
+        if (t._time < best) {
+            best = t._time;
+        }
+    }
+    return best;
+}
+
+// --- Fork timer-park -------------------------------------------------------
+//
+// Called from the context switch (core/sched.cc) on every APP-thread switch-out
+// / switch-in.  It only ever does real work once a fork has created a second
+// address space (before that all app threads share AS0 and the per-CPU timer
+// list is always walked in the one-and-only AS); the guards below make it a
+// cheap no-op otherwise.  The invariant it maintains: the per-CPU timer list
+// must only ever contain the currently-running app thread's app-stack timers
+// (plus kernel/identity timers, valid in every AS), so an IRQ-context walk in
+// any address space never dereferences a foreign-AS stack timer node.
+
+void cpu::park_timers(thread& t)
+{
+    // Outgoing thread's AS is still loaded, so its on-stack _active_timers are
+    // valid to walk.  Snapshot its earliest deadline, drop all its timers from
+    // THIS cpu's per-CPU list (suspend_timers -- sets _timers_need_reload so a
+    // concurrent migration suspend/resume of the same thread is a coherent
+    // no-op), and park it so a foreign-AS timer IRQ never dereferences its
+    // stack timer nodes.
+    if (t._timers_parked || t.timers_suspended() || !t.has_active_timers()) {
+        return;
+    }
+    t._parked_deadline = t.earliest_active_deadline();
+    t.suspend_timers();
+    // Never push_back a node that is already linked (would trip the intrusive
+    // -list safe-link double-insert assert).  A migration may have left the
+    // thread linked on ANOTHER cpu's list; the migration paths call
+    // unlink_parked() to prevent that, but assert-guard here regardless.
+    assert(!t._parked_link.is_linked());
+    parked_threads.push_back(t);
+    t._parked_cpu = this;
+    t._timers_parked = true;
+    rearm_park_timer();
+}
+
+void cpu::unpark_timers(thread& t)
+{
+    // Incoming thread's AS is loaded, so re-inserting its on-stack timers into
+    // the per-CPU list is safe.
+    if (!t._timers_parked) {
+        return;
+    }
+    // If the thread is still linked on a parked list, it must be THIS cpu's:
+    // a migration would have unlinked it from its source cpu (unlink_parked)
+    // before it could run here.  Erase from the owning cpu's list.
+    if (t._parked_link.is_linked()) {
+        assert(t._parked_cpu);
+        t._parked_cpu->parked_threads.erase(
+            t._parked_cpu->parked_threads.iterator_to(t));
+        cpu *owner = t._parked_cpu;
+        t._parked_cpu = nullptr;
+        owner->rearm_park_timer();
+    }
+    t._timers_parked = false;
+    t.resume_timers();
+}
+
+// Migration helper: unlink a (migrating) parked thread from its owning cpu's
+// parked list, WITHOUT resuming its timers.  Called on the source cpu (which is
+// the owning cpu) by load_balance / thread::pin while migrating a parked thread
+// to another cpu.  Its timers stay suspended (migration also calls
+// suspend_timers, a no-op here) and _timers_parked stays set, so the AS-local
+// resume still fires when the thread is next switched in on the target cpu.
+// The migration path re-wakes the thread, so it does not need the parked list's
+// deadline wakeup anymore.
+void cpu::unlink_parked(thread& t)
+{
+    if (!t._parked_link.is_linked()) {
+        return;
+    }
+    cpu *owner = t._parked_cpu;
+    assert(owner);
+    owner->parked_threads.erase(owner->parked_threads.iterator_to(t));
+    t._parked_cpu = nullptr;
+    owner->rearm_park_timer();
+}
+
+void cpu::rearm_park_timer()
+{
+    auto best = osv::clock::uptime::time_point::max();
+    for (auto& t : parked_threads) {
+        if (t._parked_deadline < best) {
+            best = t._parked_deadline;
+        }
+    }
+    if (best == osv::clock::uptime::time_point::max()) {
+        park_wakeup_timer.cancel();
+    } else {
+        // Cancel first: park_wakeup_timer may already be armed (re-arm on every
+        // park/unpark/fire).  set_with_irq_disabled unconditionally links the
+        // timer, so double-arming a still-linked timer trips the intrusive-list
+        // safe-link assert.  cancel() is a no-op when already free.
+        park_wakeup_timer.cancel();
+        park_wakeup_timer.set_with_irq_disabled(best);
+    }
+}
+
+void cpu::park_timer_fired()
+{
+    // Fired from the timer IRQ.  We may be in ANY address space, so we must NOT
+    // touch a parked thread's on-stack timer nodes.  Only wake the due threads
+    // (that touches solely their identity thread objects).  A woken thread is
+    // scheduled in via the normal path, and on switch-in unpark_timers() (in
+    // ITS address space) re-inserts its now-expired real timer, which fires
+    // there and completes the wait.  We leave the thread on the parked list
+    // with _timers_parked set (unpark_timers removes it) but bump its parked
+    // deadline to 'max' so we do not re-fire on it before it runs.
+    auto now = osv::clock::uptime::now();
+    for (auto& t : parked_threads) {
+        if (t._parked_deadline <= now) {
+            t._parked_deadline = osv::clock::uptime::time_point::max();
+            t.wake_with_irq_disabled();
+        }
+    }
+    rearm_park_timer();
+}
+
+void cpu::park_client::timer_fired()
+{
+    _cpu->park_timer_fired();
+}
+#endif
 
 void thread::join()
 {
@@ -1859,7 +2434,7 @@ void thread::reaper::reap()
         WITH_LOCK(_mtx) {
             wait_until(_mtx, [=] { return !_zombies.empty(); });
             while (!_zombies.empty()) {
-                auto z = _zombies.front();
+                auto z = &_zombies.front();
                 _zombies.pop_front();
                 z->join();
                 z->_cleanup();
@@ -1872,7 +2447,11 @@ void thread::reaper::add_zombie(thread* z)
 {
     assert(z->_attr._detached);
     WITH_LOCK(_mtx) {
-        _zombies.push_back(z);
+        // Intrusive push -- no allocation, so this is safe from a
+        // preemption-disabled thread-termination context and coherent across
+        // address spaces even when the terminating thread is a fork child
+        // running in its COW address space (see _zombie_link in sched.hh).
+        _zombies.push_back(*z);
         _thread->wake();
     }
 }
@@ -1882,6 +2461,22 @@ thread::reaper *thread::_s_reaper;
 void init_detached_threads_reaper()
 {
     thread::_s_reaper = new thread::reaper;
+#if CONF_sched_wake_pull
+    // Idle-CPU PULL (work-stealing): an idle CPU pulls a runnable thread from
+    // the busiest CPU instead of waiting a full load-balancer tick.  Enabled
+    // by default; set OSV_WAKE_PULL=0 to disable it (e.g. to compare against
+    // the timer-only balancer).  On a workload that fans many threads out from
+    // one waker it keeps idle CPUs busy that the 100ms balancer would leave
+    // idle between passes.
+    {
+        extern bool wake_pull_enabled;
+        const char* e = getenv("OSV_WAKE_PULL");
+        if (e && e[0])
+            wake_pull_enabled = (e[0] != '0');
+        printf("WAKE_PULL %s\n", wake_pull_enabled ? "ON" : "off");
+        printf("LEVER wake_pull=%d\n", wake_pull_enabled ? 1 : 0);
+    }
+#endif
 }
 
 void start_early_threads()

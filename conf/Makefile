@@ -56,7 +56,7 @@ CONF_FILES := conf/base.mk conf/$(mode).mk conf/$(arch).mk conf/profiles/$(arch)
 
 #Generate the default .config, gen/config/kernel.conf, and gen/include/osv/kernel_config.h if not generated yet
 $(out)/.config: $(CONF_FILES) $(out)/kbuild/kconfig/conf
-	$(call quiet, mode=$(mode) arch=$(arch) CONFIG_=CONF_ KCONFIG_AUTOHEADER=$(out)/gen/include/osv/kernel_config.h KCONFIG_AUTOCONFIG=$(out)/gen/config/kernel.conf KCONFIG_RUSTCCFG=$(out)/gen/include/osv/rustc_cfg KCONFIG_CONFIG=$(out)/.config $(out)/kbuild/kconfig/conf -s conf/kconfig/main --alldefconfig, CONF_DEF $(out)/.config)
+	$(call quiet, mode=$(mode) arch=$(arch) conf_fork=$(conf_fork) CONFIG_=CONF_ KCONFIG_AUTOHEADER=$(out)/gen/include/osv/kernel_config.h KCONFIG_AUTOCONFIG=$(out)/gen/config/kernel.conf KCONFIG_RUSTCCFG=$(out)/gen/include/osv/rustc_cfg KCONFIG_CONFIG=$(out)/.config $(out)/kbuild/kconfig/conf -s conf/kconfig/main --alldefconfig, CONF_DEF $(out)/.config)
 
 #Generate the .config.yes, gen/include/osv/kernel_yes_config.h with all available options
 $(out)/.config.yes: $(CONF_FILES) $(out)/kbuild/kconfig/conf
@@ -64,7 +64,7 @@ $(out)/.config.yes: $(CONF_FILES) $(out)/kbuild/kconfig/conf
 
 #Synchronize gen/include/osv/kernel_config.h and gen/config/kernel.conf with .config if the latter has changed maybe by mconf
 $(out)/gen/include/osv/kernel_config.h: $(out)/.config
-	$(call quiet, mode=$(mode) arch=$(arch) CONFIG_=CONF_ KCONFIG_AUTOHEADER=$(out)/gen/include/osv/kernel_config.h KCONFIG_AUTOCONFIG=$(out)/gen/config/kernel.conf KCONFIG_RUSTCCFG=$(out)/gen/include/osv/rustc_cfg KCONFIG_CONFIG=$(out)/.config $(out)/kbuild/kconfig/conf -s conf/kconfig/main --syncconfig, SYNC $(out)/.config)
+	$(call quiet, mode=$(mode) arch=$(arch) conf_fork=$(conf_fork) CONFIG_=CONF_ KCONFIG_AUTOHEADER=$(out)/gen/include/osv/kernel_config.h KCONFIG_AUTOCONFIG=$(out)/gen/config/kernel.conf KCONFIG_RUSTCCFG=$(out)/gen/include/osv/rustc_cfg KCONFIG_CONFIG=$(out)/.config $(out)/kbuild/kconfig/conf -s conf/kconfig/main --syncconfig, SYNC $(out)/.config)
 
 #Generate gen/config/kernel_conf.mk AND individual option headers gen/include/osv/kernel_config_* based on the latest gen/config/kernel.conf and gen/include/osv/kernel_config.h
 #The gen/config/kernel_conf.mk is included by the main OSv makefile and the headers gen/include/osv/kernel_config_* included by relevant source files
