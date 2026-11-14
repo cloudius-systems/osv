@@ -20,7 +20,11 @@
 // if the child is not done within the time limit (argv[1] seconds, default 20).
 // The child also checks that each stack can be written and read back through
 // the thread, and the parent reads a word the child's thread wrote, through a
-// MAP_SHARED page, after the child exits.
+// MAP_SHARED page, after the child exits.  Last, the child keeps one kernel
+// thread alive while the parent reads that thread's stack directly: a stack
+// mapped by the child must be visible from the parent's address space, which
+// is where the thread is reaped.  The test counts the stacks that came from
+// the stack window when the kernel has one.
 
 #include <osv/kernel_config_fork.h>
 
@@ -50,6 +54,10 @@ int main()
 #include <cstdint>
 #include <cstdlib>
 #include <vector>
+#if __has_include(<osv/stack_window.hh>)
+#include <osv/stack_window.hh>
+#define HAVE_STACK_WINDOW 1
+#endif
 
 static constexpr size_t page = mmu::page_size;
 static constexpr size_t block_pages = 16;
@@ -60,6 +68,9 @@ struct handshake {
     std::atomic<int> go;
     std::atomic<int> done;      // 0 until the child is done, then 1 ok, 2 bad stack
     std::atomic<long> marker;   // written by the child's kernel threads
+    std::atomic<int> in_window; // child's kernel stacks in the stack window
+    std::atomic<uintptr_t> held;    // a live child thread's stack words
+    std::atomic<int> held_seen;     // 1 parent read them right, 2 wrong
 };
 static handshake* hs;
 
@@ -108,6 +119,37 @@ static size_t free_ranges(unsigned lo, unsigned hi)
 // Run one kernel thread with a stack of `bytes`.  It writes a pattern across
 // most of its stack and reads it back, so a stack that is not fully mapped or
 // not private to the thread is caught.
+static void note_stack(const volatile void* p)
+{
+#ifdef HAVE_STACK_WINDOW
+    if (mmu::stack_window::contains(const_cast<const void*>(p))) {
+        hs->in_window++;
+    }
+#endif
+}
+
+static constexpr size_t held_words = 512;
+static long held_word(size_t i) { return 0x5a5a0000L + static_cast<long>(i); }
+
+// Keep a kernel thread alive until the parent has read its stack.
+static void run_held_thread()
+{
+    auto t = sched::thread::make([] {
+        volatile long buf[held_words];
+        for (size_t i = 0; i < held_words; i++) {
+            buf[i] = held_word(i);
+        }
+        note_stack(buf);
+        hs->held.store(reinterpret_cast<uintptr_t>(buf));
+        while (!hs->held_seen.load()) {
+            usleep(1000);
+        }
+    }, sched::thread::attr().stack(256 * 1024).name("stack-held"));
+    t->start();
+    t->join();
+    delete t;
+}
+
 static bool run_thread(size_t bytes, long tag)
 {
     std::atomic<bool> ok{false};
@@ -121,6 +163,7 @@ static bool run_thread(size_t bytes, long tag)
         for (size_t i = 0; i < n; i++) {
             good &= buf[i] == (tag ^ static_cast<long>(i));
         }
+        note_stack(buf);
         hs->marker.store(tag);
         ok.store(good);
     }, sched::thread::attr().stack(bytes).name("stack-frag"));
@@ -155,6 +198,9 @@ int main(int argc, char** argv)
             good &= run_thread(64 * 1024, 0x6400 + i);
             good &= run_thread(256 * 1024, 0x25600 + i);
         }
+        if (good) {
+            run_held_thread();
+        }
         hs->done.store(good ? 1 : 2);
         _exit(0);
     }
@@ -183,7 +229,18 @@ int main(int argc, char** argv)
     while (!done && elapsed() < limit_s) {
         carve_all();
         usleep(1000);
+        if (auto a = hs->held.load(); a && !hs->held_seen.load()) {
+            auto w = reinterpret_cast<const volatile long*>(a);
+            bool same = true;
+            for (size_t i = 0; i < held_words; i++) {
+                same &= w[i] == held_word(i);
+            }
+            hs->held_seen.store(same ? 1 : 2);
+        }
         done = hs->done.load();
+    }
+    if (!hs->held_seen.load()) {
+        hs->held_seen.store(3);   // let a late child finish
     }
     double secs = elapsed();
     if (!done) {
@@ -208,8 +265,13 @@ int main(int argc, char** argv)
         printf("FAIL: the parent does not see the child's thread's write\n");
         return 1;
     }
-    printf("%d rounds of 64 KiB and 256 KiB kernel threads in a forked child in %.3f s\nPASS\n",
-           rounds, secs);
+    if (hs->held_seen.load() != 1) {
+        printf("FAIL: the parent did not read a live child thread's stack right\n");
+        return 1;
+    }
+    printf("%d rounds of 64 KiB and 256 KiB kernel threads in a forked child in %.3f s, "
+           "%d of %d stacks in the stack window\nPASS\n",
+           rounds, secs, hs->in_window.load(), 2 * rounds + 1);
     return 0;
 }
 
