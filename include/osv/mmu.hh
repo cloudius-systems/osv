@@ -24,6 +24,7 @@
 #include <osv/kernel_config_memory_debug.h>
 #include <osv/kernel_config_memory_jvm_balloon.h>
 #include <osv/kernel_config_fork.h>
+#include <osv/stack_window.hh>
 
 struct exception_frame;
 #if CONF_memory_jvm_balloon
@@ -326,7 +327,8 @@ void virt_to_phys(void* vaddr, size_t len, OutputFunc out)
     // VMA-mapped pages (below phys_mem) may be physically non-contiguous;
     // walk page-by-page to produce correct scatter-gather segments.
     bool page_walk = (CONF_memory_debug && vaddr >= debug_base) ||
-                     (static_cast<char*>(vaddr) < phys_mem);
+                     (static_cast<char*>(vaddr) < phys_mem) ||
+                     (CONF_fork && stack_window::contains(vaddr));
     if (page_walk) {
         while (len) {
             auto next = std::min(align_down(vaddr + page_size, page_size), vaddr + len);

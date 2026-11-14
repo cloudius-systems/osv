@@ -1155,6 +1155,11 @@ phys virt_to_phys(void *virt)
         return virt_to_phys_pt(virt);
     }
 #endif
+#if CONF_fork
+    if (stack_window::contains(virt)) {
+        return virt_to_phys_pt(virt);
+    }
+#endif
 
     // For VMA-mapped addresses (below phys_mem), walk the page table.
     // This handles e.g. malloc_large fallback allocations used as DMA
@@ -2515,6 +2520,8 @@ namespace stack_window {
 
 static_assert(base >> 39 > pml4_app_last && (base + size - 1) >> 39 == base >> 39,
               "the stack window must lie in one kernel top-level slot, which fork() shares");
+static_assert(base >= debug_mem_area_base && base + size <= debug_mem_area_base + mem_area_size,
+              "the stack window must lie outside the linear map, in the debug area");
 
 static bool ready;
 static mutex window_mutex;
@@ -2525,14 +2532,18 @@ static std::unordered_map<size_t, std::vector<uintptr_t>> free_ranges;
 
 void init()
 {
+    // The window lies in the debug area, which the debug allocator then owns.
+    if (CONF_memory_debug) {
+        return;
+    }
     // Install the window's second-level table in the kernel root now, before
     // any fork(): children copy their parent's top-level entries, so a table
     // created after a fork would be invisible to the children forked earlier.
     WITH_LOCK(page_table_high_mutex) {
-        auto top = hw_ptep<3>::force(&kernel_pml4()[base >> 39]);
-        if (top.read().empty()) {
-            allocate_intermediate_level(top);
-        }
+        auto pml4 = phys_cast<pt_element<3>>(kernel_pt_root_phys());
+        auto top = hw_ptep<3>::force(&pml4[base >> 39]);
+        assert(top.read().empty());   // nothing else may map this slot
+        allocate_intermediate_level(top);
     }
     ready = true;
 }
@@ -2542,6 +2553,8 @@ void* alloc(size_t bytes)
     if (!ready) {
         return nullptr;
     }
+    // The bookkeeping below must not land in a forked caller's private heap.
+    fork_arena::kernel_heap_scope kh;
     bytes = align_up(bytes, page_size);
     uintptr_t va = 0;
     WITH_LOCK(window_mutex) {
@@ -2585,6 +2598,7 @@ private:
 
 void free(void* p, size_t bytes)
 {
+    fork_arena::kernel_heap_scope kh;
     bytes = align_up(bytes, page_size);
     std::vector<void*> pages;
     pages.reserve(bytes / page_size);

@@ -1097,7 +1097,8 @@ static void* malloc_large(size_t size, size_t alignment, bool block = true, bool
     // physical contiguity), so force that path and never fall back to map_anon.
     bool force_identity = fork_arena::force_kernel_heap;
     if (force_identity) {
-        block = true;   // wait for linear-map memory rather than map_anon
+        // Never fall back to map_anon: wait for linear-map memory, unless the
+        // caller asked not to block (block=false), which then gets nullptr.
         // A non-contiguous alloc() skips the free list below the request's
         // order, which can hold every range that fits; with no map_anon
         // fallback the caller would then wait forever with memory free.
@@ -2557,7 +2558,7 @@ void* alloc_kernel_stack(size_t size)
     if (auto p = malloc_large(size, page_size, false, true)) {
         return p;
     }
-    if (auto p = stack_window::alloc(size)) {
+    if (auto p = mmu::stack_window::alloc(size)) {
         return p;
     }
     return malloc_large(size, page_size, true, true);
@@ -2565,8 +2566,8 @@ void* alloc_kernel_stack(size_t size)
 
 void free_kernel_stack(void* p, size_t size)
 {
-    if (stack_window::contains(p)) {
-        stack_window::free(p, size);
+    if (mmu::stack_window::contains(p)) {
+        mmu::stack_window::free(p, size);
     } else {
         free(p);
     }
