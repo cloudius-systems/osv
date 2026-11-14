@@ -470,6 +470,7 @@ const char *inet_ntoa_r(struct in_addr ina, char *buf, socklen_t); /* in libkern
 const char *inet_ntop(int, const void *, char *, socklen_t); /* in libkern */
 int	 inet_pton(int af, const char *, void *); /* in libkern */
 void	 in_ifdetach(struct ifnet *);
+void in_prefixlen2mask(struct in_addr *maskp, int plen);
 __END_DECLS
 
 #define	in_hosteq(s, t)	((s).s_addr == (t).s_addr)

@@ -20,6 +20,8 @@ os.environ["LANG"]="C"
 disabled_list= [
     "tst-dns-resolver.so",
     "tst-dns-resolver",
+    "tst-ipv6-internet.so", # needs live IPv6 internet; run manually (see its header)
+    "tst-ipv6-internet",
     "tst-feexcept.so", # On AArch64 the tests around floating point exceptions (SIGFPE) fail even on KVM - see issue #1150
     "tst-feexcept",
 ]

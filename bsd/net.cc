@@ -24,6 +24,11 @@
 #include <bsd/sys/net/ethernet.h>
 #include <bsd/sys/net/route.h>
 #include <bsd/sys/compat/linux/linux_netlink.h>
+#ifdef INET6
+#include <bsd/sys/netinet/icmp6.h>
+#include <bsd/sys/netinet6/in6.h>
+#include <bsd/sys/netinet6/mld6.h>
+#endif
 
 /* Generation of ip ids */
 void ip_initid(void);
@@ -31,6 +36,10 @@ void ip_initid(void);
 extern "C" {
     /* AF_INET */
     extern  struct domain inetdomain;
+#ifdef INET6
+    /* AF_INET6 */
+    extern  struct domain inet6domain;
+#endif
     /* AF_ROUTE */
     extern  struct domain routedomain;
     /* AF_NETLINK */
@@ -55,12 +64,20 @@ void net_init(void)
     vnet_pfil_init();
     domaininit(NULL);
     OSV_DOMAIN_SET(inet);
+#ifdef INET6
+    OSV_DOMAIN_SET(inet6);
+#endif
     OSV_DOMAIN_SET(route);
     OSV_DOMAIN_SET(netlink);
     rts_init();
     route_init();
     vnet_route_init();
     netlink_init();
+#ifdef INET6
+    ip6_init2(NULL);
+    mld_init(NULL);
+    vnet_mld_init(NULL);
+#endif
     ipport_tick_init(NULL);
     arp_init();
     domainfinalize(NULL);
@@ -68,9 +85,13 @@ void net_init(void)
     if_attachdomain(NULL);
     vnet_loif_init();
 
+    /* Adding IPv4 address before starting the loopback interface
+     * cause the interface to be brought up without IPv6 support.
+     */
+
     /* Start the loopback device */
-    osv::start_if("lo0", "127.0.0.1", "255.0.0.0");
     osv::ifup("lo0");
+    osv::start_if("lo0", "127.0.0.1", "255.0.0.0");
 
     debug(" - done\n");
 }

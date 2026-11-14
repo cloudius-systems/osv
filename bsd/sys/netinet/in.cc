@@ -1673,3 +1673,13 @@ in_domifdetach(struct ifnet *ifp, void *aux)
 	lltable_free(ii->ii_llt);
 	free(ii);
 }
+
+void
+in_prefixlen2mask(struct in_addr *maskp, int plen)
+{
+	if (plen == 0)
+		maskp->s_addr = 0;
+	else
+		maskp->s_addr = htonl(0xffffffff << (32 - plen));
+}
+

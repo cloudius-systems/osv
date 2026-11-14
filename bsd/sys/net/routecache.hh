@@ -46,6 +46,8 @@
 
 #include <bsd/porting/netport.h>
 #include <bsd/sys/net/if.h>
+#include <bsd/sys/net/if_dl.h>
+#include <bsd/sys/netinet/in.h>
 #include <bsd/sys/netinet/in_var.h>
 #include <bsd/sys/net/route.h>
 

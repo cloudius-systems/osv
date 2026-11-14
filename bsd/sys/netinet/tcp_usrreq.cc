@@ -70,6 +70,7 @@
 #ifdef INET6
 #include <bsd/sys/netinet/ip6.h>
 #include <bsd/sys/netinet6/in6_pcb.h>
+#include <bsd/sys/netinet6/in6_var.h>
 #include <bsd/sys/netinet6/ip6_var.h>
 #include <bsd/sys/netinet6/scope6_var.h>
 #endif
@@ -83,6 +84,7 @@
 #endif
 
 #include <osv/poll.h>
+#include <osv/net_channel.hh>
 
 /*
  * TCP protocol interface to socket abstraction.
@@ -296,6 +298,7 @@ tcp6_usr_bind(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 	sin6p = (struct bsd_sockaddr_in6 *)nam;
 	if (nam->sa_len != sizeof (*sin6p))
 		return (EINVAL);
+
 	/*
 	 * Must check for multicast addresses and disallow binding
 	 * to them.
@@ -312,6 +315,7 @@ tcp6_usr_bind(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 		error = EINVAL;
 		goto out;
 	}
+
 	tp = intotcpcb(inp);
 	TCPDEBUG1();
 	INP_HASH_WLOCK(&V_tcbinfo);
@@ -327,14 +331,13 @@ tcp6_usr_bind(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 			in6_sin6_2_sin(&sin, sin6p);
 			inp->inp_vflag |= INP_IPV4;
 			inp->inp_vflag &= ~INP_IPV6;
-			error = in_pcbbind(inp, (struct bsd_sockaddr *)&sin,
-			    td->td_ucred);
+			error = in_pcbbind(inp, (struct bsd_sockaddr *)&sin, 0);
 			INP_HASH_WUNLOCK(&V_tcbinfo);
 			goto out;
 		}
 	}
 #endif
-	error = in6_pcbbind(inp, nam, td->td_ucred);
+	error = in6_pcbbind(inp, nam, 0);
 	INP_HASH_WUNLOCK(&V_tcbinfo);
 out:
 	TCPDEBUG2(PRU_BIND);
@@ -408,7 +411,7 @@ tcp6_usr_listen(struct socket *so, int backlog, struct thread *td)
 		inp->inp_vflag &= ~INP_IPV4;
 		if ((inp->inp_flags & IN6P_IPV6_V6ONLY) == 0)
 			inp->inp_vflag |= INP_IPV4;
-		error = in6_pcbbind(inp, (struct bsd_sockaddr *)0, td->td_ucred);
+		error = in6_pcbbind(inp, (struct bsd_sockaddr *)0, 0);
 	}
 	INP_HASH_WUNLOCK(&V_tcbinfo);
 	if (error == 0) {
@@ -517,23 +520,18 @@ tcp6_usr_connect(struct socket *so, struct bsd_sockaddr *nam, struct thread *td)
 		in6_sin6_2_sin(&sin, sin6p);
 		inp->inp_vflag |= INP_IPV4;
 		inp->inp_vflag &= ~INP_IPV6;
-		if ((error = prison_remote_ip4(td->td_ucred,
-		    &sin.sin_addr)) != 0)
-			goto out;
 		if ((error = tcp_connect(tp, (struct bsd_sockaddr *)&sin, td)) != 0)
 			goto out;
-		error = tcp_output_connect(so, nam);
+		error = tcp_output(tp);
 		goto out;
 	}
 #endif
 	inp->inp_vflag &= ~INP_IPV4;
 	inp->inp_vflag |= INP_IPV6;
 	inp->inp_inc.inc_flags |= INC_ISIPV6;
-	if ((error = prison_remote_ip6(td->td_ucred, &sin6p->sin6_addr)) != 0)
-		goto out;
 	if ((error = tcp6_connect(tp, nam, td)) != 0)
 		goto out;
-	error = tcp_output_connect(so, nam);
+	error = tcp_output(tp);
 
 out:
 	TCPDEBUG2(PRU_CONNECT);
@@ -642,7 +640,6 @@ tcp6_usr_accept(struct socket *so, struct bsd_sockaddr **nam)
 
 	inp = sotoinpcb(so);
 	KASSERT(inp != NULL, ("tcp6_usr_accept: inp == NULL"));
-	INP_INFO_RLOCK(&V_tcbinfo);
 	INP_LOCK(inp);
 	if (inp->inp_flags & (INP_TIMEWAIT | INP_DROPPED)) {
 		error = ECONNABORTED;
@@ -668,7 +665,6 @@ tcp6_usr_accept(struct socket *so, struct bsd_sockaddr **nam)
 out:
 	TCPDEBUG2(PRU_ACCEPT);
 	INP_UNLOCK(inp);
-	INP_INFO_RUNLOCK(&V_tcbinfo);
 	if (error == 0) {
 		if (v4)
 			*nam = in6_v4mapsin6_sockaddr(port, &addr);
@@ -1029,25 +1025,25 @@ struct pr_usrreqs tcp_usrreqs = initialize_with([] (pr_usrreqs& x) {
 #endif /* INET */
 
 #ifdef INET6
-struct pr_usrreqs tcp6_usrreqs = {
-	.pru_abort =		tcp_usr_abort,
-	.pru_accept =		tcp6_usr_accept,
-	.pru_attach =		tcp_usr_attach,
-	.pru_bind =		tcp6_usr_bind,
-	.pru_connect =		tcp6_usr_connect,
-	.pru_control =		in6_control,
-	.pru_detach =		tcp_usr_detach,
-	.pru_disconnect =	tcp_usr_disconnect,
-	.pru_listen =		tcp6_usr_listen,
-	.pru_peeraddr =		in6_mapped_peeraddr,
-	.pru_rcvd =		tcp_usr_rcvd,
-	.pru_rcvoob =		tcp_usr_rcvoob,
-	.pru_send =		tcp_usr_send,
-	.pru_shutdown =		tcp_usr_shutdown,
-	.pru_sockaddr =		in6_mapped_sockaddr,
-	.pru_sosetlabel =	in_pcbsosetlabel,
-	.pru_close =		tcp_usr_close,
-};
+struct pr_usrreqs tcp6_usrreqs = initialize_with([] (pr_usrreqs& x) {
+	x.pru_abort =		tcp_usr_abort;
+	x.pru_accept =		tcp6_usr_accept;
+	x.pru_attach =		tcp_usr_attach;
+	x.pru_bind =		tcp6_usr_bind;
+	x.pru_connect =		tcp6_usr_connect;
+	x.pru_control =		in6_control;
+	x.pru_detach =		tcp_usr_detach;
+	x.pru_disconnect =	tcp_usr_disconnect;
+	x.pru_listen =		tcp6_usr_listen;
+	x.pru_peeraddr =		in6_mapped_peeraddr;
+	x.pru_rcvd =		tcp_usr_rcvd;
+	x.pru_rcvoob =		tcp_usr_rcvoob;
+	x.pru_send =		tcp_usr_send;
+	x.pru_shutdown =		tcp_usr_shutdown;
+	x.pru_sockaddr =		in6_mapped_sockaddr;
+	x.pru_sosetlabel =	in_pcbsosetlabel;
+	x.pru_close =		tcp_usr_close;
+});
 #endif /* INET6 */
 
 #ifdef INET
@@ -1136,7 +1132,7 @@ tcp6_connect(struct tcpcb *tp, struct bsd_sockaddr *nam, struct thread *td)
 	INP_HASH_WLOCK(&V_tcbinfo);
 
 	if (inp->inp_lport == 0) {
-		error = in6_pcbbind(inp, (struct bsd_sockaddr *)0, td->td_ucred);
+		error = in6_pcbbind(inp, (struct bsd_sockaddr *)0, 0);
 		if (error)
 			goto out;
 	}
