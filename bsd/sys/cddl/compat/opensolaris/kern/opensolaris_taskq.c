@@ -33,12 +33,99 @@
 #include <sys/lock.h>
 #include <sys/mutex.h>
 #include <sys/queue.h>
+#include <sys/refcount.h>
 #include <sys/taskqueue.h>
 #include <sys/taskq.h>
 #include <osv/export.h>
 #include <string.h>
 
 static uma_zone_t taskq_zone;
+
+/*
+ * Task ids for taskq_dispatch(), ported from OpenZFS
+ * module/os/freebsd/spl/spl_taskq.c (zfs-2.4.4).  A dispatched ostask frees
+ * itself when it has run, so its address cannot be its id: taskq_wait_id()
+ * and taskq_cancel_id() on a finished task would read or free stale memory.
+ * Instead each task gets a never-reused 64-bit id and sits in a small hash
+ * of live tasks; a lookup takes a reference, and the task is freed when the
+ * last reference goes.  An id that is no longer in the table has finished.
+ * Caller-owned entries (taskq_dispatch_safe) are never in the table.
+ *
+ * The id state lives in a wrapper that only taskq_dispatch() allocates, not
+ * in struct ostask, which zio_t and taskq_ent_t embed: growing ostask would
+ * push BSD ZFS's zio_t past the 1 KiB small-object limit.
+ */
+struct taskq_dent {
+	struct ostask		 td_task;	/* must stay first */
+	taskqid_t		 td_id;
+	LIST_ENTRY(taskq_dent)	 td_hash;
+	volatile u_int		 td_rc;
+};
+
+_Static_assert(offsetof(struct taskq_dent, td_task) == 0,
+    "taskq_run() and uma_zfree() treat the ostask pointer as the wrapper");
+
+#define	TQ_HASH_SIZE	64
+static LIST_HEAD(, taskq_dent) taskq_hash[TQ_HASH_SIZE];
+static mutex_t taskq_hash_lock[TQ_HASH_SIZE];	/* zero-filled = unlocked */
+static uint64_t taskq_idnext;
+
+#define	TQIDHASH(id)		(&taskq_hash[(id) % TQ_HASH_SIZE])
+#define	TQIDHASHLOCK(id)	(&taskq_hash_lock[(id) % TQ_HASH_SIZE])
+
+static struct taskq_dent *
+taskq_lookup(taskqid_t id)
+{
+	struct taskq_dent *task;
+
+	if (id == 0)
+		return (NULL);
+	mutex_lock(TQIDHASHLOCK(id));
+	LIST_FOREACH(task, TQIDHASH(id), td_hash) {
+		if (task->td_id == id)
+			break;
+	}
+	if (task != NULL)
+		refcount_acquire(&task->td_rc);
+	mutex_unlock(TQIDHASHLOCK(id));
+	return (task);
+}
+
+static taskqid_t
+taskq_insert(struct taskq_dent *task)
+{
+	/* A 64-bit counter does not wrap in practice; 0 means "no task". */
+	taskqid_t id = __atomic_add_fetch(&taskq_idnext, 1, __ATOMIC_RELAXED);
+
+	task->td_id = id;
+	mutex_lock(TQIDHASHLOCK(id));
+	LIST_INSERT_HEAD(TQIDHASH(id), task, td_hash);
+	mutex_unlock(TQIDHASHLOCK(id));
+	return (id);
+}
+
+static void
+taskq_remove(struct taskq_dent *task)
+{
+	taskqid_t id = task->td_id;
+
+	if (id == 0)
+		return;
+	mutex_lock(TQIDHASHLOCK(id));
+	if (task->td_id != 0) {
+		LIST_REMOVE(task, td_hash);
+		task->td_id = 0;
+	}
+	mutex_unlock(TQIDHASHLOCK(id));
+}
+
+static void
+taskq_free(struct taskq_dent *task)
+{
+	taskq_remove(task);
+	if (refcount_release(&task->td_rc))
+		uma_zfree(taskq_zone, task);
+}
 
 OSV_LIB_SOLARIS_API
 taskq_t *system_taskq = NULL;
@@ -49,7 +136,7 @@ taskq_t *system_delay_taskq = NULL;
 OSV_LIB_SOLARIS_API void
 system_taskq_init(void *arg)
 {
-	taskq_zone = uma_zcreate("taskq_zone", sizeof(struct ostask),
+	taskq_zone = uma_zcreate("taskq_zone", sizeof(struct taskq_dent),
 	    NULL, NULL, NULL, NULL, 0, 0);
 	system_taskq = taskq_create("system_taskq", 8, 0, 0, 0, 0);
 	system_delay_taskq = taskq_create("system_delay_taskq", 4, 0, 0, 0, 0);
@@ -106,40 +193,46 @@ taskq_member(taskq_t *tq, kthread_t *thread)
 	return (taskqueue_member(tq->tq_queue, thread));
 }
 
-int
+OSV_LIB_SOLARIS_API int
 taskq_cancel_id(taskq_t *tq, taskqid_t tid, boolean_t wait)
 {
-	struct ostask *task = (struct ostask *)(void *)tid;
+	struct taskq_dent *task;
 	uint32_t pend = 0;
 	int rc;
 
-	if (task == NULL)
+	if ((task = taskq_lookup(tid)) == NULL)
 		return (ENOENT);
 
-	rc = taskqueue_cancel(tq->tq_queue, &task->ost_task, &pend);
+	rc = taskqueue_cancel(tq->tq_queue, &task->td_task.ost_task, &pend);
 	if (rc == EBUSY && wait)
-		taskqueue_drain(tq->tq_queue, &task->ost_task);
+		taskqueue_drain(tq->tq_queue, &task->td_task.ost_task);
 
+	/* A cancelled task did not run, so drop the reference it holds. */
 	if (pend)
-		uma_zfree(taskq_zone, task);
+		taskq_free(task);
+	/* Drop the reference taskq_lookup() took. */
+	taskq_free(task);
 
+	if (rc == EBUSY && !wait)
+		return (EBUSY);
 	return (pend ? 0 : ENOENT);
 }
 
 static void
 taskq_run(void *arg, int pending __bsd_unused2)
 {
-	struct ostask *task = arg;
+	struct taskq_dent *task = arg;
 
-	task->ost_func(task->ost_arg);
+	task->td_task.ost_func(task->td_task.ost_arg);
 
-	uma_zfree(taskq_zone, task);
+	taskq_free(task);
 }
 
 OSV_LIB_SOLARIS_API taskqid_t
 taskq_dispatch(taskq_t *tq, task_func_t func, void *arg, uint_t flags)
 {
-	struct ostask *task;
+	struct taskq_dent *task;
+	taskqid_t id;
 	int mflag, prio;
 
 	if ((flags & (TQ_SLEEP | TQ_NOQUEUE)) == TQ_SLEEP)
@@ -156,13 +249,15 @@ taskq_dispatch(taskq_t *tq, task_func_t func, void *arg, uint_t flags)
 	if (task == NULL)
 		return (0);
 
-	task->ost_func = func;
-	task->ost_arg = arg;
+	task->td_task.ost_func = func;
+	task->td_task.ost_arg = arg;
+	refcount_init(&task->td_rc, 1);
+	id = taskq_insert(task);
 
-	TASK_INIT(&task->ost_task, prio, taskq_run, task);
-	taskqueue_enqueue(tq->tq_queue, &task->ost_task);
+	TASK_INIT(&task->td_task.ost_task, prio, taskq_run, task);
+	taskqueue_enqueue(tq->tq_queue, &task->td_task.ost_task);
 
-	return ((taskqid_t)(void *)task);
+	return (id);
 }
 
 #define	TASKQ_MAGIC	0x74541c
@@ -228,11 +323,12 @@ taskq_wait(taskq_t *tq)
 OSV_LIB_SOLARIS_API void
 taskq_wait_id(taskq_t *tq, taskqid_t id)
 {
-	struct ostask *task = (struct ostask *)(void *)id;
+	struct taskq_dent *task;
 
-	if (task == NULL)
+	if ((task = taskq_lookup(id)) == NULL)
 		return;
-	taskqueue_drain(tq->tq_queue, &task->ost_task);
+	taskqueue_drain(tq->tq_queue, &task->td_task.ost_task);
+	taskq_free(task);
 }
 
 /*
