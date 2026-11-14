@@ -165,9 +165,30 @@ void *alloc_thread_storage(size_t align, size_t size)
     // scheduler from every address space, so it must not land in the COW fork
     // arena (which would give each address space a private copy).
     fork_arena::kernel_heap_scope kh;
+    // The object embeds its exception stack (64 KiB on aarch64), so like a
+    // kernel stack it must not wait for a free contiguous range: try one
+    // without blocking, then the stack window (page-aligned), then wait.
+    if (size > mmu::page_size && align <= mmu::page_size) {
+        if (auto p = memory::alloc_phys_contiguous_aligned(size, align, false)) {
+            return p;
+        }
+        if (auto p = mmu::stack_window::alloc(size)) {
+            return p;
+        }
+    }
     return aligned_alloc(align, size);
 #else
     return aligned_alloc(align, size);
+#endif
+}
+
+void free_thread_storage(void *p)
+{
+#if CONF_fork
+    // Only alloc_thread_storage(..., sizeof(thread)) hands out window memory.
+    memory::free_kernel_stack(p, sizeof(thread));
+#else
+    free(p);
 #endif
 }
 

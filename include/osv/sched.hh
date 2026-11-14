@@ -95,8 +95,9 @@ class thread_handle;
 // Allocate raw storage for a thread object.  Forces the identity-mapped kernel
 // heap (never the fork arena) so the object's VA is coherent across every
 // address space -- the scheduler dereferences thread objects cross-AS.  Freed
-// with the ordinary free() (address-range dispatch handles the kernel heap).
+// with free_thread_storage(): under fork it may come from the stack window.
 void *alloc_thread_storage(size_t align, size_t size);
+void free_thread_storage(void *p);
 struct cpu;
 class timer;
 class timer_list;
@@ -565,8 +566,10 @@ public:
     // delete are the same, so delete is fine.
     static void dispose(thread* p) {
         p->~thread();
-        free(p);
+        free_thread_storage(p);
     }
+    // So that delete, and std::unique_ptr<thread>, free it the same way.
+    static void operator delete(void* p) { free_thread_storage(p); }
     using thread_unique_ptr = std::unique_ptr<thread, decltype(&thread::dispose)>;
     template <typename... Args>
     static thread_unique_ptr make_unique(Args&&... args) {
