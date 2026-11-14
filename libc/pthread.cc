@@ -276,9 +276,48 @@ int pthread_atfork(void (*prepare)(void), void (*parent)(void),
     return 0;
 }
 
+// atfork handlers registered via pthread_atfork()/__register_atfork().  glibc
+// and musl register these internally (e.g. to reset the malloc arena lock in
+// the child), so fork() must actually run them.  Stored here and invoked by
+// osv::fork::run_atfork_* from libc/process/fork.cc.
+namespace {
+struct atfork_entry {
+    void (*prepare)(void);
+    void (*parent)(void);
+    void (*child)(void);
+};
+mutex atfork_lock;
+std::vector<atfork_entry> atfork_handlers;
+}
+
+extern "C" void __osv_run_atfork_prepare()
+{
+    // POSIX: prepare handlers run in LIFO (reverse registration) order.
+    SCOPE_LOCK(atfork_lock);
+    for (auto it = atfork_handlers.rbegin(); it != atfork_handlers.rend(); ++it) {
+        if (it->prepare) it->prepare();
+    }
+}
+extern "C" void __osv_run_atfork_parent()
+{
+    SCOPE_LOCK(atfork_lock);
+    for (auto &h : atfork_handlers) {
+        if (h.parent) h.parent();
+    }
+}
+extern "C" void __osv_run_atfork_child()
+{
+    SCOPE_LOCK(atfork_lock);
+    for (auto &h : atfork_handlers) {
+        if (h.child) h.child();
+    }
+}
+
 extern "C" int register_atfork(void (*prepare)(void), void (*parent)(void),
                                 void (*child)(void), void *__dso_handle)
 {
+    SCOPE_LOCK(atfork_lock);
+    atfork_handlers.push_back({prepare, parent, child});
     return 0;
 }
 
