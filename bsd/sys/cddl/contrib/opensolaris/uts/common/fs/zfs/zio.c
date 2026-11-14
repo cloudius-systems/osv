@@ -35,6 +35,7 @@
 #include <sys/dmu_objset.h>
 #include <sys/arc.h>
 #include <sys/ddt.h>
+#include <osv/export.h>
 
 SYSCTL_DECL(_vfs_zfs);
 SYSCTL_NODE(_vfs_zfs, OID_AUTO, zio, CTLFLAG_RW, 0, "ZFS ZIO");
@@ -2347,6 +2348,48 @@ zio_dva_unallocate(zio_t *zio, zio_gang_node_t *gn, blkptr_t *bp)
 }
 
 /*
+ * Number of normal-class log block allocations refused by
+ * zio_zil_space_ok() (each one makes zil_commit() fall back to
+ * txg_wait_synced()).
+ */
+OSV_LIBSOLARIS_API uint64_t zfs_zil_space_refused = 0;
+
+/*
+ * Log blocks are allocated in open context and only show up in mc_alloc
+ * when their txg syncs, so no space check counts them: dsl_pool_adjustedsize()
+ * says "The intent log is not accounted for, so it must fit within this slop."
+ * Under sustained fsync load on a small pool it does not fit.  The ZIL then
+ * takes the last free blocks, spa_sync() gets ENOSPC on a MUSTSUCCEED write,
+ * and the pool suspends with failmode=wait: every later sync waits forever.
+ * Before taking a normal-class block, check that it leaves the slop that
+ * spa_sync() needs.  If not, fail the allocation: zil_commit_writer() then
+ * falls back to txg_wait_synced(), which is slow but makes progress and frees
+ * the log.  The test is modelled on the free-versus-slop check that illumos
+ * 7303 added to metaslab_sync_done(); this one also counts the log blocks
+ * that are allocated but not yet synced.
+ */
+static boolean_t
+zio_zil_space_ok(spa_t *spa, uint64_t size)
+{
+	metaslab_class_t *mc = spa_normal_class(spa);
+	/* Unlocked reads: concurrent writers can overshoot by a few blocks. */
+	uint64_t space = metaslab_class_get_space(mc);
+	uint64_t used = metaslab_class_get_alloc(mc) + size;
+	uint64_t resv;
+
+	if (spa->spa_dsl_pool == NULL)
+		return (B_TRUE);
+	resv = spa_get_dspace(spa) -
+	    dsl_pool_adjustedsize(spa->spa_dsl_pool, B_FALSE);
+	for (int t = 0; t < TXG_SIZE; t++)
+		used += spa->spa_zil_alloc[t];
+	if (used + resv <= space)
+		return (B_TRUE);
+	atomic_inc_64(&zfs_zil_space_refused);
+	return (B_FALSE);
+}
+
+/*
  * Try to allocate an intent log block.  Return 0 on success, errno on failure.
  */
 int
@@ -2369,9 +2412,15 @@ zio_alloc_zil(spa_t *spa, uint64_t txg, blkptr_t *new_bp, blkptr_t *old_bp,
 	}
 
 	if (error) {
+		if (!zio_zil_space_ok(spa, size))
+			return (ENOSPC);
 		error = metaslab_alloc(spa, spa_normal_class(spa), size,
 		    new_bp, 1, txg, old_bp,
 		    METASLAB_HINTBP_AVOID | METASLAB_GANG_AVOID);
+		if (error == 0) {
+			atomic_add_64(&spa->spa_zil_alloc[txg & TXG_MASK],
+			    BP_GET_ASIZE(new_bp));
+		}
 	}
 
 	if (error == 0) {
