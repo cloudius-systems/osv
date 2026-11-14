@@ -167,7 +167,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 	misc-tcp-sendonly.so tst-tcp-nbwrite.so misc-tcp-hash-srv.so \
 	misc-loadbalance.so misc-scheduler.so tst-console.so tst-app.so \
 	misc-setpriority.so misc-timeslice.so misc-tls.so misc-gtod.so \
-	tst-dns-resolver.so tst-kill.so tst-truncate.so \
+	tst-dns-resolver.so tst-dns-decname.so tst-kill.so tst-truncate.so \
 	misc-panic.so tst-utimes.so tst-utimensat.so tst-futimesat.so \
 	misc-tcp.so tst-strerror_r.so misc-random.so misc-urandom.so \
 	tst-commands.so tst-options.so tst-threadcomplete.so tst-timerfd.so \
@@ -212,7 +212,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 #This is a list of the tests that interact with the internal C++ or C
 #api which is unavailable when kernel is built with all but glibc symbols
 #hidden.
-internal-api-tests := tst-app.so tst-async.so tst-bsd-evh.so \
+internal-api-tests := tst-app.so tst-async.so tst-dns-decname.so tst-bsd-evh.so \
 	tst-bsd-kthread.so tst-bsd-taskqueue.so tst-bsd-tcp1-zrcv.so \
 	tst-bsd-tcp1-zsnd.so tst-bsd-tcp1-zsndrcv.so tst-clock.so \
 	tst-condvar.so tst-dax.so tst-fpu.so tst-fs-link.so tst-hub.so \
