@@ -308,7 +308,14 @@ net::net(virtio_device& dev)
     int_factory.register_msi_bindings = [this,poll_task](interrupt_manager &msi) {
        msi.easy_register({
            { 0, [&] { this->_rxq.vqueue->disable_interrupts(); }, poll_task },
-           { 1, [&] { this->_txq.vqueue->disable_interrupts(); }, nullptr }
+           { 1, [&] {
+                   // Tx completion IRQ: mask further Tx interrupts and wake
+                   // the xmitter to reap.  The xmitter re-arms + re-checks
+                   // before it sleeps (reap_and_rearm), so a completion
+                   // posted in the enable window is never lost.
+                   this->_txq.vqueue->disable_interrupts();
+                   this->wake_tx_reaper();
+               }, nullptr }
        });
     };
 
@@ -316,7 +323,10 @@ net::net(virtio_device& dev)
         return new pci_interrupt(
             pci_dev,
             [=] { return this->ack_irq(); },
-            [=] { poll_task->wake_with_irq_disabled(); });
+            [=] {
+                poll_task->wake_with_irq_disabled();
+                this->wake_tx_reaper();
+            });
     };
 #endif
 
@@ -327,13 +337,27 @@ net::net(virtio_device& dev)
             gic::irq_type::IRQ_TYPE_EDGE,
             _dev.get_irq(),
             [=] { return this->ack_irq(); },
-            [=] { poll_task->wake_with_irq_disabled(); });
+            [=] {
+                poll_task->wake_with_irq_disabled();
+                // The shared MMIO IRQ also carries Tx completions, which
+                // ack_irq() does not service (it only quiesces Rx).  Wake
+                // the Tx reaper, as the x86 MMIO handler below does.
+                this->wake_tx_reaper();
+            });
     };
 #else
     int_factory.create_gsi_edge_interrupt = [this,poll_task]() {
         return new gsi_edge_interrupt(
             _dev.get_irq(),
-            [=] { if (this->ack_irq()) poll_task->wake_with_irq_disabled(); });
+            [=] {
+                if (this->ack_irq()) {
+                    poll_task->wake_with_irq_disabled();
+                }
+                // The shared MMIO IRQ also carries Tx completions, which
+                // ack_irq() does not service (it only quiesces Rx).  Wake
+                // the Tx reaper; virtio-PCI uses its Tx MSI-X vector.
+                this->wake_tx_reaper();
+            });
     };
 #endif
 #endif
@@ -927,6 +951,26 @@ void net::txq::gc()
     }
 
     vqueue->get_buf_gc();
+}
+
+void net::txq::reap_and_rearm()
+{
+    // Enable-then-recheck: reap visible completions, arm the completion
+    // interrupt (sets used_event + a seq_cst fence pairing with the device),
+    // then re-check the used ring once.  If a completion landed in the enable
+    // window, disable and reap again; otherwise the ring is drained with the
+    // interrupt armed, so it is safe for the xmitter to sleep -- the next
+    // completion raises the Tx MSI-X (PCI) / shared IRQ (MMIO), which wakes
+    // the xmitter to reap.  Closes the lost-wake window where the xmitter
+    // slept with unreaped completions and Tx interrupts disabled.
+    for (;;) {
+        gc();
+        vqueue->enable_interrupts();
+        if (!vqueue->used_ring_not_empty()) {
+            break;
+        }
+        vqueue->disable_interrupts();
+    }
 }
 
 u64 net::get_driver_features()
