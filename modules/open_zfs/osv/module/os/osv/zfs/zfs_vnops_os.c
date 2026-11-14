@@ -1217,7 +1217,25 @@ zfs_vop_setattr(struct vnode *vp, struct vattr *vap)
 }
 
 /*
- * zfs_vop_inactive - release znode on last vnode reference drop.
+ * zfs_vop_inactive - release the znode when a vnode's last VFS reference drops.
+ *
+ * OSv has no FreeBSD vhold/vrele or Linux igrab/iput, so the znode lifetime is
+ * tracked manually by z_ref_cnt: zfs_znode_alloc() starts it at 1 (the binding
+ * for the vnode this znode will be attached to), and every zfs_zget() that
+ * re-grabs an already-live znode (via the SA userdata on the DMU buffer) bumps
+ * it with zfs_zhold().  A znode may therefore be reachable from more than one
+ * vnode at once: a forked backend closing a file drops one vnode binding while
+ * a sibling that just re-opened the same object still holds another.
+ *
+ * The teardown MUST be serialized against that re-grab and MUST only free on
+ * the last reference, or the znode is freed while another vnode still points at
+ * it -- a use-after-free (a sibling faulting on the poisoned z_rangelock) or a
+ * double zfs_znode_free() (NULL-deref in list_remove on the already-unlinked
+ * z_all_znodes node).  Both reproduce under a sustained fork-per-connection
+ * open/close storm.  zfs_zget() takes ZFS_OBJ_HOLD for the object around its
+ * dmu_buf_get_user()+zfs_zhold(); take the same hold here so the decrement and
+ * the free decision cannot interleave with a re-grab, exactly as upstream
+ * OpenZFS relies on the VFS i_count/v_usecount to single-thread reclaim.
  */
 static int
 zfs_vop_inactive(struct vnode *vp)
@@ -1226,19 +1244,40 @@ zfs_vop_inactive(struct vnode *vp)
 	if (zp == NULL)
 		return (0);
 
-	vp->v_data = NULL;
-	zp->z_vnode = NULL;
+	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
+	uint64_t z_id = zp->z_id;
+
+	ZFS_OBJ_HOLD_ENTER(zfsvfs, z_id);
 
 	/*
-	 * zfs_zinactive destroys the SA handle under the object hold
-	 * mutex and then frees the znode.  If the zfsvfs is already
-	 * being torn down (z_sa_hdl is NULL), fall back to a direct
-	 * free.
+	 * Detach this vnode.  Clear z_vnode only if it still points at us: a
+	 * concurrent zfs_zget() re-grab may already have re-pointed it at the
+	 * sibling's newer vnode, which must not be clobbered.
+	 */
+	vp->v_data = NULL;
+	if (zp->z_vnode == vp)
+		zp->z_vnode = NULL;
+
+	/*
+	 * Drop this binding's reference.  If other holders remain (a sibling
+	 * re-grabbed the znode), leave it live -- the last holder's inactive
+	 * will free it.
+	 */
+	if (atomic_dec_32_nv(&zp->z_ref_cnt) != 0) {
+		ZFS_OBJ_HOLD_EXIT(zfsvfs, z_id);
+		return (0);
+	}
+
+	/*
+	 * Last reference: tear down.  zfs_znode_dmu_fini() destroys the SA
+	 * handle (clearing the DMU-buffer userdata so no later zfs_zget() can
+	 * find this znode) and must run under the object hold.  If the zfsvfs is
+	 * already being torn down (z_sa_hdl is NULL), skip straight to the free.
 	 */
 	if (zp->z_sa_hdl != NULL)
-		zfs_zinactive(zp);
-	else
-		zfs_znode_free(zp);
+		zfs_znode_dmu_fini(zp);
+	ZFS_OBJ_HOLD_EXIT(zfsvfs, z_id);
+	zfs_znode_free(zp);
 
 	return (0);
 }
