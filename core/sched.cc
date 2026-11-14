@@ -28,6 +28,7 @@
 #include <osv/condvar.h>
 #include <osv/printf.hh>
 #include <osv/kernel_config_fork.h>
+#include <osv/mempool.hh>
 #if CONF_fork
 #include <osv/fork_arena.hh>
 #endif
@@ -1039,7 +1040,11 @@ thread::stack_info::stack_info(void* _begin, size_t _size)
 
 void thread::stack_info::default_deleter(thread::stack_info si)
 {
+#if CONF_fork
+    memory::free_kernel_stack(si.begin, si.size);
+#else
     free(si.begin);
+#endif
 }
 
 // thread_map is used for a list of all threads, but also as a map from

@@ -30,6 +30,13 @@ extern "C" void thread_mark_emergency();
 
 namespace memory {
 
+#if CONF_fork
+// Kernel stacks under fork: shared by every address space, and not dependent
+// on a free physically contiguous range (see core/mempool.cc).
+void* alloc_kernel_stack(size_t size);
+void free_kernel_stack(void* p, size_t size);
+#endif
+
 const size_t page_size = 4096;
 
 extern size_t phys_mem_size;
