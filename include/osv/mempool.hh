@@ -35,6 +35,8 @@ namespace memory {
 // on a free physically contiguous range (see core/mempool.cc).
 void* alloc_kernel_stack(size_t size);
 void free_kernel_stack(void* p, size_t size);
+// Start keeping page-aligned kernel-heap allocations headerless.
+void headerless_init();
 #endif
 
 const size_t page_size = 4096;

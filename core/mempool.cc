@@ -711,6 +711,9 @@ public:
     bool empty() const {
         return _not_empty.none();
     }
+    size_t nr_pages() const {
+        return _bitmap.size();
+    }
     size_t size() const {
         size_t size = _free_huge.size();
         for (auto&& list : _free) {
@@ -995,6 +998,33 @@ namespace stats {
     }
 }
 
+#if CONF_fork
+// Page-aligned, page-multiple kernel-heap allocations (the zio buffers) carry
+// no header page, so a 128 KiB buffer takes 32 pages, not 33 (order 5, not
+// 6), and freed buffers coalesce back into larger ranges.  Their size in pages
+// is kept here, indexed by the object's first page; 0 for every other page.
+// free_large() and large_object_size() look here before reading a header.
+static std::atomic<uint16_t*> headerless_pages;
+static size_t headerless_n;
+
+static size_t linear_page_index(const void* p)
+{
+    return (reinterpret_cast<uintptr_t>(p) -
+            reinterpret_cast<uintptr_t>(mmu::phys_mem)) / page_size;
+}
+
+// The size of the headerless object at `obj`, or 0 if it has a header.
+static size_t headerless_size(const void* obj)
+{
+    auto t = headerless_pages.load(std::memory_order_acquire);
+    if (!t || (reinterpret_cast<uintptr_t>(obj) & (page_size - 1))) {
+        return 0;
+    }
+    auto i = linear_page_index(obj);
+    return i < headerless_n ? t[i] * page_size : 0;
+}
+#endif
+
 static void* mapped_malloc_large(size_t size, size_t offset)
 {
     //TODO: For now pre-populate the memory, in future consider doing lazy population
@@ -1096,6 +1126,9 @@ static void* malloc_large(size_t size, size_t alignment, bool block = true, bool
     // kernel PML4 slot mapped verbatim in every AS, coherent regardless of
     // physical contiguity), so force that path and never fall back to map_anon.
     bool force_identity = fork_arena::force_kernel_heap;
+    // Only malloc()-family requests (contiguous=false) go headerless; kernel
+    // stacks and alloc_phys_contiguous_aligned() keep the existing layout.
+    bool may_be_headerless = force_identity && !contiguous;
     if (force_identity) {
         // Never fall back to map_anon: wait for linear-map memory, unless the
         // caller asked not to block (block=false), which then gets nullptr.
@@ -1103,6 +1136,15 @@ static void* malloc_large(size_t size, size_t alignment, bool block = true, bool
         // order, which can hold every range that fits; with no map_anon
         // fallback the caller would then wait forever with memory free.
         contiguous = true;
+    }
+    uint16_t* headerless = nullptr;
+    if (may_be_headerless && alignment == page_size && requested_size % page_size == 0 &&
+        requested_size / page_size <= UINT16_MAX) {
+        headerless = headerless_pages.load(std::memory_order_acquire);
+        if (headerless) {
+            offset = 0;
+            size = requested_size;
+        }
     }
 #endif
 
@@ -1131,6 +1173,13 @@ static void* malloc_large(size_t size, size_t alignment, bool block = true, bool
                 on_alloc(size);
                 void* obj = ret_header;
                 obj += offset;
+#if CONF_fork
+                if (headerless) {
+                    auto i = linear_page_index(obj);
+                    assert(i < headerless_n);
+                    headerless[i] = size / page_size;
+                }
+#endif
                 trace_memory_malloc_large(obj, requested_size, size, alignment);
                 return obj;
             } else if (!contiguous
@@ -1407,6 +1456,12 @@ static void free_page_range(void *addr, size_t size)
 
 static void free_large(void* obj)
 {
+#if CONF_fork
+    if (auto size = headerless_size(obj)) {
+        headerless_pages.load(std::memory_order_relaxed)[linear_page_index(obj)] = 0;
+        return free_page_range(obj, size);
+    }
+#endif
     obj = align_down(obj - 1, page_size);
     free_page_range(static_cast<page_range*>(obj));
 }
@@ -1420,6 +1475,11 @@ static size_t large_object_offset(void *&obj)
 
 static size_t large_object_size(void *obj)
 {
+#if CONF_fork
+    if (auto size = headerless_size(obj)) {
+        return size;
+    }
+#endif
     size_t offset = large_object_offset(obj);
     auto header = static_cast<page_range*>(obj);
     return header->size - offset;
@@ -2562,6 +2622,18 @@ void* alloc_kernel_stack(size_t size)
         return p;
     }
     return malloc_large(size, page_size, true, true);
+}
+
+void headerless_init()
+{
+    size_t n;
+    WITH_LOCK(free_page_ranges_lock) {
+        n = free_page_ranges.nr_pages();
+    }
+    auto t = static_cast<uint16_t*>(alloc_phys_contiguous_aligned(n * sizeof(uint16_t), page_size));
+    memset(t, 0, n * sizeof(uint16_t));
+    headerless_n = n;
+    headerless_pages.store(t, std::memory_order_release);
 }
 
 void free_kernel_stack(void* p, size_t size)

@@ -802,6 +802,7 @@ void* do_main_thread(void *_main_args)
     fork_arena::init();
     // Kernel stacks that need no contiguous memory; set up before the first fork.
     mmu::stack_window::init();
+    memory::headerless_init();
 #endif
 
     // run each payload in order
