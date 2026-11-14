@@ -23,8 +23,10 @@
 // MAP_SHARED page, after the child exits.  Last, the child keeps one kernel
 // thread alive while the parent reads that thread's stack directly: a stack
 // mapped by the child must be visible from the parent's address space, which
-// is where the thread is reaped.  The test counts the stacks that came from
-// the stack window when the kernel has one.
+// is where the thread is reaped.  The test counts the stacks, and the thread
+// objects, that came from the stack window when the kernel has one.  The thread
+// object embeds the exception stack, so on aarch64 it is a 17-page allocation
+// too, which waits forever like a stack would.
 
 #include <osv/kernel_config_fork.h>
 
@@ -69,6 +71,7 @@ struct handshake {
     std::atomic<int> done;      // 0 until the child is done, then 1 ok, 2 bad stack
     std::atomic<long> marker;   // written by the child's kernel threads
     std::atomic<int> in_window; // child's kernel stacks in the stack window
+    std::atomic<int> obj_in_window; // child's thread objects in the stack window
     std::atomic<uintptr_t> held;    // a live child thread's stack words
     std::atomic<int> held_seen;     // 1 parent read them right, 2 wrong
 };
@@ -124,6 +127,9 @@ static void note_stack(const volatile void* p)
 #ifdef HAVE_STACK_WINDOW
     if (mmu::stack_window::contains(const_cast<const void*>(p))) {
         hs->in_window++;
+    }
+    if (mmu::stack_window::contains(sched::thread::current())) {
+        hs->obj_in_window++;
     }
 #endif
 }
@@ -270,8 +276,9 @@ int main(int argc, char** argv)
         return 1;
     }
     printf("%d rounds of 64 KiB and 256 KiB kernel threads in a forked child in %.3f s, "
-           "%d of %d stacks in the stack window\nPASS\n",
-           rounds, secs, hs->in_window.load(), 2 * rounds + 1);
+           "%d of %d stacks and %d thread objects (%zu bytes) in the stack window\nPASS\n",
+           rounds, secs, hs->in_window.load(), 2 * rounds + 1,
+           hs->obj_in_window.load(), sizeof(sched::thread));
     return 0;
 }
 
