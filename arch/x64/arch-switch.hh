@@ -14,6 +14,7 @@
 #include <osv/kernel_config_threads_default_kernel_stack_size.h>
 #include <osv/kernel_config_syscall_stack_size.h>
 #include <osv/kernel_config_fork.h>
+#include <osv/mempool.hh>
 #if CONF_fork
 #include <osv/fork_arena.hh>
 #endif
@@ -266,10 +267,12 @@ void thread::init_stack()
         // the forked child and unmapped/divergent in the reaper's AS, so the
         // reaper's free() faults on an arena address (0x3000..) -> page fault in
         // ~thread.  Force it onto the shared identity heap, like the TCB/TLS and
-        // syscall stacks below.
-        fork_arena::kernel_heap_scope kh;
-#endif
+        // syscall stacks below.  alloc_kernel_stack() does that, and does not
+        // block on a free physically contiguous range.
+        stack.begin = memory::alloc_kernel_stack(stack.size);
+#else
         stack.begin = malloc(stack.size);
+#endif
         stack.deleter = stack.default_deleter;
     } else {
         // The thread will run thread_main_c() with preemption disabled
@@ -292,12 +295,11 @@ void thread::init_stack()
         // Allocate TINY syscall call stack (identity heap, not the fork arena:
         // the kernel runs syscalls on it and must not COW-fault it).
         void* tiny_syscall_stack_begin;
-        {
 #if CONF_fork
-            fork_arena::kernel_heap_scope kh;
+        tiny_syscall_stack_begin = memory::alloc_kernel_stack(TINY_SYSCALL_STACK_SIZE);
+#else
+        tiny_syscall_stack_begin = malloc(TINY_SYSCALL_STACK_SIZE);
 #endif
-            tiny_syscall_stack_begin = malloc(TINY_SYSCALL_STACK_SIZE);
-        }
         assert(tiny_syscall_stack_begin);
         //
         // The top of the stack needs to be 16 bytes lower to make space for
@@ -432,12 +434,11 @@ void thread::setup_large_syscall_stack()
     // Allocate LARGE syscall stack (identity heap, not the fork arena: the
     // kernel runs syscalls on it and must never COW-fault it).
     void* large_syscall_stack_begin;
-    {
 #if CONF_fork
-        fork_arena::kernel_heap_scope kh;
+    large_syscall_stack_begin = memory::alloc_kernel_stack(LARGE_SYSCALL_STACK_SIZE);
+#else
+    large_syscall_stack_begin = malloc(LARGE_SYSCALL_STACK_SIZE);
 #endif
-        large_syscall_stack_begin = malloc(LARGE_SYSCALL_STACK_SIZE);
-    }
     void* large_syscall_stack_top = large_syscall_stack_begin + LARGE_SYSCALL_STACK_DEPTH;
     //
     // Copy all of the tiny stack to the are of last 1024 bytes of large stack.
@@ -480,7 +481,11 @@ void thread::free_tiny_syscall_stack()
     // Lookup address of tiny stack saved by setup_large_syscall_stack()
     // at the bottom of LARGE stack (current syscall stack)
     void* tiny_syscall_stack_begin = *((void**)large_syscall_stack_begin);
+#if CONF_fork
+    memory::free_kernel_stack(tiny_syscall_stack_begin, TINY_SYSCALL_STACK_SIZE);
+#else
     free(tiny_syscall_stack_begin);
+#endif
 }
 
 void thread::free_tcb()
@@ -496,10 +501,16 @@ void thread::free_tcb()
 void thread::free_syscall_stack()
 {
     if (_state._syscall_stack_descriptor.stack_top) {
-        void* syscall_stack_begin = GET_SYSCALL_STACK_TYPE_INDICATOR() == TINY_SYSCALL_STACK_INDICATOR ?
+        bool tiny = GET_SYSCALL_STACK_TYPE_INDICATOR() == TINY_SYSCALL_STACK_INDICATOR;
+        void* syscall_stack_begin = tiny ?
             _state._syscall_stack_descriptor.stack_top - TINY_SYSCALL_STACK_DEPTH :
             _state._syscall_stack_descriptor.stack_top - LARGE_SYSCALL_STACK_DEPTH;
+#if CONF_fork
+        memory::free_kernel_stack(syscall_stack_begin,
+                tiny ? TINY_SYSCALL_STACK_SIZE : LARGE_SYSCALL_STACK_SIZE);
+#else
         free(syscall_stack_begin);
+#endif
     }
 }
 

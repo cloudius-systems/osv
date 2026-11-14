@@ -6,6 +6,7 @@
  */
 
 #include <osv/mempool.hh>
+#include <osv/stack_window.hh>
 #include <osv/ilog2.hh>
 #include "arch-setup.hh"
 #include <cassert>
@@ -2537,6 +2538,40 @@ void enable_debug_allocator()
 {
     dbg::enabled = true;
 }
+
+#if CONF_fork
+// Kernel thread and syscall stacks, which every address space must map
+// identically.  Linear-map memory is preferred, but only for a free contiguous
+// range: under fork, large kernel allocations may not fall back to a private
+// mapping, so once physical memory fragments a blocking request for a 64 KiB
+// or 256 KiB stack can wait forever with plenty of memory free.  Stacks are
+// never DMA targets, so when no contiguous range is free one comes from the
+// stack window instead, which is shared by every address space and needs no
+// contiguity.
+void* alloc_kernel_stack(size_t size)
+{
+    fork_arena::kernel_heap_scope kh;
+    if (size <= page_size) {
+        return malloc(size);
+    }
+    if (auto p = malloc_large(size, page_size, false, true)) {
+        return p;
+    }
+    if (auto p = stack_window::alloc(size)) {
+        return p;
+    }
+    return malloc_large(size, page_size, true, true);
+}
+
+void free_kernel_stack(void* p, size_t size)
+{
+    if (stack_window::contains(p)) {
+        stack_window::free(p, size);
+    } else {
+        free(p);
+    }
+}
+#endif
 
 void* alloc_phys_contiguous_aligned(size_t size, size_t align, bool block)
 {

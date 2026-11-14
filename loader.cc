@@ -29,6 +29,7 @@
 #include <osv/numa.hh>
 #if CONF_fork
 #include <osv/fork_arena.hh>
+#include <osv/stack_window.hh>
 #endif
 #include <osv/barrier.hh>
 #include "arch.hh"
@@ -799,6 +800,8 @@ void* do_main_thread(void *_main_args)
     // here (a kernel thread, irqs on, heap up) so the arena's own map_anon()
     // cannot recurse through an app malloc.
     fork_arena::init();
+    // Kernel stacks that need no contiguous memory; set up before the first fork.
+    stack_window::init();
 #endif
 
     // run each payload in order

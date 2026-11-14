@@ -6,6 +6,7 @@
  */
 
 #include <osv/mmu.hh>
+#include <osv/stack_window.hh>
 #include <osv/mempool.hh>
 #include <osv/sched.hh>
 #include "processor.hh"
@@ -35,6 +36,7 @@
 #include <numeric>
 #include <set>
 #include <vector>
+#include <unordered_map>
 
 #include <osv/kernel_config_memory_debug.h>
 #include <osv/kernel_config_lazy_stack.h>
@@ -2506,6 +2508,102 @@ void vdepopulate(void* addr, size_t size)
         operate_range(unpopulate<>(&map), addr, size);
     }
 }
+
+#if CONF_fork
+namespace stack_window {
+
+static_assert(base >> 39 > pml4_app_last && (base + size - 1) >> 39 == base >> 39,
+              "the stack window must lie in one kernel top-level slot, which fork() shares");
+
+static bool ready;
+static mutex window_mutex;
+static uintptr_t next = base;
+// Freed ranges, reused only for stacks of the same page count (there are only a
+// handful of stack sizes), so no coalescing is needed.
+static std::unordered_map<size_t, std::vector<uintptr_t>> free_ranges;
+
+void init()
+{
+    // Install the window's second-level table in the kernel root now, before
+    // any fork(): children copy their parent's top-level entries, so a table
+    // created after a fork would be invisible to the children forked earlier.
+    WITH_LOCK(page_table_high_mutex) {
+        auto top = hw_ptep<3>::force(&kernel_pml4()[base >> 39]);
+        if (top.read().empty()) {
+            allocate_intermediate_level(top);
+        }
+    }
+    ready = true;
+}
+
+void* alloc(size_t bytes)
+{
+    if (!ready) {
+        return nullptr;
+    }
+    bytes = align_up(bytes, page_size);
+    uintptr_t va = 0;
+    WITH_LOCK(window_mutex) {
+        auto& fl = free_ranges[bytes];
+        if (!fl.empty()) {
+            va = fl.back();
+            fl.pop_back();
+        } else if (next + bytes <= base + size) {
+            va = next;
+            next += bytes;
+        }
+    }
+    if (!va) {
+        return nullptr;
+    }
+    // Map writable, non-executable 4K pages, each from alloc_page().  Fully
+    // populated: stacks are used with preemption disabled, where a fault is
+    // illegal.
+    WITH_LOCK(page_table_high_mutex) {
+        initialized_anonymous_page_provider map;
+        operate_range(populate_small<>(&map, perm_rw), reinterpret_cast<void*>(va), bytes);
+    }
+    return reinterpret_cast<void*>(va);
+}
+
+// Clear the window's 4K leaf entries and remember their pages, so they can be
+// freed only after every CPU has dropped its translations.
+class clear_window_pages : public vma_operation<allocate_intermediate_opt::no, skip_empty_opt::yes> {
+public:
+    explicit clear_window_pages(std::vector<void*>& pages) : _pages(pages) {}
+    template<int N>
+    bool page(hw_ptep<N> ptep, uintptr_t offset) {
+        assert(!pt_level_traits<N>::large_capable::value);   // always 4K pages
+        _pages.push_back(phys_to_virt(clear_pte(ptep).addr()));
+        return true;
+    }
+    unsigned nr_page_sizes(void) { return 1; }
+private:
+    std::vector<void*>& _pages;
+};
+
+void free(void* p, size_t bytes)
+{
+    bytes = align_up(bytes, page_size);
+    std::vector<void*> pages;
+    pages.reserve(bytes / page_size);
+    WITH_LOCK(page_table_high_mutex) {
+        operate_range(clear_window_pages(pages), p, bytes);
+    }
+    // Not the lazy flush_tlb_all(): it skips CPUs running kernel threads, and
+    // kernel threads are what runs on these stacks.  A stale translation left
+    // there would write into a page after it is reused.
+    flush_tlb_all_cpus();
+    for (auto pg : pages) {
+        memory::free_page(pg);
+    }
+    WITH_LOCK(window_mutex) {
+        free_ranges[bytes].push_back(reinterpret_cast<uintptr_t>(p));
+    }
+}
+
+}
+#endif
 
 void vcleanup(void* addr, size_t size)
 {
