@@ -433,12 +433,15 @@ void thread::setup_large_syscall_stack()
     //
     // Allocate LARGE syscall stack (identity heap, not the fork arena: the
     // kernel runs syscalls on it and must never COW-fault it).
+    // Not alloc_kernel_stack(): this runs on the 2 KiB tiny syscall stack,
+    // with the FPU state saved on it, and has no room for the window path.
     void* large_syscall_stack_begin;
+    {
 #if CONF_fork
-    large_syscall_stack_begin = memory::alloc_kernel_stack(LARGE_SYSCALL_STACK_SIZE);
-#else
-    large_syscall_stack_begin = malloc(LARGE_SYSCALL_STACK_SIZE);
+        fork_arena::kernel_heap_scope kh;
 #endif
+        large_syscall_stack_begin = malloc(LARGE_SYSCALL_STACK_SIZE);
+    }
     void* large_syscall_stack_top = large_syscall_stack_begin + LARGE_SYSCALL_STACK_DEPTH;
     //
     // Copy all of the tiny stack to the are of last 1024 bytes of large stack.

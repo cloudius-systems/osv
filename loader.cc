@@ -801,7 +801,7 @@ void* do_main_thread(void *_main_args)
     // cannot recurse through an app malloc.
     fork_arena::init();
     // Kernel stacks that need no contiguous memory; set up before the first fork.
-    stack_window::init();
+    mmu::stack_window::init();
 #endif
 
     // run each payload in order

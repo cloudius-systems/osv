@@ -23,6 +23,7 @@
 // Stacks are never DMA targets, which is what makes non-contiguous backing
 // safe for them.  Callers try the linear map first and use the window only
 // when that would block.
+namespace mmu {
 namespace stack_window {
 
 // The window: the top 512 GiB of the debug memory area (top-level slot 254).
@@ -51,6 +52,7 @@ inline bool contains(const void* p)
     return a >= base && a < base + size;
 }
 
+}
 }
 
 #endif
