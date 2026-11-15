@@ -33,7 +33,8 @@ sched::thread *fork_thread(void *caller_ret, void *caller_sp, void **out_stack_t
     auto parent = sched::thread::current();
     auto parent_pinned_cpu = parent->pinned() ? sched::cpu::current() : nullptr;
 
-    auto si = parent->get_stack_info();
+    // A fork child forking again runs on its own copy of its parent's stack.
+    auto si = parent->get_running_stack_info();
     char *stack_base = static_cast<char*>(si.begin) + si.size;
     char *sp = static_cast<char*>(caller_sp);
     if (sp < static_cast<char*>(si.begin) || sp > stack_base) {
@@ -103,6 +104,7 @@ sched::thread *fork_thread(void *caller_ret, void *caller_sp, void **out_stack_t
         false,
         true);
     t->set_app_tcb(parent->get_app_tcb());
+    t->set_running_stack_info({child_stack_mem, stack_size});
     if (parent_pinned_cpu) {
         t->pin(parent_pinned_cpu);
     }
