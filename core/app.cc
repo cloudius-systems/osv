@@ -17,6 +17,7 @@
 #include <libgen.h>
 #include <errno.h>
 #include <algorithm>
+#include <bitset>
 #include <boost/range/algorithm/transform.hpp>
 #include <osv/wait_record.hh>
 #include "libc/pthread.hh"
@@ -256,10 +257,23 @@ void application::start()
 
 TRACEPOINT(trace_app_destroy, "app=%p", application*);
 
+#if CONF_core_namespaces
+static void release_program(int ns, std::unique_ptr<elf::program> program);
+#endif
+
 application::~application()
 {
     assert(_runtime.use_count() == 1 || !_runtime);
     trace_app_destroy(this);
+#if CONF_core_namespaces
+    if (_program) {
+        // Release what holds the namespace's objects, then the namespace.
+        _termination_request_callbacks.clear();
+        _lib.reset();
+        _libenviron.reset();
+        release_program(_namespace, std::move(_program));
+    }
+#endif
 }
 
 TRACEPOINT(trace_app_join, "app=%p", application*);
@@ -541,29 +555,63 @@ pid_t application::get_main_thread_id() {
 }
 
 #if CONF_core_namespaces
-// For simplicity, we will not reuse bits in the bitmap, since no destructor is
-// assigned to the program. In that case, a simple counter would do. But coding
-// this way is easy, and make this future extension simple.
-constexpr int max_namespaces = 32;
-std::bitset<max_namespaces> namespaces(1);
+// Namespace i loads its objects at program_base + (i + 1) * 8 GB.  Those
+// ranges must stay below 0x200000000000, where unhinted mmap() places
+// mappings, so the address space has room for 2047 of them.  Namespace 0 is
+// never used, which leaves the main program 16 GB to grow into, so 2046 can
+// be loaded at once.  A namespace is
+// free again once its program is destroyed, which happens when its
+// application is gone and every object loaded in it has been unloaded.
+// Until then the program is kept, with its range, on the retired list.
+constexpr uintptr_t namespace_size = uintptr_t(1) << 33;
+constexpr int max_namespaces =
+    (0x200000000000ul - elf::program_base) / namespace_size - 1;
+static mutex namespaces_lock;
+static std::bitset<max_namespaces> namespaces(1);
+static std::vector<std::pair<int, std::unique_ptr<elf::program>>> retired_programs;
+
+// Destroy the retired programs that are idle and free their namespaces.
+// Called with namespaces_lock held.
+static void reclaim_programs()
+{
+    for (auto it = retired_programs.begin(); it != retired_programs.end();) {
+        if (it->second->idle()) {
+            it->second.reset();
+            namespaces.reset(it->first);
+            it = retired_programs.erase(it);
+        } else {
+            ++it;
+        }
+    }
+}
+
+static void release_program(int ns, std::unique_ptr<elf::program> program)
+{
+    SCOPE_LOCK(namespaces_lock);
+    retired_programs.emplace_back(ns, std::move(program));
+    reclaim_programs();
+}
 
 void application::new_program()
 {
-    for (unsigned long i = 0; i < max_namespaces; ++i) {
+    SCOPE_LOCK(namespaces_lock);
+    reclaim_programs();
+    for (int i = 0; i < max_namespaces; ++i) {
         if (!namespaces.test(i)) {
             namespaces.set(i);
-            // This currently limits the size of the executable and shared
-            // libraries in each "program" to 1<<33 bytes, i.e., 8 GB.
-            // This should hopefully be more than enough; It is not a
-            // limit on the amount of memory this program can allocate -
-            // just a limit on the code size.
-            void *addr =
-	        reinterpret_cast<void *>(elf::program_base) + ((i + 1) << 33);
-           _program.reset(new elf::program(addr));
-           return;
+            // This limits the size of the executable and shared libraries in
+            // each "program" to 1<<33 bytes, i.e., 8 GB.  It is not a limit
+            // on the amount of memory this program can allocate, just a limit
+            // on the code size.
+            void *addr = reinterpret_cast<void *>(elf::program_base +
+                                                  (i + 1) * namespace_size);
+            _program.reset(new elf::program(addr));
+            _namespace = i;
+            return;
         }
     }
-    abort("application::new_program() out of namespaces.\n");
+    abort("application::new_program() out of namespaces: %d programs are still "
+          "loaded.\n", max_namespaces - 1);
 }
 #endif
 
