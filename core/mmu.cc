@@ -177,6 +177,9 @@ struct address_space {
     pt_element<4> _top;       // storage for the synthetic entry (child only)
     phys pt_root;             // phys of PML4 page (CR3 value); 0 == arch root
     bool is_kernel;
+    // The fork heap arena's per-process state (core/fork_arena.cc), created
+    // on this address space's first arena allocation and freed with it.
+    std::atomic<void*> fork_arena_state{nullptr};
     // CPUs that may hold TLB entries of this AS (see flush_tlb_as()).
     std::atomic<u64> cpu_mask[sched::max_cpus / 64] = {};
     // Lifetime (see as_hold() in mmu.hh).  users: threads in this AS plus
@@ -226,6 +229,11 @@ address_space kernel_as{&vma_list, &vma_list_mutex, 0, true};
 address_space *kernel_address_space()
 {
     return &kernel_as;
+}
+
+std::atomic<void*>& fork_arena_state(address_space *as)
+{
+    return as->fork_arena_state;
 }
 
 // The address space the current thread runs in: a fork child's private AS, or
@@ -1981,6 +1989,16 @@ uintptr_t find_hole(uintptr_t start, uintptr_t size)
 {
     bool small = size < huge_page_size;
     uintptr_t good_enough = 0;
+#if CONF_fork
+    // The fork heap arena owns [arena_base, arena_end): searched mappings stay
+    // below it, and a hint inside it is ignored.
+    const uintptr_t limit = fork_arena::arena_base;
+    if (start >= limit) {
+        start = 0x200000000000ul;
+    }
+#else
+    const uintptr_t limit = upper_vma_limit;
+#endif
 
     vma_range_set_type &ranges = cur_vma_range_set();
     SCOPE_LOCK(cur_vma_range_set_mutex().for_read());
@@ -1990,19 +2008,20 @@ uintptr_t find_hole(uintptr_t start, uintptr_t size)
         --p;
     }
     auto n = std::next(p);
-    while (n->start() <= upper_vma_limit) { //we only go up to the upper mmap vma limit
+    while (n->start() <= upper_vma_limit && p->end() < limit) { //we only go up to the upper mmap vma limit
+        uintptr_t hole_end = std::min(n->start(), limit);
         //See if desired hole fits between p and n vmas
-        if (start >= p->end() && start + size <= n->start()) {
+        if (start >= p->end() && start + size <= hole_end) {
             return start;
         }
         //See if shifting start to the end of p makes desired hole fit between p and n
-        if (p->end() >= start && n->start() - p->end() >= size) {
+        if (p->end() >= start && hole_end - p->end() >= size) {
             good_enough = p->end();
             if (small) {
                 return good_enough;
             }
             //See if huge hole fits between p and n
-            if (n->start() - align_up(good_enough, huge_page_size) >= size) {
+            if (hole_end - align_up(good_enough, huge_page_size) >= size) {
                 return align_up(good_enough, huge_page_size);
             }
         }
@@ -2381,6 +2400,18 @@ static bool range_is_free(uintptr_t start, uintptr_t end)
 {
     auto range = find_intersecting_vmas(addr_range(start, end));
     return range.first == range.second;
+}
+
+bool intersects_vma(uintptr_t start, uintptr_t end)
+{
+    // An allocation made while this thread holds the lock for write (a vma
+    // split in mprotect or munmap) reaches here too.
+    auto &m = cur_vma_list_mutex();
+    if (m.wowned()) {
+        return !range_is_free(start, end);
+    }
+    SCOPE_LOCK(m.for_read());
+    return !range_is_free(start, end);
 }
 
 // Snapshot of the source mapping taken under the vma lock so the rest of
