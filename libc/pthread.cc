@@ -30,6 +30,7 @@
 #include <api/time.h>
 #include <osv/rwlock.h>
 #include <osv/export.h>
+#include <osv/fork_arena.hh>
 #include <osv/kernel_config_fork.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
@@ -202,6 +203,7 @@ namespace pthread_private {
             auto p = current_pthread ? pthread::from_libc(current_pthread) : nullptr;
             if (p && p->_borrowed) {
                 current_pthread = 0;
+                fork_arena::kernel_heap_scope kh;
                 delete p;
             }
         });
@@ -335,6 +337,7 @@ extern "C" void __osv_run_atfork_child()
     // pthread_self() would be null and every pthread_*() call on it would
     // fault.  Give it a pthread object for its own thread, freed at its exit.
     {
+        fork_arena::kernel_heap_scope kh;
         auto p = new pthread(sched::thread::current());
         p->_borrowed = true;
         current_pthread = p->to_libc();
