@@ -576,14 +576,33 @@ void free(void *p)
 
 size_t usable_size(void *p)
 {
-    // Same-AS realloc / malloc_usable_size requires an intact resident
-    // allocation, including its header. Ordinary fork preserves readability;
-    // absent/protected mappings and foreign pointers are not covered.
+    // realloc and malloc_usable_size.  The size is in the chunk header, so the
+    // header must be readable here, with free()'s tests.  An owned chunk's is.
+    // A chunk this address space does not own has a header here only if it
+    // was inherited at fork; that header is the owner's, as of the fork, and
+    // a chunk's size never changes, so it is the owner's size.  Otherwise no
+    // size can be known, and reading the pointer would fault or return
+    // another process's bytes: abort with the reason instead.  This only
+    // reads, an owned chunk is populated, and isreadable() cannot fault, so
+    // it is safe in atomic context too.
+    as_arena *st = current_state();
+    uint32_t e = extent_of(p);
+    uintptr_t user = reinterpret_cast<uintptr_t>(p);
+    bool owned = st && g_owner[e].load(std::memory_order_acquire) == st &&
+                 user - extent_addr(e) <
+                 (uintptr_t(g_used[e].load(std::memory_order_acquire)) << 20);
+    if (!owned) {
+        auto *h = reinterpret_cast<chunk_header*>(user - sizeof(chunk_header));
+        if (!mmu::isreadable(reinterpret_cast<void*>(user - header_size), header_size) ||
+                h->magic != chunk_magic || h->class_idx >= num_classes) {
+            abort("fork_arena: realloc or malloc_usable_size of %p, which is not "
+                  "an allocation of this process or one it inherited\n", p);
+        }
+    }
     uintptr_t base;
     unsigned idx;
     recover(p, base, idx);
     size_t class_size = class_size_for(idx);
-    uintptr_t user = reinterpret_cast<uintptr_t>(p);
     // Usable bytes = from user pointer to end of the chunk.
     return class_size - (user - base);
 }
