@@ -198,6 +198,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-blk-
 	tst-cow-range-cover.so \
 	tst-fork-fdleak.so \
 	tst-fork-arena-freelist.so \
+	tst-reaper-unblocked.so \
 	misc-fsx.so tst-sleep.so tst-resolve.so tst-except.so \
 	misc-tcp-sendonly.so tst-tcp-nbwrite.so misc-tcp-hash-srv.so \
 	misc-loadbalance.so misc-scheduler.so tst-console.so tst-app.so \
@@ -259,6 +260,7 @@ internal-api-tests := tst-app.so tst-async.so tst-dns-decname.so tst-bsd-evh.so 
 	tst-threadcomplete.so tst-tracepoint.so tst-unordered-ring-mpsc.so \
 	tst-vfs.so tst-wait-for.so tst-without-namespace.so
 internal-api-tests += tst-vfs-mount-pins.so
+internal-api-tests += tst-reaper-unblocked.so
 
 ifeq ($(arch),x64)
 tests += tst-x64-unhandled-vector.so
