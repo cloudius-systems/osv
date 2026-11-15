@@ -17,9 +17,9 @@
 #include <osv/spinlock.h>
 #include <osv/mutex.h>
 #include <atomic>
+#include <cerrno>
 #include <cstdio>
-#include <cstring>
-#include <cstdlib>
+#include <new>
 #include <osv/sched.hh>
 
 // -----------------------------------------------------------------------------
@@ -32,32 +32,25 @@
 // bookkeeping.  Both metadata words sit immediately BELOW the returned pointer,
 // so recovering them is two loads at fixed negative offsets with no lookup.
 //
-// All allocator state (free-list heads, bump cursors, lock) is in kernel BSS --
-// never in arena pages -- so arena management never faults an arena page under
-// a recycle lock. Returned-chunk writes may COW-fault.
+// Ownership.  The arena range [arena_base, arena_end) is cut into 64 MiB
+// extents.  owner[e] names the per-process state (as_arena) of the address
+// space that owns extent e, or is null while e is free; it is identity memory,
+// so free() decides "mine or not" without reading the arena: a free whose
+// extent is not owned by the freeing address space is a no-op.  An entry is
+// set only while its address space lives and is cleared before that state is
+// freed, so a live state never matches a stale entry.
 //
-// WHOLE-ARENA PER-AS WINDOWS (leak #2 cure).  Every live address space owns one
-// disjoint VA window in a single 512 GiB application slot (slot 97).  An AS
-// bump-carves inside its own window and recycles freed chunks through its own
-// per-class free-list.  Because a VA identifies its owning AS by pure BSS
-// arithmetic -- owner_slot(p) = (p - window_base) / window_sz -- a free() can
-// decide same-AS vs foreign WITHOUT READING THE ARENA PAGE: a foreign free is
-// an unconditional no-op, so a stale cross-AS free never reads a divergent COW
-// header nor pushes a foreign base into a live AS's recycle cache.  The whole
-// window is reclaimed wholesale by destroy_address_space's page-table teardown
-// on reap.  There is NO shared global bump, so there is nothing recycled across
-// address spaces and no cross-AS quiescence to prove.
+// Placement.  An address space carves fresh chunks, in 1 MiB mapped regions,
+// from extents it owns, and recycles freed chunks through per-class free
+// stacks.  Freed extents go back to a FIFO pool.  A dead process's extent can
+// still be mapped, by inheritance, in its live descendants, so an address
+// space never takes an extent it maps any part of (mmu::intersects_vma).
 //
-// FORK_SHARED_BUMP (compile flag, default 0): restores the OLD shared slot-96
-// global bump + unconditional slot-96 recover/push.  It reintroduces the
-// cross-AS recycle hazard and is used only by the diagnostic C2 negative
-// control (see the uncommitted fork_arena.c2probe.cc diagnostic variant).  It
-// is never the shipped path.
+// Locks.  The growth mutex serializes an address space's mapping of new
+// regions; the pool spinlock covers identity-memory pool links only.  No arena
+// memory is touched under a spinlock, and alloc/free with preemption or irqs
+// off never touch arena memory: arena writes may COW-fault.
 // -----------------------------------------------------------------------------
-
-#ifndef FORK_SHARED_BUMP
-#define FORK_SHARED_BUMP 0
-#endif
 
 namespace fork_arena {
 
@@ -85,19 +78,12 @@ constexpr size_t   granule = 16;            // linear step, and every class is a
 constexpr size_t   linear_max = linear_classes * granule;   // 128
 constexpr unsigned linear_max_shift = 7;                    // 1<<7 == linear_max
 
-// Bounded recycle cache, not allocation ownership metadata. Dropping a free
-// entry retains its mapping until AS teardown, but never reissues a live chunk.
-constexpr uint16_t recycle_capacity = 1024;
-struct recycle_entry {
-    uintptr_t chunk;
-    uint16_t next;
-};
-
 struct chunk_header {
     uint32_t class_idx;   // index into the size-class table (class_size_for)
     uint32_t magic;
 };
 constexpr uint32_t chunk_magic = 0x464b4152;   // "FKAR"
+constexpr uint32_t free_magic  = 0x46524545;   // "FREE": a double free asserts
 
 // Reserved bytes between the chunk base and the returned pointer.  Exactly the
 // two metadata words that live there: the saved chunk base at [user-16,user-8)
@@ -111,216 +97,77 @@ static_assert(header_size >= sizeof(chunk_header) + sizeof(uintptr_t),
 static_assert(header_size % 16 == 0,
               "header_size must preserve 16-byte alignment of the user pointer");
 
-// --- all state below is kernel BSS, never in arena pages ---
-//
-// The per-AS free-lists are PER-ADDRESS-SPACE, NOT global.  This is
-// load-bearing for fork correctness.  An arena chunk is COW-PRIVATE per child
-// after fork: the same VA holds a different physical page in the parent and in
-// each child.  A free-list whose HEAD lives in shared kernel BSS but whose
-// `next` LINKS live inside those COW-private chunks is incoherent across the
-// fork boundary: two address spaces sharing one head pop the same chunk and
-// read its `next` from their OWN divergent copy, so one side recycles (and
-// overwrites with fresh application data) a chunk the other still holds live.
-// PostgreSQL hit this as a memory-context block list whose `next` had been
-// clobbered with a path string ("...pid...") by another process, then
-// SIGSEGV'd walking it in AllocSetReset.  Keying the free-list on the current
-// address_space keeps each process's recycling inside its own COW domain: a
-// chunk freed by one process is only ever re-handed to that same process, whose
-// links stay self-coherent.
-//
-// Recycle descriptors and their links are identity-resident. No arena access,
-// allocator call or fault is allowed while holding the recycle spinlock.
+// A region is the unit of mapping: map_anon(mmap_fixed | mmap_populate) of
+// this much (or one chunk, if larger) inside an owned extent.  Eager
+// population commits the whole region, so it is kept small: about 1 MiB per
+// live process, amortized over ~64 average chunks.
+constexpr size_t region_sz = 1ull << 20;
+static_assert(extent_size % region_sz == 0, "regions tile an extent");
+
+constexpr uint32_t no_extent = ~0u;
+static_assert(num_extents < no_extent, "extent indices fit in 32 bits");
+
+// Free-stack head word: chunk pointer >> 4 (chunks are 16-aligned and below
+// 2^47, so 43 bits) and a 21-bit tag that makes a pop whose `next` read raced
+// with another pop fail its CAS.
+constexpr unsigned ptr_bits = 43;
+constexpr uint64_t ptr_mask = (uint64_t(1) << ptr_bits) - 1;
+static_assert(arena_end <= (uint64_t(1) << (ptr_bits + 4)), "arena VA fits the head word");
+inline uintptr_t head_ptr(uint64_t h) { return uintptr_t(h & ptr_mask) << 4; }
+inline uint64_t head_make(uintptr_t p, uint64_t old)
+{
+    return ((uint64_t(p) >> 4) & ptr_mask) | (((old >> ptr_bits) + 1) << ptr_bits);
+}
+
+// Per-address-space state.  Identity memory, found through the address
+// space (mmu::fork_arena_state), freed by release_as().
+struct as_arena {
+    explicit as_arena(void *a) : as(a) {
+        for (auto &h : heads) {
+            h.store(0, std::memory_order_relaxed);
+        }
+    }
+    void *const as;                          // the owning mmu::address_space
+    std::atomic<uint64_t> heads[num_classes];
+    std::atomic<uintptr_t> next{0};          // carve cursor in the current region
+    std::atomic<uintptr_t> end{0};           // end of the current region (0 = none)
+    mutex grow_lock;                         // serializes growth, never the fast carve
+    // Under grow_lock:
+    uint32_t chain = no_extent;              // this AS's extents, linked by g_link
+    uint32_t cur = no_extent;                // extent being carved
+    size_t cur_used = 0;                     // bytes of it mapped so far
+    size_t committed = 0;                    // region bytes mapped in this AS
+};
+
 std::atomic<bool> g_ready{false};
 
-// WHOLE-ARENA PER-AS WINDOWS (leak #2 cure).  Each live AS carves fresh chunks
-// from its own COW-private disjoint window in a dedicated app slot (97), clear
-// of the mmap hole.  Each AS maps its own window in its own page tables;
-// destroy_address_space frees it wholesale on reap.  free() of a pointer in
-// this slot that is NOT owned by the freeing AS is an unconditional NO-OP
-// (owner arithmetic below), so a cross-AS free never reads the chunk header at
-// a VA mapped only in the dead/other child.  win_slot_base/win_slot_end are
-// defined in the header (contains() needs them too).
-constexpr size_t    win_region_sz = 1ull << 20;       // 1 MiB per mapped region
+// Extent tables, identity memory allocated once in init().
+std::atomic<as_arena*> *g_owner;   // owning state, or null when free
+std::atomic<uint8_t> *g_used;      // MiB of the extent its owner has mapped
+uint32_t *g_link;                  // next extent in an AS's chain or in the pool
+static_assert((extent_size >> 20) <= 255, "g_used holds an extent's MiB");
 
-// Per-AS DISJOINT VA windows.
-//
-// WHY THE WINDOWS (this is the whole fix).  A window VA identifies its owning
-// AS: (va - win_slot_base) / win_window_sz IS the owning slot index.  So free()
-// decides same-AS vs foreign WITHOUT READING THE ARENA PAGE -- a foreign free
-// is an unconditional no-op (C2-safe), while the OWNING AS recycles through its
-// per-class free-list (committed RAM tracks LIVE heap, not lifetime churn).
-//
-// 512 GiB (slot 97) / 256 AS slots = 2 GiB of VA per AS by default.  VA only;
-// RAM is still just the pages actually mapped -- and now they get REUSED.  The
-// window size is boot-tunable via --fork-arena-size-mb (see set_size_mb / init).
-constexpr size_t    win_window_sz_default = (win_slot_end - win_slot_base) / 256;
-static_assert(win_window_sz_default >= (1ull << 31), "default window too small");
-// NOTE: region size is a RAM/overhead knob. Eager mmap_populate commits the
-// WHOLE region up front, so a large region (e.g. 32 MiB) x many concurrent
-// backends overcommits RAM and OOMs even though it is freed on reap. 1 MiB
-// keeps the concurrent working set small (~1 MiB x live backends) while still
-// amortizing the map_anon cost over ~64 avg chunks. Measured: 32 MiB OOMs at
-// exhaustion; 256 KiB and 1 MiB keep mem_free FLAT (leak-free) with no OOM.
+// The pool: extents released by dead address spaces, FIFO, plus the
+// never-used extents [g_fresh, num_extents).
+spinlock g_pool_lock;
+uint32_t g_pool_head = no_extent, g_pool_tail = no_extent;
+size_t g_pool_count;
+uint32_t g_fresh;
 
-// Effective per-AS window size.  Set in init() from --fork-arena-size-mb (MiB),
-// else win_window_sz_default.  Read this (g_window_sz), not the default, after
-// init.  0 until init() runs, so owner arithmetic is never performed before
-// ready() (alloc/free both bail on !g_ready).
-uintptr_t g_window_sz = 0;
-
-// Requested per-AS window size in BYTES, set by the loader from the
-// --fork-arena-size-mb cmdline option BEFORE init() runs (0 = default).  Read
-// from the kernel cmdline rather than getenv because init() runs before the
-// application environment is populated.
-std::atomic<size_t> g_requested_size{0};
-
-#if FORK_SHARED_BUMP
-// NEGATIVE CONTROL ONLY (-DFORK_SHARED_BUMP=1): the OLD shared slot-96 global
-// bump.  Reintroduces the cross-AS recycle hazard.  Never the shipped path.
-std::atomic<uintptr_t> g_bump{0};   // next never-yet-carved VA (GLOBAL: unique VA)
-uintptr_t g_bump_end = 0;           // arena_base + arena_size
-#endif
-
-// OSV_FORK_ARENA_RECLAIM: 1 (default) => per-AS window arena (the fix);
-//                         0            => old identity-heap fallback (the leak) A/B.
-std::atomic<int> g_reclaim_on{-1};
-inline bool reclaim_on()
-{
-    int v = g_reclaim_on.load(std::memory_order_relaxed);
-    if (v < 0) {
-        const char *e = getenv("OSV_FORK_ARENA_RECLAIM");
-        v = (e && e[0] == '0') ? 0 : 1;
-        g_reclaim_on.store(v, std::memory_order_relaxed);
-    }
-    return v != 0;
-}
-
-// BSS range check: is @p inside the per-AS window slot? Reads no arena page.
-inline bool in_window(const void *p)
-{
-    auto a = reinterpret_cast<uintptr_t>(p);
-    return a >= win_slot_base && a < win_slot_end;
-}
-
-// Which AS slot OWNS window pointer @p, by arithmetic alone.  Reads no arena
-// page and takes no lock -- this is what makes the same-AS vs foreign decision
-// in free() safe (see the win_window_sz note above).
-inline unsigned win_owner_slot(const void *p)
-{
-    auto a = reinterpret_cast<uintptr_t>(p);
-    return (unsigned)((a - win_slot_base) / g_window_sz);
-}
-
-// FOOTPRINT PROBE: window bytes COMMITTED (mapped, eagerly populated -> real
-// RAM), bytes RECYCLED through a same-AS free, and foreign frees no-op'd
-// (C2-safe).  Window pages are committed by mmap_populate, NOT by a COW fault,
-// so a COW-fault-only probe misses them.  Lightweight counters only.
+std::atomic<unsigned long> g_live_states{0};
+std::atomic<unsigned long> g_extents_in_use{0};
 std::atomic<unsigned long> g_committed{0};
-std::atomic<unsigned long> g_recycled{0};
 std::atomic<unsigned long> g_foreign_frees{0};
+std::atomic<unsigned long> g_atomic_retained{0};
 
-// Per-address-space free-list state.  Keyed by the opaque address_space* the
-// current thread runs in (mmu::current_address_space()).  A small fixed table
-// with linear probing: the concurrent-process count is modest (postmaster +
-// its backends/aux), and if it ever fills, that address space simply runs
-// bump-only (no recycling) -- correct, just less space-efficient.  Slot
-// acquisition takes a brief spinlock; per-AS recycle operations use a separate
-// short spinlock over identity metadata only.  A slot is reclaimed when its
-// address space is destroyed (release_as(), from mmu::destroy_address_space).
-struct as_freelist {
-    std::atomic<void*>      owner{nullptr};   // address_space* key, null == free slot
-    spinlock recycle_lock;
-    uint16_t heads[num_classes];
-    uint16_t unused;
-    recycle_entry entries[recycle_capacity];
-
-    void reset_recycle()
-    {
-        for (auto& head : heads) head = recycle_capacity;
-        for (uint16_t i = 0; i < recycle_capacity; ++i) entries[i].next = i + 1;
-        unused = 0;
-    }
-
-    void *pop(unsigned idx)
-    {
-        SCOPE_LOCK(recycle_lock);
-        auto n = heads[idx];
-        if (n == recycle_capacity) return nullptr;
-        auto chunk = entries[n].chunk;
-        heads[idx] = entries[n].next;
-        entries[n].next = unused;
-        unused = n;
-        return reinterpret_cast<void*>(chunk);
-    }
-
-    bool push(uintptr_t chunk, unsigned idx)
-    {
-        SCOPE_LOCK(recycle_lock);
-        // Limit: 1024 cached frees/AS (~4 MiB BSS overall). Full cache
-        // drops recycling; grow metadata only if retained-mapping churn matters.
-        if (unused == recycle_capacity) return false;
-        auto n = unused;
-        unused = entries[n].next;
-        entries[n].chunk = chunk;
-        entries[n].next = heads[idx];
-        heads[idx] = n;
-        return true;
-    }
-    // WHOLE-ARENA PER-AS WINDOW bump cursors (COW-private, slot 97).  Freed
-    // wholesale by destroy_address_space page teardown on reap; reset in
-    // release_as so a recycled slot never inherits a dead child's window VA.
-    std::atomic<uintptr_t>  win_next{0};      // next byte to carve in current region
-    std::atomic<uintptr_t>  win_end{0};       // end of current region (0 = none yet)
-    mutex                   win_lock;         // serializes growth, never the fast carve
-    // Bytes of this AS's window mapped so far.  Doubles as the map cursor
-    // (windows fill monotonically) and the high-water that free() range-checks
-    // a candidate pointer against -- both reads are BSS-only, never an arena
-    // page.
-    std::atomic<uintptr_t>  win_mapped{0};
-};
-constexpr unsigned max_as_slots = 256;
-as_freelist g_as_freelists[max_as_slots];
-spinlock g_slot_lock;   // guards slot acquisition only (rare: once per AS)
-
-// Find (or create) the free-list slot for address space @as.  Returns nullptr
-// only if the table is full (caller then runs bump-only / identity fallback).
-as_freelist *slot_for(void *as)
+inline uintptr_t extent_addr(uint32_t e)
 {
-    // nullptr is the free-slot sentinel, never an address-space identity.
-    if (!as) {
-        return nullptr;
-    }
-    // note: O(max_as_slots) linear scan per alloc/free; owners pack from
-    // index 0 so the common case is a short scan. Swap for a hash keyed on
-    // (address_space*) if the process count ever makes this measurable.
-    // Fast path: already-claimed slot, no lock.
-    for (unsigned i = 0; i < max_as_slots; i++) {
-        if (g_as_freelists[i].owner.load(std::memory_order_acquire) == as) {
-            return &g_as_freelists[i];
-        }
-    }
-    // Slow path: claim a free slot under the spinlock.  Re-scan under the lock
-    // (another thread may have just claimed one for the same AS).
-    SCOPE_LOCK(g_slot_lock);
-    for (unsigned i = 0; i < max_as_slots; i++) {
-        if (g_as_freelists[i].owner.load(std::memory_order_relaxed) == as) {
-            return &g_as_freelists[i];
-        }
-    }
-    for (unsigned i = 0; i < max_as_slots; i++) {
-        if (!g_as_freelists[i].owner.load(std::memory_order_relaxed)) {
-            g_as_freelists[i].reset_recycle();
-            // A freshly-claimed slot starts with no window (never inherit a
-            // prior owner's VA).
-            g_as_freelists[i].win_next.store(0, std::memory_order_relaxed);
-            g_as_freelists[i].win_end.store(0, std::memory_order_relaxed);
-            g_as_freelists[i].win_mapped.store(0, std::memory_order_relaxed);
-            // g_slot_lock serializes writers; publish only AFTER initialization.
-            g_as_freelists[i].owner.store(as, std::memory_order_release);
-            return &g_as_freelists[i];
-        }
-    }
-    return nullptr;   // table full: bump-only for this AS
+    return arena_base + (uintptr_t(e) << extent_shift);
+}
+
+inline uint32_t extent_of(const void *p)
+{
+    return uint32_t((reinterpret_cast<uintptr_t>(p) - arena_base) >> extent_shift);
 }
 
 // Byte size of size class @idx.  See the class-table comment above.
@@ -385,102 +232,21 @@ static_assert(class_table_consistent(), "fork_arena size-class table is inconsis
 
 } // anonymous namespace
 
-void set_size_mb(unsigned long mb)
-{
-    if (mb) {
-        g_requested_size.store((size_t)mb << 20, std::memory_order_relaxed);
-    }
-}
-
 void init()
 {
     if (g_ready.load(std::memory_order_acquire)) {
         return;
     }
-    // Effective per-AS window size: --fork-arena-size-mb (MiB) overrides the
-    // default, clamped to [512 MiB .. the 2 GiB slot share].  NOTE the SEMANTIC
-    // CHANGE from the shared-arena era: this no longer sizes a shared, eagerly
-    // committed boot-RAM arena (there is none).  It sizes each AS's PRIVATE VA
-    // WINDOW; RAM is still only the pages an AS actually maps (lazily, in
-    // win_region_sz increments) and is freed wholesale on reap.  So growing it
-    // raises the per-backend VA budget before an AS falls back to the identity
-    // heap; it does NOT cost committed boot RAM (the shared-arena GROW's one
-    // drawback is gone).
-    size_t eff_window = win_window_sz_default;
-    size_t want = g_requested_size.load(std::memory_order_relaxed);
-    if (want) {
-        if (want < (512ull << 20)) want = 512ull << 20;             // floor 512 MiB
-        if (want > win_window_sz_default) want = win_window_sz_default; // cap at the slot share
-        eff_window = want;
-    }
-    g_window_sz = eff_window;
-
-#if FORK_SHARED_BUMP
-    // NEGATIVE CONTROL: pre-map and bump from a shared slot-96 arena.
-    void *v = mmu::map_anon(reinterpret_cast<void*>(arena_base), arena_size,
-                            mmu::mmap_fixed | mmu::mmap_populate, mmu::perm_rw);
-    if (reinterpret_cast<uintptr_t>(v) != arena_base) {
-        debugf("fork_arena: failed to reserve arena at %p (got %p)\n",
-               reinterpret_cast<void*>(arena_base), v);
-        return;
-    }
-    g_bump.store(arena_base, std::memory_order_relaxed);
-    g_bump_end = arena_base + arena_size;
-#endif
-    // THE CURE: no shared arena to pre-map.  Each AS lazily maps its own window
-    // in win_region_sz increments on first carve.  This also removes the fixed
-    // boot-RAM commit the shared arena required.
-    // Resolve OSV_FORK_ARENA_RECLAIM now, before the application allocates, and
-    // show the value every later allocation will use.
-    printf("LEVER fork_arena_reclaim=%d\n", reclaim_on() ? 1 : 0);
+    kernel_heap_scope kh;
+    g_owner = new std::atomic<as_arena*>[num_extents]();
+    g_used = new std::atomic<uint8_t>[num_extents]();
+    g_link = new uint32_t[num_extents];
+    printf("LEVER fork_arena_reclaim=1\n");
     g_ready.store(true, std::memory_order_release);
 }
 
-// FOOTPRINT PROBE: count of per-AS free-list slots in use (== live processes
-// that have allocated from the arena).
-unsigned live_as_slots()
+void set_size_mb(unsigned long)
 {
-    unsigned n = 0;
-    for (unsigned i = 0; i < max_as_slots; i++) {
-        if (g_as_freelists[i].owner.load(std::memory_order_relaxed)) n++;
-    }
-    return n;
-}
-
-// FOOTPRINT PROBE: the window accounting the COW-fault probe cannot see.
-// Window regions are committed by mmap_populate (eager, real RAM at map time),
-// NOT by a COW write fault, so a COW-fault-only probe misses them ENTIRELY.
-//   committed     = bytes of window region ever mapped (real RAM)
-//   recycled      = bytes handed back through a same-AS free (the fix working)
-//   foreign_frees = frees skipped because another AS owns the VA (C2-safe no-op)
-void overflow_stats(unsigned long *committed, unsigned long *recycled,
-                    unsigned long *foreign_frees, unsigned long *live_mapped)
-{
-    if (committed) *committed = g_committed.load(std::memory_order_relaxed);
-    if (recycled) *recycled = g_recycled.load(std::memory_order_relaxed);
-    if (foreign_frees) {
-        *foreign_frees = g_foreign_frees.load(std::memory_order_relaxed);
-    }
-    if (live_mapped) {
-        unsigned long t = 0;
-        for (unsigned i = 0; i < max_as_slots; i++) {
-            if (g_as_freelists[i].owner.load(std::memory_order_relaxed)) {
-                t += g_as_freelists[i].win_mapped.load(std::memory_order_relaxed);
-            }
-        }
-        *live_mapped = t;
-    }
-}
-
-// FOOTPRINT PROBE: this AS's window bytes mapped (per-backend attribution).
-unsigned long overflow_mapped_for(void *as)
-{
-    for (unsigned i = 0; i < max_as_slots; i++) {
-        if (g_as_freelists[i].owner.load(std::memory_order_relaxed) == as) {
-            return g_as_freelists[i].win_mapped.load(std::memory_order_relaxed);
-        }
-    }
-    return 0;
 }
 
 bool ready()
@@ -488,65 +254,248 @@ bool ready()
     return g_ready.load(std::memory_order_acquire);
 }
 
+namespace {
+
+void pool_push_tail(uint32_t e)
+{
+    SCOPE_LOCK(g_pool_lock);
+    g_link[e] = no_extent;
+    if (g_pool_tail == no_extent) {
+        g_pool_head = e;
+    } else {
+        g_link[g_pool_tail] = e;
+    }
+    g_pool_tail = e;
+    g_pool_count++;
+}
+
+uint32_t pool_pop_head()
+{
+    SCOPE_LOCK(g_pool_lock);
+    uint32_t e = g_pool_head;
+    if (e != no_extent) {
+        g_pool_head = g_link[e];
+        if (g_pool_head == no_extent) {
+            g_pool_tail = no_extent;
+        }
+        g_pool_count--;
+    }
+    return e;
+}
+
+uint32_t take_fresh()
+{
+    SCOPE_LOCK(g_pool_lock);
+    return g_fresh < num_extents ? g_fresh++ : no_extent;
+}
+
+// Can address space (the current one) take extent @e?  Not if it maps any part
+// of it: that is memory it inherited from the extent's previous owner.
+bool usable(uint32_t e)
+{
+    return !mmu::intersects_vma(extent_addr(e), extent_addr(e) + extent_size);
+}
+
+// A new extent for @st, in the current address space, under st->grow_lock.
+// A child reuses a released extent first, the oldest it may take.  AS0, where
+// the kernel's own threads run, takes never-used extents first, so a late
+// kernel-thread free of a dead child's pointer cannot match an extent AS0
+// owns; it reuses released ones only once every extent has been used.
+uint32_t acquire_extent(as_arena *st)
+{
+    bool as0 = st->as == mmu::kernel_address_space();
+    uint32_t e = no_extent;
+    if (as0) {
+        while ((e = take_fresh()) != no_extent && !usable(e)) {
+            pool_push_tail(e);
+        }
+    }
+    if (e == no_extent) {
+        size_t n;
+        WITH_LOCK(g_pool_lock) {
+            n = g_pool_count;
+        }
+        while (n-- && (e = pool_pop_head()) != no_extent && !usable(e)) {
+            pool_push_tail(e);
+            e = no_extent;
+        }
+    }
+    if (e == no_extent && !as0) {
+        while ((e = take_fresh()) != no_extent && !usable(e)) {
+            pool_push_tail(e);
+        }
+    }
+    if (e == no_extent) {
+        return no_extent;
+    }
+    g_used[e].store(0, std::memory_order_relaxed);
+    g_owner[e].store(st, std::memory_order_release);
+    g_link[e] = st->chain;
+    st->chain = e;
+    g_extents_in_use.fetch_add(1, std::memory_order_relaxed);
+    return e;
+}
+
+as_arena *current_state()
+{
+    auto &slot = mmu::fork_arena_state(mmu::current_address_space());
+    return static_cast<as_arena*>(slot.load(std::memory_order_acquire));
+}
+
+as_arena *state_for_alloc()
+{
+    auto as = mmu::current_address_space();
+    auto &slot = mmu::fork_arena_state(as);
+    auto st = static_cast<as_arena*>(slot.load(std::memory_order_acquire));
+    if (st) {
+        return st;
+    }
+    as_arena *n;
+    {
+        kernel_heap_scope kh;
+        n = new (std::nothrow) as_arena(as);
+    }
+    if (!n) {
+        return nullptr;
+    }
+    void *expected = nullptr;
+    if (slot.compare_exchange_strong(expected, n, std::memory_order_acq_rel,
+                                     std::memory_order_acquire)) {
+        g_live_states.fetch_add(1, std::memory_order_relaxed);
+        return n;
+    }
+    {
+        kernel_heap_scope kh;
+        delete n;
+    }
+    return static_cast<as_arena*>(expected);
+}
+
 // Read end before next: observing a newly published end also observes its
-// initial next. next is strictly increasing across regions, including when a
-// large request abandons a small tail. Thus a stale CAS cannot succeed after
-// growth, and an old end cannot authorize a carve in a newer region.
-static void *window_carve(as_freelist *fl, size_t class_size)
+// initial next.  Within one extent regions are mapped in increasing order and
+// next only grows, so a stale end cannot authorize a carve past a newer
+// region's end.  An address space never returns to an extent it has left, so
+// a cursor and an end in the same extent always describe one region.
+void *carve(as_arena *st, size_t class_size)
 {
     for (;;) {
-        uintptr_t end = fl->win_end.load(std::memory_order_acquire);
-        uintptr_t c = fl->win_next.load(std::memory_order_relaxed);
-        if (!end || c > end || class_size > end - c) {
+        uintptr_t end = st->end.load(std::memory_order_acquire);
+        uintptr_t c = st->next.load(std::memory_order_relaxed);
+        if (!end || c > end || class_size > end - c ||
+                ((c ^ (end - 1)) >> extent_shift)) {
             return nullptr;
         }
-        if (fl->win_next.compare_exchange_weak(c, c + class_size,
+        if (st->next.compare_exchange_weak(c, c + class_size,
                 std::memory_order_acq_rel, std::memory_order_relaxed)) {
             return reinterpret_cast<void*>(c);
         }
     }
 }
 
-static void *window_alloc(as_freelist *fl, size_t class_size)
+void *grow(as_arena *st, size_t class_size)
 {
-    if (!sched::preemptable() || !arch::irq_enabled()) {
-        return nullptr;
-    }
-    if (void *chunk = window_carve(fl, class_size)) {
-        return chunk;
-    }
-    // Cover mutex waiter allocation as well as map_anon's nested allocations.
-    // Neither may recurse into this arena; waiters must be AS-coherent too.
+    // Covers mutex waiter allocation and map_anon's nested allocations.
     kernel_heap_scope kh;
-    SCOPE_LOCK(fl->win_lock);
-    if (void *chunk = window_carve(fl, class_size)) {
+    SCOPE_LOCK(st->grow_lock);
+    if (void *chunk = carve(st, class_size)) {
         return chunk;
     }
-
-    const unsigned slot = unsigned(fl - &g_as_freelists[0]);
-    const uintptr_t win_base = win_slot_base + uintptr_t(slot) * g_window_sz;
-    size_t rsz = align_up(class_size, win_region_sz);
-    uintptr_t mapped = fl->win_mapped.load(std::memory_order_relaxed);
-    if (rsz > g_window_sz - mapped) {
-        return nullptr;
+    size_t rsz = align_up(class_size, region_sz);
+    if (st->cur == no_extent || rsz > extent_size - st->cur_used) {
+        // The tail of the current extent, if any, is left unused.
+        uint32_t e = acquire_extent(st);
+        if (e == no_extent) {
+            return nullptr;
+        }
+        st->cur = e;
+        st->cur_used = 0;
     }
-    uintptr_t want = win_base + mapped;
-    // Serialize selection, mapping AND publication. mmap_fixed replaces any
-    // old mapping at want; racing maps cannot safely be discarded afterwards.
+    uintptr_t want = extent_addr(st->cur) + st->cur_used;
     void *v = mmu::map_anon(reinterpret_cast<void*>(want), rsz,
                             mmu::mmap_fixed | mmu::mmap_populate, mmu::perm_rw);
     if (reinterpret_cast<uintptr_t>(v) != want) {
         if (v) {
             mmu::munmap(v, rsz);
         }
-        return nullptr; // unchanged cursor, so a failed mapping can be retried
+        return nullptr;   // nothing published, so a later call can retry
     }
-    fl->win_next.store(want + class_size, std::memory_order_relaxed);
-    // Publish the free() range check before enabling fast carves via end.
-    fl->win_mapped.store(mapped + rsz, std::memory_order_release);
-    fl->win_end.store(want + rsz, std::memory_order_release);
+    st->cur_used += rsz;
+    st->committed += rsz;
+    g_used[st->cur].store(st->cur_used >> 20, std::memory_order_release);
     g_committed.fetch_add(rsz, std::memory_order_relaxed);
+    st->next.store(want + class_size, std::memory_order_relaxed);
+    st->end.store(want + rsz, std::memory_order_release);
     return v;
+}
+
+// The chunk is in this address space, populated, and never unmapped while
+// it lives, so reading its link cannot fault; if another pop took it first
+// the link may be garbage, and the tag fails the CAS.
+void *pop(as_arena *st, unsigned idx)
+{
+    auto &head = st->heads[idx];
+    uint64_t h = head.load(std::memory_order_acquire);
+    for (;;) {
+        uintptr_t c = head_ptr(h);
+        if (!c) {
+            return nullptr;
+        }
+        uintptr_t n = __atomic_load_n(reinterpret_cast<uintptr_t*>(c), __ATOMIC_RELAXED);
+        if (head.compare_exchange_weak(h, head_make(n, h),
+                std::memory_order_acquire, std::memory_order_acquire)) {
+            return reinterpret_cast<void*>(c);
+        }
+    }
+}
+
+// Writes the chunk, which may COW-fault: preemptible, and no lock held.
+void push(as_arena *st, uintptr_t chunk, unsigned idx)
+{
+    auto &head = st->heads[idx];
+    uint64_t h = head.load(std::memory_order_relaxed);
+    for (;;) {
+        __atomic_store_n(reinterpret_cast<uintptr_t*>(chunk), head_ptr(h), __ATOMIC_RELAXED);
+        if (head.compare_exchange_weak(h, head_make(chunk, h),
+                std::memory_order_release, std::memory_order_relaxed)) {
+            return;
+        }
+    }
+}
+
+// Bytes a request occupies in a chunk (header + alignment padding + user
+// bytes), or 0 if the arena does not serve it.  The returned pointer is
+// header_size past the chunk start when alignment divides header_size;
+// otherwise it is aligned up within the chunk.
+size_t chunk_need(size_t size, size_t alignment)
+{
+    if (size > max_alloc || alignment > max_alloc) {
+        return 0;
+    }
+    if (alignment < 16) {
+        alignment = 16;
+    }
+    if (!size) {
+        size = 1;   // malloc(0) still gets a distinct pointer with usable bytes
+    }
+    size_t need = header_size + size + (alignment > header_size ? alignment : 0);
+    return need <= max_alloc ? need : 0;
+}
+
+inline void recover(void *p, uintptr_t &base, unsigned &idx)
+{
+    uintptr_t user = reinterpret_cast<uintptr_t>(p);
+    auto *h = reinterpret_cast<chunk_header*>(user - sizeof(chunk_header));
+    assert(h->magic == chunk_magic);
+    idx = h->class_idx;
+    assert(idx < num_classes);
+    base = *reinterpret_cast<uintptr_t*>(user - 16);
+}
+
+} // anonymous namespace
+
+bool serves(size_t size, size_t alignment)
+{
+    return chunk_need(size, alignment) != 0;
 }
 
 void *alloc(size_t size, size_t alignment)
@@ -559,154 +508,76 @@ void *alloc(size_t size, size_t alignment)
     if (!g_ready.load(std::memory_order_acquire)) {
         return nullptr;
     }
+    size_t need = chunk_need(size, alignment);
+    if (!need) {
+        return nullptr;
+    }
     if (alignment < 16) {
         alignment = 16;
     }
-    if (!size) {
-        size = 1;   // malloc(0) still gets a distinct pointer with usable bytes
-    }
-    // Worst-case footprint: header + alignment padding + user bytes.  The
-    // returned pointer is header_size past the chunk start when alignment
-    // divides header_size; otherwise we align up within the chunk.
-    size_t need = header_size + size + (alignment > header_size ? alignment : 0);
-    if (need > max_alloc) {
-        return nullptr;   // too big for the arena; caller uses the normal heap
-    }
     unsigned idx = class_for(need);
-    if (idx >= num_classes) {
-        return nullptr;
-    }
     size_t class_size = class_size_for(idx);
 
-    // Per-address-space free-list: recycle only within this process's own COW
-    // domain (see the note on as_freelist).  If the slot table is full, this AS
-    // falls back to the identity heap.
-    as_freelist *fl = slot_for(mmu::current_address_space());
-    if (!fl) {
-        return nullptr;   // slot table full: caller uses the identity heap
+    as_arena *st = state_for_alloc();
+    if (!st) {
+        errno = ENOMEM;
+        return nullptr;
     }
-
-    void *chunk = fl->pop(idx);
+    void *chunk = pop(st, idx);
     if (!chunk) {
-#if FORK_SHARED_BUMP
-        // NEGATIVE CONTROL: carve off the shared global bump (the hazard).
-        uintptr_t c = g_bump.fetch_add(class_size, std::memory_order_relaxed);
-        if (c + class_size <= g_bump_end) {
-            chunk = reinterpret_cast<void*>(c);
-        } else if (reclaim_on()) {
-            chunk = window_alloc(fl, class_size);
-            if (!chunk) return nullptr;
-        } else {
-            return nullptr;
-        }
-#else
-        // THE CURE: always carve from THIS AS's private window (slot 97),
-        // reclaimed wholesale on reap.  No shared bump exists.
-        if (reclaim_on()) {
-            chunk = window_alloc(fl, class_size);
-            if (!chunk) {
-                return nullptr;   // window exhausted/unmappable: identity fallback
-            }
-        } else {
-            return nullptr;   // reclaim off (A/B before arm): identity fallback (leak)
-        }
-#endif
+        chunk = carve(st, class_size);
+    }
+    if (!chunk) {
+        chunk = grow(st, class_size);
+    }
+    if (!chunk) {
+        errno = ENOMEM;
+        return nullptr;
     }
 
-    // Now touch the chunk (a fresh chunk faults its page in here, with
-    // preemption on).  The chunk is uniquely ours, so these writes race with
-    // nobody.
-    //
-    // Place the header at the chunk start, return an aligned pointer after it.
+    // The chunk is uniquely ours, so these writes race with nobody; a fresh
+    // chunk is populated, a recycled one may COW-fault (preemption is on).
     uintptr_t base = reinterpret_cast<uintptr_t>(chunk);
     uintptr_t user = align_up(base + header_size, alignment);
     auto *h = reinterpret_cast<chunk_header*>(user - sizeof(chunk_header));
     h->class_idx = idx;
     h->magic = chunk_magic;
     // Store the chunk base so free() can reconstruct it regardless of the
-    // alignment padding.  header_size (16) == sizeof(chunk_header)(8) +
-    // sizeof(uintptr_t)(8), and user >= base + header_size, so [base .. user)
-    // is ours.
+    // alignment padding: [base .. user) is ours, and user - 16 >= base.
     *reinterpret_cast<uintptr_t*>(user - 16) = base;
     return reinterpret_cast<void*>(user);
 }
 
-namespace {
-inline void recover(void *p, uintptr_t &base, unsigned &idx)
-{
-    uintptr_t user = reinterpret_cast<uintptr_t>(p);
-    auto *h = reinterpret_cast<chunk_header*>(user - sizeof(chunk_header));
-    assert(h->magic == chunk_magic);
-    idx = h->class_idx;
-    assert(idx < num_classes);
-    base = *reinterpret_cast<uintptr_t*>(user - 16);
-}
-} // anonymous namespace
-
 void free(void *p)
 {
-    // No header access in atomic context: population does not imply that an
-    // inherited mapping is safely accessible here. Retain until AS teardown.
+    // No arena access in atomic context: population does not imply that an
+    // inherited mapping is safely writable here. Retain until AS teardown.
     if (!sched::preemptable() || !arch::irq_enabled()) {
+        g_atomic_retained.fetch_add(1, std::memory_order_relaxed);
         return;
     }
-    if (!g_ready.load(std::memory_order_acquire)) {
+    if (!g_ready.load(std::memory_order_acquire) || !contains(p)) {
         return;
     }
-#if FORK_SHARED_BUMP
-    // NEGATIVE CONTROL: the OLD shared slot-96 recover/push path -- the exact
-    // cross-AS recycle hazard the cure retires.
-    if (!in_window(p)) {
-        uintptr_t base;
-        unsigned idx;
-        recover(p, base, idx);   // may be a divergent COW copy (the hazard)
-        as_freelist *fl = slot_for(mmu::current_address_space());
-        if (!fl) {
-            return;
-        }
-        fl->push(base, idx);
-        return;
-    }
-#endif
-    // THE CURE: the window owner-arithmetic path handles EVERY arena pointer.
-    //
-    // The C2-safety constraint is absolute: a FOREIGN-AS free must not read the
-    // chunk header, because that VA may be mapped only in the dead or other
-    // child (cross-AS reaper / RCU quiescent / sibling) -> fault, or masked to a
-    // divergent COW copy.  The OWNING AS can read an intact resident header.
-    //
-    // Per-AS disjoint windows make the owner test pure BSS arithmetic:
-    // win_owner_slot(p) is the owning slot, and the current AS's slot is known
-    // from slot_for().  Same slot -> ours, recycle.  Different slot -> foreign,
-    // no-op (the window is reclaimed wholesale when the owning AS is reaped).
-    // No arena page is touched on the foreign path.
-    if (!in_window(p)) {
-        return;   // not an arena pointer (cannot happen via contains(); defensive)
-    }
-    as_freelist *fl = slot_for(mmu::current_address_space());
-    if (!fl) {
-        return;             // no slot for this AS: cannot own it
-    }
-    unsigned my_slot = (unsigned)(fl - &g_as_freelists[0]);
-    if (win_owner_slot(p) != my_slot) {
-        // FOREIGN AS: no-op, and critically NO header read (C2-safe).  The
-        // window is reclaimed wholesale when the owning AS is reaped.
+    // Ownership from identity memory only: a free from any other address
+    // space (the reaper, RCU, a sibling, a child freeing what it inherited)
+    // reads no arena memory and changes nothing.
+    // The mapped high-water also keeps a stale free into an extent this
+    // address space owns, but has not mapped that far, from reading it.
+    as_arena *st = current_state();
+    uint32_t e = extent_of(p);
+    if (!st || g_owner[e].load(std::memory_order_acquire) != st ||
+            reinterpret_cast<uintptr_t>(p) - extent_addr(e) >=
+            (uintptr_t(g_used[e].load(std::memory_order_acquire)) << 20)) {
         g_foreign_frees.fetch_add(1, std::memory_order_relaxed);
         return;
     }
-    // Ours.  Guard against a pointer inside our window but past what we ever
-    // mapped (never produced by window_alloc; a BSS-only check, no read).
-    uintptr_t win_base = win_slot_base + (uintptr_t)my_slot * g_window_sz;
-    if (reinterpret_cast<uintptr_t>(p) - win_base >=
-            fl->win_mapped.load(std::memory_order_acquire)) {
-        return;
-    }
-    uintptr_t obase;
-    unsigned oidx;
-    recover(p, obase, oidx);  // requires an intact resident same-AS allocation
-    if (fl->push(obase, oidx)) {
-        g_recycled.fetch_add(class_size_for(oidx), std::memory_order_relaxed);
-    }
+    uintptr_t base;
+    unsigned idx;
+    recover(p, base, idx);   // requires an intact resident same-AS allocation
+    reinterpret_cast<chunk_header*>(reinterpret_cast<uintptr_t>(p) -
+                                    sizeof(chunk_header))->magic = free_magic;
+    push(st, base, idx);
 }
 
 size_t usable_size(void *p)
@@ -725,57 +596,40 @@ size_t usable_size(void *p)
 
 void release_as(void *as)
 {
-    // Called from mmu::destroy_address_space when a fork child's address space
-    // is torn down.  Drop the child's free-list slot so it can be reused by a
-    // later process, and drop its recycled chunks (their VA is COW-private to
-    // the dying AS and its physical pages are freed with the page tables, so
-    // nothing here dereferences the child's now-gone memory -- we only clear
-    // the shared BSS slot).  The whole per-AS window is unmapped by the
-    // page-table teardown just before this runs.
+    // Called from mmu::destroy_address_space once every user of @as is gone
+    // and its page tables are freed.  Its extents go back to the pool tail,
+    // owner cleared first, so no later free can match this state.
     if (!as || !g_ready.load(std::memory_order_acquire)) {
         return;
     }
-    // The caller must have quiesced ALL users of this AS, including growth
-    // mutex waiters. Its page tables have already been destroyed. The writer
-    // lock prevents a new owner from claiming this slot until reset completes.
-    SCOPE_LOCK(g_slot_lock);
-    for (unsigned i = 0; i < max_as_slots; i++) {
-        if (g_as_freelists[i].owner.load(std::memory_order_relaxed) == as) {
-            g_as_freelists[i].reset_recycle();
-            // Reset the per-AS window bump. The dead child's window (slot 97)
-            // was just unmapped by the page-table teardown; a slot recycled to
-            // a NEW AS must NOT inherit the dead VA.
-            g_as_freelists[i].win_next.store(0, std::memory_order_relaxed);
-            g_as_freelists[i].win_end.store(0, std::memory_order_relaxed);
-            g_as_freelists[i].win_mapped.store(0, std::memory_order_relaxed);
-            g_as_freelists[i].owner.store(nullptr, std::memory_order_release);
-            return;
-        }
+    auto &slot = mmu::fork_arena_state(static_cast<mmu::address_space*>(as));
+    auto *st = static_cast<as_arena*>(slot.exchange(nullptr, std::memory_order_acq_rel));
+    if (!st) {
+        return;
     }
+    unsigned long n = 0;
+    for (uint32_t e = st->chain; e != no_extent; n++) {
+        uint32_t next = g_link[e];
+        g_owner[e].store(nullptr, std::memory_order_release);
+        pool_push_tail(e);
+        e = next;
+    }
+    g_extents_in_use.fetch_sub(n, std::memory_order_relaxed);
+    g_committed.fetch_sub(st->committed, std::memory_order_relaxed);
+    g_live_states.fetch_sub(1, std::memory_order_relaxed);
+    kernel_heap_scope kh;
+    delete st;
 }
 
-void leak_probe_stats(unsigned long *bump_used, unsigned long *as_slots)
+arena_stats stats()
 {
-    if (bump_used) {
-        // Sum of all live AS's mapped window bytes (the high-water of committed
-        // window space; there is no shared bump under the cure).
-        unsigned long t = 0;
-        if (g_ready.load(std::memory_order_acquire)) {
-            for (unsigned i = 0; i < max_as_slots; i++) {
-                if (g_as_freelists[i].owner.load(std::memory_order_relaxed)) {
-                    t += g_as_freelists[i].win_mapped.load(std::memory_order_relaxed);
-                }
-            }
-        }
-        *bump_used = t;
-    }
-    if (as_slots) {
-        unsigned long n = 0;
-        for (unsigned i = 0; i < max_as_slots; i++) {
-            if (g_as_freelists[i].owner.load(std::memory_order_relaxed)) n++;
-        }
-        *as_slots = n;
-    }
+    arena_stats s;
+    s.live_states = g_live_states.load(std::memory_order_relaxed);
+    s.extents_in_use = g_extents_in_use.load(std::memory_order_relaxed);
+    s.committed_bytes = g_committed.load(std::memory_order_relaxed);
+    s.foreign_frees = g_foreign_frees.load(std::memory_order_relaxed);
+    s.atomic_retained = g_atomic_retained.load(std::memory_order_relaxed);
+    return s;
 }
 
 } // namespace fork_arena

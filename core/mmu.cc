@@ -964,8 +964,8 @@ void destroy_address_space(address_space *as)
     if (as->owned_vmas) {
         as->owned_vmas->clear_and_dispose([](vma *v) { delete v; });
     }
-    // Reclaim this child's per-AS fork-arena free-list slot after its page
-    // tables.  The object goes with its last reference.
+    // Return this child's fork-arena extents to the pool and free its arena
+    // state, after its page tables.  The object goes with its last reference.
     fork_arena::release_as(as);
     live_child_address_spaces.fetch_sub(1, std::memory_order_relaxed);
 }
