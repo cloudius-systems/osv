@@ -1899,17 +1899,25 @@ thread::reaper::reaper()
     _thread->start();
 }
 
+// _mtx only guards the zombie list.  Take the whole batch under it, then join
+// and clean up without it: a cleanup can be slow (a fork child's tears down
+// its address space and fds, and can sleep on I/O), and every thread that ends
+// meanwhile needs _mtx in add_zombie().
 void thread::reaper::reap()
 {
+    decltype(_zombies) batch;
     while (true) {
         WITH_LOCK(_mtx) {
             wait_until(_mtx, [=] { return !_zombies.empty(); });
-            while (!_zombies.empty()) {
-                auto z = &_zombies.front();
-                _zombies.pop_front();
-                z->join();
-                z->_cleanup();
-            }
+            batch.swap(_zombies);
+        }
+        while (!batch.empty()) {
+            auto z = &batch.front();
+            batch.pop_front();
+            // join() only waits for z to reach terminated; it needs no lock,
+            // and z is on no shared list now.
+            z->join();
+            z->_cleanup();
         }
     }
 }
