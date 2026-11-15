@@ -411,9 +411,14 @@ static void clone_pt_level0(pt_element<0> *parent_pt, pt_element<0> *child_pt,
             parent_pt[i] = cow;
             child_pt[i] = cow;
         } else {
-            // Read-only or already-COW private page: share the same physical
-            // page as-is (stays COW/read-only in the child too).
-            child_pt[i] = ppte;
+            // Read-only or already-COW private page: share the frame, COW in
+            // both address spaces.  Left read-only and not COW, a later
+            // mprotect(PROT_WRITE) by either side made it writable in place
+            // and that side's writes reached the other.  A write to it while
+            // the vma is read-only is refused by vm_fault before the copy.
+            pt_element<0> cow = pte_mark_cow(ppte, true);
+            parent_pt[i] = cow;
+            child_pt[i] = cow;
         }
     }
 }
@@ -439,12 +444,11 @@ void clone_pt_level<1>(pt_element<1> *parent_pt, pt_element<1> *child_pt,
         if (ppte.large()) {
             // Never share a 2 MB page: split it to 4 K in the PARENT in place,
             // then fall through to the normal 4 K clone path, which makes the
-            // per-page decision (private-writable -> COW, MAP_SHARED -> stays
-            // shared, read-only -> shared as-is).  A writable one shared as-is
-            // would let the child's writes reach the parent.  A read-only one
-            // would leave the child mapping a frame nothing counts it on, and
-            // it would keep teardown from treating every 2 MB leaf in a child
-            // as one the child faulted in itself (see free_child_large_pages).
+            // per-page decision (private -> COW, MAP_SHARED -> stays shared).
+            // A writable one shared as-is would let the child's writes reach
+            // the parent.  A read-only one would keep teardown from treating
+            // every 2 MB leaf in a child as one the child faulted in itself
+            // (see free_child_large_pages).
             // Cost: one 4 K page table per split page.
             split_large_page(hw_ptep<1>::force(&parent_pt[i]));
             ppte = parent_pt[i]; // re-read: now a non-large intermediate pte
@@ -2450,7 +2454,13 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
     if (mmu::is_page_fault_write(ef->get_error())) {
         PREVENT_STACK_PAGE_FAULT
         WITH_LOCK(as->vmas_mutex->for_write()) {
-            if (handle_cow_write_fault(addr)) {
+            // A COW page in a vma that does not allow the write (it was
+            // read-only at the fork, or mprotect()ed since) is a SIGSEGV
+            // below, not a copy.  A COW page outside every vma (kernel
+            // memory in an application slot) is resolved as before.
+            auto v = find_intersecting_vma_in(*as->vmas, addr);
+            if ((v == as->vmas->end() || !access_fault(*v, ef->get_error())) &&
+                    handle_cow_write_fault(addr)) {
                 trace_mmu_vm_fault_ret(addr, ef->get_error());
                 return;
             }
