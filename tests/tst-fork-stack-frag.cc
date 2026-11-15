@@ -275,6 +275,15 @@ int main(int argc, char** argv)
         printf("FAIL: the parent did not read a live child thread's stack right\n");
         return 1;
     }
+#ifdef HAVE_STACK_WINDOW
+    // Only 14-page ranges were free, so every 64 KiB and 256 KiB stack had to
+    // come from the window; otherwise this run did not test it.
+    if (hs->in_window.load() != 2 * rounds + 1) {
+        printf("FAIL: %d of %d stacks in the stack window\n",
+               hs->in_window.load(), 2 * rounds + 1);
+        return 1;
+    }
+#endif
     printf("%d rounds of 64 KiB and 256 KiB kernel threads in a forked child in %.3f s, "
            "%d of %d stacks and %d thread objects (%zu bytes) in the stack window\nPASS\n",
            rounds, secs, hs->in_window.load(), 2 * rounds + 1,
