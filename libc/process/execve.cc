@@ -87,14 +87,13 @@ int execve(const char *path, char *const argv[], char *const envp[])
         return libc_error(ENOENT);
     }
 
-    // Record the exec'd app so the fork/wait layer can reap it under the pid
-    // of the thread that called execve() (Linux keeps the pid across exec).
-    osv::fork::adopt_execed_app(child);
-
     // A successful execve() does not return to the caller.  Join the child app
     // (run it to completion on this thread) and then exit with its return code,
-    // so this thread never re-enters the old program.
+    // so this thread never re-enters the old program.  _exit() does not
+    // unwind, so drop the application first: that unloads the program and
+    // frees its ELF namespace for the next exec.
     int rc = child->join();
+    child.reset();
     _exit(rc);
     // not reached
     return 0;

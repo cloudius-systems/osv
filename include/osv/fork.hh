@@ -33,11 +33,6 @@
 namespace osv {
 namespace fork {
 
-// Called by execve() to record the application it launched, so that when this
-// (child) thread later exits, waitpid() in the parent can report the exec'd
-// program's exit status under the child's pid.
-void adopt_execed_app(shared_app_t app);
-
 // Register a fork() child of @parent_pid with child pid @child_pid.  Called in
 // the PARENT before the child thread is started, so the entry is present in the
 // registry by the time the parent (or the child's exit path) looks it up; this

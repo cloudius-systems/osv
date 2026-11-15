@@ -40,10 +40,6 @@ struct child_state {
     pid_t parent_pid;
     bool exited = false;
     int status = 0;              // encoded: (exit_code & 0xff) << 8, or signal
-    // Set if the child execve()'d a program. Retained (not read again) to keep
-    // the exec-replaced application object alive until waitpid() reaps the
-    // child; otherwise its last reference could drop while the child still runs.
-    shared_app_t execed_app;
 };
 
 mutex g_lock;
@@ -57,15 +53,6 @@ pid_t current_pid()
 }
 
 } // anonymous namespace
-
-void adopt_execed_app(shared_app_t app)
-{
-    SCOPE_LOCK(g_lock);
-    auto it = g_children.find(current_pid());
-    if (it != g_children.end()) {
-        it->second->execed_app = app;
-    }
-}
 
 void register_child(pid_t child_pid, pid_t parent_pid)
 {
