@@ -50,7 +50,7 @@ void init();
 void* alloc(size_t bytes);
 
 // Unmap a stack returned by alloc().  The caller guarantees no thread runs on
-// it any more.
+// it any more.  Aborts if `p` is not a mapped window allocation of `bytes`.
 void free(void* p, size_t bytes);
 
 // Under CONF_memory_debug there is no window, and the debug allocator, which
