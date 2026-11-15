@@ -29,6 +29,10 @@ int execve(const char *path, char *const argv[], char *const envp[])
 #include <osv/mmu.hh>
 #include <osv/sched.hh>
 
+// Provided by libc/signal.cc: drop a process's interval timers.  The exec'd
+// program runs in AS0, so the old address space's timers cannot follow it.
+extern "C" void fork_release_process_itimers(mmu::address_space *as);
+
 // execve() on OSv.
 //
 // OSv is a single-address-space unikernel: there is no separate process image
