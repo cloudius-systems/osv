@@ -764,7 +764,9 @@ pid_t fork(void)
     // from ours.  Without this the child's sigaction() (e.g. PostgreSQL's
     // startup process resetting SIGCHLD to SIG_DFL) would clobber our shared
     // handler table and the postmaster would never be notified of child exits.
-    osv::fork::fork_init_child_signal_actions(child_as, osv::signal_actions);
+    // A fork child forking again passes on its own table.
+    struct sigaction *mine = osv::fork::fork_child_signal_actions();
+    osv::fork::fork_init_child_signal_actions(child_as, mine ? mine : osv::signal_actions);
     // Register the child BEFORE starting it so a fast child->exit cannot race
     // ahead of the parent's bookkeeping.
     fork::register_child(cpid, parent);
