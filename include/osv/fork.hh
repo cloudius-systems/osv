@@ -50,9 +50,10 @@ void unregister_pid(pid_t pid, mmu::address_space *as);
 // pid, or OSV_PID for the top-level app / kernel).  getpid() routes here.
 pid_t pid_for_current();
 
-// The address space of the live fork child with pid @pid, or nullptr if @pid is
-// not a live fork child (unknown, or the top-level app).
-mmu::address_space *as_for_pid(pid_t pid);
+// The address space of fork child @pid with a use held (release it with
+// mmu::as_release), or nullptr if @pid is not a fork child or its address
+// space is retired.  *@registered is true if @pid is a fork child at all.
+mmu::address_space *hold_as_for_pid(pid_t pid, bool *registered);
 
 // Make child @child_pid waitable, with the status its exit() recorded or else
 // @status (encoded WIFEXITED-style), wake any waiter, and raise SIGCHLD to the

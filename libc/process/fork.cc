@@ -558,13 +558,19 @@ pid_t pid_for_current()
     return it != g_as_pid.end() ? it->second : OSV_PID;
 }
 
-// The address space of the live fork child with pid @pid, or nullptr if @pid is
-// not a live fork child (unknown pid, or the top-level app).
-mmu::address_space *as_for_pid(pid_t pid)
+// The address space of fork child @pid, held (mmu::as_try_hold), or nullptr.
+// The map's entry keeps the object alive (see fork()), so the hold is taken
+// under the lock.  @registered says whether @pid is a fork child at all: one
+// whose address space is retired (it has exited, or exec'd into AS0) is.
+mmu::address_space *hold_as_for_pid(pid_t pid, bool *registered)
 {
     SCOPE_LOCK(g_pid_lock);
     auto it = g_pid_as.find(pid);
-    return it != g_pid_as.end() ? it->second : nullptr;
+    *registered = it != g_pid_as.end();
+    if (*registered && mmu::as_try_hold(it->second)) {
+        return it->second;
+    }
+    return nullptr;
 }
 
 // Record the status a child passed to exit(); the first one wins.  The child
@@ -671,15 +677,26 @@ pid_t wait_child(pid_t pid, int *status, int options)
 }
 
 // The last use of child address space @as is gone (mmu::as_release): free its
-// memory, then drop the reference the retirement holds.  Runs on the thread
-// that dropped the use: the reaper disposing the child's thread, or execve()
-// once it has left the child's stack.
+// memory and what is keyed by it only for the running image, then drop the
+// reference the retirement holds.  Runs on the thread that dropped the use:
+// the reaper or a joiner disposing the last thread, or execve() once it has
+// left the child's stack.  The pid and fd state stays until the reap.
 extern "C" void fork_retire_address_space(mmu::address_space *as)
 {
+    // Retired after the reap (a signal handler outlived the child): close the
+    // fds that handler opened, which the reap could not see.
+    bool reaped;
+    WITH_LOCK(g_pid_lock) {
+        reaped = g_as_pid.find(as) == g_as_pid.end();
+    }
+    if (reaped) {
+        release_inherited_fds(as);
+    }
+    fork_release_process_itimers(as);
+    fork_release_child_signal_actions(as);
     // The objects this process loaded or holds go with it: any it alone
     // held are unloaded now, without reading their memory (remove_object).
     elf::program::release_as_objects(as);
-    fork_release_process_itimers(as);
     mmu::destroy_address_space(as);
     mmu::as_put(as);
 }
@@ -729,8 +746,8 @@ pid_t fork(void)
     }
     pid_t cpid = child->id();
     // The new address space starts with one reference for the fork
-    // bookkeeping, dropped by the cleanup below, and its first use is the
-    // child thread's.
+    // bookkeeping (the pid and fd maps key by its pointer), dropped by the
+    // cleanup below, and its first use is the child thread's.
     mmu::address_space *child_as =
         mmu::clone_address_space(sched::thread::current()->address_space());
     child->set_address_space(child_as);
@@ -784,14 +801,12 @@ pid_t fork(void)
         // dropped the ones it explicitly closed; this releases the rest, so
         // the parent's fd refcounts return to just the parent's own).
         fork::release_inherited_fds(child_as);
-        // Drop the child's private signal-disposition table.
-        osv::fork::fork_release_child_signal_actions(child_as);
         // Disposing the thread drops its use of the child address space; if
-        // it was the last (the child did not exec), the address space is
-        // retired here.
+        // it was the last (no signal handler still runs there, and the child
+        // did not exec), the address space is retired here.
         sched::thread::dispose(child);
-        // The fork bookkeeping's reference: the fd map is done with the
-        // pointer, so a later address space may reuse it.
+        // The fork bookkeeping's reference: the pid and fd maps are done with
+        // the pointer, so a later address space may reuse it.
         mmu::as_put(as);
         fork::child_exited(pid, 0);
     });

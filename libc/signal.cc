@@ -541,12 +541,19 @@ int kill(pid_t pid, int sig)
     // kill(PostmasterPid==OSV_PID, SIGUSR1) to make the postmaster fork the
     // parallel workers; or pg_reload_conf() -> kill(PostmasterPid, SIGHUP))
     // must run the postmaster's handler in AS0, NOT be rejected.  AS0 is never
-    // registered in g_pid_as, so as_for_pid(OSV_PID) returns nullptr; treat
+    // registered in g_pid_as, so hold_as_for_pid(OSV_PID) returns nullptr; treat
     // OSV_PID like the self/broadcast case (target_as stays nullptr -> AS0)
     // instead of ESRCH -- otherwise the postmaster never launches the workers
     // and the parallel Gather hangs (leader waits forever for workers that
     // were never forked).
     mmu::address_space *target_as = nullptr;
+    // The target's address space is held until the handler thread is in it,
+    // so the child cannot be torn down under either of them.
+    struct as_use {
+        mmu::address_space *as = nullptr;
+        ~as_use() { mmu::as_release(as); }
+    } target_use;
+    bool registered = false;
     // A LIVE fork-backend's OWN latch/barrier self-signal (SIGURG/SIGUSR1)
     // must run its handler in the CALLER's own COW address space.  The base
     // kill() spawns a NEW detached thread and set_address_space()es it into
@@ -560,8 +567,14 @@ int kill(pid_t pid, int sig)
     // INLINE in the caller and skip the thread spawn entirely (self_inline).
     bool self_inline = false;
     if (pid != getpid() && pid != 0 && pid != -1 && pid != OSV_PID) {
-        target_as = osv::fork::as_for_pid(pid);
+        target_as = target_use.as = osv::fork::hold_as_for_pid(pid, &registered);
         if (!target_as) {
+            if (registered) {
+                // A child that has exited but is not reaped yet, or one that
+                // exec'd: its own address space is gone, so, as for a zombie,
+                // the signal is accepted and has no effect.
+                return 0;
+            }
             errno = ESRCH;
             return -1;
         }
@@ -571,11 +584,11 @@ int kill(pid_t pid, int sig)
         // other process.  PostgreSQL's statement and lock timeout handlers
         // send SIGINT to MyProcPid, and pg_terminate_backend() of one's own
         // backend sends SIGTERM; the postmaster's handlers for those start a
-        // shutdown.  as_for_pid() gates this to a live registered child: the
+        // shutdown.  hold_as_for_pid() gates this to a live registered child: the
         // top-level app (AS0) and a child mid-teardown get nullptr and keep
         // the global table.  The child-exit SIGCHLD goes to the parent's pid
         // (fork.cc child_exited), not here.
-        target_as = osv::fork::as_for_pid(pid);
+        target_as = target_use.as = osv::fork::hold_as_for_pid(pid, &registered);
         // Two PostgreSQL self-signals run their handler INLINE in the caller,
         // which is already in this backend's COW address space on a faultable
         // stack, so the handler sets the flag / pokes the self-pipe in the
