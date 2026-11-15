@@ -293,6 +293,8 @@ static const std::vector<cow_range> *cow_privatize_ranges;
 // than the existing per-fork push_back growth already performs).
 static std::vector<cow_range> cow_share_sorted;
 static std::vector<cow_range> cow_privatize_sorted;
+// Held by clone_address_space() while it uses any of the above.
+static mutex clone_ranges_lock;
 
 // Memo of the last range that matched, per set.  A pure-function cache: a hit
 // returns exactly what the search would have returned, a miss falls through to
@@ -566,8 +568,12 @@ address_space *clone_address_space(address_space *parent)
     // Share every kernel PML4 slot (0 and 128..511) by copying the parent's
     // entry verbatim (points at the same lower-level tables).  Clone only the
     // application slots (1..127) so their PTEs can diverge under COW.
+    // The share/privatize range sets and their memos are global, and two
+    // address spaces (AS0 and a fork child forking again) can clone at once,
+    // each under its own vmas_mutex: one clone at a time uses them.
     address_space *child = nullptr;
     PREVENT_STACK_PAGE_FAULT
+    WITH_LOCK(clone_ranges_lock)
     WITH_LOCK(parent->vmas_mutex->for_write()) {
         // Build the "share, don't COW" ranges: stack VMAs (OSv runs kernel code
         // on the app stack, so its pages must stay writable -- see the note on
@@ -589,7 +595,9 @@ address_space *clone_address_space(address_space *parent)
             // the parent's exact rsp/rbp with independent stack memory.  It
             // must stay plain-writable (no COW) since OSv runs kernel code with
             // irqs off on it -- a COW fault there is illegal.
-            auto si = sched::thread::current()->get_stack_info();
+            // A fork child forking again runs on its parent's stack VA, not
+            // on its own thread stack.
+            auto si = sched::thread::current()->get_running_stack_info();
             uintptr_t s = reinterpret_cast<uintptr_t>(si.begin);
             privatize_ranges.push_back({s, s + si.size});
         }
