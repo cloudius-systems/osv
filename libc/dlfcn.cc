@@ -8,6 +8,7 @@
 #include <dlfcn.h>
 #include <__dlfcn.h>
 #include <osv/elf.hh>
+#include <osv/mmu.hh>
 #include <link.h>
 #include <osv/debug.hh>
 #include <osv/stubbing.hh>
@@ -52,6 +53,14 @@ void* dlopen(const char* filename, int flags)
         dlerror_fmt("dlopen: failed to open %s", filename);
         return nullptr;
     }
+#if CONF_fork
+    // In a fork child the handle is in its own memory, which goes away at
+    // exit without a dlclose(): it must not own a reference.  The address
+    // space holds the object until it retires (get_library).
+    if (mmu::current_address_space() != mmu::kernel_address_space()) {
+        return new std::shared_ptr<elf::object>(std::shared_ptr<elf::object>(), obj.get());
+    }
+#endif
     return new std::shared_ptr<elf::object> (std::move(obj));
 }
 
@@ -100,6 +109,11 @@ int dl_iterate_phdr(int (*callback)(struct dl_phdr_info *info,
     elf::get_program()->with_modules([=, &ret] (
             const elf::program::modules_list &ml) {
         for (auto obj : ml.objects) {
+#if CONF_fork
+            if (!obj->visible_here()) {
+                continue;
+            }
+#endif
             dl_phdr_info info;
             info.dlpi_addr = reinterpret_cast<uintptr_t>(obj->base());
             std::string name = obj->pathname();

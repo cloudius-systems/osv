@@ -528,6 +528,21 @@ private:
 public:
     void set_visibility(VisibilityLevel);
     void set_dlopen_ed(bool dlopen_ed) { _dlopen_ed = dlopen_ed; }
+#if CONF_fork
+    // Linux semantics for an object a fork child loads: it exists only in the
+    // address space that loaded it and the children that address space forks
+    // later.  null: loaded in AS0, visible everywhere.
+    mmu::address_space *owner_as() const { return _owner_as.load(std::memory_order_acquire); }
+    bool visible_here() const;
+    // visible_here() for a caller that cannot take the vma lock (rcu read side,
+    // preemption off): owner only, so a child does not see an object its
+    // parent (not AS0) loaded.
+    bool visible_here_nolock() const;
+private:
+    std::atomic<mmu::address_space*> _owner_as{nullptr};
+    friend class program;
+public:
+#endif
 };
 
 class file : public object {
@@ -709,6 +724,24 @@ private:
     // debugger interface
     static std::vector<object*> s_objs;
     static mutex s_objs_mutex;
+#if CONF_fork
+    // The object at @name visible in the current address space, or null.
+    std::shared_ptr<object> find_loaded(const std::string &name);
+    // Address ranges of unloaded child-owned objects, reused by later loads.
+    std::vector<std::pair<char*, char*>> _free_ranges;
+    mutex _free_ranges_mutex;
+    void *alloc_range(object *ef);
+public:
+    // An object a fork child loaded, or the object it got from get_library(),
+    // is owned by its address space: the address space keeps it loaded until
+    // it retires.  hold_in_as() records that; release_as_objects() drops them
+    // (fork_retire_address_space, before destroy_address_space).  A fork copies
+    // the parent's holds to the child (inherit_as_objects).
+    static void hold_in_as(mmu::address_space *as, std::shared_ptr<object> obj);
+    static void inherit_as_objects(mmu::address_space *parent, mmu::address_space *child);
+    static void release_as_objects(mmu::address_space *as);
+private:
+#endif
 
     friend elf::file::~file();
     friend class object;

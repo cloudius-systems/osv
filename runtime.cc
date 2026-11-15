@@ -10,6 +10,7 @@
 #include <osv/fork.hh>
 #include <osv/kernel_config_fork.h>
 #include <osv/elf.hh>
+#include <osv/fork_arena.hh>
 #include <stdlib.h>
 #include <cstring>
 #include <string.h>
@@ -195,6 +196,10 @@ int __cxa_atexit(destructor_t destructor, void *arg, void *dso)
     if (dso == &__dso_handle)
         return 0;
     SCOPE_LOCK(destructors_mutex);
+#if CONF_fork
+    // A global map: a fork child's library registers here too.
+    fork_arena::kernel_heap_scope kh;
+#endif
     destructors[dso].push_back(std::make_pair(destructor, arg));
     return 0;
 }
@@ -216,6 +221,19 @@ void __cxa_finalize(void *dso)
     return;
 }
 }
+
+#if CONF_fork
+namespace elf {
+// Drop the destructors registered by an object in [start, end) whose fini
+// functions will not run (a fork child's, unloaded after its process).
+void cxa_forget_range(void *start, void *end)
+{
+    fork_arena::kernel_heap_scope kh;
+    SCOPE_LOCK(destructors_mutex);
+    destructors.erase(destructors.lower_bound(start), destructors.lower_bound(end));
+}
+}
+#endif
 
 OSV_LIBC_API
 int getpagesize()

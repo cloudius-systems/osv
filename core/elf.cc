@@ -60,6 +60,11 @@ using namespace boost::range;
 
 namespace elf {
 
+#if CONF_fork
+void cxa_forget_range(void *start, void *end);   // runtime.cc
+#endif
+
+
 const ulong program::core_module_index = 0;
 
 namespace {
@@ -148,8 +153,44 @@ ulong object::module_index() const
     return _module_index;
 }
 
+#if CONF_fork
+// An object loaded in AS0 is visible everywhere.  One a fork child loaded is
+// visible in its owner, and in an address space that maps its range: a child
+// the owner forked after the load (its clone maps the object).  AS0 never maps
+// a child's object: each load takes a range no other listed object has.
+static mmu::address_space *const gone_owner = reinterpret_cast<mmu::address_space*>(1);
+
+bool object::visible_here() const
+{
+    auto owner = owner_as();
+    if (!owner) {
+        return true;
+    }
+    auto cur = mmu::current_address_space();
+    if (owner == cur) {
+        return true;
+    }
+    if (cur == mmu::kernel_address_space()) {
+        return false;
+    }
+    return mmu::intersects_vma(reinterpret_cast<uintptr_t>(_base),
+                               reinterpret_cast<uintptr_t>(_end));
+}
+
+bool object::visible_here_nolock() const
+{
+    auto owner = owner_as();
+    return !owner || owner == mmu::current_address_space();
+}
+#endif
+
 bool object::visible(void) const
 {
+#if CONF_fork
+    if (!visible_here()) {
+        return false;
+    }
+#endif
     auto level = _visibility_level.load(std::memory_order_acquire);
     if (level == VisibilityLevel::Public) {
         return true;
@@ -1014,6 +1055,11 @@ void* object::resolve_pltgot(unsigned index)
             // resolver.  Forcing the node onto the identity heap keeps the set
             // coherent across every fork address space.
             fork_arena::kernel_heap_scope kh;
+            // Only an AS0 object needs pinning here.  An object a fork child
+            // loaded is held by its address space until it retires, and a
+            // reference to it from another object would keep it (and a cycle
+            // between two of them, both) loaded for good.
+            if (!sm.obj->owner_as())
 #endif
             _used_by_resolve_plt_got.insert(sm.obj->shared_from_this());
         }
@@ -1604,12 +1650,18 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         std::vector<std::shared_ptr<object>> &loaded_objects, bool dlopen)
 {
     fileref f;
+#if CONF_fork
+    if (auto obj = find_loaded(name)) {
+        return obj;
+    }
+#else
     if (_files.count(name)) {
         auto obj = _files[name].lock();
         if (obj) {
             return obj;
         }
     }
+#endif
     if (name.find('/') == name.npos) {
         std::vector<std::string> search_path;
         search_path.insert(search_path.end(), extra_path.begin(), extra_path.end());
@@ -1630,17 +1682,35 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         f = fileref_from_fname(name);
     }
 
+#if CONF_fork
+    if (auto obj = find_loaded(name)) {
+        return obj;
+    }
+#else
     if (_files.count(name)) {
         auto obj = _files[name].lock();
         if (obj) {
             return obj;
         }
     }
+#endif
     if (f) {
         trace_elf_load(name.c_str());
         auto ef = std::shared_ptr<object>(new file(*this, f, name),
                 [=](object *obj) { remove_object(obj); });
+#if CONF_fork
+        auto as = mmu::current_address_space();
+        if (as != mmu::kernel_address_space()) {
+            ef->_owner_as.store(as, std::memory_order_release);
+            // Held before it is mapped: a fork that clones the mapping
+            // copies the hold too (inherit_as_objects runs after the clone).
+            hold_in_as(as, ef);
+        }
+        void *at = ef->is_pic() ? alloc_range(ef.get()) : nullptr;
+        ef->set_base(at ? at : _next_alloc);
+#else
         ef->set_base(_next_alloc);
+#endif
         ef->set_visibility(ThreadOnly);
         ef->set_dlopen_ed(dlopen);
         // We need to push the object at the end of the list (so that the main
@@ -1657,14 +1727,27 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         osv::rcu_dispose(old_modules);
         ef->load_segments();
         ef->process_headers();
+#if CONF_fork
+        if (ef->is_pic() && !at)
+            _next_alloc = ef->end();
+        if (!ef->owner_as())
+            add_debugger_obj(ef.get());   // gdb reads AS0
+#else
         if (ef->is_pic())
             _next_alloc = ef->end();
         add_debugger_obj(ef.get());
+#endif
         loaded_objects.push_back(ef);
         // Do not try to load any dependant libraries for static executable, they don't apply here.
         if (!ef->is_statically_linked_executable() && !ef->is_linux_dl()) {
             ef->load_needed(loaded_objects);
         }
+#if CONF_fork
+        if (ef->owner_as()) {
+            // Found through its address space (find_loaded), not _files.
+            return ef;
+        }
+#endif
         _files[name] = ef;
         _files[ef->soname()] = ef;
         return ef;
@@ -1716,6 +1799,14 @@ program::get_library(std::string name, std::vector<std::string> extra_path, bool
     if (ret) {
         ret->init_static_tls();
     }
+#if CONF_fork
+    // The process keeps what it asked for loaded until it exits, like the
+    // objects it loaded itself (load_object).
+    auto as = mmu::current_address_space();
+    if (ret && as != mmu::kernel_address_space()) {
+        hold_in_as(as, ret);
+    }
+#endif
     }
 
     if (!delay_init) {
@@ -1753,11 +1844,21 @@ void program::remove_object(object *ef)
 {
     SCOPE_LOCK(_mutex);
     trace_elf_unload(ef->pathname().c_str());
+#if CONF_fork
+    // An object a fork child loaded goes when that process's address space
+    // retires (release_as_objects), on a thread outside it: none of its
+    // memory is mapped here.  As after _exit(), its fini functions do not run.
+    bool owned = ef->owner_as();
+#else
+    constexpr bool owned = false;
+#endif
 
+    if (!owned) {
     // ensure that any module rcu callbacks are completed before static destructors
     osv::rcu_flush();
 
     ef->run_fini_funcs();
+    }
 
     // ensure that any module rcu callbacks launched by static destructors
     // are completed before we delete the module
@@ -1766,10 +1867,13 @@ void program::remove_object(object *ef)
     del_debugger_obj(ef);
     // Note that if we race with get_library() of the same library, we may
     // find in _files a new copy of the same library, and mustn't remove it.
+    // (An owned object is not in _files, and soname() would read its memory.)
+    if (!owned) {
     if (_files[ef->pathname()].expired())
         _files.erase(ef->pathname());
     if (_files[ef->soname()].expired())
         _files.erase(ef->soname());
+    }
     auto old_modules = _modules_rcu.read_by_owner();
     std::unique_ptr<modules_list> new_modules (
             new modules_list(*old_modules));
@@ -1811,6 +1915,113 @@ void program::del_debugger_obj(object* obj)
         s_objs.erase(it);
     }
 }
+
+#if CONF_fork
+// The page range [first, second) an object's PT_LOAD segments occupy.
+static std::pair<char*, char*> load_range(object *ef)
+{
+    uintptr_t lo = UINTPTR_MAX, hi = 0;
+    for (auto &p : *ef->phdrs()) {
+        if (p.p_type == PT_LOAD) {
+            lo = std::min<uintptr_t>(lo, p.p_vaddr);
+            hi = std::max<uintptr_t>(hi, p.p_vaddr + p.p_memsz);
+        }
+    }
+    auto base = reinterpret_cast<uintptr_t>(ef->base());
+    return {reinterpret_cast<char*>(align_down(base + lo, mmu::page_size)),
+            reinterpret_cast<char*>(align_up(base + hi, mmu::page_size))};
+}
+
+// A range an unloaded owned object left, first fit, or null.  Sets ef's base.
+// Ranges are not merged.  No two listed objects share a range: an owned
+// object's range is freed only once every address space mapping it is gone.
+void *program::alloc_range(object *ef)
+{
+    SCOPE_LOCK(_free_ranges_mutex);
+    for (auto it = _free_ranges.begin(); it != _free_ranges.end(); ++it) {
+        char *start = it->first;
+        ef->set_base(start);
+        auto r = load_range(ef);
+        if (r.first >= it->first && r.second <= it->second) {
+            if (r.second == it->second) {
+                _free_ranges.erase(it);
+            } else {
+                it->first = r.second;
+            }
+            return start;
+        }
+    }
+    return nullptr;
+}
+
+std::shared_ptr<object> program::find_loaded(const std::string &name)
+{
+    if (_files.count(name)) {
+        auto obj = _files[name].lock();
+        if (obj) {
+            return obj;
+        }
+    }
+    if (mmu::current_address_space() == mmu::kernel_address_space()) {
+        return nullptr;
+    }
+    // An object a fork child loaded is not in _files: in this address space
+    // it is the one its owner or an ancestor loaded, if any.
+    for (auto obj : _modules_rcu.read_by_owner()->objects) {
+        if (obj->owner_as() && obj->visible_here() &&
+                (obj->pathname() == name || obj->soname() == name)) {
+            return obj->shared_from_this();
+        }
+    }
+    return nullptr;
+}
+
+namespace {
+mutex as_objects_mutex;
+std::unordered_map<mmu::address_space*, std::vector<std::shared_ptr<object>>> as_objects;
+}
+
+void program::hold_in_as(mmu::address_space *as, std::shared_ptr<object> obj)
+{
+    fork_arena::kernel_heap_scope kh;
+    SCOPE_LOCK(as_objects_mutex);
+    auto &v = as_objects[as];
+    if (std::find(v.begin(), v.end(), obj) == v.end()) {
+        v.push_back(std::move(obj));
+    }
+}
+
+void program::inherit_as_objects(mmu::address_space *parent, mmu::address_space *child)
+{
+    fork_arena::kernel_heap_scope kh;
+    SCOPE_LOCK(as_objects_mutex);
+    auto it = as_objects.find(parent);
+    if (it != as_objects.end()) {
+        as_objects[child] = it->second;
+    }
+}
+
+void program::release_as_objects(mmu::address_space *as)
+{
+    fork_arena::kernel_heap_scope kh;
+    std::vector<std::shared_ptr<object>> v;
+    WITH_LOCK(as_objects_mutex) {
+        auto it = as_objects.find(as);
+        if (it == as_objects.end()) {
+            return;
+        }
+        v = std::move(it->second);
+        as_objects.erase(it);
+    }
+    // A newer address space may get this pointer.  The objects still held
+    // (by this process's children) stay visible where they are mapped.
+    for (auto &obj : v) {
+        mmu::address_space *o = as;
+        obj->_owner_as.compare_exchange_strong(o, gone_owner);
+    }
+    v.clear();   // the last reference unloads (remove_object)
+}
+#endif
 
 symbol_module program::lookup(const char* name, object* seeker)
 {
@@ -1879,6 +2090,11 @@ dladdr_info program::lookup_addr(const void* addr)
     with_modules([&](const elf::program::modules_list &ml)
     {
         for (auto module : ml.objects) {
+#if CONF_fork
+            if (!module->contains_addr(addr) || !module->visible_here()) {
+                continue;
+            }
+#endif
             ret = module->lookup_addr(addr);
             if (ret.fname) {
                 return;
@@ -1902,6 +2118,14 @@ object *program::object_containing_addr(const void *addr)
     WITH_LOCK(osv::rcu_read_lock) {
          const auto &modules = _modules_rcu.read()->objects;
          for (object *module : modules) {
+#if CONF_fork
+             // No vma lock here (preemption is off), so the owner check
+             // alone: a nested descendant (a fork child's child) sees only
+             // AS0's objects and its own here, not one its parent loaded.
+             if (!module->visible_here_nolock()) {
+                 continue;
+             }
+#endif
              if (module->contains_addr(addr)) {
                  ret = module;
                  break;
@@ -2108,6 +2332,22 @@ void program::module_delete_enable()
     }
 
     for (auto ef : to_delete) {
+#if CONF_fork
+        if (ef->owner_as()) {
+            // Its mappings went with its address spaces.  Its destructors
+            // never run; forget them, then let a later load use the range.
+            auto r = load_range(ef);
+            bool pic = ef->is_pic();
+            cxa_forget_range(r.first, r.second);
+            delete ef;
+            if (pic) {
+                WITH_LOCK(_free_ranges_mutex) {
+                    _free_ranges.push_back(r);
+                }
+            }
+            continue;
+        }
+#endif
         ef->unload_segments();
         delete ef;
     }
