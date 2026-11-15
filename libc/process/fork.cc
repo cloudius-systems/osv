@@ -529,6 +529,9 @@ pid_t wait_child(pid_t pid, int *status, int options)
 // once it has left the child's stack.
 extern "C" void fork_retire_address_space(mmu::address_space *as)
 {
+    // The objects this process loaded or holds go with it: any it alone
+    // held are unloaded now, without reading their memory (remove_object).
+    elf::program::release_as_objects(as);
     mmu::destroy_address_space(as);
     mmu::as_put(as);
 }
@@ -583,6 +586,8 @@ pid_t fork(void)
     mmu::address_space *child_as =
         mmu::clone_address_space(sched::thread::current()->address_space());
     child->set_address_space(child_as);
+    // The child maps every object we hold, so it holds them too.
+    elf::program::inherit_as_objects(sched::thread::current()->address_space(), child_as);
 
     // Give the child its OWN reference on every fd it inherited from us (the
     // parent).  OSv shares one global fd table, so without this the child's

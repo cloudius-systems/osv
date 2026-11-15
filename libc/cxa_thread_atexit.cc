@@ -46,6 +46,14 @@ struct linked_destructor {
             linked_destructor *next) : dtor(dtor), obj(obj), next(next)
     {
         auto eo = elf::get_program()->object_containing_addr(dso_symbol);
+#if CONF_fork
+        // A fork child's object stays loaded while the process runs (its
+        // address space holds it), and a reference here would outlive the
+        // memory it is kept in.  One its parent loaded is not found here.
+        if (!eo || eo->owner_as()) {
+            return;
+        }
+#endif
         // dso_symbol points to the "__dso_handle" symbol in a shared object
         // (or the main program). We don't expect not to find it.
         assert(eo);
