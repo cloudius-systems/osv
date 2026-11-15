@@ -2320,6 +2320,11 @@ void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
     bool search = !(flags & mmap_fixed);
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
+#if CONF_fork
+    // The vma is disposed by destroy_address_space() on the reaper thread in
+    // AS0, so it must be identity memory, not the child's fork arena.
+    fork_arena::kernel_heap_scope kh;
+#endif
     auto* vma = new mmu::anon_vma(addr_range(start, start + size), perm, flags);
     PREVENT_STACK_PAGE_FAULT
     SCOPE_LOCK(cur_vma_list_mutex().for_write());
@@ -2355,6 +2360,9 @@ void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
     bool search = !(flags & mmu::mmap_fixed);
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
+#if CONF_fork
+    fork_arena::kernel_heap_scope kh;   // see map_anon
+#endif
     auto *vma = f->mmap(addr_range(start, start + size), flags | mmap_file, perm, offset).release();
     void *v;
     PREVENT_STACK_PAGE_FAULT
@@ -2495,6 +2503,9 @@ void* mremap(void* old_addr, size_t old_size, size_t new_size, unsigned flags)
             WITH_LOCK(vma_list_mutex.for_write()) {
                 if (range_is_free(old_end, old_end + grow)) {
                     addr_range tr(old_end, old_end + grow);
+#if CONF_fork
+                    fork_arena::kernel_heap_scope kh;   // see map_anon
+#endif
                     // Build the vma exactly as map_file()/map_anon() do (via
                     // the file's own mmap() for file-backed, so the correct
                     // page-ops are installed), then allocate() with
@@ -2949,6 +2960,9 @@ void anon_vma::split(uintptr_t edge)
     if (edge <= _range.start() || edge >= _range.end()) {
         return;
     }
+#if CONF_fork
+    fork_arena::kernel_heap_scope kh;   // see map_anon
+#endif
     vma* n = new anon_vma(addr_range(edge, _range.end()), _perm, _flags);
     set(_range.start(), edge);
     cur_vma_list().insert(*n);
@@ -3230,6 +3244,9 @@ void file_vma::split(uintptr_t edge)
         return;
     }
     auto off = offset(edge);
+#if CONF_fork
+    fork_arena::kernel_heap_scope kh;   // see map_anon
+#endif
     vma *n = _file->mmap(addr_range(edge, _range.end()), _flags, _perm, off).release();
     set(_range.start(), edge);
     cur_vma_list().insert(*n);
