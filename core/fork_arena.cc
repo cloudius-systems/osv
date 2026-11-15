@@ -41,9 +41,20 @@
 //
 // Placement.  An address space carves fresh chunks, in 1 MiB mapped regions,
 // from extents it owns, and recycles freed chunks through per-class free
-// stacks.  Freed extents go back to a FIFO pool.  A dead process's extent can
+// stacks.  Freed extents go back to a FIFO pool, used only once every extent
+// has been used (acquire_extent).  A dead process's extent can
 // still be mapped, by inheritance, in its live descendants, so an address
 // space never takes an extent it maps any part of (mmu::intersects_vma).
+//
+// Limit.  Ownership is checked against the extent, not the allocation.  A
+// free of a dead process's pointer made after its extent has been reused by
+// the freeing address space passes the owner test and recycles whatever live
+// chunk of the new owner sits at that offset.  Nothing at the pointer can tell
+// the two apart.  Reusing extents as late as possible narrows this but does
+// not close it.  The defense is that no kernel object lives in an arena: only
+// the process that allocated a chunk holds its pointer, and that process is
+// gone.  The kernel-heap scoping of shared kernel objects and its tests
+// (pipe blocks, vma objects, thread objects) keep it so.
 //
 // Locks.  The growth mutex serializes an address space's mapping of new
 // regions; the pool spinlock covers identity-memory pool links only.  No arena
@@ -291,18 +302,16 @@ bool usable(uint32_t e)
 }
 
 // A new extent for @st, in the current address space, under st->grow_lock.
-// A child reuses a released extent first, the oldest it may take.  AS0, where
-// the kernel's own threads run, takes never-used extents first, so a late
-// kernel-thread free of a dead child's pointer cannot match an extent AS0
-// owns; it reuses released ones only once every extent has been used.
+// Every address space takes a never-used extent first, and reuses a released
+// one, the oldest it may take, only once all 262,144 have been used.  That
+// puts as much time as possible between an extent's release and its reuse.
+// It cannot make a late free of a dead process's pointer safe once the extent
+// is reused (see "Limit" above).
 uint32_t acquire_extent(as_arena *st)
 {
-    bool as0 = st->as == mmu::kernel_address_space();
-    uint32_t e = no_extent;
-    if (as0) {
-        while ((e = take_fresh()) != no_extent && !usable(e)) {
-            pool_push_tail(e);
-        }
+    uint32_t e;
+    while ((e = take_fresh()) != no_extent && !usable(e)) {
+        pool_push_tail(e);
     }
     if (e == no_extent) {
         size_t n;
@@ -312,11 +321,6 @@ uint32_t acquire_extent(as_arena *st)
         while (n-- && (e = pool_pop_head()) != no_extent && !usable(e)) {
             pool_push_tail(e);
             e = no_extent;
-        }
-    }
-    if (e == no_extent && !as0) {
-        while ((e = take_fresh()) != no_extent && !usable(e)) {
-            pool_push_tail(e);
         }
     }
     if (e == no_extent) {
