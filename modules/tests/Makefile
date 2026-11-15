@@ -192,6 +192,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 	tst-fork-shared-race.so \
 	tst-fork-timer-park-stress.so \
 	tst-fork-urandom.so \
+	tst-fork-itimer.so \
 	tst-reaper-unblocked.so \
 	tst-fork-wait-teardown.so \
 	misc-fsx.so tst-sleep.so tst-resolve.so tst-except.so \
