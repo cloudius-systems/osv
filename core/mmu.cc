@@ -3286,7 +3286,7 @@ static bool handle_cow_write_fault(uintptr_t addr)
         pt_element<0> npte = pte_mark_cow(e0, false);
         npte.set_writable(true);
         pt[i0] = npte;
-        mmu::flush_tlb_all();
+        flush_tlb_as(current_address_space(), addr, page_size);
         return true;
     }
 
