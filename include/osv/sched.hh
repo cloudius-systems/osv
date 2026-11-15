@@ -639,8 +639,8 @@ public:
 #endif
     stack_info get_stack_info();
 #if CONF_fork
-    // The stack this thread runs on.  A fork child runs on a copy of its
-    // parent's stack, not on the stack its thread was created with.
+    // The stack this thread runs on.  A fork child runs on its parent's
+    // stack, at the same VA in its own address space, not on its own.
     stack_info get_running_stack_info() {
         return _fork_stack.begin ? _fork_stack : get_stack_info();
     }
