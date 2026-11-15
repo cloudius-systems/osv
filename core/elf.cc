@@ -210,6 +210,9 @@ void* object::cached_lookup(const std::string& name)
     }
     else {
         void *symbol_address = lookup(name.c_str());
+#if CONF_fork
+        fork_arena::kernel_heap_scope kh;   // the object's cache is global
+#endif
         _cached_symbols[name] = symbol_address;
         return symbol_address;
     }
@@ -234,6 +237,9 @@ std::string object::section_name(const Elf64_Shdr& shdr)
         return {};
     }
     if (!_section_names_cache) {
+#if CONF_fork
+        fork_arena::kernel_heap_scope kh;   // the object's cache is global
+#endif
         auto s = sections().at(_ehdr.e_shstrndx);
         std::unique_ptr<char[]> p(new char[s.sh_size]);
         read(s.sh_offset, p.get(), s.sh_size);
@@ -1683,8 +1689,19 @@ program::get_library(std::string name, std::vector<std::string> extra_path, bool
     // Since a library can load another one like java.so does in OSv, we want a stack
     // structure so each init_library call gets it's corresponding list of objects to operate on.
     //
+    std::shared_ptr<object> ret;
+    {
+#if CONF_fork
+    // The objects are global: every address space finds them in the module
+    // list and _files.  So is everything a load allocates for them (the file
+    // object, its headers, caches and vectors, the list nodes), and a fork
+    // child or an exec'd program can be loading.  Keep all of it on the
+    // identity heap, not in the loading process's arena.  The objects' init
+    // functions below are the application's own code, and are not scoped.
+    fork_arena::kernel_heap_scope kh;
+#endif
     std::vector<std::shared_ptr<object>> loaded_objects;
-    auto ret = load_object(name, extra_path, loaded_objects, dlopen);
+    ret = load_object(name, extra_path, loaded_objects, dlopen);
     _loaded_objects_stack.push(loaded_objects);
 
     // Relocate objects *after* loading all objects, otherwise, we cannot resolve circluar relocations.
@@ -1698,6 +1715,7 @@ program::get_library(std::string name, std::vector<std::string> extra_path, bool
 
     if (ret) {
         ret->init_static_tls();
+    }
     }
 
     if (!delay_init) {
@@ -1768,6 +1786,9 @@ void program::remove_object(object *ef)
     // modules_get().
     module_delete_disable();
     WITH_LOCK(_modules_delete_mutex) {
+#if CONF_fork
+        fork_arena::kernel_heap_scope kh;   // read by whichever process enables
+#endif
         _modules_to_delete.push_back(ef);
     }
     module_delete_enable();
@@ -2073,6 +2094,9 @@ void program::module_delete_disable()
 
 void program::module_delete_enable()
 {
+#if CONF_fork
+    fork_arena::kernel_heap_scope kh;   // to_delete copies a global vector
+#endif
     std::vector<object*> to_delete;
     WITH_LOCK(_modules_delete_mutex) {
         assert(_module_delete_disable >= 0);
