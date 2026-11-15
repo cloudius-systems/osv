@@ -2604,6 +2604,12 @@ void free(void* p, size_t bytes)
     WITH_LOCK(page_table_high_mutex) {
         operate_range(clear_window_pages(pages), p, bytes);
     }
+    // A double free (or a wrong size) finds unmapped pages: free_ranges holds
+    // only the VA, so pushing it again would hand one range out twice.
+    if (pages.size() != bytes / page_size) {
+        abort("stack_window::free(%p, %zu): %zu of %zu pages mapped\n",
+              p, bytes, pages.size(), bytes / page_size);
+    }
     // Not the lazy flush_tlb_all(): it skips CPUs running kernel threads, and
     // kernel threads are what runs on these stacks.  A stale translation left
     // there would write into a page after it is reused.
