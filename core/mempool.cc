@@ -2048,7 +2048,9 @@ static inline void* std_malloc(size_t size, size_t alignment)
     // allocated by an app thread and freed by a kernel thread (or vice versa)
     // is always handled by the allocator that owns its address range.
     if (smp_allocator && fork_arena::ready() && !fork_arena::force_kernel_heap &&
-        sched::cpu::current()->app_thread.load(std::memory_order_relaxed)) {
+        // The thread's own flag: a migration between cpu::current() and a
+        // load of the per-CPU app_thread could read another CPU's thread.
+        sched::thread::current()->is_app()) {
         ret = fork_arena::alloc(size, alignment);
         if (ret) {
 #if CONF_memory_tracker
