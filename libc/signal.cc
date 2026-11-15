@@ -28,8 +28,11 @@
 #include <osv/mmu.hh>
 #include <osv/fork.hh>
 #endif
+#include <unordered_map>
+#include <boost/intrusive/set.hpp>
 
 using namespace osv::clock::literals;
+namespace bi = boost::intrusive;
 
 namespace osv {
 
@@ -561,32 +564,33 @@ int kill(pid_t pid, int sig)
             errno = ESRCH;
             return -1;
         }
-    } else if (pid == getpid() && (sig == SIGURG || sig == SIGUSR1)) {
-        // A LIVE fork-backend's OWN latch/barrier self-signal must run its
-        // handler in the caller's own COW address space, so the handler sets
-        // the flag / pokes the self-pipe in the copy the backend actually
-        // reads.  Two PostgreSQL self-signals need this:
+    } else if (pid == getpid()) {
+        // A live fork child signalling its own pid: use the child's signal
+        // table and run the handler in the child's address space, as for any
+        // other process.  PostgreSQL's statement and lock timeout handlers
+        // send SIGINT to MyProcPid, and pg_terminate_backend() of one's own
+        // backend sends SIGTERM; the postmaster's handlers for those start a
+        // shutdown.  as_for_pid() gates this to a live registered child: the
+        // top-level app (AS0) and a child mid-teardown get nullptr and keep
+        // the global table.  The child-exit SIGCHLD goes to the parent's pid
+        // (fork.cc child_exited), not here.
+        target_as = osv::fork::as_for_pid(pid);
+        // Two PostgreSQL self-signals run their handler INLINE in the caller,
+        // which is already in this backend's COW address space on a faultable
+        // stack, so the handler sets the flag / pokes the self-pipe in the
+        // copy the backend actually reads:
         //   * WakeupMyProc() -> kill(MyProcPid, SIGURG): latch_sigurg_handler
         //     writes selfpipe_writefd to wake the backend's own WaitEventSet.
         //   * EmitProcSignalBarrier() -> kill(MyProcPid, SIGUSR1):
         //     HandleProcSignalBarrierInterrupt sets ProcSignalBarrierPending so
         //     the backend absorbs its OWN barrier (DROP DATABASE / DROP
         //     TABLESPACE otherwise wait for their own PID forever).
-        // Restrict to SIGURG/SIGUSR1 so the child-exit SIGCHLD that fork
-        // emulation raises with kill(getpid(), SIGCHLD) from a dying child
-        // (fork.cc child_exited) is NOT diverted -- its reaper must run the
-        // postmaster's handler in AS0, not in the child's torn-down COW AS.
-        // as_for_pid() also gates this to a live REGISTERED child: a child
-        // mid-teardown (unregister_pid already ran) returns nullptr -> AS0.
-        target_as = osv::fork::as_for_pid(pid);
-        // Only run inline when this is a live registered backend in its own
-        // COW AS; if as_for_pid() returned nullptr (mid-teardown, or the
-        // top-level app whose AS is AS0) fall through to the normal path.
-        // Also require the signal to be UNBLOCKED in the calling thread: if PG
-        // has it masked (a critical section), POSIX defers delivery -- keep the
-        // base deferred (thread-spawn) behavior rather than run it inline and
-        // re-enter PG at a point it masked the signal to protect.
+        // Only when the signal is UNBLOCKED in the calling thread: if PG has
+        // it masked (a critical section), POSIX defers delivery, so keep the
+        // deferred (thread-spawn) behavior rather than re-enter PG at a point
+        // it masked the signal to protect.
         if (target_as && target_as == mmu::current_address_space() &&
+            (sig == SIGURG || sig == SIGUSR1) &&
             !osv::thread_signals()->mask.test(sig - 1)) {
             self_inline = true;
         }
@@ -740,122 +744,104 @@ int pause(void) {
     return -1;
 }
 
-// Our alarm() implementation has one system-wide alarm-thread, which waits
-// for the single timer (or instructions to change the timer) and sends
-// SIGALRM when the timer expires.
-// alarm() is an archaic Unix API and didn't age well. It should should never
-// be used in new programs.
+// Interval timers: setitimer(), getitimer() and alarm().
+//
+// POSIX gives each process its own ITIMER_REAL and ITIMER_VIRTUAL.  Under
+// CONF_fork a process is an address space, so the timers are kept per address
+// space: an entry is created on the first setitimer() in that address space and
+// released with it (fork child teardown and execve()).  A fork child starts
+// with no timer, as POSIX requires.  Expiry sends the signal to the pid that
+// armed the timer, so it runs that process's handler.  Without CONF_fork there
+// is one process and one pair of timers.
+//
+// One worker thread serves every timer: it sleeps until the earliest deadline
+// of an ordered set of armed entries.  That keeps the thread count constant
+// however many processes come and go, and arming or cancelling a timer
+// allocates nothing once the entry exists.
+//
+// OSv has no per-process CPU-time accounting for the virtual timer, so
+// ITIMER_VIRTUAL counts wall-clock time, as it always has here; it is per
+// process like ITIMER_REAL.
+//
+// alarm() and setitimer() also remember the thread that armed the timer, so
+// that expiry can interrupt a system call that thread is sleeping in.
 
-class itimer {
+namespace {
+
+struct itimer_entry {
+    bi::set_member_hook<> armed_hook;     // linked in itimers::armed while due
+    osv::clock::uptime::time_point due;
+    std::chrono::nanoseconds interval {};
+    pid_t pid = 0;                        // the process the signal goes to
+    unsigned owner_tid = 0;               // thread to interrupt, 0 for none
+    int signum = 0;
+    bool operator<(const itimer_entry &o) const {
+        return due < o.due || (due == o.due && this < &o);
+    }
+};
+
+struct process_itimers {
+    itimer_entry t[2];                    // ITIMER_REAL, ITIMER_VIRTUAL
+};
+
+#if CONF_fork
+using process_key = mmu::address_space *;
+#else
+using process_key = void *;
+#endif
+
+class itimers {
 public:
-    explicit itimer(int signum, const char *name);
+    itimers();
+    int set(int which, const struct itimerval *new_value,
+            struct itimerval *old_value);
+    int get(int which, struct itimerval *curr_value);
     void cancel_this_thread();
-    int set(const struct itimerval *new_value,
-        struct itimerval *old_value);
-    int get(struct itimerval *curr_value);
-
+#if CONF_fork
+    void release(process_key key);
+#endif
 private:
     void work();
-
-    // Fllowing functions doesn't take mutex, caller has responsibility
-    // to take it
-    void cancel();
-    void set_interval(const struct timeval *tv);
-    void set_value(const struct timeval *tv);
-    void get_interval(struct timeval *tv);
-    void get_value(struct timeval *tv);
+    void disarm(itimer_entry &e);
+    static void deliver(pid_t pid, int signum, unsigned owner_tid);
 
     mutex _mutex;
     condvar _cond;
-    sched::thread *_alarm_thread;
-    sched::thread *_owner_thread = nullptr;
-    const osv::clock::uptime::time_point _no_alarm {};
-    osv::clock::uptime::time_point _due = _no_alarm;
-    std::chrono::nanoseconds _interval;
-    int _signum;
+    sched::thread *_worker;
     bool _started = false;
+    std::unordered_map<process_key, process_itimers *> _by_process;
+    bi::multiset<itimer_entry,
+                 bi::member_hook<itimer_entry, bi::set_member_hook<>,
+                                 &itimer_entry::armed_hook>> _armed;
 };
 
-static itimer itimer_real(SIGALRM, "itimer-real");
-static itimer itimer_virt(SIGVTALRM, "itimer-virt");
+static __thread bool t_owns_itimer;
 
-itimer::itimer(int signum, const char *name)
-    : _alarm_thread(sched::thread::make([&] { work(); },
-                    sched::thread::attr().name(name)))
-    , _signum(signum)
+static process_key current_process()
 {
-}
-
-void itimer::cancel_this_thread()
-{
-    if(_owner_thread == sched::thread::current()) {
-        WITH_LOCK(_mutex) {
-            if(_owner_thread == sched::thread::current()) {
-                cancel();
-            }
-        }
-    }
-}
-
-int itimer::set(const struct itimerval *new_value,
-    struct itimerval *old_value)
-{
-    if (!new_value)
-        return EINVAL;
-
-    WITH_LOCK(_mutex) {
-        if (old_value) {
-            get_interval(&old_value->it_interval);
-            get_value(&old_value->it_value);
-        }
-        cancel();
-        if (new_value->it_value.tv_sec || new_value->it_value.tv_usec) {
-            set_interval(&new_value->it_interval);
-            set_value(&new_value->it_value);
-        }
-     }
-    return 0;
-}
-
-int itimer::get(struct itimerval *curr_value)
-{
-    WITH_LOCK(_mutex) {
-        get_interval(&curr_value->it_interval);
-        get_value(&curr_value->it_value);
-    }
-    return 0;
-}
- 
-void itimer::work()
-{
-    sched::timer tmr(*sched::thread::current());
-    while (true) {
-        WITH_LOCK(_mutex) {
-            if (_due != _no_alarm) {
-                tmr.set(_due);
-                _cond.wait(_mutex, &tmr);
-                if (tmr.expired()) {
-                    if (_interval != decltype(_interval)::zero()) {
-                        auto now = osv::clock::uptime::now();
-                        _due = now + _interval;
-                    } else {
-                        _due = _no_alarm;
-                    }
-                    kill(getpid(), _signum);
-                    if(!is_sig_ign(signal_actions[_signum - 1])) {
-                        _owner_thread->interrupted(true);
-                    }
-                } else {
-#if CONF_lazy_stack_invariant
-                    assert(!sched::thread::current()->is_app());
+#if CONF_fork
+    return mmu::current_address_space();
+#else
+    return nullptr;
 #endif
-                    tmr.cancel();
-                }
-            } else {
-                _cond.wait(_mutex);
-            }
-        }
+}
+
+static int which_index(int which)
+{
+    switch (which) {
+    case ITIMER_REAL:
+        return 0;
+    case ITIMER_VIRTUAL:
+        return 1;
+    default:
+        return -1;
     }
+}
+
+itimers::itimers()
+    : _worker(sched::thread::make([this] { work(); },
+                                  sched::thread::attr().name("itimer")))
+{
 }
 
 // alarm() wants to know which thread ran it, so when the alarm happens it
@@ -871,56 +857,225 @@ static bool is_signal_handler(){
     return sched::thread::current()->name() == "signal_handler";
 }
 
-void itimer::cancel()
+static void fill_value(const itimer_entry &e, struct itimerval *v)
 {
-    _due = _no_alarm;
-    _interval = decltype(_interval)::zero();
-    if (!is_signal_handler()) {
-        _owner_thread = nullptr;
-    }
-    _cond.wake_one();
-}
-
-void itimer::set_value(const struct timeval *tv)
-{
-    auto now = osv::clock::uptime::now();
-
-    if (!_started) {
-        _alarm_thread->start();
-        _started = true;
-    }
-    _due = now + tv->tv_sec * 1_s + tv->tv_usec * 1_us;
-    if (!is_signal_handler()) {
-        _owner_thread = sched::thread::current();
-    }
-    _cond.wake_one();
-}
-
-void itimer::set_interval(const struct timeval *tv)
-{
-    _interval = tv->tv_sec * 1_s + tv->tv_usec * 1_us;
-}
-
-void itimer::get_value(struct timeval *tv)
-{
-    if (_due == _no_alarm) {
-        tv->tv_sec = tv->tv_usec = 0;
+    fill_tv(e.interval, &v->it_interval);
+    if (!e.armed_hook.is_linked()) {
+        v->it_value.tv_sec = v->it_value.tv_usec = 0;
     } else {
-        auto now = osv::clock::uptime::now();
-        fill_tv(_due - now, tv);
+        auto left = e.due - osv::clock::uptime::now();
+        if (left <= decltype(left)::zero()) {
+            left = std::chrono::microseconds(1);
+        }
+        fill_tv(left, &v->it_value);
     }
 }
 
-void itimer::get_interval(struct timeval *tv)
+void itimers::disarm(itimer_entry &e)
 {
-    fill_tv(_interval, tv);
+    if (e.armed_hook.is_linked()) {
+        _armed.erase(_armed.iterator_to(e));
+    }
 }
+
+int itimers::set(int which, const struct itimerval *new_value,
+                 struct itimerval *old_value)
+{
+    int idx = which_index(which);
+    if (idx < 0 || !new_value) {
+        return EINVAL;
+    }
+    bool arm = new_value->it_value.tv_sec || new_value->it_value.tv_usec;
+    auto key = current_process();
+    pid_t pid = getpid();
+    bool in_handler = is_signal_handler();
+    WITH_LOCK(_mutex) {
+        auto it = _by_process.find(key);
+        if (it == _by_process.end()) {
+            if (!arm) {
+                if (old_value) {
+                    *old_value = {};
+                }
+                return 0;
+            }
+#if CONF_fork
+            // Shared by the worker and every address space: identity heap.
+            fork_arena::kernel_heap_scope kh;
+#endif
+            auto *p = new process_itimers;
+            p->t[0].signum = SIGALRM;
+            p->t[1].signum = SIGVTALRM;
+            it = _by_process.emplace(key, p).first;
+        }
+        auto &e = it->second->t[idx];
+        if (old_value) {
+            fill_value(e, old_value);
+        }
+        disarm(e);
+        e.interval = std::chrono::nanoseconds::zero();
+        if (!in_handler) {
+            e.owner_tid = 0;
+        }
+        if (arm) {
+            e.interval = new_value->it_interval.tv_sec * 1_s +
+                         new_value->it_interval.tv_usec * 1_us;
+            e.due = osv::clock::uptime::now() +
+                    new_value->it_value.tv_sec * 1_s +
+                    new_value->it_value.tv_usec * 1_us;
+            e.pid = pid;
+            if (!in_handler) {
+                e.owner_tid = sched::thread::current()->id();
+                t_owns_itimer = true;
+            }
+            _armed.insert(e);
+            if (!_started) {
+                _worker->start();
+                _started = true;
+            }
+        }
+        _cond.wake_one();
+    }
+    return 0;
+}
+
+int itimers::get(int which, struct itimerval *curr_value)
+{
+    int idx = which_index(which);
+    if (idx < 0 || !curr_value) {
+        return EINVAL;
+    }
+    WITH_LOCK(_mutex) {
+        auto it = _by_process.find(current_process());
+        if (it == _by_process.end()) {
+            *curr_value = {};
+        } else {
+            fill_value(it->second->t[idx], curr_value);
+        }
+    }
+    return 0;
+}
+
+// Cancel the current process's timers that the current thread armed.
+void itimers::cancel_this_thread()
+{
+    if (!t_owns_itimer) {
+        return;
+    }
+    t_owns_itimer = false;
+    unsigned me = sched::thread::current()->id();
+    WITH_LOCK(_mutex) {
+        auto it = _by_process.find(current_process());
+        if (it == _by_process.end()) {
+            return;
+        }
+        for (auto &e : it->second->t) {
+            if (e.owner_tid == me) {
+                disarm(e);
+                e.interval = std::chrono::nanoseconds::zero();
+                e.owner_tid = 0;
+            }
+        }
+        _cond.wake_one();
+    }
+}
+
+#if CONF_fork
+// Drop a process's timers when its address space goes away.
+void itimers::release(process_key key)
+{
+    process_itimers *p = nullptr;
+    WITH_LOCK(_mutex) {
+        auto it = _by_process.find(key);
+        if (it == _by_process.end()) {
+            return;
+        }
+        p = it->second;
+        _by_process.erase(it);
+        for (auto &e : p->t) {
+            disarm(e);
+        }
+        _cond.wake_one();
+    }
+    fork_arena::kernel_heap_scope kh;
+    delete p;
+}
+#endif
+
+void itimers::deliver(pid_t pid, int signum, unsigned owner_tid)
+{
+    kill(pid, signum);
+    if (!owner_tid) {
+        return;
+    }
+    // Interrupt a system call the arming thread sleeps in, unless its
+    // process ignores the signal.
+    sched::with_thread_by_id(owner_tid, [signum] (sched::thread *t) {
+        if (!t) {
+            return;
+        }
+        const struct sigaction *actions = signal_actions;
+#if CONF_fork
+        if (auto *a = fork_child_signal_actions_for(t->address_space())) {
+            actions = a;
+        }
+#endif
+        if (!is_sig_ign(actions[signum - 1])) {
+            t->interrupted(true);
+        }
+    });
+}
+
+void itimers::work()
+{
+    sched::timer tmr(*sched::thread::current());
+    while (true) {
+        pid_t pid = 0;
+        int signum = 0;
+        unsigned owner_tid = 0;
+        WITH_LOCK(_mutex) {
+            if (_armed.empty()) {
+                _cond.wait(_mutex);
+                continue;
+            }
+            auto &e = *_armed.begin();
+            auto now = osv::clock::uptime::now();
+            if (e.due > now) {
+                tmr.set(e.due);
+                _cond.wait(_mutex, &tmr);
+                tmr.cancel();
+                continue;
+            }
+            _armed.erase(_armed.iterator_to(e));
+            if (e.interval != decltype(e.interval)::zero()) {
+                e.due = now + e.interval;
+                _armed.insert(e);
+            }
+            pid = e.pid;
+            signum = e.signum;
+            owner_tid = e.owner_tid;
+        }
+        // The entry may be released once the lock is dropped; use the copies.
+        deliver(pid, signum, owner_tid);
+    }
+}
+
+static itimers g_itimers;
+
+} // anonymous namespace
 
 void cancel_this_thread_alarm()
 {
-    itimer_real.cancel_this_thread();
-    itimer_virt.cancel_this_thread();
+    g_itimers.cancel_this_thread();
 }
+
+#if CONF_fork
+// Called when a fork child's address space is torn down or replaced by
+// execve(): its timers die with the process.
+extern "C" void fork_release_process_itimers(mmu::address_space *as)
+{
+    g_itimers.release(as);
+}
+#endif
 
 OSV_LIBC_API
 unsigned int alarm(unsigned int seconds)
@@ -945,27 +1100,13 @@ extern "C" OSV_LIBC_API
 int setitimer(int which, const struct itimerval *new_value,
     struct itimerval *old_value)
 {
-    switch (which) {
-    case ITIMER_REAL:
-        return itimer_real.set(new_value, old_value);
-    case ITIMER_VIRTUAL:
-        return itimer_virt.set(new_value, old_value);
-    default:
-        return EINVAL;
-    }
+    return g_itimers.set(which, new_value, old_value);
 }
 
 extern "C" OSV_LIBC_API
 int getitimer(int which, struct itimerval *curr_value)
 {
-    switch (which) {
-    case ITIMER_REAL:
-        return itimer_real.get(curr_value);
-    case ITIMER_VIRTUAL:
-        return itimer_virt.get(curr_value);
-    default:
-        return EINVAL;
-    }
+    return g_itimers.get(which, curr_value);
 }
 
 // A per-thread stack set with sigaltstack() to be used by
