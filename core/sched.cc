@@ -25,6 +25,8 @@
 #include <unordered_map>
 #include <osv/wait_record.hh>
 #include <osv/preempt-lock.hh>
+#include <osv/condvar.h>
+#include <osv/printf.hh>
 #include <osv/kernel_config_fork.h>
 #if CONF_fork
 #include <osv/fork_arena.hh>
@@ -151,6 +153,14 @@ void *alloc_thread_storage(size_t align, size_t size)
 #endif
 }
 
+// Detached threads are cleaned up by a pool of reaper threads, one per CPU
+// (at least two).
+// _mtx only guards the zombie list: a reaper takes one zombie under it and
+// joins and cleans it up without it.  A cleanup can be slow (a fork child's
+// tears down its address space and fds, and can sleep on I/O), and every
+// thread that ends meanwhile needs _mtx in add_zombie(), so holding it across
+// a cleanup would stall them all; one reaper would also make every cleanup
+// wait for the one before it.  Cleanups of different threads run in parallel.
 class thread::reaper {
 public:
     reaper();
@@ -158,12 +168,12 @@ public:
     void add_zombie(thread* z);
 private:
     mutex _mtx;
+    condvar _cond;
     // Intrusive zombie list (no node allocation on add_zombie -- see the
     // _zombie_link comment in sched.hh).
     bi::list<thread,
              bi::member_hook<thread, bi::list_member_hook<>, &thread::_zombie_link>,
              bi::constant_time_size<false>> _zombies;
-    thread_unique_ptr _thread;
 };
 
 cpu::cpu(unsigned _id)
@@ -1894,31 +1904,32 @@ bool operator<(const timer_base& t1, const timer_base& t2)
 }
 
 thread::reaper::reaper()
-    : _mtx{}, _zombies{}, _thread(thread::make_unique([=] { reap(); }))
+    : _mtx{}, _zombies{}
 {
-    _thread->start();
+    // At least two, so one slow cleanup never stops reaping.
+    unsigned n = std::max<size_t>(cpus.size(), 2);
+    for (unsigned i = 0; i < n; i++) {
+        auto *t = thread::make([=] { reap(); },
+                               thread::attr().name(osv::sprintf("reaper%d", i)));
+        t->start();
+    }
 }
 
-// _mtx only guards the zombie list.  Take the whole batch under it, then join
-// and clean up without it: a cleanup can be slow (a fork child's tears down
-// its address space and fds, and can sleep on I/O), and every thread that ends
-// meanwhile needs _mtx in add_zombie().
 void thread::reaper::reap()
 {
-    decltype(_zombies) batch;
     while (true) {
+        thread *z;
         WITH_LOCK(_mtx) {
-            wait_until(_mtx, [=] { return !_zombies.empty(); });
-            batch.swap(_zombies);
+            while (_zombies.empty()) {
+                _cond.wait(_mtx);
+            }
+            z = &_zombies.front();
+            _zombies.pop_front();
         }
-        while (!batch.empty()) {
-            auto z = &batch.front();
-            batch.pop_front();
-            // join() only waits for z to reach terminated; it needs no lock,
-            // and z is on no shared list now.
-            z->join();
-            z->_cleanup();
-        }
+        // join() only waits for z to reach terminated; it needs no lock, and
+        // z is on no list now, so no other reaper can see it.
+        z->join();
+        z->_cleanup();
     }
 }
 
@@ -1927,11 +1938,11 @@ void thread::reaper::add_zombie(thread* z)
     assert(z->_attr._detached);
     WITH_LOCK(_mtx) {
         // Intrusive push -- no allocation, so this is safe from a
-        // preemption-disabled thread-termination context and coherent across
-        // address spaces even when the terminating thread is a fork child
-        // running in its COW address space (see _zombie_link in sched.hh).
+        // thread-termination context and coherent across address spaces even
+        // when the terminating thread is a fork child running in its COW
+        // address space (see _zombie_link in sched.hh).
         _zombies.push_back(*z);
-        _thread->wake();
+        _cond.wake_one();
     }
 }
 
