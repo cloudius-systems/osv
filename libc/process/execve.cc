@@ -31,7 +31,6 @@ int execve(const char *path, char *const argv[], char *const envp[])
 
 // Provided by libc/signal.cc: drop a process's interval timers.  The exec'd
 // program runs in AS0, so the old address space's timers cannot follow it.
-extern "C" void fork_release_process_itimers(mmu::address_space *as);
 
 // execve() on OSv.
 //
@@ -172,7 +171,9 @@ int execve(const char *path, char *const argv[], char *const envp[])
                     // Now on the kernel stack (valid in every AS) with this
                     // thread reassigned to AS0; reload CR3 to AS0, then drop
                     // the use: we have left the child's same-VA app stack, so
-                    // the child AS may be retired here.  Never returns.
+                    // the child AS may be retired here, or by the last signal
+                    // handler still running in it.  Its pid and fds stay
+                    // until the reap.  Never returns.
                     mmu::switch_to_runtime_page_tables();
                     mmu::as_release(s_old_as);
                     execve_run_and_exit(&s_path, &s_args, &s_env, s_have_env);
