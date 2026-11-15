@@ -18,7 +18,6 @@
 #include <osv/mutex.h>
 #include <atomic>
 #include <cerrno>
-#include <cstdio>
 #include <new>
 #include <osv/sched.hh>
 
@@ -241,12 +240,7 @@ void init()
     g_owner = new std::atomic<as_arena*>[num_extents]();
     g_used = new std::atomic<uint8_t>[num_extents]();
     g_link = new uint32_t[num_extents];
-    printf("LEVER fork_arena_reclaim=1\n");
     g_ready.store(true, std::memory_order_release);
-}
-
-void set_size_mb(unsigned long)
-{
 }
 
 bool ready()

@@ -49,9 +49,6 @@ constexpr unsigned  extent_shift = 26;           // 64 MiB extents
 constexpr size_t    extent_size = size_t(1) << extent_shift;
 constexpr size_t    num_extents = (arena_end - arena_base) >> extent_shift;
 
-// Accepted and ignored: an address space has no fixed window left to size.
-void set_size_mb(unsigned long mb);
-
 // One-time setup: allocate the extent tables.  Call once, after the SMP
 // allocator is up, before the application runs.  Idempotent.
 void init();
