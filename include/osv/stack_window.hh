@@ -21,9 +21,15 @@
 // entry that fork() shares verbatim, backed page by page, so a stack mapped
 // there is coherent across address spaces without being contiguous.
 //
-// Stacks are never DMA targets, which is what makes non-contiguous backing
-// safe for them.  Callers try the linear map first and use the window only
-// when that would block.
+// A window stack is not physically contiguous, so a buffer on it that spans a
+// page boundary must be translated page by page before a device sees it.
+// Stack buffers do reach devices: virtio-net's control-queue commands live on
+// the stack.  That is safe because vring::add_sg() translates each page with
+// mmu::virt_to_phys(vaddr, len, ...), which walks window addresses, and
+// because those commands run at driver init, before init() makes the window
+// usable.  A driver that translates a whole buffer with one virt_to_phys() (or
+// BSD vtophys()) must not be given stack memory.  Callers try the linear map
+// first and use the window only when that would block.
 namespace mmu {
 namespace stack_window {
 

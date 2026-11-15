@@ -2614,10 +2614,11 @@ void enable_debug_allocator()
 // identically.  Linear-map memory is preferred, but only for a free contiguous
 // range: under fork, large kernel allocations may not fall back to a private
 // mapping, so once physical memory fragments a blocking request for a 64 KiB
-// or 256 KiB stack can wait forever with plenty of memory free.  Stacks are
-// never DMA targets, so when no contiguous range is free one comes from the
-// stack window instead, which is shared by every address space and needs no
-// contiguity.
+// or 256 KiB stack can wait forever with plenty of memory free.  When no
+// contiguous range is free one comes from the stack window instead, which is
+// shared by every address space and needs no contiguity.  See stack_window.hh
+// for why a window stack is not physically contiguous and what that means for
+// DMA from a stack buffer.
 void* alloc_kernel_stack(size_t size)
 {
     fork_arena::kernel_heap_scope kh;
