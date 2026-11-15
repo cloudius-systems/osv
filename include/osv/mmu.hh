@@ -17,6 +17,7 @@
 #include <osv/addr_range.hh>
 #include <unordered_map>
 #include <memory>
+#include <atomic>
 #include <osv/mmu-defs.hh>
 #include <osv/align.hh>
 #include <osv/trace.hh>
@@ -393,6 +394,12 @@ struct address_space;
 
 // The kernel / initial-application address space ("AS0").  Always valid.
 address_space *kernel_address_space();
+
+// The fork heap arena's per-process state slot of @as (opaque to mmu).
+std::atomic<void*>& fork_arena_state(address_space *as);
+
+// Does any vma of the current address space intersect [start, end)?
+bool intersects_vma(uintptr_t start, uintptr_t end);
 
 // The address space the current thread runs in (a fork child's private AS, or
 // AS0 for the kernel and the non-fork application).  The mmu allocation/query
