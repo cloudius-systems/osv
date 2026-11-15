@@ -1093,6 +1093,7 @@ thread::thread(std::function<void ()> func, attr attr, bool main, bool app)
     // threads).  fork() reassigns the child thread to its private child AS.
     _current_as = sched::s_current ? sched::s_current->_current_as
                                    : mmu::kernel_address_space();
+    mmu::as_hold(_current_as);
 #endif
 
     if (!main && sched::s_current) {
@@ -1239,7 +1240,21 @@ thread::~thread()
     free_tcb();
     free_syscall_stack();
     rcu_dispose(_detached_state.release());
+#if CONF_fork
+    // Last: the last thread of a fork child's address space retires it.
+    mmu::as_release(_current_as);
+#endif
 }
+
+#if CONF_fork
+void thread::set_address_space(mmu::address_space *as)
+{
+    mmu::as_hold(as);
+    auto old = _current_as;
+    _current_as = as;
+    mmu::as_release(old);
+}
+#endif
 
 void thread::start()
 {

@@ -144,6 +144,16 @@ pid_t wait_child(pid_t pid, int *status, int options)
     return -1;
 }
 
+// The last use of child address space @as is gone (mmu::as_release): free its
+// memory, then drop the reference the retirement holds.  Runs on the thread
+// that dropped the use: the reaper disposing the child's thread, or execve()
+// once it has left the child's stack.
+extern "C" void fork_retire_address_space(mmu::address_space *as)
+{
+    mmu::destroy_address_space(as);
+    mmu::as_put(as);
+}
+
 } // namespace fork
 } // namespace osv
 
@@ -193,6 +203,9 @@ pid_t fork(void)
     // parent's.  Private writable mappings become copy-on-write in both parent
     // and child; the kernel half of the page table is shared.  The child
     // thread runs in this address space (its CR3 is loaded on context switch).
+    // The new address space starts with one reference for the fork
+    // bookkeeping, dropped by the cleanup below, and its first use is the
+    // child thread's.
     mmu::address_space *child_as =
         mmu::clone_address_space(sched::thread::current()->address_space());
     child->set_address_space(child_as);
@@ -212,18 +225,18 @@ pid_t fork(void)
     // ~application_runtime never fires, application::join() blocks forever on
     // _terminated, and OSv hangs at shutdown instead of powering off.
     child->set_cleanup([cpid, stack_to_free, child, child_as] {
+        // dispose() below destroys this closure; keep what follows it local.
+        mmu::address_space *as = child_as;
         fork::child_exited(cpid, 0);
         if (stack_to_free) {
             free(stack_to_free);
         }
-        // Only destroy the child address space if the child still owns it.
-        // execve() replaces the child AS with the global (kernel) AS and
-        // destroys child_as itself; destroying it again here is a double-free
-        // (GP fault / ~rwlock assert when the reaper tears down freed vmas).
-        if (child->address_space() == child_as) {
-            mmu::destroy_address_space(child_as);
-        }
+        // Disposing the thread drops its use of the child address space; if
+        // it was the last (the child did not exec), the address space is
+        // retired here.
         sched::thread::dispose(child);
+        // The fork bookkeeping's reference.
+        mmu::as_put(as);
     });
 
     child->start();
