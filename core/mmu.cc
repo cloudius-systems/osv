@@ -161,6 +161,8 @@ struct address_space {
     pt_element<4> _top;       // storage for the synthetic entry (child only)
     phys pt_root;             // phys of PML4 page (CR3 value); 0 == arch root
     bool is_kernel;
+    // CPUs that may hold TLB entries of this AS (see flush_tlb_as()).
+    std::atomic<u64> cpu_mask[sched::max_cpus / 64] = {};
 
     // Storage owned by a child AS.
     std::unique_ptr<vma_list_type> owned_vmas;
@@ -197,6 +199,11 @@ address_space *kernel_address_space()
 phys kernel_pt_root_phys();
 // Arch hook: virtual pointer to the kernel PML4 (for cloning kernel slots).
 pt_element<4> *kernel_pml4();
+
+std::atomic<u64> *as_cpu_mask(address_space *as)
+{
+    return as->cpu_mask;
+}
 
 phys pt_root_phys(address_space *as)
 {
@@ -2376,7 +2383,7 @@ static void vm_sigbus(uintptr_t addr, exception_frame* ef)
 // into it, and install it writable in this AS only -- so the faulting side
 // (parent or child) gets its own private copy.  Returns true if it handled a
 // COW fault.
-static bool handle_cow_write_fault(uintptr_t addr)
+static bool handle_cow_write_fault(address_space *as, uintptr_t addr)
 {
     // current_pt_root() returns the synthetic top (level-4) entry; follow it to
     // the PML4 page (level-3 entries) and walk down to the 4K leaf (level 0).
@@ -2415,7 +2422,7 @@ static bool handle_cow_write_fault(uintptr_t addr)
     npte = pte_mark_cow(npte, false);
     npte.set_writable(true);
     pt[i0] = npte;
-    mmu::flush_tlb_all();
+    flush_tlb_as(as, addr, page_size);
     return true;
 }
 #endif // CONF_fork
@@ -2460,7 +2467,7 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
             // memory in an application slot) is resolved as before.
             auto v = find_intersecting_vma_in(*as->vmas, addr);
             if ((v == as->vmas->end() || !access_fault(*v, ef->get_error())) &&
-                    handle_cow_write_fault(addr)) {
+                    handle_cow_write_fault(as, addr)) {
                 trace_mmu_vm_fault_ret(addr, ef->get_error());
                 return;
             }

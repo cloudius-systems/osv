@@ -127,6 +127,11 @@ void thread::switch_to()
     // set this cpu current thread kernel TCB address to TCB address of the new thread
     // we are switching to
     c->arch._current_thread_kernel_tcb = reinterpret_cast<u64>(_tcb);
+#if CONF_fork
+    if (switch_as) {
+        mmu::note_as_loaded(_current_as, c->id);
+    }
+#endif
     auto fpucw = processor::fnstcw();
     auto mxcsr = processor::stmxcsr();
 #if CONF_fork
