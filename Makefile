@@ -1021,11 +1021,6 @@ objects += arch/$(arch)/clone.o
 objects += core/fork_arena.o
 ifeq ($(conf_fork),1)
 objects += arch/$(arch)/fork.o
-# Per-file flags for the fork-arena C2 validation build.  EMPTY in the
-# shipped build (no probe, no shared-bump control).  Set fork_arena_cflags
-# on the make command line to compile the diagnostic probe in
-# (-DFORK_C2_PROBE_DEFAULT=1) or the negative control (-DFORK_SHARED_BUMP=1).
-$(out)/core/fork_arena.o: CXXFLAGS += $(fork_arena_cflags)
 endif
 ifeq ($(conf_drivers_pci),1)
 objects += arch/$(arch)/pci.o
