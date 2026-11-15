@@ -10,6 +10,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <osv/kernel_config_memory_debug.h>
 
 // Kernel thread and syscall stacks that do not need physically contiguous
 // memory.  Under CONF_fork every kernel stack must be mapped identically in
@@ -46,10 +47,12 @@ void* alloc(size_t bytes);
 // it any more.
 void free(void* p, size_t bytes);
 
+// Under CONF_memory_debug there is no window, and the debug allocator, which
+// never reuses an address, may eventually hand out this range itself.
 inline bool contains(const void* p)
 {
     auto a = reinterpret_cast<uintptr_t>(p);
-    return a >= base && a < base + size;
+    return !CONF_memory_debug && a >= base && a < base + size;
 }
 
 }

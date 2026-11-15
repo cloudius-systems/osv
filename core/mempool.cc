@@ -2310,6 +2310,11 @@ static size_t object_size(void *object)
     if (fork_arena::contains(object)) {
         return fork_arena::usable_size(object);
     }
+    // The window lies in the debug area, whose allocator would read a header
+    // that is not there.
+    if (mmu::stack_window::contains(object)) {
+        abort("object_size() of stack window memory %p\n", object);
+    }
 #endif
     if (!mmu::is_linear_mapped(object, 0)) {
         size_t offset = memory::large_object_offset(object);
@@ -2375,6 +2380,10 @@ void free(void* object)
     // check so they never fall into the large/mmap free path.
     if (fork_arena::contains(object)) {
         return fork_arena::free(object);
+    }
+    // Window memory is freed only by free_kernel_stack(), which knows its size.
+    if (mmu::stack_window::contains(object)) {
+        abort("free() of stack window memory %p\n", object);
     }
 #endif
 
