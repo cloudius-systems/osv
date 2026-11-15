@@ -902,7 +902,9 @@ public:
     void destroy();
 #if CONF_fork
     mmu::address_space *address_space() const { return _current_as; }
-    void set_address_space(mmu::address_space *as) { _current_as = as; }
+    // Move this thread to @as.  A thread holds a use of the address space it
+    // is in (mmu::as_hold), so the old one may be retired here.
+    void set_address_space(mmu::address_space *as);
 #endif
 #ifdef __x86_64__
     unsigned long get_app_tcb() { return _tcb->app_tcb; }
