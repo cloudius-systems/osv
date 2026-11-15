@@ -1009,6 +1009,45 @@ static void mapped_free_large(void *object)
     mmu::munmap(object, *ret_header);
 }
 
+#if CONF_fork
+// An application request the fork arena does not serve (over max_alloc, or an
+// alignment that pushes it over) is mapped in the caller's own address space,
+// so it is COW-isolated and freed with the process; never the linear map.
+static void* mapped_malloc_app(size_t size, size_t alignment)
+{
+    try {
+        if (alignment <= page_size) {
+            size_t offset = alignment < page_size ?
+                align_up(sizeof(page_range), alignment) : page_size;
+            return mapped_malloc_large(align_up(size + offset, page_size), offset);
+        }
+        // Map the alignment's worth more and trim both ends, so the header
+        // page mapped_free_large() looks for sits just below an aligned object.
+        size_t usize = align_up(size, page_size);
+        size_t total = usize + alignment;
+        if (total < usize) {
+            return libc_error_ptr<void>(ENOMEM);
+        }
+        fork_arena::kernel_heap_scope kh;   // trimming splits a vma: kernel memory
+        auto obj = static_cast<char*>(mmu::map_anon(nullptr, total, mmu::mmap_populate,
+                                      mmu::perm_read | mmu::perm_write));
+        char* ret = align_up(obj + page_size, alignment);
+        char* hdr = ret - page_size;
+        char* end = ret + usize;
+        if (hdr != obj) {
+            mmu::munmap(obj, hdr - obj);
+        }
+        if (end != obj + total) {
+            mmu::munmap(end, obj + total - end);
+        }
+        *reinterpret_cast<size_t*>(hdr) = end - hdr;
+        return ret;
+    } catch (error&) {
+        return libc_error_ptr<void>(ENOMEM);
+    }
+}
+#endif
+
 static void* malloc_large(size_t size, size_t alignment, bool block = true, bool contiguous = true)
 {
     auto requested_size = size;
@@ -2048,20 +2087,27 @@ static inline void* std_malloc(size_t size, size_t alignment)
     // allocated by an app thread and freed by a kernel thread (or vice versa)
     // is always handled by the allocator that owns its address range.
     if (smp_allocator && fork_arena::ready() && !fork_arena::force_kernel_heap &&
+        // Preemption and interrupts on: arena memory may COW-fault, and an
+        // allocation in atomic context must stay on the identity heap.
+        sched::preemptable() &&
+        arch::irq_enabled() &&
         // The thread's own flag: a migration between cpu::current() and a
         // load of the per-CPU app_thread could read another CPU's thread.
         sched::thread::current()->is_app()) {
-        ret = fork_arena::alloc(size, alignment);
-        if (ret) {
-#if CONF_memory_tracker
-            memory::tracker_remember(ret, size);
-#endif
-            return ret;
+        // Never the identity heap from here: it is not COW-isolated and
+        // nothing frees it when the process exits.  Out of memory or arena VA
+        // is a NULL return with ENOMEM.
+        if (fork_arena::serves(size, alignment)) {
+            ret = fork_arena::alloc(size, alignment);
+        } else {
+            ret = memory::mapped_malloc_app(size, alignment);
         }
-        // Arena could not serve it (too large / exhausted): fall through to the
-        // normal heap.  Such an allocation is not COW-isolated, but huge
-        // allocations already go to app-slot mmap, and exhaustion is a
-        // correctness-preserving fallback, not corruption.
+#if CONF_memory_tracker
+        if (ret) {
+            memory::tracker_remember(ret, size);
+        }
+#endif
+        return ret;
     }
 #endif
     size_t minimum_size = std::max(size, memory::pool::min_object_size);

@@ -25,54 +25,35 @@
 // A forked child that writes to a heap object inherited from its parent would
 // therefore scribble the SHARED heap and corrupt the parent.
 //
-// The fork arena gives APPLICATION allocations a home in an ordinary anonymous
-// mmap region in the app-slot VA range (below 0x400000000000).  That region is
+// The fork arena gives APPLICATION allocations a home in ordinary anonymous
+// mappings in the app-slot VA range (below 0x400000000000).  They are
 // page-table-mapped like any private writable vma, so clone_address_space()'s
-// COW machinery isolates it per child for free: the child gets its own
+// COW machinery isolates them per child for free: the child gets its own
 // copy-on-write copy of the whole app heap, writes diverge privately, and the
 // parent is unaffected.  virt_to_phys() already walks the page table for
 // addresses below phys_mem, so arena pages remain DMA-usable.
 //
-// WHOLE-ARENA PER-AS WINDOWS (leak #2 cure).  Every live address space owns one
-// disjoint VA window in a single 512 GiB application slot (slot 97).  There is
-// NO shared global bump: each AS bump-carves inside its own window and recycles
-// through its own per-class free-list.  A window VA identifies its owning AS by
-// pure BSS arithmetic, so a foreign free() is an arithmetic no-op that never
-// reads the chunk header -- no pointer is ever recycled across address spaces,
-// and the whole window is reclaimed wholesale by destroy_address_space on reap.
-// ALL of the allocator's bookkeeping lives in kernel BSS, NOT inside arena
-// pages -- so managing the arena never faults an arena page and never recurses
-// back into malloc.
+// The arena range is PML4 slots 96..127 (16 TiB), cut into 64 MiB extents.
+// Each extent is owned by at most one live address space at a time, recorded
+// in an identity-mapped owner table, so a free() decides ownership without
+// reading arena memory.  Per-process state hangs off the address space and is
+// freed with it; there is no limit on the number of processes other than
+// memory.  mmu::find_hole() keeps general mmap out of the range, so contains()
+// is exact.
 // -----------------------------------------------------------------------------
 namespace fork_arena {
 
-// Legacy shared-arena constants.  Slot 96 (96 << 39) held the retired shared
-// global bump; it is used ONLY by the C2 negative-control build
-// (-DFORK_SHARED_BUMP=1), which reintroduces the shared bump to prove the probe
-// can fire.  The shipped cure carves nothing here.
-constexpr uintptr_t arena_base = 96ull << 39;   // 0x300000000000
-constexpr size_t    arena_size = 512ull << 20;  // 512 MiB (shared-bump control only)
+constexpr uintptr_t arena_base = 96ull << 39;    // 0x300000000000
+constexpr uintptr_t arena_end  = 128ull << 39;   // 0x400000000000
+constexpr unsigned  extent_shift = 26;           // 64 MiB extents
+constexpr size_t    extent_size = size_t(1) << extent_shift;
+constexpr size_t    num_extents = (arena_end - arena_base) >> extent_shift;
 
-// Per-AS window slot: a single 512 GiB application slot carved into one
-// disjoint window per AS.  contains() uses the whole slot range (a cheap range
-// test on the free/realloc dispatch path); the per-AS window inside it is
-// decided by BSS arithmetic in free().
-constexpr uintptr_t win_slot_base = 97ull << 39;   // 0x308000000000
-constexpr uintptr_t win_slot_end  = 98ull << 39;   // 0x310000000000
-
-// Set the requested PER-AS WINDOW size in MiB (clamped to [512 .. 2048] in
-// init(): the floor is the historical arena size, the cap is one AS's share of
-// the 512 GiB window slot).  Called by the loader from the --fork-arena-size-mb
-// cmdline option BEFORE init() runs; read from the cmdline, not getenv, because
-// init() runs before the application environment exists.  mb==0 keeps the
-// default.  SEMANTIC CHANGE from the shared-arena era: this sizes each AS's
-// PRIVATE VA window (no committed boot RAM), not a shared eagerly-populated
-// arena.
+// Accepted and ignored: an address space has no fixed window left to size.
 void set_size_mb(unsigned long mb);
 
-// One-time setup: resolve the per-AS window size (and, for the control build,
-// reserve the shared arena).  Call once, after the SMP allocator is up, before
-// the application runs.  Idempotent.
+// One-time setup: allocate the extent tables.  Call once, after the SMP
+// allocator is up, before the application runs.  Idempotent.
 void init();
 
 // True once init() has run and routing is live.
@@ -104,42 +85,50 @@ struct kernel_heap_scope {
     ~kernel_heap_scope() { --force_kernel_heap; }
 };
 
-// True if `p` points inside the arena (an arena allocation).  Cheap range test
-// over the per-AS window slot (97) and the legacy shared-arena slot (96).  Slot
-// 96 is unused by the shipped cure (nothing is carved there), so the extra
-// compare is a harmless constant cost that lets the C2 negative-control build
-// (-DFORK_SHARED_BUMP=1, which DOES carve slot 96) dispatch its frees here
-// without a cross-translation-unit define.
+// True if `p` points inside the arena range (an arena allocation).
 static inline bool contains(const void *p)
 {
     auto a = reinterpret_cast<uintptr_t>(p);
-    if (a >= win_slot_base && a < win_slot_end) {
-        return true;
-    }
-    if (a >= arena_base && a < arena_base + arena_size) {
-        return true;
-    }
-    return false;
+    return a >= arena_base && a < arena_end;
 }
 
-// Allocate `size` bytes with `alignment` from the arena; nullptr if it cannot
-// (too large, or arena exhausted -- caller falls back to the normal heap).
+// Allocate `size` bytes with `alignment` from the current address space's
+// arena.  nullptr if the request is outside the arena's size classes, the
+// caller cannot touch arena memory (preemption or irqs off), or memory or
+// arena VA is exhausted (errno is then ENOMEM).
 void *alloc(size_t size, size_t alignment);
 
-// Free an arena allocation (p must satisfy contains(p)).
+// True if alloc() serves a request of this size and alignment, so a nullptr
+// from it means exhaustion rather than "not an arena request".
+bool serves(size_t size, size_t alignment);
+
+// Free an arena allocation (p must satisfy contains(p)).  A free from any
+// address space other than the owner is a no-op that reads no arena memory.
 void free(void *p);
 
-// Reclaim the per-address-space free-list slot for a dying fork child address
-// space.  Called from mmu::destroy_address_space so a later process can reuse
-// the slot.  @as is the opaque mmu::address_space* being destroyed.
+// Release the arena state of a dying address space: its extents go back to
+// the pool and its state is freed.  Called from mmu::destroy_address_space
+// after the page tables are gone.  @as is the opaque mmu::address_space*.
 void release_as(void *as);
 
 // Usable size of an arena allocation (p must satisfy contains(p)).
 size_t usable_size(void *p);
 
-// Largest request the arena will service; larger requests fall through to the
-// normal heap (huge allocations already go to app-slot mmap, which is COW-able).
+// Largest request the arena will service; larger requests fall through to a
+// per-address-space mapping (still COW-isolated, freed at exit).
 constexpr size_t max_alloc = 2ull << 20;   // 2 MiB
+static_assert(max_alloc < extent_size, "a chunk must fit inside one extent");
+
+// Counters, for tests and diagnosis.
+struct arena_stats {
+    unsigned long live_states;      // address spaces with arena state
+    unsigned long extents_in_use;   // extents owned by a live address space
+    unsigned long committed_bytes;  // arena regions mapped in live address spaces
+    unsigned long foreign_frees;    // frees skipped: not owned by the freeing AS
+    unsigned long atomic_retained;  // frees skipped: preemption or irqs off
+};
+arena_stats stats();
+#define FORK_ARENA_HAS_STATS 1
 
 } // namespace fork_arena
 
