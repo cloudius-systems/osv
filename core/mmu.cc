@@ -437,15 +437,15 @@ void clone_pt_level<1>(pt_element<1> *parent_pt, pt_element<1> *child_pt,
         pt_element<1> ppte = parent_pt[i];
         if (ppte.empty()) { child_pt[i] = make_empty_pte<1>(); continue; }
         if (ppte.large()) {
-            // A read-only 2 MB page can never diverge, so share it verbatim.
-            // A WRITABLE 2 MB large page (large malloc, MAP_SHARED, large anon)
-            // must NOT be shared as-is -- that lets a forked child's writes
-            // leak into the parent.  Split it to 4 K in the PARENT in place,
+            // Never share a 2 MB page: split it to 4 K in the PARENT in place,
             // then fall through to the normal 4 K clone path, which makes the
-            // correct per-page decision (private-writable -> COW, MAP_SHARED ->
-            // stays shared, read-only -> shared as-is).  Reuses the whole 4 K
-            // COW machinery; cost is one 4 K page table per split large page.
-            if (!ppte.writable()) { child_pt[i] = ppte; continue; }
+            // per-page decision (private-writable -> COW, MAP_SHARED -> stays
+            // shared, read-only -> shared as-is).  A writable one shared as-is
+            // would let the child's writes reach the parent.  A read-only one
+            // would leave the child mapping a frame nothing counts it on, and
+            // it would keep teardown from treating every 2 MB leaf in a child
+            // as one the child faulted in itself (see free_child_large_pages).
+            // Cost: one 4 K page table per split page.
             split_large_page(hw_ptep<1>::force(&parent_pt[i]));
             ppte = parent_pt[i]; // re-read: now a non-large intermediate pte
         }
@@ -700,6 +700,8 @@ static void free_child_pt_level0(pt_element<0> *pt)
     memory::free_page(pt);
 }
 
+static void free_child_large_pages(address_space *as, vma &v); // after page_allocator
+
 template<int N>
 static void free_child_pt_level(pt_element<N> *pt);
 
@@ -708,7 +710,7 @@ void free_child_pt_level<1>(pt_element<1> *pt)
 {
     for (unsigned i = 0; i < pte_per_page; i++) {
         pt_element<1> e = pt[i];
-        if (e.empty() || e.large()) continue;   // large: shared mapping, skip
+        if (e.empty() || e.large()) continue;   // large: free_child_large_pages
         free_child_pt_level0(phys_cast<pt_element<0>>(e.next_pt_addr()));
     }
     memory::free_page(pt);
@@ -739,6 +741,9 @@ void destroy_address_space(address_space *as)
         // Unregister the child's page-cache PTEs (and leave them empty) before
         // their page-table pages are freed; the cache owns those pages.
         child_pagecache_mappings(as, pagecache::release_mappings);
+        for (auto &v : *as->vmas) {
+            free_child_large_pages(as, v);
+        }
         auto pml4 = phys_cast<pt_element<3>>(pml4_phys);
         for (unsigned slot = pml4_app_first; slot <= pml4_app_last; slot++) {
             pt_element<3> e3 = pml4[slot];
@@ -926,6 +931,48 @@ struct page_allocator {
     virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<1> ptep) = 0;
     virtual ~page_allocator() {}
 };
+
+#if CONF_fork
+// Free the 2 MB pages a child mapped in vma @v.  The fork splits every 2 MB
+// page it inherits (clone_pt_level<1>), so a 2 MB leaf in a child was faulted
+// in by the child itself.  Whether its frame belongs to the mapping is the
+// page provider's answer, the same one munmap uses: anonymous memory (and a
+// private file copy) yes; shm, io_uring rings and shared anonymous memory no.
+static void free_child_large_pages(address_space *as, vma &v)
+{
+    page_allocator *ops = v.page_ops();
+    if (!ops) {
+        return;
+    }
+    auto pml4 = phys_cast<pt_element<3>>(as->top->next_pt_addr());
+    const uintptr_t pud_sz = uintptr_t(1) << 30, pgd_sz = uintptr_t(1) << 39;
+    uintptr_t va = align_up(v.start(), huge_page_size);
+    while (va + huge_page_size <= v.end()) {
+        void *p = reinterpret_cast<void*>(va);
+        unsigned slot = pt_index(p, 3);
+        pt_element<3> e3 = pml4[slot];
+        if (slot < pml4_app_first || slot > pml4_app_last || e3.empty() || e3.large()) {
+            va = align_down(va, pgd_sz) + pgd_sz;
+            continue;
+        }
+        pt_element<2> e2 = phys_cast<pt_element<2>>(e3.next_pt_addr())[pt_index(p, 2)];
+        if (e2.empty() || e2.large()) {
+            va = align_down(va, pud_sz) + pud_sz;
+            continue;
+        }
+        auto pd = phys_cast<pt_element<1>>(e2.next_pt_addr());
+        auto ptep = hw_ptep<1>::force(&pd[pt_index(p, 1)]);
+        pt_element<1> e1 = ptep.read();
+        if (!e1.empty() && e1.large()) {
+            void *frame = phys_to_virt(e1.addr());
+            if (ops->unmap(frame, va - v.start(), ptep)) {
+                memory::free_huge_page(frame, huge_page_size);
+            }
+        }
+        va += huge_page_size;
+    }
+}
+#endif
 
 unsigned long all_vmas_size()
 {
