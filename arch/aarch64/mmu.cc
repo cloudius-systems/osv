@@ -127,6 +127,22 @@ void flush_tlb_local() {
     asm volatile("dsb sy; tlbi vmalle1; dsb sy; isb;");
 }
 
+#if CONF_fork
+// The broadcast tlbi reaches every CPU, so aarch64 needs no CPU mask.
+void flush_tlb_as(address_space *as, uintptr_t va, size_t len)
+{
+    if (as == kernel_address_space() || len > 32 * page_size) {
+        flush_tlb_all();
+        return;
+    }
+    asm volatile("dsb ishst" : : : "memory");
+    for (uintptr_t p = va; p < va + len; p += page_size) {
+        asm volatile("tlbi vaae1is, %0" : : "r"(p >> 12) : "memory");
+    }
+    asm volatile("dsb ish; isb" : : : "memory");
+}
+#endif
+
 static pt_element<4> page_table_root[2] __attribute__((init_priority((int)init_prio::pt_root)));
 u64 mem_addr;
 
