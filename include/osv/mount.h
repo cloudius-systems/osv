@@ -55,6 +55,8 @@ struct mount {
 	struct dentry	*m_covered;	/* vnode covered on parent fs */
 	void		*m_data;	/* private data for fs */
 	fsid_t 		m_fsid; 	/* id that uniquely identifies the fs */
+	int		m_lookups;	/* vfs_findroot() pins: taken under
+					   mount_lock, dropped lock-free */
 };
 
 #endif
@@ -90,6 +92,13 @@ struct mount {
 #define	MNT_LOCAL	0x00001000	/* filesystem is stored locally */
 #define	MNT_QUOTA	0x00002000	/* quotas are enabled on filesystem */
 #define	MNT_ROOTFS	0x00004000	/* identifies the root filesystem */
+
+/*
+ * Set by a filesystem's vfs_mount, never taken from mount(2): every lookup
+ * asks the filesystem instead of trusting the name cache, and SEEK_END asks
+ * it for the size instead of trusting v_size.
+ */
+#define	MNT_NONAMECACHE	0x08000000	/* outside MNT_VISFLAGMASK and MS_* */
 
 /*
  * Mask of flags that are visible to statfs()
