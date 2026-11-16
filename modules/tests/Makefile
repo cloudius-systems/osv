@@ -229,6 +229,7 @@ tests += tst-tls-dlopen-gd.so libtls_gd.so libtls_gd_user.so
 endif
 
 tests += testrunner.so
+tests += tst-inotify.so
 
 tests += tst-libaio.so
 tests += tst-rlimit.so
