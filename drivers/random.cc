@@ -39,13 +39,28 @@
 #include <osv/device.h>
 #include <osv/uio.h>
 #include <osv/debug.hh>
+#include <osv/clock.hh>
+#include <atomic>
+#include <osv/kernel_config_core_reseed_on_resume.h>
 
 #include <dev/random/randomdev.h>
 #include <dev/random/randomdev_soft.h>
 #include <dev/random/random_adaptors.h>
+#include <dev/random/random_harvestq.h>
 #include <dev/random/live_entropy_sources.h>
+#ifdef __aarch64__
+#include "cpuid.hh"
+#endif
+
+#ifdef __x86_64__
+#include "processor.hh"
+#endif
 
 namespace randomdev {
+
+#if CONF_core_reseed_on_resume
+void reseed_on_resume();
+#endif
 
 struct random_device_priv {
     random_device* drv;
@@ -56,14 +71,92 @@ static random_device_priv *to_priv(device *dev)
     return reinterpret_cast<random_device_priv*>(dev->private_data);
 }
 
+#if CONF_core_reseed_on_resume
+// Best-effort read-path resume detection, complementing kvmclock's thread.
+// A gap can also be ordinary idle time; short pauses or a restored clock can
+// be missed, and concurrent/kernel readers need not wait for this rekey.
+// This is not a first-post-resume-read or clone-uniqueness guarantee.
+static std::atomic<u64> _last_read_uptime{0};
+// Set true once randomdev_init() has brought the device (and the harvest ring)
+// up, so reseed_on_resume() is a true no-op if a resume is somehow detected
+// before that (e.g. with --norandom).
+static std::atomic<bool> _reseed_ready{false};
+
+static void reseed_if_resumed()
+{
+    u64 now = (u64)::clock::get()->uptime();
+    u64 prev = _last_read_uptime.exchange(now, std::memory_order_relaxed);
+    // Skip the very first read (prev == 0) and only act on a large forward jump.
+    // 1.5s matches the kvmclock detector; the purpose of this read-path check is
+    // faster detection of the same resume event, not a lower threshold.
+    if (prev != 0 && now > prev && (now - prev) > 1500000000ULL) {
+        reseed_on_resume();
+    }
+}
+#endif
+
+#ifdef __x86_64__
+static int drng_read(void *, int);   // hardware RDRAND read, defined below
+#endif
+
+#ifdef __aarch64__
+static int rndr_read(void *, int);   // hardware RNDR read, defined below
+#endif
+
 static int
 random_read(struct device *dev, struct uio *uio, int ioflags)
 {
     int c, error = 0;
     char random_buf[PAGE_SIZE];
 
+#if CONF_core_reseed_on_resume
+    reseed_if_resumed();
+#endif
+
     // Blocking logic
     if (!random_adaptor->seeded) {
+#if defined(__x86_64__) || defined(__aarch64__)
+        // The software CSPRNG has not accumulated enough harvested entropy to
+        // seed yet.  If the CPU has a hardware CSPRNG that needs no
+        // accumulation window (x86 RDRAND, aarch64 RNDR/FEAT_RNG), satisfy the
+        // read directly from it instead of blocking: its output is
+        // cryptographically secure, so /dev/{u,}random is usable from the very
+        // first read.  Otherwise an early reader -- e.g. a PostgreSQL backend
+        // generating its cancel key via pg_strong_random() ->
+        // read(/dev/urandom) -- blocks in randomdev_block() -> msleep(PCATCH);
+        // with signals unblocked that becomes an EINTR retry loop, and until
+        // the adaptor crosses its reseed threshold the read never completes.
+        // On x86 this was observed (racily) as "could not generate random
+        // cancel key" failing backends at startup.  On aarch64, where there was
+        // no hardware path at all before this, the very first postmaster read
+        // of /dev/urandom blocked FOREVER and PostgreSQL never reached "ready
+        // to accept connections" -- the postmaster thread sat in
+        // sys_read -> device_read -> randomdev::random_read ->
+        // randomdev_block -> _msleep -> sched::thread::wait with every CPU
+        // idle.  Pre-existing OSv startup race; independent of fork.
+#ifdef __x86_64__
+        if (processor::features().rdrand) {
+#endif
+#ifdef __aarch64__
+        if (processor::features().rndr) {
+#endif
+            while (uio->uio_resid > 0 && !error) {
+                c = std::min(uio->uio_resid, static_cast<long int>(PAGE_SIZE));
+                // the hardware read wants a multiple-of-8 length; round up in
+                // the page buffer and copy out only what the caller asked for.
+                int c8 = (c + 7) & ~7;
+#ifdef __x86_64__
+                int got = drng_read(static_cast<void *>(random_buf), c8);
+#endif
+#ifdef __aarch64__
+                int got = rndr_read(static_cast<void *>(random_buf), c8);
+#endif
+                if (got <= 0) { error = EIO; break; }
+                error = uiomove(random_buf, std::min(c, got), uio);
+            }
+            return error;
+        }
+#endif
         error = (*random_adaptor->block)(ioflags);
     }
 
@@ -162,6 +255,68 @@ drng_read(void *buf, int size)
 }
 #endif
 
+//
+// Arm FEAT_RNG, RNDR: architectural hardware source of entropy.
+// RNDR returns a 64-bit random number from a DRBG seeded by a true entropy
+// source, with NZCV.Z=0 on success (Z=1 means the RNG could not return a
+// number in reasonable time, and the result must be discarded).
+//
+#ifdef __aarch64__
+static int rndr_read(void *, int);
+
+// Mirrors the x86 RDRAND retry policy: RNDR can transiently fail to deliver
+// while the underlying entropy source catches up, so retry a bounded number of
+// times before giving up.
+static constexpr int rndr_retries_max = 10;
+
+static struct random_hardware_source arm_rndr = {
+    "arm rndr",
+    RANDOM_PURE_RDRAND,
+    &rndr_read,
+};
+
+static inline bool rndr_with_retries(uint64_t *data)
+{
+    for (auto retry = 0; retry <= rndr_retries_max; retry++) {
+        uint64_t val;
+        uint64_t fail;
+        // mrs <x>, RNDR (S3_3_C2_C4_0); PSTATE.Z is set if the read failed.
+        asm volatile("mrs %0, s3_3_c2_c4_0\n\t"
+                     "cset %1, eq\n\t"
+                     : "=r"(val), "=r"(fail)
+                     :
+                     : "cc");
+        if (!fail) {
+            *data = val;
+            return true;
+        }
+    }
+    return false;
+}
+
+static int
+rndr_read(void *buf, int size)
+{
+    uint64_t *dest = static_cast<uint64_t *>(buf);
+    uint64_t data;
+    unsigned qwords, qwords_to_read;
+
+    assert((size & (sizeof(uint64_t) - 1)) == 0);
+    qwords_to_read = size / sizeof(uint64_t);
+
+    for (qwords = 0; qwords < qwords_to_read; qwords++) {
+        if (!rndr_with_retries(&data)) {
+            // Handle the unlikely case where RNDR failed after all retries.
+            break;
+        }
+
+        *dest++ = data;
+    }
+
+    return qwords * sizeof(uint64_t);
+}
+#endif
+
 random_device::random_device()
 {
     struct random_device_priv *prv;
@@ -169,6 +324,11 @@ random_device::random_device()
 #ifdef __x86_64__
     if (processor::features().rdrand) {
         live_entropy_source_register(&drng);
+    }
+#endif
+#ifdef __aarch64__
+    if (processor::features().rndr) {
+        live_entropy_source_register(&arm_rndr);
     }
 #endif
     if (live_entropy_sources_empty()) {
@@ -196,6 +356,11 @@ random_device::~random_device()
         live_entropy_source_deregister(&drng);
     }
 #endif
+#ifdef __aarch64__
+    if (processor::features().rndr) {
+        live_entropy_source_deregister(&arm_rndr);
+    }
+#endif
     (random_adaptor->deinit)();
 
     device_destroy(_random_dev);
@@ -206,6 +371,51 @@ void randomdev_init()
 {
     new random_device();
     debugf("random: <%s> initialized\n", random_adaptor->ident);
+#if CONF_core_reseed_on_resume
+    _reseed_ready.store(true, std::memory_order_release);
+#endif
 }
+
+#if CONF_core_reseed_on_resume
+// Mix predictable timing data after a suspected resume. Distinct material can
+// separate already-seeded clones, but clocks may repeat across restores and
+// this does not add entropy or recover security from a disclosed snapshot.
+// With no real entropy source an unseeded device must remain blocked.
+void reseed_on_resume()
+{
+    // No-op until the random device has actually been initialized. random_adaptor
+    // is always non-null (it points at the static soft CSPRNG context), so that
+    // alone is not enough: with --norandom, or if a resume were somehow detected
+    // before randomdev_init() ran, the harvest ring would not exist yet and
+    // random_harvestq_internal() would dereference it. _reseed_ready is set true
+    // only at the end of randomdev_init(), after random_harvestq_init().
+    if (!random_adaptor || !_reseed_ready.load(std::memory_order_acquire)) {
+        return;
+    }
+
+    // Best-effort divergence material, not guaranteed unique or secret.
+    struct {
+        u64 wall_ns;
+        u64 tsc;
+        u64 uptime_ns;
+    } seed;
+    seed.wall_ns = (u64)::clock::get()->time();
+    seed.uptime_ns = (u64)::clock::get()->uptime();
+#ifdef __x86_64__
+    seed.tsc = processor::rdtsc();
+#else
+    seed.tsc = seed.uptime_ns;
+#endif
+
+    // Give timing data zero entropy credit. The flush processes queued events
+    // and polls live sources; Yarrow rekeys only if already seeded (possibly
+    // by credited events in that flush). No hardware source is required.
+    random_harvestq_internal(seed.tsc, &seed, sizeof(seed),
+                             0, RANDOM_PURE_RDRAND);
+    if (random_adaptor->reseed) {
+        (random_adaptor->reseed)();
+    }
+}
+#endif
 
 }
