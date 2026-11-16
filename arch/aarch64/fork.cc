@@ -100,7 +100,9 @@ sched::thread *fork_thread(void *caller_ret, void *caller_sp,
            : "x0", "x9", "x10", "x19", "x20", "x21", "x22", "x23",
              "x24", "x25", "x26", "x27", "x28", "x29", "x30", "memory");
     }, sched::thread::attr().
-        stack(4096 * 4).
+        // The default kernel stack size, not 16 KB: the child runs fork()'s
+        // caller on the parent's stack VAs, but execve() in the child loads
+        // the new program on this thread's own stack, which needs about 16 KB.
         // Detached: nobody join()s the fork child (the parent reaps it via the
         // pid registry / waitpid).  A detached thread is handed to the reaper on
         // completion, which runs set_cleanup() (disposing the thread object and
