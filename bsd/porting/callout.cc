@@ -122,6 +122,15 @@ static void _callout_thread(void)
         // get the first callout with the earliest time
         callout *c = callouts::get_one();
 
+        // Defensive: get_one() can return null if the set drained after the
+        // wait_until predicate woke us (a concurrent stop/drain removed the
+        // last callout).  Guard against a null head rather than page-faulting
+        // at address 0 in the dispatcher and aborting the guest under heavy
+        // concurrency (ZFS txg timers + many TCP timers).
+        if (!c) {
+            continue;
+        }
+
         assert(c->c_flags & (CALLOUT_ACTIVE | CALLOUT_PENDING));
 
         //////////////////////
@@ -165,6 +174,18 @@ static void _callout_thread(void)
 
         c->c_flags &= ~CALLOUT_PENDING;
 
+        //
+        // Remove the callout from the ordered set BEFORE running the handler.
+        // The handler may free the callout (common in the TCP/lle teardown
+        // paths); if it stayed linked, the freed memory would be dereferenced
+        // by callout_compare on the next add_callout/insert, page-faulting at
+        // address 0 in the dispatcher and aborting the guest under sustained
+        // load (large >RAM PostgreSQL dataset: many TCP + ZFS timers churning).
+        // If the handler reschedules via callout_reset, add_callout re-links
+        // it, so have_callout(c) below correctly means rescheduled.
+        //
+        callouts::remove_callout(c);
+
         callouts::unlock();
 
         // Callout handler
@@ -176,23 +197,29 @@ static void _callout_thread(void)
         sched::thread* waiter = nullptr;
 
         //
-        // note: after the handler have been invoked the callout structure
-        // can look much differently, the handler may reschedule the callout
-        // or even freed it.
+        // The callout was removed from the set before dispatch, so after the
+        // handler it is linked again ONLY if the handler rescheduled it via
+        // callout_reset.  Two cases to handle:
         //
-        // if the callout is in the set it means that it hasn't been freed
-        // by the user
+        //   rescheduled -> honor a drain waiter if any (it must complete even
+        //                  though the callout re-armed), otherwise leave armed.
+        //   not linked  -> completed normally or freed by the handler.  A
+        //                  callout_drain caller keeps the callout memory valid
+        //                  while it waits on CALLOUT_COMPLETED and set its
+        //                  waiter under the lock, so if a waiter is present we
+        //                  must still complete + wake it (else drain hangs).
         //
-        // reset || drain || !stop
-        if (callouts::have_callout(c)) {
-
-            waiter = callout_get_waiter(c);
+        bool rescheduled = callouts::have_callout(c);
+        waiter = callout_get_waiter(c);
+        if (waiter) {
             callout_set_waiter(c, NULL);
-            // if the callout hadn't been reschedule, remove it
-            if ( ((c->c_flags & CALLOUT_PENDING) == 0) || (waiter) ) {
-                c->c_flags |= CALLOUT_COMPLETED;
+            c->c_flags |= CALLOUT_COMPLETED;
+            if (rescheduled)
                 callouts::remove_callout(c);
-            }
+        } else if (rescheduled &&
+                   ((c->c_flags & CALLOUT_PENDING) == 0)) {
+            c->c_flags |= CALLOUT_COMPLETED;
+            callouts::remove_callout(c);
         }
 
         // FIXME: should we do this in case the caller called callout_stop?
@@ -214,6 +241,15 @@ static void _callout_thread(void)
 int callout_reset_on(struct callout *c, u64 to_ticks, void (*fn)(void *),
     void *arg, int ignore_cpu)
 {
+    // Defensive: a null callout must be a no-op, never a fault.  Under
+    // concurrency the ARP/lle path can reach callout_reset() on a link-layer
+    // entry (la->la_timer) that raced with its own teardown, passing a null
+    // callout; dereferencing it here would page-fault at address 0 in the
+    // network output path (arpresolve -> ether_output -> tcp_output) and abort
+    // the instance.  Nothing to arm, so return.
+    if (!c) {
+        return 0;
+    }
     auto cur = osv::clock::uptime::now();
     int cur_ticks = ns2ticks(
             std::chrono::duration_cast<std::chrono::nanoseconds>
