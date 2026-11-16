@@ -25,6 +25,7 @@
 #include <osv/wait_record.hh>
 #include <osv/preempt-lock.hh>
 #include <osv/app.hh>
+#include <osv/kernel_config_sched_load_balance_ms.h>
 #include <osv/symbols.hh>
 #include <osv/stubbing.hh>
 #include <algorithm>
@@ -792,54 +793,89 @@ void thread::unpin()
     helper->join();
 }
 
+// The load balancer is the only mechanism that spreads threads across CPUs:
+// thread::start() places a new thread on its creator's CPU and thread::wake()
+// re-wakes a blocked thread on the CPU it last ran on, so neither disperses
+// work by itself.  Running once every 100ms and migrating a single thread per
+// wakeup is far too slow for a workload that fans out many threads from one
+// parent (e.g. a server that forks or spawns a worker per connection): the
+// workers pile onto the few CPUs they were started/woken on while the rest of
+// the machine sits idle, and a 1-thread-per-100ms drip cannot catch up under a
+// high request rate.  So this runs more often (the interval is configurable via
+// CONF_sched_load_balance_ms), and on each pass keeps migrating the
+// most-migratable queued thread to the least-loaded CPU until this CPU is no
+// longer meaningfully more loaded than that CPU -- the load difference itself
+// is the terminator, so a pass drains the whole imbalance (which can be larger
+// than the CPU count) rather than a single thread of it.
 void cpu::load_balance()
 {
     notifier::fire();
     timer tmr(*thread::current());
     while (true) {
-        tmr.set(osv::clock::uptime::now() + 100_ms);
+        tmr.set(osv::clock::uptime::now() + std::chrono::milliseconds(CONF_sched_load_balance_ms));
         thread::wait_until([&] { return tmr.expired(); });
         if (runqueue.empty()) {
             continue;
         }
-        auto min = *std::min_element(cpus.begin(), cpus.end(),
-                [](cpu* c1, cpu* c2) { return c1->load() < c2->load(); });
-        if (min == this) {
-            continue;
-        }
-        // This CPU is temporarily running one extra thread (this thread),
-        // so don't migrate a thread away if the difference is only 1.
-        if (min->load() >= (load() - 1)) {
-            continue;
-        }
-#if CONF_lazy_stack_invariant
-        assert(!thread::current()->is_app());
-#endif
-        WITH_LOCK(irq_lock) {
-            auto i = std::find_if(runqueue.rbegin(), runqueue.rend(),
-                    [](thread& t) { return t._migration_lock_counter == 0; });
-            if (i == runqueue.rend()) {
-                continue;
+        // Each thread we migrate this pass is queued on its destination CPU but
+        // has not yet been dequeued there, so cpu::load() (runqueue.size()) does
+        // not yet reflect it.  Track the migrations we have queued per CPU so
+        // both the least-loaded selection and the stop condition use an
+        // effective load (current load + pending arrivals); otherwise the same
+        // destination would keep looking least-loaded and we would pile the
+        // whole imbalance onto one CPU instead of spreading it.
+        std::vector<unsigned> pending(cpus.size(), 0);
+        // The load difference is the real terminator (see below); this only
+        // caps a pathological storm if loads never converge.  It is generous
+        // (many times the CPU count) so a genuinely large imbalance still
+        // drains in one pass.
+        unsigned migrated = 0;
+        const unsigned max_migrations_per_pass = cpus.size() * 8;
+        while (migrated < max_migrations_per_pass) {
+            auto min = *std::min_element(cpus.begin(), cpus.end(),
+                    [&pending](cpu* c1, cpu* c2) {
+                        return c1->load() + pending[c1->id] <
+                               c2->load() + pending[c2->id];
+                    });
+            if (min == this) {
+                break;
             }
-            auto& mig = *i;
-            trace_sched_migrate(&mig, min->id);
-            runqueue.erase(std::prev(i.base()));  // i.base() returns off-by-one
-            // we won't race with wake(), since we're not thread::waiting
-            assert(mig._detached_state->st.load() == thread::status::queued);
-            mig._detached_state->st.store(thread::status::waking);
-            mig.suspend_timers();
-            mig._detached_state->_cpu = min;
-            // Convert the CPU-local runtime measure to a globally meaningful
-            // measure
-            mig._runtime.export_runtime();
-            mig.remote_thread_local_var(::percpu_base) = min->percpu_base;
-            mig.remote_thread_local_var(current_cpu) = min;
-            mig.stat_migrations.incr();
-            min->incoming_wakeups[id].push_back(mig);
-            min->incoming_wakeups_mask.set(id);
-            // FIXME: avoid if the cpu is alive and if the priority does not
-            // FIXME: warrant an interruption
-            min->send_wakeup_ipi();
+            // This CPU is temporarily running one extra thread (this thread),
+            // so don't migrate a thread away if the difference is only 1.
+            if (min->load() + pending[min->id] >= (load() - 1)) {
+                break;
+            }
+#if CONF_lazy_stack_invariant
+            assert(!thread::current()->is_app());
+#endif
+            WITH_LOCK(irq_lock) {
+                auto i = std::find_if(runqueue.rbegin(), runqueue.rend(),
+                        [](thread& t) { return t._migration_lock_counter == 0; });
+                if (i == runqueue.rend()) {
+                    break;
+                }
+                auto& mig = *i;
+                trace_sched_migrate(&mig, min->id);
+                runqueue.erase(std::prev(i.base()));  // i.base() returns off-by-one
+                // we won't race with wake(), since we're not thread::waiting
+                assert(mig._detached_state->st.load() == thread::status::queued);
+                mig._detached_state->st.store(thread::status::waking);
+                mig.suspend_timers();
+                mig._detached_state->_cpu = min;
+                // Convert the CPU-local runtime measure to a globally meaningful
+                // measure
+                mig._runtime.export_runtime();
+                mig.remote_thread_local_var(::percpu_base) = min->percpu_base;
+                mig.remote_thread_local_var(current_cpu) = min;
+                mig.stat_migrations.incr();
+                min->incoming_wakeups[id].push_back(mig);
+                min->incoming_wakeups_mask.set(id);
+                // FIXME: avoid if the cpu is alive and if the priority does not
+                // FIXME: warrant an interruption
+                min->send_wakeup_ipi();
+                pending[min->id]++;
+            }
+            migrated++;
         }
     }
 }
