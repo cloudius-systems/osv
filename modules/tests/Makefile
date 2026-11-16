@@ -350,6 +350,8 @@ tests += tst-fork-signal-exit.so
 internal-api-tests += tst-fork-signal-exit.so
 tests += tst-fork-realloc-foreign.so
 internal-api-tests += tst-fork-realloc-foreign.so
+tests += tst-fork-dlopen.so
+internal-api-tests += tst-fork-dlopen.so
 
 # tst-pmu calls the kernel's x64 PMU readout, which only conf_pmu=1 builds.
 ifeq ($(arch),x64)
