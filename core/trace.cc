@@ -365,7 +365,13 @@ void tracepoint_base::do_log_backtrace(trace_record* tr, u8*& buffer)
 {
     assert(tr->backtrace);
     auto bt = reinterpret_cast<void**>(buffer);
-    auto done = backtrace_safe(bt, backtrace_len);
+    // A sampling profiler wants the interrupted code, not the path that reached
+    // the tracepoint.  Every other tracepoint wants the opposite, so this is
+    // opt-in per tracepoint (core/sampler.cc sets it) and --log-backtrace keeps
+    // its meaning for all the rest.
+    auto done = _interrupt_backtrace
+        ? backtrace_safe_from_interrupt(bt, backtrace_len)
+        : backtrace_safe(bt, backtrace_len);
     fill(bt + done, bt + backtrace_len, nullptr);
     buffer += backtrace_len * sizeof(void*);
 }
