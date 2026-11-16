@@ -63,6 +63,7 @@ struct devinfo {
 
 typedef int (*devop_open_t)   (struct device *, int);
 typedef int (*devop_close_t)  (struct device *);
+// Read/write flags are IO_* from vnode.h, not open(2) O_* flags.
 typedef int (*devop_read_t)   (struct device *, struct uio *, int);
 typedef int (*devop_write_t)  (struct device *, struct uio *, int);
 typedef int (*devop_ioctl_t)  (struct device *, u_long, void *);
