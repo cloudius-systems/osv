@@ -49,6 +49,11 @@ config core_syscall
   bool
   default y
 
+config core_reseed_on_resume
+  prompt "Reseed the CSPRNG on hypervisor resume"
+  bool
+  default y
+
 config core_epoll
   prompt "Include epoll"
   bool

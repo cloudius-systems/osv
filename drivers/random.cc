@@ -39,13 +39,25 @@
 #include <osv/device.h>
 #include <osv/uio.h>
 #include <osv/debug.hh>
+#include <osv/clock.hh>
+#include <atomic>
+#include <osv/kernel_config_core_reseed_on_resume.h>
 
 #include <dev/random/randomdev.h>
 #include <dev/random/randomdev_soft.h>
 #include <dev/random/random_adaptors.h>
+#include <dev/random/random_harvestq.h>
 #include <dev/random/live_entropy_sources.h>
 
+#ifdef __x86_64__
+#include "processor.hh"
+#endif
+
 namespace randomdev {
+
+#if CONF_core_reseed_on_resume
+void reseed_on_resume();
+#endif
 
 struct random_device_priv {
     random_device* drv;
@@ -56,11 +68,39 @@ static random_device_priv *to_priv(device *dev)
     return reinterpret_cast<random_device_priv*>(dev->private_data);
 }
 
+#if CONF_core_reseed_on_resume
+// Best-effort read-path resume detection, complementing kvmclock's thread.
+// A gap can also be ordinary idle time; short pauses or a restored clock can
+// be missed, and concurrent/kernel readers need not wait for this rekey.
+// This is not a first-post-resume-read or clone-uniqueness guarantee.
+static std::atomic<u64> _last_read_uptime{0};
+// Set true once randomdev_init() has brought the device (and the harvest ring)
+// up, so reseed_on_resume() is a true no-op if a resume is somehow detected
+// before that (e.g. with --norandom).
+static std::atomic<bool> _reseed_ready{false};
+
+static void reseed_if_resumed()
+{
+    u64 now = (u64)::clock::get()->uptime();
+    u64 prev = _last_read_uptime.exchange(now, std::memory_order_relaxed);
+    // Skip the very first read (prev == 0) and only act on a large forward jump.
+    // 1.5s matches the kvmclock detector; the purpose of this read-path check is
+    // faster detection of the same resume event, not a lower threshold.
+    if (prev != 0 && now > prev && (now - prev) > 1500000000ULL) {
+        reseed_on_resume();
+    }
+}
+#endif
+
 static int
 random_read(struct device *dev, struct uio *uio, int ioflags)
 {
     int c, error = 0;
     char random_buf[PAGE_SIZE];
+
+#if CONF_core_reseed_on_resume
+    reseed_if_resumed();
+#endif
 
     // Blocking logic
     if (!random_adaptor->seeded) {
@@ -206,6 +246,51 @@ void randomdev_init()
 {
     new random_device();
     debugf("random: <%s> initialized\n", random_adaptor->ident);
+#if CONF_core_reseed_on_resume
+    _reseed_ready.store(true, std::memory_order_release);
+#endif
 }
+
+#if CONF_core_reseed_on_resume
+// Mix predictable timing data after a suspected resume. Distinct material can
+// separate already-seeded clones, but clocks may repeat across restores and
+// this does not add entropy or recover security from a disclosed snapshot.
+// With no real entropy source an unseeded device must remain blocked.
+void reseed_on_resume()
+{
+    // No-op until the random device has actually been initialized. random_adaptor
+    // is always non-null (it points at the static soft CSPRNG context), so that
+    // alone is not enough: with --norandom, or if a resume were somehow detected
+    // before randomdev_init() ran, the harvest ring would not exist yet and
+    // random_harvestq_internal() would dereference it. _reseed_ready is set true
+    // only at the end of randomdev_init(), after random_harvestq_init().
+    if (!random_adaptor || !_reseed_ready.load(std::memory_order_acquire)) {
+        return;
+    }
+
+    // Best-effort divergence material, not guaranteed unique or secret.
+    struct {
+        u64 wall_ns;
+        u64 tsc;
+        u64 uptime_ns;
+    } seed;
+    seed.wall_ns = (u64)::clock::get()->time();
+    seed.uptime_ns = (u64)::clock::get()->uptime();
+#ifdef __x86_64__
+    seed.tsc = processor::rdtsc();
+#else
+    seed.tsc = seed.uptime_ns;
+#endif
+
+    // Give timing data zero entropy credit. The flush processes queued events
+    // and polls live sources; Yarrow rekeys only if already seeded (possibly
+    // by credited events in that flush). No hardware source is required.
+    random_harvestq_internal(seed.tsc, &seed, sizeof(seed),
+                             0, RANDOM_PURE_RDRAND);
+    if (random_adaptor->reseed) {
+        (random_adaptor->reseed)();
+    }
+}
+#endif
 
 }
