@@ -140,9 +140,10 @@ namespace virtio {
         // store before our used->_idx load, so at least one side observes the
         // other: either our re-check sees the new completion, or the device
         // sees interrupts enabled and raises one.  Without this fence a
-        // completion could be missed with interrupts left disabled.  (The
-        // relaxed _flags stores in enable_interrupt()/disable_interrupt() are
-        // adequate only because of this fence.)  With multiqueue this reasoning
+        // completion could be missed with interrupts left disabled.  (This
+        // fence covers the device side; the interrupt handler side is why
+        // enable_interrupt()/disable_interrupt() store _flags seq_cst, see
+        // vring_avail.)  With multiqueue this reasoning
         // holds per queue: each vring's _flags/used->_idx/_used_ring_host_head
         // are independent and _used_ring_host_head is advanced only by the
         // single consumer thread, never by an interrupt handler.
