@@ -50,10 +50,8 @@
 #include <errno.h>
 #include <signal.h>
 #define open __open_variadic
-#define fcntl __fcntl_variadic
 #include <fcntl.h>
 #undef open
-#undef fcntl
 #include <dlfcn.h>
 
 #include <osv/prex.h>
@@ -1843,18 +1841,40 @@ int dup2(int oldfd, int newfd)
  */
 #define SETFL (O_APPEND | O_ASYNC | O_DIRECT | O_NOATIME | O_NONBLOCK)
 
-TRACEPOINT(trace_vfs_fcntl, "%d %d 0x%x", int, int, int);
+TRACEPOINT(trace_vfs_fcntl, "%d %d 0x%x %p", int, int, int, struct flock*);
 TRACEPOINT(trace_vfs_fcntl_ret, "%d", int);
 TRACEPOINT(trace_vfs_fcntl_err, "%d", int);
 
 extern "C" OSV_LIBC_API
-int fcntl(int fd, int cmd, int arg)
+int fcntl(int fd, int cmd, ...)
 {
     struct file *fp;
     int ret = 0, error;
     int tmp;
+    int arg = 0;
+    struct flock *lock = nullptr;
 
-    trace_vfs_fcntl(fd, cmd, arg);
+    // The third argument's type depends on the command, and some commands
+    // take none, so read only what the command defines.
+    va_list ap;
+    va_start(ap, cmd);
+    switch (cmd) {
+    case F_DUPFD:
+    case F_DUPFD_CLOEXEC:
+    case F_SETFD:
+    case F_SETFL:
+    case F_SETOWN:
+        arg = va_arg(ap, int);
+        break;
+    case F_GETLK:
+    case F_SETLK:
+    case F_SETLKW:
+        lock = va_arg(ap, struct flock *);
+        break;
+    }
+    va_end(ap);
+
+    trace_vfs_fcntl(fd, cmd, arg, lock);
     error = fget(fd, &fp);
     if (error)
         goto out_errno;
@@ -1908,7 +1928,17 @@ int fcntl(int fd, int cmd, int arg)
         WARN_ONCE("fcntl(F_SETLK) stubbed\n");
         break;
     case F_GETLK:
-        WARN_ONCE("fcntl(F_GETLK) stubbed\n");
+        if (!lock) {
+            error = EFAULT;
+            break;
+        }
+        if (lock->l_type != F_RDLCK && lock->l_type != F_WRLCK) {
+            error = EINVAL;
+            break;
+        }
+        // OSv runs a single process, and a process's own record locks
+        // never conflict with its own query, so nothing can block it.
+        lock->l_type = F_UNLCK;
         break;
     case F_SETLKW:
         WARN_ONCE("fcntl(F_SETLKW) stubbed\n");
