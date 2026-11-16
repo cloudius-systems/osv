@@ -111,6 +111,16 @@ def get_command_line(basic_apps):
 
 def make_cmd(cmdline, j, jobserver):
     ret = 'make ' + cmdline
+    # Pass conf_* build options as make ARGUMENTS, not just environment, so they
+    # override a module Makefile's `include conf/base.mk` (a make command-line
+    # assignment wins over one made inside an included file; an environment
+    # variable does not).  Without this, conf_locale=1 on scripts/build reaches
+    # the kernel but a module built here still sees base.mk's conf_locale=0.
+    import os as _os
+    for _v in ('conf_locale', 'conf_locale_data', 'conf_fork', 'conf_zfs'):
+        _val = _os.environ.get(_v)
+        if _val is not None:
+            ret += ' %s=%s' % (_v, _val)
     if jobserver is not None:
         ret += ' -j --jobserver-fds=' + jobserver
     elif j == '-':

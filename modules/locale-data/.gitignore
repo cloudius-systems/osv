@@ -1,0 +1,7 @@
+download/
+src/
+build-localedef/
+install/
+install.*
+usr.manifest
+.locale-data-mode
