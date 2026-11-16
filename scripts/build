@@ -345,7 +345,9 @@ create_zfs_disk() {
 	else
 		qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
 		qemu-img resize $qcow2_disk.img ${image_size}b >/dev/null 2>&1
-		"$SRC"/scripts/upload_manifest.py --arch=$arch -o $qcow2_disk.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
+		# The ERR trap does not fire inside a function (no errtrace),
+		# so propagate a failed upload explicitly.
+		"$SRC"/scripts/upload_manifest.py --arch=$arch -o $qcow2_disk.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir" || exit
 	fi
 	rm ${raw_disk}.raw
 }
