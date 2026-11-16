@@ -84,7 +84,8 @@ size_t mbstowcs (wchar_t *__restrict, const char *__restrict, size_t);
 #define EXIT_FAILURE 1
 #define EXIT_SUCCESS 0
 
-#define MB_CUR_MAX ((size_t)+4)
+#define MB_CUR_MAX ((size_t)__ctype_get_mb_cur_max())
+size_t __ctype_get_mb_cur_max(void);
 
 #define RAND_MAX (0x7fffffff)
 
@@ -170,6 +171,7 @@ void *memalign(size_t, size_t);
 #ifdef _GNU_SOURCE
 int clearenv(void);
 int ptsname_r(int, char *, size_t);
+int rpmatch(const char *);
 char *ecvt(double, int, int *, int *);
 char *fcvt(double, int, int *, int *);
 char *gcvt(double, int, char *);

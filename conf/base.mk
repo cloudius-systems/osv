@@ -12,3 +12,7 @@ conf_cxx_level=gnu++14
 
 conf_lazy_stack=0
 conf_lazy_stack_invariant=0
+
+# Named locales from glibc-format data (libc/locale/locale-data.cc). 0: only
+# the built-in C and C.UTF-8 locales.
+conf_locale=0
