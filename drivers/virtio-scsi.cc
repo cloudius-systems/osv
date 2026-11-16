@@ -112,8 +112,7 @@ void scsi::add_lun(u16 target, u16 lun)
 
     exec_read_capacity(target, lun, devsize);
 
-    std::string dev_name("vblk");
-    dev_name += std::to_string(_disk_idx++);
+    std::string dev_name = blk_next_device_name();
     dev = device_create(&scsi_driver, dev_name.c_str(), D_BLK);
     prv = static_cast<struct scsi_priv*>(dev->private_data);
     prv->strategy = scsi_strategy;

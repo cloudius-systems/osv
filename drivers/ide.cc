@@ -86,7 +86,7 @@ ide_drive::ide_drive(pci::device& pci_dev)
 
     struct ide_priv* prv;
     struct device *dev;
-    std::string dev_name("vblk0");
+    std::string dev_name = blk_next_device_name();
 
     dev = device_create(&ide_driver, dev_name.c_str(), D_BLK);
     prv = reinterpret_cast<struct ide_priv*>(dev->private_data);
