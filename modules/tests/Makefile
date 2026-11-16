@@ -234,6 +234,7 @@ tests += tst-fork.so
 tests += tst-execve.so
 tests += payload-exit7.so
 internal-api-tests += tst-random-flush.so
+tests += tst-fork-pthread-self.so
 
 # Tests with special compilation parameters needed...
 $(out)/tests/tst-mmap.so: COMMON += -Wl,-z,now
