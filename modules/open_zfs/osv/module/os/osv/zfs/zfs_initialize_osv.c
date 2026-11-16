@@ -48,6 +48,7 @@ __thread void *zfs_fsyncer_key;
  * pipeline during TXG sync.
  */
 extern uint64_t arc_reduce_target_size_noshrink(uint64_t to_free);
+extern uint64_t arc_reduce_target_size_shrink_sync(uint64_t to_free);
 /*
  * Use arc_all_memory() (a function call via PLT within libsolaris.so) rather
  * than referencing arc_c directly.  arc_c is compiled with -fvisibility=hidden
@@ -59,14 +60,23 @@ extern uint64_t arc_reduce_target_size_noshrink(uint64_t to_free);
  */
 extern uint64_t arc_all_memory(void);
 
-/* Called by the shrinker in "hard" mode (evict aggressively). */
+/*
+ * Called by the shrinker in "hard" mode (the reclaimer has OOM-blocked
+ * waiters).  Use the synchronous variant so we do not return until real memory
+ * has actually been evicted: OSv's reclaimer OOMs if a shrinker pass frees
+ * nothing, and the plain noshrink variant only lowers the target and wakes the
+ * async evict thread, returning before any page is freed.  Under a burst (a
+ * large PostgreSQL checkpoint plus many backend/autovacuum-worker forks) the
+ * async eviction lags demand and the reclaimer aborts even though eviction is
+ * in flight.  The synchronous variant waits for the eviction to complete.
+ */
 static size_t
 osv_arc_lowmem(void *arg, int howto)
 {
 	uint64_t to_free = arc_all_memory() / 4;
 	if (to_free < (16UL << 20))
 		to_free = 16UL << 20;
-	return ((size_t)arc_reduce_target_size_noshrink(to_free));
+	return ((size_t)arc_reduce_target_size_shrink_sync(to_free));
 }
 
 /* Called by the shrinker in "soft" mode (reclaim a specific amount). */
