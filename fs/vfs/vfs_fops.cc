@@ -77,6 +77,16 @@ int vfs_file::read(struct uio *uio, int flags)
 }
 
 
+// The filesystem's write for this open file: vop_write_file if it has one,
+// else the vnode-only vop_write.
+static int write_file(struct vnode *vp, vfs_file *fp, struct uio *uio,
+		      int ioflags)
+{
+	if (vp->v_op->vop_write_file)
+		return vp->v_op->vop_write_file(vp, fp, uio, ioflags);
+	return VOP_WRITE(vp, uio, ioflags);
+}
+
 int vfs_file::write(struct uio *uio, int flags)
 {
 	auto fp = this;
@@ -98,7 +108,7 @@ int vfs_file::write(struct uio *uio, int flags)
 	if (vp->v_type == VBLK && (flags & FOF_OFFSET) != 0) {
 		if (fp->f_flags & (O_DSYNC|O_SYNC))
 			ioflags |= IO_SYNC;
-		return VOP_WRITE(vp, uio, ioflags);
+		return write_file(vp, fp, uio, ioflags);
 	}
 
 	vn_lock(vp);
@@ -111,7 +121,7 @@ int vfs_file::write(struct uio *uio, int flags)
 	if ((flags & FOF_OFFSET) == 0)
 	        uio->uio_offset = fp->f_offset;
 
-	error = VOP_WRITE(vp, uio, ioflags);
+	error = write_file(vp, fp, uio, ioflags);
 	if (!error) {
 		count = bytes - uio->uio_resid;
 		if ((flags & FOF_OFFSET) == 0)

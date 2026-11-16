@@ -2008,6 +2008,26 @@ endif
 ifeq ($(conf_fs_sysfs),1)
 fs_objs += sysfs/sysfs_vnops.o
 endif
+ifeq ($(conf_fs_9p),1)
+fs_objs += 9p/codec.o
+fs_objs += 9p/session_state.o
+fs_objs += 9p/session.o
+endif
+# Command-line values bypass the Kconfig "depends on", so check here.
+ifeq ($(conf_fs_9p_tcp),1)
+ifneq ($(conf_fs_9p),1)
+$(error conf_fs_9p_tcp=1 needs conf_fs_9p=1: the 9P TCP transport is part of the 9P client)
+endif
+ifneq ($(conf_networking_stack),1)
+$(error conf_fs_9p_tcp=1 needs conf_networking_stack=1: the 9P TCP transport uses the networking stack)
+endif
+fs_objs += 9p/tcp.o
+fs_objs += 9p/9p_vfsops.o
+fs_objs += 9p/9p_vnops.o
+endif
+# The generated kernel_config_fs_9p_tcp.h follows .config only, so a
+# command-line conf_fs_9p_tcp=1 would not reach it; pass the make value.
+$(out)/fs/vfs/vfs_conf.o: CXXFLAGS += -DCONF_fs_9p_tcp=$(if $(filter 1,$(conf_fs_9p_tcp)),1,0)
 fs_objs += zfs/zfs_null_vfsops.o
 
 objects += $(addprefix fs/, $(fs_objs))
@@ -2232,6 +2252,20 @@ ifeq ($(fs),ext)
 bootfs_dep += $(out)/modules/libext/libext.so
 else
 ifeq ($(fs),zfs)
+bootfs_dep += $(tools:%=$(out)/%) $(out)/libsolaris.so
+endif
+endif
+# bootfs.manifest.skel names /usr/lib/fs/libsolaris.so unconditionally, so the
+# ZFS library is part of bootfs for every root filesystem, not only fs=zfs.  Any
+# ZFS-enabled build therefore has to list it (and the tools that go with it) as a
+# prerequisite here, or mkbootfs runs before it exists: serially that is a hard
+# failure on the missing file, and under -j it is a race that shows up as an
+# intermittent build break.  Key on the ZFS build itself rather than on the root
+# filesystem choice.  A conf_zfs=openzfs image with, say, fs=ramfs and a runtime
+# data pool is a normal configuration and hits exactly this.
+# fs=ext and fs=zfs already have their dependencies from the chain above.
+ifdef conf_zfs_openzfs
+ifeq ($(filter ext zfs,$(fs)),)
 bootfs_dep += $(tools:%=$(out)/%) $(out)/libsolaris.so
 endif
 endif
