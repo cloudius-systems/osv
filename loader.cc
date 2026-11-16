@@ -44,6 +44,9 @@
 #include <osv/shutdown.hh>
 #include <osv/commands.hh>
 #include <osv/boot.hh>
+#if CONF_pmu
+#include <osv/pmu.hh>
+#endif
 #include <osv/sampler.hh>
 #include <osv/app.hh>
 #include <osv/firmware.hh>
@@ -814,6 +817,12 @@ void main_cont(int loader_argc, char** loader_argv)
     smp_launch();
     setenv("OSV_CPUS", std::to_string(sched::cpus.size()).c_str(), 1);
     boot_time.event("SMP launched");
+#if CONF_pmu
+    // Lever proof: print the CPU's architectural-perfmon capability once, on
+    // the boot CPU, so a run's console proves the PMU is live and what it can
+    // do (same discipline as the other PROOF lever lines).
+    pmu::print_proof();
+#endif
 
     auto end = osv::clock::uptime::now() + boot_delay;
     while (end > osv::clock::uptime::now()) {
