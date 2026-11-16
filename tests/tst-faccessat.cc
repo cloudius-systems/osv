@@ -60,6 +60,27 @@ int main(int argc, char **argv)
     chdir(oldwd);
     free(oldwd);
 
+    // test AT_SYMLINK_NOFOLLOW: the check applies to the symlink itself, not
+    // its target. Before the fix this flag aborted the whole unikernel.
+    remove("/tmp/f3");
+    remove("/tmp/link_ok");
+    remove("/tmp/link_dangling");
+    expect(mknod("/tmp/f3", 0777|S_IFREG, 0), 0);
+    expect(symlink("/tmp/f3", "/tmp/link_ok"), 0);
+    expect(symlink("/tmp/does_not_exist", "/tmp/link_dangling"), 0);
+    // Following the link reaches the real file; not following checks the link.
+    expect(faccessat(-1, "/tmp/link_ok", F_OK, 0), 0);
+    expect(faccessat(-1, "/tmp/link_ok", F_OK, AT_SYMLINK_NOFOLLOW), 0);
+    // A dangling link: following fails ENOENT, not following still finds it.
+    expect_errno(faccessat(-1, "/tmp/link_dangling", F_OK, 0), ENOENT);
+    expect(faccessat(-1, "/tmp/link_dangling", F_OK, AT_SYMLINK_NOFOLLOW), 0);
+    // A plain file with the flag falls through to the normal check.
+    expect(faccessat(-1, "/tmp/f3", R_OK, AT_SYMLINK_NOFOLLOW), 0);
+    expect_errno(faccessat(-1, "/tmp/f2", F_OK, AT_SYMLINK_NOFOLLOW), ENOENT);
+    remove("/tmp/link_ok");
+    remove("/tmp/link_dangling");
+    remove("/tmp/f3");
+
     remove("/tmp/f1");
 
     std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";
