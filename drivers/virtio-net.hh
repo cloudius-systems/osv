@@ -15,6 +15,7 @@
 
 #include <osv/percpu_xmit.hh>
 #include <osv/contiguous_alloc.hh>
+#include <osv/aligned_new.hh>
 
 #include "drivers/virtio.hh"
 #include "drivers/pci-device.hh"
@@ -26,6 +27,14 @@ namespace virtio {
  * virtio net device class
  */
 class net : public virtio_driver {
+public:
+
+    // Forward declarations of the per-queue structs (defined in the private
+    // section below) so member functions can be declared with rxq*/txq*.
+    // Declared private to match the access of their definitions.
+private:
+    struct rxq;
+    struct txq;
 public:
 
     // The feature bitmap for virtio net
@@ -220,8 +229,12 @@ public:
 
     void wait_for_queue(vring* queue);
     bool bad_rx_csum(struct mbuf* m, struct net_hdr* hdr);
-    void receiver();
-    void fill_rx_ring();
+    // receiver()/fill_rx_ring() operate on a specific Rx queue so that with
+    // multiqueue (VIRTIO_NET_F_MQ) each Rx queue is drained by its own poll
+    // thread on its own CPU, instead of all inbound traffic funnelling through
+    // one queue and one thread.
+    void receiver(struct rxq* rxq);
+    void fill_rx_ring(struct rxq* rxq);
     mbuf* packet_to_mbuf(const std::vector<iovec>& iovec);
     unsigned* rx_buffer_refcnt(void* frame);
     static void free_rx_buffer(void* buffer, void* refcnt);
@@ -313,7 +326,8 @@ private:
         }
     } _pre_init;
 
-    /* Single Rx queue object */
+    /* An Rx queue object. With VIRTIO_NET_F_MQ there is one per queue pair,
+     * each drained by its own poll thread. */
     struct rxq {
         rxq(vring* vq, std::function<void ()> poll_func)
             : vqueue(vq), poll_task(sched::thread::make(poll_func, sched::thread::attr().
@@ -497,9 +511,20 @@ private:
         }
     }
 
-    /* We currently support only a single Rx+Tx queue */
-    struct rxq _rxq;
-    struct txq _txq;
+    /* Rx+Tx queue pairs. Without VIRTIO_NET_F_MQ there is exactly one pair,
+     * preserving the original single-queue behaviour.  txq is over-aligned
+     * (its percpu xmitter is cacheline aligned), so it is allocated with
+     * aligned_new and freed with the matching deleter. */
+    std::vector<std::unique_ptr<rxq>> _rxqs;
+    std::vector<std::unique_ptr<txq, aligned_new_deleter<txq>>> _txqs;
+    /* Number of active queue pairs (1 when multiqueue is not negotiated). */
+    unsigned _nqp = 1;
+    /* Control virtqueue index (2*_nqp) when VIRTIO_NET_F_CTRL_VQ is present. */
+    int _ctrl_vq_idx = -1;
+
+    /* Tell the device how many queue pairs the guest will use, per the
+     * VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET command.  Returns true on device ACK. */
+    bool set_vq_pairs(u16 pairs);
 
     //maintains the virtio instance number for multiple drives
     static int _instance;

@@ -137,6 +137,20 @@ blk::blk(virtio_device& virtio_dev)
     // base class did not set up.
     _num_queues = virtio_driver::_num_queues;
 
+    // Cap the number of queues we arm with an interrupt against the shared
+    // MSI-X vector budget.  Each queue uses one vector, and the x86-64 IDT has
+    // only 224 usable vectors shared by every device; a high-vCPU guest with
+    // several multiqueue virtio devices can otherwise exhaust them at boot.
+    // Extra probed virtqueues beyond this cap are simply left unused - I/O is
+    // directed only to queues 0.._num_queues-1, all of which have a serviced
+    // interrupt.
+    unsigned granted = reserve_msix_vectors(_num_queues);
+    if (granted < (unsigned)_num_queues) {
+        virtio_i("virtio-blk: capping active queues from %d to %d (MSI-X budget)\n",
+                 _num_queues, granted);
+        _num_queues = granted;
+    }
+
     // Resize per-queue lock vector now that _num_queues is known.
     _queue_locks = std::vector<mutex>(_num_queues);
 
