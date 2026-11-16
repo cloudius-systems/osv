@@ -104,6 +104,48 @@ zfsvfs_create(const char *osname, boolean_t readonly, zfsvfs_t **zfvp)
 	return (error);
 }
 
+
+/*
+ * Create a zfsvfs structure for an unmounted dataset using a shared
+ * dmu_objset_hold() rather than an exclusive dmu_objset_own().  A shared
+ * hold does not conflict with the exclusive own taken by zfs_domount(),
+ * which avoids the EBUSY race between quota queries and mount (OpenZFS
+ * 2.4.4, upstream commit b021ebcdc).  Mirrors the FreeBSD/Linux
+ * zfsvfs_create_hold(); the shared zfs_ioctl.c zfsvfs_hold()/zfsvfs_rele()
+ * branch on z_use_hold to rele (not disown) and to juggle the pool config
+ * lock.  On zfsvfs_create_impl() error we release here (OSv keeps the
+ * disown/free in the caller, unlike upstream which frees inside _impl).
+ */
+int
+zfsvfs_create_hold(const char *osname, zfsvfs_t **zfvp)
+{
+	objset_t *os;
+	zfsvfs_t *zfsvfs;
+	int error;
+
+	zfsvfs = kmem_zalloc(sizeof (zfsvfs_t), KM_SLEEP);
+
+	error = dmu_objset_hold(osname, zfsvfs, &os);
+	if (error != 0) {
+		kmem_free(zfsvfs, sizeof (zfsvfs_t));
+		return (error);
+	}
+
+	if (dmu_objset_type(os) != DMU_OST_ZFS) {
+		dmu_objset_rele(os, zfsvfs);
+		kmem_free(zfsvfs, sizeof (zfsvfs_t));
+		return (SET_ERROR(EINVAL));
+	}
+
+	zfsvfs->z_use_hold = B_TRUE;
+	error = zfsvfs_create_impl(zfvp, zfsvfs, os);
+	if (error != 0) {
+		dmu_objset_rele(os, zfsvfs);
+		zfsvfs_free(zfsvfs);
+	}
+	return (error);
+}
+
 /*
  * zfsvfs_init -- read on-disk ZPL properties into a zfsvfs_t.
  *
