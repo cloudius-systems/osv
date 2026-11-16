@@ -170,6 +170,7 @@ zfs_movbe_available(void)
 #define	zfs_aes_available()		B_FALSE
 #define	zfs_pclmulqdq_available()	B_FALSE
 #define	zfs_sha256_available()		B_FALSE
+#define	zfs_sha512_available()		B_FALSE
 #define	zfs_movbe_available()		B_FALSE
 
 #endif /* __x86_64__ || __i386__ */

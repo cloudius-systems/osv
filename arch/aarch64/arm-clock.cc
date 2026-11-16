@@ -42,9 +42,10 @@ private:
 
 arm_clock::arm_clock() {
     asm volatile ("mrs %0, cntfrq_el0; isb; " : "=r"(freq_hz) :: "memory");
-    /* spec documents a typical range of 1-50 MHZ,
-     * the ampere-1a however, runs on 1Ghz, so allow up to that frequency */
-    if (freq_hz < 1 * MHZ || freq_hz > 1000 * MHZ) {
+    /* spec documents a typical range of 1-50 MHZ, but the ampere-1a runs
+     * on 1Ghz and AWS Graviton3 reports 1.05Ghz, so do not impose an upper
+     * bound; only reject an unprogrammed (zero) or implausibly slow timer */
+    if (freq_hz < 1 * MHZ) {
         debug_early_u64("arm_clock(): read invalid frequency ", freq_hz);
         abort();
     }
