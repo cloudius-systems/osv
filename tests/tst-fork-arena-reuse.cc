@@ -5,16 +5,20 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-// Fork-arena VA of an exited process is reused, but never by a process that
-// maps part of it.  main forks P, which fills part of its first arena extent
-// and exits.  A new child C then maps a page of its own (MAP_FIXED) inside P's
-// old extent, stamps it, and allocates across three extents: C must not be
-// given P's extent, and its page must survive.  New children of main, which
-// do not map it, then allocate until one of them is given P's extent.
+// Fork-arena VA of an exited process is not handed out again while
+// never-used VA remains, and never to a process that maps part of it.  main
+// forks P, which fills part of its first arena extent and exits.  A new child
+// C then maps a page of its own (MAP_FIXED) inside P's old extent, stamps it,
+// and allocates across three extents: C must not be given P's extent, and its
+// page must survive.  Then up to 32 new children of main each run P's exact
+// allocation sequence and free P's first pointer late, as a stale free would.
+// None may be given P's extent.  One that were would hold a live chunk at that
+// very address, which the late free would recycle: the next allocation would
+// return it while it is in use.
 //
-// If fork() works in a fork child, P also forks G before exiting: G inherits
-// P's chunks, allocates past an extent after P is reaped, and must neither be
-// given P's extent nor see the inherited chunks change.
+// P also forks G before exiting: G inherits P's chunks, allocates past an
+// extent after P is reaped, and must neither be given P's extent nor see the
+// inherited chunks change.
 //
 // Extents are 64 MiB, numbered from the start of the arena range, and are
 // computed from pointer values only.
@@ -69,6 +73,8 @@ struct shared {
     std::atomic<int> outside;
     std::atomic<long> sib_extent[max_siblings];
     std::atomic<int> sib_ready[max_siblings];
+    std::atomic<int> sib_corrupt[max_siblings];
+    std::atomic<int> sib_reissued[max_siblings];
 };
 static shared *sh;
 static void *live[nlive];   // COW-inherited by G
@@ -143,7 +149,8 @@ static void run_g()
     _exit(0);
 }
 
-static void run_p()
+// P's allocations, first thing in the process; a sibling repeats them.
+static void fill_live()
 {
     for (auto &p : live) {
         p = malloc(live_sz);
@@ -152,6 +159,27 @@ static void run_p()
             q[i] = live_word(p, i);
         }
     }
+}
+
+static void run_sibling(int n)
+{
+    fill_live();
+    sh->sib_extent[n] = fork_arena::contains(live[0]) ? extent_of(live[0]) : -1;
+    // The late free of P's pointer, then an allocation of the same size.
+    void *stale = reinterpret_cast<void*>(sh->p_first.load());
+    free(stale);
+    void *q = malloc(live_sz);
+    sh->sib_reissued[n] = q == stale;
+    memset(q, 0x77, live_sz);
+    sh->sib_corrupt[n] = corrupt_count();
+    sh->sib_ready[n] = 1;
+    wait_for(sh->phase, 2);
+    _exit(0);
+}
+
+static void run_p()
+{
+    fill_live();
     long e = extent_of(live[0]);
     for (auto p : live) {
         if (!fork_arena::contains(p) || extent_of(p) != e) {
@@ -240,8 +268,9 @@ int main()
             failures++;
         }
     } else {
-        printf("NOTE: fork() in a fork child failed (errno %d): inherited-extent case not run\n",
+        printf("FAIL: fork() in a fork child failed (errno %d): inherited-extent case not run\n",
                sh->g_errno.load());
+        failures++;
     }
 
     pid_t c = fork();
@@ -271,11 +300,7 @@ int main()
     for (; nsib < max_siblings && got < 0; nsib++) {
         pid_t s = fork();
         if (s == 0) {
-            void *q = malloc(live_sz);
-            sh->sib_extent[nsib] = fork_arena::contains(q) ? extent_of(q) : -1;
-            sh->sib_ready[nsib] = 1;
-            wait_for(sh->phase, 2);
-            _exit(0);
+            run_sibling(nsib);
         }
         sib[nsib] = s;
         wait_for(sh->sib_ready[nsib], 1);
@@ -283,10 +308,20 @@ int main()
             got = nsib;
         }
     }
-    printf("new children: %d forked, P's extent %s\n", nsib,
-           got >= 0 ? "given to one of them" : "never given out");
-    if (got < 0) {
-        printf("FAIL: an exited process's extent was not reused\n");
+    int recycled = 0;
+    for (int i = 0; i < nsib; i++) {
+        if (sh->sib_corrupt[i] || sh->sib_reissued[i]) {
+            recycled++;
+        }
+    }
+    printf("new children: %d forked, P's extent %s, %d had a live chunk recycled by the late free\n",
+           nsib, got >= 0 ? "given to one of them" : "never given out", recycled);
+    if (got >= 0) {
+        printf("FAIL: an exited process's extent was given out while never-used ones remain\n");
+        failures++;
+    }
+    if (recycled) {
+        printf("FAIL: a late free of an exited process's pointer recycled a live chunk\n");
         failures++;
     }
     sh->phase = 2;
