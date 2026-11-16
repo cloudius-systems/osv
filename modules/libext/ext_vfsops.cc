@@ -232,6 +232,9 @@ ext_unmount(struct mount *mp, int flags)
 
     ext4_block_fini(&ext_blockdev);
     r = device_close((struct device*)ext_blockdev.bdif->p_user);
+    if (r == EOK) {
+        release_mp_dentries(mp);
+    }
     kprintf("[ext4] Unmounted ext filesystem!\n");
     return r;
 }

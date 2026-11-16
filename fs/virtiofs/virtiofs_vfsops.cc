@@ -195,7 +195,11 @@ static int virtiofs_unmount(struct mount* mp, int flags)
     delete m_data;
 
     struct device* dev = mp->m_dev;
-    return device_close(dev);
+    int error = device_close(dev);
+    if (!error) {
+        release_mp_dentries(mp);
+    }
+    return error;
 }
 
 #define virtiofs_vget ((vfsop_vget_t)vfs_nullop)
