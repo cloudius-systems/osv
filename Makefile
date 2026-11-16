@@ -2008,6 +2008,26 @@ endif
 ifeq ($(conf_fs_sysfs),1)
 fs_objs += sysfs/sysfs_vnops.o
 endif
+ifeq ($(conf_fs_9p),1)
+fs_objs += 9p/codec.o
+fs_objs += 9p/session_state.o
+fs_objs += 9p/session.o
+endif
+# Command-line values bypass the Kconfig "depends on", so check here.
+ifeq ($(conf_fs_9p_tcp),1)
+ifneq ($(conf_fs_9p),1)
+$(error conf_fs_9p_tcp=1 needs conf_fs_9p=1: the 9P TCP transport is part of the 9P client)
+endif
+ifneq ($(conf_networking_stack),1)
+$(error conf_fs_9p_tcp=1 needs conf_networking_stack=1: the 9P TCP transport uses the networking stack)
+endif
+fs_objs += 9p/tcp.o
+fs_objs += 9p/9p_vfsops.o
+fs_objs += 9p/9p_vnops.o
+endif
+# The generated kernel_config_fs_9p_tcp.h follows .config only, so a
+# command-line conf_fs_9p_tcp=1 would not reach it; pass the make value.
+$(out)/fs/vfs/vfs_conf.o: CXXFLAGS += -DCONF_fs_9p_tcp=$(if $(filter 1,$(conf_fs_9p_tcp)),1,0)
 fs_objs += zfs/zfs_null_vfsops.o
 
 objects += $(addprefix fs/, $(fs_objs))
