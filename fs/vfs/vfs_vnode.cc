@@ -143,6 +143,16 @@ vn_lock(struct vnode *vp)
 	ASSERT(vp);
 	ASSERT(vp->v_refcnt > 0);
 
+#ifdef DEBUG_VFS
+	/*
+	 * Lock-order check with teeth (see the ordering note in vfs_dentry.cc):
+	 * the VFS order is vnode lock -> dentry_hash_lock, never the reverse.
+	 * Taking a vnode lock while already holding dentry_hash_lock is the
+	 * AB-BA inversion that deadlocked drele() against namei().
+	 */
+	ASSERT(!vfs_dentry_hash_lock_held());
+#endif
+
 	mutex_lock(&vp->v_lock);
 	vp->v_nrlocks++;
 	DPRINTF(VFSDB_VNODE, ("vn_lock:   %s\n", vn_path(vp)));
