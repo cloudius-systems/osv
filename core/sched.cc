@@ -873,6 +873,21 @@ void thread::pin(thread *t, cpu *target_cpu)
     helper->join();
 }
 
+// The thread can only be moved off this CPU by code running on this CPU with
+// interrupts off (the load balancer's migration, a pin() helper), which sees
+// the hold; a thread pinning itself elsewhere is not running while a
+// real-time handler is.
+bool thread::hold_here()
+{
+    WITH_LOCK(irq_lock) {
+        if (tcpu() != cpu::current()) {
+            return false;
+        }
+        _interrupt_holds.fetch_add(1, std::memory_order_relaxed);
+    }
+    return true;
+}
+
 void thread::unpin()
 {
     // Unpinning the current thread is straightforward. But to work on a
@@ -943,7 +958,10 @@ void cpu::load_balance()
 #endif
         WITH_LOCK(irq_lock) {
             auto i = std::find_if(runqueue.rbegin(), runqueue.rend(),
-                    [](thread& t) { return t._migration_lock_counter == 0; });
+                    [](thread& t) {
+                        return t._migration_lock_counter == 0 &&
+                               t._interrupt_holds.load(std::memory_order_seq_cst) == 0;
+                    });
             if (i == runqueue.rend()) {
                 continue;
             }

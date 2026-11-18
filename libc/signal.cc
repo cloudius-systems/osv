@@ -523,6 +523,39 @@ int osv_sigtimedwait(const sigset_t *set, siginfo_t *si,
 // another handler thread. We should probably block this signal while
 // handling it.
 
+#if CONF_fork
+// Run @handler as an interrupt of fork child @pid's thread @victim (held with
+// hold_pid_thread(), released here): on a thread made for it on @victim's CPU,
+// at real-time priority, which a normal thread never preempts, in @as.  The
+// handler thread holds @victim on that CPU while it runs.  If @victim moved
+// before the hold took, the handler thread starts again on @victim's new CPU;
+// after a few moves it runs beside @victim, as kill() did before.  A handler
+// thread never migrates itself.
+static void start_interrupting_handler(sched::thread *victim, pid_t pid,
+                                       mmu::address_space *as,
+                                       std::function<void ()> handler, int tries)
+{
+    sched::cpu *where = victim->tcpu();
+    auto t = sched::thread::make([=] {
+        bool held = victim->hold_here();
+        if (!held && tries < 4) {
+            // This thread's own use of @as covers the next one's start.
+            start_interrupting_handler(victim, pid, as, handler, tries + 1);
+            return;
+        }
+        handler();
+        if (held) {
+            victim->release_hold();
+        }
+        osv::fork::release_pid_thread(pid);
+    }, sched::thread::attr().detached().stack(65536).name("signal_handler").pin(where),
+        false, true);
+    t->set_realtime_priority(1);
+    t->set_address_space(as);
+    t->start();
+}
+#endif
+
 OSV_LIBC_API
 int kill(pid_t pid, int sig)
 {
@@ -716,7 +749,7 @@ int kill(pid_t pid, int sig)
             return 0;
         }
 #endif
-        auto t = sched::thread::make([=] {
+        auto run_handler = [=] {
             if (sa.sa_flags & SA_RESETHAND) {
                 actions[sigidx].sa_flags = 0;
                 actions[sigidx].sa_handler = SIG_DFL;
@@ -736,7 +769,25 @@ int kill(pid_t pid, int sig)
             } else {
                 sa.sa_handler(sig);
             }
-        }, sched::thread::attr().detached().stack(65536).name("signal_handler"),
+        };
+#if CONF_fork
+        // A handler for a fork process interrupts that process's thread, as a
+        // POSIX signal does, instead of running beside it.  Programs depend on
+        // that: PostgreSQL's handlers set InterruptPending and then a reason
+        // flag, and its mainline clears InterruptPending before it tests the
+        // reason flags, so a handler that runs concurrently can leave a reason
+        // set that is never acted on (a parallel leader then waits for its
+        // workers forever).
+        if (target_as) {
+            sched::thread *victim = osv::fork::hold_pid_thread(pid);
+            if (victim) {
+                start_interrupting_handler(victim, pid, target_as, run_handler, 0);
+                return 0;
+            }
+        }
+#endif
+        auto t = sched::thread::make(run_handler,
+                sched::thread::attr().detached().stack(65536).name("signal_handler"),
                 false, true);
 #if CONF_fork
         // Where does the handler thread run?
