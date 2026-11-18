@@ -45,6 +45,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/taskqueue.h>
 #include <sys/time.h>
+#include <bsd/sys/sys/libkern.h>
 #include <sys/ioctl.h>
 
 #include <vm/vm.h>
@@ -1404,13 +1405,19 @@ ena_rss_configure(struct ena_adapter *adapter)
 	}
 
 	/*
-	 * Keep the default Toeplitz key filled by ena_com_rss_init(); passing a
-	 * NULL key leaves it in place. ena_com_fill_hash_function() already
-	 * flushes the hash function to the device, so no separate
-	 * ena_com_set_hash_function() call is needed. Not fatal if unsupported.
+	 * Program a random Toeplitz key, as FreeBSD's ena_rss_key_fill() does.
+	 * A NULL key would keep whatever key the device reports, and on Nitro
+	 * that is often all zeros: Toeplitz with a zero key hashes every flow
+	 * to 0, so every flow would land on indirection entry 0 and all Rx on
+	 * queue 0.
+	 * ena_com_fill_hash_function() also flushes the hash function to the
+	 * device, so no separate ena_com_set_hash_function() call is needed.
+	 * Not fatal if unsupported.
 	 */
-	rc = ena_com_fill_hash_function(ena_dev, ENA_ADMIN_TOEPLITZ, NULL,
-	    ENA_HASH_KEY_SIZE, 0x0);
+	u8 rss_key[ENA_HASH_KEY_SIZE];
+	arc4rand(rss_key, sizeof(rss_key), 0);
+	rc = ena_com_fill_hash_function(ena_dev, ENA_ADMIN_TOEPLITZ, rss_key,
+	    sizeof(rss_key), 0x0);
 	if (unlikely(rc != 0 && rc != ENA_COM_UNSUPPORTED)) {
 		ena_log(adapter->pdev, ERR, "Cannot fill hash function rc: %d", rc);
 		goto err_rss_destroy;
