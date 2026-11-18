@@ -632,6 +632,16 @@ public:
      * allows the thread to be later migrated to any CPU.
      */
     void unpin();
+    /**
+     * Keep the thread on the calling thread's CPU: the load balancer and the
+     * idle CPUs' pull do not move a held thread.  A signal handler running
+     * there at real-time priority then interrupts the thread, which does not
+     * run until the handler blocks or ends.  Returns false, and holds nothing,
+     * if the thread is on another CPU.  Each hold_here() that returned true is
+     * undone by one release_hold().
+     */
+    bool hold_here();
+    void release_hold() { _interrupt_holds.fetch_sub(1, std::memory_order_release); }
 
 #ifdef __OSV_CORE__
     static inline thread* current() { return s_current; };
@@ -877,6 +887,8 @@ private:
     std::unique_ptr<detached_state> _detached_state;
     attr _attr;
     int _migration_lock_counter;
+    // Signal handlers interrupting this thread (see hold_on()).
+    std::atomic<unsigned> _interrupt_holds{0};
     // _migration_lock_counter being set may be temporary, but if _pinned
     // is true, it was permanently incremented by 1 by sched::thread::pin().
     // In the future, we should replace this boolean _pinned by a bitmask

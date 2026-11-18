@@ -103,6 +103,13 @@ std::unordered_map<pid_t, std::shared_ptr<child_state>> g_children;
 mutex g_pid_lock;
 std::unordered_map<mmu::address_space *, pid_t> g_as_pid;   // child AS  -> pid
 std::unordered_map<pid_t, mmu::address_space *> g_pid_as;   // child pid -> AS
+// The child's thread, for kill() to interrupt, and how many kill()s hold it.
+struct pid_thread {
+    sched::thread *t;
+    unsigned holds;
+};
+std::unordered_map<pid_t, pid_thread> g_pid_thread;
+condvar g_pid_thread_cv;
 
 // ---- fork fd-inheritance -------------------------------------------------
 //
@@ -538,12 +545,13 @@ void register_child(pid_t child_pid, pid_t parent_pid)
     g_children[child_pid] = st;
 }
 
-void register_pid(pid_t pid, mmu::address_space *as)
+void register_pid(pid_t pid, mmu::address_space *as, sched::thread *t)
 {
     fork_arena::kernel_heap_scope kh;
     SCOPE_LOCK(g_pid_lock);
     g_as_pid[as] = pid;
     g_pid_as[pid] = as;
+    g_pid_thread[pid] = {t, 0};
 }
 
 void unregister_pid(pid_t pid, mmu::address_space *as)
@@ -552,6 +560,37 @@ void unregister_pid(pid_t pid, mmu::address_space *as)
     SCOPE_LOCK(g_pid_lock);
     g_as_pid.erase(as);
     g_pid_as.erase(pid);
+    // The caller disposes of the thread next: wait for the signal handlers
+    // that hold it to finish interrupting it.
+    auto it = g_pid_thread.find(pid);
+    while (it != g_pid_thread.end() && it->second.holds) {
+        g_pid_thread_cv.wait(&g_pid_lock);
+        it = g_pid_thread.find(pid);
+    }
+    if (it != g_pid_thread.end()) {
+        g_pid_thread.erase(it);
+    }
+}
+
+sched::thread *hold_pid_thread(pid_t pid)
+{
+    SCOPE_LOCK(g_pid_lock);
+    auto it = g_pid_thread.find(pid);
+    if (it == g_pid_thread.end()) {
+        return nullptr;
+    }
+    it->second.holds++;
+    return it->second.t;
+}
+
+void release_pid_thread(pid_t pid)
+{
+    SCOPE_LOCK(g_pid_lock);
+    auto it = g_pid_thread.find(pid);
+    assert(it != g_pid_thread.end() && it->second.holds);
+    if (--it->second.holds == 0) {
+        g_pid_thread_cv.wake_all();
+    }
 }
 
 // The pid of the "process" the current thread belongs to: a fork child's
@@ -785,7 +824,7 @@ pid_t fork(void)
     // child's distinct pid, and so kill(cpid, SIGURG) can route the latch
     // -wakeup handler into THIS child's address space (where its self-pipe fd
     // resolves).
-    fork::register_pid(cpid, child_as);
+    fork::register_pid(cpid, child_as, child);
 
     // The cleanup closure (a std::function, heap-allocated) is stored in the
     // thread object and invoked by the reaper (a kernel thread, AS0); keep it

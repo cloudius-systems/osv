@@ -12,6 +12,7 @@
 #include <osv/app.hh>
 
 namespace mmu { struct address_space; }
+namespace sched { class thread; }
 
 // fork() emulation on OSv.
 //
@@ -43,7 +44,9 @@ void register_child(pid_t child_pid, pid_t parent_pid);
 // Map/unmap a fork child's pid <-> its address space.  Lets getpid() report a
 // per-child pid and lets kill(pid, SIGURG) route the latch-wakeup handler into
 // the target child's address space.
-void register_pid(pid_t pid, mmu::address_space *as);
+// @t is the child's thread, which a signal from another process interrupts
+// (see hold_pid_thread()).  unregister_pid() waits until no kill() holds it.
+void register_pid(pid_t pid, mmu::address_space *as, sched::thread *t);
 void unregister_pid(pid_t pid, mmu::address_space *as);
 
 // The pid of the process the current thread belongs to (a fork child's distinct
@@ -54,6 +57,11 @@ pid_t pid_for_current();
 // mmu::as_release), or nullptr if @pid is not a fork child or its address
 // space is retired.  *@registered is true if @pid is a fork child at all.
 mmu::address_space *hold_as_for_pid(pid_t pid, bool *registered);
+
+// The thread of fork child @pid, kept alive until release_pid_thread(@pid),
+// or nullptr if @pid is not a registered fork child.
+sched::thread *hold_pid_thread(pid_t pid);
+void release_pid_thread(pid_t pid);
 
 // Make child @child_pid waitable, with the status its exit() recorded or else
 // @status (encoded WIFEXITED-style), wake any waiter, and raise SIGCHLD to the
