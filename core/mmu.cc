@@ -561,6 +561,31 @@ static bool addr_is_nocount(uintptr_t va)
 static vma_list_type *cow_parent_vmas;
 static bool parent_vma_writable(uintptr_t va); // defined below
 
+// True if every address in [start, end) lies in one share range and none in a
+// privatize range, so the per-leaf range tests below would all give the same
+// answer for a page table covering it.
+static bool range_wholly_shared(uintptr_t start, uintptr_t end)
+{
+    if (!addr_is_shared(start) || end > memo_share.end) {
+        return false;
+    }
+    for (auto &r : cow_privatize_sorted) {
+        if (r.start < end && start < r.end) {
+            return false;
+        }
+    }
+    return true;
+}
+
+// A leaf a fork already shares and that the clone below would copy unchanged
+// into both tables: a writable frame owned by its file or the shared-anon
+// registry (pte_shared), neither COW nor page cache.
+static bool pte_plain_shared(pt_element<0> pte)
+{
+    return pte.writable() && pte.sw_bit(pte_shared) && !pte_is_cow(pte) &&
+           !pte.sw_bit(pte_pagecache);
+}
+
 // A leaf the parent maps copy-on-write at @ppte is about to be shared with a
 // fork child: it lies in a share range (a user-supplied thread stack that an
 // earlier fork saw as private memory).  Make the parent map a frame it alone
@@ -606,10 +631,20 @@ static pt_element<0> cow_break_for_share(pt_element<0> *ppte)
 static void clone_pt_level0(pt_element<0> *parent_pt, pt_element<0> *child_pt,
                             uintptr_t base_virt)
 {
+    // Most of a forking server's leaves are in its shared memory, and after
+    // its first fork each of them is plain shared, for which the
+    // addr_is_shared() case below writes the parent's PTE back as it was and
+    // copies it to the child.  When the range tests cannot differ within this
+    // table, copy those directly and leave the rest to the per-leaf cases.
+    bool shared = range_wholly_shared(base_virt, base_virt + huge_page_size);
     for (unsigned i = 0; i < pte_per_page; i++) {
         pt_element<0> ppte = parent_pt[i];
         if (ppte.empty()) {
             child_pt[i] = make_empty_pte<0>();
+            continue;
+        }
+        if (shared && pte_plain_shared(ppte)) {
+            child_pt[i] = ppte;
             continue;
         }
         uintptr_t va = base_virt + (uintptr_t)i * page_size;
