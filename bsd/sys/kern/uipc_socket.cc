@@ -107,6 +107,9 @@
 #include <sys/epoll.h>
 #include <osv/debug.h>
 #include <cinttypes>
+#include <osv/mempool.hh>
+#include <algorithm>
+#include <limits>
 
 #include <bsd/porting/netport.h>
 #include <bsd/porting/uma_stub.h>
@@ -127,9 +130,6 @@
 #include <bsd/sys/net/vnet.h>
 
 #include <osv/zcopy.hh>
-#include <osv/mempool.hh>
-#include <algorithm>
-#include <limits>
 
 #define uipc_d(...) tprintf_d("uipc_socket", __VA_ARGS__)
 
