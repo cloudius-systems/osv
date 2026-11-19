@@ -710,6 +710,13 @@ void thread::pin(cpu *target_cpu)
     sched::ensure_next_stack_page_if_preemptable();
 #endif
     WITH_LOCK(irq_lock) {
+        // A held thread runs only while its signal handler is blocked; leaving
+        // now would let it run beside the handler once the handler resumes.
+        while (t._interrupt_holds.load(std::memory_order_seq_cst)) {
+            DROP_LOCK(irq_lock) {
+                thread::sleep(std::chrono::milliseconds(1));
+            }
+        }
         trace_sched_migrate(&t, target_cpu->id);
         t.stat_migrations.incr();
         t.suspend_timers();
@@ -769,9 +776,12 @@ void thread::pin(thread *t, cpu *target_cpu)
                 return;
             }
             // The target thread might be temporarily holding a migration lock
-            // and we must not migrate it in the middle of this. Currently we
-            // sleep a bit and retry, I don't know if there's a better way.
-            while(t->_migration_lock_counter) {
+            // and we must not migrate it in the middle of this, nor move it
+            // away from a signal handler interrupting it (see hold_here()).
+            // Currently we sleep a bit and retry, I don't know if there's a
+            // better way.
+            while (t->_migration_lock_counter ||
+                   t->_interrupt_holds.load(std::memory_order_seq_cst)) {
                 t->_migration_lock_counter++;
                 DROP_LOCK(irq_lock) {
                     debug("sched::thread::pin() retrying\n");
@@ -849,10 +859,11 @@ void thread::pin(thread *t, cpu *target_cpu)
     helper->join();
 }
 
-// The thread can only be moved off this CPU by code running on this CPU with
-// interrupts off (the load balancer's migration, a pin() helper), which sees
-// the hold; a thread pinning itself elsewhere is not running while a
-// real-time handler is.
+// Each path that moves another thread off its CPU runs on that CPU with
+// interrupts off and checks the hold under irq_lock: the load balancer skips
+// a held thread and pin()'s helper waits for the holds to drop.  A held
+// thread pinning itself also waits.  So once this returns true the thread
+// stays on this CPU until release_hold().
 bool thread::hold_here()
 {
     WITH_LOCK(irq_lock) {
