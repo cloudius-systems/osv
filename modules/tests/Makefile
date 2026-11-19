@@ -272,6 +272,7 @@ tests += payload-exit7.so
 tests += tst-fork-cow.so
 tests += tst-fork-deep.so
 tests += tst-fork-file-mmap.so
+tests += tst-fork-cow-file-race.so
 tests += tst-fork-pagecache-ptes.so
 tests += tst-fork-arc-evict.so
 internal-api-tests += tst-random-flush.so
