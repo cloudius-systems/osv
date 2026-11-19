@@ -302,6 +302,20 @@ public:
         unlock_running();
 
         //
+        // StoreLoad barrier: the clear of RUNNING above must be visible before
+        // has_pending() below reads PENDING.  This pairs with a sender that
+        // failed try_lock_running() and then set PENDING in push_cpu() with
+        // test_and_set_pending() (a full barrier), which wakes the worker, and
+        // the worker then retries try_lock_running().  With the fence, either
+        // we see PENDING and wake the worker, or the worker sees RUNNING clear.
+        // Without it the load may pass the store (x86 does this): we read
+        // PENDING as 0 and wake nobody, the worker sees RUNNING still set and
+        // sleeps in lock_running(), and with PENDING left set later senders
+        // only queue.  Tx then stops for good.
+        //
+        std::atomic_thread_fence(std::memory_order_seq_cst);
+
+        //
         // We unlock_running() not from a dispatcher only if the dispatcher is
         // not running and is waiting for either a new work or for this lock.
         //
