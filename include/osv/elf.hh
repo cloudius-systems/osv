@@ -592,6 +592,12 @@ public:
     static const ulong core_module_index;
 
     explicit program(void* base = reinterpret_cast<void*>(program_base));
+    ~program();
+    /**
+     * True when no object loaded in this program is still alive, so the
+     * program can be destroyed and its address range reused.
+     */
+    bool idle();
     /**
      * Load a shared library, and return an interface to it.
      *
