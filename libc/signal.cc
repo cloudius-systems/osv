@@ -298,6 +298,26 @@ int sigismember(const sigset_t *sigset, int signum)
     return from_libc(sigset)->mask.test(sigidx);
 }
 
+#if CONF_fork
+// Signals a fork process sent to itself while this thread blocked them (see
+// kill()), one bit per signal index.  Only this thread reads or writes it.
+static_assert(nsignals <= 64, "deferred_self_signals holds one bit per signal");
+static __thread unsigned long deferred_self_signals;
+
+// Deliver the deferred self-signals this thread no longer blocks, before
+// sigprocmask() returns, as POSIX requires.
+static void deliver_deferred_self_signals()
+{
+    unsigned long ready = deferred_self_signals & ~thread_signals()->mask.to_ulong();
+    while (ready) {
+        unsigned sigidx = __builtin_ctzl(ready);
+        ready &= ready - 1;
+        deferred_self_signals &= ~(1UL << sigidx);
+        kill(getpid(), sigidx + 1);
+    }
+}
+#endif
+
 OSV_LIBC_API
 int sigprocmask(int how, const sigset_t* _set, sigset_t* _oldset)
 {
@@ -336,6 +356,9 @@ int sigprocmask(int how, const sigset_t* _set, sigset_t* _oldset)
         default:
             abort();
         }
+#if CONF_fork
+        deliver_deferred_self_signals();
+#endif
     }
     return 0;
 }
@@ -653,6 +676,8 @@ int kill(pid_t pid, int sig)
     // handler would run.  So run those two short async-signal-safe handlers
     // INLINE in the caller and skip the thread spawn entirely (self_inline).
     bool self_inline = false;
+    // The target is the calling process itself (a live fork child).
+    bool to_own_process = false;
     if (pid != getpid() && pid != 0 && pid != -1 && pid != OSV_PID) {
         target_as = target_use.as = osv::fork::hold_as_for_pid(pid, &registered);
         if (!target_as) {
@@ -687,10 +712,11 @@ int kill(pid_t pid, int sig)
         //     the backend absorbs its OWN barrier (DROP DATABASE / DROP
         //     TABLESPACE otherwise wait for their own PID forever).
         // Only when the signal is UNBLOCKED in the calling thread: if PG has
-        // it masked (a critical section), POSIX defers delivery, so keep the
-        // deferred (thread-spawn) behavior rather than re-enter PG at a point
-        // it masked the signal to protect.
-        if (target_as && target_as == mmu::current_address_space() &&
+        // it masked (a critical section), POSIX defers delivery, and so does
+        // kill() below, rather than re-enter PG at a point it masked the
+        // signal to protect.
+        to_own_process = target_as && target_as == mmu::current_address_space();
+        if (to_own_process &&
             (sig == SIGURG || sig == SIGUSR1) &&
             !osv::thread_signals()->mask.test(sig - 1)) {
             self_inline = true;
@@ -716,6 +742,12 @@ int kill(pid_t pid, int sig)
     }
     unsigned sigidx = sig - 1;
 #if CONF_fork
+    // A signal a fork process sends itself while the calling thread blocks it
+    // stays pending until that thread unblocks it, as POSIX requires.
+    if (to_own_process && osv::thread_signals()->mask.test(sigidx)) {
+        deferred_self_signals |= 1UL << sigidx;
+        return 0;
+    }
     // A targeted live fork child uses THAT child's signal table (it installed
     // its own handler); everything else uses the global/top-level table.
     struct sigaction *actions = signal_actions;
