@@ -28,6 +28,7 @@
 #include <osv/fork_arena.hh>
 #include <osv/mmu.hh>
 #include <osv/fork.hh>
+#include <osv/trace.hh>
 #endif
 #include <unordered_map>
 #include <boost/intrusive/set.hpp>
@@ -524,35 +525,89 @@ int osv_sigtimedwait(const sigset_t *set, siginfo_t *si,
 // handling it.
 
 #if CONF_fork
+TRACEPOINT(trace_signal_interrupt_fallback, "pid=%d tries=%d", pid_t, int);
+
+// Handlers that ran beside their target instead of interrupting it, because
+// the target kept moving or no thread could be made on its CPU.
+std::atomic<unsigned long> signal_interrupt_fallbacks{0};
+
+// What the interrupting handler on this thread holds: the target's pid entry
+// (pid != 0) and the target on its CPU (victim != nullptr).  end_interrupt()
+// releases both, after the handler returns or, if the handler ends its own
+// thread with thread::exit() (which does not unwind), from the thread's exit
+// notifier.
+struct interrupt_record {
+    sched::thread *victim;
+    pid_t pid;
+};
+static __thread interrupt_record current_interrupt;
+
+static void end_interrupt()
+{
+    auto& r = current_interrupt;
+    if (r.victim) {
+        r.victim->release_hold();
+        r.victim = nullptr;
+    }
+    if (r.pid) {
+        osv::fork::release_pid_thread(r.pid);
+        r.pid = 0;
+    }
+}
+
+static void __attribute__((constructor)) interrupt_register_thread_notifier()
+{
+    sched::thread::register_exit_notifier(end_interrupt);
+}
+
 // Run @handler as an interrupt of fork child @pid's thread @victim (held with
-// hold_pid_thread(), released here): on a thread made for it on @victim's CPU,
-// at real-time priority, which a normal thread never preempts, in @as.  The
-// handler thread holds @victim on that CPU while it runs.  If @victim moved
-// before the hold took, the handler thread starts again on @victim's new CPU;
-// after a few moves it runs beside @victim, as kill() did before.  A handler
-// thread never migrates itself.
-static void start_interrupting_handler(sched::thread *victim, pid_t pid,
+// hold_pid_thread(), released when the handler ends): on a thread made for it
+// on @victim's CPU, at real-time priority, which a normal thread never
+// preempts, in @as.  The handler thread holds @victim on that CPU while it
+// runs.  If @victim moved before the hold took, the handler thread starts
+// again on @victim's new CPU; after a few moves, or if no thread can be made
+// there, it runs beside @victim, as kill() did before.  A handler thread never
+// migrates itself.  Returns false, and owns nothing, if no thread was made.
+//
+// The interruption lasts until the handler first blocks: @victim may then run
+// on that CPU, and is preempted again when the handler resumes.
+//
+// A handler that spins without blocking keeps that CPU's normal threads off
+// it until it returns.  It cannot spin on a kernel spinlock held by one of
+// them: spin_lock() disables preemption, so its holder is never queued behind
+// the handler.  Application code that spins in a handler (pthread_spin_lock(),
+// a sched_yield() loop), which POSIX does not allow, can stall that CPU.
+static bool start_interrupting_handler(sched::thread *victim, pid_t pid,
                                        mmu::address_space *as,
                                        std::function<void ()> handler, int tries)
 {
     sched::cpu *where = victim->tcpu();
     auto t = sched::thread::make([=] {
-        bool held = victim->hold_here();
-        if (!held && tries < 4) {
-            // This thread's own use of @as covers the next one's start.
-            start_interrupting_handler(victim, pid, as, handler, tries + 1);
+        auto& r = current_interrupt;
+        r.pid = pid;
+        if (victim->hold_here()) {
+            r.victim = victim;
+        } else if (tries < 4 &&
+                   start_interrupting_handler(victim, pid, as, handler, tries + 1)) {
+            // The next thread owns the pid entry's hold now.  This thread's
+            // own use of @as covers that thread's start.
+            r.pid = 0;
             return;
+        } else {
+            trace_signal_interrupt_fallback(pid, tries);
+            signal_interrupt_fallbacks.fetch_add(1, std::memory_order_relaxed);
         }
         handler();
-        if (held) {
-            victim->release_hold();
-        }
-        osv::fork::release_pid_thread(pid);
+        end_interrupt();
     }, sched::thread::attr().detached().stack(65536).name("signal_handler").pin(where),
         false, true);
+    if (!t) {
+        return false;
+    }
     t->set_realtime_priority(1);
     t->set_address_space(as);
     t->start();
+    return true;
 }
 #endif
 
@@ -781,8 +836,10 @@ int kill(pid_t pid, int sig)
         if (target_as) {
             sched::thread *victim = osv::fork::hold_pid_thread(pid);
             if (victim) {
-                start_interrupting_handler(victim, pid, target_as, run_handler, 0);
-                return 0;
+                if (start_interrupting_handler(victim, pid, target_as, run_handler, 0)) {
+                    return 0;
+                }
+                osv::fork::release_pid_thread(pid);
             }
         }
 #endif
