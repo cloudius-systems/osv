@@ -674,12 +674,13 @@ public:
      */
     void unpin();
     /**
-     * Keep the thread on the calling thread's CPU: the load balancer does not
-     * move a held thread, and pin() waits until it is released.  A signal
-     * handler running there at real-time priority then interrupts the thread,
-     * which does not run until the handler first blocks or ends.  Returns
-     * false, and holds nothing, if the thread is on another CPU.  Each
-     * hold_here() that returned true is undone by one release_hold().
+     * Keep the thread on the calling thread's CPU: the load balancer and the
+     * idle CPUs' pull do not move a held thread, and pin() waits until it is
+     * released.  A signal handler running there at real-time priority then
+     * interrupts the thread, which does not run until the handler first
+     * blocks or ends.  Returns false, and holds nothing, if the thread is on
+     * another CPU.  Each hold_here() that returned true is undone by one
+     * release_hold().
      * NB: the holder must not pin() the held thread, which would wait for
      * the holder's own release.
      */
