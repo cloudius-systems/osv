@@ -29,6 +29,7 @@
 #include <osv/export.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_fork.h>
 #include <string.h>
 
 typedef float runtime_t;
@@ -632,6 +633,14 @@ public:
     static thread* current();
 #endif
     stack_info get_stack_info();
+#if CONF_fork
+    // The stack this thread runs on.  A fork child runs on a copy of its
+    // parent's stack, not on the stack its thread was created with.
+    stack_info get_running_stack_info() {
+        return _fork_stack.begin ? _fork_stack : get_stack_info();
+    }
+    void set_running_stack_info(stack_info si) { _fork_stack = si; }
+#endif
     cpu* tcpu() const __attribute__((no_instrument_function));
     status get_status() const;
     void join();
@@ -876,6 +885,9 @@ private:
     std::vector<char*> _tls;
     bool _app;
     std::shared_ptr<osv::application_runtime> _app_runtime;
+#if CONF_fork
+    stack_info _fork_stack;   // see get_running_stack_info()
+#endif
 public:
     void destroy();
 #ifdef __x86_64__
