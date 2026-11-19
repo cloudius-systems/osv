@@ -2439,6 +2439,50 @@ static void vm_sigbus(uintptr_t addr, exception_frame* ef)
 // --- fork COW write-fault resolver ----------------------------------------
 #if CONF_fork
 //
+// Walk the CURRENT address space's page tables to the 4K leaf for `addr`,
+// returning a pointer to the leaf pt_element table + the index, or nullptr if
+// there is no present 4K leaf (empty entry or a large page).  The walk takes no
+// lock of its own.  Its callers hold the address space's vmas_mutex, and the
+// page-table pages of the vma range are freed only under that lock held for
+// write or when the address space is destroyed.  handle_cow_write_fault() and
+// write_fault_needs_cow_lock() share this so the walk is written once.
+static pt_element<0> *walk_to_leaf(uintptr_t addr, unsigned &i0_out)
+{
+    // current_pt_root() returns the synthetic top (level-4) entry; follow it to
+    // the PML4 page (level-3 entries) and walk down to the 4K leaf (level 0).
+    pt_element<4> *top = current_pt_root();
+    if (top->empty()) return nullptr;
+    auto pml4 = phys_cast<pt_element<3>>(top->next_pt_addr());
+    unsigned i3 = pt_index(reinterpret_cast<void*>(addr), 3); // PML4 index
+    pt_element<3> e3 = pml4[i3];
+    if (e3.empty() || e3.large()) return nullptr;
+    auto pdpt = phys_cast<pt_element<2>>(e3.next_pt_addr());
+    unsigned i2 = pt_index(reinterpret_cast<void*>(addr), 2);
+    pt_element<2> e2 = pdpt[i2];
+    if (e2.empty() || e2.large()) return nullptr;
+    auto pd = phys_cast<pt_element<1>>(e2.next_pt_addr());
+    unsigned i1 = pt_index(reinterpret_cast<void*>(addr), 1);
+    pt_element<1> e1 = pd[i1];
+    if (e1.empty() || e1.large()) return nullptr; // 2 MB pages are not COW here
+    auto pt = phys_cast<pt_element<0>>(e1.next_pt_addr());
+    i0_out = pt_index(reinterpret_cast<void*>(addr), 0);
+    return pt;
+}
+
+// Does the current AS hold a resident, private copy-on-write leaf at `addr`
+// that handle_cow_write_fault() would copy?  A page-cache leaf is resolved by
+// the vma's own fault path (the page cache unregisters the slot, or promotes a
+// MAP_SHARED page), not copied.
+static bool write_fault_needs_cow_lock(uintptr_t addr)
+{
+    unsigned i0;
+    pt_element<0> *pt = walk_to_leaf(addr, i0);
+    if (!pt) return false;
+    pt_element<0> e0 = pt[i0];
+    if (e0.empty()) return false;
+    return pte_is_cow(e0) && !e0.sw_bit(pte_pagecache);
+}
+
 // Walk the CURRENT address space's page table to the leaf PTE for `addr`.  If
 // it is a copy-on-write page (write-protected + cow bit, set by
 // clone_address_space), allocate a fresh page, copy the shared page's contents
@@ -2447,24 +2491,9 @@ static void vm_sigbus(uintptr_t addr, exception_frame* ef)
 // COW fault.
 static bool handle_cow_write_fault(address_space *as, uintptr_t addr)
 {
-    // current_pt_root() returns the synthetic top (level-4) entry; follow it to
-    // the PML4 page (level-3 entries) and walk down to the 4K leaf (level 0).
-    pt_element<4> *top = current_pt_root();
-    if (top->empty()) return false;
-    auto pml4 = phys_cast<pt_element<3>>(top->next_pt_addr());
-    unsigned i3 = pt_index(reinterpret_cast<void*>(addr), 3); // PML4 index
-    pt_element<3> e3 = pml4[i3];
-    if (e3.empty() || e3.large()) return false;
-    auto pdpt = phys_cast<pt_element<2>>(e3.next_pt_addr());
-    unsigned i2 = pt_index(reinterpret_cast<void*>(addr), 2);
-    pt_element<2> e2 = pdpt[i2];
-    if (e2.empty() || e2.large()) return false;
-    auto pd = phys_cast<pt_element<1>>(e2.next_pt_addr());
-    unsigned i1 = pt_index(reinterpret_cast<void*>(addr), 1);
-    pt_element<1> e1 = pd[i1];
-    if (e1.empty() || e1.large()) return false;   // 2 MB pages are not COW here
-    auto pt = phys_cast<pt_element<0>>(e1.next_pt_addr());
-    unsigned i0 = pt_index(reinterpret_cast<void*>(addr), 0);
+    unsigned i0;
+    pt_element<0> *pt = walk_to_leaf(addr, i0);
+    if (!pt) return false;
     pt_element<0> e0 = pt[i0];
     if (e0.empty()) return false;
     if (!pte_is_cow(e0)) return false;
@@ -2520,31 +2549,47 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
 
     // First handle a copy-on-write write fault (fork private mappings): the
     // page is present but write-protected with the cow bit -- copy it.
-    if (mmu::is_page_fault_write(ef->get_error())) {
-        PREVENT_STACK_PAGE_FAULT
-        WITH_LOCK(as->vmas_mutex->for_write()) {
-            // A COW page in a vma that does not allow the write (it was
-            // read-only at the fork, or mprotect()ed since) is a SIGSEGV
-            // below, not a copy.  A COW page outside every vma (kernel
-            // memory in an application slot) is resolved as before.
-            auto v = find_intersecting_vma_in(*as->vmas, addr);
-            if ((v == as->vmas->end() || !access_fault(*v, ef->get_error())) &&
-                    handle_cow_write_fault(as, addr)) {
-                trace_mmu_vm_fault_ret(addr, ef->get_error());
-                return;
+    bool cow_raced;
+    do {
+        if (mmu::is_page_fault_write(ef->get_error())) {
+            PREVENT_STACK_PAGE_FAULT
+            WITH_LOCK(as->vmas_mutex->for_write()) {
+                // A COW page in a vma that does not allow the write (it was
+                // read-only at the fork, or mprotect()ed since) is a SIGSEGV
+                // below, not a copy.  A COW page outside every vma (kernel
+                // memory in an application slot) is resolved as before.
+                auto v = find_intersecting_vma_in(*as->vmas, addr);
+                if ((v == as->vmas->end() || !access_fault(*v, ef->get_error())) &&
+                        handle_cow_write_fault(as, addr)) {
+                    trace_mmu_vm_fault_ret(addr, ef->get_error());
+                    return;
+                }
             }
         }
-    }
 
-    WITH_LOCK(as->vmas_mutex->for_read()) {
-        auto vma = find_intersecting_vma_in(*as->vmas, addr);
-        if (vma == as->vmas->end() || access_fault(*vma, ef->get_error())) {
-            vm_sigsegv(addr, ef);
-            trace_mmu_vm_fault_sigsegv(addr, ef->get_error(), "slow");
-            return;
+        cow_raced = false;
+        WITH_LOCK(as->vmas_mutex->for_read()) {
+            // A fork may have COW-protected the leaf again since we checked it
+            // (another thread resolved the first COW fault, then a fork ran).
+            // vma->fault() must not see a COW leaf: for a private file mapping
+            // it would replace this AS's written private page with the file's
+            // bytes.  The fork holds the lock for write, so this check is
+            // stable while we hold it for read.
+            auto vma = find_intersecting_vma_in(*as->vmas, addr);
+            bool denied = vma != as->vmas->end() && access_fault(*vma, ef->get_error());
+            if (!denied && mmu::is_page_fault_write(ef->get_error()) &&
+                    write_fault_needs_cow_lock(addr)) {
+                cow_raced = true;
+                continue;
+            }
+            if (vma == as->vmas->end() || denied) {
+                vm_sigsegv(addr, ef);
+                trace_mmu_vm_fault_sigsegv(addr, ef->get_error(), "slow");
+                return;
+            }
+            vma->fault(addr, ef);
         }
-        vma->fault(addr, ef);
-    }
+    } while (cow_raced);
     trace_mmu_vm_fault_ret(addr, ef->get_error());
 #else // !CONF_fork -- original single-address-space fault path
     WITH_LOCK(vma_list_mutex.for_read()) {
