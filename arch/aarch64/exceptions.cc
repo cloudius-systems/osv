@@ -82,6 +82,12 @@ unsigned interrupt_table::register_handler(std::function<void ()> handler)
     return vector;
 }
 
+unsigned interrupt_table::available_vectors()
+{
+    unsigned used = _next_msi_vector.load() - _msi_vector_base;
+    return used < max_msi_handlers ? max_msi_handlers - used : 0;
+}
+
 void interrupt_table::unregister_handler(unsigned vector)
 {
     unsigned index = vector - _msi_vector_base;
