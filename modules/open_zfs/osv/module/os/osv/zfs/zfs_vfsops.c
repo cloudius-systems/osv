@@ -533,6 +533,23 @@ zfs_domount(struct mount *mp, const char *osname)
 	 */
 	zfs_set_fuid_feature(zfsvfs);
 
+	/*
+	 * Honor the dataset's recordsize.  Other platforms set z_max_blksz
+	 * from a dsl_prop_register() callback (blksz_changed_cb) before the
+	 * intent log is replayed; OSv registers no property callbacks, so
+	 * z_max_blksz stayed at SPA_OLD_MAXBLOCKSIZE and every file grew
+	 * 128 KiB records whatever recordsize said.  A small random read then
+	 * reads a whole 128 KiB record, and a small write rewrites one.  A
+	 * recordsize changed after the mount still needs a remount on OSv.
+	 */
+	{
+		uint64_t rs = 0;
+		if (dsl_prop_get_integer(osname, "recordsize", &rs, NULL) == 0 &&
+		    rs >= SPA_MINBLOCKSIZE && ISP2(rs) &&
+		    rs <= spa_maxblocksize(dmu_objset_spa(zfsvfs->z_os)))
+			zfsvfs->z_max_blksz = rs;
+	}
+
 	if (dmu_objset_is_snapshot(zfsvfs->z_os)) {
 		/*
 		 * Snapshots are always read-only.  Disable sync and
