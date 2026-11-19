@@ -920,10 +920,10 @@ void thread::pin(thread *t, cpu *target_cpu)
 }
 
 // Each path that moves another thread off its CPU runs on that CPU with
-// interrupts off and checks the hold under irq_lock: the load balancer skips
-// a held thread and pin()'s helper waits for the holds to drop.  A held
-// thread pinning itself also waits.  So once this returns true the thread
-// stays on this CPU until release_hold().
+// interrupts off and checks the hold under irq_lock: the load balancer and
+// the idle CPUs' pull skip a held thread and pin()'s helper waits for the
+// holds to drop.  A held thread pinning itself also waits.  So once this
+// returns true the thread stays on this CPU until release_hold().
 bool thread::hold_here()
 {
     WITH_LOCK(irq_lock) {
@@ -1147,7 +1147,8 @@ void cpu::donate_to_puller()
     // does, but never a fork timer-parked thread.
     auto i = std::find_if(runqueue.rbegin(), runqueue.rend(),
             [](thread& t) {
-                if (t._migration_lock_counter != 0) {
+                if (t._migration_lock_counter != 0 ||
+                    t._interrupt_holds.load(std::memory_order_seq_cst) != 0) {
                     return false;
                 }
 #if CONF_fork
