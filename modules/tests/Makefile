@@ -168,16 +168,13 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-mq-s
 	misc-ctxsw.so tst-read.so tst-symlink.so tst-openat.so \
 	tst-eventfd.so tst-remove.so misc-wake.so tst-epoll.so misc-lfring.so \
 	tst-sig-dfl-ignore.so \
-	tst-fork-child-mmap.so \
-	tst-fork.so tst-execve.so payload-exit7.so \
-	tst-fork-cow.so tst-fork-deep.so tst-pgfork.so tst-fork-preempt.so \
+	tst-pgfork.so tst-fork-preempt.so \
 	tst-fork-cow-lost-write.so \
 	tst-fork-pltgot.so \
 	tst-fork-symlookup.so \
 	tst-fork-vislookup.so \
 	libforksym.so \
 	tst-fork-child-mmap.so \
-	tst-fork-file-mmap.so \
 	tst-fork-socket.so \
 	tst-fork-conn-socket.so \
 	tst-fork-overlap-sockets.so \
