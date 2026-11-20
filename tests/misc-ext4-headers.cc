@@ -15,8 +15,9 @@
 //   misc-ext4-headers.so bad ERRNO     mount or read fails with ERRNO
 //
 // ERRNO is the error lwext4 gives for the field under test: ENOTSUP when
-// the superblock check refuses the mount, EIO when an extent header or the
-// geometry behind an uninitialized group bitmap is found corrupt. A
+// the superblock check refuses the mount (this includes the geometry
+// behind an uninitialized group bitmap), EIO when an extent header is
+// found corrupt. A
 // different errno means the bad field was not detected and some later step
 // failed by accident. For "bad" the program must also
 // return normally: PASS is printed only if the guest is still running.

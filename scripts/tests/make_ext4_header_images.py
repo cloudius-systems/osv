@@ -13,16 +13,19 @@
 #   logblock.img    superblock s_log_block_size = 22 (block size 1024 << 22)
 #   ehmax.img       /f's in-inode extent header: eh_max = eh_entries = 0xffff
 #   idx0.img        /f's in-inode extent header: eh_depth = 1, eh_entries = 0
-#   rsvgdt-max.img  group 0 BLOCK_UNINIT, s_reserved_gdt_blocks set so that
-#                   group 0's superblock, GDT and reserved GDT blocks fill
-#                   its block bitmap exactly (the largest valid value)
-#   rsvgdt-over.img the same with one block more than the bitmap holds
-#                   (CVE-2025-71474)
+#   rsvgdt-max.img  group 0 BLOCK_UNINIT, s_reserved_gdt_blocks at the
+#                   largest value the mount check accepts (a quarter block
+#                   of descriptor pointers, as Linux and mkfs.ext4)
+#   rsvgdt-over-by-one.img  the same plus one
+#   rsvgdt-over.img group 0 BLOCK_UNINIT, s_reserved_gdt_blocks so large
+#                   that group 0's superblock, GDT and reserved GDT blocks
+#                   overflow its block bitmap by one bit (CVE-2025-71474)
 #   ipg-over.img    group 0 INODE_UNINIT, s_inodes_per_group one more than
 #                   the bits in one block (CVE-2025-71473)
 #
-# The last three make lwext4 rebuild a group 0 bitmap from the superblock
-# the first time it reads an inode.
+# With BLOCK_UNINIT or INODE_UNINIT set, lwext4 rebuilds a group 0 bitmap
+# from the superblock the first time it reads an inode.  The mount check
+# refuses the last three images before that happens.
 #
 # Needs mkfs.ext4 and debugfs (e2fsprogs). Usage:
 #   scripts/tests/make_ext4_header_images.py OUTDIR
@@ -135,7 +138,8 @@ def main():
         sys.exit("expected a single block group, got %d blocks of %d per "
                  "group" % (blocks, bpg))
     bitmap_bits = BLOCK_SIZE * 8
-    for name, reserved in (("rsvgdt-max.img", bitmap_bits - 2),
+    for name, reserved in (("rsvgdt-max.img", BLOCK_SIZE // 4),
+                           ("rsvgdt-over-by-one.img", BLOCK_SIZE // 4 + 1),
                            ("rsvgdt-over.img", bitmap_bits - 1)):
         rg = variant(name)
         patch(rg, SB_OFF + SB_RESERVED_GDT, "<H", reserved)
