@@ -22,10 +22,14 @@
 #                   overflow its block bitmap by one bit (CVE-2025-71474)
 #   ipg-over.img    group 0 INODE_UNINIT, s_inodes_per_group one more than
 #                   the bits in one block (CVE-2025-71473)
+#   gdt-over.img    group 0 BLOCK_UNINIT, 8 blocks per group and a block
+#                   count near 2^32: the geometry passes the mount check,
+#                   but the 4M descriptor blocks marked in group 0's bitmap
+#                   do not fit, so only the bitmap rebuild bound stops it
 #
 # With BLOCK_UNINIT or INODE_UNINIT set, lwext4 rebuilds a group 0 bitmap
 # from the superblock the first time it reads an inode.  The mount check
-# refuses the last three images before that happens.
+# refuses rsvgdt-over-by-one, rsvgdt-over and ipg-over before that happens.
 #
 # Needs mkfs.ext4 and debugfs (e2fsprogs). Usage:
 #   scripts/tests/make_ext4_header_images.py OUTDIR
@@ -43,6 +47,7 @@ SB_OFF = 1024                 # primary superblock
 SB_LOG_BLOCK_SIZE = 24        # __le32 s_log_block_size
 SB_BLOCKS_COUNT = 0x04        # __le32 s_blocks_count_lo
 SB_BLOCKS_PER_GROUP = 0x20    # __le32 s_blocks_per_group
+SB_CLUSTERS_PER_GROUP = 0x24  # __le32 s_clusters_per_group
 SB_INODES_PER_GROUP = 0x28    # __le32 s_inodes_per_group
 SB_RESERVED_GDT = 0xCE        # __le16 s_reserved_gdt_blocks
 BG0_FLAGS = 4096 + 0x12       # __le16 bg_flags of group 0 (GDT in block 1)
@@ -144,6 +149,11 @@ def main():
         rg = variant(name)
         patch(rg, SB_OFF + SB_RESERVED_GDT, "<H", reserved)
         patch(rg, BG0_FLAGS, "<H", BG_BLOCK_UNINIT | BG_ITABLE_ZEROED)
+    gdt = variant("gdt-over.img")
+    patch(gdt, SB_OFF + SB_BLOCKS_COUNT, "<I", 0xfffffff8)
+    patch(gdt, SB_OFF + SB_BLOCKS_PER_GROUP, "<I", 8)
+    patch(gdt, SB_OFF + SB_CLUSTERS_PER_GROUP, "<I", 8)
+    patch(gdt, BG0_FLAGS, "<H", BG_BLOCK_UNINIT | BG_ITABLE_ZEROED)
     ipg = variant("ipg-over.img")
     patch(ipg, SB_OFF + SB_INODES_PER_GROUP, "<I", bitmap_bits + 1)
     patch(ipg, BG0_FLAGS, "<H", BG_INODE_UNINIT | BG_ITABLE_ZEROED)
