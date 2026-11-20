@@ -2362,9 +2362,9 @@ public:
         // NOT free this frame: it is a jointly-owned shared-anon page in the
         // global registry, not this AS's private COW copy.  Without this, the
         // first backend to exit frees the shared frame and later siblings read
-        // freed/zeroed memory.
+        // freed/zeroed memory.  The write bit stays as the caller built it from
+        // the vma's protection, so a PROT_READ mapping maps the page read-only.
         pte = pte_mark_cow(pte, false);
-        pte.set_writable(true);
         pte.set_sw_bit(pte_shared, true);
         return write_pte(page, ptep, pte);
     }
