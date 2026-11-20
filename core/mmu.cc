@@ -374,6 +374,29 @@ static bool addr_is_privatize(uintptr_t va)
 static vma_list_type *cow_parent_vmas;
 static bool parent_vma_writable(uintptr_t va); // defined below
 
+// A leaf the parent maps copy-on-write at @ppte is about to be shared with a
+// fork child: it lies in a share range (a user-supplied thread stack that an
+// earlier fork saw as private memory).  An earlier child may still map its
+// frame, so clearing COW in place would let the parent's later writes reach
+// that child.  Give the parent a private copy of the page instead, with the
+// COW bit clear, as its own write fault would, and return the new PTE.
+// Other parent threads keep running during the fork, and a CPU may still hold
+// a TLB entry for the old frame, so the copy is installed and flushed at once:
+// otherwise one thread could write the copy while another still read the old
+// frame through its stale entry.  The old frame itself stays read-only.
+static pt_element<0> cow_break_for_share(pt_element<0> *ppte)
+{
+    pt_element<0> pte = *ppte;
+    void *priv = memory::alloc_page();
+    memcpy(priv, phys_to_virt(pte.addr()), page_size);
+    pt_element<0> npte = pte_mark_cow(pte, false);
+    npte.set_sw_bit(pte_shared, false);
+    npte.set_addr(virt_to_phys(priv), false);
+    *ppte = npte;
+    flush_tlb_all();
+    return npte;
+}
+
 // The parent must hold vma_list_mutex for write while this runs.  base_virt is
 // the virtual address that leaf entry 0 of this PT maps.
 static void clone_pt_level0(pt_element<0> *parent_pt, pt_element<0> *child_pt,
@@ -421,7 +444,7 @@ static void clone_pt_level0(pt_element<0> *parent_pt, pt_element<0> *child_pt,
             // pte_shared so teardown does not free the jointly-owned frame.
             pt_element<0> sh = ppte;
             if (pte_is_cow(sh)) {
-                sh = pte_mark_cow(sh, false);
+                sh = cow_break_for_share(&parent_pt[i]);
                 sh.set_writable(parent_vma_writable(va));
             }
             parent_pt[i] = sh;
