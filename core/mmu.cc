@@ -369,6 +369,11 @@ static bool addr_is_privatize(uintptr_t va)
     return sorted_ranges_contain(cow_privatize_sorted, va, memo_privatize);
 }
 
+// The parent's vma list while clone_address_space() walks its page tables,
+// under the same lock and lifetime as cow_share_ranges.
+static vma_list_type *cow_parent_vmas;
+static bool parent_vma_writable(uintptr_t va); // defined below
+
 // The parent must hold vma_list_mutex for write while this runs.  base_virt is
 // the virtual address that leaf entry 0 of this PT maps.
 static void clone_pt_level0(pt_element<0> *parent_pt, pt_element<0> *child_pt,
@@ -405,16 +410,20 @@ static void clone_pt_level0(pt_element<0> *parent_pt, pt_element<0> *child_pt,
             pv.set_addr(virt_to_phys(child_page), false);
             child_pt[i] = pv;
         } else if (addr_is_shared(va)) {
-            // Stack / MAP_SHARED page: must stay genuinely shared + writable in
-            // both parent and child (never COW).  Clear any COW bit and grant
-            // write so both sides see each other's writes to the same phys
-            // page.  Tag the child's copy pte_shared so teardown does not free
-            // the jointly-owned physical frame.
+            // Stack / MAP_SHARED page: must stay genuinely shared in both
+            // parent and child (never COW), so both sides see each other's
+            // writes to the same phys page.  A COW bit here is left from an
+            // earlier fork that found the page outside every share range (a
+            // user-supplied thread stack, say): clear it, and let the vma's
+            // protection decide whether the page is writable again.  Any other
+            // leaf keeps the parent's write permission, so a read-only shared
+            // mapping stays read-only on both sides.  Tag the child's copy
+            // pte_shared so teardown does not free the jointly-owned frame.
             pt_element<0> sh = ppte;
             if (pte_is_cow(sh)) {
                 sh = pte_mark_cow(sh, false);
+                sh.set_writable(parent_vma_writable(va));
             }
-            sh.set_writable(true);
             parent_pt[i] = sh;
             sh.set_sw_bit(pte_shared, true);
             child_pt[i] = sh;
@@ -620,6 +629,7 @@ address_space *clone_address_space(address_space *parent)
         });
         cow_share_ranges = &share_ranges;
         cow_privatize_ranges = &privatize_ranges;
+        cow_parent_vmas = parent->vmas;
         // Build the sorted/coalesced lookup views ONCE per fork, after both
         // range vectors are final and before the clone walk that queries them
         // per PTE.  Same predicate, O(log n) per lookup instead of O(n).
@@ -651,6 +661,7 @@ address_space *clone_address_space(address_space *parent)
         }
         cow_share_ranges = nullptr;
         cow_privatize_ranges = nullptr;
+        cow_parent_vmas = nullptr;
         live_child_address_spaces.fetch_add(1, std::memory_order_relaxed);
 
         // Any write-protection we applied to the parent's page tables above
@@ -1715,6 +1726,17 @@ static inline vma_list_type::iterator
 find_intersecting_vma(uintptr_t addr) {
     return find_intersecting_vma_in(vma_list, addr);
 }
+
+#if CONF_fork
+// Whether the parent's vma at @va allows writes.  An address in a share range
+// with no vma (a thread stack the application supplied from memory it did not
+// mmap) is writable, as a stack must be.
+static bool parent_vma_writable(uintptr_t va)
+{
+    auto v = find_intersecting_vma_in(*cow_parent_vmas, va);
+    return v == cow_parent_vmas->end() || (v->perm() & perm_write);
+}
+#endif
 
 // Find the list of vmas which intersect a given address range. Because the
 // vmas are sorted in vma_list, the result is a consecutive slice of vma_list,
