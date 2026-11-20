@@ -92,12 +92,12 @@ struct hash<pagecache::arc_hashkey> {
     }
 };
 
-std::unordered_set<mmu::hw_ptep<0>>::iterator begin(std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>> const& e)
+std::vector<mmu::hw_ptep<0>>::iterator begin(std::unique_ptr<std::vector<mmu::hw_ptep<0>>> const& e)
 {
     return e->begin();
 }
 
-std::unordered_set<mmu::hw_ptep<0>>::iterator end(std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>> const& e)
+std::vector<mmu::hw_ptep<0>>::iterator end(std::unique_ptr<std::vector<mmu::hw_ptep<0>>> const& e)
 {
     return e->end();
 }
@@ -123,8 +123,13 @@ class cached_page {
 protected:
     const hashkey _key;
     void* _page;
-    typedef boost::variant<std::nullptr_t, mmu::hw_ptep<0>, std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>>> ptep_list;
-    ptep_list _ptes; // set of pointers to ptes that map the page
+    // The slots (pointers to PTEs) that map the page.  A page a forking
+    // server has mapped holds one slot per live child, and each fork adds and
+    // each child's exit removes one, so the list of several slots is a vector:
+    // once grown it neither allocates nor frees on those paths.  A slot is
+    // listed at most once, as it was in the hash set this replaces.
+    typedef boost::variant<std::nullptr_t, mmu::hw_ptep<0>, std::unique_ptr<std::vector<mmu::hw_ptep<0>>>> ptep_list;
+    ptep_list _ptes;
 
     template<typename T>
     class ptes_visitor : public boost::static_visitor<T> {
@@ -141,12 +146,16 @@ protected:
             _ptes = _ptep;
         }
         void operator()(mmu::hw_ptep<0>& ptep) {
-            auto ptes = std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>>(new std::unordered_set<mmu::hw_ptep<0>>({ptep}));
-            ptes->emplace(_ptep);
+            if (ptep == _ptep) {
+                return;
+            }
+            auto ptes = std::unique_ptr<std::vector<mmu::hw_ptep<0>>>(new std::vector<mmu::hw_ptep<0>>({ptep, _ptep}));
             _ptes = std::move(ptes);
         }
-        void operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>>& set) {
-            set->emplace(_ptep);
+        void operator()(std::unique_ptr<std::vector<mmu::hw_ptep<0>>>& set) {
+            if (std::find(set->begin(), set->end(), _ptep) == set->end()) {
+                set->push_back(_ptep);
+            }
         }
     };
     class ptep_remove : public ptes_visitor<int> {
@@ -172,10 +181,14 @@ protected:
             }
             return 1;
         }
-        int operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>>& set) {
-            set->erase(_ptep);
+        int operator()(std::unique_ptr<std::vector<mmu::hw_ptep<0>>>& set) {
+            auto it = std::find(set->begin(), set->end(), _ptep);
+            if (it != set->end()) {
+                *it = set->back();
+                set->pop_back();
+            }
             if (set->size() == 1) {
-                auto pte = *(set->begin());
+                auto pte = set->front();
                 _ptes = pte;
                 return 1;
             }
@@ -197,7 +210,7 @@ protected:
         Ret operator()(mmu::hw_ptep<0>& ptep) {
             return _reducer(_initial, _mapper(ptep));
         }
-        Ret operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>>& set) {
+        Ret operator()(std::unique_ptr<std::vector<mmu::hw_ptep<0>>>& set) {
             Ret acc = _initial;
             for (auto&& i: set) {
               acc = _reducer(acc, _mapper(i));
@@ -264,8 +277,8 @@ public:
         if (auto p = boost::get<mmu::hw_ptep<0>>(&_ptes)) {
             return *p == ptep;
         }
-        if (auto set = boost::get<std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>>>(&_ptes)) {
-            return (*set)->count(ptep);
+        if (auto set = boost::get<std::unique_ptr<std::vector<mmu::hw_ptep<0>>>>(&_ptes)) {
+            return std::find((*set)->begin(), (*set)->end(), ptep) != (*set)->end();
         }
         return false;
     }
