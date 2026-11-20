@@ -1,29 +1,37 @@
 Reject crafted group descriptors and a zero mkfs block size
 
-Backport of three memory-safety fixes from the Aladdin-R-D/lwext4 fork
-(https://github.com/Aladdin-R-D/lwext4), carried until lwext4 or the
-osvunikernel fork picks them up.  The error codes are normalized here to
-match ext4_extent.c (EIO for a corrupt on-disk value found at mount,
-EINVAL for a bad mkfs argument) rather than the fork's ENXIO/EFAULT/ENOMEM.
+Backports, carried until lwext4 or the osvunikernel fork picks them up:
 
-- 2f5714d42 (out-of-bounds write in the block and inode bitmap init):
-  bit_max and inodes_per_group come straight from the group descriptor
-  and superblock, so a crafted image can drive ext4_bmap_bit_set() and
-  the memset() past the end of the one-block bitmap buffer.  Bound both
-  against the block size before touching the buffer.  Not covered by the
-  extent/superblock checks already in this PR.
-- 1d32b2f17 (NULL dereference in ext4_dir_en_get_name_len): guard the
+- From gkostka/lwext4 PR #111, commit
+  b9c842f168e6044bd03fe34e1237eda33c299908 (Chris Thomas), src/ext4_fs.c
+  only, byte for byte: bound the block and inode bitmap rebuild of an
+  uninitialized group.  bit_max (from s_reserved_gdt_blocks and the GDT
+  geometry) and inodes_per_group come straight from the superblock, so a
+  crafted image drives ext4_bmap_bit_set() and the memset() past the end
+  of the one-block bitmap buffer.  Each is now checked against
+  block_size * 8 bits, and so are the bitmap, inode bitmap and inode
+  table blocks marked in the group's own bitmap.  On error the bitmap
+  block reference is released before returning EIO.  Fixes
+  CVE-2025-71474 (ext4_fs_init_block_bitmap(), crafted
+  s_reserved_gdt_blocks with BLOCK_UNINIT) and CVE-2025-71473
+  (ext4_fs_init_inode_bitmap(), crafted s_inodes_per_group).  The mount
+  time geometry check in ext4_super.c from the same commit is not
+  carried; the bounds here are where the writes happen.
+- From the Aladdin-R-D/lwext4 fork (https://github.com/Aladdin-R-D/lwext4),
+  1d32b2f17 (NULL dereference in ext4_dir_en_get_name_len): guard the
   directory entry pointer in this hot untrusted dir-read helper.
-- fa299459e (division by zero in create_fs_aux_info): reject a zero
-  block size before dividing by it in the mkfs path.
+- From the same fork, fa299459e (division by zero in
+  create_fs_aux_info): reject a zero block size before dividing by it in
+  the mkfs path, with EINVAL rather than the fork's EFAULT.
 
-Applies to osvunikernel/lwext4 6f6d8f7c509da696e71e80cc5a59abfc48e4971b.
+Applies to osvunikernel/lwext4 6f6d8f7c509da696e71e80cc5a59abfc48e4971b
+after 0001.
 
 diff --git a/include/ext4_dir.h b/include/ext4_dir.h
-index 1111111..2222222 100644
+index d0d13a2..9a4fe94 100644
 --- a/include/ext4_dir.h
 +++ b/include/ext4_dir.h
-@@ -123,6 +123,9 @@ static inline uint16_t ext4_dir_en_get_name_len(struct ext4_sblock *sb,
+@@ -123,6 +123,9 @@ static inline void ext4_dir_en_set_entry_len(struct ext4_dir_en *de, uint16_t l)
  static inline uint16_t ext4_dir_en_get_name_len(struct ext4_sblock *sb,
  						struct ext4_dir_en *de)
  {
@@ -34,32 +42,121 @@ index 1111111..2222222 100644
  
  	if ((ext4_get32(sb, rev_level) == 0) &&
 diff --git a/src/ext4_fs.c b/src/ext4_fs.c
-index 3333333..4444444 100644
+index 26d25a0..cd71d61 100644
 --- a/src/ext4_fs.c
 +++ b/src/ext4_fs.c
-@@ -329,6 +329,10 @@ static int ext4_fs_init_block_bitmap(struct ext4_block_group_ref *bg_ref)
+@@ -283,6 +283,23 @@ static void ext4_fs_mark_bitmap_end(int start_bit, int end_bit, void *bitmap)
+ 		memset((char *)bitmap + (i >> 3), 0xff, (end_bit - i) >> 3);
+ }
+ 
++/**@brief Mark a metadata block of a group in the group's block bitmap.
++ * @param bitmap      block bitmap data
++ * @param bitmap_bits number of bits in the bitmap
++ * @param first_bg    first block of the group
++ * @param blk         block to mark
++ * @return Error code (EIO if the block is outside of the bitmap)
++ */
++static int ext4_fs_bitmap_mark_block(uint8_t *bitmap, uint32_t bitmap_bits,
++				     ext4_fsblk_t first_bg, ext4_fsblk_t blk)
++{
++	if (blk < first_bg || blk - first_bg >= bitmap_bits)
++		return EIO;
++
++	ext4_bmap_bit_set(bitmap, (uint32_t)(blk - first_bg));
++	return EOK;
++}
++
+ /**@brief Initialize block bitmap in block group.
+  * @param bg_ref Reference to block group
+  * @return Error code
+@@ -311,6 +328,7 @@ static int ext4_fs_init_block_bitmap(struct ext4_block_group_ref *bg_ref)
+ 	bool meta_bg = ext4_sb_feature_incom(sb, EXT4_FINCOM_META_BG);
+ 
+ 	uint32_t inode_table_bcnt = inodes_per_group * inode_size / block_size;
++	uint32_t bitmap_bits = block_size * 8;
+ 
+ 	struct ext4_block block_bitmap;
+ 	rc = ext4_trans_block_get_noread(bg_ref->fs->bdev, &block_bitmap, bmp_blk);
+@@ -329,6 +347,13 @@ static int ext4_fs_init_block_bitmap(struct ext4_block_group_ref *bg_ref)
  	} else { /* For META_BG_BLOCK_GROUPS */
  		bit_max += ext4_bg_num_gdb(sb, bg_ref->index);
  	}
 +
-+	if ((bit_max >> 3) > block_size)
-+		return EIO;
++	/* The group's own metadata has to fit in its bitmap */
++	if (bit_max > bitmap_bits) {
++		rc = EIO;
++		goto fail;
++	}
 +
  	for (bit = 0; bit < bit_max; bit++)
  		ext4_bmap_bit_set(block_bitmap.data, bit);
  
-@@ -400,6 +404,9 @@ static int ext4_fs_init_inode_bitmap(struct ext4_block_group_ref *bg_ref)
+@@ -349,20 +374,30 @@ static int ext4_fs_init_block_bitmap(struct ext4_block_group_ref *bg_ref)
+ 
+ 	bool in_bg;
+ 	in_bg = ext4_block_in_group(sb, bmp_blk, bg_ref->index);
+-	if (!flex_bg || in_bg)
+-		ext4_bmap_bit_set(block_bitmap.data,
+-				  (uint32_t)(bmp_blk - first_bg));
++	if (!flex_bg || in_bg) {
++		rc = ext4_fs_bitmap_mark_block(block_bitmap.data, bitmap_bits,
++					       first_bg, bmp_blk);
++		if (rc != EOK)
++			goto fail;
++	}
+ 
+ 	in_bg = ext4_block_in_group(sb, bmp_inode, bg_ref->index);
+-	if (!flex_bg || in_bg)
+-		ext4_bmap_bit_set(block_bitmap.data,
+-				  (uint32_t)(bmp_inode - first_bg));
++	if (!flex_bg || in_bg) {
++		rc = ext4_fs_bitmap_mark_block(block_bitmap.data, bitmap_bits,
++					       first_bg, bmp_inode);
++		if (rc != EOK)
++			goto fail;
++	}
+ 
+         for (i = inode_table; i < inode_table + inode_table_bcnt; i++) {
+ 		in_bg = ext4_block_in_group(sb, i, bg_ref->index);
+-		if (!flex_bg || in_bg)
+-			ext4_bmap_bit_set(block_bitmap.data,
+-					  (uint32_t)(i - first_bg));
++		if (!flex_bg || in_bg) {
++			rc = ext4_fs_bitmap_mark_block(block_bitmap.data,
++						       bitmap_bits, first_bg,
++						       i);
++			if (rc != EOK)
++				goto fail;
++		}
+ 	}
+         /*
+          * Also if the number of blocks within the group is
+@@ -377,6 +412,10 @@ static int ext4_fs_init_block_bitmap(struct ext4_block_group_ref *bg_ref)
+ 
+ 	/* Save bitmap */
+ 	return ext4_block_set(bg_ref->fs->bdev, &block_bitmap);
++
++fail:
++	ext4_block_set(bg_ref->fs->bdev, &block_bitmap);
++	return rc;
+ }
+ 
+ /**@brief Initialize i-node bitmap in block group.
+@@ -401,6 +440,12 @@ static int ext4_fs_init_inode_bitmap(struct ext4_block_group_ref *bg_ref)
  	uint32_t block_size = ext4_sb_get_block_size(sb);
  	uint32_t inodes_per_group = ext4_get32(sb, inodes_per_group);
  
-+	if (((inodes_per_group + 7) / 8) > block_size)
++	/* The bitmap of a group has to fit in a single block */
++	if (inodes_per_group > block_size * 8) {
++		ext4_block_set(bg_ref->fs->bdev, &b);
 +		return EIO;
++	}
 +
  	memset(b.data, 0, (inodes_per_group + 7) / 8);
  
  	uint32_t start_bit = inodes_per_group;
 diff --git a/src/ext4_mkfs.c b/src/ext4_mkfs.c
-index 5555555..6666666 100644
+index 0dfc91f..cc8ccf1 100644
 --- a/src/ext4_mkfs.c
 +++ b/src/ext4_mkfs.c
 @@ -148,6 +148,9 @@ static bool has_superblock(struct ext4_mkfs_info *info, uint32_t bgid)
