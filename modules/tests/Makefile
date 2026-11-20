@@ -287,6 +287,7 @@ internal-api-tests += tst-fork-xcpu-free.so
 tests += tst-fork-pthread-self.so
 tests += tst-fork-nested.so
 tests += tst-fork-shared-ro.so
+tests += tst-fork-stack-reshare.so
 
 # tst-pmu calls the kernel's x64 PMU readout, which only conf_pmu=1 builds.
 ifeq ($(arch),x64)
