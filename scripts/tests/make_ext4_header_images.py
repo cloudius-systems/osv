@@ -6,13 +6,23 @@
 # BSD license as described in the LICENSE file in the top-level directory.
 #
 # Builds the ext4 images used by tests/misc-ext4-headers.cc: one valid image
-# holding /f, and three copies that each change one header field to a value
-# Linux refuses at mount or read time.
+# holding /f, and copies that each change one or two header fields.  All but
+# rsvgdt-max.img hold a value lwext4 has to refuse at mount or read time.
 #
-#   good.img      unchanged
-#   logblock.img  superblock s_log_block_size = 22 (block size 1024 << 22)
-#   ehmax.img     /f's in-inode extent header: eh_max = eh_entries = 0xffff
-#   idx0.img      /f's in-inode extent header: eh_depth = 1, eh_entries = 0
+#   good.img        unchanged
+#   logblock.img    superblock s_log_block_size = 22 (block size 1024 << 22)
+#   ehmax.img       /f's in-inode extent header: eh_max = eh_entries = 0xffff
+#   idx0.img        /f's in-inode extent header: eh_depth = 1, eh_entries = 0
+#   rsvgdt-max.img  group 0 BLOCK_UNINIT, s_reserved_gdt_blocks set so that
+#                   group 0's superblock, GDT and reserved GDT blocks fill
+#                   its block bitmap exactly (the largest valid value)
+#   rsvgdt-over.img the same with one block more than the bitmap holds
+#                   (CVE-2025-71474)
+#   ipg-over.img    group 0 INODE_UNINIT, s_inodes_per_group one more than
+#                   the bits in one block (CVE-2025-71473)
+#
+# The last three make lwext4 rebuild a group 0 bitmap from the superblock
+# the first time it reads an inode.
 #
 # Needs mkfs.ext4 and debugfs (e2fsprogs). Usage:
 #   scripts/tests/make_ext4_header_images.py OUTDIR
@@ -28,6 +38,15 @@ import tempfile
 CONTENT = b"lwext4 header test\n"
 SB_OFF = 1024                 # primary superblock
 SB_LOG_BLOCK_SIZE = 24        # __le32 s_log_block_size
+SB_BLOCKS_COUNT = 0x04        # __le32 s_blocks_count_lo
+SB_BLOCKS_PER_GROUP = 0x20    # __le32 s_blocks_per_group
+SB_INODES_PER_GROUP = 0x28    # __le32 s_inodes_per_group
+SB_RESERVED_GDT = 0xCE        # __le16 s_reserved_gdt_blocks
+BG0_FLAGS = 4096 + 0x12       # __le16 bg_flags of group 0 (GDT in block 1)
+BG_INODE_UNINIT = 0x1
+BG_BLOCK_UNINIT = 0x2
+BG_ITABLE_ZEROED = 0x4
+BLOCK_SIZE = 4096
 EXT4_EXTENTS_FL = 0x80000
 I_FLAGS = 0x20                # __le32 i_flags in the on-disk inode
 I_BLOCK = 0x28                # 60-byte i_block, holds the extent root
@@ -102,6 +121,28 @@ def main():
     idx = variant("idx0.img")
     patch(idx, ino + I_BLOCK + 2, "<H", 0)       # eh_entries
     patch(idx, ino + I_BLOCK + 6, "<H", 1)       # eh_depth
+
+    # Group 0 holds the superblock, one GDT block (the image has a single
+    # group) and the reserved GDT blocks, so lwext4 marks 2 + reserved bits
+    # before anything else.  ITABLE_ZEROED keeps it from zeroing the inode
+    # table.
+    with open(good, "rb") as f:
+        f.seek(SB_OFF + SB_BLOCKS_COUNT)
+        blocks, = struct.unpack("<I", f.read(4))
+        f.seek(SB_OFF + SB_BLOCKS_PER_GROUP)
+        bpg, = struct.unpack("<I", f.read(4))
+    if blocks > bpg:
+        sys.exit("expected a single block group, got %d blocks of %d per "
+                 "group" % (blocks, bpg))
+    bitmap_bits = BLOCK_SIZE * 8
+    for name, reserved in (("rsvgdt-max.img", bitmap_bits - 2),
+                           ("rsvgdt-over.img", bitmap_bits - 1)):
+        rg = variant(name)
+        patch(rg, SB_OFF + SB_RESERVED_GDT, "<H", reserved)
+        patch(rg, BG0_FLAGS, "<H", BG_BLOCK_UNINIT | BG_ITABLE_ZEROED)
+    ipg = variant("ipg-over.img")
+    patch(ipg, SB_OFF + SB_INODES_PER_GROUP, "<I", bitmap_bits + 1)
+    patch(ipg, BG0_FLAGS, "<H", BG_INODE_UNINIT | BG_ITABLE_ZEROED)
     print("inode /f at byte %d; images in %s" % (ino, out))
 
 
