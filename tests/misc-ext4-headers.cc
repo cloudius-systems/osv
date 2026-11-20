@@ -7,17 +7,18 @@
 
 // Mounts the ext4 image attached as the second disk (/dev/vblk1) and reads
 // /f from it. scripts/tests/make_ext4_header_images.py builds one valid
-// image and three with a single out-of-range header field each; boot once
-// per image. The test needs that disk and an argument, so it is a misc-
-// test, which scripts/test.py does not run on its own:
+// image and copies with out-of-range header fields; boot once per image.
+// The test needs that disk and an argument, so it is a misc-test, which
+// scripts/test.py does not run on its own:
 //
 //   misc-ext4-headers.so good          mount and read succeed, contents match
 //   misc-ext4-headers.so bad ERRNO     mount or read fails with ERRNO
 //
 // ERRNO is the error lwext4 gives for the field under test: ENOTSUP when
-// the superblock check refuses the mount, EIO when an extent header is
-// found corrupt. A different errno means the bad field was not detected
-// and some later step failed by accident. For "bad" the program must also
+// the superblock check refuses the mount, EIO when an extent header or the
+// geometry behind an uninitialized group bitmap is found corrupt. A
+// different errno means the bad field was not detected and some later step
+// failed by accident. For "bad" the program must also
 // return normally: PASS is printed only if the guest is still running.
 
 #include <sys/mount.h>
