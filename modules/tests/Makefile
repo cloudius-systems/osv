@@ -244,6 +244,7 @@ internal-api-tests += tst-fork-xcpu-free.so
 tests += tst-fork-pthread-self.so
 tests += tst-fork-nested.so
 tests += tst-fork-shared-ro.so
+tests += tst-fork-stack-reshare.so
 
 # Tests with special compilation parameters needed...
 $(out)/tests/tst-mmap.so: COMMON += -Wl,-z,now
