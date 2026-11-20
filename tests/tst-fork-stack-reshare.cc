@@ -16,7 +16,9 @@
 // second fork runs, the parent overwrites the filled pages, and the first
 // child, which has been waiting, must still read the values from before its
 // fork.  The second child is checked too: it shares the stack with the parent
-// and reads what the parent held at the second fork.
+// and reads what the parent held at the second fork.  The whole sequence then
+// repeats, and free memory must come back once the children and the thread
+// are gone: the page the parent copied away from must be freed.
 
 #include <errno.h>
 #include <pthread.h>
@@ -24,6 +26,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <sys/mman.h>
+#include <sys/sysinfo.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
@@ -31,6 +34,11 @@ static const size_t PG = 4096;
 static const size_t STACK = 1 << 20;
 static const size_t STACK_TOP = 256 << 10;   // the thread's own frames
 static const size_t FILLED = STACK - STACK_TOP;
+static const int LEAK_ROUNDS = 100;
+// A round fills FILLED bytes of stack; losing the old copy of each page loses
+// most of them.  Allow half: the kernel's own per-thread and per-child memory
+// moves free memory by up to about a quarter of that.
+static const long LIMIT_BYTES_PER_ROUND = FILLED / 2;
 
 static int failures;
 
@@ -87,6 +95,97 @@ static int reap(pid_t pid)
     return WEXITSTATUS(st);
 }
 
+static void check(bool verbose, bool ok, const char *what)
+{
+    if (verbose || !ok) {
+        expect(ok, what);
+    }
+}
+
+static long free_bytes()
+{
+    struct sysinfo si;
+    if (sysinfo(&si) != 0) {
+        return -1;
+    }
+    return (long)si.freeram * si.mem_unit;
+}
+
+// One round: fork a child over the filled mapping, make the mapping a thread
+// stack, fork again, overwrite it, and check both children.  Prints each
+// check when @verbose, and only failures otherwise.
+static void round_trip(bool verbose)
+{
+    // Fill the stack's lower part only.  The top, where the thread will run,
+    // stays unpopulated at the first fork, so the thread never starts on a
+    // copy-on-write page.
+    char *st = static_cast<char *>(mmap(nullptr, STACK, PROT_READ | PROT_WRITE,
+                                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
+    int go[2], park_pipe[2];
+    if (st == MAP_FAILED || pipe(go) || pipe(park_pipe)) {
+        printf("FAIL: setup (errno %d)\n", errno);
+        failures++;
+        return;
+    }
+    for (size_t off = 0; off < FILLED; off += PG) {
+        *word(st, off) = before_fork(off);
+    }
+
+    pid_t first = fork();
+    if (first == 0) {
+        char c;
+        if (read(go[0], &c, 1) != 1) {
+            _exit(100);
+        }
+        int bad = mismatches(st, before_fork);
+        if (verbose) {
+            printf("first child: %d of %zu pages changed since its fork\n",
+                   bad, FILLED / PG);
+        }
+        _exit(bad ? 1 : 0);
+    }
+
+    pthread_attr_t a;
+    pthread_t t;
+    pthread_attr_init(&a);
+    pthread_attr_setstack(&a, st, STACK);
+    if (pthread_create(&t, &a, park, &park_pipe[0])) {
+        printf("FAIL: pthread_create (errno %d)\n", errno);
+        failures++;
+        return;
+    }
+    sleep(1);
+
+    pid_t second = fork();
+    if (second == 0) {
+        _exit(mismatches(st, before_fork) ? 1 : 0);
+    }
+    check(verbose, reap(second) == 0, "the second child reads the stack as "
+          "the parent held it at the second fork");
+
+    for (size_t off = 0; off < FILLED; off += PG) {
+        *word(st, off) = after_fork(off);
+    }
+    if (write(go[1], "g", 1) != 1) {
+        printf("FAIL: pipe write\n");
+        failures++;
+    }
+    check(verbose, reap(first) == 0, "the first child does not see the "
+          "parent's writes to memory that became a stack after its fork");
+    check(verbose, mismatches(st, after_fork) == 0,
+          "the parent reads its own writes");
+
+    if (write(park_pipe[1], "x", 1) != 1) {
+        failures++;
+    }
+    pthread_join(t, nullptr);
+    munmap(st, STACK);
+    close(go[0]);
+    close(go[1]);
+    close(park_pipe[0]);
+    close(park_pipe[1]);
+}
+
 int main()
 {
     setvbuf(stdout, nullptr, _IONBF, 0);
@@ -104,65 +203,24 @@ int main()
     }
     reap(probe);
 
-    // Fill the stack's lower part only.  The top, where the thread will run,
-    // stays unpopulated at the first fork, so the thread never starts on a
-    // copy-on-write page.
-    char *st = static_cast<char *>(mmap(nullptr, STACK, PROT_READ | PROT_WRITE,
-                                        MAP_PRIVATE | MAP_ANONYMOUS, -1, 0));
-    int go[2], park_pipe[2];
-    if (st == MAP_FAILED || pipe(go) || pipe(park_pipe)) {
-        printf("FAIL: setup (errno %d)\nSUMMARY: 1 failures\n", errno);
-        return 1;
-    }
-    for (size_t off = 0; off < FILLED; off += PG) {
-        *word(st, off) = before_fork(off);
-    }
+    round_trip(true);
 
-    pid_t first = fork();
-    if (first == 0) {
-        char c;
-        if (read(go[0], &c, 1) != 1) {
-            _exit(100);
-        }
-        int bad = mismatches(st, before_fork);
-        printf("first child: %d of %zu pages changed since its fork\n", bad,
-               FILLED / PG);
-        _exit(bad ? 1 : 0);
-    }
-
-    pthread_attr_t a;
-    pthread_t t;
-    pthread_attr_init(&a);
-    pthread_attr_setstack(&a, st, STACK);
-    if (pthread_create(&t, &a, park, &park_pipe[0])) {
-        printf("FAIL: pthread_create (errno %d)\nSUMMARY: 1 failures\n", errno);
-        return 1;
+    for (int r = 0; r < 5; r++) {
+        round_trip(false);
     }
     sleep(1);
-
-    pid_t second = fork();
-    if (second == 0) {
-        _exit(mismatches(st, before_fork) ? 1 : 0);
+    long before = free_bytes();
+    for (int r = 0; r < LEAK_ROUNDS; r++) {
+        round_trip(false);
     }
-    expect(reap(second) == 0, "the second child reads the stack as the parent "
-           "held it at the second fork");
-
-    for (size_t off = 0; off < FILLED; off += PG) {
-        *word(st, off) = after_fork(off);
-    }
-    if (write(go[1], "g", 1) != 1) {
-        printf("FAIL: pipe write\n");
-        failures++;
-    }
-    expect(reap(first) == 0, "the first child does not see the parent's writes "
-           "to memory that became a thread stack after its fork");
-    expect(mismatches(st, after_fork) == 0, "the parent reads its own writes");
-
-    if (write(park_pipe[1], "x", 1) != 1) {
-        failures++;
-    }
-    pthread_join(t, nullptr);
-    munmap(st, STACK);
+    sleep(1);
+    long after = free_bytes();
+    long per_round = (before - after) / LEAK_ROUNDS;
+    printf("free memory %ld -> %ld KiB over %d rounds: %ld bytes per round "
+           "(limit %ld)\n", before / 1024, after / 1024, LEAK_ROUNDS, per_round,
+           LIMIT_BYTES_PER_ROUND);
+    expect(per_round <= LIMIT_BYTES_PER_ROUND,
+           "memory comes back after each round");
     printf("SUMMARY: %d failures\n", failures);
     return failures ? 1 : 0;
 }
