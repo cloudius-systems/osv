@@ -1,18 +1,13 @@
 Validate ext4 extent headers and the superblock block size at mount
 
-Backport of two proposed upstream lwext4 fixes, needed until lwext4 or
-the osvunikernel fork carries them:
-
-- gkostka/lwext4 PR #107, commit 2d3407305c2d5f9b40d8209fc0a15a4d3d2d2feb
-  (Chris Thomas), src/ext4_extent.c only: bound eh_max by the capacity of
-  the buffer holding the extent header, require eh_entries > 0 for index
-  nodes, cap the depth at 5, and check the root header in the inode
-  before walking the tree. Fixes lwext4 issues #100 and #91
-  (CVE-2025-70101).
-- From gkostka/lwext4 PR #111, commit 7b6535051575455303b6686a9411e0537e63af41
-  (Chris Thomas), only the s_log_block_size range check, written here in
-  ext4_sb_check(): reject log_block_size > 6 (1 KiB..64 KiB, as Linux).
-  Fixes lwext4 issue #90 (CVE-2025-70100).
+Backport of gkostka/lwext4 PR #107, commit
+4cd3485702a0b174c5a308a793ae1b7b0b3fbf5b (Christopher Thomas), library
+part only, byte for byte (its tests are not carried): bound eh_max by
+the capacity of the buffer holding the extent header, require
+eh_entries > 0 for index nodes, cap the depth at 5, and check the root
+header in the inode before walking the tree.  Fixes lwext4 issues #100
+and #91 (CVE-2025-70101).  The s_log_block_size bound (lwext4 issue #90,
+CVE-2025-70100) comes with 0002.
 
 Applies to osvunikernel/lwext4 6f6d8f7c509da696e71e80cc5a59abfc48e4971b.
 
@@ -106,19 +101,3 @@ index abac59b..a6bee80 100644
  	if (path) {
  		ext4_ext_drop_refs(inode_ref, path, 0);
  		if (depth > path[0].maxdepth) {
-diff --git a/src/ext4_super.c b/src/ext4_super.c
-index 092c38b..f5c8a26 100644
---- a/src/ext4_super.c
-+++ b/src/ext4_super.c
-@@ -142,6 +142,11 @@ bool ext4_sb_check(struct ext4_sblock *s)
- 	if (ext4_get32(s, blocks_per_group) == 0)
- 		return false;
- 
-+	/* Block size is 1024 << log_block_size; Linux allows 1 KiB..64 KiB.
-+	 * Larger values overflow the shift and give a zero block size. */
-+	if (ext4_get32(s, log_block_size) > 6)
-+		return false;
-+
- 	if (ext4_get32(s, inodes_per_group) == 0)
- 		return false;
- 

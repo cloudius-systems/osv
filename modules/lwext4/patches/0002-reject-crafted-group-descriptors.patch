@@ -1,40 +1,33 @@
-Reject crafted group descriptors and a zero mkfs block size
+Validate superblock geometry at mount and bound the group bitmaps
 
-Backports, carried until lwext4 or the osvunikernel fork picks them up:
+Backport of gkostka/lwext4 PR #111, commit
+b9c842f168e6044bd03fe34e1237eda33c299908 (Christopher Thomas), library
+part only, byte for byte (its tests are not carried).
 
-- gkostka/lwext4 PR #111, commit
-  b9c842f168e6044bd03fe34e1237eda33c299908 (Chris Thomas): all of its
-  library part, byte for byte (its tests are not carried).
-  In ext4_fs.c it bounds the block and inode bitmap rebuild of an
-  uninitialized group.  bit_max (from s_reserved_gdt_blocks and the GDT
-  geometry) and inodes_per_group come straight from the superblock, so a
-  crafted image drives ext4_bmap_bit_set() and the memset() past the end
-  of the one-block bitmap buffer.  Each is now checked against
-  block_size * 8 bits, and so are the bitmap, inode bitmap and inode
-  table blocks marked in the group's own bitmap.  On error the bitmap
-  block reference is released before returning EIO.  Fixes
-  CVE-2025-71474 (ext4_fs_init_block_bitmap(), crafted
-  s_reserved_gdt_blocks with BLOCK_UNINIT) and CVE-2025-71473
-  (ext4_fs_init_inode_bitmap(), crafted s_inodes_per_group).
-  In ext4_super.c it adds ext4_sb_check_geometry(), which refuses at
-  mount, as Linux does, a superblock whose block or cluster size, blocks
-  or inodes per group, inode size, group count, s_reserved_gdt_blocks
-  (at most a quarter block of descriptor pointers) or s_first_meta_bg is
-  out of range.  Images built for the two CVEs are therefore refused
-  with ENOTSUP before any bitmap is rebuilt.  ext4_mount() and
-  ext4_block_set_lb_size() now return an error instead of asserting on
-  a block size the device cannot hold.
-  0001's log_block_size > 6 check overlaps the new one; it stays, so
-  0001 is unchanged.
-- From the Aladdin-R-D/lwext4 fork (https://github.com/Aladdin-R-D/lwext4),
-  1d32b2f17 (NULL dereference in ext4_dir_en_get_name_len): guard the
-  directory entry pointer in this hot untrusted dir-read helper.
-- From the same fork, fa299459e (division by zero in
-  create_fs_aux_info): reject a zero block size before dividing by it in
-  the mkfs path, with EINVAL rather than the fork's EFAULT.
+In ext4_super.c it adds ext4_sb_check_geometry(), which refuses at
+mount, as Linux does, a superblock whose block or cluster size, blocks
+or inodes per group, inode size, group count, s_reserved_gdt_blocks (at
+most a quarter block of descriptor pointers) or s_first_meta_bg is out
+of range.  That includes s_log_block_size > 6, which overflowed
+1024 << log_block_size to a zero block size (lwext4 issue #90,
+CVE-2025-70100).
 
-Applies to osvunikernel/lwext4 6f6d8f7c509da696e71e80cc5a59abfc48e4971b
-after 0001.
+In ext4_fs.c it bounds the block and inode bitmap rebuild of an
+uninitialized group: bit_max (from s_reserved_gdt_blocks and the GDT
+geometry) and inodes_per_group are checked against block_size * 8 bits,
+and so are the bitmap, inode bitmap and inode table blocks marked in
+the group's own bitmap.  On error the bitmap block reference is
+released before returning EIO.  Fixes CVE-2025-71474
+(ext4_fs_init_block_bitmap(), crafted s_reserved_gdt_blocks with
+BLOCK_UNINIT) and CVE-2025-71473 (ext4_fs_init_inode_bitmap(), crafted
+s_inodes_per_group).  The mount check refuses the images for those two
+CVEs first; the bitmap bounds still matter for geometry the mount check
+accepts.
+
+ext4_mount() and ext4_block_set_lb_size() return an error instead of
+asserting on a block size the device cannot hold.
+
+Applies after 0001.
 
 diff --git a/include/ext4_blockdev.h b/include/ext4_blockdev.h
 index 668fb05..92af7da 100644
@@ -53,20 +46,6 @@ index 668fb05..92af7da 100644
  
  /**@brief   Block get function (through cache, don't read).
   * @param   bdev block device descriptor
-diff --git a/include/ext4_dir.h b/include/ext4_dir.h
-index d0d13a2..9a4fe94 100644
---- a/include/ext4_dir.h
-+++ b/include/ext4_dir.h
-@@ -123,6 +123,9 @@ static inline void ext4_dir_en_set_entry_len(struct ext4_dir_en *de, uint16_t l)
- static inline uint16_t ext4_dir_en_get_name_len(struct ext4_sblock *sb,
- 						struct ext4_dir_en *de)
- {
-+	if (de == NULL)
-+		return 0;
-+
- 	uint16_t v = de->name_len;
- 
- 	if ((ext4_get32(sb, rev_level) == 0) &&
 diff --git a/include/ext4_types.h b/include/ext4_types.h
 index c9cdd34..2400c10 100644
 --- a/include/ext4_types.h
@@ -237,20 +216,10 @@ index 26d25a0..cd71d61 100644
  
  	uint32_t start_bit = inodes_per_group;
 diff --git a/src/ext4_mkfs.c b/src/ext4_mkfs.c
-index 0dfc91f..1651227 100644
+index 0dfc91f..2e16ac0 100644
 --- a/src/ext4_mkfs.c
 +++ b/src/ext4_mkfs.c
-@@ -148,6 +148,9 @@ static bool has_superblock(struct ext4_mkfs_info *info, uint32_t bgid)
- static int create_fs_aux_info(struct fs_aux_info *aux_info,
- 			      struct ext4_mkfs_info *info)
- {
-+	if (info->block_size == 0)
-+		return EINVAL;
-+
- 	aux_info->first_data_block = (info->block_size > 1024) ? 0 : 1;
- 	aux_info->len_blocks = info->len / info->block_size;
- 	aux_info->inode_table_blocks = EXT4_DIV_ROUND_UP(info->inodes_per_group *
-@@ -807,7 +810,9 @@ int ext4_mkfs(struct ext4_fs *fs, struct ext4_blockdev *bd,
+@@ -807,7 +807,9 @@ int ext4_mkfs(struct ext4_fs *fs, struct ext4_blockdev *bd,
  	struct ext4_bcache bc;
  
  	memset(&bc, 0, sizeof(struct ext4_bcache));
@@ -262,7 +231,7 @@ index 0dfc91f..1651227 100644
  	r = ext4_bcache_init_dynamic(&bc, CONFIG_BLOCK_DEV_CACHE_SIZE,
  				      info->block_size);
 diff --git a/src/ext4_super.c b/src/ext4_super.c
-index f5c8a26..4fd6cc6 100644
+index 092c38b..68008b5 100644
 --- a/src/ext4_super.c
 +++ b/src/ext4_super.c
 @@ -128,6 +128,90 @@ int ext4_sb_read(struct ext4_blockdev *bdev, struct ext4_sblock *s)
@@ -356,7 +325,7 @@ index f5c8a26..4fd6cc6 100644
  bool ext4_sb_check(struct ext4_sblock *s)
  {
  	if (ext4_get16(s, magic) != EXT4_SUPERBLOCK_MAGIC)
-@@ -162,6 +246,9 @@ bool ext4_sb_check(struct ext4_sblock *s)
+@@ -157,6 +241,9 @@ bool ext4_sb_check(struct ext4_sblock *s)
  	if (ext4_sb_get_desc_size(s) > EXT4_MAX_BLOCK_GROUP_DESCRIPTOR_SIZE)
  		return false;
  
