@@ -3342,6 +3342,18 @@ static bool handle_cow_write_fault(uintptr_t addr)
     }
     return true;
 }
+
+long fork_cow_mappers(const void *addr)
+{
+    SCOPE_LOCK(cur_vma_list_mutex().for_read());
+    unsigned i0;
+    pt_element<0> *pt = walk_to_leaf(reinterpret_cast<uintptr_t>(addr), i0);
+    if (!pt || pt[i0].empty()) {
+        return -1;
+    }
+    auto c = cow_count(pt[i0].addr());
+    return c ? c->load(std::memory_order_acquire) : -1;
+}
 #endif // CONF_fork
 
 void vm_fault(uintptr_t addr, exception_frame* ef)

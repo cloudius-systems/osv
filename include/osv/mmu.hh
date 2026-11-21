@@ -431,6 +431,11 @@ address_space *clone_address_space(address_space *parent);
 // see identically.  Called by the ELF loader for each writable PT_LOAD segment.
 void add_fork_shared_module_range(uintptr_t start, uintptr_t end);
 
+// Test view: the fork mapper count of the 4K frame the current address space
+// maps at @addr, or -1 if nothing is mapped there as a 4K page or no count is
+// kept for the frame (no fork has run yet).
+long fork_cow_mappers(const void *addr);
+
 // Free the memory of a child address_space (its private page tables, VMAs
 // and arena extents), once nothing runs in it.  The object stays until its
 // last as_put().  Never call on the kernel address space.
