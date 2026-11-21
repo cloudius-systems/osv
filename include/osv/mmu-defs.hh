@@ -96,12 +96,25 @@ enum {
 
 enum {
     pte_cow = 0,
+    // Software PTE bit tagging a page as SHARED across a fork (stack /
+    // MAP_SHARED / shm): such a page's physical frame is owned jointly, so a
+    // child address space must NOT free it on teardown.
+    pte_shared = 1,
+    // Software PTE bit tagging a leaf that maps a page-cache page (read cache,
+    // write cache or the zero page), installed by pagecache::get().  The page
+    // cache records the address of every such PTE so it can unmap the page;
+    // the bit tells the fault, fork and teardown paths to go through the page
+    // cache for this leaf instead of treating the frame as process memory.
+    pte_pagecache = 2,
 };
 
 /* flush tlb for the current processor */
 void flush_tlb_local();
 /* flush tlb for all */
 void flush_tlb_all();
+/* flush tlb for all, including CPUs that run kernel threads (flush_tlb_all
+   may defer those until they next run an application thread) */
+void flush_tlb_all_cpus();
 
 constexpr size_t page_size_level(unsigned level)
 {
