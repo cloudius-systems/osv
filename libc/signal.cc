@@ -22,8 +22,18 @@
 #include <osv/export.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#include <osv/mmu.hh>
+#include <osv/fork.hh>
+#include <osv/trace.hh>
+#endif
+#include <unordered_map>
+#include <boost/intrusive/set.hpp>
 
 using namespace osv::clock::literals;
+namespace bi = boost::intrusive;
 
 namespace osv {
 
@@ -37,7 +47,65 @@ __thread __attribute__((aligned(sizeof(sigset))))
 // pending signal changes: returning any one is fine
 __thread int thread_pending_signal;
 
+// Bitmask (indexed by signal-1) of signals the current thread is ACTIVELY
+// blocked on inside sigwait()/sigtimedwait() right now.  This distinguishes a
+// thread that is CONSUMING a signal via sigwait (delivery goes to it, not to a
+// handler) from a thread that merely BLOCKED the signal with sigprocmask (the
+// signal's handler must still run, e.g. PostgreSQL's SIGCHLD reaper).  A thread
+// can only be in one sigwait at a time, so a plain per-thread mask suffices.
+__thread unsigned long thread_sigwaiting[(nsignals + 63) / 64];
+
+static inline void set_sigwaiting(unsigned sigidx, bool on)
+{
+    unsigned long bit = 1UL << (sigidx & 63);
+    if (on) {
+        thread_sigwaiting[sigidx >> 6] |= bit;
+    } else {
+        thread_sigwaiting[sigidx >> 6] &= ~bit;
+    }
+}
+
 struct sigaction signal_actions[nsignals];
+
+#if CONF_fork
+// Signal dispositions are per-PROCESS in POSIX, but OSv keeps a single global
+// signal_actions[] and collapses every fork "process" onto one pid (OSV_PID).
+// A fork child that calls sigaction() (e.g. PostgreSQL's startup process
+// resetting its inherited handlers) would therefore CLOBBER the parent
+// postmaster's handlers in the shared table -- most damagingly the SIGCHLD
+// reaper the postmaster relies on to reap children and advance to PM_RUN.
+//
+// To model per-process dispositions we give each fork-child address space its
+// own copy of signal_actions[], initialized from the parent's at fork time and
+// only mutated by that child's own sigaction() calls.  The top-level
+// application (AS0 / kernel address space) keeps using the global array, so the
+// heavily-tested non-fork path is byte-identical.
+//
+// Synchronous signals to the current thread (generate_signal: SIGSEGV/SIGFPE)
+// and sigaction() use the CURRENT context's table.  Asynchronous kill() to the
+// process (getpid()) uses the TOP-LEVEL (global) table: the fork-synthesized
+// SIGCHLD that a child raises to the postmaster on exit must run the
+// postmaster's handler, not the exiting child's (which has been reset).
+extern "C" struct sigaction *fork_child_signal_actions();  // this child's table or nullptr
+extern "C" struct sigaction *fork_child_signal_actions_for(mmu::address_space *child_as);  // a specific child's table
+extern "C" void fork_init_child_signal_actions(mmu::address_space *child_as,
+                                    const struct sigaction *parent_table);
+extern "C" void fork_release_child_signal_actions(mmu::address_space *child_as);
+// Table for sigaction()/generate_signal(): the current fork child's private
+// copy if we are in one, else the global array.
+static inline struct sigaction *current_signal_actions()
+{
+    if (auto *t = fork_child_signal_actions()) {
+        return t;
+    }
+    return signal_actions;
+}
+#else
+static inline struct sigaction *current_signal_actions()
+{
+    return signal_actions;
+}
+#endif
 
 sigset* from_libc(sigset_t* s)
 {
@@ -80,26 +148,52 @@ mutex waiters_mutex;
 int wake_up_signal_waiters(int signo)
 {
     SCOPE_LOCK(waiters_mutex);
-    int woken = 0;
+    int consumers = 0;
 
     unsigned sigidx = signo - 1;
     for (auto& t: waiters[sigidx]) {
-        woken++;
+        // Wake every thread blocked on this signal (unchanged), so a thread in
+        // sigwait()/sigtimedwait() sees thread_pending_signal and returns.
         t->remote_thread_local_var<int>(thread_pending_signal) = signo;
         t->wake();
+        // Only a thread ACTIVELY inside sigwait()/sigtimedwait() for this
+        // signal is CONSUMING it; a thread that merely sigprocmask()-blocked it
+        // is not.  Return a nonzero "consumed" count only for the former, so
+        // kill() runs the handler when nobody is actually sigwaiting (the
+        // PostgreSQL SIGCHLD case).
+        unsigned long bit = 1UL << (sigidx & 63);
+        if (t->remote_thread_local_ptr<unsigned long>(&thread_sigwaiting)[sigidx >> 6] & bit) {
+            consumers++;
+        }
     }
-    return woken;
+    return consumers;
 }
 
 void wait_for_signal(unsigned int sigidx)
 {
     SCOPE_LOCK(waiters_mutex);
+#if CONF_fork
+    // `waiters` is a GLOBAL kernel structure manipulated cross-address-space:
+    // a fork child and its parent both push/remove on the same list.  Its
+    // std::list nodes must therefore live in the identity-mapped kernel heap,
+    // never the copy-on-write fork arena -- a COW-private node would corrupt
+    // the shared list's next/prev pointers as seen from the other address
+    // space, and a later traversal (unwait_for_signal -> list::remove) would
+    // follow a dangling link and fault.  This is
+    // the same rule already applied to thread objects and wait_records.
+    fork_arena::kernel_heap_scope kh;
+#endif
     waiters[sigidx].push_front(sched::thread::current());
 }
 
 void unwait_for_signal(sched::thread *t, unsigned int sigidx)
 {
     SCOPE_LOCK(waiters_mutex);
+#if CONF_fork
+    // Match wait_for_signal(): keep list-node churn on the identity heap so the
+    // shared cross-AS list is never a COW arena page.
+    fork_arena::kernel_heap_scope kh;
+#endif
     waiters[sigidx].remove(t);
 }
 
@@ -135,11 +229,11 @@ void generate_signal(siginfo_t &siginfo, exception_frame* ef)
         // needs to be running to generate them. So definitely not waiting.
         abort();
     }
-    if (is_sig_dfl(signal_actions[sigidx])) {
+    if (is_sig_dfl(current_signal_actions()[sigidx])) {
         // Our default is to abort the process
         abort();
-    } else if(!is_sig_ign(signal_actions[sigidx])) {
-        arch::build_signal_frame(ef, siginfo, signal_actions[sigidx]);
+    } else if(!is_sig_ign(current_signal_actions()[sigidx])) {
+        arch::build_signal_frame(ef, siginfo, current_signal_actions()[sigidx]);
     }
 }
 
@@ -204,6 +298,26 @@ int sigismember(const sigset_t *sigset, int signum)
     return from_libc(sigset)->mask.test(sigidx);
 }
 
+#if CONF_fork
+// Signals a fork process sent to itself while this thread blocked them (see
+// kill()), one bit per signal index.  Only this thread reads or writes it.
+static_assert(nsignals <= 64, "deferred_self_signals holds one bit per signal");
+static __thread unsigned long deferred_self_signals;
+
+// Deliver the deferred self-signals this thread no longer blocks, before
+// sigprocmask() returns, as POSIX requires.
+static void deliver_deferred_self_signals()
+{
+    unsigned long ready = deferred_self_signals & ~thread_signals()->mask.to_ulong();
+    while (ready) {
+        unsigned sigidx = __builtin_ctzl(ready);
+        ready &= ready - 1;
+        deferred_self_signals &= ~(1UL << sigidx);
+        kill(getpid(), sigidx + 1);
+    }
+}
+#endif
+
 OSV_LIBC_API
 int sigprocmask(int how, const sigset_t* _set, sigset_t* _oldset)
 {
@@ -242,6 +356,9 @@ int sigprocmask(int how, const sigset_t* _set, sigset_t* _oldset)
         default:
             abort();
         }
+#if CONF_fork
+        deliver_deferred_self_signals();
+#endif
     }
     return 0;
 }
@@ -257,11 +374,12 @@ int sigaction(int signum, const struct sigaction* act, struct sigaction* oldact)
         return -1;
     }
     unsigned sigidx = signum - 1;
+    struct sigaction *table = current_signal_actions();
     if (oldact) {
-        *oldact = signal_actions[sigidx];
+        *oldact = table[sigidx];
     }
     if (act) {
-        signal_actions[sigidx] = *act;
+        table[sigidx] = *act;
     }
     return 0;
 }
@@ -318,8 +436,25 @@ int sigignore(int signum)
 OSV_LIBC_API
 int sigwait(const sigset_t *set, int *sig)
 {
+    // Mark the signals in @set as actively being CONSUMED via sigwait, so a
+    // concurrent kill() delivers to us (and skips the handler) rather than
+    // running the installed handler.  Cleared on return.
+    if (set) {
+        for (unsigned i = 0; i < nsignals; ++i) {
+            if (sigismember(set, i + 1)) {
+                set_sigwaiting(i, true);
+            }
+        }
+    }
     sched::thread::wait_until([sig] { return *sig = thread_pending_signal; });
     thread_pending_signal = 0;
+    if (set) {
+        for (unsigned i = 0; i < nsignals; ++i) {
+            if (sigismember(set, i + 1)) {
+                set_sigwaiting(i, false);
+            }
+        }
+    }
     return 0;
 }
 
@@ -345,6 +480,17 @@ int osv_sigtimedwait(const sigset_t *set, siginfo_t *si,
             std::chrono::seconds(timeout->tv_sec) +
             std::chrono::nanoseconds(timeout->tv_nsec));
 
+    // Mark the @set signals as actively consumed via sigtimedwait (see sigwait
+    // and wake_up_signal_waiters): while we are here a concurrent kill()
+    // delivers to us rather than running the handler.
+    if (set) {
+        for (unsigned i = 0; i < nsignals; ++i) {
+            if (sigismember(set, i + 1)) {
+                set_sigwaiting(i, true);
+            }
+        }
+    }
+
     // Only accept a delivered signal that is a member of @set (rt_sigtimedwait
     // waits for a specific set); a signal outside the set is not what the
     // caller asked for, so keep waiting for it (or the timeout).
@@ -357,6 +503,14 @@ int osv_sigtimedwait(const sigset_t *set, siginfo_t *si,
         }
         return tmr.expired();
     });
+
+    if (set) {
+        for (unsigned i = 0; i < nsignals; ++i) {
+            if (sigismember(set, i + 1)) {
+                set_sigwaiting(i, false);
+            }
+        }
+    }
 
     if (signo == 0) {
         // Timed out (or polled with {0,0}) with no matching signal.
@@ -392,9 +546,183 @@ int osv_sigtimedwait(const sigset_t *set, siginfo_t *si,
 // another handler thread. We should probably block this signal while
 // handling it.
 
+#if CONF_fork
+TRACEPOINT(trace_signal_interrupt_fallback, "pid=%d tries=%d", pid_t, int);
+
+// Handlers that ran beside their target instead of interrupting it, because
+// the target kept moving or no thread could be made on its CPU.
+std::atomic<unsigned long> signal_interrupt_fallbacks{0};
+
+// What the interrupting handler on this thread holds: the target's pid entry
+// (pid != 0) and the target on its CPU (victim != nullptr).  end_interrupt()
+// releases both, after the handler returns or, if the handler ends its own
+// thread with thread::exit() (which does not unwind), from the thread's exit
+// notifier.
+struct interrupt_record {
+    sched::thread *victim;
+    pid_t pid;
+};
+static __thread interrupt_record current_interrupt;
+
+static void end_interrupt()
+{
+    auto& r = current_interrupt;
+    if (r.victim) {
+        r.victim->release_hold();
+        r.victim = nullptr;
+    }
+    if (r.pid) {
+        osv::fork::release_pid_thread(r.pid);
+        r.pid = 0;
+    }
+}
+
+static void __attribute__((constructor)) interrupt_register_thread_notifier()
+{
+    sched::thread::register_exit_notifier(end_interrupt);
+}
+
+// Run @handler as an interrupt of fork child @pid's thread @victim (held with
+// hold_pid_thread(), released when the handler ends): on a thread made for it
+// on @victim's CPU, at real-time priority, which a normal thread never
+// preempts, in @as.  The handler thread holds @victim on that CPU while it
+// runs.  If @victim moved before the hold took, the handler thread starts
+// again on @victim's new CPU; after a few moves, or if no thread can be made
+// there, it runs beside @victim, as kill() did before.  A handler thread never
+// migrates itself.  Returns false, and owns nothing, if no thread was made.
+//
+// The interruption lasts until the handler first blocks: @victim may then run
+// on that CPU, and is preempted again when the handler resumes.
+//
+// A handler that spins without blocking keeps that CPU's normal threads off
+// it until it returns.  It cannot spin on a kernel spinlock held by one of
+// them: spin_lock() disables preemption, so its holder is never queued behind
+// the handler.  Application code that spins in a handler (pthread_spin_lock(),
+// a sched_yield() loop), which POSIX does not allow, can stall that CPU.
+static bool start_interrupting_handler(sched::thread *victim, pid_t pid,
+                                       mmu::address_space *as,
+                                       std::function<void ()> handler, int tries)
+{
+    sched::cpu *where = victim->tcpu();
+    auto t = sched::thread::make([=] {
+        auto& r = current_interrupt;
+        r.pid = pid;
+        if (victim->hold_here()) {
+            r.victim = victim;
+        } else if (tries < 4 &&
+                   start_interrupting_handler(victim, pid, as, handler, tries + 1)) {
+            // The next thread owns the pid entry's hold now.  This thread's
+            // own use of @as covers that thread's start.
+            r.pid = 0;
+            return;
+        } else {
+            trace_signal_interrupt_fallback(pid, tries);
+            signal_interrupt_fallbacks.fetch_add(1, std::memory_order_relaxed);
+        }
+        handler();
+        end_interrupt();
+    }, sched::thread::attr().detached().stack(65536).name("signal_handler").pin(where),
+        false, true);
+    if (!t) {
+        return false;
+    }
+    t->set_realtime_priority(1);
+    t->set_address_space(as);
+    t->start();
+    return true;
+}
+#endif
+
 OSV_LIBC_API
 int kill(pid_t pid, int sig)
 {
+#if CONF_fork
+    // Under fork() each backend has a distinct pid (getpid()) and its own
+    // address space + signal table.  A cross-backend kill (PostgreSQL's
+    // WakeupOtherProc -> kill(other_backend_pid, SIGURG) to wake its latch)
+    // must run the TARGET backend's handler in the TARGET's address space --
+    // otherwise latch_sigurg_handler pokes the wrong self-pipe and the waiting
+    // backend never wakes (a lock wait wedges: 0 tps, no failure).  Detect a
+    // live-fork-child target and route accordingly.
+    //
+    // OSV_PID names the top-level app / kernel (AS0) -- e.g. the PostgreSQL
+    // postmaster, whose getpid() is OSV_PID.  A forked backend signalling the
+    // postmaster (a parallel-query leader's RegisterDynamicBackgroundWorker ->
+    // kill(PostmasterPid==OSV_PID, SIGUSR1) to make the postmaster fork the
+    // parallel workers; or pg_reload_conf() -> kill(PostmasterPid, SIGHUP))
+    // must run the postmaster's handler in AS0, NOT be rejected.  AS0 is never
+    // registered in g_pid_as, so hold_as_for_pid(OSV_PID) returns nullptr; treat
+    // OSV_PID like the self/broadcast case (target_as stays nullptr -> AS0)
+    // instead of ESRCH -- otherwise the postmaster never launches the workers
+    // and the parallel Gather hangs (leader waits forever for workers that
+    // were never forked).
+    mmu::address_space *target_as = nullptr;
+    // The target's address space is held until the handler thread is in it,
+    // so the child cannot be torn down under either of them.
+    struct as_use {
+        mmu::address_space *as = nullptr;
+        ~as_use() { mmu::as_release(as); }
+    } target_use;
+    bool registered = false;
+    // A LIVE fork-backend's OWN latch/barrier self-signal (SIGURG/SIGUSR1)
+    // must run its handler in the CALLER's own COW address space.  The base
+    // kill() spawns a NEW detached thread and set_address_space()es it into
+    // that COW AS -- but that fresh handler thread, running PG barrier code
+    // (HandleProcSignalBarrierInterrupt / latch_sigurg_handler) against a
+    // COW-lazy mmap page (0x2000..), faults and the fault NESTS fatally
+    // ("exception nested too deeply", ~1-in-3 DROP DATABASE runs).  For a
+    // self-signal the caller is ALREADY that backend, already in the right
+    // COW AS, on a real faultable stack -- exactly where a real Unix signal
+    // handler would run.  So run those two short async-signal-safe handlers
+    // INLINE in the caller and skip the thread spawn entirely (self_inline).
+    bool self_inline = false;
+    // The target is the calling process itself (a live fork child).
+    bool to_own_process = false;
+    if (pid != getpid() && pid != 0 && pid != -1 && pid != OSV_PID) {
+        target_as = target_use.as = osv::fork::hold_as_for_pid(pid, &registered);
+        if (!target_as) {
+            if (registered) {
+                // A child that has exited but is not reaped yet, or one that
+                // exec'd: its own address space is gone, so, as for a zombie,
+                // the signal is accepted and has no effect.
+                return 0;
+            }
+            errno = ESRCH;
+            return -1;
+        }
+    } else if (pid == getpid()) {
+        // A live fork child signalling its own pid: use the child's signal
+        // table and run the handler in the child's address space, as for any
+        // other process.  PostgreSQL's statement and lock timeout handlers
+        // send SIGINT to MyProcPid, and pg_terminate_backend() of one's own
+        // backend sends SIGTERM; the postmaster's handlers for those start a
+        // shutdown.  hold_as_for_pid() gates this to a live registered child: the
+        // top-level app (AS0) and a child mid-teardown get nullptr and keep
+        // the global table.  The child-exit SIGCHLD goes to the parent's pid
+        // (fork.cc child_exited), not here.
+        target_as = target_use.as = osv::fork::hold_as_for_pid(pid, &registered);
+        // Two PostgreSQL self-signals run their handler INLINE in the caller,
+        // which is already in this backend's COW address space on a faultable
+        // stack, so the handler sets the flag / pokes the self-pipe in the
+        // copy the backend actually reads:
+        //   * WakeupMyProc() -> kill(MyProcPid, SIGURG): latch_sigurg_handler
+        //     writes selfpipe_writefd to wake the backend's own WaitEventSet.
+        //   * EmitProcSignalBarrier() -> kill(MyProcPid, SIGUSR1):
+        //     HandleProcSignalBarrierInterrupt sets ProcSignalBarrierPending so
+        //     the backend absorbs its OWN barrier (DROP DATABASE / DROP
+        //     TABLESPACE otherwise wait for their own PID forever).
+        // Only when the signal is UNBLOCKED in the calling thread: if PG has
+        // it masked (a critical section), POSIX defers delivery, and so does
+        // kill() below, rather than re-enter PG at a point it masked the
+        // signal to protect.
+        to_own_process = target_as && target_as == mmu::current_address_space();
+        if (to_own_process &&
+            (sig == SIGURG || sig == SIGUSR1) &&
+            !osv::thread_signals()->mask.test(sig - 1)) {
+            self_inline = true;
+        }
+    }
+#else
     // OSv only implements one process, whose pid is getpid().
     // Sending a signal to pid 0 or -1 is also fine, as it will also send a
     // signal to the same single process.
@@ -402,6 +730,7 @@ int kill(pid_t pid, int sig)
         errno = ESRCH;
         return -1;
     }
+#endif
     if (sig == 0) {
         // kill() with signal 0 doesn't cause an actual signal 0, just
         // testing the pid.
@@ -412,13 +741,33 @@ int kill(pid_t pid, int sig)
         return -1;
     }
     unsigned sigidx = sig - 1;
-    if (is_sig_dfl(signal_actions[sigidx])) {
+#if CONF_fork
+    // A signal a fork process sends itself while the calling thread blocks it
+    // stays pending until that thread unblocks it, as POSIX requires.
+    if (to_own_process && osv::thread_signals()->mask.test(sigidx)) {
+        deferred_self_signals |= 1UL << sigidx;
+        return 0;
+    }
+    // A targeted live fork child uses THAT child's signal table (it installed
+    // its own handler); everything else uses the global/top-level table.
+    struct sigaction *actions = signal_actions;
+    if (target_as) {
+        struct sigaction *tt = fork_child_signal_actions_for(target_as);
+        if (tt) {
+            actions = tt;
+        }
+    }
+#else
+    struct sigaction *actions = signal_actions;
+#endif
+    if (is_sig_dfl(actions[sigidx])) {
         // Per POSIX, the default disposition of SIGCHLD, SIGURG and SIGWINCH is
         // to IGNORE (not to terminate the process).  OSv treats an unhandled
         // SIG_DFL signal as fatal and powers the VM off, which is wrong for
         // these three: e.g. delivering SIGCHLD to a process with no handler
         // installed must be silently ignored, not fatal.  Honor the ignore
-        // default for them instead of powering off.
+        // default for them instead of powering off.  (OSv's fork() emulation
+        // relies on this: it raises SIGCHLD to the parent when a child exits.)
         if (sig == SIGCHLD || sig == SIGURG || sig == SIGWINCH) {
             return 0;
         }
@@ -426,7 +775,7 @@ int kill(pid_t pid, int sig)
         debugf("Uncaught signal %d (\"%s\"). Powering off.\n",
                 sig, strsignal(sig));
         osv::poweroff();
-    } else if(!is_sig_ign(signal_actions[sigidx])) {
+    } else if(!is_sig_ign(actions[sigidx])) {
         if ((pid == OSV_PID) || (pid == 0) || (pid == -1)) {
             // This semantically means signalling everybody. So we will signal
             // every thread that is waiting for this.
@@ -434,6 +783,16 @@ int kill(pid_t pid, int sig)
             // The thread does not expect the signal handler to still be delivered,
             // so if we wake up some folks (usually just the one waiter), we should
             // not continue processing.
+            //
+            // wake_up_signal_waiters() returns nonzero only if a thread is
+            // actively CONSUMING this signal via sigwait()/sigtimedwait() (see
+            // that function): such a thread takes delivery itself, so the
+            // handler must NOT also run.  A thread that merely BLOCKED the
+            // signal with sigprocmask (e.g. PostgreSQL's postmaster around its
+            // epoll ServerLoop) is not consuming it -- for that case
+            // wake_up_signal_waiters() returns 0 and we fall through to run the
+            // installed handler (which is what pokes the latch/self-pipe that
+            // wakes the postmaster on SIGCHLD).
             if (wake_up_signal_waiters(sig)) {
                 return 0;
             }
@@ -446,11 +805,33 @@ int kill(pid_t pid, int sig)
         // The newly created thread is tagged as an application one
         // to make sure that user provided signal handler code has access to all
         // the features like syscall stack which matters for Golang apps
-        const auto sa = signal_actions[sigidx];
-        auto t = sched::thread::make([=] {
+        const auto sa = actions[sigidx];
+#if CONF_fork
+        // Self-signal SIGURG/SIGUSR1 to our own live backend: run the handler
+        // INLINE in the caller instead of spawning a thread + retargeting its
+        // AS.  The caller is already in this backend's COW AS on a faultable
+        // stack, so the COW-lazy mmap fault the spawned handler thread took
+        // (and nested "exception nested too deeply") is handled normally here.
+        // PG's latch_sigurg_handler / HandleProcSignalBarrierInterrupt are
+        // short async-signal-safe routines (poke a pipe / set a flag), safe
+        // to run synchronously in the calling thread.
+        if (self_inline) {
             if (sa.sa_flags & SA_RESETHAND) {
-                signal_actions[sigidx].sa_flags = 0;
-                signal_actions[sigidx].sa_handler = SIG_DFL;
+                actions[sigidx].sa_flags = 0;
+                actions[sigidx].sa_handler = SIG_DFL;
+            }
+            if (sa.sa_flags & SA_SIGINFO) {
+                sa.sa_sigaction(sig, nullptr, nullptr);
+            } else {
+                sa.sa_handler(sig);
+            }
+            return 0;
+        }
+#endif
+        auto run_handler = [=] {
+            if (sa.sa_flags & SA_RESETHAND) {
+                actions[sigidx].sa_flags = 0;
+                actions[sigidx].sa_handler = SIG_DFL;
             }
             if (sa.sa_flags & SA_SIGINFO) {
                 // FIXME: proper second (siginfo) and third (context) arguments (See example in call_signal_handler)
@@ -458,8 +839,44 @@ int kill(pid_t pid, int sig)
             } else {
                 sa.sa_handler(sig);
             }
-        }, sched::thread::attr().detached().stack(65536).name("signal_handler"),
+        };
+#if CONF_fork
+        // A handler for a fork process interrupts that process's thread, as a
+        // POSIX signal does, instead of running beside it.  Programs depend on
+        // that: PostgreSQL's handlers set InterruptPending and then a reason
+        // flag, and its mainline clears InterruptPending before it tests the
+        // reason flags, so a handler that runs concurrently can leave a reason
+        // set that is never acted on (a parallel leader then waits for its
+        // workers forever).
+        if (target_as) {
+            sched::thread *victim = osv::fork::hold_pid_thread(pid);
+            if (victim) {
+                if (start_interrupting_handler(victim, pid, target_as, run_handler, 0)) {
+                    return 0;
+                }
+                osv::fork::release_pid_thread(pid);
+            }
+        }
+#endif
+        auto t = sched::thread::make(run_handler,
+                sched::thread::attr().detached().stack(65536).name("signal_handler"),
                 false, true);
+#if CONF_fork
+        // Where does the handler thread run?
+        //  * Targeted at a live fork child (target_as != nullptr): run it in
+        //    THAT child's address space, so its handler (PostgreSQL's
+        //    latch_sigurg_handler) touches the TARGET backend's globals/fds
+        //    (its self-pipe) -- the cross-backend latch wakeup.
+        //  * Otherwise (process-level notify, e.g. the fork-synthesized SIGCHLD
+        //    a child raises to the postmaster on exit): run it in AS0.  A newly
+        //    created thread inherits the CREATING thread's address space; under
+        //    fork a child raises SIGCHLD from its own dying COW address space,
+        //    and the postmaster's process-level handler must run against the
+        //    top-level app's globals (its latch/self-pipe), not the child's.
+        //    The top-level app and kernel already have _current_as == AS0, so
+        //    this is a no-op for them and the non-fork path is unchanged.
+        t->set_address_space(target_as ? target_as : mmu::kernel_address_space());
+#endif
         t->start();
     }
     return 0;
@@ -480,122 +897,104 @@ int pause(void) {
     return -1;
 }
 
-// Our alarm() implementation has one system-wide alarm-thread, which waits
-// for the single timer (or instructions to change the timer) and sends
-// SIGALRM when the timer expires.
-// alarm() is an archaic Unix API and didn't age well. It should should never
-// be used in new programs.
+// Interval timers: setitimer(), getitimer() and alarm().
+//
+// POSIX gives each process its own ITIMER_REAL and ITIMER_VIRTUAL.  Under
+// CONF_fork a process is an address space, so the timers are kept per address
+// space: an entry is created on the first setitimer() in that address space and
+// released with it (fork child teardown and execve()).  A fork child starts
+// with no timer, as POSIX requires.  Expiry sends the signal to the pid that
+// armed the timer, so it runs that process's handler.  Without CONF_fork there
+// is one process and one pair of timers.
+//
+// One worker thread serves every timer: it sleeps until the earliest deadline
+// of an ordered set of armed entries.  That keeps the thread count constant
+// however many processes come and go, and arming or cancelling a timer
+// allocates nothing once the entry exists.
+//
+// OSv has no per-process CPU-time accounting for the virtual timer, so
+// ITIMER_VIRTUAL counts wall-clock time, as it always has here; it is per
+// process like ITIMER_REAL.
+//
+// alarm() and setitimer() also remember the thread that armed the timer, so
+// that expiry can interrupt a system call that thread is sleeping in.
 
-class itimer {
+namespace {
+
+struct itimer_entry {
+    bi::set_member_hook<> armed_hook;     // linked in itimers::armed while due
+    osv::clock::uptime::time_point due;
+    std::chrono::nanoseconds interval {};
+    pid_t pid = 0;                        // the process the signal goes to
+    unsigned owner_tid = 0;               // thread to interrupt, 0 for none
+    int signum = 0;
+    bool operator<(const itimer_entry &o) const {
+        return due < o.due || (due == o.due && this < &o);
+    }
+};
+
+struct process_itimers {
+    itimer_entry t[2];                    // ITIMER_REAL, ITIMER_VIRTUAL
+};
+
+#if CONF_fork
+using process_key = mmu::address_space *;
+#else
+using process_key = void *;
+#endif
+
+class itimers {
 public:
-    explicit itimer(int signum, const char *name);
+    itimers();
+    int set(int which, const struct itimerval *new_value,
+            struct itimerval *old_value);
+    int get(int which, struct itimerval *curr_value);
     void cancel_this_thread();
-    int set(const struct itimerval *new_value,
-        struct itimerval *old_value);
-    int get(struct itimerval *curr_value);
-
+#if CONF_fork
+    void release(process_key key);
+#endif
 private:
     void work();
-
-    // Fllowing functions doesn't take mutex, caller has responsibility
-    // to take it
-    void cancel();
-    void set_interval(const struct timeval *tv);
-    void set_value(const struct timeval *tv);
-    void get_interval(struct timeval *tv);
-    void get_value(struct timeval *tv);
+    void disarm(itimer_entry &e);
+    static void deliver(pid_t pid, int signum, unsigned owner_tid);
 
     mutex _mutex;
     condvar _cond;
-    sched::thread *_alarm_thread;
-    sched::thread *_owner_thread = nullptr;
-    const osv::clock::uptime::time_point _no_alarm {};
-    osv::clock::uptime::time_point _due = _no_alarm;
-    std::chrono::nanoseconds _interval;
-    int _signum;
+    sched::thread *_worker;
     bool _started = false;
+    std::unordered_map<process_key, process_itimers *> _by_process;
+    bi::multiset<itimer_entry,
+                 bi::member_hook<itimer_entry, bi::set_member_hook<>,
+                                 &itimer_entry::armed_hook>> _armed;
 };
 
-static itimer itimer_real(SIGALRM, "itimer-real");
-static itimer itimer_virt(SIGVTALRM, "itimer-virt");
+static __thread bool t_owns_itimer;
 
-itimer::itimer(int signum, const char *name)
-    : _alarm_thread(sched::thread::make([&] { work(); },
-                    sched::thread::attr().name(name)))
-    , _signum(signum)
+static process_key current_process()
 {
-}
-
-void itimer::cancel_this_thread()
-{
-    if(_owner_thread == sched::thread::current()) {
-        WITH_LOCK(_mutex) {
-            if(_owner_thread == sched::thread::current()) {
-                cancel();
-            }
-        }
-    }
-}
-
-int itimer::set(const struct itimerval *new_value,
-    struct itimerval *old_value)
-{
-    if (!new_value)
-        return EINVAL;
-
-    WITH_LOCK(_mutex) {
-        if (old_value) {
-            get_interval(&old_value->it_interval);
-            get_value(&old_value->it_value);
-        }
-        cancel();
-        if (new_value->it_value.tv_sec || new_value->it_value.tv_usec) {
-            set_interval(&new_value->it_interval);
-            set_value(&new_value->it_value);
-        }
-     }
-    return 0;
-}
-
-int itimer::get(struct itimerval *curr_value)
-{
-    WITH_LOCK(_mutex) {
-        get_interval(&curr_value->it_interval);
-        get_value(&curr_value->it_value);
-    }
-    return 0;
-}
- 
-void itimer::work()
-{
-    sched::timer tmr(*sched::thread::current());
-    while (true) {
-        WITH_LOCK(_mutex) {
-            if (_due != _no_alarm) {
-                tmr.set(_due);
-                _cond.wait(_mutex, &tmr);
-                if (tmr.expired()) {
-                    if (_interval != decltype(_interval)::zero()) {
-                        auto now = osv::clock::uptime::now();
-                        _due = now + _interval;
-                    } else {
-                        _due = _no_alarm;
-                    }
-                    kill(getpid(), _signum);
-                    if(!is_sig_ign(signal_actions[_signum - 1])) {
-                        _owner_thread->interrupted(true);
-                    }
-                } else {
-#if CONF_lazy_stack_invariant
-                    assert(!sched::thread::current()->is_app());
+#if CONF_fork
+    return mmu::current_address_space();
+#else
+    return nullptr;
 #endif
-                    tmr.cancel();
-                }
-            } else {
-                _cond.wait(_mutex);
-            }
-        }
+}
+
+static int which_index(int which)
+{
+    switch (which) {
+    case ITIMER_REAL:
+        return 0;
+    case ITIMER_VIRTUAL:
+        return 1;
+    default:
+        return -1;
     }
+}
+
+itimers::itimers()
+    : _worker(sched::thread::make([this] { work(); },
+                                  sched::thread::attr().name("itimer")))
+{
 }
 
 // alarm() wants to know which thread ran it, so when the alarm happens it
@@ -611,56 +1010,225 @@ static bool is_signal_handler(){
     return sched::thread::current()->name() == "signal_handler";
 }
 
-void itimer::cancel()
+static void fill_value(const itimer_entry &e, struct itimerval *v)
 {
-    _due = _no_alarm;
-    _interval = decltype(_interval)::zero();
-    if (!is_signal_handler()) {
-        _owner_thread = nullptr;
-    }
-    _cond.wake_one();
-}
-
-void itimer::set_value(const struct timeval *tv)
-{
-    auto now = osv::clock::uptime::now();
-
-    if (!_started) {
-        _alarm_thread->start();
-        _started = true;
-    }
-    _due = now + tv->tv_sec * 1_s + tv->tv_usec * 1_us;
-    if (!is_signal_handler()) {
-        _owner_thread = sched::thread::current();
-    }
-    _cond.wake_one();
-}
-
-void itimer::set_interval(const struct timeval *tv)
-{
-    _interval = tv->tv_sec * 1_s + tv->tv_usec * 1_us;
-}
-
-void itimer::get_value(struct timeval *tv)
-{
-    if (_due == _no_alarm) {
-        tv->tv_sec = tv->tv_usec = 0;
+    fill_tv(e.interval, &v->it_interval);
+    if (!e.armed_hook.is_linked()) {
+        v->it_value.tv_sec = v->it_value.tv_usec = 0;
     } else {
-        auto now = osv::clock::uptime::now();
-        fill_tv(_due - now, tv);
+        auto left = e.due - osv::clock::uptime::now();
+        if (left <= decltype(left)::zero()) {
+            left = std::chrono::microseconds(1);
+        }
+        fill_tv(left, &v->it_value);
     }
 }
 
-void itimer::get_interval(struct timeval *tv)
+void itimers::disarm(itimer_entry &e)
 {
-    fill_tv(_interval, tv);
+    if (e.armed_hook.is_linked()) {
+        _armed.erase(_armed.iterator_to(e));
+    }
 }
+
+int itimers::set(int which, const struct itimerval *new_value,
+                 struct itimerval *old_value)
+{
+    int idx = which_index(which);
+    if (idx < 0 || !new_value) {
+        return EINVAL;
+    }
+    bool arm = new_value->it_value.tv_sec || new_value->it_value.tv_usec;
+    auto key = current_process();
+    pid_t pid = getpid();
+    bool in_handler = is_signal_handler();
+    WITH_LOCK(_mutex) {
+        auto it = _by_process.find(key);
+        if (it == _by_process.end()) {
+            if (!arm) {
+                if (old_value) {
+                    *old_value = {};
+                }
+                return 0;
+            }
+#if CONF_fork
+            // Shared by the worker and every address space: identity heap.
+            fork_arena::kernel_heap_scope kh;
+#endif
+            auto *p = new process_itimers;
+            p->t[0].signum = SIGALRM;
+            p->t[1].signum = SIGVTALRM;
+            it = _by_process.emplace(key, p).first;
+        }
+        auto &e = it->second->t[idx];
+        if (old_value) {
+            fill_value(e, old_value);
+        }
+        disarm(e);
+        e.interval = std::chrono::nanoseconds::zero();
+        if (!in_handler) {
+            e.owner_tid = 0;
+        }
+        if (arm) {
+            e.interval = new_value->it_interval.tv_sec * 1_s +
+                         new_value->it_interval.tv_usec * 1_us;
+            e.due = osv::clock::uptime::now() +
+                    new_value->it_value.tv_sec * 1_s +
+                    new_value->it_value.tv_usec * 1_us;
+            e.pid = pid;
+            if (!in_handler) {
+                e.owner_tid = sched::thread::current()->id();
+                t_owns_itimer = true;
+            }
+            _armed.insert(e);
+            if (!_started) {
+                _worker->start();
+                _started = true;
+            }
+        }
+        _cond.wake_one();
+    }
+    return 0;
+}
+
+int itimers::get(int which, struct itimerval *curr_value)
+{
+    int idx = which_index(which);
+    if (idx < 0 || !curr_value) {
+        return EINVAL;
+    }
+    WITH_LOCK(_mutex) {
+        auto it = _by_process.find(current_process());
+        if (it == _by_process.end()) {
+            *curr_value = {};
+        } else {
+            fill_value(it->second->t[idx], curr_value);
+        }
+    }
+    return 0;
+}
+
+// Cancel the current process's timers that the current thread armed.
+void itimers::cancel_this_thread()
+{
+    if (!t_owns_itimer) {
+        return;
+    }
+    t_owns_itimer = false;
+    unsigned me = sched::thread::current()->id();
+    WITH_LOCK(_mutex) {
+        auto it = _by_process.find(current_process());
+        if (it == _by_process.end()) {
+            return;
+        }
+        for (auto &e : it->second->t) {
+            if (e.owner_tid == me) {
+                disarm(e);
+                e.interval = std::chrono::nanoseconds::zero();
+                e.owner_tid = 0;
+            }
+        }
+        _cond.wake_one();
+    }
+}
+
+#if CONF_fork
+// Drop a process's timers when its address space goes away.
+void itimers::release(process_key key)
+{
+    process_itimers *p = nullptr;
+    WITH_LOCK(_mutex) {
+        auto it = _by_process.find(key);
+        if (it == _by_process.end()) {
+            return;
+        }
+        p = it->second;
+        _by_process.erase(it);
+        for (auto &e : p->t) {
+            disarm(e);
+        }
+        _cond.wake_one();
+    }
+    fork_arena::kernel_heap_scope kh;
+    delete p;
+}
+#endif
+
+void itimers::deliver(pid_t pid, int signum, unsigned owner_tid)
+{
+    kill(pid, signum);
+    if (!owner_tid) {
+        return;
+    }
+    // Interrupt a system call the arming thread sleeps in, unless its
+    // process ignores the signal.
+    sched::with_thread_by_id(owner_tid, [signum] (sched::thread *t) {
+        if (!t) {
+            return;
+        }
+        const struct sigaction *actions = signal_actions;
+#if CONF_fork
+        if (auto *a = fork_child_signal_actions_for(t->address_space())) {
+            actions = a;
+        }
+#endif
+        if (!is_sig_ign(actions[signum - 1])) {
+            t->interrupted(true);
+        }
+    });
+}
+
+void itimers::work()
+{
+    sched::timer tmr(*sched::thread::current());
+    while (true) {
+        pid_t pid = 0;
+        int signum = 0;
+        unsigned owner_tid = 0;
+        WITH_LOCK(_mutex) {
+            if (_armed.empty()) {
+                _cond.wait(_mutex);
+                continue;
+            }
+            auto &e = *_armed.begin();
+            auto now = osv::clock::uptime::now();
+            if (e.due > now) {
+                tmr.set(e.due);
+                _cond.wait(_mutex, &tmr);
+                tmr.cancel();
+                continue;
+            }
+            _armed.erase(_armed.iterator_to(e));
+            if (e.interval != decltype(e.interval)::zero()) {
+                e.due = now + e.interval;
+                _armed.insert(e);
+            }
+            pid = e.pid;
+            signum = e.signum;
+            owner_tid = e.owner_tid;
+        }
+        // The entry may be released once the lock is dropped; use the copies.
+        deliver(pid, signum, owner_tid);
+    }
+}
+
+static itimers g_itimers;
+
+} // anonymous namespace
 
 void cancel_this_thread_alarm()
 {
-    itimer_real.cancel_this_thread();
-    itimer_virt.cancel_this_thread();
+    g_itimers.cancel_this_thread();
 }
+
+#if CONF_fork
+// Called when a fork child's address space is torn down or replaced by
+// execve(): its timers die with the process.
+extern "C" void fork_release_process_itimers(mmu::address_space *as)
+{
+    g_itimers.release(as);
+}
+#endif
 
 OSV_LIBC_API
 unsigned int alarm(unsigned int seconds)
@@ -685,27 +1253,13 @@ extern "C" OSV_LIBC_API
 int setitimer(int which, const struct itimerval *new_value,
     struct itimerval *old_value)
 {
-    switch (which) {
-    case ITIMER_REAL:
-        return itimer_real.set(new_value, old_value);
-    case ITIMER_VIRTUAL:
-        return itimer_virt.set(new_value, old_value);
-    default:
-        return EINVAL;
-    }
+    return g_itimers.set(which, new_value, old_value);
 }
 
 extern "C" OSV_LIBC_API
 int getitimer(int which, struct itimerval *curr_value)
 {
-    switch (which) {
-    case ITIMER_REAL:
-        return itimer_real.get(curr_value);
-    case ITIMER_VIRTUAL:
-        return itimer_virt.get(curr_value);
-    default:
-        return EINVAL;
-    }
+    return g_itimers.get(which, curr_value);
 }
 
 // A per-thread stack set with sigaltstack() to be used by

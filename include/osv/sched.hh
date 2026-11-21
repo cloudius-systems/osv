@@ -29,6 +29,10 @@
 #include <osv/export.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 #include <string.h>
 
 typedef float runtime_t;
@@ -68,6 +72,10 @@ namespace elf {
     struct tls_data;
 }
 
+namespace mmu {
+    struct address_space;
+}
+
 namespace osv {
 
 class application;
@@ -82,6 +90,13 @@ namespace sched {
 
 class thread;
 class thread_handle;
+
+// Allocate raw storage for a thread object.  Forces the identity-mapped kernel
+// heap (never the fork arena) so the object's VA is coherent across every
+// address space -- the scheduler dereferences thread objects cross-AS.  Freed
+// with free_thread_storage(): under fork it may come from the stack window.
+void *alloc_thread_storage(size_t align, size_t size);
+void free_thread_storage(void *p);
 struct cpu;
 class timer;
 class timer_list;
@@ -238,6 +253,17 @@ public:
         virtual void timer_fired() = 0;
         void suspend_timers();
         void resume_timers();
+#if CONF_fork
+        // Fork timer-park (see thread::_parked_deadline / cpu::park_timers).
+        // These manipulate the per-CPU timer list directly and are INDEPENDENT
+        // of the migration suspend/resume above (they use a separate flag), so
+        // parking never collides with a concurrent migration of the same
+        // thread.  MUST be called with this client's address space loaded (its
+        // _active_timers nodes live on its private stack).
+        osv::clock::uptime::time_point earliest_active_deadline() const;
+        bool has_active_timers() const { return !_active_timers.empty(); }
+        bool timers_suspended() const { return _timers_need_reload; }
+#endif
     private:
         bool _timers_need_reload = false;
         client_list_t _active_timers;
@@ -509,7 +535,26 @@ public:
         // Note that avoiding new() is is not *really* important because
         // sizeof(thread) very large (over 20 KB) and would get a 4096-byte
         // alignment anyway, even if we allocated it with normal new.
-        void *p = aligned_alloc(alignof(thread), sizeof(thread));
+        //
+        // The thread object MUST live in the identity-mapped kernel heap, not
+        // the fork arena: the scheduler dereferences it from every address
+        // space (a fork child's AS and the parent's AS0), so its VA must resolve
+        // to the same physical page everywhere.  An arena (COW, app-slot)
+        // allocation would give each address space a private copy -- corrupting
+        // cross-AS scheduling.  alloc_thread_storage() forces the kernel heap.
+        //
+        // The SAME is true of every allocation the thread CONSTRUCTOR makes:
+        // _detached_state (scheduler status/cpu), _wakeup_link's
+        // lockless_queue_helper (touched by wake_impl with preemption off), the
+        // _tls vector, etc.  All are dereferenced by the scheduler cross-AS
+        // with preemption disabled, where a COW page fault is illegal.  So run
+        // the whole construction under a kernel_heap_scope, not just the object
+        // storage -- one guard covers alloc_thread_storage() and every
+        // sub-allocation the constructor performs.
+#if CONF_fork
+        fork_arena::kernel_heap_scope kh;
+#endif
+        void *p = alloc_thread_storage(alignof(thread), sizeof(thread));
         if (!p) {
             return nullptr;
         }
@@ -520,8 +565,10 @@ public:
     // delete are the same, so delete is fine.
     static void dispose(thread* p) {
         p->~thread();
-        free(p);
+        free_thread_storage(p);
     }
+    // So that delete, and std::unique_ptr<thread>, free it the same way.
+    static void operator delete(void* p) { free_thread_storage(p); }
     using thread_unique_ptr = std::unique_ptr<thread, decltype(&thread::dispose)>;
     template <typename... Args>
     static thread_unique_ptr make_unique(Args&&... args) {
@@ -625,6 +672,18 @@ public:
      * allows the thread to be later migrated to any CPU.
      */
     void unpin();
+    /**
+     * Keep the thread on the calling thread's CPU: the load balancer does not
+     * move a held thread, and pin() waits until it is released.  A signal
+     * handler running there at real-time priority then interrupts the thread,
+     * which does not run until the handler first blocks or ends.  Returns
+     * false, and holds nothing, if the thread is on another CPU.  Each
+     * hold_here() that returned true is undone by one release_hold().
+     * NB: the holder must not pin() the held thread, which would wait for
+     * the holder's own release.
+     */
+    bool hold_here();
+    void release_hold() { _interrupt_holds.fetch_sub(1, std::memory_order_release); }
 
 #ifdef __OSV_CORE__
     static inline thread* current() { return s_current; };
@@ -632,6 +691,14 @@ public:
     static thread* current();
 #endif
     stack_info get_stack_info();
+#if CONF_fork
+    // The stack this thread runs on.  A fork child runs on its parent's
+    // stack, at the same VA in its own address space, not on its own.
+    stack_info get_running_stack_info() {
+        return _fork_stack.begin ? _fork_stack : get_stack_info();
+    }
+    void set_running_stack_info(stack_info si) { _fork_stack = si; }
+#endif
     cpu* tcpu() const __attribute__((no_instrument_function));
     status get_status() const;
     void join();
@@ -862,6 +929,8 @@ private:
     std::unique_ptr<detached_state> _detached_state;
     attr _attr;
     int _migration_lock_counter;
+    // Signal handlers interrupting this thread (see hold_here()).
+    std::atomic<unsigned> _interrupt_holds{0};
     // _migration_lock_counter being set may be temporary, but if _pinned
     // is true, it was permanently incremented by 1 by sched::thread::pin().
     // In the future, we should replace this boolean _pinned by a bitmask
@@ -876,8 +945,46 @@ private:
     std::vector<char*> _tls;
     bool _app;
     std::shared_ptr<osv::application_runtime> _app_runtime;
+#if CONF_fork
+    // Current address space (Stage 2 fork COW).  The arch context switch loads
+    // this AS's page-table root (CR3) when it differs from the outgoing
+    // thread's.  Defaults to the kernel address space (AS0); a forked child's
+    // thread is moved into its private child address space.
+    mmu::address_space *_current_as;
+    stack_info _fork_stack;   // see get_running_stack_info()
+    // Fork timer-park support.  A thread's sched::timer objects live on its
+    // (per-address-space private) user stack, but the per-CPU timer_set list
+    // they link into is shared identity memory walked from IRQ context in
+    // WHATEVER address space the CPU currently holds.  After fork, a timer node
+    // at a child stack VA is garbage when walked from another AS (parent/idle)
+    // -> a COW/wild page fault in non-preemptable IRQ context.  So on an
+    // AS-crossing context switch we SUSPEND the outgoing thread's timers off the
+    // per-CPU list (done in the outgoing AS, where its stack timers are valid)
+    // and RESUME the incoming thread's (in the incoming AS).  A suspended
+    // (blocked) thread's earliest deadline is parked in identity memory here so
+    // a per-CPU identity kernel timer can still wake it on time.
+    osv::clock::uptime::time_point _parked_deadline;
+    bi::list_member_hook<> _parked_link;
+    bool _timers_parked = false;
+    // The cpu whose parked_threads list currently holds _parked_link (nullptr
+    // when not linked).  The per-CPU parked list is NOT migration-coherent by
+    // itself: a parked (blocked/preempted) thread can be migrated to another
+    // cpu (load_balance, thread::pin) while still linked on its SOURCE cpu's
+    // list.  Recording the owning cpu lets every erase (unpark/complete) target
+    // the RIGHT list, and every migration point (all of which run ON the source
+    // cpu) unlink it there before the thread can run/park elsewhere -- so
+    // park_timers never push_back()s a still-linked node (the intrusive-list
+    // safe-link double-insert assert) and no erase touches a foreign cpu's list.
+    cpu *_parked_cpu = nullptr;
+#endif
 public:
     void destroy();
+#if CONF_fork
+    mmu::address_space *address_space() const { return _current_as; }
+    // Move this thread to @as.  A thread holds a use of the address space it
+    // is in (mmu::as_hold), so the old one may be retired here.
+    void set_address_space(mmu::address_space *as);
+#endif
 #ifdef __x86_64__
     unsigned long get_app_tcb() { return _tcb->app_tcb; }
     void set_app_tcb(unsigned long tcb) { _tcb->app_tcb = tcb; }
@@ -902,6 +1009,14 @@ private:
 public:
     std::atomic<thread *> _joiner;
     bi::set_member_hook<> _runqueue_link;
+    // Intrusive link for the detached-thread reaper's zombie list.  Intrusive
+    // (no node allocation) is REQUIRED: add_zombie() runs from thread
+    // termination paths that may have preemption disabled, and -- with the fork
+    // arena -- from an application thread whose malloc would route a std::list
+    // node into the child's COW-private arena page (incoherent to the reaper in
+    // AS0).  A hook inside the thread object (identity kernel heap) sidesteps
+    // both: no allocation, coherent cross-address-space.
+    bi::list_member_hook<> _zombie_link;
     // see cpu class
     lockless_queue_link<thread> _wakeup_link;
     static unsigned long _s_idgen;
@@ -1052,6 +1167,35 @@ struct cpu : private timer_base::client {
     thread* terminating_thread;
     osv::clock::uptime::time_point running_since;
     char* percpu_base;
+#if CONF_fork
+    // Fork timer-park (see thread::_parked_deadline).  A per-CPU identity kernel
+    // timer that fires at the earliest parked (suspended, blocked) thread's
+    // deadline and wakes every due parked thread, so a blocked fork-child thread
+    // whose real timer we removed from the per-CPU list still wakes on time.
+    // The parked list + the wakeup timer all live in identity (cpu/thread
+    // objects), never COW arena, so this handler never faults from IRQ context.
+    struct park_client : timer_base::client {
+        cpu *_cpu;
+        explicit park_client(cpu *c) : _cpu(c) {}
+        void timer_fired() override;
+    } park_timer_client{this};
+    timer_base park_wakeup_timer{park_timer_client};
+    bi::list<thread, bi::member_hook<thread, bi::list_member_hook<>, &thread::_parked_link>> parked_threads;
+    // Park an outgoing thread's timers (called with its AS still loaded).
+    void park_timers(thread& t);
+    // Unpark an incoming thread's timers (called with its AS loaded).
+    void unpark_timers(thread& t);
+    // Drop a thread from ITS parked list (t._parked_cpu->parked_threads) without
+    // resuming its timers -- for the migration paths, which run on the source
+    // cpu (== t._parked_cpu) and re-wake the thread themselves.  Keeps
+    // _timers_parked set so the AS-local resume still happens on switch-in.
+    // No-op if the thread is not currently linked on any parked list.
+    static void unlink_parked(thread& t);
+    // Re-arm park_wakeup_timer to the earliest parked deadline.
+    void rearm_park_timer();
+    // park_wakeup_timer callback: wake all due parked threads.
+    void park_timer_fired();
+#endif
     static cpu* current();
     void init_on_cpu();
     static void schedule();
