@@ -1,12 +1,26 @@
 #include "stdio_impl.h"
 
 /* The behavior of this function is undefined except when it is the first
- * operation on the stream, so the presence or absence of locking is not
- * observable in a program whose behavior is defined. Thus no locking is
- * performed here. */
+ * operation on the stream. OSv cannot rely on that for stdout and stderr,
+ * see below. */
 
 int setvbuf(FILE *restrict f, char *restrict buf, int type, size_t size)
 {
+	// In OSv, the kernel and every application share one stdout and one
+	// stderr, and the kernel has usually written to them before an
+	// application's main() runs, so setvbuf() is rarely the first operation
+	// on those streams.  If we only changed buf_size, the write pointers
+	// would keep pointing at the old buffer, and later writes would be
+	// copied there instead of being written, even with _IONBF.  So flush
+	// any pending output and clear the write state, under the stream's
+	// lock as fflush() does, so the next write starts over with the new
+	// buffering.  On a stream that has not been written to, this does
+	// nothing.  The read state is left alone: unread bytes in the old
+	// buffer are still returned, and the next refill uses the new buffer.
+	FLOCK(f);
+	if (f->wpos != f->wbase) f->write(f, 0, 0);
+	f->wpos = f->wbase = f->wend = 0;
+
 	f->lbf = EOF;
 
 	if (type == _IONBF) {
@@ -34,10 +48,12 @@ int setvbuf(FILE *restrict f, char *restrict buf, int type, size_t size)
 		if (type == _IOLBF && f->buf_size)
 			f->lbf = '\n';
 	} else {
+		FUNLOCK(f);
 		return -1;
 	}
 
 	f->flags |= F_SVB;
 
+	FUNLOCK(f);
 	return 0;
 }
