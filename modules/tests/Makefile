@@ -541,6 +541,8 @@ solaris-tests := tst-solaris-taskq.so
 # The BSD sleep/wakeup port (bsd/porting/synch.cc) and the taskqueue on it.
 tests += tst-bsd-synch.so misc-bsd-taskq-bench.so
 internal-api-tests += tst-bsd-synch.so misc-bsd-taskq-bench.so
+tests += tst-fork-msleep-noalloc.so
+internal-api-tests += tst-fork-msleep-noalloc.so
 
 #FIXME: the misc-zfs-disk.c does not compile due to some header issues
 #zfs-tests := misc-zfs-disk.so misc-zfs-io.so misc-zfs-arc.so
