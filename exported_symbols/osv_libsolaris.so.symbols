@@ -1,3 +1,7 @@
+SHA256_Final
+SHA256_Init
+SHA256_Update
+_msleep
 alloc_bio
 bio_wait
 bsd_pause
@@ -8,7 +12,6 @@ copyin
 copyinstr
 copyout
 cv_timedwait
-openzfs_cv_timedwait
 debug
 destroy_bio
 device_close
@@ -21,6 +24,8 @@ file_dentry
 file_flags
 file_offset
 file_setoffset
+fork_kernel_heap_pop
+fork_kernel_heap_push
 get_cpuid
 get_curproc
 get_curthread
@@ -35,13 +40,13 @@ lockfree_mutex_try_lock
 lockfree_mutex_unlock
 mmu_map
 mmu_unmap
-_msleep
 nmount
+openzfs_cv_timedwait
 osv_alloc_page
 osv_free_page
 osv_free_pages
-osv_pagecache_map_page
 osv_pagecache_map_arc_page
+osv_pagecache_map_page
 osv_pagecache_register_arc_rele
 osv_reclaimer_thread
 physmem
@@ -52,8 +57,6 @@ register_pagecache_arc_funs
 register_shrinker_arc_funs
 release_mp_dentries
 rw_downgrade
-rwlock_destroy
-rwlock_init
 rw_rlock
 rw_runlock
 rw_try_rlock
@@ -62,13 +65,12 @@ rw_try_wlock
 rw_wlock
 rw_wowned
 rw_wunlock
+rwlock_destroy
+rwlock_init
 sbuf_delete
 sbuf_finish
 sbuf_new
 sbuf_printf
-SHA256_Final
-SHA256_Init
-SHA256_Update
 smp_processors
 start_pagecache_access_scanner
 sys_open
@@ -97,6 +99,6 @@ vm_throttling_needed
 vrele
 vttoif_tab
 wakeup
-zfsdev_init
 zfs_driver_initialized
 zfs_update_vfsops
+zfsdev_init

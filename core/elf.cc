@@ -8,6 +8,10 @@
 #include <osv/elf.hh>
 #include <osv/app.hh>
 #include <osv/mmu.hh>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 #include <osv/kernel_config_elf_debug.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
@@ -55,6 +59,11 @@ extern char libvdso_start[];
 using namespace boost::range;
 
 namespace elf {
+
+#if CONF_fork
+void cxa_forget_range(void *start, void *end);   // runtime.cc
+#endif
+
 
 const ulong program::core_module_index = 0;
 
@@ -144,8 +153,44 @@ ulong object::module_index() const
     return _module_index;
 }
 
+#if CONF_fork
+// An object loaded in AS0 is visible everywhere.  One a fork child loaded is
+// visible in its owner, and in an address space that maps its range: a child
+// the owner forked after the load (its clone maps the object).  AS0 never maps
+// a child's object: each load takes a range no other listed object has.
+static mmu::address_space *const gone_owner = reinterpret_cast<mmu::address_space*>(1);
+
+bool object::visible_here() const
+{
+    auto owner = owner_as();
+    if (!owner) {
+        return true;
+    }
+    auto cur = mmu::current_address_space();
+    if (owner == cur) {
+        return true;
+    }
+    if (cur == mmu::kernel_address_space()) {
+        return false;
+    }
+    return mmu::intersects_vma(reinterpret_cast<uintptr_t>(_base),
+                               reinterpret_cast<uintptr_t>(_end));
+}
+
+bool object::visible_here_nolock() const
+{
+    auto owner = owner_as();
+    return !owner || owner == mmu::current_address_space();
+}
+#endif
+
 bool object::visible(void) const
 {
+#if CONF_fork
+    if (!visible_here()) {
+        return false;
+    }
+#endif
     auto level = _visibility_level.load(std::memory_order_acquire);
     if (level == VisibilityLevel::Public) {
         return true;
@@ -206,6 +251,9 @@ void* object::cached_lookup(const std::string& name)
     }
     else {
         void *symbol_address = lookup(name.c_str());
+#if CONF_fork
+        fork_arena::kernel_heap_scope kh;   // the object's cache is global
+#endif
         _cached_symbols[name] = symbol_address;
         return symbol_address;
     }
@@ -230,6 +278,9 @@ std::string object::section_name(const Elf64_Shdr& shdr)
         return {};
     }
     if (!_section_names_cache) {
+#if CONF_fork
+        fork_arena::kernel_heap_scope kh;   // the object's cache is global
+#endif
         auto s = sections().at(_ehdr.e_shstrndx);
         std::unique_ptr<char[]> p(new char[s.sh_size]);
         read(s.sh_offset, p.get(), s.sh_size);
@@ -259,6 +310,33 @@ file::file(program& prog, ::fileref f, std::string pathname)
 {
     load_elf_header();
     load_program_headers();
+#if CONF_fork
+    // A non-PIE (ET_EXEC) image keeps its writable .data/.bss at the fixed low
+    // virtual addresses the linker chose, which fall in PML4 slot 0 (VA 0 ..
+    // 512 GB).  clone_address_space() SHARES slot 0 verbatim -- it is the
+    // kernel's own slot and is never COW-cloned -- so a fork child and its
+    // parent would share the SAME physical pages for the app's globals: the
+    // child's writes to them silently leak into and corrupt the parent's
+    // address space (no fault, no assert).  Refuse such an image at load with a
+    // clear, actionable error rather than corrupt; it must be relinked as PIE
+    // (-pie) so the loader can place its writable data in a COW-isolated
+    // application slot.  Checked here in the ctor (not set_base) so the throw
+    // unwinds cleanly before the object is wrapped in a shared_ptr whose
+    // partial-construction deleter would run.  The VA bound
+    // (pml4_app_first << 39 == 1 << 39 == 0x8000000000) is arch-independent in
+    // clone_address_space, so this guard holds for x86-64 and aarch64.
+    if (!is_pic()) {
+        for (auto& phdr : _phdrs) {
+            if (phdr.p_type == PT_LOAD && (phdr.p_flags & PF_W) &&
+                phdr.p_vaddr < 0x8000000000ull /* slot 1 start = 512 GB */) {
+                throw osv::invalid_elf_error(
+                    "non-PIE executable [" + pathname + "] has writable data in"
+                    " the shared kernel PML4 slot 0; it cannot be safely"
+                    " fork()ed -- relink as PIE (-pie)");
+            }
+        }
+    }
+#endif
 }
 
 file::~file()
@@ -419,7 +497,74 @@ void file::load_segment(const Elf64_Phdr& phdr)
 
     unsigned perm = get_segment_mmap_permissions(phdr);
 
-    auto flag = mmu::mmap_fixed | (mlocked() ? mmu::mmap_populate : 0);
+    // Under CONF_fork, eagerly POPULATE every file-backed segment at load.
+    //
+    // Two distinct fork hazards make the on-demand (lazy) mapping of a
+    // file-backed PT_LOAD segment unsafe once the program fork()s:
+    //
+    //  1. WRITABLE segments (.data/.got/.got.plt) are RELOCATED in memory at
+    //     load (object::relocate / relocate_pltgot rewrite the GOT with this
+    //     object's base, the resolver trampoline pointer and jump-slot
+    //     targets).  Those writes diverge the page from its on-disk contents.
+    //     If a relocated page is demand-paged (not resident) when fork() clones
+    //     the address space, the child inherits an EMPTY leaf PTE and its first
+    //     access re-reads the ORIGINAL, unrelocated bytes from the file
+    //     (pltgot[1]=0, raw jump slots) -- the child's lazy PLT resolver then
+    //     dereferences a NULL elf::object and faults (the resolve_pltgot
+    //     fork-coherence bug).
+    //
+    //  2. READ-ONLY exec/rodata segments (.text/.rodata) are byte-identical to
+    //     the file, so they have no relocation-divergence problem -- but when
+    //     the executable lives on a DEMAND-PAGED backing store (ROFS) a forked
+    //     child that touches a page not yet resident takes a page fault whose
+    //     servicing must READ FROM DISK (rofs_read_blocks -> blocking
+    //     virtio-blk I/O) and/or acquire the AS-wide vmas write lock.  Both can
+    //     BLOCK and reschedule.  That fault can be NESTED inside another
+    //     in-flight fork/COW fault (exception_depth >= 2), where no reschedule
+    //     is allowed, so the reschedule trips assert(exception_depth <= 1) in
+    //     reschedule_from_interrupt (seen as the "ROFS-demand-page-nested-in-
+    //     fork-fault" wall: a forked PostgreSQL backend touching a cold .text
+    //     page aborts the unikernel -- reproduced on an fs=rofs_with_zfs
+    //     conf_fork=1 image).  The fs=ramfs image sidesteps this by baking
+    //     .text into the loader so nothing is ever demand-paged; we instead PIN
+    //     the whole segment resident at load so no fork child ever takes a
+    //     demand fault on it.  (A pure fs=zfs root, where the whole image is one
+    //     ZFS pool, happens not to hit the abort in practice because the
+    //     postmaster warms most .text through the ZFS ARC before forking, but
+    //     pinning closes the race there too and is correct for any backing fs.)
+    //
+    // Populating the WHOLE segment resident at load makes clone_address_space
+    // COW-share already-present pages, so every fork child resolves .text/.data
+    // accesses against a present PTE -- no demand read, no nested blocking
+    // fault, and writable pages carry the correct RELOCATED contents.  This is
+    // load-time work (preemptable, not at nested exception depth) so it is
+    // safe.  Gated on CONF_fork: the non-fork build is byte-identical.
+    //
+    // CAVEATS (do not read this as an absolute guarantee):
+    //  - populate is BEST-EFFORT: map_file does not fail if a page cannot be
+    //    populated and populate::page swallows an allocation failure, so under
+    //    memory pressure a page can still be left demand-paged.  It removes the
+    //    fault in the common case, it does not make the fault impossible.
+    //  - It covers only objects loaded through THIS path: the main executable
+    //    and every shared library present at load/DT_NEEDED time (so all of
+    //    PostgreSQL's .so's, which the postmaster loads BEFORE forking).  A
+    //    library a CHILD dlopen()s AFTER fork is mapped only in that child and
+    //    is NOT covered here; the same nested-fault class can recur for it.
+    //    That is a latent gap, not something this change introduces, and PG's
+    //    pre-fork load order avoids it.  The deeper fix is to make the nested
+    //    blocking fault safe (relax/handle assert(exception_depth <= 1)); this
+    //    populate is the smaller, more upstreamable step.
+    //  - COST direction: this pins the whole RO text+rodata (and the writable
+    //    segments as before) resident for the object's lifetime and does the
+    //    read I/O synchronously at load.  The cost scales with binary+library
+    //    size, NOT with child count (children COW-share the resident pages).
+    //    Fine for a ~50 MB postgres under a multi-GiB guest; weigh it for a very
+    //    large executable in a memory-tight guest or a cold-boot-latency path.
+    unsigned populate = 0;
+#if CONF_fork
+    populate = mmu::mmap_populate;
+#endif
+    auto flag = mmu::mmap_fixed | (mlocked() ? mmu::mmap_populate : populate);
     mmu::map_file(_base + vstart, filesz, flag, perm, _f, align_down(phdr.p_offset, mmu::page_size));
     if (phdr.p_filesz != phdr.p_memsz) {
         assert(perm & mmu::perm_write);
@@ -428,6 +573,24 @@ void file::load_segment(const Elf64_Phdr& phdr)
             mmu::map_anon(_base + vstart + filesz, memsz - filesz, flag, perm);
         }
     }
+#if CONF_fork
+    // libsolaris.so (the OpenZFS kernel module) is loaded into the COW-cloned
+    // application VA slot, but its writable .data/.bss hold GLOBAL ZFS state
+    // (buf_hash_table, arc_anon/mru/mfu, the dbuf hash, arc_stats, ...) that
+    // both AS0 ZFS kernel threads and forked app threads must see identically.
+    // Register its writable segments so clone_address_space shares them verbatim
+    // (never COW) across every fork child -- otherwise a forked PostgreSQL
+    // process and the AS0 txg_sync / dp_sync_taskq threads diverge and ZFS
+    // corrupts (e.g. NULL-deref in buf_hash_remove).  libsolaris.so is mlocked
+    // and never unloaded, so its VA range is fixed for the life of the system.
+    if ((perm & mmu::perm_write) &&
+        _pathname.size() >= 13 &&
+        _pathname.compare(_pathname.size() - 13, 13, "libsolaris.so") == 0) {
+        uintptr_t rstart = reinterpret_cast<uintptr_t>(_base) + vstart;
+        uintptr_t rend = reinterpret_cast<uintptr_t>(_base) + vstart + memsz;
+        mmu::add_fork_shared_module_range(rstart, rend);
+    }
+#endif
     elf_debug("Loaded and mapped PT_LOAD segment at: %018p of size: 0x%x\n", _base + vstart, filesz);
 }
 
@@ -849,6 +1012,31 @@ void object::relocate_pltgot()
         (dynamic_exists(DT_FLAGS) && (dynamic_val(DT_FLAGS) & DF_BIND_NOW)) ||
         (dynamic_exists(DT_FLAGS_1) && (dynamic_val(DT_FLAGS_1) & DF_1_NOW)) || mlocked();
 
+#if CONF_fork
+    // Under CONF_fork, EAGERLY bind every PLT jump slot at load time (in AS0,
+    // before any fork).  Lazy PLT binding is not fork-coherent: a forked child
+    // running in its own COW address space that is the FIRST to hit an
+    // unresolved slot must run the resolver (elf::object::resolve_pltgot ->
+    // object::symbol -> program::lookup) in that child.  Two facets bite there:
+    //   (1) GOT-slot: a demand-paged, relocation-dirtied GOT page not resident
+    //       at fork is re-read UNRELOCATED from the file in the child (the
+    //       resolve_pltgot NULL-deref fixed in 8d775cc01), and
+    //   (2) SYMBOL-LOOKUP: the child's resolver walks the shared object list /
+    //       symbol tables and can fail to FIND a symbol the parent resolves
+    //       fine (the "sem_wait/preadv/pwritev not found" wall under heavy PG
+    //       fork load).
+    // Resolving all slots up front in AS0 removes BOTH: no forked child ever
+    // runs the resolver, and the resolution WRITES each GOT slot so its page is
+    // anonymous + resident and clone_address_space() COW-shares the RELOCATED
+    // contents.  This runs before fix_permissions() write-protects RELRO, so
+    // the slot writes never hit a read-only page.  It supersedes the
+    // mmap_populate-of-writable-segments half of 8d775cc01 (the writes here
+    // already pin the GOT resident) while remaining complementary to its
+    // identity-heap _used_by_resolve_plt_got insert (which now only matters for
+    // objects dlopen'd AFTER the first fork).
+    bind_now = true;
+#endif
+
     auto rel = dynamic_ptr<Elf64_Rela>(DT_JMPREL);
     auto nrel = dynamic_val(DT_PLTRELSZ) / sizeof(*rel);
     for (auto p = rel; p < rel + nrel; ++p) {
@@ -900,6 +1088,24 @@ void* object::resolve_pltgot(unsigned index)
 
     if (sm.obj != this) {
         WITH_LOCK(_used_by_resolve_plt_got_mutex) {
+#if CONF_fork
+            // A lazily-resolved PLT slot may first be hit by a FORKED CHILD,
+            // running in its own COW address space.  Without this scope the set
+            // node std::unordered_set::insert allocates would land in the
+            // child's private COW arena, while the set itself lives in the
+            // shared elf::object (identity heap).  A sibling or AS0 later walking
+            // this shared set (e.g. at module unload, or its own resolve) would
+            // dereference a node mapped only in that child's -- possibly already
+            // reclaimed -- address space: the NULL/COW-stale fault in the elf
+            // resolver.  Forcing the node onto the identity heap keeps the set
+            // coherent across every fork address space.
+            fork_arena::kernel_heap_scope kh;
+            // Only an AS0 object needs pinning here.  An object a fork child
+            // loaded is held by its address space until it retires, and a
+            // reference to it from another object would keep it (and a cycle
+            // between two of them, both) loaded for good.
+            if (!sm.obj->owner_as())
+#endif
             _used_by_resolve_plt_got.insert(sm.obj->shared_from_this());
         }
     }
@@ -1428,8 +1634,21 @@ program::program(void* addr)
           "libcrypt.so.1",
           "libutil.so",
     };
-    auto ml = new modules_list();
-    ml->objects.push_back(_core.get());
+    modules_list *ml;
+    {
+#if CONF_fork
+        // The object-list vector (modules_list::objects) is read by forked
+        // children under rcu_read_lock (object_containing_addr), which runs
+        // with preemption DISABLED.  Keep its backing store on the shared
+        // identity kernel heap (resident at the same VA in every address
+        // space) instead of the per-AS COW fork arena, so the non-preemptable
+        // read in a child cannot take a not-present fault on an arena page the
+        // child's clone did not capture.
+        fork_arena::kernel_heap_scope kh;
+#endif
+        ml = new modules_list();
+        ml->objects.push_back(_core.get());
+    }
     for (auto name : supplied_modules) {
         _files[name] = _core;
     }
@@ -1489,12 +1708,18 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         std::vector<std::shared_ptr<object>> &loaded_objects, bool dlopen)
 {
     fileref f;
+#if CONF_fork
+    if (auto obj = find_loaded(name)) {
+        return obj;
+    }
+#else
     if (_files.count(name)) {
         auto obj = _files[name].lock();
         if (obj) {
             return obj;
         }
     }
+#endif
     if (name.find('/') == name.npos) {
         std::vector<std::string> search_path;
         search_path.insert(search_path.end(), extra_path.begin(), extra_path.end());
@@ -1515,17 +1740,35 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         f = fileref_from_fname(name);
     }
 
+#if CONF_fork
+    if (auto obj = find_loaded(name)) {
+        return obj;
+    }
+#else
     if (_files.count(name)) {
         auto obj = _files[name].lock();
         if (obj) {
             return obj;
         }
     }
+#endif
     if (f) {
         trace_elf_load(name.c_str());
         auto ef = std::shared_ptr<object>(new file(*this, f, name),
                 [=](object *obj) { remove_object(obj); });
+#if CONF_fork
+        auto as = mmu::current_address_space();
+        if (as != mmu::kernel_address_space()) {
+            ef->_owner_as.store(as, std::memory_order_release);
+            // Held before it is mapped: a fork that clones the mapping
+            // copies the hold too (inherit_as_objects runs after the clone).
+            hold_in_as(as, ef);
+        }
+        void *at = ef->is_pic() ? alloc_range(ef.get()) : nullptr;
+        ef->set_base(at ? at : _next_alloc);
+#else
         ef->set_base(_next_alloc);
+#endif
         ef->set_visibility(ThreadOnly);
         ef->set_dlopen_ed(dlopen);
         // We need to push the object at the end of the list (so that the main
@@ -1533,23 +1776,45 @@ program::load_object(std::string name, std::vector<std::string> extra_path,
         // with one exception: the kernel needs to remain at the end of the
         // list - We want it to behave like a library, not the main program.
         auto old_modules = _modules_rcu.read_by_owner();
-        std::unique_ptr<modules_list> new_modules (
-                new modules_list(*old_modules));
-        new_modules->objects.insert(
-                std::prev(new_modules->objects.end()), ef.get());
+        std::unique_ptr<modules_list> new_modules;
+        {
+#if CONF_fork
+            // Identity heap, not the COW arena: forked children walk this
+            // vector under rcu_read_lock (preemption off) via
+            // object_containing_addr.  Both the copy ctor and insert() grow the
+            // backing store, so wrap both.
+            fork_arena::kernel_heap_scope kh;
+#endif
+            new_modules.reset(new modules_list(*old_modules));
+            new_modules->objects.insert(
+                    std::prev(new_modules->objects.end()), ef.get());
+        }
         new_modules->adds++;
         _modules_rcu.assign(new_modules.release());
         osv::rcu_dispose(old_modules);
         ef->load_segments();
         ef->process_headers();
+#if CONF_fork
+        if (ef->is_pic() && !at)
+            _next_alloc = ef->end();
+        if (!ef->owner_as())
+            add_debugger_obj(ef.get());   // gdb reads AS0
+#else
         if (ef->is_pic())
             _next_alloc = ef->end();
         add_debugger_obj(ef.get());
+#endif
         loaded_objects.push_back(ef);
         // Do not try to load any dependant libraries for static executable, they don't apply here.
         if (!ef->is_statically_linked_executable() && !ef->is_linux_dl()) {
             ef->load_needed(loaded_objects);
         }
+#if CONF_fork
+        if (ef->owner_as()) {
+            // Found through its address space (find_loaded), not _files.
+            return ef;
+        }
+#endif
         _files[name] = ef;
         _files[ef->soname()] = ef;
         return ef;
@@ -1574,8 +1839,19 @@ program::get_library(std::string name, std::vector<std::string> extra_path, bool
     // Since a library can load another one like java.so does in OSv, we want a stack
     // structure so each init_library call gets it's corresponding list of objects to operate on.
     //
+    std::shared_ptr<object> ret;
+    {
+#if CONF_fork
+    // The objects are global: every address space finds them in the module
+    // list and _files.  So is everything a load allocates for them (the file
+    // object, its headers, caches and vectors, the list nodes), and a fork
+    // child or an exec'd program can be loading.  Keep all of it on the
+    // identity heap, not in the loading process's arena.  The objects' init
+    // functions below are the application's own code, and are not scoped.
+    fork_arena::kernel_heap_scope kh;
+#endif
     std::vector<std::shared_ptr<object>> loaded_objects;
-    auto ret = load_object(name, extra_path, loaded_objects, dlopen);
+    ret = load_object(name, extra_path, loaded_objects, dlopen);
     _loaded_objects_stack.push(loaded_objects);
 
     // Relocate objects *after* loading all objects, otherwise, we cannot resolve circluar relocations.
@@ -1589,6 +1865,15 @@ program::get_library(std::string name, std::vector<std::string> extra_path, bool
 
     if (ret) {
         ret->init_static_tls();
+    }
+#if CONF_fork
+    // The process keeps what it asked for loaded until it exits, like the
+    // objects it loaded itself (load_object).
+    auto as = mmu::current_address_space();
+    if (ret && as != mmu::kernel_address_space()) {
+        hold_in_as(as, ret);
+    }
+#endif
     }
 
     if (!delay_init) {
@@ -1626,11 +1911,21 @@ void program::remove_object(object *ef)
 {
     SCOPE_LOCK(_mutex);
     trace_elf_unload(ef->pathname().c_str());
+#if CONF_fork
+    // An object a fork child loaded goes when that process's address space
+    // retires (release_as_objects), on a thread outside it: none of its
+    // memory is mapped here.  As after _exit(), its fini functions do not run.
+    bool owned = ef->owner_as();
+#else
+    constexpr bool owned = false;
+#endif
 
+    if (!owned) {
     // ensure that any module rcu callbacks are completed before static destructors
     osv::rcu_flush();
 
     ef->run_fini_funcs();
+    }
 
     // ensure that any module rcu callbacks launched by static destructors
     // are completed before we delete the module
@@ -1639,15 +1934,26 @@ void program::remove_object(object *ef)
     del_debugger_obj(ef);
     // Note that if we race with get_library() of the same library, we may
     // find in _files a new copy of the same library, and mustn't remove it.
+    // (An owned object is not in _files, and soname() would read its memory.)
+    if (!owned) {
     if (_files[ef->pathname()].expired())
         _files.erase(ef->pathname());
     if (_files[ef->soname()].expired())
         _files.erase(ef->soname());
+    }
     auto old_modules = _modules_rcu.read_by_owner();
-    std::unique_ptr<modules_list> new_modules (
-            new modules_list(*old_modules));
-    new_modules->objects.erase(std::find(
-            new_modules->objects.begin(), new_modules->objects.end(), ef));
+    std::unique_ptr<modules_list> new_modules;
+    {
+#if CONF_fork
+        // Identity heap, not the COW arena (same reason as add_object): the new
+        // modules_list and its copied objects vector are read by forked
+        // children under rcu_read_lock with preemption off.
+        fork_arena::kernel_heap_scope kh;
+#endif
+        new_modules.reset(new modules_list(*old_modules));
+        new_modules->objects.erase(std::find(
+                new_modules->objects.begin(), new_modules->objects.end(), ef));
+    }
     new_modules->subs++;
     _modules_rcu.assign(new_modules.release());
     osv::rcu_dispose(old_modules);
@@ -1659,6 +1965,9 @@ void program::remove_object(object *ef)
     // modules_get().
     module_delete_disable();
     WITH_LOCK(_modules_delete_mutex) {
+#if CONF_fork
+        fork_arena::kernel_heap_scope kh;   // read by whichever process enables
+#endif
         _modules_to_delete.push_back(ef);
     }
     module_delete_enable();
@@ -1681,6 +1990,113 @@ void program::del_debugger_obj(object* obj)
         s_objs.erase(it);
     }
 }
+
+#if CONF_fork
+// The page range [first, second) an object's PT_LOAD segments occupy.
+static std::pair<char*, char*> load_range(object *ef)
+{
+    uintptr_t lo = UINTPTR_MAX, hi = 0;
+    for (auto &p : *ef->phdrs()) {
+        if (p.p_type == PT_LOAD) {
+            lo = std::min<uintptr_t>(lo, p.p_vaddr);
+            hi = std::max<uintptr_t>(hi, p.p_vaddr + p.p_memsz);
+        }
+    }
+    auto base = reinterpret_cast<uintptr_t>(ef->base());
+    return {reinterpret_cast<char*>(align_down(base + lo, mmu::page_size)),
+            reinterpret_cast<char*>(align_up(base + hi, mmu::page_size))};
+}
+
+// A range an unloaded owned object left, first fit, or null.  Sets ef's base.
+// Ranges are not merged.  No two listed objects share a range: an owned
+// object's range is freed only once every address space mapping it is gone.
+void *program::alloc_range(object *ef)
+{
+    SCOPE_LOCK(_free_ranges_mutex);
+    for (auto it = _free_ranges.begin(); it != _free_ranges.end(); ++it) {
+        char *start = it->first;
+        ef->set_base(start);
+        auto r = load_range(ef);
+        if (r.first >= it->first && r.second <= it->second) {
+            if (r.second == it->second) {
+                _free_ranges.erase(it);
+            } else {
+                it->first = r.second;
+            }
+            return start;
+        }
+    }
+    return nullptr;
+}
+
+std::shared_ptr<object> program::find_loaded(const std::string &name)
+{
+    if (_files.count(name)) {
+        auto obj = _files[name].lock();
+        if (obj) {
+            return obj;
+        }
+    }
+    if (mmu::current_address_space() == mmu::kernel_address_space()) {
+        return nullptr;
+    }
+    // An object a fork child loaded is not in _files: in this address space
+    // it is the one its owner or an ancestor loaded, if any.
+    for (auto obj : _modules_rcu.read_by_owner()->objects) {
+        if (obj->owner_as() && obj->visible_here() &&
+                (obj->pathname() == name || obj->soname() == name)) {
+            return obj->shared_from_this();
+        }
+    }
+    return nullptr;
+}
+
+namespace {
+mutex as_objects_mutex;
+std::unordered_map<mmu::address_space*, std::vector<std::shared_ptr<object>>> as_objects;
+}
+
+void program::hold_in_as(mmu::address_space *as, std::shared_ptr<object> obj)
+{
+    fork_arena::kernel_heap_scope kh;
+    SCOPE_LOCK(as_objects_mutex);
+    auto &v = as_objects[as];
+    if (std::find(v.begin(), v.end(), obj) == v.end()) {
+        v.push_back(std::move(obj));
+    }
+}
+
+void program::inherit_as_objects(mmu::address_space *parent, mmu::address_space *child)
+{
+    fork_arena::kernel_heap_scope kh;
+    SCOPE_LOCK(as_objects_mutex);
+    auto it = as_objects.find(parent);
+    if (it != as_objects.end()) {
+        as_objects[child] = it->second;
+    }
+}
+
+void program::release_as_objects(mmu::address_space *as)
+{
+    fork_arena::kernel_heap_scope kh;
+    std::vector<std::shared_ptr<object>> v;
+    WITH_LOCK(as_objects_mutex) {
+        auto it = as_objects.find(as);
+        if (it == as_objects.end()) {
+            return;
+        }
+        v = std::move(it->second);
+        as_objects.erase(it);
+    }
+    // A newer address space may get this pointer.  The objects still held
+    // (by this process's children) stay visible where they are mapped.
+    for (auto &obj : v) {
+        mmu::address_space *o = as;
+        obj->_owner_as.compare_exchange_strong(o, gone_owner);
+    }
+    v.clear();   // the last reference unloads (remove_object)
+}
+#endif
 
 symbol_module program::lookup(const char* name, object* seeker)
 {
@@ -1749,6 +2165,11 @@ dladdr_info program::lookup_addr(const void* addr)
     with_modules([&](const elf::program::modules_list &ml)
     {
         for (auto module : ml.objects) {
+#if CONF_fork
+            if (!module->contains_addr(addr) || !module->visible_here()) {
+                continue;
+            }
+#endif
             ret = module->lookup_addr(addr);
             if (ret.fname) {
                 return;
@@ -1772,6 +2193,14 @@ object *program::object_containing_addr(const void *addr)
     WITH_LOCK(osv::rcu_read_lock) {
          const auto &modules = _modules_rcu.read()->objects;
          for (object *module : modules) {
+#if CONF_fork
+             // No vma lock here (preemption is off), so the owner check
+             // alone: a nested descendant (a fork child's child) sees only
+             // AS0's objects and its own here, not one its parent loaded.
+             if (!module->visible_here_nolock()) {
+                 continue;
+             }
+#endif
              if (module->contains_addr(addr)) {
                  ret = module;
                  break;
@@ -1893,6 +2322,13 @@ ulong program::register_dtv(object* obj)
     SCOPE_LOCK(_module_index_list_mutex);
     auto list = _module_index_list_rcu.read_by_owner();
     if (!list) {
+#if CONF_fork
+        // Identity heap, not the COW arena: this DTV index vector is read by
+        // forked children under rcu_read_lock (preemption off) in tls_object()
+        // on the first dynamic-TLS access of a module.  Keep its backing store
+        // resident at the same VA in every address space.
+        fork_arena::kernel_heap_scope kh;
+#endif
         _module_index_list_rcu.assign(new std::vector<object*>({obj}));
         return 0;
     }
@@ -1901,8 +2337,14 @@ ulong program::register_dtv(object* obj)
         *i = obj;
         return i - list->begin();
     } else {
-        auto newlist = new std::vector<object*>(*list);
-        newlist->push_back(obj);
+        std::vector<object*> *newlist;
+        {
+#if CONF_fork
+            fork_arena::kernel_heap_scope kh;
+#endif
+            newlist = new std::vector<object*>(*list);
+            newlist->push_back(obj);
+        }
         _module_index_list_rcu.assign(newlist);
         osv::rcu_dispose(list);
         return newlist->size() - 1;
@@ -1923,6 +2365,19 @@ void program::free_dtv(object* obj)
 // so we use this function to make a copy the current list of modules.
 program::modules_list program::modules_get() const
 {
+#if CONF_fork
+    // The returned list's `objects` vector is grown here (reserve) and written
+    // (assign) while holding osv::rcu_read_lock -- i.e. with preemption OFF.
+    // On an application thread (e.g. a dladdr()/dl_iterate_phdr() caller) an
+    // unscoped std::vector allocation routes to the COW fork arena (app slot
+    // 97).  A concurrent fork() can then COW-write-protect that arena page, so
+    // the non-preemptable assign() takes an illegal COW write-fault -> abort
+    // (tst-fork-concfork-objlist: "assert(preemptable())" / a wild write at the
+    // win_slot).  Force the identity kernel heap for this vector, exactly as
+    // add_object()/remove_object() already do for the published modules_list,
+    // so it is never a COW page and the non-preemptable write is always safe.
+    fork_arena::kernel_heap_scope kh;
+#endif
     modules_list ret;
 #if CONF_lazy_stack_invariant
     assert(sched::preemptable() && arch::irq_enabled());
@@ -1964,6 +2419,9 @@ void program::module_delete_disable()
 
 void program::module_delete_enable()
 {
+#if CONF_fork
+    fork_arena::kernel_heap_scope kh;   // to_delete copies a global vector
+#endif
     std::vector<object*> to_delete;
     WITH_LOCK(_modules_delete_mutex) {
         assert(_module_delete_disable >= 0);
@@ -1975,6 +2433,22 @@ void program::module_delete_enable()
     }
 
     for (auto ef : to_delete) {
+#if CONF_fork
+        if (ef->owner_as()) {
+            // Its mappings went with its address spaces.  Its destructors
+            // never run; forget them, then let a later load use the range.
+            auto r = load_range(ef);
+            bool pic = ef->is_pic();
+            cxa_forget_range(r.first, r.second);
+            delete ef;
+            if (pic) {
+                WITH_LOCK(_free_ranges_mutex) {
+                    _free_ranges.push_back(r);
+                }
+            }
+            continue;
+        }
+#endif
         ef->unload_segments();
         delete ef;
     }
