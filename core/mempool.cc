@@ -397,8 +397,13 @@ struct mark_smp_allocator_intialized {
         // Our malloc() is very coarse so allocate all the queues in one large buffer.
         // We allocate at least one page because current implementation of aligned_alloc()
         // is not capable of ensuring aligned allocation for small allocations.
-        auto buf = aligned_alloc(alignof(garbage_sink),
-                    std::max(page_size, sizeof(garbage_sink) * ncpus * ncpus));
+        // Keep the queues in the linear map: from about 105 CPUs the buffer
+        // reaches 2 MiB, and aligned_alloc() would then mmap it in the
+        // application address range, where fork() makes it copy-on-write
+        // and a cross-CPU free (preemption disabled) faults on it.
+        auto buf = alloc_phys_contiguous_aligned(
+                    std::max(page_size, sizeof(garbage_sink) * ncpus * ncpus),
+                    alignof(garbage_sink));
         pcpu_free_list = new garbage_sink**[ncpus];
         for (auto i = 0U; i < ncpus; i++) {
             pcpu_free_list[i] = new garbage_sink*[ncpus];
