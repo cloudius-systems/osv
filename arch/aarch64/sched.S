@@ -1,3 +1,5 @@
+#include <osv/kernel_config_fork.h>
+
 #void cpu::reschedule_from_interrupt(bool called_from_yield,
 #                                    thread_runtime::duration preempt_after)
 .global reschedule_from_interrupt
@@ -64,6 +66,27 @@ reschedule_from_interrupt:
         msr     spsel, #0         //Select SP_EL0
         mov     sp, x3            //Restore new thread exception stack pointer
         msr     spsel, x2         //Restore new thread stack selector (1-SP_ELx,0-SP_EL0)
+
+#if CONF_fork
+        //Fork COW address-space reload: load the incoming thread's TTBR0_EL1 if
+        //its address space differs from the outgoing thread's (reload_ttbr0 != 0).
+        //Placed at the stack swap so same-VA fork stacks resolve correctly:
+        //old-stack writes used the old AS, new-stack reads (the 1: resume) use
+        //the new AS.  Correctness-first TLB maintenance: a full local stage-1
+        //invalidate (tlbi vmalle1) after the TTBR0 write -- OSv does not yet use
+        //per-AS ASIDs, so a TTBR0 change with the same ASID must flush stale
+        //entries or the child would read the parent's pages (silent corruption).
+        //Barriers mirror arch/aarch64/mmu.cc flush_tlb_local/switch_to_runtime_page_tables.
+        ldr     x3, [x1, #56]     //new thread reload_ttbr0 (0 == no AS change)
+        cbz     x3, 3f
+        dsb     sy                //ensure prior page-table writes complete
+        msr     ttbr0_el1, x3     //switch the low-half (user/app) root
+        isb
+        tlbi    vmalle1           //invalidate stale stage-1 TLB (this cpu)
+        dsb     sy
+        isb
+3:
+#endif
 
         blr     x4                //Jump to the new thread pc
 

@@ -40,6 +40,7 @@
 
 #include <osv/dentry.h>
 #include <osv/vnode.h>
+#include <osv/fork_arena.hh>
 #include "vfs.h"
 
 #define DENTRY_BUCKETS 32
@@ -70,6 +71,12 @@ struct dentry *
 dentry_alloc(struct dentry *parent_dp, struct vnode *vp, const char *path)
 {
     struct mount *mp = vp->v_mount;
+    // A dentry is shared filesystem cache infrastructure inherited across
+    // fork(); keep it off the COW fork arena (see the note in vget) so the
+    // child never COW-faults on it while servicing a demand fault.
+#if CONF_fork
+    fork_arena::kernel_heap_scope kh;
+#endif
     struct dentry *dp = (dentry*)calloc(sizeof(*dp), 1);
 
     if (!dp) {
@@ -157,8 +164,20 @@ dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path)
         dentry_children_remove(dp);
         // Remove dp with outdated hash info from the hashtable.
         LIST_REMOVE(dp, d_link);
-        // Update dp.
+        // Update dp.  Like dentry_alloc, d_path is shared dentry-cache
+        // infrastructure inherited across fork(); keep it off the COW fork
+        // arena so it stays freeable from any address space -- a rename from
+        // a forked backend (e.g. PG WAL-segment recycling during a checkpoint)
+        // must not leave d_path in that backend's COW-private arena, or a
+        // later drele() from AS0/another backend faults on the diverged header.
+#if CONF_fork
+        {
+            fork_arena::kernel_heap_scope kh;
+            dp->d_path = strdup(path);
+        }
+#else
         dp->d_path = strdup(path);
+#endif
         dp->d_parent = parent_dp;
         // Insert dp updated hash info into the hashtable.
         LIST_INSERT_HEAD(&dentry_hash_table[dentry_hash(dp->d_mount, path)],

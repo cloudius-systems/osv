@@ -17,11 +17,14 @@
 #include <osv/addr_range.hh>
 #include <unordered_map>
 #include <memory>
+#include <atomic>
 #include <osv/mmu-defs.hh>
 #include <osv/align.hh>
 #include <osv/trace.hh>
 #include <osv/kernel_config_memory_debug.h>
 #include <osv/kernel_config_memory_jvm_balloon.h>
+#include <osv/kernel_config_fork.h>
+#include <osv/stack_window.hh>
 
 struct exception_frame;
 #if CONF_memory_jvm_balloon
@@ -131,6 +134,13 @@ public:
     anon_vma(addr_range range, unsigned perm, unsigned flags);
     virtual void split(uintptr_t edge) override;
     virtual error sync(uintptr_t start, uintptr_t end) override;
+#if CONF_fork
+    ~anon_vma();
+    // Re-key the shared-anon page provider to this vma's current start VA
+    // (needed after allocate() relocates a searched mapping).  No-op unless
+    // this is an anonymous MAP_SHARED vma.
+    void update_shared_base();
+#endif
 };
 
 class file_vma : public vma {
@@ -317,7 +327,8 @@ void virt_to_phys(void* vaddr, size_t len, OutputFunc out)
     // VMA-mapped pages (below phys_mem) may be physically non-contiguous;
     // walk page-by-page to produce correct scatter-gather segments.
     bool page_walk = (CONF_memory_debug && vaddr >= debug_base) ||
-                     (static_cast<char*>(vaddr) < phys_mem);
+                     (static_cast<char*>(vaddr) < phys_mem) ||
+                     (CONF_fork && stack_window::contains(vaddr));
     if (page_walk) {
         while (len) {
             auto next = std::min(align_down(vaddr + page_size, page_size), vaddr + len);
@@ -372,6 +383,95 @@ void vcleanup(void* addr, size_t size);
 error  advise(void* addr, size_t size, int advice);
 
 void vm_fault(uintptr_t addr, exception_frame* ef);
+
+#if CONF_fork
+// -----------------------------------------------------------------------------
+// Per-process address space (Stage 2 fork COW).
+//
+// An address_space bundles a page-table root (the PML4 whose physical address
+// is loaded into CR3) with its own set of VMAs.  Historically OSv had a single
+// global address space shared by all threads; that global is now "address
+// space 0" (the kernel + the initial application), returned by
+// kernel_address_space().  fork() creates a child address_space whose kernel
+// half (PML4 entries for OSv text/data + the identity/phys maps) is shared
+// with AS0, while the application half is a COW clone of the parent's.
+//
+// The concrete type is defined in core/mmu.cc (it owns the internal vma_list
+// container); here it is opaque.  Each thread carries a pointer to its current
+// address_space; the arch context switch loads its page-table root.
+struct address_space;
+
+// The kernel / initial-application address space ("AS0").  Always valid.
+address_space *kernel_address_space();
+
+// The fork heap arena's per-process state slot of @as (opaque to mmu).
+std::atomic<void*>& fork_arena_state(address_space *as);
+
+// Does any vma of the current address space intersect [start, end)?
+bool intersects_vma(uintptr_t start, uintptr_t end);
+
+// The address space the current thread runs in (a fork child's private AS, or
+// AS0 for the kernel and the non-fork application).  The mmu allocation/query
+// path resolves its vma_list / vma_range_set through this.
+address_space *current_address_space();
+
+// Physical address of an address_space's page-table root (value for CR3).
+phys pt_root_phys(address_space *as);
+
+// Create a child address_space that COW-clones "parent" for fork().  Private
+// writable VMAs are write-protected in both parent and child and marked COW;
+// MAP_SHARED / shm VMAs are mapped to the same physical pages (truly shared).
+// The kernel half of the page table is shared with the parent.
+address_space *clone_address_space(address_space *parent);
+
+// Register a writable segment of an in-app-slot kernel module (e.g.
+// libsolaris.so / OpenZFS) so it is SHARED verbatim -- never COW -- across every
+// fork child address space.  Such modules live in the COW-cloned app slot but
+// hold global kernel state that AS0 kernel threads and forked app threads must
+// see identically.  Called by the ELF loader for each writable PT_LOAD segment.
+void add_fork_shared_module_range(uintptr_t start, uintptr_t end);
+
+// Test view: the fork mapper count of the 4K frame the current address space
+// maps at @addr, or -1 if nothing is mapped there as a 4K page or no count is
+// kept for the frame (no fork has run yet).
+long fork_cow_mappers(const void *addr);
+
+// Free the memory of a child address_space (its private page tables, VMAs
+// and arena extents), once nothing runs in it.  The object stays until its
+// last as_put().  Never call on the kernel address space.
+void destroy_address_space(address_space *as);
+
+// Lifetime of a child address space.  A use (as_hold/as_try_hold, dropped by
+// as_release) keeps its memory: every thread whose current address space it
+// is holds one (sched::thread does this itself), and so may a caller that
+// switches into it.  The last as_release() retires it: its memory is freed.
+// A reference (as_get, dropped by as_put) keeps only the object, so state
+// keyed by its pointer cannot alias a newer address space; the fork
+// bookkeeping holds one until the child is reaped.  as_hold() needs a use or
+// a reference already held; as_try_hold() fails once the address space is
+// retired.  AS0 is never counted.
+void as_hold(address_space *as);
+bool as_try_hold(address_space *as);
+void as_release(address_space *as);
+void as_get(address_space *as);
+void as_put(address_space *as);
+
+// Flush the TLB entries for [va, va + len) of @as on every CPU that can hold
+// them, and return when they are gone.  AS0 uses flush_tlb_all().
+void flush_tlb_as(address_space *as, uintptr_t va, size_t len);
+
+// The CPU mask of @as: bit N is set while CPU N may hold entries of @as.
+std::atomic<u64> *as_cpu_mask(address_space *as);
+
+// x86: the context switch calls this on CPU @cpu right before it loads the
+// page-table root of @as.
+void note_as_loaded(address_space *as, unsigned cpu);
+
+// Resolve OSV_MMU_COW_PEEK and print "LEVER mmu_cow_peek=0|1".  Call once,
+// after the command line's --env options are applied and before the
+// application runs, so the console shows the value the fault path uses.
+void print_cow_peek_setting();
+#endif // CONF_fork
 
 std::string procfs_maps();
 std::string sysfs_linear_maps();
