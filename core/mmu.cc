@@ -6,7 +6,9 @@
  */
 
 #include <osv/mmu.hh>
+#include <osv/stack_window.hh>
 #include <osv/mempool.hh>
+#include <osv/sched.hh>
 #include "processor.hh"
 #include <osv/debug.hh>
 #include "exceptions.hh"
@@ -26,15 +28,26 @@
 #include <osv/file.h>
 #include "dump.hh"
 #include <osv/rcu.hh>
+#if CONF_fork
+#include <osv/rcu-hashtable.hh>
+#endif
 #include <osv/rwlock.h>
 #include <algorithm>
 #include <numeric>
 #include <set>
+#include <vector>
+#include <unordered_map>
 
 #include <osv/kernel_config_memory_debug.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
 #include <osv/kernel_config_memory_jvm_balloon.h>
+#include <osv/pagecache.hh>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
+#include <cstdio>
 
 // FIXME: Without this pragma, we get a lot of warnings that I don't know
 // how to explain or fix. For now, let's just ignore them :-(
@@ -65,8 +78,9 @@ struct vma_range_compare {
 };
 
 //Set of all vma ranges - both linear and non-linear ones
+typedef std::set<vma_range, vma_range_compare> vma_range_set_type;
 __attribute__((init_priority((int)init_prio::vma_range_set)))
-std::set<vma_range, vma_range_compare> vma_range_set;
+vma_range_set_type vma_range_set;
 rwlock_t vma_range_set_mutex;
 
 struct linear_vma_compare {
@@ -100,7 +114,12 @@ typedef boost::intrusive::set<vma,
                               > vma_list_base;
 
 struct vma_list_type : vma_list_base {
-    vma_list_type() {
+    // The edge markers are inserted into `into` (defaults to the global
+    // vma_range_set / mutex).  A fork child's private vma_list points `into`
+    // at the child's OWN range set so the child's edges never pollute the
+    // global set (see clone_address_space / address_space child ctor).
+    vma_list_type(vma_range_set_type *into = &vma_range_set,
+                  rwlock_t *into_mutex = &vma_range_set_mutex) {
         // insert markers for the edges of allocatable area
         // simplifies searches
         auto lower_edge = new anon_vma(addr_range(lower_vma_limit, lower_vma_limit), 0, 0);
@@ -108,9 +127,9 @@ struct vma_list_type : vma_list_base {
         auto upper_edge = new anon_vma(addr_range(upper_vma_limit, upper_vma_limit), 0, 0);
         insert(*upper_edge);
 
-        WITH_LOCK(vma_range_set_mutex.for_write()) {
-            vma_range_set.insert(vma_range(lower_edge));
-            vma_range_set.insert(vma_range(upper_edge));
+        WITH_LOCK(into_mutex->for_write()) {
+            into->insert(vma_range(lower_edge));
+            into->insert(vma_range(upper_edge));
         }
     }
 };
@@ -122,6 +141,964 @@ vma_list_type vma_list;
 // anything that may add, remove, split vma, zaps pte or changes pte permission
 // should hold the lock for write
 rwlock_t vma_list_mutex;
+
+#if CONF_fork
+// -----------------------------------------------------------------------------
+// Stage 2 fork: per-process address space object.
+//
+// An address_space bundles a page-table root (PML4) with its own vma_list.
+// "AS0" (kernel_as) aliases the pre-existing global vma_list / vma_list_mutex
+// and uses the arch page_table_root, so existing behaviour is unchanged: the
+// kernel and the initial application run in AS0.
+//
+// A child address_space (clone_address_space, for fork) owns a private PML4
+// whose *kernel half* (the PML4 slots that map OSv text/data and the
+// identity/phys ranges) is shared with AS0, while its *application half* is a
+// COW clone of the parent's page tables.  It also owns a private vma_list that
+// is a structural copy of the parent's.
+//
+// PML4 slot layout on x86-64 (each slot spans 512 GB):
+//   slot 0        : OSv kernel text/data (mapped at ~1 GB) -- SHARED
+//   slots 1..127  : application VMA space (ELF at slot 32, mmap at slot 64) -- PRIVATE (COW)
+//   slots 128..511: kernel identity / phys / mempool / debug maps -- SHARED
+// Only slots 1..127 are cloned per child; the rest are shared by copying the
+// parent's PML4 entries (pointing at the same lower-level tables).
+constexpr unsigned pml4_app_first = 1;
+constexpr unsigned pml4_app_last = 127;   // inclusive
+
+struct address_space {
+    vma_list_type *vmas;      // AS0: aliases global vma_list; child: owns_vmas
+    rwlock_t *vmas_mutex;     // AS0: aliases global vma_list_mutex
+    // Per-AS set of vma ranges used by the allocation path (find_hole etc.).
+    // AS0 aliases the global vma_range_set / mutex; a child owns private ones
+    // (owned_ranges/owned_ranges_mutex) so its post-fork mmap picks a hole from
+    // -- and inserts into -- its OWN address space, not the global set.
+    vma_range_set_type *ranges;   // AS0: aliases global vma_range_set
+    rwlock_t *ranges_mutex;       // AS0: aliases global vma_range_set_mutex
+    // Synthetic top-level entry (mirrors the arch page_table_root): its
+    // next_pt_addr() is the physical address of this AS's PML4 page.  The page
+    // table walk starts here via get_root_pt() (see map_range).  Null for AS0
+    // (which uses the arch page_table_root).
+    pt_element<4> *top;       // -> &_top for a child; nullptr for AS0
+    pt_element<4> _top;       // storage for the synthetic entry (child only)
+    phys pt_root;             // phys of PML4 page (CR3 value); 0 == arch root
+    bool is_kernel;
+    // The fork heap arena's per-process state (core/fork_arena.cc), created
+    // on this address space's first arena allocation and freed with it.
+    std::atomic<void*> fork_arena_state{nullptr};
+    // CPUs that may hold TLB entries of this AS (see flush_tlb_as()).
+    std::atomic<u64> cpu_mask[sched::max_cpus / 64] = {};
+    // Lifetime (see as_hold() in mmu.hh).  users: threads in this AS plus
+    // callers keeping its memory mapped; the last one retires it.  refs: the
+    // object, one for the fork bookkeeping and one dropped at retirement.
+    std::atomic<long> users{0};
+    std::atomic<long> refs{2};
+
+    // Storage owned by a child AS.
+    std::unique_ptr<vma_list_type> owned_vmas;
+    std::unique_ptr<rwlock_t> owned_mutex;
+    std::unique_ptr<vma_range_set_type> owned_ranges;
+    std::unique_ptr<rwlock_t> owned_ranges_mutex;
+
+    // AS0 constructor: alias the globals.
+    address_space(vma_list_type *l, rwlock_t *m, phys root, bool kernel)
+        : vmas(l), vmas_mutex(m), ranges(&vma_range_set),
+          ranges_mutex(&vma_range_set_mutex), top(nullptr), pt_root(root),
+          is_kernel(kernel) {}
+
+    // Child constructor: owns a fresh vma_list, mutex and PML4 page.  The
+    // synthetic top entry points at the child PML4 (phys pml4_page_phys).
+    address_space(phys pml4_page_phys)
+        : pt_root(pml4_page_phys), is_kernel(false)
+        , owned_mutex(new rwlock_t())
+        , owned_ranges(new vma_range_set_type())
+        , owned_ranges_mutex(new rwlock_t())
+    {
+        // The child's private vma_list must insert its edge markers into the
+        // child's OWN range set, not the global one -- so build owned_ranges
+        // first and hand it to the vma_list ctor.
+        ranges = owned_ranges.get();
+        ranges_mutex = owned_ranges_mutex.get();
+        owned_vmas.reset(new vma_list_type(ranges, ranges_mutex));
+        _top = make_intermediate_pte(hw_ptep<4>::force(&_top), pml4_page_phys);
+        top = &_top;
+        vmas = owned_vmas.get();
+        vmas_mutex = owned_mutex.get();
+    }
+};
+
+// AS0: kernel + initial application.  Aliases the global vma_list.  pt_root is
+// filled in lazily (0 means "arch page_table_root", see pt_root_phys()).
+__attribute__((init_priority((int)init_prio::vma_list)))
+address_space kernel_as{&vma_list, &vma_list_mutex, 0, true};
+
+address_space *kernel_address_space()
+{
+    return &kernel_as;
+}
+
+std::atomic<void*>& fork_arena_state(address_space *as)
+{
+    return as->fork_arena_state;
+}
+
+// The address space the current thread runs in: a fork child's private AS, or
+// AS0 (kernel_as) for the kernel and the non-fork initial application.  The
+// allocation/query path (find_hole, allocate, evacuate, protect, ...) resolves
+// its vma_list / vma_range_set through this, so a fork child's post-fork mmap
+// lands in -- and its later faults resolve against -- the child's OWN address
+// space.  For AS0 the accessors below alias the global vma_list / vma_range_set,
+// so the heavily-tested non-fork path is unchanged.
+address_space *current_address_space()
+{
+    auto t = sched::thread::current();
+    if (t) {
+        auto as = t->address_space();
+        if (as) {
+            return as;
+        }
+    }
+    return &kernel_as;
+}
+
+// Per-AS accessors used by the allocation/query path.  In a CONF_fork build
+// they resolve to the current thread's address space; AS0 aliases the globals.
+static inline vma_list_type &cur_vma_list()
+{
+    return *current_address_space()->vmas;
+}
+static inline rwlock_t &cur_vma_list_mutex()
+{
+    return *current_address_space()->vmas_mutex;
+}
+static inline vma_range_set_type &cur_vma_range_set()
+{
+    return *current_address_space()->ranges;
+}
+static inline rwlock_t &cur_vma_range_set_mutex()
+{
+    return *current_address_space()->ranges_mutex;
+}
+
+// Arch hook: physical address of the kernel PML4 (CR3 value for AS0).
+phys kernel_pt_root_phys();
+// Arch hook: virtual pointer to the kernel PML4 (for cloning kernel slots).
+pt_element<4> *kernel_pml4();
+
+std::atomic<u64> *as_cpu_mask(address_space *as)
+{
+    return as->cpu_mask;
+}
+
+phys pt_root_phys(address_space *as)
+{
+    if (as->pt_root) {
+        return as->pt_root;
+    }
+    // AS0 (or any AS with pt_root not yet cached): the arch kernel root.
+    return kernel_pt_root_phys();
+}
+
+// The PML4 (virtual pointer) that the current thread's page-table walks should
+// use.  Returns the child AS's private PML4 when the current thread runs in a
+// child address space, else the kernel PML4 (AS0).  Called from get_root_pt().
+pt_element<4> *current_pt_root()
+{
+    auto t = sched::thread::current();
+    if (t) {
+        auto as = t->address_space();
+        if (as && as->top) {
+            return as->top;
+        }
+    }
+    return kernel_pml4();
+}
+
+// --- fork COW page-table clone --------------------------------------------
+//
+// Number of live fork-child address spaces.  A wait_record placed on a SHARED
+// kernel condvar/mutex is a stack local; with per-child same-VA private stacks,
+// that stack VA resolves to DIFFERENT physical pages in different address
+// spaces, so a thread in one AS that walks the queue and dereferences another
+// thread's stack-resident wait_record reads the wrong page.  When any child AS
+// is live, ANY thread's wait_record can be dereferenced cross-AS (the parent's
+// by a child, a child's by the parent), so wait_records must come from the
+// identity-mapped kernel heap (same VA->phys in every AS) -- see
+// fork_child_needs_heap_wait_record() and include/osv/wait_record.hh.
+std::atomic<int> live_child_address_spaces{0};
+
+// Recursively clone the child's copy of an application-range subtree of the
+// parent's page table, level by level, marking most private 4K leaf pages
+// copy-on-write.
+//
+// IMPORTANT (OSv has no user/kernel stack split): OSv runs kernel code on the
+// SAME stack the application uses.  A context switch (switch_to) writes to that
+// stack with interrupts disabled, and OSv forbids page faults in that context.
+// So we must NOT copy-on-write-protect any *stack* page -- write-protecting the
+// running thread's live stack would fault the very next stack push with irqs
+// off (assert(preemptable()) in page_fault).  The child already runs on its
+// own private copied stack (see fork_thread), so stack pages are simply shared
+// writable.  MAP_SHARED pages are likewise shared writable (sharing preserved).
+// These "share, don't COW" address ranges are passed in via cow_share_ranges.
+struct cow_range { uintptr_t start, end; };
+static const std::vector<cow_range> *cow_share_ranges;
+// Ranges (the FORKING thread's live stack) that must be PRIVATIZED into the
+// child: fresh private physical pages that byte-copy the parent's page, mapped
+// at the SAME VA in the child, writable and NOT COW (OSv runs kernel code with
+// irqs off on the app stack, so a COW write-fault there is illegal) and NOT
+// shared (so the child owns its stack and frees it on teardown).  This is what
+// lets the child resume on the parent's exact rsp/rbp (same-VA stack) while
+// having private stack memory -- see arch/x64/fork.cc.
+static const std::vector<cow_range> *cow_privatize_ranges;
+
+// Sorted, coalesced, disjoint views of the two range sets above.
+//
+// WHY: addr_is_shared()/addr_is_privatize() are called ONCE PER LEAF PTE by
+// clone_pt_level0, and each was a LINEAR scan of its range vector.
+// cow_share_ranges holds one entry per MAP_SHARED/stack vma PLUS one per LIVE
+// THREAD (see the with_all_threads loop in clone_address_space).  OSv pins ~2
+// threads per CPU (idle_thread, page_pool_l1_<id>) and a server app adds one or
+// more per connection, so the scan length grows with both vCPU count and
+// workload concurrency, making the whole clone walk O(PTEs x threads).  Sorting
+// once per fork and binary searching makes it O(PTEs x log threads).
+//
+// CORRECTNESS: only HOW the "is this VA in the set?" predicate is computed
+// changes -- not which VAs are selected, no PTE value, no lock, and no flush
+// semantics.  Coalescing touching/overlapping ranges preserves the predicate
+// exactly, since the union of the intervals is what the linear scan tested.
+// Half-open [start, end) throughout, matching the original comparison
+// (va >= start && va < end).
+//
+// SCOPE/LIFETIME: identical to the cow_share_ranges/cow_privatize_ranges
+// pointers these cache -- written only by a thread inside clone_address_space
+// between publishing and clearing those pointers, under the parent's
+// vmas_mutex->for_write().  So this adds no new cross-thread sharing.  Kept
+// static so their capacity is reused across forks: clear() preserves it, so
+// steady-state rebuilds do not allocate (fewer allocations under the write lock
+// than the existing per-fork push_back growth already performs).
+static std::vector<cow_range> cow_share_sorted;
+static std::vector<cow_range> cow_privatize_sorted;
+// Held by clone_address_space() while it uses any of the above.
+static mutex clone_ranges_lock;
+
+// Memo of the last range that matched, per set.  A pure-function cache: a hit
+// returns exactly what the search would have returned, a miss falls through to
+// it.  This is what removes the dominant remaining per-PTE cost, because the
+// clone walk ascends VAs and a single large range (e.g. a multi-GB MAP_SHARED
+// segment) covers millions of consecutive PTEs.  start > end encodes "invalid".
+static cow_range memo_share{1, 0};
+static cow_range memo_privatize{1, 0};
+
+static void build_sorted_ranges(const std::vector<cow_range> *src,
+                                std::vector<cow_range> &dst)
+{
+    // The range sets are changing, so both memos are stale.
+    memo_share = cow_range{1, 0};
+    memo_privatize = cow_range{1, 0};
+    dst.clear();
+    if (!src || src->empty()) return;
+    dst.reserve(src->size());
+    for (auto &r : *src) {
+        if (r.end > r.start) dst.push_back(r);
+    }
+    std::sort(dst.begin(), dst.end(),
+              [](const cow_range &a, const cow_range &b) {
+                  return a.start < b.start;
+              });
+    // Coalesce overlapping/adjacent ranges so the result is strictly ordered
+    // and disjoint, which is what makes the binary search below exact.
+    size_t w = 0;
+    for (size_t i = 1; i < dst.size(); i++) {
+        if (dst[i].start <= dst[w].end) {
+            if (dst[i].end > dst[w].end) dst[w].end = dst[i].end;
+        } else {
+            dst[++w] = dst[i];
+        }
+    }
+    dst.resize(dst.empty() ? 0 : w + 1);
+}
+
+// The same predicate as the linear scan, in O(log n) on a sorted+disjoint set.
+static inline bool sorted_ranges_contain(const std::vector<cow_range> &v,
+                                         uintptr_t va, cow_range &memo)
+{
+    if (va >= memo.start && va < memo.end) return true;
+    // First range with start > va; the only candidate is the one before it.
+    auto it = std::upper_bound(v.begin(), v.end(), va,
+                               [](uintptr_t a, const cow_range &r) {
+                                   return a < r.start;
+                               });
+    if (it == v.begin()) return false;
+    --it;
+    if (va >= it->start && va < it->end) {
+        memo = *it;
+        return true;
+    }
+    return false;
+}
+
+// ---- fork: writable segments of in-app-slot kernel modules -----------------
+//
+// libsolaris.so (the OpenZFS kernel module) is loaded into the COW-cloned
+// application VA slot (slot 32), not the shared kernel slots.  Its writable
+// .data/.bss therefore diverge per fork child under COW -- but they hold GLOBAL
+// ZFS state that BOTH a forked app thread (calling into ZFS) and AS0 ZFS kernel
+// threads (txg_sync, dp_sync_taskq, block completion) must see identically:
+// buf_hash_table (the ARC hash table pointer + mask), arc_anon / arc_mru /
+// arc_mfu state, the dbuf hash, arc_stats, etc.  A child inserting an
+// arc_buf_hdr into buf_hash_table.ht_table[] writes its private COW copy; the
+// AS0 sync thread then reads an empty table and NULL-derefs in buf_hash_remove.
+// So these ranges must be SHARED (mapped verbatim, never COW) across every fork
+// address space, exactly like the kernel .data.  The ELF loader records each
+// such writable module segment here (see elf.cc load_segment).  Fixed after
+// load (libsolaris.so is mlocked and never unloaded), so this list is
+// append-only and read lock-free during clone_address_space.
+static std::vector<cow_range> fork_shared_module_ranges;
+static mutex fork_shared_module_lock;
+
+
+static bool addr_is_shared(uintptr_t va)
+{
+    if (!cow_share_ranges) return false;
+    return sorted_ranges_contain(cow_share_sorted, va, memo_share);
+}
+
+static bool addr_is_privatize(uintptr_t va)
+{
+    if (!cow_privatize_ranges) return false;
+    return sorted_ranges_contain(cow_privatize_sorted, va, memo_privatize);
+}
+
+// The parent's vma list while clone_address_space() walks its page tables,
+// under the same lock and lifetime as cow_share_ranges.
+static vma_list_type *cow_parent_vmas;
+static bool parent_vma_writable(uintptr_t va); // defined below
+
+// A leaf the parent maps copy-on-write at @ppte is about to be shared with a
+// fork child: it lies in a share range (a user-supplied thread stack that an
+// earlier fork saw as private memory).  An earlier child may still map its
+// frame, so clearing COW in place would let the parent's later writes reach
+// that child.  Give the parent a private copy of the page instead, with the
+// COW bit clear, as its own write fault would, and return the new PTE.
+// Other parent threads keep running during the fork, and a CPU may still hold
+// a TLB entry for the old frame, so the copy is installed and flushed at once:
+// otherwise one thread could write the copy while another still read the old
+// frame through its stale entry.  The old frame itself stays read-only.
+static pt_element<0> cow_break_for_share(pt_element<0> *ppte)
+{
+    pt_element<0> pte = *ppte;
+    void *priv = memory::alloc_page();
+    memcpy(priv, phys_to_virt(pte.addr()), page_size);
+    pt_element<0> npte = pte_mark_cow(pte, false);
+    npte.set_sw_bit(pte_shared, false);
+    npte.set_addr(virt_to_phys(priv), false);
+    *ppte = npte;
+    flush_tlb_all();
+    return npte;
+}
+
+// The parent must hold vma_list_mutex for write while this runs.  base_virt is
+// the virtual address that leaf entry 0 of this PT maps.
+static void clone_pt_level0(pt_element<0> *parent_pt, pt_element<0> *child_pt,
+                            uintptr_t base_virt)
+{
+    for (unsigned i = 0; i < pte_per_page; i++) {
+        pt_element<0> ppte = parent_pt[i];
+        if (ppte.empty()) {
+            child_pt[i] = make_empty_pte<0>();
+            continue;
+        }
+        uintptr_t va = base_virt + (uintptr_t)i * page_size;
+        if (ppte.sw_bit(pte_pagecache)) {
+            // A page-cache page (already read-only/COW for a private mapping,
+            // or a MAP_SHARED write-cache page): the child maps it as the
+            // parent does, and the page cache learns of the child's slot after
+            // the walk (see child_pagecache_mappings).  Never make it
+            // writable here: writes must reach the page cache through a fault.
+            child_pt[i] = ppte;
+        } else if (addr_is_privatize(va)) {
+            // Forking thread's live stack: give the child its OWN physical
+            // page (byte-copy of the parent's), mapped at the SAME VA, plain
+            // writable (no COW bit, no shared bit).  The parent's PTE is left
+            // untouched -- only the child diverges -- so the parent keeps
+            // writing its own stack with irqs off and never faults, and the
+            // child owns/frees this page on address-space teardown.
+            void *child_page = memory::alloc_page();
+            memcpy(child_page, phys_to_virt(ppte.addr()), page_size);
+            pt_element<0> pv = ppte;
+            if (pte_is_cow(pv)) {
+                pv = pte_mark_cow(pv, false);
+            }
+            pv.set_writable(true);
+            pv.set_addr(virt_to_phys(child_page), false);
+            child_pt[i] = pv;
+        } else if (addr_is_shared(va)) {
+            // Stack / MAP_SHARED page: must stay genuinely shared in both
+            // parent and child (never COW), so both sides see each other's
+            // writes to the same phys page.  A COW bit here is left from an
+            // earlier fork that found the page outside every share range (a
+            // user-supplied thread stack, say): clear it, and let the vma's
+            // protection decide whether the page is writable again.  Any other
+            // leaf keeps the parent's write permission, so a read-only shared
+            // mapping stays read-only on both sides.  Tag the child's copy
+            // pte_shared so teardown does not free the jointly-owned frame.
+            pt_element<0> sh = ppte;
+            if (pte_is_cow(sh)) {
+                sh = cow_break_for_share(&parent_pt[i]);
+                sh.set_writable(parent_vma_writable(va));
+            }
+            parent_pt[i] = sh;
+            sh.set_sw_bit(pte_shared, true);
+            child_pt[i] = sh;
+        } else if (ppte.writable() && !pte_is_cow(ppte)) {
+            // Private writable page: make it COW (write-protect + cow bit) in
+            // BOTH parent and child.
+            pt_element<0> cow = pte_mark_cow(ppte, true);
+            parent_pt[i] = cow;
+            child_pt[i] = cow;
+        } else {
+            // Read-only or already-COW private page: share the frame, COW in
+            // both address spaces.  Left read-only and not COW, a later
+            // mprotect(PROT_WRITE) by either side made it writable in place
+            // and that side's writes reached the other.  A write to it while
+            // the vma is read-only is refused by vm_fault before the copy.
+            pt_element<0> cow = pte_mark_cow(ppte, true);
+            parent_pt[i] = cow;
+            child_pt[i] = cow;
+        }
+    }
+}
+
+// clone_pt_level<N> for N in 1..2, carrying base_virt so leaf pages can be
+// tested against the share-ranges.  (gnu++14: no if constexpr, so explicit
+// specialization.)
+template<int N> void split_large_page(hw_ptep<N> ptep); // defined below
+template<> void split_large_page(hw_ptep<1> ptep);      // defined below
+template<int N>
+static void clone_pt_level(pt_element<N> *parent_pt, pt_element<N> *child_pt,
+                           uintptr_t base_virt);
+
+template<>
+void clone_pt_level<1>(pt_element<1> *parent_pt, pt_element<1> *child_pt,
+                       uintptr_t base_virt)
+{
+    // Level 1 (PD): each entry spans 2 MB.
+    const uintptr_t step = (uintptr_t)page_size * pte_per_page; // 2 MB
+    for (unsigned i = 0; i < pte_per_page; i++) {
+        pt_element<1> ppte = parent_pt[i];
+        if (ppte.empty()) { child_pt[i] = make_empty_pte<1>(); continue; }
+        if (ppte.large()) {
+            // Never share a 2 MB page: split it to 4 K in the PARENT in place,
+            // then fall through to the normal 4 K clone path, which makes the
+            // per-page decision (private -> COW, MAP_SHARED -> stays shared).
+            // A writable one shared as-is would let the child's writes reach
+            // the parent.  A read-only one would keep teardown from treating
+            // every 2 MB leaf in a child as one the child faulted in itself
+            // (see free_child_large_pages).
+            // Cost: one 4 K page table per split page.
+            split_large_page(hw_ptep<1>::force(&parent_pt[i]));
+            ppte = parent_pt[i]; // re-read: now a non-large intermediate pte
+        }
+        void *child_sub = memory::alloc_page();
+        memset(child_sub, 0, page_size);
+        auto parent_sub = phys_cast<pt_element<0>>(ppte.next_pt_addr());
+        clone_pt_level0(parent_sub, static_cast<pt_element<0>*>(child_sub),
+                        base_virt + (uintptr_t)i * step);
+        pt_element<1> cpte = ppte;
+        cpte.set_addr(virt_to_phys(child_sub), false);
+        child_pt[i] = cpte;
+    }
+}
+
+template<>
+void clone_pt_level<2>(pt_element<2> *parent_pt, pt_element<2> *child_pt,
+                       uintptr_t base_virt)
+{
+    // Level 2 (PDPT): each entry spans 1 GB.
+    const uintptr_t step = (uintptr_t)page_size * pte_per_page * pte_per_page; // 1 GB
+    for (unsigned i = 0; i < pte_per_page; i++) {
+        pt_element<2> ppte = parent_pt[i];
+        if (ppte.empty()) { child_pt[i] = make_empty_pte<2>(); continue; }
+        if (ppte.large()) { child_pt[i] = ppte; continue; }
+        void *child_sub = memory::alloc_page();
+        memset(child_sub, 0, page_size);
+        auto parent_sub = phys_cast<pt_element<1>>(ppte.next_pt_addr());
+        clone_pt_level<1>(parent_sub, static_cast<pt_element<1>*>(child_sub),
+                          base_virt + (uintptr_t)i * step);
+        pt_element<2> cpte = ppte;
+        cpte.set_addr(virt_to_phys(child_sub), false);
+        child_pt[i] = cpte;
+    }
+}
+
+// Register a writable segment of an in-app-slot kernel module (libsolaris.so)
+// to be SHARED (not COW) across fork children -- see fork_shared_module_ranges.
+void add_fork_shared_module_range(uintptr_t start, uintptr_t end)
+{
+    SCOPE_LOCK(fork_shared_module_lock);
+    fork_shared_module_ranges.push_back({start, end});
+}
+
+static pt_element<0> *walk_to_leaf(uintptr_t addr, unsigned &i0_out);
+
+// Visit the 4K leaf PTEs of [start, end) in a fork child's page table (not the
+// current thread's), skipping unmapped and large ranges.
+template<typename F>
+static void for_each_child_leaf(address_space *as, uintptr_t start,
+                                uintptr_t end, F f)
+{
+    auto pml4 = phys_cast<pt_element<3>>(as->top->next_pt_addr());
+    uintptr_t va = start;
+    while (va < end) {
+        void *v = reinterpret_cast<void*>(va);
+        pt_element<3> e3 = pml4[pt_index(v, 3)];
+        if (e3.empty() || e3.large()) {
+            va = align_down(va, uintptr_t(1) << 39) + (uintptr_t(1) << 39);
+            continue;
+        }
+        pt_element<2> e2 = phys_cast<pt_element<2>>(e3.next_pt_addr())[pt_index(v, 2)];
+        if (e2.empty() || e2.large()) {
+            va = align_down(va, uintptr_t(1) << 30) + (uintptr_t(1) << 30);
+            continue;
+        }
+        pt_element<1> e1 = phys_cast<pt_element<1>>(e2.next_pt_addr())[pt_index(v, 1)];
+        if (e1.empty() || e1.large()) {
+            va = align_down(va, huge_page_size) + huge_page_size;
+            continue;
+        }
+        auto pt = phys_cast<pt_element<0>>(e1.next_pt_addr());
+        f(va, hw_ptep<0>::force(&pt[pt_index(v, 0)]));
+        va += page_size;
+    }
+}
+
+// For each file vma of a fork child, hand the page-cache leaves of its range
+// (pte_pagecache) to @op (pagecache::inherit_mappings or release_mappings),
+// one call per vma.
+static void child_pagecache_mappings(address_space *as,
+        void (*op)(dev_t, ino_t, const off_t *, hw_ptep<0> *, unsigned))
+{
+    std::vector<off_t> offs;
+    std::vector<hw_ptep<0>> pteps;
+    for (auto &v : *as->vmas) {
+        auto *fv = dynamic_cast<file_vma *>(&v);
+        if (!fv) {
+            continue;
+        }
+        offs.clear();
+        pteps.clear();
+        for_each_child_leaf(as, v.start(), v.end(), [&] (uintptr_t va, hw_ptep<0> ptep) {
+            if (ptep.read().sw_bit(pte_pagecache)) {
+                offs.push_back(fv->offset() + (va - v.start()));
+                pteps.push_back(ptep);
+            }
+        });
+        if (!pteps.empty()) {
+            op(fv->file_dev_id(), fv->file_inode(), offs.data(), pteps.data(),
+               pteps.size());
+        }
+    }
+}
+
+address_space *clone_address_space(address_space *parent)
+{
+    // Force every allocation done while cloning (the child's anon_vma copies,
+    // any std::vector growth) onto the identity kernel heap.  We hold the
+    // parent's vmas_mutex for_write below; an arena allocation that faulted a
+    // fresh arena page would re-enter the vma fault path and deadlock on that
+    // same mutex (and give the child a COW-private copy of kernel vma
+    // bookkeeping).  This is the malloc-during-fork recursion trap.
+    fork_arena::kernel_heap_scope kh;
+    // The parent's actual PML4 page (array of 512 level-3 entries).
+    phys parent_pml4_phys = parent->top ? parent->top->next_pt_addr()
+                                        : kernel_pt_root_phys();
+    auto parent_pml4 = phys_cast<pt_element<3>>(parent_pml4_phys);
+
+    // Allocate the child's PML4 page.
+    void *child_pml4_page = memory::alloc_page();
+    memset(child_pml4_page, 0, page_size);
+    auto child_pml4 = static_cast<pt_element<3>*>(child_pml4_page);
+
+    // Pre-reserve the child address_space object BEFORE taking vmas_mutex.
+    // Allocating under the write-locked vmas_mutex is unsafe once the fork
+    // arena is active: the identity malloc pool may need a refill that wants
+    // to schedule the page-pool fill thread, but nothing can make progress
+    // while this thread holds vmas_mutex for write -- a fork-time malloc
+    // deadlock.  Doing every kernel allocation up front (pre-reserve) is the
+    // documented cure for the malloc-during-fork trap.
+    auto child = new address_space(virt_to_phys(child_pml4_page));
+
+    // Snapshot of the parent's private VMAs, filled under the lock and turned
+    // into the child's anon_vma copies AFTER the lock is released (so no malloc
+    // runs under vmas_mutex).  Reserve generous capacity up front so the vector
+    // never reallocates (mallocs) while the lock is held.
+    // Snapshot carries the file identity too, so a file-backed vma (e.g. the
+    // ELF loader's .text) is rebuilt AFTER the lock as a file_vma bound to the
+    // SAME file + offset -- preserving #1456's wild-branch fix without calling
+    // the allocating file()->mmap() under vmas_mutex (illegal with the arena
+    // active).  `file` is null for anonymous vmas; the held fileref keeps the
+    // file alive across the lock release and is dropped when `snap` dies.
+    struct vma_snap { uintptr_t start, end; unsigned perm, flags;
+                      fileref file; f_offset foffset; };
+    std::vector<vma_snap> snap;
+    // Pre-grown share/privatize range vectors: filled under the lock but never
+    // reallocated there (all growth malloc happens up front, before the lock).
+    std::vector<cow_range> share_ranges;
+    std::vector<cow_range> privatize_ranges;
+    {
+        size_t threads = sched::thread::numthreads();
+        SCOPE_LOCK(parent->vmas_mutex->for_read());
+        size_t n = 0;
+        for (auto &v : *parent->vmas) { if (v.size()) n++; }
+        snap.reserve(n + 8);
+        // share_ranges holds MAP_SHARED/stack vmas + every live thread's stack;
+        // reserve room for all vmas plus all threads so it never reallocates.
+        share_ranges.reserve(n + threads + 16 + fork_shared_module_ranges.size());
+        privatize_ranges.reserve(4);
+    }
+
+    // Share every kernel PML4 slot (0 and 128..511) by copying the parent's
+    // entry verbatim (points at the same lower-level tables).  Clone only the
+    // application slots (1..127) so their PTEs can diverge under COW.
+    // The share/privatize range sets and their memos are global, and two
+    // address spaces (AS0 and a fork child forking again) can clone at once,
+    // each under its own vmas_mutex: one clone at a time uses them.
+    PREVENT_STACK_PAGE_FAULT
+    WITH_LOCK(clone_ranges_lock)
+    WITH_LOCK(parent->vmas_mutex->for_write()) {
+        // Build the "share, don't COW" ranges: stack VMAs (OSv runs kernel code
+        // on the app stack, so its pages must stay writable -- see the note on
+        // clone_pt_level0) and MAP_SHARED VMAs (sharing must be preserved).
+        for (auto &v : *parent->vmas) {
+            if (v.size() == 0) continue;
+            if ((v.flags() & mmap_stack) || (v.flags() & mmap_shared)) {
+                share_ranges.push_back({v.start(), v.end()});
+            }
+        }
+        // Share libsolaris.so writable .data/.bss verbatim (never COW): its
+        // global ZFS state (buf_hash_table, arc_anon/mru/mfu, dbuf hash, ...)
+        // must be coherent in every fork address space, or an AS0 ZFS sync
+        // thread sees a stale/empty copy of what a forked child wrote.
+        {
+            SCOPE_LOCK(fork_shared_module_lock);
+            for (auto &r : fork_shared_module_ranges) {
+                share_ranges.push_back({r.start, r.end});
+            }
+        }
+        // Always share the forking thread's live stack: OSv runs kernel code
+        // (incl. the context switch, with irqs off) on it, so it must never be
+        // write-protected.  get_stack_info() gives the current thread's stack.
+        {
+            // The FORKING thread's live stack is PRIVATIZED (not shared): the
+            // child gets private byte-copies at the same VA so it can resume on
+            // the parent's exact rsp/rbp with independent stack memory.  It
+            // must stay plain-writable (no COW) since OSv runs kernel code with
+            // irqs off on it -- a COW fault there is illegal.
+            // A fork child forking again runs on its parent's stack VA, not
+            // on its own thread stack.
+            auto si = sched::thread::current()->get_running_stack_info();
+            uintptr_t s = reinterpret_cast<uintptr_t>(si.begin);
+            privatize_ranges.push_back({s, s + si.size});
+        }
+        // Likewise every OTHER live thread's stack: those threads keep running
+        // in the PARENT address space and perform context switches (irqs off) on
+        // their own stacks, which OSv forbids faulting on.  COW-protecting them
+        // would fault the next switch.  The forked child is single-threaded and
+        // never touches sibling stacks, so sharing them is safe.
+        sched::with_all_threads([&share_ranges](sched::thread &t) {
+            auto si = t.get_stack_info();
+            if (si.begin) {
+                uintptr_t s = reinterpret_cast<uintptr_t>(si.begin);
+                share_ranges.push_back({s, s + si.size});
+            }
+        });
+        cow_share_ranges = &share_ranges;
+        cow_privatize_ranges = &privatize_ranges;
+        cow_parent_vmas = parent->vmas;
+        // Build the sorted/coalesced lookup views ONCE per fork, after both
+        // range vectors are final and before the clone walk that queries them
+        // per PTE.  Same predicate, O(log n) per lookup instead of O(n).
+        build_sorted_ranges(cow_share_ranges, cow_share_sorted);
+        build_sorted_ranges(cow_privatize_ranges, cow_privatize_sorted);
+
+        // A fork-shared range over a private file mapping (libsolaris.so's
+        // .data) must be one copy in every address space, but a page there
+        // that was never written still maps the page cache copy-on-write.
+        // Make it the parent's private page now; the walk then shares it.
+        for (auto &v : *parent->vmas) {
+            auto *fv = dynamic_cast<file_vma *>(&v);
+            if (!fv || (v.flags() & mmap_shared)) {
+                continue;
+            }
+            SCOPE_LOCK(fork_shared_module_lock);
+            for (auto &r : fork_shared_module_ranges) {
+                uintptr_t s = std::max(r.start, v.start());
+                uintptr_t e = std::min(r.end, v.end());
+                for (uintptr_t va = align_up(s, page_size); va < e; va += page_size) {
+                    unsigned i0;
+                    pt_element<0> *pt = walk_to_leaf(va, i0);
+                    if (pt && pt[i0].sw_bit(pte_pagecache)) {
+                        pagecache::privatize_mapping(fv->file_dev_id(),
+                            fv->file_inode(), fv->offset() + (va - v.start()),
+                            hw_ptep<0>::force(&pt[i0]), v.perm() & perm_write);
+                    }
+                }
+            }
+        }
+
+        for (unsigned slot = 0; slot < pte_per_page; slot++) {
+            if (slot >= pml4_app_first && slot <= pml4_app_last) {
+                pt_element<3> pslot = parent_pml4[slot];
+                if (pslot.empty() || pslot.large()) {
+                    // Empty, or (unexpected) large: share as-is / leave empty.
+                    child_pml4[slot] = pslot.empty() ? make_empty_pte<3>() : pslot;
+                    continue;
+                }
+                // Deep-copy this app subtree (level 2 downwards) into the
+                // child, marking private 4K leaves COW.
+                void *child_sub = memory::alloc_page();
+                memset(child_sub, 0, page_size);
+                auto parent_sub = phys_cast<pt_element<2>>(pslot.next_pt_addr());
+                clone_pt_level<2>(parent_sub, static_cast<pt_element<2>*>(child_sub),
+                                  (uintptr_t)slot << 39);
+                pt_element<3> cslot = pslot;
+                cslot.set_addr(virt_to_phys(child_sub), false);
+                child_pml4[slot] = cslot;
+            } else {
+                // Kernel slot: share verbatim.
+                child_pml4[slot] = parent_pml4[slot];
+            }
+        }
+        cow_share_ranges = nullptr;
+        cow_privatize_ranges = nullptr;
+        cow_parent_vmas = nullptr;
+
+        // The child AS was pre-reserved above.  Snapshot the parent's private
+        // VMAs into `snap` while still under the lock (reads only; the
+        // pre-reserved vector storage is identity-mapped so its push_back never
+        // faults).  Capture each vma's file identity (a fileref + offset for a
+        // file_vma, null for an anon_vma) so the child's copies -- built AFTER
+        // the lock below -- can preserve each vma's DYNAMIC TYPE.  A file_vma
+        // (e.g. the ELF loader's file-backed .text) must clone as a file_vma
+        // bound to the SAME file + offset, else the child's demand faults
+        // zero-fill over its own .text (#1456's fork COW-clone wild-branch
+        // fix).  The allocating file()->mmap() rebuild cannot run here, so we
+        // defer it.  We must NOT do any write that can COW-fault (e.g. to a
+        // kernel .bss global we just write-protected) while holding vmas_mutex
+        // for write: the COW fault handler re-acquires vmas_mutex, which
+        // self-deadlocks.  So the live_child_address_spaces bump is deferred
+        // until after the lock.  The TLB flush is not: it runs before the lock
+        // is released (see below) and touches only kernel .bss and the
+        // identity heap, which are never COW.
+        for (auto &v : *parent->vmas) {
+            if (v.size() == 0) {
+                continue;
+            }
+            auto *fv = dynamic_cast<file_vma *>(&v);
+            if (fv) {
+                snap.push_back({v.start(), v.end(), v.perm(), v.flags(),
+                                fv->file(), fv->offset()});
+            } else {
+                snap.push_back({v.start(), v.end(), v.perm(), v.flags(),
+                                nullptr, 0});
+            }
+        }
+        // Flush the write-protection out of every CPU's TLB BEFORE releasing
+        // the lock.  Once it is released another thread can COW-fault one of
+        // these pages and give the parent a new frame for it; a CPU still
+        // holding a pre-fork writable TLB entry would then keep writing the
+        // OLD frame, which only the child maps now, and the parent loses those
+        // writes.  (That is how the vma tree lost a relink and a later fork
+        // walked into an erased node.)  It must reach CPUs that are running
+        // kernel threads too: those write this memory as well (the reaper
+        // drops references held in a dead child's thread object).  The
+        // TLB-flush state is kernel .bss and identity heap, never COW, so
+        // this cannot fault under the lock.
+        mmu::flush_tlb_all_cpus();
+    } // release vmas_mutex
+
+    live_child_address_spaces.fetch_add(1, std::memory_order_relaxed);
+
+    // Build the child's vma_list from the snapshot -- these allocations are free
+    // to hit the malloc pool refill path without risking a fork-time deadlock.
+    // Preserve each vma's dynamic type: a file-backed snap entry is rebuilt via
+    // the file's own mmap() (the SAME call map_file/file_vma::split use, giving
+    // the correct page_allocator so the child's demand faults read the file
+    // instead of zero-filling); the new file_vma holds its OWN fileref, released
+    // by ~file_vma in destroy_address_space.  Each vma also goes into the
+    // child's OWN range set (S1 AS-aware allocation): find_hole/allocate/
+    // evacuate consult child->ranges, so the child's post-fork mmap resolves a
+    // hole from -- and inserts into -- its OWN address space.
+    for (auto &s : snap) {
+        vma *nv;
+        if (s.file) {
+            nv = s.file->mmap(addr_range(s.start, s.end),
+                              s.flags, s.perm, s.foffset).release();
+        } else {
+            nv = new anon_vma(addr_range(s.start, s.end), s.perm, s.flags);
+        }
+        child->vmas->insert(*nv);
+        WITH_LOCK(child->ranges_mutex->for_write()) {
+            child->ranges->insert(vma_range(nv));
+        }
+    }
+    // The walk copied the parent's page-cache PTEs: register the child's
+    // copies with the page cache (the child has not started yet).
+    child_pagecache_mappings(child, pagecache::inherit_mappings);
+    return child;
+}
+
+// --- fork COW page-table teardown ------------------------------------------
+//
+// Recursively free a child's private app-range subtree.  Intermediate tables
+// are always freed (they were allocated fresh for the child).  Leaf 4K pages
+// are freed only if they are the child's PRIVATE copy (writable, non-COW);
+// COW / read-only leaves are shared with the parent and left intact.
+static void free_child_pt_level0(pt_element<0> *pt)
+{
+    for (unsigned i = 0; i < pte_per_page; i++) {
+        pt_element<0> e = pt[i];
+        if (e.empty()) continue;
+        if (e.writable() && !pte_is_cow(e) && !e.sw_bit(pte_shared) &&
+                !e.sw_bit(pte_pagecache)) {
+            // Child's own COW-copied private page: free it.  (pte_shared pages
+            // are jointly-owned stack/MAP_SHARED frames -- never free them.)
+            memory::free_page(phys_to_virt(e.addr()));
+        }
+        // else: shared (COW, read-only, or pte_shared) -- leave the frame.
+    }
+    memory::free_page(pt);
+}
+
+static void free_child_large_pages(address_space *as, vma &v); // after page_allocator
+
+template<int N>
+static void free_child_pt_level(pt_element<N> *pt);
+
+template<>
+void free_child_pt_level<1>(pt_element<1> *pt)
+{
+    for (unsigned i = 0; i < pte_per_page; i++) {
+        pt_element<1> e = pt[i];
+        if (e.empty() || e.large()) continue;   // large: free_child_large_pages
+        free_child_pt_level0(phys_cast<pt_element<0>>(e.next_pt_addr()));
+    }
+    memory::free_page(pt);
+}
+template<>
+void free_child_pt_level<2>(pt_element<2> *pt)
+{
+    for (unsigned i = 0; i < pte_per_page; i++) {
+        pt_element<2> e = pt[i];
+        if (e.empty() || e.large()) continue;
+        free_child_pt_level<1>(phys_cast<pt_element<1>>(e.next_pt_addr()));
+    }
+    memory::free_page(pt);
+}
+
+void destroy_address_space(address_space *as)
+{
+    if (!as || as == &kernel_as) {
+        return;
+    }
+    // Free the child's private page tables for the application slots (1..127)
+    // and the PML4 page.  Kernel slots (0, 128..511) are shared and must NOT
+    // be freed.  For leaf 4K pages: free only the child's PRIVATE copies
+    // (writable, non-COW) -- COW/read-only leaves are still shared with the
+    // parent and must be left alone.
+    phys pml4_phys = as->top ? as->top->next_pt_addr() : 0;
+    if (pml4_phys) {
+        // Unregister the child's page-cache PTEs (and leave them empty) before
+        // their page-table pages are freed; the cache owns those pages.
+        {
+            fork_arena::kernel_heap_scope kh;
+            child_pagecache_mappings(as, pagecache::release_mappings);
+        }
+        for (auto &v : *as->vmas) {
+            free_child_large_pages(as, v);
+        }
+        auto pml4 = phys_cast<pt_element<3>>(pml4_phys);
+        for (unsigned slot = pml4_app_first; slot <= pml4_app_last; slot++) {
+            pt_element<3> e3 = pml4[slot];
+            if (e3.empty() || e3.large()) continue;
+            free_child_pt_level<2>(phys_cast<pt_element<2>>(e3.next_pt_addr()));
+        }
+        memory::free_page(phys_to_virt(pml4_phys));
+    }
+    // Dispose the child's own vma objects (the clones built in
+    // clone_address_space, plus the vma_list edge markers).  ~vma is a no-op
+    // for the base/anon case; for a file_vma it deletes the page_allocator and
+    // releases the fileref this child took in clone_address_space -- so the
+    // file-backed clone does not leak its file reference.  (This also closes
+    // the pre-existing anon_vma + edge-marker leak.)  ~vma touches no global
+    // list, so disposing here is safe.
+    if (as->owned_vmas) {
+        as->owned_vmas->clear_and_dispose([](vma *v) { delete v; });
+    }
+    // Return this child's fork-arena extents to the pool and free its arena
+    // state, after its page tables.  The object goes with its last reference.
+    fork_arena::release_as(as);
+    live_child_address_spaces.fetch_sub(1, std::memory_order_relaxed);
+}
+
+// Defined in libc/process/fork.cc: frees what a retired child address space
+// still owns (its memory, timers and signal table) and drops its reference.
+extern "C" void fork_retire_address_space(address_space *as);
+
+void as_hold(address_space *as)
+{
+    if (as && as != &kernel_as) {
+        as->users.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+bool as_try_hold(address_space *as)
+{
+    if (!as || as == &kernel_as) {
+        return true;
+    }
+    long n = as->users.load(std::memory_order_relaxed);
+    do {
+        if (n == 0) {
+            return false;
+        }
+    } while (!as->users.compare_exchange_weak(n, n + 1, std::memory_order_acquire,
+                                              std::memory_order_relaxed));
+    return true;
+}
+
+void as_release(address_space *as)
+{
+    if (as && as != &kernel_as &&
+            as->users.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        fork_retire_address_space(as);
+    }
+}
+
+void as_get(address_space *as)
+{
+    if (as && as != &kernel_as) {
+        as->refs.fetch_add(1, std::memory_order_relaxed);
+    }
+}
+
+void as_put(address_space *as)
+{
+    if (as && as != &kernel_as &&
+            as->refs.fetch_sub(1, std::memory_order_acq_rel) == 1) {
+        delete as;
+    }
+}
+#else // !CONF_fork
+// Non-fork build: the allocation/query path uses the single global vma_list /
+// vma_range_set directly.  These accessors make the shared code below identical
+// in shape to the CONF_fork build while compiling to the exact same global
+// references (byte-identical non-fork behaviour).
+static inline vma_list_type &cur_vma_list() { return vma_list; }
+static inline rwlock_t &cur_vma_list_mutex() { return vma_list_mutex; }
+static inline vma_range_set_type &cur_vma_range_set() { return vma_range_set; }
+static inline rwlock_t &cur_vma_range_set_mutex() { return vma_range_set_mutex; }
+#endif // CONF_fork
 
 // A mutex serializing modifications to the high part of the page table
 // (linear map, etc.) which are not part of vma_list.
@@ -175,6 +1152,11 @@ phys virt_to_phys(void *virt)
 
 #if CONF_memory_debug
     if (virt > debug_base) {
+        return virt_to_phys_pt(virt);
+    }
+#endif
+#if CONF_fork
+    if (stack_window::contains(virt)) {
         return virt_to_phys_pt(virt);
     }
 #endif
@@ -287,6 +1269,48 @@ struct page_allocator {
     virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<1> ptep) = 0;
     virtual ~page_allocator() {}
 };
+
+#if CONF_fork
+// Free the 2 MB pages a child mapped in vma @v.  The fork splits every 2 MB
+// page it inherits (clone_pt_level<1>), so a 2 MB leaf in a child was faulted
+// in by the child itself.  Whether its frame belongs to the mapping is the
+// page provider's answer, the same one munmap uses: anonymous memory (and a
+// private file copy) yes; shm, io_uring rings and shared anonymous memory no.
+static void free_child_large_pages(address_space *as, vma &v)
+{
+    page_allocator *ops = v.page_ops();
+    if (!ops) {
+        return;
+    }
+    auto pml4 = phys_cast<pt_element<3>>(as->top->next_pt_addr());
+    const uintptr_t pud_sz = uintptr_t(1) << 30, pgd_sz = uintptr_t(1) << 39;
+    uintptr_t va = align_up(v.start(), huge_page_size);
+    while (va + huge_page_size <= v.end()) {
+        void *p = reinterpret_cast<void*>(va);
+        unsigned slot = pt_index(p, 3);
+        pt_element<3> e3 = pml4[slot];
+        if (slot < pml4_app_first || slot > pml4_app_last || e3.empty() || e3.large()) {
+            va = align_down(va, pgd_sz) + pgd_sz;
+            continue;
+        }
+        pt_element<2> e2 = phys_cast<pt_element<2>>(e3.next_pt_addr())[pt_index(p, 2)];
+        if (e2.empty() || e2.large()) {
+            va = align_down(va, pud_sz) + pud_sz;
+            continue;
+        }
+        auto pd = phys_cast<pt_element<1>>(e2.next_pt_addr());
+        auto ptep = hw_ptep<1>::force(&pd[pt_index(p, 1)]);
+        pt_element<1> e1 = ptep.read();
+        if (!e1.empty() && e1.large()) {
+            void *frame = phys_to_virt(e1.addr());
+            if (ops->unmap(frame, va - v.start(), ptep)) {
+                memory::free_huge_page(frame, huge_page_size);
+            }
+        }
+        va += huge_page_size;
+    }
+}
+#endif
 
 unsigned long all_vmas_size()
 {
@@ -613,6 +1637,21 @@ public:
             if (_page_provider->map(offset, ptep, pte, _write)) {
                 this->account(pt_level_traits<N>::size::value);
             }
+#if CONF_fork
+            // [W1] A provider may REJECT a large (2M) fill by returning false
+            // at a large-capable level to force 4K granularity (e.g. the
+            // fork-coherent shared_anon_page_provider, whose registry is 4K
+            // keyed).  In that case the walker MUST descend to level 0 and map
+            // the 4K pages; returning true here would tell the walker "handled"
+            // and leave the 2M range with an EMPTY pte -> the fault re-fires on
+            // the same address forever (the PG shared_buffers mmap-populate spin
+            // loop).  Returning false at a large-capable level makes the walker
+            // descend.  At the 4K leaf there is nothing below to descend to, so
+            // a false there is harmless (return value ignored at level 0).
+            else if (pt_level_traits<N>::large_capable::value) {
+                return false;
+            }
+#endif
         } catch(std::exception&) {
             return false;
         }
@@ -938,8 +1977,8 @@ public:
 // Find the single (if any) vma which contains the given address.
 // The complexity is logarithmic in the number of vmas in vma_list.
 static inline vma_list_type::iterator
-find_intersecting_vma(uintptr_t addr) {
-    auto vma = vma_list.lower_bound(addr, addr_compare());
+find_intersecting_vma_in(vma_list_type &vmas, uintptr_t addr) {
+    auto vma = vmas.lower_bound(addr, addr_compare());
     if (vma->start() == addr) {
         return vma;
     }
@@ -948,9 +1987,25 @@ find_intersecting_vma(uintptr_t addr) {
     if (addr >= vma->start() && addr < vma->end()) {
         return vma;
     } else {
-        return vma_list.end();
+        return vmas.end();
     }
 }
+
+static inline vma_list_type::iterator
+find_intersecting_vma(uintptr_t addr) {
+    return find_intersecting_vma_in(cur_vma_list(), addr);
+}
+
+#if CONF_fork
+// Whether the parent's vma at @va allows writes.  An address in a share range
+// with no vma (a thread stack the application supplied from memory it did not
+// mmap) is writable, as a stack must be.
+static bool parent_vma_writable(uintptr_t va)
+{
+    auto v = find_intersecting_vma_in(*cow_parent_vmas, va);
+    return v == cow_parent_vmas->end() || (v->perm() & perm_write);
+}
+#endif
 
 // Find the list of vmas which intersect a given address range. Because the
 // vmas are sorted in vma_list, the result is a consecutive slice of vma_list,
@@ -960,10 +2015,11 @@ find_intersecting_vma(uintptr_t addr) {
 static inline std::pair<vma_list_type::iterator, vma_list_type::iterator>
 find_intersecting_vmas(const addr_range& r)
 {
+    vma_list_type &vmas = cur_vma_list();
     if (r.end() <= r.start()) { // empty range, so nothing matches
-        return {vma_list.end(), vma_list.end()};
+        return {vmas.end(), vmas.end()};
     }
-    auto start = vma_list.lower_bound(r.start(), addr_compare());
+    auto start = vmas.lower_bound(r.start(), addr_compare());
     if (start->start() > r.start()) {
         // The previous vma might also intersect with our range if it ends
         // after our range's start.
@@ -975,11 +2031,11 @@ find_intersecting_vmas(const addr_range& r)
     // If the start vma is actually beyond the end of the search range,
     // there is no intersection.
     if (start->start() >= r.end()) {
-        return {vma_list.end(), vma_list.end()};
+        return {vmas.end(), vmas.end()};
     }
     // end is the first vma starting >= r.end(), so any previous vma (after
     // start) surely started < r.end() so is part of the intersection.
-    auto end = vma_list.lower_bound(r.end(), addr_compare());
+    auto end = vmas.lower_bound(r.end(), addr_compare());
     return {start, end};
 }
 
@@ -1024,27 +2080,39 @@ uintptr_t find_hole(uintptr_t start, uintptr_t size)
 {
     bool small = size < huge_page_size;
     uintptr_t good_enough = 0;
+#if CONF_fork
+    // The fork heap arena owns [arena_base, arena_end): searched mappings stay
+    // below it, and a hint inside it is ignored.
+    const uintptr_t limit = fork_arena::arena_base;
+    if (start >= limit) {
+        start = 0x200000000000ul;
+    }
+#else
+    const uintptr_t limit = upper_vma_limit;
+#endif
 
-    SCOPE_LOCK(vma_range_set_mutex.for_read());
+    vma_range_set_type &ranges = cur_vma_range_set();
+    SCOPE_LOCK(cur_vma_range_set_mutex().for_read());
     //Find first vma range which starts before the start parameter or is the 1st one
-    auto p = std::lower_bound(vma_range_set.begin(), vma_range_set.end(), start, vma_range_addr_compare());
-    if (p != vma_range_set.begin()) {
+    auto p = std::lower_bound(ranges.begin(), ranges.end(), start, vma_range_addr_compare());
+    if (p != ranges.begin()) {
         --p;
     }
     auto n = std::next(p);
-    while (n->start() <= upper_vma_limit) { //we only go up to the upper mmap vma limit
+    while (n->start() <= upper_vma_limit && p->end() < limit) { //we only go up to the upper mmap vma limit
+        uintptr_t hole_end = std::min(n->start(), limit);
         //See if desired hole fits between p and n vmas
-        if (start >= p->end() && start + size <= n->start()) {
+        if (start >= p->end() && start + size <= hole_end) {
             return start;
         }
         //See if shifting start to the end of p makes desired hole fit between p and n
-        if (p->end() >= start && n->start() - p->end() >= size) {
+        if (p->end() >= start && hole_end - p->end() >= size) {
             good_enough = p->end();
             if (small) {
                 return good_enough;
             }
             //See if huge hole fits between p and n
-            if (n->start() - align_up(good_enough, huge_page_size) >= size) {
+            if (hole_end - align_up(good_enough, huge_page_size) >= size) {
                 return align_up(good_enough, huge_page_size);
             }
         }
@@ -1074,9 +2142,10 @@ ulong evacuate(uintptr_t start, uintptr_t end)
                 memory::stats::on_jvm_heap_free(size);
             }
 #endif
-            vma_list.erase(dead);
-            WITH_LOCK(vma_range_set_mutex.for_write()) {
-                vma_range_set.erase(vma_range(&dead));
+            vma_list_type &vmas = cur_vma_list();
+            vmas.erase(dead);
+            WITH_LOCK(cur_vma_range_set_mutex().for_write()) {
+                cur_vma_range_set().erase(vma_range(&dead));
             }
             delete &dead;
         }
@@ -1156,6 +2225,188 @@ private:
     }
 };
 
+#if CONF_fork
+// --- shared-anonymous page provider (fork MAP_SHARED coherence) ------------
+//
+// [W-catalog-read] Anonymous MAP_SHARED (PG shared_buffers with the default
+// shared_memory_type=mmap) must resolve a given page to the SAME physical
+// frame in EVERY address space -- parent and all fork children.  The plain
+// initialized_anonymous_page_provider allocates a FRESH page per map() call,
+// so a page first-faulted by one forked backend is a private zero page in a
+// sibling backend that faults the same VA post-fork -> the sibling reads zeros
+// ("pg_authid_rolname_index contains unexpected zero page").
+//
+// The parent (postmaster) creates the segment before forking, and only a few
+// of its pages are touched pre-fork; the rest are first-touched by individual
+// backends AFTER their fork, when the parent's page table (and thus every
+// child's clone) still has an EMPTY PTE for them.  clone_pt_level0 can only
+// share what is already present, so those pages are NOT covered by the fork
+// share path -- they must be resolved coherently AT FAULT TIME.
+//
+// This provider backs such a mapping with a process-global registry keyed by
+// the absolute page VA (an anon MAP_SHARED region lives at the SAME VA in every
+// fork address space -- clone_address_space keeps identical VAs -- so the VA
+// uniquely identifies the shared page).  The first AS to fault a page allocates
+// and records it; every later AS (sibling backend or parent) that faults the
+// same VA maps THAT recorded physical page.  All siblings converge -- exactly
+// what MAP_SHARED means.  The registry map lives on the identity kernel heap so
+// it is one shared table across all address spaces, mirroring shm_file::_pages.
+// The registry is populated ONCE per VA (the first backend to fault a given
+// shared-anon page allocates and records it) and then READ on every later
+// fault of that VA by every fork address space.  For a big shared-anon segment
+// exercised by many forked workers that is a handful of inserts and then a
+// flood of read-only lookups -- a textbook read-mostly VA-keyed table.  Back it
+// with osv::rcu_hashtable (the same structure the net-channel classifier uses
+// for its read-mostly flow-keyed lookups) so the hit path takes NO mutex: it
+// runs inside an rcu_read_lock, does a lock-free reader_find(va), and returns
+// the recorded page.  Only the rare first-fault INSERT takes a lock (a single
+// process-global insert mutex), which is where the "one shared physical page
+// per VA" invariant is preserved by a double-checked re-lookup under that lock.
+// This removes the per-shard mutex that every fault previously contended.
+struct shared_anon_node {
+    uintptr_t va;      // abs page VA (the key)
+    void *page;        // recorded kernel page for that VA
+};
+struct shared_anon_node_hash {
+    size_t operator()(const shared_anon_node &n) const { return hash_va(n.va); }
+    static size_t hash_va(uintptr_t va) {
+        // va is page-aligned; spread the page-index bits.
+        uintptr_t k = va >> page_size_shift;
+        k ^= k >> 16;
+        return k;
+    }
+};
+struct shared_anon_registry {
+    osv::rcu_hashtable<shared_anon_node, shared_anon_node_hash> pages;
+    // Serializes only the first-fault INSERT for a VA (and the double-checked
+    // re-lookup that preserves the one-page-per-VA invariant).  The READ path
+    // never takes this: it is rcu_read_lock only.
+    mutex insert_lock;
+};
+static shared_anon_registry *shared_anon_reg;
+static std::atomic<bool> shared_anon_reg_inited{false};
+
+static shared_anon_registry *get_shared_anon_registry()
+{
+    // Allocate the singleton registry on the identity kernel heap so it (and
+    // the nodes emplaced into it below) are visible in every fork AS.
+    if (!shared_anon_reg_inited.load(std::memory_order_acquire)) {
+        fork_arena::kernel_heap_scope kh;
+        static mutex init_lock;
+        WITH_LOCK(init_lock) {
+            if (!shared_anon_reg) {
+                shared_anon_reg = new shared_anon_registry();
+                shared_anon_reg_inited.store(true, std::memory_order_release);
+            }
+        }
+    }
+    return shared_anon_reg;
+}
+
+// Per-vma provider: stores the vma's start VA so map()'s vma-relative offset
+// can be turned into the absolute VA used as the registry key.  Owned + freed
+// by the anon_vma (see ~anon_vma).  Cheap: one object per shared-anon mapping.
+class shared_anon_page_provider : public page_allocator {
+private:
+    uintptr_t _base;   // vma start VA (same in every fork AS for MAP_SHARED)
+public:
+    explicit shared_anon_page_provider(uintptr_t base) : _base(base) {}
+    void set_base(uintptr_t base) { _base = base; }
+
+    // Resolve (or allocate-and-record) the ONE shared physical page for the
+    // absolute VA = _base + offset.  Returns the kernel virtual address of the
+    // backing page (identity-mapped, so valid in every AS).
+    void *shared_page(uintptr_t offset) {
+        uintptr_t va = _base + offset;
+        auto *reg = get_shared_anon_registry();
+        // Fast path: already recorded -- LOCK-FREE read under RCU.  This is the
+        // flood-of-faults hot path; it takes no mutex.
+        WITH_LOCK(osv::rcu_read_lock) {
+            auto it = reg->pages.reader_find(va, shared_anon_node_hash::hash_va,
+                [](uintptr_t k, const shared_anon_node &n) { return n.va == k; });
+            if (it) {
+                return it->page;
+            }
+        }
+        // Slow path (first fault of this VA): allocate the backing page OUTSIDE
+        // any lock (alloc_page may schedule / refill the page pool -- never hold
+        // a mutex across that).  Force it onto the identity kernel heap so it is
+        // valid in every AS.
+        void *page;
+        {
+            fork_arena::kernel_heap_scope kh;
+            page = memory::alloc_page();
+            memset(page, 0, page_size);
+        }
+        WITH_LOCK(reg->insert_lock) {
+            // Double-checked re-lookup under the insert lock: preserves the
+            // "one shared physical page per VA" invariant if another AS raced us.
+            auto it = reg->pages.owner_find(va, shared_anon_node_hash::hash_va,
+                [](uintptr_t k, const shared_anon_node &n) { return n.va == k; });
+            if (it) {
+                // Lost the race: another AS recorded it first -- use theirs.
+                fork_arena::kernel_heap_scope kh;
+                memory::free_page(page);
+                return it->page;
+            }
+            // Publish on the identity heap so the node (and any bucket regrow)
+            // are visible in every fork AS, exactly like the old emplace.
+            fork_arena::kernel_heap_scope kh;
+            reg->pages.emplace(shared_anon_node{va, page});
+            return page;
+        }
+    }
+
+    virtual bool map(uintptr_t offset, hw_ptep<0> ptep, pt_element<0> pte, bool write) override {
+        void *page = shared_page(offset);
+        // Tag the PTE pte_shared so per-AS teardown (free_child_pt_level0) does
+        // NOT free this frame: it is a jointly-owned shared-anon page in the
+        // global registry, not this AS's private COW copy.  Without this, the
+        // first backend to exit frees the shared frame and later siblings read
+        // freed/zeroed memory.  The write bit stays as the caller built it from
+        // the vma's protection, so a PROT_READ mapping maps the page read-only.
+        pte = pte_mark_cow(pte, false);
+        pte.set_sw_bit(pte_shared, true);
+        return write_pte(page, ptep, pte);
+    }
+    virtual bool map(uintptr_t offset, hw_ptep<1> ptep, pt_element<1> pte, bool write) override {
+        // Force 4K granularity for shared-anon so the registry stays 4K-keyed
+        // and coherent; reject the 2M large-page fill and let the walker fall
+        // to level 0 (the 4K map() above).
+        return false;
+    }
+    virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<0> ptep) override {
+        // The shared frame is owned by the registry, not by this AS's PTE --
+        // clearing one AS's mapping must NOT free a page other ASes still use
+        // (mirrors shm_file::put_page).  Only the creating AS (AS0, which owns
+        // the segment lifetime like the PG postmaster) reclaims the frame from
+        // the registry on a genuine munmap.
+        clear_pte(ptep);
+        auto t = sched::thread::current();
+        if (t && t->address_space() && t->address_space() != kernel_address_space()) {
+            return false;   // a fork child: never free the shared frame
+        }
+        uintptr_t va = _base + offset;
+        auto *reg = get_shared_anon_registry();
+        void *page = nullptr;
+        WITH_LOCK(reg->insert_lock) {
+            auto it = reg->pages.owner_find(va, shared_anon_node_hash::hash_va,
+                [](uintptr_t k, const shared_anon_node &n) { return n.va == k; });
+            if (it) { page = it->page; reg->pages.erase(it); }
+        }
+        if (page) {
+            fork_arena::kernel_heap_scope kh;
+            memory::free_page(page);
+        }
+        return false;   // we already handled the frame; don't double-free
+    }
+    virtual bool unmap(void *addr, uintptr_t offset, hw_ptep<1> ptep) override {
+        clear_pte(ptep);
+        return false;
+    }
+};
+#endif // CONF_fork
+
 // Page provider for MAP_HUGETLB strict mode: refuses 4KB small-page fallback.
 // When alloc_huge_page() fails, the level-1 map() throws (existing behaviour).
 // The page walker then falls to level 0; our override returns false so
@@ -1233,9 +2484,9 @@ uintptr_t allocate(vma *v, uintptr_t start, size_t size, bool search)
     }
     v->set(start, start+size);
 
-    vma_list.insert(*v);
-    WITH_LOCK(vma_range_set_mutex.for_write()) {
-        vma_range_set.insert(vma_range(v));
+    cur_vma_list().insert(*v);
+    WITH_LOCK(cur_vma_range_set_mutex().for_write()) {
+        cur_vma_range_set().insert(vma_range(v));
     }
 
     return start;
@@ -1263,6 +2514,117 @@ void vdepopulate(void* addr, size_t size)
         operate_range(unpopulate<>(&map), addr, size);
     }
 }
+
+#if CONF_fork
+namespace stack_window {
+
+static_assert(base >> 39 > pml4_app_last && (base + size - 1) >> 39 == base >> 39,
+              "the stack window must lie in one kernel top-level slot, which fork() shares");
+static_assert(base >= debug_mem_area_base && base + size <= debug_mem_area_base + mem_area_size,
+              "the stack window must lie outside the linear map, in the debug area");
+
+static bool ready;
+static mutex window_mutex;
+static uintptr_t next = base;
+// Freed ranges, reused only for stacks of the same page count (there are only a
+// handful of stack sizes), so no coalescing is needed.
+static std::unordered_map<size_t, std::vector<uintptr_t>> free_ranges;
+
+void init()
+{
+    // The window lies in the debug area, which the debug allocator then owns.
+    if (CONF_memory_debug) {
+        return;
+    }
+    // Install the window's second-level table in the kernel root now, before
+    // any fork(): children copy their parent's top-level entries, so a table
+    // created after a fork would be invisible to the children forked earlier.
+    WITH_LOCK(page_table_high_mutex) {
+        auto pml4 = phys_cast<pt_element<3>>(kernel_pt_root_phys());
+        auto top = hw_ptep<3>::force(&pml4[base >> 39]);
+        assert(top.read().empty());   // nothing else may map this slot
+        allocate_intermediate_level(top);
+    }
+    ready = true;
+}
+
+void* alloc(size_t bytes)
+{
+    if (!ready) {
+        return nullptr;
+    }
+    // The bookkeeping below must not land in a forked caller's private heap.
+    fork_arena::kernel_heap_scope kh;
+    bytes = align_up(bytes, page_size);
+    uintptr_t va = 0;
+    WITH_LOCK(window_mutex) {
+        auto& fl = free_ranges[bytes];
+        if (!fl.empty()) {
+            va = fl.back();
+            fl.pop_back();
+        } else if (next + bytes <= base + size) {
+            va = next;
+            next += bytes;
+        }
+    }
+    if (!va) {
+        return nullptr;
+    }
+    // Map writable, non-executable 4K pages, each from alloc_page().  Fully
+    // populated: stacks are used with preemption disabled, where a fault is
+    // illegal.
+    WITH_LOCK(page_table_high_mutex) {
+        initialized_anonymous_page_provider map;
+        operate_range(populate_small<>(&map, perm_rw), reinterpret_cast<void*>(va), bytes);
+    }
+    return reinterpret_cast<void*>(va);
+}
+
+// Clear the window's 4K leaf entries and remember their pages, so they can be
+// freed only after every CPU has dropped its translations.
+class clear_window_pages : public vma_operation<allocate_intermediate_opt::no, skip_empty_opt::yes> {
+public:
+    explicit clear_window_pages(std::vector<void*>& pages) : _pages(pages) {}
+    template<int N>
+    bool page(hw_ptep<N> ptep, uintptr_t offset) {
+        assert(!pt_level_traits<N>::large_capable::value);   // always 4K pages
+        _pages.push_back(phys_to_virt(clear_pte(ptep).addr()));
+        return true;
+    }
+    unsigned nr_page_sizes(void) { return 1; }
+private:
+    std::vector<void*>& _pages;
+};
+
+void free(void* p, size_t bytes)
+{
+    fork_arena::kernel_heap_scope kh;
+    bytes = align_up(bytes, page_size);
+    std::vector<void*> pages;
+    pages.reserve(bytes / page_size);
+    WITH_LOCK(page_table_high_mutex) {
+        operate_range(clear_window_pages(pages), p, bytes);
+    }
+    // A double free (or a wrong size) finds unmapped pages: free_ranges holds
+    // only the VA, so pushing it again would hand one range out twice.
+    if (pages.size() != bytes / page_size) {
+        abort("stack_window::free(%p, %zu): %zu of %zu pages mapped\n",
+              p, bytes, pages.size(), bytes / page_size);
+    }
+    // Not the lazy flush_tlb_all(): it skips CPUs running kernel threads, and
+    // kernel threads are what runs on these stacks.  A stale translation left
+    // there would write into a page after it is reused.
+    flush_tlb_all_cpus();
+    for (auto pg : pages) {
+        memory::free_page(pg);
+    }
+    WITH_LOCK(window_mutex) {
+        free_ranges[bytes].push_back(reinterpret_cast<uintptr_t>(p));
+    }
+}
+
+}
+#endif
 
 void vcleanup(void* addr, size_t size)
 {
@@ -1320,7 +2682,7 @@ static void hugepage(void* addr, size_t length)
 error advise(void* addr, size_t size, int advice)
 {
     PREVENT_STACK_PAGE_FAULT
-    WITH_LOCK(vma_list_mutex.for_write()) {
+    WITH_LOCK(cur_vma_list_mutex().for_write()) {
         if (!ismapped(addr, size)) {
             return make_error(ENOMEM);
         }
@@ -1361,10 +2723,31 @@ void* map_anon(const void* addr, size_t size, unsigned flags, unsigned perm)
     bool search = !(flags & mmap_fixed);
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
+#if CONF_fork
+    // The vma object is inserted into THIS address space's owned_vmas and later
+    // disposed by destroy_address_space() -- which runs on the REAPER thread in
+    // AS0, not in this child's AS.  If the vma lived in the child's COW fork
+    // arena (arena_base 0x3000..), its VA is not mapped in the reaper's AS, so
+    // the reaper's intrusive-list walk (clear_and_dispose) dereferences an
+    // unmapped/garbage pointer -> null-deref fault in destroy_address_space.
+    // Force the vma onto the shared identity kernel heap, exactly like the
+    // clone-path vmas built in clone_address_space (which are already under a
+    // kernel_heap_scope for the same reason).
+    fork_arena::kernel_heap_scope kh;
+#endif
     auto* vma = new mmu::anon_vma(addr_range(start, start + size), perm, flags);
     PREVENT_STACK_PAGE_FAULT
-    SCOPE_LOCK(vma_list_mutex.for_write());
+    SCOPE_LOCK(cur_vma_list_mutex().for_write());
     auto v = (void*) allocate(vma, start, size, search);
+#if CONF_fork
+    // allocate() may have RELOCATED a searched (addr==NULL) mapping to a hole,
+    // so the vma's real start VA is only known now.  A shared-anon provider
+    // keys the global registry on the absolute page VA (start + offset), so it
+    // must be told the final base -- otherwise every AS keys off base 0 and
+    // the parent vs. the fork children disagree.  (split/clone construct with
+    // an explicit range, so only this searched path needs the fixup.)
+    vma->update_shared_base();
+#endif
     if (flags & mmap_populate) {
         auto mapped = populate_vma<account_opt::yes>(vma, v, size);
         if ((flags & mmap_huge) && mapped < size) {
@@ -1396,10 +2779,16 @@ void* map_file(const void* addr, size_t size, unsigned flags, unsigned perm,
     bool search = !(flags & mmu::mmap_fixed);
     size = align_up(size, mmu::page_size);
     auto start = reinterpret_cast<uintptr_t>(addr);
+#if CONF_fork
+    // Same rule as map_anon: the file_vma (and its map_file_page_* allocator)
+    // is disposed cross-AS by destroy_address_space() on the reaper thread, so
+    // it must live on the shared identity heap, not the child's COW arena.
+    fork_arena::kernel_heap_scope kh;
+#endif
     auto *vma = f->mmap(addr_range(start, start + size), flags | mmap_file, perm, offset).release();
     void *v;
     PREVENT_STACK_PAGE_FAULT
-    WITH_LOCK(vma_list_mutex.for_write()) {
+    WITH_LOCK(cur_vma_list_mutex().for_write()) {
         v = (void*) allocate(vma, start, size, search);
         if (flags & mmap_populate) {
             populate_vma(vma, v, std::min(size, align_up(::size(f), page_size)));
@@ -1414,6 +2803,18 @@ static bool range_is_free(uintptr_t start, uintptr_t end)
 {
     auto range = find_intersecting_vmas(addr_range(start, end));
     return range.first == range.second;
+}
+
+bool intersects_vma(uintptr_t start, uintptr_t end)
+{
+    // An allocation made while this thread holds the lock for write (a vma
+    // split in mprotect or munmap) reaches here too.
+    auto &m = cur_vma_list_mutex();
+    if (m.wowned()) {
+        return !range_is_free(start, end);
+    }
+    SCOPE_LOCK(m.for_read());
+    return !range_is_free(start, end);
 }
 
 // Snapshot of the source mapping taken under the vma lock so the rest of
@@ -1536,6 +2937,9 @@ void* mremap(void* old_addr, size_t old_size, size_t new_size, unsigned flags)
             WITH_LOCK(vma_list_mutex.for_write()) {
                 if (range_is_free(old_end, old_end + grow)) {
                     addr_range tr(old_end, old_end + grow);
+#if CONF_fork
+                    fork_arena::kernel_heap_scope kh;   // see map_anon
+#endif
                     // Build the vma exactly as map_file()/map_anon() do (via
                     // the file's own mmap() for file-backed, so the correct
                     // page-ops are installed), then allocate() with
@@ -1672,8 +3076,131 @@ static void vm_sigbus(uintptr_t addr, exception_frame* ef)
     osv::handle_mmap_fault(addr, SIGBUS, ef);
 }
 
+// --- fork COW write-fault resolver ----------------------------------------
+#if CONF_fork
+//
+// Walk the CURRENT address space's page tables to the 4K leaf for `addr`,
+// returning a pointer to the leaf pt_element table + the index, or nullptr if
+// there is no present 4K leaf (empty entry or a large page).  The walk takes no
+// lock of its own.  Every caller but one holds the address space's vmas_mutex,
+// and the page-table pages of the vma range are freed only under that lock held
+// for write or when the address space is destroyed.  The exception is the
+// write-fault peek in vm_fault(), which walks with no lock held; vm_fault()
+// acts on its answer only after checking the leaf again under vmas_mutex.
+// handle_cow_write_fault() and the write-fault classifier share this so the
+// walk is written once.
+static pt_element<0> *walk_to_leaf(uintptr_t addr, unsigned &i0_out)
+{
+    // current_pt_root() returns the synthetic top (level-4) entry; follow it to
+    // the PML4 page (level-3 entries) and walk down to the 4K leaf (level 0).
+    pt_element<4> *top = current_pt_root();
+    if (top->empty()) return nullptr;
+    auto pml4 = phys_cast<pt_element<3>>(top->next_pt_addr());
+    unsigned i3 = pt_index(reinterpret_cast<void*>(addr), 3); // PML4 index
+    pt_element<3> e3 = pml4[i3];
+    if (e3.empty() || e3.large()) return nullptr;
+    auto pdpt = phys_cast<pt_element<2>>(e3.next_pt_addr());
+    unsigned i2 = pt_index(reinterpret_cast<void*>(addr), 2);
+    pt_element<2> e2 = pdpt[i2];
+    if (e2.empty() || e2.large()) return nullptr;
+    auto pd = phys_cast<pt_element<1>>(e2.next_pt_addr());
+    unsigned i1 = pt_index(reinterpret_cast<void*>(addr), 1);
+    pt_element<1> e1 = pd[i1];
+    if (e1.empty() || e1.large()) return nullptr; // 2 MB pages are not COW here
+    auto pt = phys_cast<pt_element<0>>(e1.next_pt_addr());
+    i0_out = pt_index(reinterpret_cast<void*>(addr), 0);
+    return pt;
+}
+
+// Fast, lock-free classifier for a write fault: does the current AS already
+// hold a resident, private copy-on-write leaf at `addr` that needs the
+// AS-wide write lock to copy?  A shared-anon page (present + pte_shared,
+// installed writable through the lock-free registry) is NOT a COW page and
+// never needs the AS-wide write lock -- neither does a not-yet-resident
+// first-touch fault (the for_read fault path installs it).  Only a genuine
+// private-COW leaf answers true here.  Generic: this holds for ANY
+// MAP_SHARED|MAP_ANONYMOUS-across-fork mapping, no workload awareness.
+static bool write_fault_needs_cow_lock(uintptr_t addr)
+{
+    unsigned i0;
+    pt_element<0> *pt = walk_to_leaf(addr, i0);
+    if (!pt) return false;
+    pt_element<0> e0 = pt[i0];
+    if (e0.empty()) return false;
+    // A page-cache leaf is resolved by the vma's own fault path (the page
+    // cache unregisters the slot, or promotes a MAP_SHARED page), not copied.
+    return pte_is_cow(e0) && !e0.sw_bit(pte_pagecache);
+}
+
+// Toggle the write-fault peek (skip the AS-wide write lock for non-COW write
+// faults) via env so a single image supports a clean A/B.  Default ON.  Read
+// once, lazily.
+static bool cow_peek_enabled()
+{
+    static std::atomic<int> cached{-1};
+    int v = cached.load(std::memory_order_relaxed);
+    if (v < 0) {
+        const char *e = getenv("OSV_MMU_COW_PEEK");
+        v = (e && e[0] == '0') ? 0 : 1;
+        cached.store(v, std::memory_order_relaxed);
+    }
+    return v != 0;
+}
+
+void print_cow_peek_setting()
+{
+    printf("LEVER mmu_cow_peek=%d\n", cow_peek_enabled() ? 1 : 0);
+}
+
+// Walk the CURRENT address space's page table to the leaf PTE for `addr`.  If
+// it is a copy-on-write page (write-protected + cow bit, set by
+// clone_address_space), allocate a fresh page, copy the shared page's contents
+// into it, and install it writable in this AS only -- so the faulting side
+// (parent or child) gets its own private copy.  Returns true if it handled a
+// COW fault.
+static bool handle_cow_write_fault(uintptr_t addr)
+{
+    unsigned i0;
+    pt_element<0> *pt = walk_to_leaf(addr, i0);
+    if (!pt) return false;
+    pt_element<0> e0 = pt[i0];
+    if (e0.empty()) return false;
+    if (!pte_is_cow(e0)) return false;
+    // A page-cache page: copying it here would leave the page cache holding
+    // &pt[i0] as a mapping of its page, and the next drop of that page would
+    // clear this process's private copy.  The vma fault path handles it.
+    if (e0.sw_bit(pte_pagecache)) return false;
+
+    // Copy the shared page into a fresh private page.
+    void *shared = phys_to_virt(e0.addr());
+    void *priv = memory::alloc_page();
+    memcpy(priv, shared, page_size);
+
+    // Install the private page writable, clearing the cow bit, in THIS AS only.
+    pt_element<0> npte = make_leaf_pte(hw_ptep<0>::force(&pt[i0]),
+                                       virt_to_phys(priv), perm_rwx);
+    npte = pte_mark_cow(npte, false);
+    npte.set_writable(true);
+    pt[i0] = npte;
+    flush_tlb_as(current_address_space(), addr, page_size);
+    return true;
+}
+#endif // CONF_fork
+
 void vm_fault(uintptr_t addr, exception_frame* ef)
 {
+#if CONF_fork
+    // Page-fault servicing is KERNEL work: the pagecache pages, cached_page
+    // bookkeeping and filesystem (e.g. ROFS) demand-paging buffers it allocates
+    // are shared kernel infrastructure that must be identity-mapped and must
+    // never be a COW fork-arena page.  Critically, this handler runs while
+    // holding vma_list_mutex and may already be nested one exception deep;
+    // touching a fresh (not-yet-faulted) arena page here would take ANOTHER
+    // page fault, exceeding exception_depth and asserting.  Force the identity
+    // kernel heap for the whole fault path so no arena page is ever allocated
+    // or first-touched while servicing a fault.
+    fork_arena::kernel_heap_scope kh;
+#endif
     trace_mmu_vm_fault(addr, ef->get_error());
     if (fast_sigsegv_check(addr, ef)) {
         vm_sigsegv(addr, ef);
@@ -1689,6 +3216,73 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
     }
 #endif
     addr = align_down(addr, mmu::page_size);
+
+#if CONF_fork
+    // Resolve against the CURRENT thread's address space (child AS after fork,
+    // else AS0).  A COW write fault copies the page privately for this side.
+    address_space *as = kernel_address_space();
+    {
+        auto t = sched::thread::current();
+        if (t && t->address_space()) {
+            as = t->address_space();
+        }
+    }
+
+    // First handle a copy-on-write write fault (fork private mappings): the
+    // page is present but write-protected with the cow bit -- copy it.
+    //
+    // Only a genuine PRIVATE-COW leaf needs the AS-wide write lock (to make the
+    // private copy).  A shared-anon write fault (MAP_SHARED|ANON across fork)
+    // resolves its ONE shared physical page lock-free through the registry and
+    // installs a writable pte_shared PTE under the for_read fault path -- it
+    // never needs the AS-wide write lock.  A not-yet-resident first-touch fault
+    // is likewise handled by for_read.  Peek the leaf PTE lock-free and skip
+    // the exclusive lock unless the leaf is really COW, so shared-anon faults
+    // no longer serialize behind the AS-wide writer.
+    bool cow_raced;
+    do {
+        if (mmu::is_page_fault_write(ef->get_error()) &&
+                (!cow_peek_enabled() || write_fault_needs_cow_lock(addr))) {
+            PREVENT_STACK_PAGE_FAULT
+            WITH_LOCK(as->vmas_mutex->for_write()) {
+                // A COW page in a vma that does not allow the write (it was
+                // read-only at the fork, or mprotect()ed since) is a SIGSEGV
+                // below, not a copy.  A COW page outside every vma (kernel
+                // memory in an application slot) is resolved as before.
+                auto v = find_intersecting_vma_in(*as->vmas, addr);
+                if ((v == as->vmas->end() || !access_fault(*v, ef->get_error())) &&
+                        handle_cow_write_fault(addr)) {
+                    trace_mmu_vm_fault_ret(addr, ef->get_error());
+                    return;
+                }
+            }
+        }
+
+        cow_raced = false;
+        WITH_LOCK(as->vmas_mutex->for_read()) {
+            // A fork may have COW-protected the leaf again since we checked it
+            // (another thread resolved the first COW fault, then a fork ran).
+            // vma->fault() must not see a COW leaf: for a private file mapping
+            // it would replace this AS's written private page with the file's
+            // bytes.  The fork holds the lock for write, so this check is
+            // stable while we hold it for read.
+            auto vma = find_intersecting_vma_in(*as->vmas, addr);
+            bool denied = vma != as->vmas->end() && access_fault(*vma, ef->get_error());
+            if (!denied && mmu::is_page_fault_write(ef->get_error()) &&
+                    write_fault_needs_cow_lock(addr)) {
+                cow_raced = true;
+                continue;
+            }
+            if (vma == as->vmas->end() || denied) {
+                vm_sigsegv(addr, ef);
+                trace_mmu_vm_fault_sigsegv(addr, ef->get_error(), "slow");
+                return;
+            }
+            vma->fault(addr, ef);
+        }
+    } while (cow_raced);
+    trace_mmu_vm_fault_ret(addr, ef->get_error());
+#else // !CONF_fork -- original single-address-space fault path
     WITH_LOCK(vma_list_mutex.for_read()) {
         auto vma = find_intersecting_vma(addr);
         if (vma == vma_list.end() || access_fault(*vma, ef->get_error())) {
@@ -1699,6 +3293,7 @@ void vm_fault(uintptr_t addr, exception_frame* ef)
         vma->fault(addr, ef);
     }
     trace_mmu_vm_fault_ret(addr, ef->get_error());
+#endif // CONF_fork
 }
 
 vma::vma(addr_range range, unsigned perm, unsigned flags, bool map_dirty, page_allocator *page_ops)
@@ -1756,13 +3351,13 @@ unsigned vma::flags() const
 
 void vma::update_flags(unsigned flag)
 {
-    assert(vma_list_mutex.wowned());
+    assert(cur_vma_list_mutex().wowned());
     _flags |= flag;
 }
 
 void vma::clear_flags(unsigned flag)
 {
-    assert(vma_list_mutex.wowned());
+    assert(cur_vma_list_mutex().wowned());
     _flags &= ~flag;
 }
 
@@ -1831,18 +3426,51 @@ anon_vma::anon_vma(addr_range range, unsigned perm, unsigned flags)
           (flags & mmap_uninitialized) ? page_allocator_noinitp    :
                                          page_allocator_initp)
 {
+#if CONF_fork
+    // Anonymous MAP_SHARED must be coherent across fork (PG shared_buffers).
+    // Back it with a per-vma shared_anon_page_provider keyed on the vma's start
+    // VA -> a process-global registry, so every fork AS resolves a given page
+    // to the SAME physical frame.  (Huge / uninitialized anon are not on the
+    // shared_buffers path and keep their existing providers.)  The provider is
+    // owned by this vma and freed in ~anon_vma.  _range is already aligned by
+    // the base ctor, so start() is the correct base.
+    if ((flags & mmap_shared) && !(flags & mmap_huge) && !(flags & mmap_uninitialized)) {
+        _page_ops = new shared_anon_page_provider(start());
+    }
+#endif
 }
+
+#if CONF_fork
+anon_vma::~anon_vma()
+{
+    if ((_flags & mmap_shared) && !(_flags & mmap_huge) && !(_flags & mmap_uninitialized)) {
+        delete static_cast<shared_anon_page_provider*>(_page_ops);
+    }
+}
+#endif
+
+#if CONF_fork
+void anon_vma::update_shared_base()
+{
+    if ((_flags & mmap_shared) && !(_flags & mmap_huge) && !(_flags & mmap_uninitialized)) {
+        static_cast<shared_anon_page_provider*>(_page_ops)->set_base(start());
+    }
+}
+#endif
 
 void anon_vma::split(uintptr_t edge)
 {
     if (edge <= _range.start() || edge >= _range.end()) {
         return;
     }
+#if CONF_fork
+    fork_arena::kernel_heap_scope kh;   // see map_anon
+#endif
     vma* n = new anon_vma(addr_range(edge, _range.end()), _perm, _flags);
     set(_range.start(), edge);
-    vma_list.insert(*n);
-    WITH_LOCK(vma_range_set_mutex.for_write()) {
-        vma_range_set.insert(vma_range(n));
+    cur_vma_list().insert(*n);
+    WITH_LOCK(cur_vma_range_set_mutex().for_write()) {
+        cur_vma_range_set().insert(vma_range(n));
     }
 }
 
@@ -2119,11 +3747,14 @@ void file_vma::split(uintptr_t edge)
         return;
     }
     auto off = offset(edge);
+#if CONF_fork
+    fork_arena::kernel_heap_scope kh;   // see map_anon
+#endif
     vma *n = _file->mmap(addr_range(edge, _range.end()), _flags, _perm, off).release();
     set(_range.start(), edge);
-    vma_list.insert(*n);
-    WITH_LOCK(vma_range_set_mutex.for_write()) {
-        vma_range_set.insert(vma_range(n));
+    cur_vma_list().insert(*n);
+    WITH_LOCK(cur_vma_range_set_mutex().for_write()) {
+        cur_vma_range_set().insert(vma_range(n));
     }
 }
 
@@ -2198,6 +3829,17 @@ void* shm_file::page(uintptr_t hp_off)
         if (!addr)
             throw make_error(ENOMEM);
         memset(addr, 0, huge_page_size);
+#if CONF_fork
+        // _pages tracks the physical huge pages backing this shared segment.
+        // The shm_file itself is on the identity heap (make_file), but this map
+        // node is allocated here on the FAULTING app thread -- which would land
+        // in the COW fork arena, giving each process a private _pages copy.  A
+        // second process faulting the SAME MAP_SHARED offset would then miss the
+        // existing page and allocate a DIFFERENT physical page, breaking the
+        // cross-fork coherence MAP_SHARED (and PG's DSM) requires.  Force the
+        // node onto the identity heap so all address spaces share one _pages.
+        fork_arena::kernel_heap_scope kh;
+#endif
         _pages.emplace(hp_off, addr);
     } else {
         addr = p->second;
@@ -2318,7 +3960,7 @@ void free_initial_memory_range(uintptr_t addr, size_t size)
 error mprotect(const void *addr, size_t len, unsigned perm)
 {
     PREVENT_STACK_PAGE_FAULT
-    SCOPE_LOCK(vma_list_mutex.for_write());
+    SCOPE_LOCK(cur_vma_list_mutex().for_write());
 
     if (!ismapped(addr, len)) {
         return make_error(ENOMEM);
@@ -2330,7 +3972,7 @@ error mprotect(const void *addr, size_t len, unsigned perm)
 error munmap(const void *addr, size_t length)
 {
     PREVENT_STACK_PAGE_FAULT
-    SCOPE_LOCK(vma_list_mutex.for_write());
+    SCOPE_LOCK(cur_vma_list_mutex().for_write());
 
     length = align_up(length, mmu::page_size);
     if (!ismapped(addr, length)) {
@@ -2343,7 +3985,13 @@ error munmap(const void *addr, size_t length)
 
 error msync(const void* addr, size_t length, int flags)
 {
-    SCOPE_LOCK(vma_list_mutex.for_read());
+#if CONF_fork
+    // Writeback bookkeeping is kernel memory.  More to the point, a fork
+    // arena allocation can map a new arena region, which takes this address
+    // space's vma lock for write, and we hold it for read here: deadlock.
+    fork_arena::kernel_heap_scope kh;
+#endif
+    SCOPE_LOCK(cur_vma_list_mutex().for_read());
 
     if (!ismapped(addr, length)) {
         return make_error(ENOMEM);
@@ -2355,7 +4003,7 @@ error mincore(const void *addr, size_t length, unsigned char *vec)
 {
     char *end = align_up((char *)addr + length, page_size);
     char tmp;
-    SCOPE_LOCK(vma_list_mutex.for_read());
+    SCOPE_LOCK(cur_vma_list_mutex().for_read());
     if (!is_linear_mapped(addr, length) && !ismapped(addr, length)) {
         return make_error(ENOMEM);
     }
