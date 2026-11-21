@@ -389,12 +389,21 @@ static mutex clone_ranges_lock;
 static cow_range memo_share{1, 0};
 static cow_range memo_privatize{1, 0};
 
+// The part of the share ranges whose frames fork does not count (see the
+// share branch of clone_pt_level0): OSv-allocated thread stacks (mmap_stack
+// vmas) and the fork-shared module ranges.  Same lifetime and lock as the
+// sorted views above.
+static const std::vector<cow_range> *cow_nocount_ranges;
+static std::vector<cow_range> cow_nocount_sorted;
+static cow_range memo_nocount{1, 0};
+
 static void build_sorted_ranges(const std::vector<cow_range> *src,
                                 std::vector<cow_range> &dst)
 {
     // The range sets are changing, so both memos are stale.
     memo_share = cow_range{1, 0};
     memo_privatize = cow_range{1, 0};
+    memo_nocount = cow_range{1, 0};
     dst.clear();
     if (!src || src->empty()) return;
     dst.reserve(src->size());
@@ -541,6 +550,12 @@ static bool addr_is_privatize(uintptr_t va)
     return sorted_ranges_contain(cow_privatize_sorted, va, memo_privatize);
 }
 
+static bool addr_is_nocount(uintptr_t va)
+{
+    if (!cow_nocount_ranges) return false;
+    return sorted_ranges_contain(cow_nocount_sorted, va, memo_nocount);
+}
+
 // The parent's vma list while clone_address_space() walks its page tables,
 // under the same lock and lifetime as cow_share_ranges.
 static vma_list_type *cow_parent_vmas;
@@ -643,7 +658,14 @@ static void clone_pt_level0(pt_element<0> *parent_pt, pt_element<0> *child_pt,
             // becomes COW there, and the count must not miss this child.  A
             // frame the parent already tags pte_shared belongs to its file or
             // to the shared-anon registry, never to the fork paths: skip it.
-            if (!sh.sw_bit(pte_shared)) {
+            // So is a frame that can never become COW while it is mapped: an
+            // mmap_stack vma (an OSv-allocated thread stack) is in the share
+            // ranges for as long as it exists, and its munmap frees the frame.
+            // A fork-shared module range stays in its list once added, even
+            // when its memory is unmapped (a large ZFS allocation), so every
+            // later fork shares that address and its frame never becomes COW.
+            // Counting those would only add one per fork that nothing drops.
+            if (!sh.sw_bit(pte_shared) && !addr_is_nocount(va)) {
                 cow_get(sh.addr());
             }
             parent_pt[i] = sh;
@@ -863,6 +885,7 @@ address_space *clone_address_space(address_space *parent)
     // reallocated there (all growth malloc happens up front, before the lock).
     std::vector<cow_range> share_ranges;
     std::vector<cow_range> privatize_ranges;
+    std::vector<cow_range> nocount_ranges;
     {
         size_t threads = sched::thread::numthreads();
         SCOPE_LOCK(parent->vmas_mutex->for_read());
@@ -873,6 +896,7 @@ address_space *clone_address_space(address_space *parent)
         // reserve room for all vmas plus all threads so it never reallocates.
         share_ranges.reserve(n + threads + 16 + fork_shared_module_ranges.size());
         privatize_ranges.reserve(4);
+        nocount_ranges.reserve(n + fork_shared_module_ranges.size());
     }
 
     // Share every kernel PML4 slot (0 and 128..511) by copying the parent's
@@ -892,6 +916,9 @@ address_space *clone_address_space(address_space *parent)
             if ((v.flags() & mmap_stack) || (v.flags() & mmap_shared)) {
                 share_ranges.push_back({v.start(), v.end()});
             }
+            if (v.flags() & mmap_stack) {
+                nocount_ranges.push_back({v.start(), v.end()});
+            }
         }
         // Share libsolaris.so writable .data/.bss verbatim (never COW): its
         // global ZFS state (buf_hash_table, arc_anon/mru/mfu, dbuf hash, ...)
@@ -901,6 +928,7 @@ address_space *clone_address_space(address_space *parent)
             SCOPE_LOCK(fork_shared_module_lock);
             for (auto &r : fork_shared_module_ranges) {
                 share_ranges.push_back({r.start, r.end});
+                nocount_ranges.push_back({r.start, r.end});
             }
         }
         // Always share the forking thread's live stack: OSv runs kernel code
@@ -932,12 +960,14 @@ address_space *clone_address_space(address_space *parent)
         });
         cow_share_ranges = &share_ranges;
         cow_privatize_ranges = &privatize_ranges;
+        cow_nocount_ranges = &nocount_ranges;
         cow_parent_vmas = parent->vmas;
         // Build the sorted/coalesced lookup views ONCE per fork, after both
         // range vectors are final and before the clone walk that queries them
         // per PTE.  Same predicate, O(log n) per lookup instead of O(n).
         build_sorted_ranges(cow_share_ranges, cow_share_sorted);
         build_sorted_ranges(cow_privatize_ranges, cow_privatize_sorted);
+        build_sorted_ranges(cow_nocount_ranges, cow_nocount_sorted);
 
         // A fork-shared range over a private file mapping (libsolaris.so's
         // .data) must be one copy in every address space, but a page there
@@ -989,6 +1019,7 @@ address_space *clone_address_space(address_space *parent)
         }
         cow_share_ranges = nullptr;
         cow_privatize_ranges = nullptr;
+        cow_nocount_ranges = nullptr;
         cow_parent_vmas = nullptr;
 
         // The child AS was pre-reserved above.  Snapshot the parent's private
