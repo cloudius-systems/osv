@@ -26,6 +26,10 @@
 
 #include <osv/elf.hh>
 #include <osv/sched.hh>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 
 typedef void (*destructor) (void *);
 
@@ -42,6 +46,14 @@ struct linked_destructor {
             linked_destructor *next) : dtor(dtor), obj(obj), next(next)
     {
         auto eo = elf::get_program()->object_containing_addr(dso_symbol);
+#if CONF_fork
+        // A fork child's object stays loaded while the process runs (its
+        // address space holds it), and a reference here would outlive the
+        // memory it is kept in.  One its parent loaded is not found here.
+        if (!eo || eo->owner_as()) {
+            return;
+        }
+#endif
         // dso_symbol points to the "__dso_handle" symbol in a shared object
         // (or the main program). We don't expect not to find it.
         assert(eo);
@@ -55,6 +67,14 @@ static __thread linked_destructor *thread_local_destructors;
 extern "C"
 void __cxa_thread_atexit_impl(destructor dtor, void* obj, void* dso_symbol)
 {
+    // Keep the destructor node in the identity kernel heap, never the COW fork
+    // arena: run_exit_notifiers() walks this list and calls item->dtor during
+    // thread::exit(), and a fork child that registered a thread_local before
+    // execve() would otherwise chase a pointer into an arena page that execve()
+    // has since torn down -- jumping through a dangling/NULL dtor.
+#if CONF_fork
+    fork_arena::kernel_heap_scope kh;
+#endif
     auto *item = new linked_destructor(
             dtor, obj, dso_symbol, thread_local_destructors);
     thread_local_destructors = item;

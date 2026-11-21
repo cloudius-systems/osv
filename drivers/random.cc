@@ -56,6 +56,10 @@ static random_device_priv *to_priv(device *dev)
     return reinterpret_cast<random_device_priv*>(dev->private_data);
 }
 
+#ifdef __x86_64__
+static int drng_read(void *, int);   // hardware RDRAND read, defined below
+#endif
+
 static int
 random_read(struct device *dev, struct uio *uio, int ioflags)
 {
@@ -64,6 +68,32 @@ random_read(struct device *dev, struct uio *uio, int ioflags)
 
     // Blocking logic
     if (!random_adaptor->seeded) {
+#ifdef __x86_64__
+        // The software CSPRNG has not accumulated enough harvested entropy to
+        // seed yet.  If the CPU has RDRAND (a hardware CSPRNG that needs no
+        // accumulation window), satisfy the read directly from it instead of
+        // blocking: RDRAND output is cryptographically secure, so /dev/{u,}random
+        // is usable from the very first read.  Otherwise an early reader --
+        // e.g. a PostgreSQL backend generating its cancel key via
+        // pg_strong_random() -> read(/dev/urandom) -- blocks in
+        // randomdev_block() -> msleep(PCATCH); with signals unblocked that
+        // becomes an EINTR retry loop, and until the adaptor crosses its reseed
+        // threshold the read never completes -- observed (racily) as "could not
+        // generate random cancel key" failing backends at startup.  Pre-existing
+        // OSv startup race; independent of fork.
+        if (processor::features().rdrand) {
+            while (uio->uio_resid > 0 && !error) {
+                c = std::min(uio->uio_resid, static_cast<long int>(PAGE_SIZE));
+                // drng_read wants a multiple-of-8 length; round up in the page
+                // buffer and copy out only what the caller asked for.
+                int c8 = (c + 7) & ~7;
+                int got = drng_read(static_cast<void *>(random_buf), c8);
+                if (got <= 0) { error = EIO; break; }
+                error = uiomove(random_buf, std::min(c, got), uio);
+            }
+            return error;
+        }
+#endif
         error = (*random_adaptor->block)(ioflags);
     }
 
