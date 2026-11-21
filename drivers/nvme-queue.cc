@@ -18,6 +18,10 @@
 #include <osv/align.hh>
 
 #include "nvme-queue.hh"
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 
 TRACEPOINT(trace_nvme_cq_wait, "nvme%d qid=%d, cq_head=%d", int, int, int);
 TRACEPOINT(trace_nvme_cq_woken, "nvme%d qid=%d, have_elements=%d", int, int, bool);
@@ -253,6 +257,13 @@ io_queue_pair::~io_queue_pair()
 
 void io_queue_pair::init_pending_bios(u32 level)
 {
+#if CONF_fork
+    // Rows past the first are allocated by whichever thread submits when a
+    // command id is still in flight, possibly a forked process; the
+    // completion thread reads them from its own address space, so they must
+    // be on the kernel heap, not in that process's copy-on-write heap arena.
+    fork_arena::kernel_heap_scope kh;
+#endif
     _pending_bios[level] = (std::atomic<struct bio*> *) malloc(sizeof(std::atomic<struct bio*>) * _qsize);
     for (u32 idx = 0; idx < _qsize; idx++) {
         _pending_bios[level][idx] = {};
