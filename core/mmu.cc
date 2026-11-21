@@ -46,6 +46,7 @@
 #include <osv/kernel_config_fork.h>
 #if CONF_fork
 #include <osv/fork_arena.hh>
+#include <osv/cow_count.hh>
 #endif
 #include <cstdio>
 
@@ -500,7 +501,7 @@ static void cow_get(phys pa)
 {
     auto c = cow_count(pa);
     if (c) {
-        c->fetch_add(1, std::memory_order_acq_rel);
+        cow_count_add(*c);
     }
 }
 
@@ -512,10 +513,7 @@ static bool cow_put(phys pa)
     if (!c) {
         return true;
     }
-    uint32_t v = c->load(std::memory_order_acquire);
-    while (v && !c->compare_exchange_weak(v, v - 1, std::memory_order_acq_rel)) {
-    }
-    return v != 0;
+    return cow_count_drop(*c);
 }
 
 // The frame of a plain private leaf (neither COW, pte_shared nor page cache)
