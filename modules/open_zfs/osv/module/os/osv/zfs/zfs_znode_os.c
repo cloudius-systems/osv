@@ -224,7 +224,8 @@ zfs_znode_free(znode_t *zp)
 /*
  * zfs_zinactive -- release a znode when the last VFS reference drops.
  *
- * Called from vop_inactive when the OSv vnode is being reclaimed.
+ * Called from vop_inactive when the OSv vnode is being reclaimed, from the
+ * unmount teardown, and from zfs_unlinked_drain().
  */
 void
 zfs_zinactive(znode_t *zp)
@@ -233,6 +234,16 @@ zfs_zinactive(znode_t *zp)
 	uint64_t z_id = zp->z_id;
 
 	ASSERT3P(zp->z_sa_hdl, !=, NULL);
+
+	/*
+	 * The last reference to a file with no links: free its space, unless
+	 * the file system is read-only, in which case it stays in the
+	 * unlinked set for the next writable mount to drain.
+	 */
+	if (zp->z_unlinked && !zfs_is_readonly(zfsvfs)) {
+		zfs_rmnode(zp);
+		return;
+	}
 
 	ZFS_OBJ_HOLD_ENTER(zfsvfs, z_id);
 	zfs_znode_dmu_fini(zp);
