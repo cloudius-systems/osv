@@ -11,6 +11,8 @@
 
 #include <unordered_map>
 #include <algorithm>
+#include <cstddef>
+#include <cstdint>
 
 #include <osv/drivers_config.h>
 
@@ -73,14 +75,20 @@ static void parse_srat()
         return;   // No SRAT: leave the single-node fallback in place.
     }
     auto srat = get_parent_from_member(header, &ACPI_TABLE_SRAT::Header);
-    void* sub = srat + 1;
-    void* end = static_cast<void*>(srat) + srat->Header.Length;
+    if (srat->Header.Length < sizeof(ACPI_TABLE_SRAT)) {
+        return;   // Truncated SRAT header: nothing safe to walk.
+    }
+    // Walk with a byte cursor: void* arithmetic is a non-standard GNU extension,
+    // and a byte cursor makes the bounds checks below straightforward.
+    auto* base = reinterpret_cast<char*>(srat);
+    auto* cur = base + sizeof(ACPI_TABLE_SRAT);
+    auto* end = base + srat->Header.Length;
     unsigned max_node = 0;
 
-    while (sub < end) {
-        auto s = static_cast<ACPI_SUBTABLE_HEADER*>(sub);
-        if (s->Length == 0) {
-            break;   // Guard against a malformed zero-length subtable.
+    while (cur + sizeof(ACPI_SUBTABLE_HEADER) <= end) {
+        auto s = reinterpret_cast<ACPI_SUBTABLE_HEADER*>(cur);
+        if (s->Length < sizeof(ACPI_SUBTABLE_HEADER) || cur + s->Length > end) {
+            break;   // Malformed: zero/short length, or subtable overruns SRAT.
         }
         switch (s->Type) {
         case ACPI_SRAT_TYPE_CPU_AFFINITY: {
@@ -114,7 +122,7 @@ static void parse_srat()
         default:
             break;
         }
-        sub = static_cast<void*>(sub) + s->Length;
+        cur += s->Length;
     }
 
     if (!s_apic_to_node.empty() || !s_mem_ranges.empty()) {
@@ -134,6 +142,12 @@ static void parse_slit()
     uint64_t n = slit->LocalityCount;
     // Only trust SLIT if it agrees with the node count we saw in SRAT.
     if (n == 0 || n != s_nr_nodes) {
+        return;
+    }
+    // Guard against a malformed/truncated SLIT: the n*n entries must actually
+    // fit within the table's declared length (and n*n must not overflow).
+    if (n > (SIZE_MAX / n) ||
+        offsetof(ACPI_TABLE_SLIT, Entry) + n * n > slit->Header.Length) {
         return;
     }
     s_distances.assign(slit->Entry, slit->Entry + n * n);
