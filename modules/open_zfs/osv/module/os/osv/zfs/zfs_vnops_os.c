@@ -1269,6 +1269,19 @@ zfs_vop_inactive(struct vnode *vp)
 	}
 
 	/*
+	 * Last reference to a file with no links: release it through
+	 * zfs_zinactive(), which is where an unlinked file's space is freed
+	 * (zfs_rmnode()), as on FreeBSD.  zfs_zinactive() takes the object hold
+	 * itself, so drop it first.  No re-grab can race this in between,
+	 * because zfs_zget() refuses a live unlinked znode.
+	 */
+	if (zp->z_unlinked && zp->z_sa_hdl != NULL) {
+		ZFS_OBJ_HOLD_EXIT(zfsvfs, z_id);
+		zfs_zinactive(zp);
+		return (0);
+	}
+
+	/*
 	 * Last reference: tear down.  zfs_znode_dmu_fini() destroys the SA
 	 * handle (clearing the DMU-buffer userdata so no later zfs_zget() can
 	 * find this znode) and must run under the object hold.  If the zfsvfs is
