@@ -76,6 +76,12 @@ int condvar::wait(mutex* user_mutex, sched::timer* tmr)
                 ret = 0;
             }
         }
+        // If we removed the last waiter, zero the saved user_mutex, as
+        // wake_one() and wake_all() do, so a later wait() may use a
+        // different mutex without failing the assert() above.
+        if (ret && !_waiters_fifo.oldest) {
+            _user_mutex = nullptr;
+        }
         _m.unlock();
         if (!ret) {
             // wr is no longer in the queue, so either wr.wake() is
