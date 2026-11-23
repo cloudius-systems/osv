@@ -26,6 +26,12 @@ int main()
     std::cerr << "Running rlimit tests\n";
     struct rlimit rl;
 
+    // The default RLIMIT_NOFILE is the size of the file descriptor table,
+    // so applications that size themselves by it can use all of it.
+    assert(getrlimit(RLIMIT_NOFILE, &rl) == 0);
+    assert(rl.rlim_cur == (rlim_t)getdtablesize());
+    assert(rl.rlim_max == (rlim_t)getdtablesize());
+
     // Every resource in range must be queryable without aborting.
     for (int r = 0; r < RLIMIT_NLIMITS; r++) {
         assert(getrlimit(r, &rl) == 0);

@@ -85,7 +85,10 @@ static void init_rlimits_locked()
     }
     rlimits[RLIMIT_STACK].rlim_cur = rlimits[RLIMIT_STACK].rlim_max =
         default_stack_limit();
-    rlimits[RLIMIT_NOFILE].rlim_cur = rlimits[RLIMIT_NOFILE].rlim_max = 1024 * 10;
+    // A file descriptor can be any number below the size of the file
+    // descriptor table, so that's the limit (like Linux, whose RLIMIT_NOFILE
+    // is also one more than the highest allowed file descriptor).
+    rlimits[RLIMIT_NOFILE].rlim_cur = rlimits[RLIMIT_NOFILE].rlim_max = getdtablesize();
     rlimits[RLIMIT_NICE].rlim_cur = rlimits[RLIMIT_NICE].rlim_max = 0;
     rlimits_initialized = true;
 }
