@@ -16,6 +16,7 @@
 #include <errno.h>
 
 #include <cassert>
+#include <thread>
 #include <cstring>
 #include <iostream>
 
@@ -28,6 +29,7 @@ int main()
     sigemptyset(&mask);
     sigaddset(&mask, SIGUSR1);
     sigaddset(&mask, SIGUSR2);
+    sigaddset(&mask, SIGRTMIN);
     // Block these signals first, as an application using signalfd is expected
     // to (on Linux the signal must be blocked to be consumed via the fd rather
     // than run its handler/default action).  This keeps the test meaningful on
@@ -67,6 +69,42 @@ int main()
     assert(two[0].ssi_signo == (uint32_t)SIGUSR1);
     assert(two[1].ssi_signo == (uint32_t)SIGUSR2);
 
+    // A standard signal raised twice before a read is delivered once, as on
+    // Linux (only real-time signals are queued).
+    assert(kill(getpid(), SIGUSR1) == 0);
+    assert(kill(getpid(), SIGUSR1) == 0);
+    n = read(sfd, two, sizeof(two));
+    assert(n == (ssize_t)sizeof(si));
+    assert(two[0].ssi_signo == (uint32_t)SIGUSR1);
+
+    // A real-time signal is queued once per kill().
+    signalfd_siginfo three[3];
+    for (int i = 0; i < 3; i++) {
+        assert(kill(getpid(), SIGRTMIN) == 0);
+    }
+    n = read(sfd, three, sizeof(three));
+    assert(n == (ssize_t)sizeof(three));
+    for (auto& q : three) {
+        assert(q.ssi_signo == (uint32_t)SIGRTMIN);
+    }
+    n = read(sfd, &si, sizeof(si));
+    assert(n == -1 && errno == EAGAIN);
+
+#ifdef __OSV__
+    // OSv queues at most 4096 real-time records, then coalesces a signal that
+    // is already pending (Linux's limit is RLIMIT_SIGPENDING, which varies).
+    for (int i = 0; i < 5000; i++) {
+        assert(kill(getpid(), SIGRTMIN) == 0);
+    }
+    int queued = 0;
+    while (read(sfd, &si, sizeof(si)) == (ssize_t)sizeof(si)) {
+        assert(si.ssi_signo == (uint32_t)SIGRTMIN);
+        queued++;
+    }
+    assert(errno == EAGAIN);
+    assert(queued == 4096);
+#endif
+
     // A short buffer (< one siginfo) is rejected with EINVAL.
     char tiny[8];
     n = read(sfd, tiny, sizeof(tiny));
@@ -76,6 +114,15 @@ int main()
     errno = 0;
     assert(signalfd(-1, &mask, 0x40) == -1 && errno == EINVAL);
 
+    close(sfd);
+
+    // A blocking read is woken by a signal raised in another thread.
+    sfd = signalfd(-1, &mask, 0);
+    assert(sfd >= 0);
+    std::thread t([] { usleep(100000); kill(getpid(), SIGUSR1); });
+    n = read(sfd, &si, sizeof(si));
+    t.join();
+    assert(n == (ssize_t)sizeof(si) && si.ssi_signo == (uint32_t)SIGUSR1);
     close(sfd);
     std::cerr << "signalfd tests PASSED\n";
     return 0;

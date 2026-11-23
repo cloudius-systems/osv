@@ -39,6 +39,7 @@
 #include <unistd.h>
 #include <string.h>
 
+#include <algorithm>
 #include <deque>
 #include <set>
 #include <signal.h>
@@ -77,6 +78,18 @@ public:
     // Called from the signal path to enqueue a delivered signal.
     void deliver(const signalfd_siginfo& si) {
         WITH_LOCK(_mutex) {
+            // Like Linux, keep at most one pending instance of a standard
+            // signal.  Real-time signals are queued, up to max_rt_queued
+            // records; past that a real-time signal that is already pending
+            // is coalesced, as Linux does for kill() over RLIMIT_SIGPENDING
+            // (which OSv does not enforce).  The queue thus never holds more
+            // than max_rt_queued + nsignals records.
+            bool rt = si.ssi_signo >= (uint32_t)SIGRTMIN;
+            if ((!rt || _queue.size() >= max_rt_queued) &&
+                std::any_of(_queue.begin(), _queue.end(), [&] (const signalfd_siginfo& q) {
+                    return q.ssi_signo == si.ssi_signo; })) {
+                return;
+            }
             _queue.push_back(si);
             _blocked_reader.wake_all();
         }
@@ -91,6 +104,7 @@ public:
     }
 
 private:
+    static constexpr size_t max_rt_queued = 4096;
     mutable mutex _mutex;
     sigset_t      _mask;
     condvar       _blocked_reader;
