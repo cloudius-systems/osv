@@ -27,6 +27,13 @@
 
 namespace numa {
 
+// Boot discovery implementation budgets, not firmware validity or CPU limits.
+// A 64KiB compact distance matrix permits 256 distinct CPU/memory domains.
+// The SRAT byte limit bounds parsing and staged metadata growth separately.
+// These are NOT a budget for per-node allocator pools or worker threads.
+constexpr unsigned max_nodes = 256;
+constexpr size_t max_srat_bytes = 1024 * 1024;
+
 // A contiguous physical memory range assigned to a NUMA node.
 struct mem_range {
     uint64_t base;
@@ -38,27 +45,32 @@ struct mem_range {
 // Discover the topology by parsing SRAT/SLIT.  Safe to call once, after ACPI is
 // initialized and the CPUs have been enumerated (so APIC ids are known).  If no
 // SRAT is present, or it is malformed/unsupported, initializes a single flat
-// node. A raw proximity domain of UINT32_MAX is unsupported because its
-// exclusive upper bound cannot be represented by nr_nodes().
-// Truncated or count-mismatched SLIT leaves SRAT intact with default distances.
-// Idempotent.
+// node. Over-budget or allocation-failed discovery also gives this fallback.
+// Invalid SLIT leaves SRAT intact with default distances; no matrix indexed by
+// raw PXM is allocated. IDs are sorted by raw PXM, stable across record order.
+// Idempotent; boot-only publication, not concurrent runtime reinitialization.
 void init();
 
-// Exclusive upper bound of raw proximity domain IDs (>= 1). Sparse domains
-// leave holes: this is not necessarily the number of populated nodes. Do not
-// size per-node resources from this value without a separate resource bound.
+// Number of discovered distinct domains (CPU and/or memory), always >= 1.
+// Node IDs are dense [0, nr_nodes()), not firmware proximity-domain numbers.
 unsigned nr_nodes();
 
 // True if the topology came from a real SRAT (as opposed to the synthesized
 // single-node fallback).
 bool available();
 
-// The node a CPU (by sched cpu id) belongs to, or 0 if unknown.
+// Firmware provenance for a dense node; false for the synthetic fallback or
+// invalid node. Does not manufacture raw PXM 0 for unknown topology.
+bool raw_domain(unsigned node, uint32_t& domain);
+
+// The node a CPU (by sched cpu id) belongs to, or 0 if unknown. The compatibility
+// fallback is not evidence of affinity to dense0 (which need not be raw PXM0).
+bool cpu_node_known(unsigned cpu_id);
 unsigned node_of_cpu(unsigned cpu_id);
 
 // The SLIT distance from node `from` to node `to`.  Linux/ACPI convention:
-// 10 == local (same node), higher == farther.  Returns 10 for the diagonal and
-// a default (10 local / 20 remote) when no SLIT is present.
+// The diagonal is 10; off-diagonal values are >= 10, with 255 unreachable.
+// Returns defaults (10 local / 20 remote) when no SLIT is present.
 unsigned distance(unsigned from, unsigned to);
 
 // The memory ranges discovered from SRAT (empty if none).
