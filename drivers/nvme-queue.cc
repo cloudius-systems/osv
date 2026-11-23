@@ -60,7 +60,6 @@ queue_pair::queue_pair(
       ,_qsize(qsize)
       ,_dev(&dev)
       ,_sq(sq_doorbell)
-      ,_sq_full(false)
       ,_cq(cq_doorbell)
       ,_cq_phase_tag(1)
       ,_ns(ns)
@@ -91,12 +90,9 @@ queue_pair::~queue_pair()
 inline void queue_pair::advance_sq_tail()
 {
     _sq._tail = (_sq._tail + 1) % _qsize;
-    if (((_sq._tail + 1) % _qsize) == _sq._head) {
-        _sq_full = true;
-    }
     trace_nvme_sq_tail_advance(_driver_id, _id, _sq._tail, _sq._head,
         (_sq._tail >= _sq._head) ? _sq._tail - _sq._head : _sq._tail + (_qsize - _sq._head),
-         _sq_full);
+         sq_full());
 }
 
 u16 queue_pair::submit_cmd(nvme_sq_entry_t* cmd)
@@ -265,11 +261,21 @@ int io_queue_pair::make_request(struct bio* bio, u32 nsid = 1)
     u32 nlb = bio->bio_bcount; //do the blockshift in nvme_driver
 
     SCOPE_LOCK(_lock);
-    if (_sq_full) {
-        //Wait for free entries
+    if (sq_full()) {
+        // Wait for free entries. Whether the queue is full is computed from
+        // _sq._head and _sq._tail, not kept in a separate flag: req_done()
+        // updates _sq._head without taking _lock, so a flag set here and
+        // cleared there could get out of sync with the queue.
+        //
+        // We set _sq_full_waiting before checking _sq._head (in wait_until),
+        // and req_done() changes _sq._head before checking _sq_full_waiting.
+        // Both are seq_cst, so either we see the new _sq._head or req_done()
+        // sees _sq_full_waiting and wakes us.
         _sq_full_waiter.reset(*sched::thread::current());
+        _sq_full_waiting = true;
         trace_nvme_sq_full_wait(_driver_id, _id, _sq._tail, _sq._head);
-        sched::thread::wait_until([this] { return !(this->_sq_full); });
+        sched::thread::wait_until([this] { return !sq_full(); });
+        _sq_full_waiting = false;
         _sq_full_waiter.clear();
     }
     assert((((_sq._tail + 1) % _qsize) != _sq._head));
@@ -334,12 +340,9 @@ void io_queue_pair::req_done()
             //
             // Wake up the requesting thread in case the submission queue was full before
             auto old_sq_head = _sq._head.exchange(cqe.sqhd); //update sq_head
-            if (old_sq_head != cqe.sqhd && _sq_full) {
-                _sq_full = false;
-                if (_sq_full_waiter) {
-                     trace_nvme_sq_full_wake(_driver_id, _id, _sq._tail, _sq._head);
-                    _sq_full_waiter.wake_from_kernel_or_with_irq_disabled();
-                }
+            if (old_sq_head != cqe.sqhd && _sq_full_waiting) {
+                trace_nvme_sq_full_wake(_driver_id, _id, _sq._tail, _sq._head);
+                _sq_full_waiter.wake_from_kernel_or_with_irq_disabled();
             }
             //
             // Read cid and release it

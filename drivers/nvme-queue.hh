@@ -88,6 +88,9 @@ public:
     u32 _id;
 protected:
     void advance_sq_tail();
+    // The submission queue is full when advancing _tail would make it equal
+    // to _head (one entry always stays unused, see struct queue above).
+    bool sq_full() const { return (_sq._tail + 1) % _qsize == _sq._head; }
     void advance_cq_head();
 
     // PRP stands for Physical Region Page and is used to specify locations in
@@ -110,7 +113,6 @@ protected:
 
     // Submission Queue (SQ) - each entry is 64 bytes in size
     queue<nvme_sq_entry_t> _sq;
-    std::atomic<bool> _sq_full;
 
     // Completion Queue (CQ) - each entry is 16 bytes in size
     queue<nvme_cq_entry_t> _cq;
@@ -157,6 +159,8 @@ private:
     u16 submit_flush_cmd(u16 cid, u32 nsid);
 
     sched::thread_handle _sq_full_waiter;
+    // Set by make_request() while it waits for space in the submission queue.
+    std::atomic<bool> _sq_full_waiting {false};
 
     // Vector of arrays of pointers to struct bio used to track bio associated
     // with given command. The scheme to generate 16-bit 'cid' is -
