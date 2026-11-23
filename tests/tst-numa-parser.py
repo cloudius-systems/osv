@@ -20,7 +20,7 @@ import tempfile
 root = Path(__file__).resolve().parents[1]
 cases = ['ordering', 'memory-only', 'conflicts', 'budgets', 'allocation-failure', 'slit-semantics', 'valid', 'short-cpu', 'short-x2apic', 'short-memory', 'short-slit',
          'domain-bound', 'max-pxm', 'bad-tail', 'overflow-memory', 'empty-memory',
-         'boundaries', 'sparse', 'ignored', 'slit-bounds']
+         'boundaries', 'sparse', 'ignored', 'slit-bounds', 'log-reason']
 (root / 'build').mkdir(exist_ok=True)
 with tempfile.TemporaryDirectory(prefix='numa-parser-', dir=root / 'build') as tmp:
     tmp = Path(tmp)
@@ -33,7 +33,19 @@ inline cpu cpu0{0, {7}}, cpu1{1, {9}};
 inline std::vector<cpu*> cpus{&cpu0, &cpu1};
 }
 ''')
-    (tmp / 'osv/debug.hh').write_text('#pragma once\ninline void debugf(const char*, ...) {}\n')
+    (tmp / 'osv/debug.hh').write_text('''#pragma once
+#include <cstdarg>
+#include <cstdio>
+// Keep the last message so a case can check what discovery logged.
+inline char debug_last[256];
+inline void debugf(const char* fmt, ...)
+{
+    va_list ap;
+    va_start(ap, fmt);
+    vsnprintf(debug_last, sizeof(debug_last), fmt, ap);
+    va_end(ap);
+}
+''')
     (tmp / 'osv/drivers_config.h').write_text('#define CONF_drivers_acpi 1\n')
     exe = tmp / 'numa-parser'
     subprocess.run([os.environ.get('CXX', 'g++'), '-std=c++17', '-O1', '-g',

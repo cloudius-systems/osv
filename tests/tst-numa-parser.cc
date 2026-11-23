@@ -478,6 +478,30 @@ static void slit_semantics()
     assert(numa::available() && numa::distance(1, 0) == 20);
 }
 
+// A rejected SRAT is logged with its reason, and is not mistaken for an
+// absent one.
+static void log_reason()
+{
+    discover({});
+    fallback();
+    assert(!strcmp(debug_last, "NUMA: no SRAT, assuming a single flat node\n"));
+    auto table = srat();
+    append(table, cpu(1, 9));
+    append(table, cpu(2, 9));
+    discover(table);
+    fallback();
+    assert(!strcmp(debug_last, "NUMA: SRAT rejected: APIC id listed in two proximity "
+                               "domains, assuming a single flat node\n"));
+    discover(bytes(sizeof(ACPI_TABLE_HEADER)));
+    fallback();
+    assert(strstr(debug_last, "SRAT rejected: table shorter than its header"));
+    table = srat();
+    append(table, cpu(1, 9));
+    discover(table, {}, 0);
+    fallback();
+    assert(strstr(debug_last, "SRAT rejected: allocation failure"));
+}
+
 int main(int argc, char** argv)
 {
     assert(argc == 2);
@@ -500,6 +524,7 @@ int main(int argc, char** argv)
         {"bad-tail", bad_tail}, {"overflow-memory", [] { ranges(false); }},
         {"empty-memory", [] { ranges(true); }}, {"boundaries", boundaries},
         {"sparse", sparse}, {"ignored", ignored}, {"slit-bounds", slit_bounds},
+        {"log-reason", log_reason},
     };
     for (auto& test : tests) {
         if (!strcmp(argv[1], test.name)) {

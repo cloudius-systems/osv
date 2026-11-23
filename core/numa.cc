@@ -74,20 +74,26 @@ unsigned distance(unsigned from, unsigned to)
     return 20;       // Default remote distance when no SLIT is present.
 }
 
+static const char no_srat[] = "no SRAT";
+
 #if CONF_drivers_acpi
 using boost::intrusive::get_parent_from_member;
 
-static bool parse_srat(topology& t)
+// Parse the SRAT into t.  Returns nullptr on success, no_srat when the table
+// is absent, or a short description of why a present table was rejected.
+static const char* parse_srat(topology& t)
 {
     char sig[] = ACPI_SIG_SRAT;
     ACPI_TABLE_HEADER* header;
     if (AcpiGetTable(sig, 0, &header) != AE_OK) {
-        return false;   // No SRAT: leave the single-node fallback in place.
+        return no_srat;
     }
     auto srat = get_parent_from_member(header, &ACPI_TABLE_SRAT::Header);
-    if (srat->Header.Length < sizeof(ACPI_TABLE_SRAT) ||
-        srat->Header.Length > max_srat_bytes) {
-        return false;   // Truncated SRAT header: nothing safe to walk.
+    if (srat->Header.Length < sizeof(ACPI_TABLE_SRAT)) {
+        return "table shorter than its header";
+    }
+    if (srat->Header.Length > max_srat_bytes) {
+        return "table larger than 1 MiB";
     }
     // Walk with a byte cursor: void* arithmetic is a non-standard GNU extension,
     // and a byte cursor makes the bounds checks below straightforward.
@@ -96,37 +102,40 @@ static bool parse_srat(topology& t)
     auto* end = base + srat->Header.Length;
     std::unordered_map<uint32_t, unsigned> apic_to_node;
     std::vector<mem_range> mem_ranges;
-    auto record_domain = [&](uint32_t domain) {
+    auto record_domain = [&](uint32_t domain) -> const char* {
         if (std::find(t.domains.begin(), t.domains.end(), domain) == t.domains.end()) {
             if (t.domains.size() == max_nodes) {
-                return false;
+                return "more than 256 proximity domains";
             }
             t.domains.push_back(domain);
         }
-        return true;
+        return nullptr;
     };
-    auto record_cpu_affinity = [&](uint32_t apic_id, unsigned node) {
-        if (!record_domain(node)) {
-            return false;
+    auto record_cpu_affinity = [&](uint32_t apic_id, unsigned node) -> const char* {
+        if (auto why = record_domain(node)) {
+            return why;
         }
         auto entry = apic_to_node.emplace(apic_id, node);
-        return entry.second || entry.first->second == node;
+        if (!entry.second && entry.first->second != node) {
+            return "APIC id listed in two proximity domains";
+        }
+        return nullptr;
     };
 
     // Stage the topology until every entry has been checked. A malformed tail
     // must not publish a partial CPU/memory map.
     while (cur < end) {
         if (size_t(end - cur) < sizeof(ACPI_SUBTABLE_HEADER)) {
-            return false;
+            return "truncated subtable header";
         }
         auto s = reinterpret_cast<ACPI_SUBTABLE_HEADER*>(cur);
         if (s->Length < sizeof(ACPI_SUBTABLE_HEADER) || s->Length > size_t(end - cur)) {
-            return false;   // Malformed: zero/short length, or subtable overruns SRAT.
+            return "subtable length too short or past the table end";
         }
         switch (s->Type) {
         case ACPI_SRAT_TYPE_CPU_AFFINITY: {
             if (s->Length < sizeof(ACPI_SRAT_CPU_AFFINITY)) {
-                return false;
+                return "short CPU affinity entry";
             }
             auto a = get_parent_from_member(s, &ACPI_SRAT_CPU_AFFINITY::Header);
             if (a->Flags & ACPI_SRAT_CPU_ENABLED) {
@@ -134,33 +143,35 @@ static bool parse_srat(topology& t)
                     (a->ProximityDomainHi[0] << 8) |
                     (a->ProximityDomainHi[1] << 16) |
                     (uint32_t(a->ProximityDomainHi[2]) << 24);
-                if (!record_cpu_affinity(a->ApicId, node)) {
-                    return false;
+                if (auto why = record_cpu_affinity(a->ApicId, node)) {
+                    return why;
                 }
             }
             break;
         }
         case ACPI_SRAT_TYPE_X2APIC_CPU_AFFINITY: {
             if (s->Length < sizeof(ACPI_SRAT_X2APIC_CPU_AFFINITY)) {
-                return false;
+                return "short x2APIC affinity entry";
             }
             auto a = get_parent_from_member(s, &ACPI_SRAT_X2APIC_CPU_AFFINITY::Header);
             if (a->Flags & ACPI_SRAT_CPU_ENABLED) {
-                if (!record_cpu_affinity(a->ApicId, a->ProximityDomain)) {
-                    return false;
+                if (auto why = record_cpu_affinity(a->ApicId, a->ProximityDomain)) {
+                    return why;
                 }
             }
             break;
         }
         case ACPI_SRAT_TYPE_MEMORY_AFFINITY: {
             if (s->Length < sizeof(ACPI_SRAT_MEM_AFFINITY)) {
-                return false;
+                return "short memory affinity entry";
             }
             auto m = get_parent_from_member(s, &ACPI_SRAT_MEM_AFFINITY::Header);
             if (m->Flags & ACPI_SRAT_MEM_ENABLED) {
-                if (!record_domain(m->ProximityDomain) || m->Length == 0 ||
-                    m->Length > UINT64_MAX - m->BaseAddress) {
-                    return false;
+                if (auto why = record_domain(m->ProximityDomain)) {
+                    return why;
+                }
+                if (m->Length == 0 || m->Length > UINT64_MAX - m->BaseAddress) {
+                    return "empty or wrapping memory range";
                 }
                 mem_ranges.push_back(mem_range{
                     m->BaseAddress, m->Length, m->ProximityDomain,
@@ -175,7 +186,7 @@ static bool parse_srat(topology& t)
     }
 
     if (t.domains.empty()) {
-        return false;
+        return "no enabled entries";
     }
     // Node numbers are dense and follow the sorted proximity domain numbers,
     // so the same firmware gives the same numbering whatever the entry order.
@@ -195,14 +206,14 @@ static bool parse_srat(topology& t)
     uint64_t end_address = 0;
     for (auto& range : mem_ranges) {
         if (range.base < end_address) {
-            return false; // No ambiguous physical ownership, even within one node.
+            return "overlapping memory ranges";
         }
         end_address = range.base + range.length; // Validated above.
         range.node = dense(range.node);
     }
     t.apic_to_node = std::move(apic_to_node);
     t.mem_ranges = std::move(mem_ranges);
-    return true;
+    return nullptr;
 }
 
 static void parse_slit(topology& t)
@@ -262,10 +273,12 @@ void init()
     }
     s_initialized = true;
 
+    const char* why = no_srat;
 #if CONF_drivers_acpi
     try {
         topology pending;
-        if (parse_srat(pending)) {
+        why = parse_srat(pending);
+        if (!why) {
             parse_slit(pending);
             resolve_cpus(pending);
             // All allocations have completed. Boot-only publication, not a
@@ -276,6 +289,7 @@ void init()
         }
     } catch (const std::bad_alloc&) {
         // Synthetic/unknown topology is preferable to a partial firmware map.
+        why = "allocation failure";
     }
 #endif
 
@@ -284,7 +298,8 @@ void init()
                s_nr_nodes, s_topology.cpu_to_node.size(), s_topology.mem_ranges.size(),
                s_topology.distances.empty() ? ", no SLIT" : "");
     } else {
-        debugf("NUMA: no SRAT, assuming a single flat node\n");
+        debugf("NUMA: %s%s, assuming a single flat node\n",
+               why == no_srat ? "" : "SRAT rejected: ", why);
     }
 }
 
