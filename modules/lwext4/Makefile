@@ -15,6 +15,7 @@ COMMON_DEFINITIONS =                                      \
 	-DVERSION_MINOR=$(VERSION_MINOR)                  \
 	-DVERSION_PATCH=$(VERSION_PATCH)                  \
 	-DVERSION=$(VERSION)                              \
+	-DCMAKE_POLICY_VERSION_MINIMUM=3.5                \
 
 all: module
 module: lwext4
