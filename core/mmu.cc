@@ -2156,6 +2156,11 @@ error file_vma::sync(uintptr_t start, uintptr_t end)
         return err;
     }
 
+    // A file that isn't in a filesystem, such as a shared-memory or io_uring
+    // file, has nothing to fsync(); sys_fsync() would fail it with EINVAL.
+    if (!_file->f_dentry) {
+        return no_error();
+    }
     return make_error(sys_fsync(_file.get()));
 }
 

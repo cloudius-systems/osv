@@ -20,6 +20,8 @@
 #include <iostream>
 #include <cassert>
 #include <cstdlib>
+#include <fcntl.h>
+#include <unistd.h>
 
 int main(int argc, char **argv)
 {
@@ -181,6 +183,21 @@ int main(int argc, char **argv)
     assert(msync(buf, 3*4096, MS_ASYNC) == -1);
     assert(msync(buf+3*4096, 3*4096, MS_ASYNC) == -1);
     munmap(buf, 4096*10);
+
+    // Test that msync() of a MAP_SHARED mapping of a shared-memory object
+    // succeeds. Such a file isn't in a filesystem, so it has nothing to
+    // flush, but msync() used to fail on it with EINVAL.
+    int shm_fd = shm_open("/tst-mmap-msync", O_CREAT | O_RDWR, 0600);
+    assert(shm_fd >= 0);
+    assert(ftruncate(shm_fd, 4096*4) == 0);
+    buf = mmap(NULL, 4096*4, PROT_READ|PROT_WRITE, MAP_SHARED, shm_fd, 0);
+    assert(buf != MAP_FAILED);
+    memset(buf, 'x', 4096*4);
+    assert(msync(buf, 4096*4, MS_SYNC) == 0);
+    assert(msync(buf, 4096*4, MS_ASYNC) == 0);
+    assert(munmap(buf, 4096*4) == 0);
+    close(shm_fd);
+    shm_unlink("/tst-mmap-msync");
 
     // Similarly test mincore().
     unsigned char vec[20];
