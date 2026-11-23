@@ -10,6 +10,7 @@
 #include <osv/sched.hh>
 #include <osv/debug.hh>
 #include <chrono>
+#include <errno.h>
 
 #include <osv/condvar.h>
 
@@ -58,6 +59,23 @@ int main(int argc, char **argv)
     delete t1;
     delete t2;
     assert_idle(&cond);
+
+    // Only concurrent waits must use the same mutex: after a wait() times
+    // out, a later wait() may use a different mutex. A timed-out wait used
+    // to leave its mutex recorded, so the next wait() with a different
+    // mutex failed an assertion.
+    debugf("test timeout with different mutexes\n");
+    {
+        mutex m1, m2;
+        m1.lock();
+        assert(cond.wait(&m1, std::chrono::milliseconds(1)) == ETIMEDOUT);
+        m1.unlock();
+        assert_idle(&cond);
+        m2.lock();
+        assert(cond.wait(&m2, std::chrono::milliseconds(1)) == ETIMEDOUT);
+        m2.unlock();
+        assert_idle(&cond);
+    }
 
     // A test where N threads wait on a single condition
     // variable, and when all are ready (using an atomic counter
