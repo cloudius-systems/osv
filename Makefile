@@ -2233,6 +2233,11 @@ bootfs_dep += $(out)/modules/libext/libext.so
 else
 ifeq ($(fs),zfs)
 bootfs_dep += $(tools:%=$(out)/%) $(out)/libsolaris.so
+else
+ifeq ($(fs),ramfs)
+# usr_ramfs.manifest.skel puts the mount tools into the bootfs.
+bootfs_dep += $(out)/tools/mount/mount-fs.so $(out)/tools/mount/umount.so
+endif
 endif
 endif
 $(out)/bootfs.bin: $(bootfs_dep)
