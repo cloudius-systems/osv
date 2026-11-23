@@ -429,12 +429,28 @@ net::net(virtio_device& dev)
     // to use, and the control queue may be used only after DRIVER_OK.  If
     // the device refuses, stay on the first pair, leaving the other pairs'
     // threads idle as in the MSI-X fallback above.
+    //
+    // With VIRTIO_NET_F_RSS, the RSS configuration also carries the queue
+    // count (in max_tx_vq), so, as in Linux, it replaces VQ_PAIRS_SET.
+    // Without RSS the device picks the Rx queue itself, and inbound flows
+    // may concentrate on a few queues.  Note that a device may offer and
+    // acknowledge RSS without performing it: in QEMU, RSS takes effect only
+    // with rss=on on a modern-only device (disable-legacy=on, since the
+    // legacy interface cannot negotiate feature bit 60), and with vhost=on
+    // only when QEMU can load its eBPF steering program (otherwise QEMU logs
+    // "Can't load eBPF RSS for vhost", acknowledges RSS_CONFIG and ignores
+    // it).
     if (_nqp > 1) {
-        net_ctrl_mq mq = { (u16)_nqp };
-        if (!send_ctrl_command(VIRTIO_NET_CTRL_MQ, VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET,
-                               &mq, sizeof(mq))) {
-            net_w("virtio-net: device refused %d queue pairs, using one", _nqp);
-            _nqp = 1;
+        bool rss = get_guest_feature_bit(VIRTIO_NET_F_RSS) && set_rss_config();
+        if (rss) {
+            net_i("virtio-net: RSS enabled across %d Rx queues", _nqp);
+        } else {
+            net_ctrl_mq mq = { (u16)_nqp };
+            if (!send_ctrl_command(VIRTIO_NET_CTRL_MQ, VIRTIO_NET_CTRL_MQ_VQ_PAIRS_SET,
+                                   &mq, sizeof(mq))) {
+                net_w("virtio-net: device refused %d queue pairs, using one", _nqp);
+                _nqp = 1;
+            }
         }
     }
 
@@ -517,6 +533,27 @@ void net::read_config()
                          sizeof(_config.max_virtqueue_pairs));
         net_i("Multiqueue: device advertises %d queue pairs",
               _config.max_virtqueue_pairs);
+    }
+
+    // With VIRTIO_NET_F_RSS the device exposes the RSS limits and the hash
+    // types it can compute; read them so init() can program a valid config.
+    _config.rss_max_key_size = 0;
+    _config.rss_max_indirection_table_length = 0;
+    _config.supported_hash_types = 0;
+    if (get_guest_feature_bit(VIRTIO_NET_F_RSS)) {
+        virtio_conf_read(offsetof(net_config, rss_max_key_size),
+                         &_config.rss_max_key_size,
+                         sizeof(_config.rss_max_key_size));
+        virtio_conf_read(offsetof(net_config, rss_max_indirection_table_length),
+                         &_config.rss_max_indirection_table_length,
+                         sizeof(_config.rss_max_indirection_table_length));
+        virtio_conf_read(offsetof(net_config, supported_hash_types),
+                         &_config.supported_hash_types,
+                         sizeof(_config.supported_hash_types));
+        net_i("RSS: device max_key=%d, max_indir_table=%d, hash_types=0x%x",
+              _config.rss_max_key_size,
+              _config.rss_max_indirection_table_length,
+              _config.supported_hash_types);
     }
 
     net_i("Features: %s=%d,%s=%d", "Status", _status, "TSO_ECN", _tso_ecn);
@@ -1098,6 +1135,93 @@ bool net::send_ctrl_command(u8 cls, u8 cmd, void* data, u32 len)
     return ack == VIRTIO_NET_OK;
 }
 
+// Program RSS via VIRTIO_NET_CTRL_MQ_RSS_CONFIG so the device hashes each
+// inbound flow (by its TCP/UDP 5-tuple, using a Toeplitz key) onto one of the
+// _nqp Rx queues.  The indirection table is filled round-robin across the
+// queues so flows spread evenly.  The payload is variable-length (indirection
+// table and key are inline), so it is serialized into a byte buffer.  Returns
+// true on device ACK.
+bool net::set_rss_config()
+{
+    // Hash TCP and UDP flows by their ports as well as their addresses, so
+    // that many connections between the same two hosts still spread over
+    // the queues; other IP packets are hashed by address only.  Ask only
+    // for the types the device can compute.
+    u32 want = VIRTIO_NET_RSS_HASH_TYPE_TCPv4 | VIRTIO_NET_RSS_HASH_TYPE_UDPv4 |
+               VIRTIO_NET_RSS_HASH_TYPE_IPv4  | VIRTIO_NET_RSS_HASH_TYPE_TCPv6 |
+               VIRTIO_NET_RSS_HASH_TYPE_UDPv6 | VIRTIO_NET_RSS_HASH_TYPE_IPv6;
+    u32 hash_types = want & _config.supported_hash_types;
+    if (hash_types == 0) {
+        net_w("virtio-net: device supports no RSS hash types we want (0x%x)",
+              _config.supported_hash_types);
+        return false;
+    }
+
+    // Indirection table length: a power of two, at least _nqp so every queue
+    // appears, capped by what the device allows.  128 is the conventional size
+    // (matches Linux) and is plenty to spread flows.
+    unsigned table_len = 128;
+    if (_config.rss_max_indirection_table_length &&
+        table_len > _config.rss_max_indirection_table_length) {
+        table_len = _config.rss_max_indirection_table_length;
+    }
+    // Round down to a power of two and make sure it can hold every queue.
+    unsigned p2 = 1;
+    while (p2 * 2 <= table_len) p2 *= 2;
+    table_len = p2;
+    if (table_len < _nqp) {
+        net_w("virtio-net: RSS table (%d) smaller than queues (%d); flows will "
+              "not reach every queue", table_len, _nqp);
+    }
+
+    // Toeplitz hash key.  Length is device-dictated (rss_max_key_size); use the
+    // well-known 40-byte Microsoft key, truncated to the device's size.  A
+    // fixed key is fine: we only need a stable hash that spreads distinct
+    // flows, not cryptographic strength.
+    static const u8 toeplitz_key[40] = {
+        0x6d,0x5a,0x56,0xda,0x25,0x5b,0x0e,0xc2,0x41,0x67,0x25,0x3d,0x43,0xa3,0x8f,0xb0,
+        0xd0,0xca,0x2b,0xcb,0xae,0x7b,0x30,0xb4,0x77,0xcb,0x2d,0xa3,0x80,0x30,0xf2,0x0c,
+        0x6a,0x42,0xb7,0x3b,0xbe,0xac,0x01,0xfa,
+    };
+    unsigned key_len = _config.rss_max_key_size;
+    if (key_len == 0 || key_len > sizeof(toeplitz_key)) {
+        key_len = sizeof(toeplitz_key);
+    }
+
+    // Serialize: hdr | indirection_table[table_len] | max_tx_vq | key_len | key.
+    size_t payload = sizeof(net_ctrl_rss_hdr)
+                   + table_len * sizeof(u16)
+                   + sizeof(u16)          /* max_tx_vq */
+                   + sizeof(u8)           /* hash_key_length */
+                   + key_len;
+    std::vector<u8> buf(payload, 0);
+    u8* p = buf.data();
+
+    auto* hdr = reinterpret_cast<net_ctrl_rss_hdr*>(p);
+    hdr->hash_types = hash_types;
+    hdr->indirection_table_mask = static_cast<u16>(table_len - 1);
+    hdr->unclassified_queue = 0;   // flows we don't hash land on queue 0
+    p += sizeof(net_ctrl_rss_hdr);
+
+    auto* table = reinterpret_cast<u16*>(p);
+    for (unsigned i = 0; i < table_len; i++) {
+        table[i] = static_cast<u16>(i % _nqp);   // round-robin across all queues
+    }
+    p += table_len * sizeof(u16);
+
+    // max_tx_vq: the number of Tx queues the device may use.
+    u16 max_tx_vq = static_cast<u16>(_nqp);
+    memcpy(p, &max_tx_vq, sizeof(max_tx_vq));
+    p += sizeof(max_tx_vq);
+
+    *p = static_cast<u8>(key_len);
+    p += sizeof(u8);
+    memcpy(p, toeplitz_key, key_len);
+
+    return send_ctrl_command(VIRTIO_NET_CTRL_MQ, VIRTIO_NET_CTRL_MQ_RSS_CONFIG,
+                             buf.data(), buf.size());
+}
+
 u64 net::get_driver_features()
 {
     auto base = virtio_driver::get_driver_features();
@@ -1117,6 +1241,11 @@ u64 net::get_driver_features()
                  // CTRL_MQ_VQ_PAIRS_SET command that activates them.
                  | (1 << VIRTIO_NET_F_CTRL_VQ)
                  | (1 << VIRTIO_NET_F_MQ)
+                 // Receive-Side Scaling: let the device hash each inbound flow
+                 // (by its 5-tuple, via a Toeplitz key) onto one of the Rx
+                 // queues.  Bit 60 is outside the 32-bit range, so it must be
+                 // set with 1ULL.
+                 | (1ULL << VIRTIO_NET_F_RSS)
             );
 }
 
