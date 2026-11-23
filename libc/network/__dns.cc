@@ -276,7 +276,9 @@ static int decname(char *s, const unsigned char *b, const unsigned char *p)
 	for (;;) {
 		if (p>=pz) return -1;
 		else if (*p&0xc0) {
-			int j = (p[0]&1) | p[1];
+			/* A compression pointer holds a 14-bit offset. */
+			int j = (p[0]&0x3f)<<8 | p[1];
+			if (j >= PACKET_MAX) return -1;
 			if (BITOP(seen, j, &)) return -1;
 			BITOP(seen, j, |=);
 			p = b + j;
