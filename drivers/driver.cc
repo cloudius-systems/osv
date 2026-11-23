@@ -8,12 +8,19 @@
 #include "drivers/driver.hh"
 #include <osv/pci.hh>
 #include <osv/debug.hh>
+#include <atomic>
 
 #include "driver.hh"
 
 using namespace pci;
 
 namespace hw {
+
+    int next_disk_index()
+    {
+        static std::atomic<int> disk_idx{0};
+        return disk_idx++;
+    }
 
     driver_manager* driver_manager::_instance = nullptr;
 

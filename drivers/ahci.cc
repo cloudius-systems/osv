@@ -16,8 +16,6 @@
 
 namespace ahci {
 
-int hba::_disk_idx = 0;
-
 struct hba_priv {
     devop_strategy_t strategy;
     class hba *hba;
@@ -524,7 +522,7 @@ void hba::scan()
         }
 
         std::string dev_name("vblk");
-        dev_name += std::to_string(_disk_idx++);
+        dev_name += std::to_string(hw::next_disk_index());
         auto dev = device_create(&hba_driver, dev_name.c_str(), D_BLK);
         auto prv = static_cast<struct hba_priv*>(dev->private_data);
         prv->hba = this;

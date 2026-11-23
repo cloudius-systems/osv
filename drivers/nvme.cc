@@ -42,7 +42,6 @@ TRACEPOINT(trace_nvme_strategy, "bio=%p, bcount=%lu", struct bio*, size_t);
 
 namespace nvme {
 
-int driver::_disk_idx = 0;
 int driver::_instance = 0;
 
 struct nvme_priv {
@@ -154,7 +153,7 @@ driver::driver(pci::device &pci_dev)
     }
 
     std::string dev_name("vblk");
-    dev_name += std::to_string(_disk_idx++);
+    dev_name += std::to_string(hw::next_disk_index());
 
     struct device* dev = device_create(&_driver, dev_name.c_str(), D_BLK);
     struct nvme_priv* prv = reinterpret_cast<struct nvme_priv*>(dev->private_data);
