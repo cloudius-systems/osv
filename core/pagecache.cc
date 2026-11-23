@@ -164,6 +164,17 @@ protected:
             return 0;
         }
         int operator()(mmu::hw_ptep<0>& ptep) {
+            // Only forget the mapping if it is the one being removed. A COW
+            // write fault calls remove_read_mapping() for a pte which may not
+            // map this page at all - e.g., when another mapping of the same
+            // file page (such as an ELF code segment sharing its last page
+            // with the data segment) has it mapped. Clearing that other
+            // mapping's record here would let the page be dropped from the
+            // cache - and freed, for a page the cache owns - while still
+            // mapped.
+            if (!(ptep == _ptep)) {
+                return 1;
+            }
             _ptes = nullptr;
             return 0;
         }

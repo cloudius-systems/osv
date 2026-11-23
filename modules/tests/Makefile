@@ -255,6 +255,7 @@ tests += tst-dentry-rename-child.so
 tests += misc-tcp-syncache-flood.so
 tests += tst-umount-vget.so
 tests += tst-signalfd.so
+tests += tst-mmap-cow.so
 internal-api-tests += tst-random-flush.so
 tests += tst-umount-release.so
 internal-api-tests += tst-umount-release.so
