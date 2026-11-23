@@ -9,6 +9,9 @@ StringIO = io.StringIO
 
 host_arch = os.uname().machine
 
+# Set by upload()'s output thread when the guest's output shows it crashed.
+guest_crashed = threading.Event()
+
 def find_free_port():
     with closing(socket.socket(socket.AF_INET, socket.SOCK_STREAM)) as s:
         s.bind(('localhost', 0))
@@ -63,14 +66,20 @@ def upload(osv, manifest, depends, port):
     # hang, and so the user can see what's happening. Easiest to do this with
     # a thread. Start it before waiting for cpiod, so the guest's boot and
     # mkfs output cannot fill the pipe while we wait.
+    # It also watches for the guest crashing: OSv's abort() always prints
+    # either "[backtrace]" or "Halting.".
     stop_output = False
     def consumeoutput(file, silent):
         for line in iter(lambda: file.readline(), b''):
+            if b'[backtrace]' in line or b'Halting.' in line:
+                guest_crashed.set()
             if not silent():
                 os.write(sys.stdout.fileno(), line)
     # A daemon, so a failed upload can exit without waiting for QEMU.
-    threading.Thread(target=consumeoutput, args=(osv.stdout, lambda: stop_output),
-                     daemon=True).start()
+    output_thread = threading.Thread(target=consumeoutput,
+                                     args=(osv.stdout, lambda: stop_output),
+                                     daemon=True)
+    output_thread.start()
 
     s = wait_for_cpiod(osv, port)
 
@@ -146,6 +155,7 @@ def upload(osv, manifest, depends, port):
         # stop_output is set when we failed during the upload, so let's
         # have the upload fail.
         sys.exit(1)
+    return output_thread
 
 def read_pid(pidfile):
     try:
@@ -253,30 +263,40 @@ def main():
     # come, so QEMU would never exit. Kill it and fail the build instead.
     # (--pass-args needs the "=" form: its value starts with "-".)
     try:
-        upload(osv, manifest, depends, upload_port)
+        output_thread = upload(osv, manifest, depends, upload_port)
     except BaseException as e:
         kill_qemu(osv, pidfile)
+        shutil.rmtree(piddir, ignore_errors=True)
         if isinstance(e, OSError):
             sys.exit("ERROR: zfs_builder upload failed (%s); QEMU killed. "
                      "cpiod may not have been listening yet." % e)
         raise
-    finally:
-        shutil.rmtree(piddir, ignore_errors=True)
 
     # cpiod acknowledged the sync, so the ZFS image is written. Give QEMU up
     # to 120 seconds to exit cleanly (e.g. via ACPI poweroff), then kill it.
     # OSv may call halt() instead of poweroff() when ACPI is not available
     # (e.g. --noinit suppresses ACPI init), so QEMU would never exit on its own.
-    try:
-        ret = osv.wait(timeout=120)
-    except subprocess.TimeoutExpired:
-        osv.terminate()
+    # But if the guest crashed (e.g. while exporting the pool), stop waiting
+    # and fail: the image may be incomplete.
+    ret = None
+    for _ in range(120):
         try:
-            osv.wait(timeout=5)
+            ret = osv.wait(timeout=1)
+            break
         except subprocess.TimeoutExpired:
-            osv.kill()
-            osv.wait()
+            if guest_crashed.is_set():
+                break
+    if ret is None:
+        # Kill QEMU itself, not only the shell that runs run.py, which runs
+        # QEMU: otherwise QEMU would be left running.
+        kill_qemu(osv, pidfile)
         ret = 0  # upload succeeded; QEMU just didn't exit cleanly
+    shutil.rmtree(piddir, ignore_errors=True)
+    # QEMU is gone, so the output thread soon reaches the end of its output;
+    # let it print the guest's last lines and notice a crash.
+    output_thread.join(timeout=10)
+    if guest_crashed.is_set():
+        sys.exit("Upload failed: the ZFS builder guest crashed.")
     if ret != 0:
         sys.exit("Upload failed.")
 
