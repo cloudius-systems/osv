@@ -160,6 +160,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-blk-
 	tst-mmap-file.so misc-mmap-big-file.so tst-mmap.so tst-huge.so \
 	tst-pthread-timedlock.so \
 	tst-signal-fills.so \
+	tst-dentry-lock.so \
 	tst-epoll-pwait2.so \
 	tst-splice.so \
 	tst-fs-syscalls.so \
