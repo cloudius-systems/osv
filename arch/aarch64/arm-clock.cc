@@ -15,6 +15,8 @@
 #include <osv/debug.hh>
 #include <osv/prio.hh>
 #include <osv/sched.hh>
+#include <algorithm>
+#include <climits>
 #include <osv/kernel_config_logger_debug.h>
 
 #include "arch-dtb.hh"
@@ -203,6 +205,11 @@ void arm_clock_events::set(std::chrono::nanoseconds nanos)
         u64 tval = nanos.count();
         class arm_clock *c = static_cast<arm_clock *>(clock::get());
         tval = ((__uint128_t)tval * c->freq_hz) / NANO_PER_SEC;
+        // CNTV_TVAL_EL0 is a signed 32-bit down-counter: the hardware sets
+        // CVAL = counter + SignExtend(TVAL), so a value of 2^31 or more would
+        // be programmed in the past and fire at once.  Clamp it; an early
+        // interrupt just makes the timer code re-arm for the remainder.
+        tval = std::min<u64>(tval, INT32_MAX);
 
         if (tval) {
             //This 'if (tval)' optimization is not likely to save us much
