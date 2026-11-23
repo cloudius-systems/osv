@@ -13,12 +13,25 @@
 // inotify instances, matches each event against their watches, and queues a
 // struct inotify_event for the fd (waking any poller).
 //
-// A watch on a directory fires for changes to entries within it (with the entry
-// name); a watch on a file fires for changes to the file itself.  The VFS hooks
-// currently wire the path-mutation events: IN_CREATE, IN_DELETE, and
-// IN_MOVED_FROM/IN_MOVED_TO (with a shared cookie).  IN_MODIFY, IN_ATTRIB,
-// IN_CLOSE_WRITE and the recursive-watch/mount-related events are not yet
-// generated and are out of scope for this change.
+// A watch on a directory reports IN_CREATE (from open(O_CREAT), mkdir(),
+// mknod(), link() and symlink()), IN_DELETE (unlink(), rmdir()) and
+// IN_MOVED_FROM/IN_MOVED_TO (rename(), the pair sharing a non-zero cookie) for
+// the entries in it, with the entry name.  A watch on the object itself reports
+// IN_DELETE_SELF followed by IN_IGNORED (and the watch is removed) when it is
+// deleted, and IN_MOVE_SELF when it is renamed.
+//
+// Not supported (a watch that asks for any of these gets a one-time warning on
+// the console, not an error, because programs usually ask for a mix):
+// - These events are never generated: IN_ACCESS, IN_MODIFY, IN_ATTRIB,
+//   IN_CLOSE_WRITE, IN_CLOSE_NOWRITE, IN_OPEN, IN_UNMOUNT and IN_Q_OVERFLOW.
+// - These flags are accepted and ignored: IN_DONT_FOLLOW and IN_EXCL_UNLINK.
+// - Watches follow paths, not inodes.  A watched directory that is renamed
+//   reports IN_MOVE_SELF and then goes silent (Linux keeps reporting events
+//   from its new location), and the watch reports events for whatever is
+//   later created at the old path.  For the same reason a watch on a hard
+//   link sees only changes made through that path.
+// - The event queue has no size limit, where Linux caps it at
+//   max_queued_events and then reports IN_Q_OVERFLOW.
 
 #include <sys/inotify.h>
 #include <sys/stat.h>
@@ -28,14 +41,16 @@
 #include <osv/mutex.h>
 #include <osv/condvar.h>
 #include <osv/poll.h>
+#include <osv/stubbing.hh>
+#include <fs/vfs/vfs.h>
 
+#include <atomic>
 #include <deque>
 #include <map>
 #include <set>
 #include <string>
 #include <vector>
 #include <cstring>
-#include <cstdio>
 #include <climits>
 #include <unistd.h>
 #include <errno.h>
@@ -46,6 +61,14 @@ class inotify_fd;
 
 mutex registry_lock;
 std::set<inotify_fd*> registry;
+// The number of live instances, so the VFS hooks skip registry_lock when no
+// program uses inotify.  A hook that races the creation of the first instance
+// may miss an event for a mutation that the new instance had no watch for yet.
+std::atomic<int> live_instances{0};
+
+// Requested events this implementation never generates, and flags it ignores.
+constexpr uint32_t unsupported_mask = IN_ACCESS | IN_MODIFY | IN_ATTRIB |
+    IN_CLOSE_WRITE | IN_CLOSE_NOWRITE | IN_OPEN | IN_DONT_FOLLOW | IN_EXCL_UNLINK;
 
 struct watch {
     int         wd;
@@ -75,10 +98,12 @@ public:
         : special_file(FREAD | flags, DTYPE_UNSPEC)
     {
         WITH_LOCK(registry_lock) { registry.insert(this); }
+        live_instances++;
     }
 
     int close() override {
         WITH_LOCK(registry_lock) { registry.erase(this); }
+        live_instances--;
         return 0;
     }
 
@@ -99,6 +124,7 @@ private:
     mutable mutex _mutex;
     condvar       _blocked_reader;
     int           _next_wd = 1;
+    bool          _warned = false;   // the unsupported-events warning was shown
     std::vector<watch> _watches;
     std::deque<std::vector<char>> _events;   // each is a packed inotify_event
 };
@@ -129,18 +155,41 @@ bool inotify_fd::notify(const std::string& dir, const std::string& name,
 {
     bool queued = false;
     WITH_LOCK(_mutex) {
-        for (auto& w : _watches) {
-            if (!(w.mask & (mask & IN_ALL_EVENTS))) {
-                continue;
-            }
+        for (auto it = _watches.begin(); it != _watches.end(); ) {
+            auto& w = *it;
+            uint32_t ev = 0;
+            uint32_t ev_cookie = 0;
+            std::string ev_name;
+            bool gone = false;
             if (w.path == dir) {
                 // A directory watch: report the affected entry name.
-                queue_event(w.wd, mask, cookie, name);
-                queued = true;
+                ev = mask;
+                ev_cookie = cookie;
+                ev_name = name;
             } else if (w.path == full) {
-                // A watch on the file/dir itself: no name.
-                queue_event(w.wd, mask, cookie, std::string());
+                // A watch on the object itself gets no directory-entry
+                // events, only IN_DELETE_SELF and IN_MOVE_SELF, with no name.
+                // IN_MOVED_TO here means a rename replaced the object.  Linux
+                // follows a deleted object with IN_IGNORED and drops the
+                // watch, whatever the watch asked for.
+                if (mask & (IN_DELETE | IN_MOVED_TO)) {
+                    ev = IN_DELETE_SELF;
+                    gone = true;
+                } else if (mask & IN_MOVED_FROM) {
+                    ev = IN_MOVE_SELF;
+                }
+            }
+            if (w.mask & ev & IN_ALL_EVENTS) {
+                queue_event(w.wd, ev, ev_cookie, ev_name);
                 queued = true;
+                gone |= (w.mask & IN_ONESHOT) != 0;
+            }
+            if (gone) {
+                queue_event(w.wd, IN_IGNORED, 0, std::string());
+                queued = true;
+                it = _watches.erase(it);
+            } else {
+                ++it;
             }
         }
     }
@@ -155,10 +204,20 @@ bool inotify_fd::notify(const std::string& dir, const std::string& name,
 int inotify_fd::add_watch(const std::string& path, uint32_t mask)
 {
     WITH_LOCK(_mutex) {
+        if ((mask & unsupported_mask) && !_warned) {
+            _warned = true;
+            debug_always("WARNING: inotify_add_watch(%s, 0x%x): OSv does not "
+                "support the events or flags 0x%x; they will never be reported\n",
+                path.c_str(), mask, mask & unsupported_mask);
+        }
         // Existing watch on the same path: merge the mask (or replace unless
-        // IN_MASK_ADD), and keep its wd, like Linux.
+        // IN_MASK_ADD), and keep its wd, like Linux.  IN_MASK_CREATE asks
+        // for a new watch only.
         for (auto& w : _watches) {
             if (w.path == path) {
+                if (mask & IN_MASK_CREATE) {
+                    return -EEXIST;
+                }
                 w.mask = (mask & IN_MASK_ADD) ? (w.mask | mask) : mask;
                 return w.wd;
             }
@@ -235,16 +294,17 @@ extern "C" void osv_inotify_notify(const char* path, uint32_t mask, int is_dir,
     if (!path) {
         return;
     }
-    // Fast path: nothing is watching.
-    WITH_LOCK(registry_lock) {
-        if (registry.empty()) {
-            return;
-        }
+    if (live_instances.load(std::memory_order_relaxed) == 0) {
+        return;
     }
     if (is_dir) {
         mask |= IN_ISDIR;
     }
+    // path_conv() keeps a trailing slash (mkdir("d/sub/")); watches have none.
     std::string full(path);
+    while (full.size() > 1 && full.back() == '/') {
+        full.pop_back();
+    }
     std::string dir, name;
     split_path(full, dir, name);
 
@@ -289,6 +349,11 @@ int inotify_add_watch(int fd, const char* pathname, uint32_t mask)
     if (!pathname) {
         return libc_error(EINVAL);
     }
+    // Linux rejects an empty mask, and IN_MASK_ADD with IN_MASK_CREATE.
+    if (mask == 0 ||
+        (mask & (IN_MASK_ADD | IN_MASK_CREATE)) == (IN_MASK_ADD | IN_MASK_CREATE)) {
+        return libc_error(EINVAL);
+    }
     fileref f(fileref_from_fd(fd));
     if (!f) {
         return libc_error(EBADF);
@@ -297,21 +362,19 @@ int inotify_add_watch(int fd, const char* pathname, uint32_t mask)
     if (!in) {
         return libc_error(EINVAL);
     }
-    // Resolve to an absolute path so it matches what the VFS hook reports.
+    if (!pathname[0]) {
+        return libc_error(ENOENT);
+    }
+    // Resolve the path the way the VFS does (path_conv() drops "." and ".."
+    // components), so it matches the paths the VFS hooks report.
+    char cwd[PATH_MAX];
+    if (!getcwd(cwd, sizeof(cwd))) {
+        return libc_error(errno);
+    }
     char abs[PATH_MAX];
-    if (pathname[0] == '/') {
-        if (strlcpy(abs, pathname, sizeof(abs)) >= sizeof(abs)) {
-            return libc_error(ENAMETOOLONG);
-        }
-    } else {
-        char cwd[PATH_MAX];
-        if (!getcwd(cwd, sizeof(cwd))) {
-            return libc_error(errno);
-        }
-        int need = snprintf(abs, sizeof(abs), "%s/%s", cwd, pathname);
-        if (need < 0 || (size_t)need >= sizeof(abs)) {
-            return libc_error(ENAMETOOLONG);
-        }
+    int error = path_conv(cwd, pathname, abs);
+    if (error) {
+        return libc_error(error);
     }
     // Strip a trailing slash (except for root).
     size_t n = strlen(abs);
@@ -328,7 +391,11 @@ int inotify_add_watch(int fd, const char* pathname, uint32_t mask)
     if ((mask & IN_ONLYDIR) && !S_ISDIR(st.st_mode)) {
         return libc_error(ENOTDIR);
     }
-    return in->add_watch(abs, mask);
+    int wd = in->add_watch(abs, mask);
+    if (wd < 0) {
+        return libc_error(-wd);
+    }
+    return wd;
 }
 
 extern "C" OSV_LIBC_API

@@ -685,6 +685,9 @@ sys_mknod(char *path, mode_t mode)
 		error = VOP_MKDIR(ddp->d_vnode, name, mode);
 	else
 		error = VOP_CREATE(ddp->d_vnode, name, mode);
+	if (!error) {
+		osv_inotify_notify(path, IN_CREATE, S_ISDIR(mode) ? 1 : 0, 0);
+	}
  out:
 	vn_unlock(ddp->d_vnode);
 	drele(ddp);
@@ -949,6 +952,9 @@ sys_symlink(const char *oldpath, const char *newpath)
 		goto out;
 	}
 	error = VOP_SYMLINK(newdirdp->d_vnode, name, op);
+	if (!error) {
+		osv_inotify_notify(np, IN_CREATE, 0, 0);
+	}
 
 out:
 	if (newdirdp != nullptr) {
@@ -1011,6 +1017,9 @@ sys_link(char *oldpath, char *newpath)
 	}
 
 	error = VOP_LINK(newdirdp->d_vnode, vp, name);
+	if (!error) {
+		osv_inotify_notify(newpath, IN_CREATE, 0, 0);
+	}
  out1:
 	vn_unlock(newdirdp->d_vnode);
 	drele(newdirdp);
