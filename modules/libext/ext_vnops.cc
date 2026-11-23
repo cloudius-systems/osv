@@ -217,6 +217,41 @@ ext_close(vnode_t *vp, file_t *fp)
     return (EOK);
 }
 
+// ext4_block_readbytes() and ext4_block_writebytes() handle a sector that the
+// requested range only partly covers through a single buffer shared by the
+// whole block device (bdev->bdif->ph_bbuf), and they don't lock it. The VFS
+// only locks each vnode, so reads and writes of different files run
+// concurrently and could overwrite each other's sector in that buffer: a read
+// returned another file's data, and a write could write it to the disk.
+// Serialize all calls to these two functions. They're only used for the
+// partial first and last block of a range (the aligned middle goes through
+// ext4_blocks_get_direct() and ext4_blocks_set_direct()) and for writing a
+// long symlink's target, so this serializes little I/O.
+// lwext4 also calls these two functions itself, without this mutex, for the
+// superblock (ext4_sb_read() and ext4_sb_write(), at mount, at unmount and
+// from the journal code), and in its MBR code. The superblock is 1024 bytes
+// at offset 1024, whole 512-byte sectors, so it never goes through the shared
+// buffer; and libext uses neither the journal nor the MBR code.
+static mutex_t ext_partial_sector_mutex;
+
+static int
+ext_block_readbytes(struct ext4_blockdev *bdev, uint64_t off, void *buf, uint32_t len)
+{
+    mutex_lock(&ext_partial_sector_mutex);
+    int r = ext4_block_readbytes(bdev, off, buf, len);
+    mutex_unlock(&ext_partial_sector_mutex);
+    return r;
+}
+
+static int
+ext_block_writebytes(struct ext4_blockdev *bdev, uint64_t off, const void *buf, uint32_t len)
+{
+    mutex_lock(&ext_partial_sector_mutex);
+    int r = ext4_block_writebytes(bdev, off, buf, len);
+    mutex_unlock(&ext_partial_sector_mutex);
+    return r;
+}
+
 static int
 ext_internal_read(struct ext4_fs *fs, struct ext4_inode_ref *ref, uint64_t offset, void *buf, size_t size, size_t *rcnt)
 {
@@ -258,7 +293,7 @@ ext_internal_read(struct ext4_fs *fs, struct ext4_inode_ref *ref, uint64_t offse
         /* Do we get an unwritten range? */
         if (fblock != 0) {
             uint64_t off = fblock * block_size + unalg;
-            r = ext4_block_readbytes(fs->bdev, off, u8_buf, len);
+            r = ext_block_readbytes(fs->bdev, off, u8_buf, len);
             if (r != EOK)
                 goto Finish;
 
@@ -320,7 +355,7 @@ ext_internal_read(struct ext4_fs *fs, struct ext4_inode_ref *ref, uint64_t offse
 
         uint64_t off = fblock * block_size;
         ext_debug("ext4_block_readbytes: off:%ld, size:%ld\n", off, size);
-        r = ext4_block_readbytes(fs->bdev, off, u8_buf, size);
+        r = ext_block_readbytes(fs->bdev, off, u8_buf, size);
         if (r != EOK)
             goto Finish;
 
@@ -428,7 +463,7 @@ ext_internal_write(struct ext4_fs *fs, struct ext4_inode_ref *ref, uint64_t offs
             goto Finish;
 
         off = fblock * block_size + unalg;
-        r = ext4_block_writebytes(fs->bdev, off, u8_buf, len);
+        r = ext_block_writebytes(fs->bdev, off, u8_buf, len);
         ext_debug("[ext_internal_write] Wrote unaligned %ld bytes at %ld\n", len, off);
         if (r != EOK)
             goto Finish;
@@ -535,7 +570,7 @@ ext_internal_write(struct ext4_fs *fs, struct ext4_inode_ref *ref, uint64_t offs
         }
 
         off = fblock * block_size;
-        r = ext4_block_writebytes(fs->bdev, off, u8_buf, size);
+        r = ext_block_writebytes(fs->bdev, off, u8_buf, size);
         ext_debug("[ext_internal_write] Wrote remaining %ld bytes at %ld\n", size, off);
         if (r != EOK)
             goto Finish;
@@ -1453,7 +1488,7 @@ ext_fsymlink_set(struct ext4_fs *fs, uint32_t inode_no, const void *buf, uint32_
             return r;
 
         uint64_t off = fblock * block_size;
-        r = ext4_block_writebytes(fs->bdev, off, buf, size);
+        r = ext_block_writebytes(fs->bdev, off, buf, size);
         if (r != EOK)
             return r;
     }
