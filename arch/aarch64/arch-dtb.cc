@@ -17,6 +17,7 @@
 #include <osv/mempool.hh>
 #include <osv/commands.hh>
 #include <osv/elf.hh>
+#include <osv/sched.hh>
 #if CONF_drivers_mmio
 #include "drivers/virtio-mmio.hh"
 #endif
@@ -437,9 +438,8 @@ bool dtb_get_gic_v3(u64 *dist, size_t *dist_len, u64 *redist, size_t *redist_len
 }
 
 /* this parses the cpus node and mpidr values and returns the number of cpu in it. */
-#define DTB_MAX_CPU_COUNT 32
 static int dtb_cpu_count = -1;
-static u64 dtb_cpus_mpids[DTB_MAX_CPU_COUNT];
+static u64 dtb_cpus_mpids[sched::max_cpus];
 
 static int dtb_parse_cpus()
 {
@@ -456,14 +456,13 @@ static int dtb_parse_cpus()
          subnode >= 0;
          subnode = fdt_next_subnode(dtb, subnode)) {
 
-        if (count > DTB_MAX_CPU_COUNT) {
-            abort("dtb_parse_cpus_mpid: number of cpus greater than maximum. Increase the DTB_MAX_CPU_COUNT!\n");
-        }
-
         // Only count subnode that have a property "device_type" with value "cpu"
         auto property = fdt_get_property(dtb, subnode, "device_type", NULL);
         if (property) {
             if (!strncmp("cpu", property->data, 3)) {
+                if (unsigned(count) == sched::max_cpus) {
+                    abort("dtb_parse_cpus_mpid: more than %u cpus\n", sched::max_cpus);
+                }
                 (void)dtb_get_reg(subnode, mpids);
                 mpids++;
                 count++;
