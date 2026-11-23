@@ -23,6 +23,7 @@
 #endif
 #include <atomic>
 #include <osv/mmu.hh>
+#include <osv/numa.hh>
 #include <osv/trace.hh>
 #include <lockfree/ring.hh>
 #include <osv/percpu-worker.hh>
@@ -597,6 +598,11 @@ public:
     page_range* alloc(size_t size, bool contiguous = true);
     page_range* alloc_aligned(size_t size, size_t offset, size_t alignment,
                               bool fill = false);
+    // Carve a single page from a free range that lies on NUMA node `node`,
+    // returning it, or nullptr if no free memory on that node is available.
+    // Used by the node-preferring allocator; the caller falls back to a normal
+    // allocation when this returns nullptr.
+    page_range* alloc_page_from_node(int node);
     void free(page_range* pr);
 
     void initial_add(page_range* pr);
@@ -794,6 +800,86 @@ page_range* page_range_allocator::alloc(size_t size, bool contiguous)
         set_bits(pr, false);
     }
     return &pr;
+}
+
+// Return the byte offset of the first page-aligned page within the physical
+// range [base, base+size) that lies on NUMA node `node`, or (size_t)-1 if the
+// range has no memory on that node.  Uses the SRAT memory ranges to intersect
+// directly rather than probing page by page, so a multi-hundred-MB free range
+// costs a handful of comparisons.
+static size_t node_offset_within(uint64_t base, size_t size, int node)
+{
+    uint64_t end = base + size;
+    uint64_t best = end;   // lowest on-node start found so far
+    for (auto& r : numa::memory_ranges()) {
+        if ((int)r.node != node) {
+            continue;
+        }
+        uint64_t lo = std::max(base, r.base);
+        uint64_t hi = std::min(end, r.base + r.length);
+        if (lo < hi) {
+            // Align the intersection start up to a page; must still leave room
+            // for one page inside both the free range and the node's range.
+            uint64_t start = align_up(lo, (uint64_t)page_size);
+            if (start + page_size <= hi && start < best) {
+                best = start;
+            }
+        }
+    }
+    return best == end ? (size_t)-1 : (size_t)(best - base);
+}
+
+page_range* page_range_allocator::alloc_page_from_node(int node)
+{
+    // Carve a single page physically on NUMA node `node` from the free lists.
+    //
+    // A free range may straddle a node boundary: OSv's boot allocator coalesces
+    // physically adjacent memory, and node N and node N+1 are usually adjacent
+    // in physical space, so one free range can begin on a low node and extend
+    // into a higher one.  Classifying a range only by its base address would
+    // therefore make a higher node's memory invisible (it lives inside a range
+    // whose base is on a lower node).  Instead, for each free range we find the
+    // first page-aligned offset within it that lies on `node`, then carve there,
+    // splitting the range into up-to-three pieces (prefix / the page / suffix).
+    //
+    // Best-effort: a linear scan over the free lists returning the first match,
+    // and nullptr if the node has no free memory so the caller can fall back.
+    page_range* found = nullptr;
+    size_t found_off = 0;   // byte offset of the on-node page within *found
+    for_each(0, [&] (page_range& pr) {
+        auto base = mmu::virt_to_phys(static_cast<void*>(&pr));
+        size_t off = node_offset_within(base, pr.size, node);
+        if (off != (size_t)-1) {
+            found = &pr;
+            found_off = off;
+            return false;   // stop iterating
+        }
+        return true;
+    });
+    if (!found) {
+        return nullptr;
+    }
+
+    auto& pr = *found;
+    remove(pr);
+    char* v = static_cast<char*>(static_cast<void*>(&pr));
+    // Suffix after the carved page stays free.
+    size_t tail = pr.size - found_off - page_size;
+    if (tail) {
+        insert(*new (v + found_off + page_size) page_range(tail));
+    }
+    // Prefix before the carved page stays free.
+    page_range* ret;
+    if (found_off) {
+        pr.size = found_off;
+        insert(pr);
+        ret = new (v + found_off) page_range(page_size);
+    } else {
+        pr.size = page_size;
+        ret = &pr;
+    }
+    set_bits(*ret, false);
+    return ret;
 }
 
 page_range* page_range_allocator::alloc_aligned(size_t size, size_t offset,
@@ -1787,6 +1873,41 @@ void* alloc_page()
     tracker_remember(p, page_size);
 #endif
     return p;
+}
+
+// Allocate one page, preferring memory local to NUMA node `node`.  Falls back
+// to a node-agnostic allocation when the node has no free memory local to it
+// in the global page-range allocator (or NUMA is not available).
+//
+// This is a best-effort node-preferring hint that the scheduler and
+// mbind/set_mempolicy can build on.  It only sees memory still held by the
+// global page-range allocator: OSv drains much of physical memory into per-CPU
+// L1/L2 pools that are not (yet) node-partitioned, so once a node's global
+// ranges are exhausted this falls back.  Full per-node pools are future work;
+// this step places the page on the node while the global allocator still
+// holds free memory there, and otherwise falls back instead of failing.
+void* alloc_page_on_node(int node)
+{
+    if (node < 0 || !numa::available() || (unsigned)node >= numa::nr_nodes()) {
+        return alloc_page();
+    }
+    void* ret = nullptr;
+    WITH_LOCK(free_page_ranges_lock) {
+        page_range* pr = free_page_ranges.alloc_page_from_node(node);
+        if (pr) {
+            on_alloc(page_size);
+            ret = static_cast<void*>(pr);
+        }
+    }
+    if (!ret) {
+        // No free memory on that node: fall back rather than fail.
+        return alloc_page();
+    }
+    trace_memory_page_alloc(ret);
+#if CONF_memory_tracker
+    tracker_remember(ret, page_size);
+#endif
+    return ret;
 }
 
 static inline void untracked_free_page(void *v)
