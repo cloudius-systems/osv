@@ -4,7 +4,7 @@ import subprocess, os, string, sys
 import distro
 import re
 
-osv_root = os.path.join(os.path.dirname(os.path.abspath(__file__)), '..')
+osv_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 destination = '%s/build/downloaded_packages/aarch64' % osv_root
 
 def fedora_download_commands(fedora_version):
@@ -25,23 +25,50 @@ def fedora_download_commands(fedora_version):
                     'glibc-devel',
                     'kernel-headers',
                     'libgcc',
+                    'libatomic',
                     'libstdc++',
                     'libstdc++-devel',
                     'libstdc++-static']
+    # zlib is needed by the OpenZFS user-space libraries (conf_zfs=openzfs).
+    # Since Fedora 40, zlib is provided by zlib-ng-compat.
+    if int(fedora_version) >= 40:
+        gcc_packages += ['zlib-ng-compat', 'zlib-ng-compat-devel']
+    else:
+        gcc_packages += ['zlib', 'zlib-devel']
     boost_packages = ['boost-devel',
                       'boost-static',
-                      'boost-system',
                       'boost-filesystem',
                       'boost-test',
                       'boost-chrono',
                       'boost-program-options',
                       'boost-timer']
+    # Boost.System is header-only, and since Fedora 44 (Boost 1.89) there is
+    # no separate boost-system package anymore.
+    if int(fedora_version) < 44:
+        boost_packages.append('boost-system')
     script_path = '%s/scripts/download_fedora_aarch64_rpm_package.sh' % osv_root
 
     install_commands = ['%s %s %s %s/gcc' % (script_path, package, fedora_version, destination) for package in gcc_packages]
     install_commands += ['%s %s %s %s/boost' % (script_path, package, fedora_version, destination) for package in boost_packages]
     install_commands = ['rm -rf %s/gcc/install' % destination,
                         'rm -rf %s/boost/install' % destination] + install_commands
+    # Newer Fedora packages install libraries in /usr/lib and /usr/lib64, and
+    # /lib and /lib64 are symbolic links to them (from the "filesystem"
+    # package, which we don't download), while linker scripts like libm.so
+    # and the dynamic linker's path still refer to /lib and /lib64. So
+    # recreate these symbolic links, merging in what was put in lib or lib64.
+    for d in ['lib', 'lib64']:
+        install_commands += ['cd %s/gcc/install && if [ -d usr/%s ] && [ ! -L %s ]; then '
+                             '(if [ -d %s ]; then cp -a %s/. usr/%s/ && rm -rf %s; fi) && ln -s usr/%s %s; fi'
+                             % (destination, d, d, d, d, d, d, d, d)]
+    # Since GCC 15, gcc links every program with -latomic_asneeded. The cross
+    # compiler doesn't come with this target library, and the one in the gcc
+    # package we downloaded is in its private directory, which the cross
+    # compiler doesn't search. So make it, and the libatomic it refers to,
+    # visible in usr/lib64.
+    install_commands += ['cd %s/gcc/install/usr/lib64 && '
+                         'for f in ../lib/gcc/*/*/libatomic*; do '
+                         'if [ -e "$f" ]; then ln -sf "$f" .; fi; done' % destination]
     return ' && '.join(install_commands)
 
 def ubuntu_download_commands(boost_long_version):
