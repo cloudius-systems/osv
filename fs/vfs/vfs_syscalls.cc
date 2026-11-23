@@ -566,6 +566,11 @@ sys_mkdir(char *path, mode_t mode)
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_mkdir: path=%s mode=%d\n",	path, mode));
 
+	/* POSIX allows trailing slashes in the name of the new directory. */
+	size_t len = strlen(path);
+	while (len > 1 && path[len - 1] == '/')
+		path[--len] = '\0';
+
 	error = namei(path, &dp);
 	if (!error) {
 		/* File already exists */
