@@ -28,6 +28,7 @@
 #include <sys/dsl_dataset.h>
 #include <sys/dsl_prop.h>
 #include <sys/dsl_dir.h>
+#include <sys/dsl_pool.h>
 #include <sys/spa.h>
 #include <sys/zap.h>
 #include <sys/zil.h>
@@ -682,6 +683,9 @@ zfs_osv_unmount(struct mount *mp, int flags)
 		zil_close(zfsvfs->z_log);
 		zfsvfs->z_log = NULL;
 	}
+
+	/* Let deferred zfs_zrele_async() releases finish before the teardown. */
+	taskq_wait(dsl_pool_zrele_taskq(dmu_objset_pool(zfsvfs->z_os)));
 
 	/*
 	 * Sync the pool to ensure all pending transactions (and
