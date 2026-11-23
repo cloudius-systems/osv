@@ -9,6 +9,7 @@
 #include <osv/prio.hh>
 #include <osv/sched.hh>
 #include <osv/interrupt.hh>
+#include <osv/intr_random.hh>
 #include <osv/kernel_config_logger_debug.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
@@ -227,6 +228,7 @@ void interrupt(exception_frame* frame)
     current_interrupt_frame = frame;
 
     unsigned int iar = gic::gic->ack_irq();
+    harvest_interrupt_randomness(iar, frame);
     if (idt.invoke_interrupt(iar)) {
         gic::gic->end_irq(iar);
     }
