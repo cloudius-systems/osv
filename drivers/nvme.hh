@@ -94,9 +94,6 @@ private:
     static int _instance;
     int _id;
 
-    //Disk index number
-    static int _disk_idx;
-
     std::vector<std::unique_ptr<msix_vector>> _msix_vectors;
 
     std::unique_ptr<admin_queue_pair, aligned_new_deleter<admin_queue_pair>> _admin_queue;

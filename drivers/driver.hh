@@ -15,6 +15,12 @@
 
 namespace hw {
 
+    // Return the next unused index N for naming a block device "vblkN".
+    // Every driver that creates "vblk" devices (virtio-blk, virtio-scsi, NVMe,
+    // AHCI, IDE, PVSCSI) must use this one counter, so that disks attached
+    // through different drivers get distinct names.
+    int next_disk_index();
+
     class hw_driver {
     public:
         virtual ~hw_driver() {};

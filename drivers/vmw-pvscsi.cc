@@ -28,7 +28,6 @@ using namespace memory;
 
 namespace vmw {
 int pvscsi::_instance = 0;
-int pvscsi::_disk_idx = 0;
 
 struct pvscsi_priv {
     devop_strategy_t strategy;
@@ -313,7 +312,7 @@ void pvscsi::add_lun(u16 target, u16 lun)
     exec_read_capacity(target, lun, devsize);
 
     std::string dev_name("vblk");
-    dev_name += std::to_string(_disk_idx++);
+    dev_name += std::to_string(hw::next_disk_index());
     dev = device_create(&pvscsi_driver, dev_name.c_str(), D_BLK);
     prv = static_cast<struct pvscsi_priv*>(dev->private_data);
     prv->strategy = pvscsi_strategy;
