@@ -60,13 +60,6 @@ unsigned distance(unsigned from, unsigned to)
 #if CONF_drivers_acpi
 using boost::intrusive::get_parent_from_member;
 
-// Record the (apic id -> node) mapping and track the highest node seen.
-static void record_cpu_affinity(uint32_t apic_id, unsigned node, unsigned& max_node)
-{
-    s_apic_to_node[apic_id] = node;
-    max_node = std::max(max_node, node);
-}
-
 static void parse_srat()
 {
     char sig[] = ACPI_SIG_SRAT;
@@ -84,35 +77,68 @@ static void parse_srat()
     auto* cur = base + sizeof(ACPI_TABLE_SRAT);
     auto* end = base + srat->Header.Length;
     unsigned max_node = 0;
+    std::unordered_map<uint32_t, unsigned> apic_to_node;
+    std::vector<mem_range> mem_ranges;
+    auto record_cpu_affinity = [&](uint32_t apic_id, unsigned node) {
+        // nr_nodes() is the exclusive upper bound of raw domain IDs.
+        if (node == UINT32_MAX) {
+            return false;
+        }
+        apic_to_node[apic_id] = node;
+        max_node = std::max(max_node, node);
+        return true;
+    };
 
-    while (cur + sizeof(ACPI_SUBTABLE_HEADER) <= end) {
+    // Stage the topology until every entry has been checked. A malformed tail
+    // must not publish a partial CPU/memory map.
+    while (cur < end) {
+        if (size_t(end - cur) < sizeof(ACPI_SUBTABLE_HEADER)) {
+            return;
+        }
         auto s = reinterpret_cast<ACPI_SUBTABLE_HEADER*>(cur);
-        if (s->Length < sizeof(ACPI_SUBTABLE_HEADER) || cur + s->Length > end) {
-            break;   // Malformed: zero/short length, or subtable overruns SRAT.
+        if (s->Length < sizeof(ACPI_SUBTABLE_HEADER) || s->Length > size_t(end - cur)) {
+            return;   // Malformed: zero/short length, or subtable overruns SRAT.
         }
         switch (s->Type) {
         case ACPI_SRAT_TYPE_CPU_AFFINITY: {
+            if (s->Length < sizeof(ACPI_SRAT_CPU_AFFINITY)) {
+                return;
+            }
             auto a = get_parent_from_member(s, &ACPI_SRAT_CPU_AFFINITY::Header);
             if (a->Flags & ACPI_SRAT_CPU_ENABLED) {
                 unsigned node = a->ProximityDomainLo |
                     (a->ProximityDomainHi[0] << 8) |
                     (a->ProximityDomainHi[1] << 16) |
-                    (a->ProximityDomainHi[2] << 24);
-                record_cpu_affinity(a->ApicId, node, max_node);
+                    (uint32_t(a->ProximityDomainHi[2]) << 24);
+                if (!record_cpu_affinity(a->ApicId, node)) {
+                    return;
+                }
             }
             break;
         }
         case ACPI_SRAT_TYPE_X2APIC_CPU_AFFINITY: {
+            if (s->Length < sizeof(ACPI_SRAT_X2APIC_CPU_AFFINITY)) {
+                return;
+            }
             auto a = get_parent_from_member(s, &ACPI_SRAT_X2APIC_CPU_AFFINITY::Header);
             if (a->Flags & ACPI_SRAT_CPU_ENABLED) {
-                record_cpu_affinity(a->ApicId, a->ProximityDomain, max_node);
+                if (!record_cpu_affinity(a->ApicId, a->ProximityDomain)) {
+                    return;
+                }
             }
             break;
         }
         case ACPI_SRAT_TYPE_MEMORY_AFFINITY: {
+            if (s->Length < sizeof(ACPI_SRAT_MEM_AFFINITY)) {
+                return;
+            }
             auto m = get_parent_from_member(s, &ACPI_SRAT_MEM_AFFINITY::Header);
             if (m->Flags & ACPI_SRAT_MEM_ENABLED) {
-                s_mem_ranges.push_back(mem_range{
+                if (m->ProximityDomain == UINT32_MAX || m->Length == 0 ||
+                    m->Length > UINT64_MAX - m->BaseAddress) {
+                    return;
+                }
+                mem_ranges.push_back(mem_range{
                     m->BaseAddress, m->Length, m->ProximityDomain,
                     (m->Flags & ACPI_SRAT_MEM_HOT_PLUGGABLE) != 0});
                 max_node = std::max(max_node, (unsigned)m->ProximityDomain);
@@ -125,9 +151,11 @@ static void parse_srat()
         cur += s->Length;
     }
 
-    if (!s_apic_to_node.empty() || !s_mem_ranges.empty()) {
-        s_available = true;
+    if (!apic_to_node.empty() || !mem_ranges.empty()) {
+        s_apic_to_node = std::move(apic_to_node);
+        s_mem_ranges = std::move(mem_ranges);
         s_nr_nodes = max_node + 1;
+        s_available = true;
     }
 }
 
@@ -138,6 +166,10 @@ static void parse_slit()
     if (AcpiGetTable(sig, 0, &header) != AE_OK) {
         return;
     }
+    constexpr size_t fixed_size = offsetof(ACPI_TABLE_SLIT, Entry);
+    if (header->Length < fixed_size) {
+        return;
+    }
     auto slit = get_parent_from_member(header, &ACPI_TABLE_SLIT::Header);
     uint64_t n = slit->LocalityCount;
     // Only trust SLIT if it agrees with the node count we saw in SRAT.
@@ -146,8 +178,7 @@ static void parse_slit()
     }
     // Guard against a malformed/truncated SLIT: the n*n entries must actually
     // fit within the table's declared length (and n*n must not overflow).
-    if (n > (SIZE_MAX / n) ||
-        offsetof(ACPI_TABLE_SLIT, Entry) + n * n > slit->Header.Length) {
+    if (n > (header->Length - fixed_size) / n) {
         return;
     }
     s_distances.assign(slit->Entry, slit->Entry + n * n);

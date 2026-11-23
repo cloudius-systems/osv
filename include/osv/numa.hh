@@ -37,10 +37,16 @@ struct mem_range {
 
 // Discover the topology by parsing SRAT/SLIT.  Safe to call once, after ACPI is
 // initialized and the CPUs have been enumerated (so APIC ids are known).  If no
-// SRAT is present, initializes a single flat node.  Idempotent.
+// SRAT is present, or it is malformed/unsupported, initializes a single flat
+// node. A raw proximity domain of UINT32_MAX is unsupported because its
+// exclusive upper bound cannot be represented by nr_nodes().
+// Truncated or count-mismatched SLIT leaves SRAT intact with default distances.
+// Idempotent.
 void init();
 
-// Number of NUMA nodes (>= 1).
+// Exclusive upper bound of raw proximity domain IDs (>= 1). Sparse domains
+// leave holes: this is not necessarily the number of populated nodes. Do not
+// size per-node resources from this value without a separate resource bound.
 unsigned nr_nodes();
 
 // True if the topology came from a real SRAT (as opposed to the synthesized
