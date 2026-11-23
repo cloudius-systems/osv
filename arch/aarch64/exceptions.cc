@@ -70,12 +70,12 @@ void interrupt_table::enable_msi_vector(unsigned vector)
     gic::gic->unmask_irq(vector);
 }
 
-unsigned interrupt_table::register_handler(std::function<void ()> handler)
+unsigned interrupt_table::try_register_handler(std::function<void ()> handler)
 {
     unsigned vector = _next_msi_vector.fetch_add(1);
     unsigned index = vector - _msi_vector_base;
     if (index >= max_msi_handlers) {
-        abort("The MSI vector %d too large\n", index);
+        return 0;
     }
 
     _msi_handlers[index] = handler;
@@ -87,6 +87,15 @@ unsigned interrupt_table::available_vectors()
 {
     unsigned used = _next_msi_vector.load() - _msi_vector_base;
     return used < max_msi_handlers ? max_msi_handlers - used : 0;
+}
+
+unsigned interrupt_table::register_handler(std::function<void ()> handler)
+{
+    unsigned vector = try_register_handler(handler);
+    if (!vector) {
+        abort("No free MSI vector\n");
+    }
+    return vector;
 }
 
 void interrupt_table::unregister_handler(unsigned vector)

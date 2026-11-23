@@ -39,7 +39,7 @@ static unsigned free_high_vector()
 {
     std::vector<unsigned> taken;
     unsigned v;
-    while ((v = idt.register_handler([] {})) != 0) {
+    while ((v = idt.try_register_handler([] {})) != 0) {
         taken.push_back(v);
     }
     for (auto t : taken) {

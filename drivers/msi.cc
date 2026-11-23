@@ -38,7 +38,9 @@ void interrupt_manager::reserve_vectors(int n)
 msix_vector::msix_vector(pci::function* dev)
     : _dev(dev)
 {
-    _vector = idt.register_handler([this] { interrupt(); });
+    // A device can run with fewer vectors than it asks for (see
+    // request_vectors()), so running out is not fatal here.
+    _vector = idt.try_register_handler([this] { interrupt(); });
 }
 
 msix_vector::~msix_vector()
