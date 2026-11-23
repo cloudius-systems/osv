@@ -30,6 +30,7 @@
 #include <algorithm>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
+#include <osv/kernel_config_sched_wake_pull.h>
 
 MAKE_SYMBOL(sched::thread::current);
 MAKE_SYMBOL(sched::cpu::current);
@@ -72,6 +73,13 @@ TRACEPOINT(trace_thread_create, "thread=%p", thread*);
 
 std::vector<cpu*> cpus __attribute__((init_priority((int)init_prio::cpus)));
 
+#if CONF_sched_wake_pull
+// An idle CPU pulls only from a victim whose runqueue holds at least this
+// many threads.  The idle thread waits in the runqueue whenever it is not
+// running, so 2 means one queued thread besides the idle thread.
+static constexpr unsigned wake_pull_min_depth = 2;
+#endif
+
 thread __thread * s_current;
 cpu __thread * current_cpu;
 
@@ -81,6 +89,15 @@ bool __thread need_reschedule = false;
 elf::tls_data tls;
 
 inter_processor_interrupt wakeup_ipi{IPI_WAKEUP, [] {}};
+
+#if CONF_sched_wake_pull
+// An idle CPU sends this IPI to the busiest CPU to ask it for one runnable
+// thread.  The handler runs on the busiest CPU with interrupts disabled, so it
+// changes only that CPU's own runqueue, as load_balance() does when it
+// migrates a thread away.
+inter_processor_interrupt sched_pull_ipi{IPI_SCHED_PULL,
+    [] { cpu::current()->donate_to_puller(); }};
+#endif
 
 constexpr float cmax = 0x1P63;
 constexpr float cinitial = 0x1P-63;
@@ -471,10 +488,17 @@ void cpu::do_idle()
 {
     do {
         idle_poll_lock_type idle_poll_lock{*this};
+#if CONF_sched_wake_pull
+        // Ask the busiest CPU to donate one runnable thread.  This runs once
+        // per idle entry, not per spin iteration, so the IPI rate is bounded
+        // by the number of idle CPUs rather than by the wake rate.  The
+        // donated thread arrives through incoming_wakeups and is picked up by
+        // the spin loop below.
+        try_pull_from_busiest();
+#endif
         WITH_LOCK(idle_poll_lock) {
             // spin for a bit before halting
             for (unsigned ctr = 0; ctr < 10000; ++ctr) {
-                // FIXME: can we pull threads from loaded cpus?
                 handle_incoming_wakeups();
                 if (!runqueue.empty()) {
                     return;
@@ -843,6 +867,99 @@ void cpu::load_balance()
         }
     }
 }
+
+#if CONF_sched_wake_pull
+// Called from the idle path when this CPU has an empty runqueue and is about
+// to poll or halt.  Rather than wait up to 100ms for some CPU's load_balance()
+// to notice the imbalance, ask the busiest CPU to give this one a queued
+// thread.  This addresses OSv issue #396.
+//
+// The request rate is bounded by the number of idle CPUs, not by the wake
+// rate: only idle CPUs ask, a CPU that receives a thread stops being idle,
+// and each victim holds at most one outstanding request (pull_donate_to).
+//
+// The cost: when thread A wakes thread B on the same CPU, B is queued until A
+// blocks.  An idle CPU that looks in that window takes B, and from then on
+// every wake between A and B crosses CPUs.  A higher wake_pull_min_depth
+// avoids that for a single pair but loses most of the gain for a fan-out to
+// as many workers as CPUs, which is why this is off by default.
+//
+// Returns true if a request was sent.
+bool cpu::try_pull_from_busiest()
+{
+    // Only pull when genuinely idle.
+    if (!runqueue.empty()) {
+        return false;
+    }
+    // Find the busiest CPU by runqueue depth.  Bounded scan over cpus[].
+    cpu* busiest = nullptr;
+    unsigned best = wake_pull_min_depth;
+    for (cpu* c : cpus) {
+        if (c == this) {
+            continue;
+        }
+        unsigned d = c->load();
+        if (d >= best) {
+            best = d;
+            busiest = c;
+        }
+    }
+    if (!busiest) {
+        return false;   // nobody has a queued thread to give
+    }
+    // Publish our request on the victim.  If another idle CPU already has a
+    // request outstanding there, leave it: one at a time keeps the IPI rate
+    // low and stops two idle CPUs from competing for the same thread.
+    cpu* expected = nullptr;
+    if (!busiest->pull_donate_to.compare_exchange_strong(
+            expected, this, std::memory_order_acq_rel)) {
+        return false;
+    }
+    sched_pull_ipi.send(busiest);
+    return true;
+}
+
+// IPI handler on the busiest CPU: give one migratable queued thread to the
+// CPU recorded in pull_donate_to.  Interrupts are disabled here, so changing
+// this CPU's runqueue and the thread's timers and runtime is safe; the steps
+// are the same as in load_balance().
+void cpu::donate_to_puller()
+{
+    cpu* dst = pull_donate_to.exchange(nullptr, std::memory_order_acq_rel);
+    if (!dst || dst == this) {
+        return;
+    }
+    // Give a thread only if one is still queued besides the idle thread, so
+    // this CPU does not hand off its last runnable thread.
+    if (runqueue.size() < wake_pull_min_depth) {
+        return;
+    }
+    // Take the last migratable thread in the runqueue, as load_balance()
+    // does.
+    auto i = std::find_if(runqueue.rbegin(), runqueue.rend(),
+            [](thread& t) { return t._migration_lock_counter == 0; });
+    if (i == runqueue.rend()) {
+        return;
+    }
+    auto& mig = *i;
+    trace_sched_migrate(&mig, dst->id);
+    runqueue.erase(std::prev(i.base()));
+    assert(mig._detached_state->st.load() == thread::status::queued);
+    mig._detached_state->st.store(thread::status::waking);
+    mig.suspend_timers();
+    mig._detached_state->_cpu = dst;
+    mig._runtime.export_runtime();
+    mig.remote_thread_local_var(::percpu_base) = dst->percpu_base;
+    mig.remote_thread_local_var(current_cpu) = dst;
+    mig.stat_migrations.incr();
+    dst->incoming_wakeups[id].push_back(mig);
+    dst->incoming_wakeups_mask.set(id);
+    // Always send the IPI: the requester may already have halted in
+    // wait_for_interrupt(), and send_wakeup_ipi() skips the IPI for a CPU
+    // that is idle polling, so the thread could sit unnoticed.
+    wakeup_ipi.send(dst);
+}
+#endif // CONF_sched_wake_pull
 
 cpu::notifier::notifier(std::function<void ()> cpu_up)
     : _cpu_up(cpu_up)
