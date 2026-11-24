@@ -38,8 +38,6 @@ using namespace memory;
 
 TRACEPOINT(trace_nvme_strategy, "bio=%p, bcount=%lu", struct bio*, size_t);
 
-#define QEMU_VID 0x1b36
-
 namespace nvme {
 
 int driver::_instance = 0;
@@ -147,10 +145,6 @@ driver::driver(pci::device &pci_dev)
 
     //Create IO queues
     create_io_queues();
-
-    if (_identify_controller->vid != QEMU_VID) {
-        set_interrupt_coalescing(20, 2);
-    }
 
     std::string dev_name("vblk");
     dev_name += std::to_string(hw::next_disk_index());
