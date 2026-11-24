@@ -45,6 +45,7 @@ __FBSDID("$FreeBSD$");
 #include <sys/sysctl.h>
 #include <sys/taskqueue.h>
 #include <sys/time.h>
+#include <bsd/sys/sys/libkern.h>
 #include <sys/ioctl.h>
 
 #include <vm/vm.h>
@@ -1130,27 +1131,30 @@ ena_enable_msix(struct ena_adapter *adapter)
 		return (EINVAL);
 	}
 
-	/* Reserved the max msix vectors we might need */
+	/* One vector per IO queue and one for admin/AENQ. */
 	int msix_vecs = ENA_MAX_MSIX_VEC(adapter->max_num_io_queues);
+	unsigned dev_entries = dev->msix_get_num_entries();
 
-	ena_log(dev, DBG, "trying to enable MSI-X, vectors: %d", msix_vecs);
+	ena_log(dev, DBG, "trying to enable MSI-X, vectors: %d (device has %u)",
+	    msix_vecs, dev_entries);
 
 	dev->set_bus_master(true);
 	dev->msix_enable();
 	assert(dev->is_msix());
 
-	if (msix_vecs != dev->msix_get_num_entries()) {
+	if ((unsigned)msix_vecs > dev_entries) {
 		if (msix_vecs == ENA_ADMIN_MSIX_VEC) {
 			ena_log(dev, ERR,
-			    "Not enough number of MSI-x allocated: %d",
+			    "Not enough MSI-X vectors allocated: %d",
 			    msix_vecs);
 			dev->msix_disable();
 			return ENOSPC;
 		}
+		/* Fall back to what the device can actually back. */
+		msix_vecs = dev_entries;
 		ena_log(dev, ERR,
-		    "Enable only %d MSI-x (out of %d), reduce "
-		    "the number of queues",
-		    msix_vecs, dev->msix_get_num_entries());
+		    "Reduced to %d MSI-X vectors (device has %u)",
+		    msix_vecs, dev_entries);
 	}
 
 	adapter->msix_vecs = msix_vecs;
@@ -1332,10 +1336,110 @@ ena_unmask_all_io_irqs(struct ena_adapter *adapter)
 	}
 }
 
+/*
+ * Allocate the RSS state once, at the first ena_up(): the indirection table,
+ * a random Toeplitz key (as FreeBSD's ena_rss_key_fill() does) and the hash
+ * function.  The key is needed because ena_com_rss_init() does not fill a
+ * default one, and with a NULL key ena_com_fill_hash_function() programs the
+ * key the device reports, which on Nitro is often all zeros: Toeplitz then
+ * hashes every flow to indirection entry 0, so all Rx lands on queue 0.
+ *
+ * ena_com_fill_hash_function() also sends the hash function to the device.
+ * Returns 0 if the device does not support RSS (everything then arrives on
+ * queue 0, which the driver services).
+ */
+static int
+ena_rss_init_default(struct ena_adapter *adapter)
+{
+	struct ena_com_dev *ena_dev = adapter->ena_dev;
+	u8 rss_key[ENA_HASH_KEY_SIZE];
+	int rc;
+
+	rc = ena_com_rss_init(ena_dev, ENA_RX_RSS_TABLE_LOG_SIZE);
+	if (unlikely(rc != 0)) {
+		if (rc == ENA_COM_UNSUPPORTED) {
+			ena_log(adapter->pdev, WARN, "RSS not supported by device");
+			return (0);
+		}
+		ena_log(adapter->pdev, ERR, "Cannot init RSS rc: %d", rc);
+		return (rc);
+	}
+
+	arc4rand(rss_key, sizeof(rss_key), 0);
+	rc = ena_com_fill_hash_function(ena_dev, ENA_ADMIN_TOEPLITZ, rss_key,
+	    sizeof(rss_key), 0x0);
+	if (unlikely(rc != 0 && rc != ENA_COM_UNSUPPORTED)) {
+		ena_log(adapter->pdev, ERR, "Cannot fill hash function rc: %d", rc);
+		ena_com_rss_destroy(ena_dev);
+		return (rc);
+	}
+	return (0);
+}
+
+/*
+ * Program RSS on every ena_up(): a device reset loses it.  The state is
+ * allocated only the first time; later calls fill the indirection table for
+ * the current number of IO queues (which a reset can lower) and push the
+ * table and the hash function to the device.
+ *
+ * Each table entry must be an ENA Rx queue id (ENA_IO_RXQ_IDX), not a plain
+ * queue number: ena_com_indirect_table_set() rejects the whole table unless
+ * every entry names a queue with Rx direction, and Rx queues sit at the odd
+ * IO queue indices.  Until the table is programmed, the device keeps its
+ * power-up table, which steers inbound unicast to Rx queues the driver never
+ * set up: ARP (broadcast) still reaches queue 0, but inbound TCP is lost.
+ */
+static int
+ena_rss_configure(struct ena_adapter *adapter)
+{
+	struct ena_com_dev *ena_dev = adapter->ena_dev;
+	int rc, i;
+
+	if (ena_dev->rss.tbl_log_size == 0) {
+		rc = ena_rss_init_default(adapter);
+		if (unlikely(rc != 0))
+			return (rc);
+		if (ena_dev->rss.tbl_log_size == 0)
+			return (0);
+	} else {
+		rc = ena_com_set_hash_function(ena_dev);
+		if (unlikely(rc != 0 && rc != ENA_COM_UNSUPPORTED)) {
+			ena_log(adapter->pdev, ERR, "Cannot set hash function rc: %d", rc);
+			return (rc);
+		}
+	}
+
+	for (i = 0; i < ENA_RX_RSS_TABLE_SIZE; i++) {
+		uint16_t qid = ENA_IO_RXQ_IDX(i % adapter->num_io_queues);
+		rc = ena_com_indirect_table_fill_entry(ena_dev, i, qid);
+		if (unlikely(rc != 0)) {
+			ena_log(adapter->pdev, ERR,
+			    "Cannot fill indirect table entry %d rc: %d", i, rc);
+			return (rc);
+		}
+	}
+
+	rc = ena_com_indirect_table_set(ena_dev);
+	if (unlikely(rc != 0 && rc != ENA_COM_UNSUPPORTED)) {
+		ena_log(adapter->pdev, ERR, "Cannot set indirect table rc: %d", rc);
+		return (rc);
+	}
+
+	ENA_FLAG_SET_ATOMIC(ENA_FLAG_RSS_ACTIVE, adapter);
+	ena_log(adapter->pdev, INFO,
+	    "RSS configured: %d-entry indirection table across %d IO queues",
+	    ENA_RX_RSS_TABLE_SIZE, adapter->num_io_queues);
+	return (0);
+}
+
 static int
 ena_up_complete(struct ena_adapter *adapter)
 {
 	int rc = ena_change_mtu(adapter->ifp, adapter->ifp->if_mtu);
+	if (unlikely(rc != 0))
+		return (rc);
+
+	rc = ena_rss_configure(adapter);
 	if (unlikely(rc != 0))
 		return (rc);
 
