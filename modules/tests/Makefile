@@ -227,6 +227,7 @@ ifeq ($(arch),x64)
 tests += tst-mmx-fpu.so tst-tls-desc.so tst-tls-pie-desc.so libtls_desc.so
 tests += tst-tls-pie-dlopen-desc.so tst-tls-pie-dlopen-desc-needed.so libtls_desc_user.so
 tests += tst-tls-dlopen-gd.so libtls_gd.so libtls_gd_user.so
+tests += tst-swapcontext.so
 endif
 
 tests += testrunner.so

@@ -71,10 +71,20 @@ void makecontext(struct __ucontext *ucp, void (*func)(void), int argc, ...)
 
 int swapcontext(struct __ucontext *oucp, const struct __ucontext *ucp)
 {
-    int ret;
-    ret = getcontext(oucp);
+    // getcontext() returns twice: once now, and again when someone later
+    // resumes oucp. Only the first return may switch to ucp; the second
+    // must return to our caller, or resuming oucp would switch to ucp again.
+    // The flag is volatile so it is re-read from this stack frame after the
+    // second return, rather than taken from a register getcontext() doesn't
+    // restore.
+    volatile bool resumed = false;
+    int ret = getcontext(oucp);
     if (ret) {
         return ret;
     }
+    if (resumed) {
+        return 0;
+    }
+    resumed = true;
     return setcontext(ucp);
 }
