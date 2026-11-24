@@ -247,6 +247,7 @@ tests += tst-close-range.so
 tests += tst-numa.so
 tests += tst-random-flush.so
 tests += tst-dentry-rename-child.so
+tests += misc-tcp-syncache-flood.so
 internal-api-tests += tst-random-flush.so
 tests += tst-umount-release.so
 internal-api-tests += tst-umount-release.so

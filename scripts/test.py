@@ -30,12 +30,14 @@ qemu_disabled_list= [
 
 firecracker_disabled_list= [
     "tracing_smoke_test",
+    "tcp_syncache_flood_on_qemu",
     "tcp_close_without_reading_on_qemu"
 ]
 
 linux_ld_disabled_list= [
     "tracing_smoke_test",
     "tcp_close_without_reading_on_fc",
+    "tcp_syncache_flood_on_qemu",
     "tcp_close_without_reading_on_qemu"
 ]
 
