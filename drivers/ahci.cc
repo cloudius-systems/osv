@@ -65,8 +65,15 @@ port::port(u32 pnr, hba *hba)
     if (!linkup()) {
         return;
     }
-    disk_identify();
+
+    if (!disk_identify()) {
+        debugf("AHCI: port %d ignored, IDENTIFY DEVICE failed\n", _pnr);
+        return;
+    }
+
     enable_irq();
+    start_irq_thread();
+    _usable = true;
 }
 
 void port::reset()
@@ -128,8 +135,10 @@ void port::setup()
     // Start Device
     cmd |= PORT_CMD_ST;
     port_writel(PORT_CMD, cmd);
+}
 
-    // Register the per-port irq thread
+void port::start_irq_thread()
+{
     std::string name("ahci-port");
     name += std::to_string(_pnr);
     _irq_thread = sched::thread::make([this] { this->req_done(); },
@@ -207,33 +216,65 @@ int port::send_cmd(u8 slot, int iswrite, void *buffer, u32 bsize)
     return 0;
 }
 
-void port::wait_cmd_poll(u8 slot)
+bool port::wait_cmd_poll(u8 slot)
 {
     auto host_is = _hba->hba_readl(HOST_IS);
+    bool ok = false;
+
     for (;;) {
         auto is = port_readl(PORT_IS);
-        if (is) {
+        if (!is) {
+            continue;
+        }
+
+        // A task file error means the device rejected or failed the command.
+        // The error state has to be sampled before PxIS is acked, because
+        // writing PxIS clears the record of what went wrong. The HBA has also
+        // already cleared PxCMD.ST and will not retire the command slot, so
+        // neither PxTFD nor PxCI will ever settle for this command and waiting
+        // on them would never return (AHCI 1.3.1, section 6.2.2). Report the
+        // failure to the caller instead.
+        if (is & PORT_IS_TFES) {
+            auto tfd = port_readl(PORT_TFD);
             port_writel(PORT_IS, is);
+            debugf("AHCI: port %d command in slot %d failed, "
+                   "PxIS=0x%08x PxTFD=0x%08x\n", _pnr, slot, is, tfd);
+            break;
+        }
 
-            wait_device_ready();
-            wait_ci_ready(slot);
+        port_writel(PORT_IS, is);
 
-           if (is & 0x02) {
-               auto error  = _recv_fis->psfis[3];
-               assert(!error);
-               break;
-           }
+        wait_device_ready();
+        wait_ci_ready(slot);
 
-           if (is & 0x01) {
-               auto error  = recv_fis_error();
-               assert(!error);
-               break;
+        if (is & PORT_IS_PSS) {
+            auto error = _recv_fis->psfis[3];
+            if (error) {
+                debugf("AHCI: port %d slot %d PIO setup FIS error 0x%02x\n",
+                       _pnr, slot, error);
+                break;
             }
+            ok = true;
+            break;
+        }
+
+        if (is & PORT_IS_DHRS) {
+            auto error = recv_fis_error();
+            if (error) {
+                debugf("AHCI: port %d slot %d device to host FIS error "
+                       "0x%02x\n", _pnr, slot, error);
+                break;
+            }
+            ok = true;
+            break;
         }
     }
+
     _hba->hba_writel(HOST_IS, host_is);
 
     _cmd_active &= ~(1U << slot);
+
+    return ok;
 }
 
 u32 port::done_mask()
@@ -309,8 +350,8 @@ int port::make_request(struct bio* bio)
 void port::poll_mode_done(struct bio *bio, u8 slot)
 {
     if (_hba->poll_mode()) {
-        wait_cmd_poll(slot);
-        biodone(bio, true);
+        bool ok = wait_cmd_poll(slot);
+        biodone(bio, ok);
     }
 }
 
@@ -365,7 +406,7 @@ void port::disk_flush(struct bio *bio)
     poll_mode_done(bio, slot);
 }
 
-void port::disk_identify()
+bool port::disk_identify()
 {
     u8 slot = 0;
     struct cmd_table &cmd = _cmd_table[slot];
@@ -378,7 +419,10 @@ void port::disk_identify()
     cmd.fis.command = ATA_CMD_IDENTIFY_DEVICE;
 
     send_cmd(slot, 0, buffer, 512);
-    wait_cmd_poll(slot);
+    if (!wait_cmd_poll(slot)) {
+        delete [] buffer;
+        return false;
+    }
 
     // Word 75 queue depth
     _queue_depth = buffer[75] & 0x1F;
@@ -395,6 +439,7 @@ void port::disk_identify()
     _devsize = sectors * 512;
 
     delete [] buffer;
+    return true;
 }
 
 bool port::used_slot()
@@ -518,7 +563,10 @@ void hba::scan()
             continue;
 
         auto p = new port(pnr, this);
-        if (!p->linkup()) {
+        if (!p->usable()) {
+            // setup() may have started FIS receive and the command engine,
+            // which DMA into the port's memory, so stop them before freeing it.
+            p->reset();
             delete p;
             continue;
         }

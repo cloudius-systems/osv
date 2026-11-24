@@ -102,7 +102,9 @@ enum port_reg_ie_bits {
 // PORT_IS bits
 enum port_reg_is_bits {
     PORT_IS_DHRS    = 1U << 0,
+    PORT_IS_PSS     = 1U << 1,
     PORT_IS_SDBS    = 1U << 3,
+    PORT_IS_TFES    = 1U << 30,
 };
 
 // PORT_SSTS bits
@@ -232,10 +234,11 @@ public:
 
     void reset();
     void setup();
+    void start_irq_thread();
     int send_cmd(u8 slot, int iswrite, void *buffer, u32 bsize);
-    void wait_cmd_poll(u8 slot);
+    bool wait_cmd_poll(u8 slot);
     void wait_cmd_irq(u8 slot);
-    void disk_identify();
+    bool disk_identify();
     void disk_flush(struct bio *bio);
     void disk_rw(struct bio *bio, bool iswrite);
     int make_request(struct bio *bio);
@@ -244,6 +247,12 @@ public:
     void wait_ci_ready(u8 slot);
     void wakeup() { _irq_thread->wake_with_irq_disabled(); }
     bool linkup() { return _linkup; }
+
+    // A port is usable only once it has been identified as a working ATA disk.
+    // linkup() alone is not sufficient: a port can be linked up and still fail
+    // or reject IDENTIFY DEVICE, in which case it has no valid size and must
+    // not be published as a block device.
+    bool usable() { return _usable; }
 
     u32 port2hba(u32 port_reg)
     {
@@ -284,6 +293,7 @@ public:
 private:
     sched::thread_handle _cmd_send_waiter;
     bool _linkup = false;
+    bool _usable = false;
     u8 _queue_depth;
     size_t _devsize;
     mutex _lock;
