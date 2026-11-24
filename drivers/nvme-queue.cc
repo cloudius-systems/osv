@@ -129,28 +129,35 @@ void queue_pair::wait_for_completion_queue_entries()
 
 void queue_pair::map_prps(nvme_sq_entry_t* cmd, struct bio* bio, u64 datasize)
 {
-    void* data = (void*)mmu::virt_to_phys(bio->bio_data);
     bio->bio_private = nullptr;
 
     // Depending on the datasize, we map PRPs (Physical Region Page) as follows:
     // 0. We always set the prp1 field to the beginning of the data
     // 1. If data falls within single 4K page then we simply set prp2 to 0
-    // 2. If data falls within 2 pages then set prp2 to the second 4K-aligned part of data
+    // 2. If data falls within 2 pages then set prp2 to the second 4K page of data
     // 3. Otherwise, allocate a physically contigous array long enough to hold addresses
     //    of remaining 4K pages of data
-    u64 addr = (u64) data;
-    cmd->rw.common.prp1 = addr;
+    // The buffer is contiguous in virtual memory only.  One outside the linear
+    // physical map (a large malloc() served through a VMA, or application
+    // memory) can be backed by unrelated physical pages, so translate every
+    // 4K page separately, as virtio does, rather than adding offsets to the
+    // physical address of the first byte.
+    cmd->rw.common.prp1 = mmu::virt_to_phys(bio->bio_data);
     cmd->rw.common.prp2 = 0;
 
     // Calculate number of 4K pages and therefore number of entries in the PRP
     // list. The 1st entry rw.common.prp1 can be misaligned but every
     // other one needs to be 4K-aligned
-    u64 first_page_start = align_down(addr, NVME_PAGESIZE);
-    u64 last_page_end = align_up(addr + datasize, NVME_PAGESIZE);
+    u64 vaddr = reinterpret_cast<u64>(bio->bio_data);
+    u64 first_page_start = align_down(vaddr, NVME_PAGESIZE);
+    u64 last_page_end = align_up(vaddr + datasize, NVME_PAGESIZE);
     int num_of_pages = (last_page_end - first_page_start) / NVME_PAGESIZE;
+    auto page_phys = [first_page_start] (int i) -> u64 {
+        return mmu::virt_to_phys(reinterpret_cast<void*>(first_page_start + i * NVME_PAGESIZE));
+    };
 
     if (num_of_pages == 2) {
-        cmd->rw.common.prp2 = first_page_start + NVME_PAGESIZE; //2nd page start
+        cmd->rw.common.prp2 = page_phys(1);
     } else if (num_of_pages > 2) {
         // Allocate a single-page PRP list for a request larger than 8K. prp1
         // covers the first page, so the list holds the remaining num_of_pages-1
@@ -175,12 +182,8 @@ void queue_pair::map_prps(nvme_sq_entry_t* cmd, struct bio* bio, u64 datasize)
         bio->bio_private = prp_list;
 
         // Fill in the PRP list with address of subsequent 4K pages
-        addr = first_page_start + NVME_PAGESIZE; //2nd page start
-        prp_list[0] = addr;
-
-        for (int i = 1; i < num_of_pages - 1; i++) {
-            addr += NVME_PAGESIZE;
-            prp_list[i] = addr;
+        for (int i = 1; i < num_of_pages; i++) {
+            prp_list[i - 1] = page_phys(i);
         }
     }
 }
