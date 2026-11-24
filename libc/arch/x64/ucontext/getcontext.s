@@ -68,7 +68,10 @@ getcontext:
 	xorq %rdi, %rdi
 	xorq %rsi, %rsi
 	movq $8,%rcx
+	/* Keep the stack 16-byte aligned for the call, as the ABI requires */
+	subq $8, %rsp
 	call sigprocmask
+	addq $8, %rsp
 	/* Check %rax for error and call abort.
 	 * Commented because sigprocmask does not
 	 * implement error checking.
