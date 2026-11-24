@@ -2274,6 +2274,10 @@ bootfs_dep += $(out)/tools/mount/mount-fs.so $(out)/tools/mount/umount.so
 endif
 endif
 endif
+# bootfs.manifest.skel lists libsolaris.so, whichever file system the image uses.
+ifeq ($(bootfs_manifest),bootfs.manifest.skel)
+bootfs_dep += $(out)/libsolaris.so
+endif
 $(out)/bootfs.bin: $(bootfs_dep)
 	$(call quiet, olddir=`pwd`; cd $(out); "$$olddir"/scripts/mkbootfs.py -o bootfs.bin -d bootfs.bin.d -m "$$olddir"/$(bootfs_manifest), MKBOOTFS $@)
 
