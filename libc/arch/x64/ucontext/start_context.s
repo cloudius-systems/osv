@@ -18,7 +18,9 @@ start_context:
 	on the stack pointer for the next context. */
 	movq	%rbx, %rsp
 
-	popq %rdi /* This is the next context. */
+	/* This is the next context. Read it without popping it, so that
+	%rsp stays 16-byte aligned, as the calls below need. */
+	movq (%rsp), %rdi
 	testq %rdi, %rdi
 	je 2f	/* If it is zero exit. */
 
