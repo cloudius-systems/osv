@@ -240,6 +240,7 @@ tests += tst-rlimit.so
 tests += tst-close-range.so
 tests += tst-numa.so
 tests += tst-random-flush.so
+tests += tst-ramfs-rename.so
 tests += tst-dentry-rename-child.so
 internal-api-tests += tst-random-flush.so
 tests += tst-umount-release.so
