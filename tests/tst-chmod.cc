@@ -87,6 +87,28 @@ int main(int argc, char **argv)
     expect((int)(st.st_mode & 0777), 0765);
     remove("/tmp/f1");
 
+    // Everything runs as the superuser, which on Linux may read and write a
+    // file whatever its mode bits, and may execute it only if some x bit is
+    // set.
+    for (mode_t mode : {0444, 0200, 0}) {
+        fd = open("/tmp/f1", O_CREAT | O_EXCL | O_WRONLY, mode);
+        expect(fd >= 0, true);
+        close(fd);
+        expect(stat("/tmp/f1", &st), 0);
+        expect((int)(st.st_mode & 0777), (int)mode);
+        fd = open("/tmp/f1", O_RDWR);
+        expect(fd >= 0, true);
+        close(fd);
+        expect(access("/tmp/f1", R_OK | W_OK), 0);
+        expect_errno(access("/tmp/f1", X_OK), EACCES);
+        remove("/tmp/f1");
+    }
+    fd = open("/tmp/f1", O_CREAT | O_EXCL | O_WRONLY, 0100);
+    expect(fd >= 0, true);
+    close(fd);
+    expect(access("/tmp/f1", X_OK), 0);
+    remove("/tmp/f1");
+
     std::cout << "SUMMARY: " << tests << " tests, " << fails << " failures\n";
     return fails == 0 ? 0 : 1;
 }
