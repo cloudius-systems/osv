@@ -932,12 +932,16 @@ int syncache_expand(struct in_conninfo *inc, struct tcpopt *to,
 
 	if (*lsop == NULL) {
 		TCPSTAT_INC(tcps_sc_aborted);
+		/* Keep the entry for the peer's retransmitted ACK. */
+		if (sc != &scs)
+			SCH_UNLOCK(sch);
 	} else {
 		TCPSTAT_INC(tcps_sc_completed);
 		if (sc != &scs) {
 			syncache_remove_and_free(sch, sc);
 		}
 	}
+	assert(!mutex_owned(&sch->sch_mtx));
 	return (1);
 failed:
 	if (sc != NULL && sc != &scs) {

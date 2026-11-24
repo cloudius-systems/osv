@@ -240,6 +240,7 @@ tests += tst-close-range.so
 tests += tst-numa.so
 tests += tst-random-flush.so
 tests += tst-dentry-rename-child.so
+tests += misc-tcp-syncache-flood.so
 internal-api-tests += tst-random-flush.so
 
 # Tests with special compilation parameters needed...
