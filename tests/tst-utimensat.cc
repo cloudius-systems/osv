@@ -5,6 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
+#include <sys/mount.h>
 #include <sys/types.h>
 #include <sys/stat.h>
 #include <stdlib.h>
@@ -50,6 +51,26 @@ static void init_timespec(timespec &time, time_t tv_sec, long tv_nsec)
 {
     time.tv_sec = tv_sec;
     time.tv_nsec = tv_nsec;
+}
+
+// A utimensat() refused with EACCES must release the file it looked up:
+// the mount the file is on must still unmount.
+static void test_refused_utimensat_unmounts()
+{
+    const char *dir = "/tmp/tst-utimensat-mnt";
+    const char *file = "/tmp/tst-utimensat-mnt/f";
+    mkdir(dir, 0755);
+    report(mount("none", dir, "ramfs", 0, nullptr) == 0, "mount a private ramfs");
+    // Keep the file open, so its vnode keeps the mode chmod gives it
+    int fd = open(file, O_CREAT | O_RDWR, 0644);
+    report(fd >= 0, "create a file on the private mount");
+    report(chmod(file, 0444) == 0, "make the file read-only");
+    int ret = utimensat(AT_FDCWD, file, nullptr, 0);
+    report(ret == -1 && errno == EACCES, "utimensat of the read-only file fails with EACCES");
+    close(fd);
+    report(unlink(file) == 0, "remove the file");
+    report(umount(dir) == 0, "the private mount still unmounts");
+    rmdir(dir);
 }
 
 int main(int argc, char *argv[])
@@ -149,6 +170,8 @@ int main(int argc, char *argv[])
     /* Clean up temporary files */
     report(unlink(tmp_file_bar) == 0, "remove the file bar");
     report(rmdir(tmp_folder_foo) == 0, "remove the folder foo");
+
+    test_refused_utimensat_unmounts();
 
     /* Report results. */
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);
