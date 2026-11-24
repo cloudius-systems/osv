@@ -1,0 +1,439 @@
+Release a leaked group reference and validate directory entries
+
+Backports from gkostka/lwext4, library parts only, byte for byte (their
+tests are not carried):
+
+- PR #118, commit 5004e9527cda1d5a0b2d88aa33c262bce37efd0b (Christopher
+  Thomas): ext4_ialloc_free_inode() released neither the block group
+  reference nor the descriptor block when reading the inode bitmap
+  failed, and ext4_ialloc_alloc_inode() ignored the results of
+  ext4_block_set() and ext4_fs_put_block_group_ref().  Fixes lwext4
+  issue #57.
+- PR #112, commit 35a8dde0ff281d860e8f96b632147b2b4b51f69e (Christopher
+  Thomas): ext4_dir_entry_next() dereferenced a NULL entry for a
+  directory with no entries (lwext4 issue #89, CVE-2025-70099).
+  ext4_dir_en_is_valid(), modelled on Linux __ext4_check_dir_entry(),
+  now checks every entry in the iterator, ext4_dir_find_in_block() and
+  ext4_dir_try_insert_entry(): find_in_block() could read past the
+  block buffer, and try_insert_entry() looped forever on a zero rec_len
+  or wrote an entry with an underflowed length.  Directory holes are
+  skipped, and ext4_dir_iterator_init() releases its block on failure.
+
+Applies after 0002.
+
+diff --git a/src/ext4.c b/src/ext4.c
+index 8152d73..81ace2e 100644
+--- a/src/ext4.c
++++ b/src/ext4.c
+@@ -3205,7 +3205,10 @@ const ext4_direntry *ext4_dir_entry_next(ext4_dir *dir)
+ 	}
+ 
+ 	r = ext4_dir_iterator_init(&it, &dir_inode, dir->next_off);
+-	if (r != EOK) {
++	if (r != EOK || !it.curr) {
++		/* Corrupted entry or no entry at all (e.g. empty directory):
++		 * either way, there is nothing more to return. */
++		dir->next_off = EXT4_DIR_ENTRY_OFFSET_TERM;
+ 		ext4_fs_put_inode_ref(&dir_inode);
+ 		goto Finish;
+ 	}
+diff --git a/src/ext4_dir.c b/src/ext4_dir.c
+index 29a51c5..95ecfc5 100644
+--- a/src/ext4_dir.c
++++ b/src/ext4_dir.c
+@@ -151,6 +151,56 @@ void ext4_dir_set_csum(struct ext4_inode_ref *inode_ref,
+ 	}
+ }
+ 
++/**@brief Check that a directory entry is sane (see __ext4_check_dir_entry
++ *        in Linux). Everything read from the entry, including the start
++ *        of the following entry, is then known to lie inside the block.
++ * @param sb           Superblock
++ * @param block_size   Size of data block
++ * @param off_in_block Offset of the entry within its block
++ * @param en           Directory entry
++ * @return true if the entry is valid
++ */
++static bool ext4_dir_en_is_valid(struct ext4_sblock *sb, uint32_t block_size,
++				 uint32_t off_in_block, struct ext4_dir_en *en)
++{
++	const uint32_t min_len = sizeof(struct ext4_fake_dir_entry) + 4;
++
++	/* Ensure proper alignment and that the header fits in the block */
++	if ((off_in_block % 4) != 0 || off_in_block + min_len > block_size)
++		return false;
++
++	uint32_t rec_len = ext4_dir_en_get_entry_len(en);
++	uint32_t name_len = ext4_dir_en_get_name_len(sb, en);
++
++	/* rec_len must be aligned and keep the next entry in this block */
++	if ((rec_len % 4) != 0 || rec_len < min_len ||
++	    rec_len > block_size - off_in_block)
++		return false;
++
++	/* The name must fit into the entry */
++	if (name_len > EXT4_DIRECTORY_FILENAME_LEN ||
++	    sizeof(struct ext4_fake_dir_entry) + name_len > rec_len)
++		return false;
++
++	if (ext4_dir_en_get_inode(en) > ext4_get32(sb, inodes_count))
++		return false;
++
++	return true;
++}
++
++/**@brief Map a directory block, treating holes as a regular condition.
++ * @param inode_ref Directory i-node
++ * @param iblock    Logical block index
++ * @param fblock    Output physical block, 0 for a hole
++ * @return Error code
++ */
++static int ext4_dir_get_dblk(struct ext4_inode_ref *inode_ref,
++			     ext4_lblk_t iblock, ext4_fsblk_t *fblock)
++{
++	/* support_unwritten: we handle the 0 (hole) result ourselves */
++	return ext4_fs_get_inode_dblk_idx(inode_ref, iblock, fblock, true);
++}
++
+ /**@brief Do some checks before returning iterator.
+  * @param it Iterator to be checked
+  * @param block_size Size of data block
+@@ -161,27 +211,12 @@ static int ext4_dir_iterator_set(struct ext4_dir_iter *it,
+ {
+ 	uint32_t off_in_block = it->curr_off % block_size;
+ 	struct ext4_sblock *sb = &it->inode_ref->fs->sb;
++	struct ext4_dir_en *en;
+ 
+ 	it->curr = NULL;
+ 
+-	/* Ensure proper alignment */
+-	if ((off_in_block % 4) != 0)
+-		return EIO;
+-
+-	/* Ensure that the core of the entry does not overflow the block */
+-	if (off_in_block > block_size - 8)
+-		return EIO;
+-
+-	struct ext4_dir_en *en;
+ 	en = (void *)(it->curr_blk.data + off_in_block);
+-
+-	/* Ensure that the whole entry does not overflow the block */
+-	uint16_t length = ext4_dir_en_get_entry_len(en);
+-	if (off_in_block + length > block_size)
+-		return EIO;
+-
+-	/* Ensure the name length is not too large */
+-	if (ext4_dir_en_get_name_len(sb, en) > length - 8)
++	if (!ext4_dir_en_is_valid(sb, block_size, off_in_block, en))
+ 		return EIO;
+ 
+ 	/* Everything OK - "publish" the entry */
+@@ -191,6 +226,7 @@ static int ext4_dir_iterator_set(struct ext4_dir_iter *it,
+ 
+ /**@brief Seek to next valid directory entry.
+  *        Here can be jumped to the next data block.
++ *        Holes in the directory are skipped.
+  * @param it  Initialized iterator
+  * @param pos Position of the next entry
+  * @return Error code
+@@ -201,36 +237,26 @@ static int ext4_dir_iterator_seek(struct ext4_dir_iter *it, uint64_t pos)
+ 	struct ext4_inode *inode = it->inode_ref->inode;
+ 	struct ext4_blockdev *bdev = it->inode_ref->fs->bdev;
+ 	uint64_t size = ext4_inode_get_size(sb, inode);
++	uint32_t block_size = ext4_sb_get_block_size(sb);
+ 	int r;
+ 
+ 	/* The iterator is not valid until we seek to the desired position */
+ 	it->curr = NULL;
+ 
+-	/* Are we at the end? */
+-	if (pos >= size) {
+-		if (it->curr_blk.lb_id) {
+-
+-			r = ext4_block_set(bdev, &it->curr_blk);
+-			it->curr_blk.lb_id = 0;
+-			if (r != EOK)
+-				return r;
++	while (pos < size) {
++		/* Compute next block address */
++		uint64_t current_blk_idx = it->curr_off / block_size;
++		uint32_t next_blk_idx = (uint32_t)(pos / block_size);
++
++		/*
++		 * If we already have the right block, we are done
++		 */
++		if (it->curr_blk.lb_id && current_blk_idx == next_blk_idx) {
++			it->curr_off = pos;
++			return ext4_dir_iterator_set(it, block_size);
+ 		}
+ 
+-		it->curr_off = pos;
+-		return EOK;
+-	}
+-
+-	/* Compute next block address */
+-	uint32_t block_size = ext4_sb_get_block_size(sb);
+-	uint64_t current_blk_idx = it->curr_off / block_size;
+-	uint32_t next_blk_idx = (uint32_t)(pos / block_size);
+-
+-	/*
+-	 * If we don't have a block or are moving across block boundary,
+-	 * we need to get another block
+-	 */
+-	if ((it->curr_blk.lb_id == 0) ||
+-	    (current_blk_idx != next_blk_idx)) {
++		/* Otherwise we need to get another block */
+ 		if (it->curr_blk.lb_id) {
+ 			r = ext4_block_set(bdev, &it->curr_blk);
+ 			it->curr_blk.lb_id = 0;
+@@ -240,20 +266,36 @@ static int ext4_dir_iterator_seek(struct ext4_dir_iter *it, uint64_t pos)
+ 		}
+ 
+ 		ext4_fsblk_t next_blk;
+-		r = ext4_fs_get_inode_dblk_idx(it->inode_ref, next_blk_idx,
+-					       &next_blk, false);
++		r = ext4_dir_get_dblk(it->inode_ref, next_blk_idx, &next_blk);
+ 		if (r != EOK)
+ 			return r;
+ 
++		if (next_blk == 0) {
++			/* Hole in the directory: continue at the next block */
++			pos = ((uint64_t)next_blk_idx + 1) * block_size;
++			continue;
++		}
++
+ 		r = ext4_trans_block_get(bdev, &it->curr_blk, next_blk);
+ 		if (r != EOK) {
+ 			it->curr_blk.lb_id = 0;
+ 			return r;
+ 		}
++
++		it->curr_off = pos;
++		return ext4_dir_iterator_set(it, block_size);
++	}
++
++	/* We are at the end */
++	if (it->curr_blk.lb_id) {
++		r = ext4_block_set(bdev, &it->curr_blk);
++		it->curr_blk.lb_id = 0;
++		if (r != EOK)
++			return r;
+ 	}
+ 
+ 	it->curr_off = pos;
+-	return ext4_dir_iterator_set(it, block_size);
++	return EOK;
+ }
+ 
+ int ext4_dir_iterator_init(struct ext4_dir_iter *it,
+@@ -264,7 +306,13 @@ int ext4_dir_iterator_init(struct ext4_dir_iter *it,
+ 	it->curr_off = 0;
+ 	it->curr_blk.lb_id = 0;
+ 
+-	return ext4_dir_iterator_seek(it, pos);
++	int r = ext4_dir_iterator_seek(it, pos);
++	if (r != EOK) {
++		/* Callers do not fini a failed iterator: don't leak the block */
++		ext4_dir_iterator_fini(it);
++	}
++
++	return r;
+ }
+ 
+ int ext4_dir_iterator_next(struct ext4_dir_iter *it)
+@@ -272,14 +320,14 @@ int ext4_dir_iterator_next(struct ext4_dir_iter *it)
+ 	int r = EOK;
+ 	uint16_t skip;
+ 
+-	while (r == EOK) {
++	/* Nothing to advance from at the end of the directory or after an
++	 * error: it->curr stays NULL */
++	while (r == EOK && it->curr) {
+ 		skip = ext4_dir_en_get_entry_len(it->curr);
+ 		r = ext4_dir_iterator_seek(it, it->curr_off + skip);
+ 
+-		if (!it->curr)
+-			break;
+ 		/*Skip NULL referenced entry*/
+-		if (ext4_dir_en_get_inode(it->curr) != 0)
++		if (it->curr && ext4_dir_en_get_inode(it->curr) != 0)
+ 			break;
+ 	}
+ 
+@@ -375,12 +423,15 @@ int ext4_dir_add_entry(struct ext4_inode_ref *parent, const char *name,
+ 	uint32_t total_blocks = (uint32_t)(inode_size / block_size);
+ 
+ 	/* Find block, where is space for new entry and try to add */
+-	bool success = false;
+ 	for (iblock = 0; iblock < total_blocks; ++iblock) {
+-		r = ext4_fs_get_inode_dblk_idx(parent, iblock, &fblock, false);
++		r = ext4_dir_get_dblk(parent, iblock, &fblock);
+ 		if (r != EOK)
+ 			return r;
+ 
++		/* Hole in the directory */
++		if (fblock == 0)
++			continue;
++
+ 		struct ext4_block block;
+ 		r = ext4_trans_block_get(fs->bdev, &block, fblock);
+ 		if (r != EOK)
+@@ -396,17 +447,16 @@ int ext4_dir_add_entry(struct ext4_inode_ref *parent, const char *name,
+ 		}
+ 
+ 		/* If adding is successful, function can finish */
+-		r = ext4_dir_try_insert_entry(sb, parent, &block, child,
+-						name, name_len);
+-		if (r == EOK)
+-			success = true;
++		int ri = ext4_dir_try_insert_entry(sb, parent, &block, child,
++						   name, name_len);
+ 
+ 		r = ext4_block_set(fs->bdev, &block);
+ 		if (r != EOK)
+ 			return r;
+ 
+-		if (success)
+-			return EOK;
++		/* Done, or the block is corrupted */
++		if (ri != ENOSPC)
++			return ri;
+ 	}
+ 
+ 	/* No free block found - needed to allocate next data block */
+@@ -486,10 +536,14 @@ int ext4_dir_find_entry(struct ext4_dir_search_result *result,
+ 	/* Walk through all data blocks */
+ 	for (iblock = 0; iblock < total_blocks; ++iblock) {
+ 		/* Load block address */
+-		r = ext4_fs_get_inode_dblk_idx(parent, iblock, &fblock, false);
++		r = ext4_dir_get_dblk(parent, iblock, &fblock);
+ 		if (r != EOK)
+ 			return r;
+ 
++		/* Hole in the directory */
++		if (fblock == 0)
++			continue;
++
+ 		/* Load data block */
+ 		struct ext4_block b;
+ 		r = ext4_trans_block_get(parent->fs->bdev, &b, fblock);
+@@ -516,8 +570,12 @@ int ext4_dir_find_entry(struct ext4_dir_search_result *result,
+ 
+ 		/* Entry not found - put block and continue to the next block */
+ 
+-		r = ext4_block_set(parent->fs->bdev, &b);
+-		if (r != EOK)
++		int rb = ext4_block_set(parent->fs->bdev, &b);
++		if (rb != EOK)
++			return rb;
++
++		/* Corrupted block */
++		if (r != ENOENT)
+ 			return r;
+ 	}
+ 
+@@ -590,15 +648,19 @@ int ext4_dir_try_insert_entry(struct ext4_sblock *sb,
+ 	if ((required_len % 4) != 0)
+ 		required_len += 4 - (required_len % 4);
+ 
+-	/* Initialize pointers, stop means to upper bound */
+-	struct ext4_dir_en *start = (void *)dst_blk->data;
+-	struct ext4_dir_en *stop = (void *)(dst_blk->data + block_size);
++	uint32_t off = 0;
+ 
+ 	/*
+ 	 * Walk through the block and check for invalid entries
+ 	 * or entries with free space for new entry
+ 	 */
+-	while (start < stop) {
++	while (off < block_size) {
++		struct ext4_dir_en *start = (void *)(dst_blk->data + off);
++
++		/* Corrupted entry */
++		if (!ext4_dir_en_is_valid(sb, block_size, off, start))
++			return EIO;
++
+ 		uint32_t inode = ext4_dir_en_get_inode(start);
+ 		uint16_t rec_len = ext4_dir_en_get_entry_len(start);
+ 		uint8_t itype = ext4_dir_en_get_inode_type(sb, start);
+@@ -644,7 +706,7 @@ int ext4_dir_try_insert_entry(struct ext4_sblock *sb,
+ 		}
+ 
+ 		/* Jump to the next entry */
+-		start = (void *)((uint8_t *)start + rec_len);
++		off += rec_len;
+ 	}
+ 
+ 	/* No free space found for new entry */
+@@ -655,17 +717,16 @@ int ext4_dir_find_in_block(struct ext4_block *block, struct ext4_sblock *sb,
+ 			   size_t name_len, const char *name,
+ 			   struct ext4_dir_en **res_entry)
+ {
+-	/* Start from the first entry in block */
+-	struct ext4_dir_en *de = (struct ext4_dir_en *)block->data;
+-
+-	/* Set upper bound for cycling */
+-	uint8_t *addr_limit = block->data + ext4_sb_get_block_size(sb);
++	uint32_t block_size = ext4_sb_get_block_size(sb);
++	uint32_t off = 0;
+ 
+ 	/* Walk through the block and check entries */
+-	while ((uint8_t *)de < addr_limit) {
+-		/* Termination condition */
+-		if ((uint8_t *)de + name_len > addr_limit)
+-			break;
++	while (off < block_size) {
++		struct ext4_dir_en *de = (void *)(block->data + off);
++
++		/* Corrupted entry */
++		if (!ext4_dir_en_is_valid(sb, block_size, off, de))
++			return EIO;
+ 
+ 		/* Valid entry - check it */
+ 		if (ext4_dir_en_get_inode(de) != 0) {
+@@ -680,14 +741,8 @@ int ext4_dir_find_in_block(struct ext4_block *block, struct ext4_sblock *sb,
+ 			}
+ 		}
+ 
+-		uint16_t de_len = ext4_dir_en_get_entry_len(de);
+-
+-		/* Corrupted entry */
+-		if (de_len == 0)
+-			return EINVAL;
+-
+ 		/* Jump to next entry */
+-		de = (struct ext4_dir_en *)((uint8_t *)de + de_len);
++		off += ext4_dir_en_get_entry_len(de);
+ 	}
+ 
+ 	/* Entry not found */
+diff --git a/src/ext4_dir_idx.c b/src/ext4_dir_idx.c
+index 120cb9f..3551338 100644
+--- a/src/ext4_dir_idx.c
++++ b/src/ext4_dir_idx.c
+@@ -1310,7 +1310,8 @@ int ext4_dir_dx_add_entry(struct ext4_inode_ref *parent,
+ 	/* Check if insert operation passed */
+ 	r = ext4_dir_try_insert_entry(&fs->sb, parent, &target_block, child,
+ 					name, name_len);
+-	if (r == EOK)
++	/* Inserted, or the leaf is corrupted: do not try to split it */
++	if (r != ENOSPC)
+ 		goto release_target_index;
+ 
+ 	/* Split entries to two blocks (includes sorting by hash value) */
+diff --git a/src/ext4_ialloc.c b/src/ext4_ialloc.c
+index 196fdd2..a86487a 100644
+--- a/src/ext4_ialloc.c
++++ b/src/ext4_ialloc.c
+@@ -177,8 +177,10 @@ __ext4_ialloc_free_inode(struct ext4_fs *fs, uint32_t index, bool is_dir)
+ 
+ 	struct ext4_block b;
+ 	rc = ext4_trans_block_get(fs->bdev, &b, bitmap_block_addr);
+-	if (rc != EOK)
++	if (rc != EOK) {
++		ext4_fs_put_block_group_ref(&bg_ref);
+ 		return rc;
++	}
+ 
+ 	if (!ext4_ialloc_verify_bitmap_csum(sb, bg, b.data)) {
+ 		ext4_dbg(DEBUG_IALLOC,
