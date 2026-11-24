@@ -137,6 +137,15 @@ random_harvestq_init(event_proc_f cb)
 
 	live_entropy_sources_init(NULL);
 
+	/*
+	 * Poll the live (hardware) sources a few times now, which is enough for
+	 * a source that delivers full reads, such as RDRAND, to cross the fast
+	 * pool's reseed threshold before the device is created. At the thread's
+	 * one poll per pass, the device would stay unseeded, and early readers
+	 * would block, for the first few passes.
+	 */
+	live_entropy_sources_feed(4, cb);
+
 	/* Start the hash/reseed thread */
 	int error = kproc_create(reinterpret_cast<void(*)(void*)>(random_kthread), reinterpret_cast<void*>(cb),
 		&random_kthread_proc, RFHIGHPID, 0, "rand_harvestq"); /* RANDOM_CSPRNG_NAME */
