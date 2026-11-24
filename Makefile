@@ -2252,7 +2252,9 @@ endif
 
 bootfs_dep := scripts/mkbootfs.py $(bootfs_manifest) $(bootfs_manifest_dep) $(out)/libenviron.so
 ifeq ($(fs),ext)
-bootfs_dep += $(out)/modules/libext/libext.so
+# bootfs_ext.manifest.skel puts both libraries in the bootfs.
+bootfs_dep += $(out)/modules/libext/libext.so \
+	modules/lwext4/upstream/lwext4/build_lib_only/src/liblwext4.so
 else
 ifeq ($(fs),zfs)
 bootfs_dep += $(tools:%=$(out)/%) $(out)/libsolaris.so
