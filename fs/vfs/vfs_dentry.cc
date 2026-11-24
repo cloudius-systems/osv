@@ -37,6 +37,7 @@
 #include <string.h>
 #include <stdlib.h>
 #include <sys/param.h>
+#include <string>
 
 #include <osv/dentry.h>
 #include <osv/vnode.h>
@@ -137,10 +138,15 @@ static void dentry_children_remove(struct dentry *dp)
 }
 
 void
-dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path)
+dentry_move(struct dentry *dp, struct dentry *parent_dp, const char *name)
 {
     struct dentry *old_pdp = dp->d_parent;
     char *old_path = dp->d_path;
+    // d_path is the full path from the root of the mount, so the new one is
+    // the new parent's path followed by the new name. The root of the mount
+    // has the path "/".
+    std::string path = (parent_dp && strcmp(parent_dp->d_path, "/")) ?
+        std::string(parent_dp->d_path) + "/" + name : std::string("/") + name;
 
     if (old_pdp) {
         WITH_LOCK(old_pdp->d_lock) {
@@ -163,10 +169,10 @@ dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path)
         // Remove dp with outdated hash info from the hashtable.
         LIST_REMOVE(dp, d_link);
         // Update dp.
-        dp->d_path = strdup(path);
+        dp->d_path = strdup(path.c_str());
         dp->d_parent = parent_dp;
         // Insert dp updated hash info into the hashtable.
-        LIST_INSERT_HEAD(&dentry_hash_table[dentry_hash(dp->d_mount, path)],
+        LIST_INSERT_HEAD(&dentry_hash_table[dentry_hash(dp->d_mount, dp->d_path)],
             dp, d_link);
     }
 

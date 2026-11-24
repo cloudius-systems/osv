@@ -237,6 +237,8 @@ tests += tst-close-range.so
 tests += tst-numa.so
 tests += tst-random-flush.so
 tests += tst-dentry-rename-child.so
+tests += tst-rename-dentry-path.so
+tests += tst-fchdir.so
 internal-api-tests += tst-random-flush.so
 
 # Tests with special compilation parameters needed...
