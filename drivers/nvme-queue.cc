@@ -342,10 +342,22 @@ void io_queue_pair::req_done()
                 }
             }
             //
-            // Read cid and release it
+            // Read cid and release it.  The controller writes cqe.cid, so
+            // check that it names a pending request before using it as an
+            // index: rows are allocated lazily, so the row must be in range
+            // and allocated.  A bad cid is logged and skipped; the CQ head
+            // has already moved past it.
             u16 cid = cqe.cid;
+            if (cid_to_row(cid) >= max_pending_levels ||
+                !_pending_bios[cid_to_row(cid)]) {
+                NVME_ERROR("I/O queue: completion with invalid cid=%d, ignored\n", cid);
+                continue;
+            }
             auto pending_bio = _pending_bios[cid_to_row(cid)][cid_to_col(cid)].exchange(nullptr);
-            assert(pending_bio);
+            if (!pending_bio) {
+                NVME_ERROR("I/O queue: completion for idle cid=%d, ignored\n", cid);
+                continue;
+            }
             //
             // Save for future re-use or free PRP list saved under bio_private if any
             if (pending_bio->bio_private) {
