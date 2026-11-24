@@ -19,6 +19,7 @@
 #include <osv/mempool.hh>
 #include <osv/bio.h>
 #include <osv/types.h>
+#include <chrono>
 
 namespace ahci {
 
@@ -114,6 +115,15 @@ enum port_reg_ssts_bits {
     PORT_SSTS_RETRY     = 0x0F,
 };
 
+// How long the driver waits for a register to settle. The HBA reset and a
+// port's command engine stopping have to complete within the specification's
+// limits (AHCI 1.3.1, sections 10.4.3 and 10.1.2). A command has no deadline
+// in the specification, so its bound only has to be long enough for a healthy
+// device.
+constexpr std::chrono::milliseconds hba_reset_timeout{1000};
+constexpr std::chrono::milliseconds port_stop_timeout{500};
+constexpr std::chrono::milliseconds cmd_timeout{5000};
+
 // CIFS: Command FIS
 struct cfis {
     // DWORD 0
@@ -204,7 +214,7 @@ public:
     void dump_config();
     bool ack_irq();
     void enable_irq();
-    void reset();
+    bool reset();
     void setup();
     void scan();
     void add_port(u32 pnr, port * port);
@@ -232,7 +242,7 @@ class port {
 public:
     port(u32 pnr, hba *hba);
 
-    void reset();
+    bool reset();
     void setup();
     void start_irq_thread();
     int send_cmd(u8 slot, int iswrite, void *buffer, u32 bsize);
@@ -243,8 +253,8 @@ public:
     void disk_rw(struct bio *bio, bool iswrite);
     int make_request(struct bio *bio);
     void enable_irq();
-    void wait_device_ready();
-    void wait_ci_ready(u8 slot);
+    bool wait_device_ready();
+    bool wait_ci_ready(u8 slot);
     void wakeup() { _irq_thread->wake_with_irq_disabled(); }
     bool linkup() { return _linkup; }
 
