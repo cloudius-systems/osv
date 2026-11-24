@@ -137,6 +137,7 @@ namei(const char *path, struct dentry **dpp)
         dp = dentry_lookup(mp, node);
         if (dp) {
             /* vnode is already active. */
+            vfs_putroot(mp);
             *dpp = dp;
             return 0;
         }
@@ -150,6 +151,8 @@ namei(const char *path, struct dentry **dpp)
             sys_panic("VFS: no root");
         }
         dref(ddp);
+        /* The dentry chain to ddp now keeps the mount busy. */
+        vfs_putroot(mp);
 
         node[0] = '\0';
 
@@ -308,6 +311,7 @@ out:
     if (dvp != nullptr) {
         vn_unlock(dvp);
     }
+    vfs_putroot(mp);
     return (error);
 }
 
