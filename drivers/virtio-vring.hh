@@ -247,6 +247,9 @@ class virtio_driver;
 
     private:
 
+        // Return idx, or abort if it is not a descriptor index.
+        unsigned checked_descriptor_index(u32 idx) const;
+
         // Up pointer
         virtio_driver* _driver;
         u16 _q_index;
