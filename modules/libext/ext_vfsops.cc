@@ -23,6 +23,7 @@ void free_contiguous_aligned(void* p);
 #include <ext4_fs.h>
 #include <ext4_super.h>
 
+#include <atomic>
 #include <cstdlib>
 #include <cstddef>
 #include <cstdio>
@@ -138,7 +139,7 @@ static void ext_bcache_unlock()
 #define META_BLOCK_DEV_CACHE_SIZE 32
 
 static int
-ext_mount(struct mount *mp, const char *dev, int flags, const void *data)
+ext_mount_dev(struct mount *mp, const char *dev, int flags, const void *data)
 {
     struct device *device;
 
@@ -217,6 +218,26 @@ ext_mount(struct mount *mp, const char *dev, int flags, const void *data)
     return r;
 }
 
+// The state of a mounted ext filesystem (ext_fs, ext_blockdev and
+// ext_block_cache) is global, so only one ext filesystem can be mounted at
+// a time. Mounting a second one would overwrite the first one's state, and
+// unmounting it would then tear down the state the first one still uses.
+static std::atomic<bool> ext_mounted{false};
+
+static int
+ext_mount(struct mount *mp, const char *dev, int flags, const void *data)
+{
+    if (ext_mounted.exchange(true)) {
+        kprintf("[ext4] Only one ext filesystem can be mounted at a time\n");
+        return EBUSY;
+    }
+    int r = ext_mount_dev(mp, dev, flags, data);
+    if (r) {
+        ext_mounted = false;
+    }
+    return r;
+}
+
 extern void ext_delete_outstanding_inodes(struct ext4_fs *fs);
 
 static int
@@ -233,6 +254,9 @@ ext_unmount(struct mount *mp, int flags)
     ext4_block_fini(&ext_blockdev);
     r = device_close((struct device*)ext_blockdev.bdif->p_user);
     kprintf("[ext4] Unmounted ext filesystem!\n");
+    if (r == 0) {
+        ext_mounted = false;
+    }
     return r;
 }
 
