@@ -132,6 +132,8 @@ static void usage()
     std::cout << "  --help                produce help message\n";
     std::cout << "  --port arg (=10000)   set listening port\n";
     std::cout << "  --verbose arg (=1)    disable verbose output\n";
+    std::cout << "  --ready               greet the client with \"CPIOD1\\n\" once\n";
+    std::cout << "                        connected, before reading the stream\n";
     std::cout << "  --prefix arg (=/)     set prefix\n\n";
 }
 
@@ -148,6 +150,7 @@ int main(int ac, char** av)
     int port = 10000;
     std::string prefix("/");
     bool verbose = true;
+    bool ready = false;
 
     auto options_values = options::parse_options_values(ac - 1, av + 1, handle_parse_error);
 
@@ -162,6 +165,10 @@ int main(int ac, char** av)
 
     if (options::option_value_exists(options_values, "prefix")) {
         prefix = options::extract_option_value(options_values, "prefix");
+    }
+
+    if (options::extract_option_flag(options_values, "ready", handle_parse_error)) {
+        ready = true;
     }
 
     if (options::option_value_exists(options_values, "verbose")) {
@@ -183,6 +190,15 @@ int main(int ac, char** av)
     cout << "Waiting for connection from host..." << endl;
     boost::asio::ip::tcp::socket raw_socket(io_service);
     acceptor.accept(raw_socket);
+    if (ready) {
+        // A client cannot tell that we are listening: a forwarded port (QEMU
+        // hostfwd) accepts the client's connect() before the guest does. The
+        // greeting is the client's proof that it reached cpiod. Opt-in, so
+        // clients that read the first byte as the sync ack are unaffected.
+        static const char greeting[] = "CPIOD1\n";
+        boost::asio::write(raw_socket,
+            boost::asio::buffer(greeting, sizeof(greeting) - 1));
+    }
     boost::asio::ip::tcp::iostream socket(std::move(raw_socket));
     cpio_in_expand expand_files(prefix, verbose);
     cpio_in::parse(socket, expand_files);
