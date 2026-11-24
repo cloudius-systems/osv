@@ -766,31 +766,59 @@ ena_tx_map_mbuf(struct ena_ring *tx_ring, struct ena_tx_buffer *tx_info,
     struct mbuf *mbuf, void **push_hdr, u16 *header_len)
 {
 	int nsegs = 0;
+	int skip = 0;
 
 	tx_info->mbuf = mbuf;
 
+	if (tx_ring->tx_mem_queue_type == ENA_ADMIN_PLACEMENT_POLICY_DEV) {
+		/*
+		 * LLQ: the first min(packet, tx_max_header_size) bytes go into
+		 * the device-memory entry with the descriptors (push header);
+		 * only the rest is described by DMA buffers.  Copy the header
+		 * into the ring's intermediate buffer when it spans mbufs.
+		 */
+		int pkt_len = mbuf->M_dat.MH.MH_pkthdr.len;
+		int hlen = min_t(int, pkt_len, tx_ring->tx_max_header_size);
+		if (mbuf->m_hdr.mh_len >= hlen) {
+			*push_hdr = mbuf->m_hdr.mh_data;
+		} else {
+			m_copydata(mbuf, 0, hlen,
+			    (caddr_t)tx_ring->push_buf_intermediate_buf);
+			*push_hdr = tx_ring->push_buf_intermediate_buf;
+		}
+		*header_len = hlen;
+		skip = hlen;
+	} else {
+		*push_hdr = NULL;
+		/*
+		 * header_len is just a hint for the device. Because FreeBSD is
+		 * not giving us information about packet header length and it
+		 * is not guaranteed that all packet headers will be in the 1st
+		 * mbuf, setting header_len to 0 is making the device ignore
+		 * this value and resolve header on it's own.
+		 */
+		*header_len = 0;
+	}
+
 	for (struct mbuf *m = mbuf; m != NULL; m = m->m_hdr.mh_next) {
 		int frag_len = m->m_hdr.mh_len;
+		int off = 0;
 
-		if (frag_len != 0) {
+		if (skip >= frag_len) {
+			skip -= frag_len;
+			continue;
+		}
+		off = skip;
+		skip = 0;
+		if (frag_len - off != 0) {
 			struct ena_com_buf *ena_buf = &tx_info->bufs[nsegs];
-			ena_buf->paddr = mmu::virt_to_phys(m->m_hdr.mh_data);
-			ena_buf->len = frag_len;
+			ena_buf->paddr = mmu::virt_to_phys(m->m_hdr.mh_data + off);
+			ena_buf->len = frag_len - off;
 			tx_info->num_of_bufs++;
 			if (++nsegs >= ENA_PKT_MAX_BUFS) //TODO: Do we loose data if this is true?
 				break;
 		}
 	}
-
-	*push_hdr = NULL;
-	/*
-	 * header_len is just a hint for the device. Because FreeBSD is
-	 * not giving us information about packet header length and it
-	 * is not guaranteed that all packet headers will be in the 1st
-	 * mbuf, setting header_len to 0 is making the device ignore
-	 * this value and resolve header on it's own.
-	 */
-	*header_len = 0;
 
 	return (0);
 }

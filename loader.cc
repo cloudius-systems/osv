@@ -176,6 +176,9 @@ std::vector<mntent> opt_mount_fs;
 bool opt_maxnic = false;
 int maxnic;
 bool opt_pci_disabled = false;
+#if CONF_drivers_ena
+bool opt_ena_llq = false;
+#endif
 
 #if CONF_tracepoints_sampler
 static int sampler_frequency;
@@ -225,6 +228,10 @@ static void usage()
         "  --redirect=arg        redirect stdout and stderr to file\n"
         "  --disable_rofs_cache  disable ROFS memory cache\n"
         "  --nopci               disable PCI enumeration\n"
+#if CONF_drivers_ena
+        "  --ena-llq             use the ENA low-latency queue (LLQ) for\n"
+        "                        transmit when the device offers it\n"
+#endif
         "  --extra-zfs-pools     import extra ZFS pools\n"
         "  --mount-fs=arg        mount extra filesystem, format:<fs_type,url,path>\n"
         "  --preload-zfs-library preload ZFS library from /usr/lib/fs\n\n");
@@ -406,6 +413,12 @@ static void parse_options(int loader_argc, char** loader_argv)
     if (extract_option_flag(options_values, "nopci")) {
         opt_pci_disabled = true;
     }
+
+#if CONF_drivers_ena
+    if (extract_option_flag(options_values, "ena-llq")) {
+        opt_ena_llq = true;
+    }
+#endif
 
     if (!options_values.empty()) {
         for (auto other_option : options_values) {

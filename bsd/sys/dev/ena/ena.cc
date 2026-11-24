@@ -183,6 +183,8 @@ static ena_vendor_info_t ena_vendor_info_array[] = {
 
 struct sx ena_global_lock;
 
+extern bool opt_ena_llq;
+
 int
 ena_dma_alloc(device_t dmadev, bus_size_t size, ena_mem_handle_t *dma,
     int mapflags, bus_size_t alignment, int domain)
@@ -1725,6 +1727,10 @@ ena_calc_max_io_queue_num(pci::device *pdev, struct ena_com_dev *ena_dev,
 		io_rx_num = min_t(int, io_tx_sq_num, io_tx_cq_num);
 	}
 
+	/* Every Tx queue lives in device memory in LLQ mode. */
+	if (ena_dev->tx_mem_queue_type == ENA_ADMIN_PLACEMENT_POLICY_DEV)
+		io_tx_sq_num = get_feat_ctx->llq.max_llq_num;
+
 	max_num_io_queues = min_t(uint32_t, mp_ncpus, ENA_MAX_NUM_IO_QUEUES);
 	max_num_io_queues = min_t(uint32_t, max_num_io_queues, io_rx_num);
 	max_num_io_queues = min_t(uint32_t, max_num_io_queues, io_tx_sq_num);
@@ -1740,11 +1746,46 @@ ena_set_queues_placement_policy(pci::device *pdev, struct ena_com_dev *ena_dev,
     struct ena_admin_feature_llq_desc *llq,
     struct ena_llq_configurations *llq_default_configurations)
 {
-	//We do NOT support LLQ
+	/*
+	 * LLQ (device-memory Tx queue) is opt-in, with the --ena-llq loader
+	 * option.  The Tx descriptors and the first tx_max_header_size bytes of
+	 * each packet are written into the device's memory BAR with the
+	 * doorbell, instead of the device fetching them from host memory after
+	 * it.
+	 */
 	ena_dev->tx_mem_queue_type = ENA_ADMIN_PLACEMENT_POLICY_HOST;
-
-	ena_log(pdev, INFO,
-		"LLQ is not supported. Using the host mode policy.");
+	if (!opt_ena_llq) {
+		ena_log(pdev, INFO, "LLQ not requested. Using the host mode policy.");
+		return (0);
+	}
+	if (!(ena_dev->supported_features & BIT(ENA_ADMIN_LLQ)) ||
+	    llq->max_llq_num == 0) {
+		ena_log(pdev, WARN, "LLQ is not offered by the device. Using the host mode policy.");
+		return (0);
+	}
+	pci::bar *mem = pdev->get_bar(ENA_MEM_BAR + 1);
+	if (mem == NULL || !mem->is_mmio()) {
+		ena_log(pdev, WARN, "LLQ: no memory BAR. Using the host mode policy.");
+		return (0);
+	}
+	/* A device reset runs this again; map the BAR only once. */
+	if (!mem->is_mapped())
+		mem->map();
+	ena_dev->mem_bar = (void __iomem *)mem->get_mmio();
+	struct ena_llq_configurations cfg;
+	cfg.llq_header_location = ENA_ADMIN_INLINE_HEADER;
+	cfg.llq_stride_ctrl = ENA_ADMIN_MULTIPLE_DESCS_PER_ENTRY;
+	cfg.llq_num_decs_before_header = ENA_ADMIN_LLQ_NUM_DESCS_BEFORE_HEADER_2;
+	cfg.llq_ring_entry_size = ENA_ADMIN_LIST_ENTRY_SIZE_128B;
+	cfg.llq_ring_entry_size_value = 128;
+	int rc = ena_com_config_dev_mode(ena_dev, llq, &cfg);
+	if (rc != 0) {
+		ena_log(pdev, WARN, "LLQ setup failed rc: %d. Using the host mode policy.", rc);
+		ena_dev->tx_mem_queue_type = ENA_ADMIN_PLACEMENT_POLICY_HOST;
+		return (0);
+	}
+	ena_log(pdev, INFO, "LLQ Tx placement: %u queues, depth %u, header %u bytes",
+	    llq->max_llq_num, llq->max_llq_depth, ena_dev->tx_max_header_size);
 	return (0);
 }
 
@@ -1795,6 +1836,10 @@ ena_calc_io_queue_size(struct ena_calc_queue_size_ctx *ctx)
 		ctx->max_rx_sgl_size = min_t(uint16_t, ENA_PKT_MAX_BUFS,
 		    max_queues->max_packet_rx_descs);
 	}
+
+	if (ena_dev->tx_mem_queue_type == ENA_ADMIN_PLACEMENT_POLICY_DEV)
+		max_tx_queue_size = min_t(uint32_t, max_tx_queue_size,
+		    ctx->get_feat_ctx->llq.max_llq_depth);
 
 	/* round down to the nearest power of 2 */
 	max_tx_queue_size = 1 << (flsl(max_tx_queue_size) - 1);
@@ -2520,6 +2565,9 @@ ena_attach(pci::device* pdev, ena_adapter **_adapter)
 	adapter->buf_ring_size = ENA_DEFAULT_BUF_RING_SIZE;
 
 	adapter->max_mtu = get_feat_ctx.dev_attr.max_mtu;
+	adapter->disable_meta_caching =
+	    ena_dev->tx_mem_queue_type == ENA_ADMIN_PLACEMENT_POLICY_DEV &&
+	    ena_dev->llq_info.disable_meta_caching;
 
 	adapter->reset_reason = ENA_REGS_RESET_NORMAL;
 
