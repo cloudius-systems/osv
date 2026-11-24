@@ -116,6 +116,7 @@ TYPEDEF int blksize_t;
 TYPEDEF long blkcnt_t;
 TYPEDEF unsigned long fsblkcnt_t;
 TYPEDEF unsigned long fsfilcnt_t;
+TYPEDEF unsigned short reclen_t;
 
 TYPEDEF void * timer_t;
 TYPEDEF int clockid_t;
