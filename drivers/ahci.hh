@@ -153,14 +153,18 @@ struct prdt {
     u32 flags; // 4MB per entry at most
 } __attribute__((packed));
 
+// The most data one command transfers. A buffer that is contiguous only in
+// virtual memory needs a PRD entry for every page it touches.
+constexpr u32 max_io_size = 512 * 1024;
+constexpr unsigned max_prd_entries = max_io_size / mmu::page_size + 1;
+
 // Command Table Structure
 struct cmd_table {
     struct cfis fis;
     u8 atapi_cmd[0x10];
     u8 reserved[0x30];
-    struct prdt prdt[1]; // TODO: support more descriptors
-    u8 pad[256 - 144];   // cmd_table need to be aligned to 128 bytes
-} __attribute__((packed));
+    struct prdt prdt[max_prd_entries];
+} __attribute__((packed, aligned(128))); // cmd_table need to be aligned to 128 bytes
 
 // Command List Structure
 struct cmd_list {
