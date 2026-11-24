@@ -234,6 +234,7 @@ public:
     // thread on its own CPU, instead of all inbound traffic funnelling through
     // one queue and one thread.
     void receiver(struct rxq* rxq);
+    void deliver(mbuf** pkts, unsigned n);
     void fill_rx_ring(struct rxq* rxq);
     mbuf* packet_to_mbuf(const std::vector<iovec>& iovec);
     unsigned* rx_buffer_refcnt(void* frame);

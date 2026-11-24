@@ -594,6 +594,29 @@ bool net::bad_rx_csum(struct mbuf* m, struct net_hdr* hdr)
     return false;
 }
 
+// Deliver a pass's packets in the order they arrived.  Packets for a
+// connection with a net channel go to the channel, and each such channel is
+// woken once at the end of the pass instead of once per packet.  Channel
+// lookup needs rcu_read_lock (preemption off), but the full stack behind
+// if_input() may sleep or fault, so a packet without a channel first wakes
+// the channels recorded so far and drops the lock.
+void net::deliver(mbuf** pkts, unsigned n)
+{
+    net_channel_wake_batch batch;
+    osv::rcu_read_lock.lock();
+    for (unsigned i = 0; i < n; i++) {
+        if (_ifn->if_classifier.post_packet(pkts[i], batch)) {
+            continue;
+        }
+        batch.flush();
+        osv::rcu_read_lock.unlock();
+        (*_ifn->if_input)(_ifn, pkts[i]);
+        osv::rcu_read_lock.lock();
+    }
+    batch.flush();
+    osv::rcu_read_lock.unlock();
+}
+
 void net::receiver(struct rxq* rxq)
 {
     vring* vq = rxq->vqueue;
@@ -601,6 +624,7 @@ void net::receiver(struct rxq* rxq)
     u64 rx_drops = 0, rx_packets = 0, csum_ok = 0;
     u64 csum_err = 0, rx_bytes = 0;
     static const u16 refill_thresh = 16;
+    mbuf* pkts[net_channel_wake_batch::capacity];
 
     while (1) {
 
@@ -620,71 +644,80 @@ void net::receiver(struct rxq* rxq)
         // truncating it.
         net_hdr_mrg_rxbuf* mhdr;
 
-        while (void* buffer = vq->get_buf_elem(&len)) {
-
-            vq->get_buf_finalize();
-
-            if (vq->effective_avail_ring_count() >= refill_thresh)
-                fill_rx_ring(rxq);
-
-            // Bad packet/buffer - discard and continue to the next one
-            if (len < _hdr_size + ETHER_HDR_LEN) {
-                rx_drops++;
-                free_buffer(buffer);
-                continue;
-            }
-
-            mhdr = static_cast<net_hdr_mrg_rxbuf*>(buffer);
-
-            if (!_mergeable_bufs) {
-                nbufs = 1;
-            } else {
-                nbufs = mhdr->num_buffers;
-            }
-
-            packet.push_back({buffer + _hdr_size, len - _hdr_size});
-
-            // Read the fragments - only applies if _mergeable_bufs is ON
-            while (--nbufs > 0) {
-                buffer = vq->get_buf_elem(&len);
+        // Build up to a batch of mbufs with preemption enabled (building one
+        // allocates), then deliver them; repeat while the ring has more.
+        bool running = true;
+        while (running) {
+            unsigned n = 0;
+            while (n < net_channel_wake_batch::capacity) {
+                void* buffer = vq->get_buf_elem(&len);
                 if (!buffer) {
-                    rx_drops++;
-                    for (auto&& v : packet) {
-                        free_buffer(v);
-                    }
                     break;
                 }
-                packet.push_back({buffer, len});
+
                 vq->get_buf_finalize();
+
+                if (vq->effective_avail_ring_count() >= refill_thresh)
+                    fill_rx_ring(rxq);
+
+                // Bad packet/buffer - discard and continue to the next one
+                if (len < _hdr_size + ETHER_HDR_LEN) {
+                    rx_drops++;
+                    free_buffer(buffer);
+                    continue;
+                }
+
+                mhdr = static_cast<net_hdr_mrg_rxbuf*>(buffer);
+
+                if (!_mergeable_bufs) {
+                    nbufs = 1;
+                } else {
+                    nbufs = mhdr->num_buffers;
+                }
+
+                packet.push_back({buffer + _hdr_size, len - _hdr_size});
+
+                // Read the fragments - only applies if _mergeable_bufs is ON
+                while (--nbufs > 0) {
+                    buffer = vq->get_buf_elem(&len);
+                    if (!buffer) {
+                        rx_drops++;
+                        for (auto&& v : packet) {
+                            free_buffer(v);
+                        }
+                        break;
+                    }
+                    packet.push_back({buffer, len});
+                    vq->get_buf_finalize();
+                }
+
+                auto m_head = packet_to_mbuf(packet);
+                packet.clear();
+
+                if ((_ifn->if_capenable & IFCAP_RXCSUM) &&
+                    (mhdr->hdr.flags &
+                     net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM)) {
+                    if (bad_rx_csum(m_head, &mhdr->hdr))
+                        csum_err++;
+                    else
+                        csum_ok++;
+
+                }
+
+                rx_packets++;
+                rx_bytes += m_head->M_dat.MH.MH_pkthdr.len;
+                pkts[n++] = m_head;
+                trace_virtio_net_rx_packet(_ifn->if_index, rx_bytes);
             }
-
-            auto m_head = packet_to_mbuf(packet);
-            packet.clear();
-
-            if ((_ifn->if_capenable & IFCAP_RXCSUM) &&
-                (mhdr->hdr.flags &
-                 net_hdr::VIRTIO_NET_HDR_F_NEEDS_CSUM)) {
-                if (bad_rx_csum(m_head, &mhdr->hdr))
-                    csum_err++;
-                else
-                    csum_ok++;
-
+            if (n == 0) {
+                break;
             }
-
-            rx_packets++;
-            rx_bytes += m_head->M_dat.MH.MH_pkthdr.len;
-
-            bool fast_path = _ifn->if_classifier.post_packet(m_head);
-            if (!fast_path) {
-                (*_ifn->if_input)(_ifn, m_head);
-            }
-
-            trace_virtio_net_rx_packet(_ifn->if_index, rx_bytes);
+            deliver(pkts, n);
 
             // The interface may have been stopped while we were
-            // passing the packet up the network stack.
-            if ((_ifn->if_drv_flags & IFF_DRV_RUNNING) == 0)
-                break;
+            // passing the packets up the network stack.
+            running = n == net_channel_wake_batch::capacity &&
+                      (_ifn->if_drv_flags & IFF_DRV_RUNNING) != 0;
         }
 
         // Update the stats

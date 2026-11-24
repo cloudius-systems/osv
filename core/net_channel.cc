@@ -138,10 +138,25 @@ bool classifier::post_packet(mbuf* m)
             if (!nc->push(m)) {
                 return false;
             }
-            // FIXME: find a way to batch wakes
             nc->wake();
             return true;
         }
+    }
+    return false;
+}
+
+bool classifier::post_packet(mbuf* m, net_channel_wake_batch& batch)
+{
+#if CONF_lazy_stack_invariant
+    assert(!sched::thread::current()->is_app());
+#endif
+    if (auto nc = classify_ipv4_tcp(m)) {
+        log_packet_in(m, NETISR_ETHER);
+        if (!nc->push(m)) {
+            return false;
+        }
+        batch.add(nc);
+        return true;
     }
     return false;
 }
