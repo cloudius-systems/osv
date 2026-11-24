@@ -419,21 +419,18 @@ vn_access(struct vnode *vp, int flags)
 {
 	int error = 0;
 
+	/*
+	 * Everything in OSv runs as the superuser, which may read and write a
+	 * file whatever its mode bits, but may execute it only if some execute
+	 * bit is set.
+	 */
 	if ((flags & VEXEC) && (vp->v_mode & 0111) == 0) {
-		error = EACCES;
-		goto out;
-	}
-	if ((flags & VREAD) && (vp->v_mode & 0444) == 0) {
 		error = EACCES;
 		goto out;
 	}
 	if (flags & VWRITE) {
 		if (vp->v_mount->m_flags & MNT_RDONLY) {
 			error = EROFS;
-			goto out;
-		}
-		if ((vp->v_mode & 0222) == 0) {
-			error = EACCES;
 			goto out;
 		}
 	}
