@@ -1209,7 +1209,19 @@ sys_fchdir(struct file *fp, char *cwd)
 		vn_unlock(dvp);
 		return EBADF;
 	}
-	strlcpy(cwd, fp->f_dentry->d_path, PATH_MAX);
+	/*
+	 * The cwd is an absolute path, but d_path is relative to the mount
+	 * point, so prepend the mount point (unless it is the root, "/").
+	 */
+	const char *mpath = fp->f_dentry->d_mount->m_path;
+	const char *dpath = fp->f_dentry->d_path;
+	if (!strcmp(mpath, "/")) {
+		strlcpy(cwd, dpath, PATH_MAX);
+	} else {
+		strlcpy(cwd, mpath, PATH_MAX);
+		if (strcmp(dpath, "/"))
+			strlcat(cwd, dpath, PATH_MAX);
+	}
 	vn_unlock(dvp);
 	return 0;
 }

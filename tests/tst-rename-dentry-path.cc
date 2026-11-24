@@ -100,12 +100,11 @@ int main()
     test_rename_dir("/tmp", true);
 
     // Renaming a directory in the root of a mount: the parent's own path is
-    // "/" there. getcwd() is not checked there, because fchdir() does not
-    // include the mount point in the cwd (a separate issue).
+    // "/" there.
     const char* mnt = "/tmp/tst-rename-dentry-path-mnt";
     mkdir(mnt, 0755);
     if (mount("", mnt, "ramfs", 0, nullptr) == 0) {
-        test_rename_dir(mnt, false);
+        test_rename_dir(mnt, true);
         umount(mnt);
     } else {
         report(false, std::string("mount ramfs on ") + mnt + ": " + strerror(errno));
