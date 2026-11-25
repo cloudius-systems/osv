@@ -199,6 +199,7 @@ static void test_io_uring_features(void)
     assert(p.features & IORING_FEAT_SUBMIT_STABLE);
     assert(p.features & IORING_FEAT_NATIVE_WORKERS);  /* A2-1 io-wq pool */
     assert(p.features & IORING_FEAT_CQE_SKIP);        /* CQE_SKIP_SUCCESS */
+    assert(p.features & IORING_FEAT_EXT_ARG);         /* A2-12 getevents_arg timed wait */
 
     /* SINGLE_MMAP is deliberately NOT advertised (3 separate regions). */
     assert(!(p.features & IORING_FEAT_SINGLE_MMAP));
@@ -512,6 +513,72 @@ static void test_io_uring_enter_ext_arg_timeout(void)
 
     test_ring_cleanup(&ring);
     printf("  PASSED - EXT_ARG timeout + REGISTERED_RING reject\n");
+}
+
+/* Push one SQE on the test ring (no submit). */
+static struct io_uring_sqe *test_ring_push(struct test_ring *ring)
+{
+    unsigned tail = ring->sq_ring->tail;
+    struct io_uring_sqe *sqe = &ring->sqes[tail & ring->sq_ring->ring_mask];
+    memset(sqe, 0, sizeof(*sqe));
+    ring->sq_ring->tail = tail + 1;
+    return sqe;
+}
+
+/*
+ * An EXT_ARG timed wait that times out is not an error, as in Linux, when
+ * the same call submitted SQEs (it returns their count) or when some CQEs
+ * (fewer than min_complete) are ready (it returns 0).
+ */
+static void test_io_uring_enter_ext_arg_timeout_partial(void)
+{
+    printf("Testing enter EXT_ARG timeout with submissions or partial CQEs...\n");
+
+    struct test_ring ring;
+    int ret = test_ring_init(&ring, 8);
+    assert(ret == 0);
+    int p[2];
+    assert(pipe(p) == 0);
+    char buf[1];
+
+    struct __kernel_timespec ts = { 0, 20 * 1000 * 1000 };   /* 20 ms */
+    struct io_uring_getevents_arg arg = {};
+    arg.ts = (uint64_t)(uintptr_t)&ts;
+
+    /* Submit a read of an empty pipe and wait for it: times out, returns 1. */
+    struct io_uring_sqe *sqe = test_ring_push(&ring);
+    sqe->opcode = IORING_OP_READ;
+    sqe->fd = p[0];
+    sqe->addr = (uint64_t)(uintptr_t)buf;
+    sqe->len = 1;
+    sqe->user_data = 1;
+    ret = sys_io_uring_enter(ring.fd, 1, 1,
+                             IORING_ENTER_GETEVENTS | IORING_ENTER_EXT_ARG,
+                             &arg, sizeof(arg));
+    assert(ret == 1);
+
+    /* Complete a NOP, then wait for 2 CQEs: times out with 1 ready, returns 0. */
+    sqe = test_ring_push(&ring);
+    sqe->opcode = IORING_OP_NOP;
+    sqe->user_data = 2;
+    ret = sys_io_uring_enter(ring.fd, 1, 1, IORING_ENTER_GETEVENTS, NULL, 0);
+    assert(ret == 1);
+    ret = sys_io_uring_enter(ring.fd, 0, 2,
+                             IORING_ENTER_GETEVENTS | IORING_ENTER_EXT_ARG,
+                             &arg, sizeof(arg));
+    assert(ret == 0);
+
+    /* Let the read finish and reap both CQEs. */
+    assert(write(p[1], "x", 1) == 1);
+    ret = sys_io_uring_enter(ring.fd, 0, 2, IORING_ENTER_GETEVENTS, NULL, 0);
+    assert(ret == 0);
+    assert(ring.cq_ring->tail - ring.cq_ring->head == 2);
+    ring.cq_ring->head = ring.cq_ring->head + 2;
+
+    close(p[0]);
+    close(p[1]);
+    test_ring_cleanup(&ring);
+    printf("  PASSED - EXT_ARG timeout with submissions or partial CQEs\n");
 }
 
 
@@ -966,6 +1033,7 @@ int main(int argc, char **argv)
     test_io_uring_fixed_buffer_bounds();
     test_io_uring_msg_ring();
     test_io_uring_enter_ext_arg_timeout();
+    test_io_uring_enter_ext_arg_timeout_partial();
 
     printf("\n===========================================\n");
     printf("All io_uring tests PASSED!\n");
