@@ -89,7 +89,8 @@ private:
     };
 
     enum ide_identify {
-        IDENTIFY_LBA_EXT = 100
+        IDENTIFY_LBA_EXT = 100,
+        IDENTIFY_ROTATION_RATE = 217
     };
 
     static int poll(u8 mask = (STATUS_BSY|STATUS_DRDY), u8 match = STATUS_DRDY);
@@ -106,6 +107,7 @@ private:
     static int _instance;
     int _id;
     bool _ro;
+    bool _rotational = false;
     // This mutex protects parallel make_request invocations
     mutex _lock;
 };

@@ -392,6 +392,10 @@ void port::disk_identify()
 
     _devsize = sectors * 512;
 
+    // Word 217 nominal media rotation rate: 0x0401-0xFFFE is a speed in
+    // rpm; 1 (solid state) and 0 (not reported) count as non-rotating.
+    _rotational = buffer[217] >= 0x0401 && buffer[217] <= 0xFFFE;
+
     delete [] buffer;
 }
 
@@ -523,7 +527,8 @@ void hba::scan()
 
         std::string dev_name("vblk");
         dev_name += std::to_string(hw::next_disk_index());
-        auto dev = device_create(&hba_driver, dev_name.c_str(), D_BLK);
+        auto dev = device_create(&hba_driver, dev_name.c_str(),
+                                 D_BLK | (p->rotational() ? D_ROTATIONAL : 0));
         auto prv = static_cast<struct hba_priv*>(dev->private_data);
         prv->hba = this;
         prv->port = p;

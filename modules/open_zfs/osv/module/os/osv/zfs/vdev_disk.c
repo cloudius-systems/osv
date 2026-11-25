@@ -105,6 +105,23 @@ vdev_disk_open(vdev_t *vd, uint64_t *psize, uint64_t *max_psize,
 	/* Secure/discard-zeroes semantics are not guaranteed on OSv. */
 	vd->vdev_has_securetrim = B_FALSE;
 
+	/*
+	 * Report the vdev as non-rotating unless its driver knows the disk
+	 * spins (D_ROTATIONAL, from the ATA rotation rate on AHCI and IDE).
+	 * The storage OSv runs on (NVMe, and virtio-blk over host flash or
+	 * network storage) is rarely a spinning disk, and virtio-blk, NVMe,
+	 * SCSI and Xen disks tell OSv nothing either way.  On a non-rotating
+	 * vdev, vdev_queue_aggregate() caps an aggregated I/O at 128 KiB
+	 * (zfs_vdev_aggregation_limit_non_rotating) instead of 1 MiB,
+	 * metaslab_weight() stops favoring low-LBA metaslabs, and mirror read
+	 * selection uses the non-rotating costs, which do not depend on the
+	 * seek distance.  vdev_file.c reports non-rotating too.
+	 *
+	 * Note that Linux marks a virtio-blk disk rotational, so this differs
+	 * from a Linux guest for virtio-blk.
+	 */
+	vd->vdev_nonrot = !(dvd->device->flags & D_ROTATIONAL);
+
 	return (0);
 }
 

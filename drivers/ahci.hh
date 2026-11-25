@@ -265,6 +265,7 @@ public:
     }
 
     size_t get_devsize() { return _devsize; }
+    bool rotational() { return _rotational; }
 
     u8 recv_fis_error()
     {
@@ -285,6 +286,7 @@ private:
     bool _linkup = false;
     u8 _queue_depth;
     size_t _devsize;
+    bool _rotational = false;
     mutex _lock;
     mutex _cmd_lock;
     u32 _pnr;
