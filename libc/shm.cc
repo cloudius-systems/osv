@@ -90,12 +90,15 @@ int shmctl(int shmid, int cmd, struct shmid_ds *buf)
         if (!shm_fd_is_segment(shmid)) {
             return libc_error(EINVAL);
         }
+        fileref seg(fileref_from_fd(shmid));
         memset(buf, 0, sizeof(*buf));
-        // Count active attachments (shmmap entries whose fd matches shmid).
+        // Each attachment holds its own dup() of the segment's fd, so count
+        // the attachments whose fd refers to the same file as shmid.
         shmatt_t nattch = 0;
         SCOPE_LOCK(shm_lock);
         for (auto& e : shmmap) {
-            if (e.second == shmid) {
+            fileref f(fileref_from_fd(e.second));
+            if (f.get() == seg.get()) {
                 nattch++;
             }
         }

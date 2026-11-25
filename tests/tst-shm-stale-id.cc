@@ -72,7 +72,8 @@ int main()
     check(id >= 0, "shmget(IPC_PRIVATE) succeeds");
     void *a = shmat(id, nullptr, 0);
     check(a != (void *)-1, "shmat() on a real segment succeeds");
-    check(shmctl(id, IPC_STAT, &ds) == 0, "shmctl(IPC_STAT) on a real segment succeeds");
+    check(shmctl(id, IPC_STAT, &ds) == 0 && ds.shm_nattch == 1,
+          "shmctl(IPC_STAT) on a real segment reports one attachment");
     check(a != (void *)-1 && shmdt(a) == 0, "shmdt() succeeds");
     check(shmctl(id, IPC_RMID, nullptr) == 0, "shmctl(IPC_RMID) on a real segment succeeds");
 
