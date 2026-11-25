@@ -76,7 +76,14 @@ java_isolated_cmd := 'java_isolated: /java_isolated.so -cp /tests/java/tests.jar
 java_non_isolated_cmd := 'java_non_isolated: /java.so -cp /tests/java/tests.jar:/tests/java/isolates.jar \
         -Disolates.jar=/tests/java/isolates.jar org.junit.runner.JUnitCore io.osv.AllTestsThatTestNonIsolatedApp'
 java_no_wrapper_cmd := 'java_no_wrapper: /usr/lib/jvm/java/bin/java -cp /tests/java/tests.jar org.junit.runner.JUnitCore io.osv.BasicTests !'
-java_perms_cmd := 'java-perms: /usr/lib/jvm/java/bin/java -cp /tests/java/tests.jar io.osv.TestDomainPermissions !'
+# JDK 18 and later refuse System.setSecurityManager() unless the security manager is allowed at
+# start-up; JDK 8 and 11 take "allow" for the name of a class and do not start.
+java_major := $(shell javac -version 2>&1 | grep -oP "javac \K\d+")
+java_perms_opts := $(shell [ "$(java_major)" -ge 18 ] 2>/dev/null && echo -Djava.security.manager=allow)
+java_perms_cmd := 'java-perms: /usr/lib/jvm/java/bin/java $(java_perms_opts) -cp /tests/java/tests.jar io.osv.TestDomainPermissions !'
+
+# JDK 24 removed the security manager (JEP 486), so java-perms is not listed there.
+java_perms_listed := $(shell [ "$(java_major)" -lt 24 ] 2>/dev/null && echo yes)
 
 .PHONY: test_commands
 
@@ -87,7 +94,7 @@ test_commands:
 		echo $(java_isolated_cmd) >> test_commands && \
 		echo $(java_non_isolated_cmd) >> test_commands; fi )
 	$(call very-quiet, echo $(java_no_wrapper_cmd) >> test_commands)
-	$(call very-quiet, echo $(java_perms_cmd) >> test_commands)
+	$(if $(java_perms_listed),$(call very-quiet, echo $(java_perms_cmd) >> test_commands))
 else
 test_commands:
 	$(call very-quiet, rm -f test_commands)
