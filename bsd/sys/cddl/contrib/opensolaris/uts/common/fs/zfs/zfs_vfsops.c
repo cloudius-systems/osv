@@ -1749,6 +1749,13 @@ zfs_umount(vfs_t *vfsp, int fflag)
 			    rootzp->z_ref_cnt == 1)
 				count--;
 		}
+		/*
+		 * The thresholds below allow for a hold on the vfs structure
+		 * itself, which OSv never takes, so without this they would
+		 * let one hold of someone else's through, and the unmount
+		 * would free the file system under it.
+		 */
+		count++;
 #endif
 		if (zfsvfs->z_ctldir == NULL) {
 			if (count > 1)

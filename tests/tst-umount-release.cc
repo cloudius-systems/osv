@@ -12,8 +12,8 @@
 // (c) ramfs, the control: its unmount already releases them.
 // (r) rofs, on a private in-memory block device holding a minimal image.
 // (i) bsd ZFS: an idle unforced unmount succeeds and releases both.
-// (h) bsd ZFS: the same with one extra hold on the mount, which zfs_umount()
-//     allows.
+// (h) bsd ZFS: an unforced unmount refused with EBUSY while the mount itself
+//     has a hold, as the zfs ioctls take; then a real one.
 // (z) bsd ZFS: an unforced unmount refused with EBUSY, then a real one.
 // (d) bsd ZFS: the same with only the mount root directory open.
 // (v) bsd ZFS: the same with a bare reference on the root vnode.
@@ -96,8 +96,7 @@ static bool root_hashed(struct mount *mp, struct dentry *root)
 // Mount, check the covered dentry gained exactly the mount's reference,
 // unmount, and check that both references are gone.
 static void mount_cycle(const std::string& what, const std::string& dir,
-                        const char *dev, const char *fs, unsigned long flags,
-                        void (*after_mount)(struct mount *) = nullptr)
+                        const char *dev, const char *fs, unsigned long flags)
 {
     if (mkdir(dir.c_str(), 0755) != 0 && errno != EEXIST) {
         report(false, what + ": mkdir " + dir + ": " + strerror(errno));
@@ -121,9 +120,6 @@ static void mount_cycle(const std::string& what, const std::string& dir,
     report(c1 == c0 + 1, what + ": mount holds the covered dentry (" +
            n2s(c0) + " -> " + n2s(c1) + ")");
     report(r1 == 1, what + ": mount holds its root dentry (" + n2s(r1) + ")");
-    if (after_mount) {
-        after_mount(mp);
-    }
     if (umount(dir.c_str()) != 0) {
         report(false, what + ": unmount: " + strerror(errno));
         drele(cov);
@@ -216,20 +212,6 @@ static void test_zfs_idle()
         return;
     }
     mount_cycle("(i) zfs idle", "/tmp/umrel-i", "osv/zfs", "zfs", 0);
-}
-
-// (h) One extra hold on the mount itself (vfs_busy(), as zfs_ioctl.c's
-// VFS_HOLD() takes): zfs_umount() allows one ("off by 1"), so this idle
-// unmount succeeds, as it did when the check ran after the release.
-static void test_zfs_vfs_hold()
-{
-    if (!root_is_zfs()) {
-        printf("SKIP: (h) zfs: root filesystem is not bsd zfs\n");
-        return;
-    }
-    // The mount is freed by the unmount; the hold is never dropped.
-    mount_cycle("(h) zfs one vfs hold", "/tmp/umrel-h", "osv/zfs", "zfs", 0,
-                [](struct mount *mp) { vfs_busy(mp); });
 }
 
 static void test_zfs()
@@ -452,6 +434,28 @@ static void test_zfs_file_vnode()
 {
     busy_cycle("(w) zfs file vnode held", "/tmp/umrel-w",
                hold_file_vnode, unhold_vnode);
+}
+
+// (h) A hold on the mount itself (vfs_busy(), as zfs_ioctl.c's VFS_HOLD()
+// takes), with no vnode: the unmount would free the mount under it.
+static struct mount *held_mp;
+static bool hold_mount(const std::string& dir)
+{
+    held_mp = nullptr;
+    root_refs(dir, &held_mp);
+    if (held_mp) {
+        vfs_busy(held_mp);
+    }
+    return held_mp != nullptr;
+}
+static void unhold_mount()
+{
+    vfs_unbusy(held_mp);
+}
+
+static void test_zfs_vfs_hold()
+{
+    busy_cycle("(h) zfs mount held", "/tmp/umrel-h", hold_mount, unhold_mount);
 }
 
 // An optional argument selects cases by letter.
