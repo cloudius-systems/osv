@@ -224,11 +224,14 @@ int fork()
     return -1;
 }
 
+// OSv runs one process and has no sessions or process groups, so there is
+// nothing to detach from: the caller already leads its only session. Report
+// success, with the session id equal to the pid as on Linux. Daemons and
+// servers (PostgreSQL's postmaster, for one) treat a failing setsid() as fatal.
 OSV_LIBC_API
 pid_t setsid(void)
 {
-    WARN_STUBBED();
-    return -1;
+    return OSV_PID;
 }
 
 NO_SYS(OSV_LIBC_API int execvp(const char *, char *const []));
