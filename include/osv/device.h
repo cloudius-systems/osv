@@ -60,6 +60,7 @@ struct devinfo {
 #define D_BLK		0x00000002	/* block device */
 #define D_REM		0x00000004	/* removable device */
 #define D_TTY		0x00000010	/* tty device */
+#define D_ROTATIONAL	0x00000020	/* spinning media */
 
 typedef int (*devop_open_t)   (struct device *, int);
 typedef int (*devop_close_t)  (struct device *);
