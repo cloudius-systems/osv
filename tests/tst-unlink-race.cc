@@ -47,11 +47,7 @@ int main(int argc, char **argv)
                 if (mkdir(dpath, 0755) != 0 && errno != EEXIST && errors++ < 5) {
                     printf("mkdir: %s\n", strerror(errno));
                 }
-                // rmdir() may also fail with EBUSY: OSv refuses to remove a
-                // directory while anything else holds its vnode, and the
-                // other thread may be releasing its last dentry for it.
-                if (rmdir(dpath) != 0 && errno != ENOENT && errno != EBUSY &&
-                        errors++ < 5) {
+                if (rmdir(dpath) != 0 && errno != ENOENT && errors++ < 5) {
                     printf("rmdir: %s\n", strerror(errno));
                 }
                 cycles++;

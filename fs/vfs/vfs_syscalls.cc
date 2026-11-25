@@ -660,7 +660,7 @@ sys_rmdir(char *path)
 		error = ENOTDIR;
 		goto out_unlock;
 	}
-	if (vp->v_flags & VROOT || vp->v_refcnt >= 2) {
+	if (vp->v_flags & VROOT) {
 		error = EBUSY;
 		goto out_unlock;
 	}
