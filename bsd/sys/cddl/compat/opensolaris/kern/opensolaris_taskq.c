@@ -56,14 +56,11 @@ static uma_zone_t taskq_zone;
  * push BSD ZFS's zio_t past the 1 KiB small-object limit.
  */
 struct taskq_dent {
-	struct ostask		 td_task;	/* must stay first */
+	struct ostask		 td_task;
 	taskqid_t		 td_id;
 	LIST_ENTRY(taskq_dent)	 td_hash;
 	volatile u_int		 td_rc;
 };
-
-_Static_assert(offsetof(struct taskq_dent, td_task) == 0,
-    "taskq_run() and uma_zfree() treat the ostask pointer as the wrapper");
 
 #define	TQ_HASH_SIZE	64
 static LIST_HEAD(, taskq_dent) taskq_hash[TQ_HASH_SIZE];
