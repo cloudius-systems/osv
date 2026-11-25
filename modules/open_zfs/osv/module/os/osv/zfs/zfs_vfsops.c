@@ -663,12 +663,25 @@ zfs_osv_mount(struct mount *mp, const char *dev, int flags, const void *data)
 static int
 zfs_osv_unmount(struct mount *mp, int flags)
 {
-	(void) flags;
 	zfsvfs_t *zfsvfs = mp->m_data;
 	int error;
 
 	if (zfsvfs == NULL)
 		return (0);
+
+	/*
+	 * Refuse an unforced unmount while any vnode other than the root's is
+	 * alive, as bsd ZFS does.  sys_umount2() only checks for dentries, but
+	 * a vnode can live without one: the page cache keeps a vnode for a page
+	 * written through a MAP_SHARED mapping until it evicts the page, and
+	 * vrele() still has a vnode it is about to inactivate.  The drain below
+	 * would free their znodes, and the mount would be freed after it, under
+	 * them.  Every vnode keeps the mount busy (vget()'s vfs_busy()) until
+	 * vrele() has inactivated it, and sys_umount2() holds mount_lock, which
+	 * vfs_busy() takes, so no vnode can appear after this check.
+	 */
+	if (!(flags & MNT_FORCE) && mp->m_count > 1)
+		return (SET_ERROR(EBUSY));
 
 	if ((error = zfs_enter(zfsvfs, FTAG)) != 0)
 		return (error);
