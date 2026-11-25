@@ -14,6 +14,7 @@
 #include <sys/zfs_sa.h>
 #include <sys/dmu.h>
 #include <sys/dmu_objset.h>
+#include <sys/dsl_pool.h>
 #include <sys/dmu_tx.h>
 #include <sys/sa.h>
 #include <sys/zap.h>
@@ -562,11 +563,59 @@ zfs_znode_fini(void)
 	/* Nothing needed on OSv */
 }
 
+/*
+ * Drop the last hold on a znode taken by zfs_zget() outside the VFS, as
+ * zfs_vop_inactive() drops a vnode binding's: under the object hold, so a
+ * concurrent zfs_zget() cannot re-grab it in between.  An unlinked znode
+ * cannot be re-grabbed (zfs_zget() refuses it), so it is released after the
+ * hold is dropped, through zfs_zinactive(), which frees its space.
+ */
+static void
+zfs_zrele_async_task(void *arg)
+{
+	znode_t *zp = arg;
+	zfsvfs_t *zfsvfs = zp->z_zfsvfs;
+	uint64_t z_id = zp->z_id;
+
+	ZFS_OBJ_HOLD_ENTER(zfsvfs, z_id);
+	if (atomic_dec_32_nv(&zp->z_ref_cnt) != 0) {
+		ZFS_OBJ_HOLD_EXIT(zfsvfs, z_id);
+		return;
+	}
+	if (zp->z_unlinked && zp->z_sa_hdl != NULL) {
+		ZFS_OBJ_HOLD_EXIT(zfsvfs, z_id);
+		zfs_zinactive(zp);
+		return;
+	}
+	if (zp->z_sa_hdl != NULL)
+		zfs_znode_dmu_fini(zp);
+	ZFS_OBJ_HOLD_EXIT(zfsvfs, z_id);
+	zfs_znode_free(zp);
+}
+
+/*
+ * Release a hold from a context that must not tear the znode down inline:
+ * zfs_get_data() calls this with the txg held open, and freeing an unlinked
+ * file needs a transaction.  Like Linux, drop the hold in place unless it is
+ * the last one, and hand the last one to the pool's zrele taskq.
+ * zfs_osv_unmount() waits for that taskq before it tears the znodes down.
+ */
 void
 zfs_zrele_async(znode_t *zp)
 {
-	(void) zp;
-	/* Stub: synchronous release for now */
+	objset_t *os = zp->z_zfsvfs->z_os;
+	uint32_t n;
+
+	for (;;) {
+		n = zp->z_ref_cnt;
+		ASSERT3U(n, >, 0);
+		if (n == 1)
+			break;
+		if (atomic_cas_32(&zp->z_ref_cnt, n, n - 1) == n)
+			return;
+	}
+	VERIFY(taskq_dispatch(dsl_pool_zrele_taskq(dmu_objset_pool(os)),
+	    zfs_zrele_async_task, zp, TQ_SLEEP) != TASKQID_INVALID);
 }
 
 /*
