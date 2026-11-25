@@ -93,5 +93,54 @@ int main(int argc, char **argv)
   }
   std::cerr << "shm test 2 succeeded" << std::endl;
 
+  ////////////////////////////////////////////////////////////////////////////////
+  // After IPC_RMID, the key no longer names the removed segment, even while
+  // it is still attached: shmget() without IPC_CREAT fails with ENOENT, and
+  // shmget() with IPC_CREAT | IPC_EXCL creates a new, zero-filled segment.
+  shmkey = 3;
+  shmid = shmget(shmkey, 1024, IPC_CREAT | 0666);
+  if (shmid < 0) {
+    std::cerr << "Cannot create shm segment for key " << shmkey << ": " << strerror(errno) << std::endl;
+    return 1;
+  }
+  addr1 = (char*)shmat(shmid, NULL, 0);
+  if (addr1 == MAP_FAILED) {
+    std::cerr << "Cannot attach to shm id " << shmid << ": " << strerror(errno) << std::endl;
+    return 1;
+  }
+  strcpy(addr1, "old segment");
+  if (shmctl(shmid, IPC_RMID, NULL) < 0) {
+    std::cerr << "Cannot remove shm id " << shmid << ": " << strerror(errno) << std::endl;
+    return 1;
+  }
+  // Check that the removed segment's key is gone.
+  errno = 0;
+  shmid2 = shmget(shmkey, 1024, 0666);
+  if (shmid2 != -1 || errno != ENOENT) {
+    std::cerr << "shmget of a removed key returned " << shmid2 << " (" << strerror(errno) << "), expected ENOENT" << std::endl;
+    return 1;
+  }
+  // Check that the key can be used to create a new segment.
+  shmid2 = shmget(shmkey, 1024, IPC_CREAT | IPC_EXCL | 0666);
+  if (shmid2 < 0) {
+    std::cerr << "Cannot create a new shm segment for removed key " << shmkey << ": " << strerror(errno) << std::endl;
+    return 1;
+  }
+  addr2 = (char*)shmat(shmid2, NULL, 0);
+  if (addr2 == MAP_FAILED) {
+    std::cerr << "Cannot attach to shm id " << shmid2 << ": " << strerror(errno) << std::endl;
+    return 1;
+  }
+  // Check that the new segment is a different, zero-filled segment, and
+  // that the old one is still attached and intact.
+  if (addr2[0] != 0 || strcmp(addr1, "old segment") != 0) {
+    std::cerr << "shmget after IPC_RMID did not create a new segment" << std::endl;
+    return 1;
+  }
+  shmdt(addr1);
+  shmdt(addr2);
+  shmctl(shmid2, IPC_RMID, NULL);
+  std::cerr << "shm test 3 succeeded" << std::endl;
+
   return ret;
 }
