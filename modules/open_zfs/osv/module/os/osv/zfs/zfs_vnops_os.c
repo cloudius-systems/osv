@@ -1034,11 +1034,13 @@ zfs_vop_lookup(struct vnode *dvp, char *name, struct vnode **vpp)
 	/*
 	 * vget() looks up the vnode cache by (mount, inode).  If not
 	 * cached, it allocates a new vnode and calls zfs_osv_vget() to
-	 * load the znode from disk.
+	 * load the znode from disk.  If that fails, vget() returns no vnode
+	 * and zfs_osv_vget()'s error, e.g. ENOENT when the file was removed
+	 * after the zap_lookup() above.
 	 */
-	vget(dvp->v_mount, zoid, &vp);
+	error = vget(dvp->v_mount, zoid, &vp);
 	if (vp == NULL)
-		return (SET_ERROR(ENOMEM));
+		return (error != 0 ? error : SET_ERROR(ENOMEM));
 
 	*vpp = vp;
 	return (0);
