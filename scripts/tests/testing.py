@@ -76,7 +76,7 @@ def scan_errors(s,scan_for_failed_to_load_object_error=True):
 	    "Failed looking up symbol",
 	    "Failure",
         "program exited with status",
-        r"program tests/(.*?) returned",
+        r"program \S+ returned",
         "Exception was caught while running",
         "at org.junit.runner.JUnitCore.main",
         "ContextFailedException",

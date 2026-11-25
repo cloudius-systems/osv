@@ -51,6 +51,7 @@
 #include <osv/xen.hh>
 #endif
 #include <osv/options.hh>
+#include <osv/stubbing.hh>
 #include <osv/mount.h>
 #include <dirent.h>
 #include <mntent.h>
@@ -550,6 +551,17 @@ static int load_ext_library_and_mount_ext_root(bool pivot_when_error = false)
     });
 }
 
+// Wait for a command given on the command line to finish.  A non-zero return
+// code is printed on the console even without --verbose: it is the only sign
+// of failure from a program that prints none, and scripts/test.py looks for it.
+static void join_command(shared_app_t app)
+{
+    int ret = app->join();
+    if (ret) {
+        debug_always("program %s returned %d\n", app->get_command().c_str(), ret);
+    }
+}
+
 void* do_main_thread(void *_main_args)
 {
     auto app_cmdline = static_cast<char*>(_main_args);
@@ -784,7 +796,7 @@ void* do_main_thread(void *_main_args)
             if (suffix == "&!") {
                 detached.push_back(app);
             } else if (!background) {
-                app->join();
+                join_command(app);
             } else {
                 bg.push_back(app);
             }
@@ -795,7 +807,7 @@ void* do_main_thread(void *_main_args)
     }
 
     for (auto app : bg) {
-        app->join();
+        join_command(app);
     }
 
     for (auto app : detached) {

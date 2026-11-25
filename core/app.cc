@@ -467,10 +467,6 @@ void application::run_main()
     _return_code = _main(_args.size(), _argv.get());
     optind = old_optind;
 
-    if (_return_code) {
-        debugf("program %s returned %d\n", _command.c_str(), _return_code);
-    }
-
     if(_post_main) {
         _post_main();
     }
