@@ -2094,10 +2094,9 @@ static int io_uring_submit_sqes(struct io_uring_ctx *ctx, unsigned count)
  * Wait for at least min_complete CQEs to be available.
  *
  * If deadline_valid is true, the wait is bounded by deadline (an absolute
- * osv::clock::uptime point); on expiry we return -ETIME if fewer than
- * min_complete CQEs are ready.  This backs the io_uring_enter() EXT_ARG
- * timeout (A2-12).  A min_wait floor is applied via min_deadline: the wait is
- * not cut short before that point even when the main deadline is sooner.
+ * osv::clock::uptime point); on expiry we return 0 if any CQE is ready and
+ * -ETIME if none is.  This backs the io_uring_enter() EXT_ARG timeout
+ * (A2-12).
  * ---------------------------------------------------------------------- */
 
 static int io_uring_wait_cqe(struct io_uring_ctx *ctx, unsigned min_complete,
@@ -2132,8 +2131,9 @@ static int io_uring_wait_cqe(struct io_uring_ctx *ctx, unsigned min_complete,
             if (ctx->pending_ops == 0 && (tail - head) > 0)
                 return 0;
 
+            /* Like Linux, a timeout is only an error if no CQE is ready. */
             if (deadline_valid && tmr.expired())
-                return (tail - head) >= min_complete ? 0 : -ETIME;
+                return (tail - head) > 0 ? 0 : -ETIME;
 
             if (deadline_valid)
                 sched::thread::wait_for(ctx->mtx, ctx->wait_cq, tmr);
@@ -2596,6 +2596,11 @@ static long io_uring_setup_impl(unsigned entries, struct io_uring_params *params
          *   RW_CUR_POS      - offset -1 uses the file's current position.
          *   FAST_POLL       - POLL_ADD-backed readiness for pollable ops (A2-3).
          *   SQPOLL_NONFIXED - SQPOLL works without pre-registered files.
+         *   EXT_ARG         - io_uring_enter(GETEVENTS) takes a struct
+         *                     io_uring_getevents_arg with a timeout (ts).
+         *                     liburing checks this bit before using it for
+         *                     timed waits; without it, liburing adds a TIMEOUT
+         *                     SQE to every timed wait instead.
          *   CQE_SKIP        - IOSQE_CQE_SKIP_SUCCESS is honored at completion.
          *   NATIVE_WORKERS  - real persistent io-wq worker pool (A2-1).
          * SINGLE_MMAP is deliberately NOT advertised: we allocate the SQ ring,
@@ -2607,6 +2612,7 @@ static long io_uring_setup_impl(unsigned entries, struct io_uring_params *params
                            | IORING_FEAT_RW_CUR_POS
                            | IORING_FEAT_FAST_POLL
                            | IORING_FEAT_SQPOLL_NONFIXED
+                           | IORING_FEAT_EXT_ARG
                            | IORING_FEAT_CQE_SKIP
                            | IORING_FEAT_NATIVE_WORKERS;
 
@@ -2770,7 +2776,8 @@ static int io_uring_enter_impl(int fd, unsigned to_submit, unsigned min_complete
 
     if (flags & IORING_ENTER_GETEVENTS) {
         int err = io_uring_wait_cqe(ctx, min_complete, deadline_valid, deadline);
-        if (err) {
+        /* Like Linux, a wait error is only returned if nothing was submitted. */
+        if (err && !submitted) {
             fdrop(fp);
             return err;
         }
