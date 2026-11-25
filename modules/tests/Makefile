@@ -157,6 +157,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-blk-
 	tst-splice.so \
 	tst-fs-syscalls.so \
 	tst-vfs-mount-pins.so \
+	tst-mmap-private-race.so \
 	tst-prctl.so \
 	tst-mmap-file-cow.so \
 	tst-membarrier.so \
