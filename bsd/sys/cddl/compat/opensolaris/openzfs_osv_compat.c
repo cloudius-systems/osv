@@ -289,9 +289,11 @@ taskq_empty_ent(taskq_ent_t *e)
  * is queued, a taskq worker may run it at once, and the task commonly frees
  * the object that embeds the entry (dsl_dir_evict_async frees the dsl_dir_t,
  * zio_done frees the zio_t), so a store after taskq_dispatch_safe() returns
- * is a write into freed memory.  tqent_id is therefore set first; it is the
- * address of the embedded ostask, which is what taskq_dispatch_safe()
- * returns.
+ * is a write into freed memory.
+ *
+ * tqent_id stays 0 from taskq_init_ent(), as in FreeBSD's spl_taskq.c: a
+ * caller-owned entry is not in the id table, so it has no id that
+ * taskq_wait_id() or taskq_cancel_id() could use.
  */
 void
 taskq_dispatch_ent(taskq_t *tq, task_func_t func, void *arg, uint_t flags,
@@ -299,7 +301,6 @@ taskq_dispatch_ent(taskq_t *tq, task_func_t func, void *arg, uint_t flags,
 {
 	e->tqent_func = func;
 	e->tqent_arg  = arg;
-	e->tqent_id   = (taskqid_t)(void *)&e->tqent_ostask;
 	(void) taskq_dispatch_safe(tq, func, arg, flags, &e->tqent_ostask);
 }
 
