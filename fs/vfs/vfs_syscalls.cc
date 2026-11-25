@@ -135,20 +135,45 @@ sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 				drele(ddp);
 				return error;
 			}
-			mode &= ~S_IFMT;
-			mode |= S_IFREG;
-			error = VOP_CREATE(ddp->d_vnode, filename, mode);
+			/*
+			 * Hold the directory's lock from checking that the file
+			 * is still missing until looking up the file created
+			 * here. Otherwise another thread could create the file
+			 * in between, making this open() fail with EEXIST or
+			 * ignore O_EXCL, or remove it, making it fail with
+			 * ENOENT.
+			 */
+			bool created = false;
+			error = namei_last_nofollow(path, ddp, &dp);
+			if (error == ENOENT) {
+				mode &= ~S_IFMT;
+				mode |= S_IFREG;
+				error = VOP_CREATE(ddp->d_vnode, filename, mode);
+				if (!error) {
+					created = true;
+					error = namei_last_nofollow(path, ddp, &dp);
+				}
+			}
 			vn_unlock(ddp->d_vnode);
 			drele(ddp);
 
 			if (error)
 				return error;
-			osv_inotify_notify(path, IN_CREATE, 0, 0);
-			if ((error = namei(path, &dp)) != 0)
-				return error;
+			if (created)
+				osv_inotify_notify(path, IN_CREATE, 0, 0);
+			if (!created && (flags & O_EXCL)) {
+				error = EEXIST;
+				goto out_drele;
+			}
+			if (dp->d_vnode->v_type == VLNK) {
+				/* A symbolic link to a file that namei() did not find */
+				drele(dp);
+				return ENOENT;
+			}
 
 			vp = dp->d_vnode;
-			flags &= ~O_TRUNC;
+			if (created)
+				flags &= ~O_TRUNC;
 		} else if (error) {
 			return error;
 		} else {
