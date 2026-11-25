@@ -636,16 +636,23 @@ sys_rmdir(char *path)
 
 	if ((error = check_dir_empty(path)) != 0)
 		return error;
-	error = namei(path, &dp);
-	if (error)
+	if ((error = lookup(path, &ddp, &name)) != 0)
 		return error;
 
-	vp = dp->d_vnode;
-	if ((error = lookup(path, &ddp, &name)) != 0)
-		goto out;
-
-	/* Directory before entry, the order lookup takes them in. */
+	/*
+	 * Lock the parent directory before looking the directory up, and keep
+	 * it locked until the directory's dentry is removed, as sys_unlink()
+	 * does, so that another thread cannot remove it and create a new one
+	 * with the same name in between.
+	 */
 	vn_lock(ddp->d_vnode);
+	if ((error = namei_last_nofollow(path, ddp, &dp)) != 0) {
+		vn_unlock(ddp->d_vnode);
+		drele(ddp);
+		return error;
+	}
+
+	vp = dp->d_vnode;
 	vn_lock(vp);
 	if ((error = vn_access(vp, VWRITE)) != 0)
 		goto out_unlock;
@@ -663,8 +670,8 @@ sys_rmdir(char *path)
 		osv_inotify_notify(path, IN_DELETE, 1, 0);
 	}
 	vn_unlock(vp);
-	vn_unlock(ddp->d_vnode);
 	dentry_remove(dp);
+	vn_unlock(ddp->d_vnode);
 	drele(ddp);
 	drele(dp);
 	return error;
@@ -673,7 +680,6 @@ sys_rmdir(char *path)
 	vn_unlock(vp);
 	vn_unlock(ddp->d_vnode);
 	drele(ddp);
- out:
 	drele(dp);
 	return error;
 }
@@ -1114,14 +1120,20 @@ sys_unlink(char *path)
 		return (error);
 	}
 
+	/*
+	 * Lock the directory before looking the file up, and keep it locked
+	 * until the file's dentry is removed. Otherwise another thread could
+	 * remove the file and create a new one with the same name in between,
+	 * and VOP_REMOVE(), which removes the entry by name, would be given
+	 * the vnode of a file that is already gone.
+	 */
+	vn_lock(ddp->d_vnode);
 	error = namei_last_nofollow(path, ddp, &dp);
 	if (error != 0) {
 		goto out;
 	}
 
 	vp = dp->d_vnode;
-	/* Directory before entry, the order lookup takes them in. */
-	vn_lock(ddp->d_vnode);
 	vn_lock(vp);
 	if (vp->v_type == VDIR) {
 	    // Posix specifies that we should return EPERM here, but Linux
@@ -1143,16 +1155,16 @@ sys_unlink(char *path)
 		osv_inotify_notify(path, IN_DELETE, 0, 0);
 	}
 	vn_unlock(vp);
-	vn_unlock(ddp->d_vnode);
 	dentry_remove(dp);
+	vn_unlock(ddp->d_vnode);
 	drele(ddp);
 	drele(dp);
 	return error;
  out:
 	if (vp != nullptr) {
 		vn_unlock(vp);
-		vn_unlock(ddp->d_vnode);
 	}
+	vn_unlock(ddp->d_vnode);
 
 	if (dp != nullptr) {
 		drele(dp);

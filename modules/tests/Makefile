@@ -253,6 +253,7 @@ tests += tst-ramfs-unlink-race.so
 tests += tst-rlimit.so
 tests += misc-nvme-sq-full.so
 tests += tst-rename-deadlock.so
+tests += tst-unlink-race.so
 tests += tst-close-range.so
 tests += tst-blk-all-devices.so
 tests += tst-numa.so
