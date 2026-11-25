@@ -382,7 +382,7 @@ The statically linked executables interact with OSv kernel by directly making sy
 
 In this mode, the Linux-compatibility is should be improved. But compared to the dynamically linked executables that call *local functions*, the statically linked ones suffer from the ~110 ns system call overhead mainly paid to save and restore the state of regular registers and FPU. Having said that, most Linux applications have been written with the understanding that system calls are expensive and avoid them if possible so neither statically linked executables are affected negatively nor the dynamically linked ones launched via built-in dynamic linker benefit in any significant way.
 
-For more information about OSv implementet syscalls please read this [wiki](https://github.com/cloudius-systems/osv/wiki/Syscalls).
+For more information about OSv implemented syscalls please read this [wiki](https://github.com/cloudius-systems/osv/wiki/Syscalls).
 
 ### Networking
 

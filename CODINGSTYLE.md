@@ -46,7 +46,7 @@ applying these rules is required.
 ```
 
 2.3 Do not use spaces between a function and its parameters, or a
-template and its paramters.
+template and its parameters.
 ```
    sqrt(2.0)
    std::vector<object*>
@@ -132,9 +132,9 @@ void abort(void) {
 double sqrt(double d) {
 ```
 
-7.3 Avoid parantheses around return value
+7.3 Avoid parentheses around return value
 
-"return" is not a function - it doesn't need parantheses. For example:
+"return" is not a function - it doesn't need parentheses. For example:
 
 ```C++
 return 0;
