@@ -249,6 +249,8 @@ internal-api-tests += tst-umount-release.so
 ifeq ($(conf_zfs),openzfs)
 $(out)/tests/tst-umount-release.o: COMMON += -DCONF_ZFS_OPENZFS
 endif
+tests += tst-blk-inflight.so
+internal-api-tests += tst-blk-inflight.so
 
 # Tests with special compilation parameters needed...
 $(out)/tests/tst-mmap.so: COMMON += -Wl,-z,now
