@@ -283,9 +283,15 @@ taskq_empty_ent(taskq_ent_t *e)
  * Routes through taskq_dispatch_safe(), which initializes and enqueues the
  * entry's own ostask without ever freeing it.  The entry is owned by the
  * caller (it lives inside a zio_t/dbuf_t/etc.), matching upstream FreeBSD
- * semantics.  tqent_id is the address of the embedded ostask, which stays
- * valid for the entry's lifetime, so taskq_wait_id() never dereferences
- * freed memory.
+ * semantics.
+ *
+ * Every store into the entry must happen BEFORE the enqueue.  Once the task
+ * is queued, a taskq worker may run it at once, and the task commonly frees
+ * the object that embeds the entry (dsl_dir_evict_async frees the dsl_dir_t,
+ * zio_done frees the zio_t), so a store after taskq_dispatch_safe() returns
+ * is a write into freed memory.  tqent_id is therefore set first; it is the
+ * address of the embedded ostask, which is what taskq_dispatch_safe()
+ * returns.
  */
 void
 taskq_dispatch_ent(taskq_t *tq, task_func_t func, void *arg, uint_t flags,
@@ -293,8 +299,8 @@ taskq_dispatch_ent(taskq_t *tq, task_func_t func, void *arg, uint_t flags,
 {
 	e->tqent_func = func;
 	e->tqent_arg  = arg;
-	e->tqent_id   = taskq_dispatch_safe(tq, func, arg, flags,
-	    &e->tqent_ostask);
+	e->tqent_id   = (taskqid_t)(void *)&e->tqent_ostask;
+	(void) taskq_dispatch_safe(tq, func, arg, flags, &e->tqent_ostask);
 }
 
 /*
