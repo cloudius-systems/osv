@@ -1740,7 +1740,7 @@ zfs_umount(vfs_t *vfsp, int fflag)
 		 * own, and any active references underneath are
 		 * reflected in the vnode count.
 		 */
-		int count = vfsp->m_count;
+		int count = __atomic_load_n(&vfsp->m_count, __ATOMIC_ACQUIRE);
 #ifdef __OSV__
 		/*
 		 * On OSv this check runs before release_mp_dentries() below,

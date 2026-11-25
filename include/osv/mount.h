@@ -47,7 +47,7 @@ __BEGIN_DECLS
 struct mount {
 	struct vfsops	*m_op;		/* pointer to vfs operation */
 	int		m_flags;	/* mount flag */
-	int		m_count;	/* reference count */
+	int		m_count;	/* reference count, lock-free */
 	char            m_path[PATH_MAX]; /* mounted path */
 	char            m_special[PATH_MAX]; /* resource */
 	struct device	*m_dev;		/* mounted device */

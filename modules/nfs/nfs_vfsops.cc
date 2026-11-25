@@ -52,7 +52,7 @@ static int nfs_op_unmount(struct mount *mp, int flags)
     assert(mp);
 
     // Make sure nothing is used under this mount point.
-    if (mp->m_count > 1) {
+    if (__atomic_load_n(&mp->m_count, __ATOMIC_ACQUIRE) > 1) {
         return EBUSY;
     }
 
