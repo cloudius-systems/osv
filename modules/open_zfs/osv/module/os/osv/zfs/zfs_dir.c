@@ -18,6 +18,8 @@
 #include <sys/dmu_tx.h>
 #include <sys/sa.h>
 #include <sys/zap.h>
+#include <sys/dsl_dir.h>
+#include <sys/dsl_dataset.h>
 
 /*
  * Timestamp update setup for create/modify operations.
@@ -619,18 +621,139 @@ zfs_zrele_async(znode_t *zp)
 }
 
 /*
- * Drain the unlinked set: clean up any znodes that had no links when
- * the filesystem was crashed or force-unmounted.
+ * Drain the unlinked set at mount: free every object that lost its last
+ * link while still open when the pool was last exported, crashed, or
+ * unmounted.
  *
- * OSv stub: our zfs_zget is not yet fully implemented, so we cannot
- * actually reclaim the unlinked objects here. On a freshly-created pool
- * (zpool create) the unlinked set is empty and this is a no-op.  Full
- * recovery of crash-orphaned inodes requires a working zfs_zget.
+ * Each entry is loaded with zfs_zget(), marked unlinked, and released
+ * through zfs_zinactive(), which frees it with zfs_rmnode().  An entry
+ * that is already live in memory (zfs_zget() returns ENOENT for an
+ * unlinked live znode) belongs to its current holder and is skipped.
  */
 void
 zfs_unlinked_drain(zfsvfs_t *zfsvfs)
 {
-	(void) zfsvfs;
+	zap_cursor_t	zc;
+	zap_attribute_t *zap;
+	dmu_object_info_t doi;
+	znode_t		*zp;
+	dmu_tx_t	*tx;
+	int		error;
+
+	zap = zap_attribute_alloc();
+	for (zap_cursor_init(&zc, zfsvfs->z_os, zfsvfs->z_unlinkedobj);
+	    zap_cursor_retrieve(&zc, zap) == 0;
+	    zap_cursor_advance(&zc)) {
+		error = dmu_object_info(zfsvfs->z_os,
+		    zap->za_first_integer, &doi);
+		if (error != 0)
+			continue;
+
+		error = zfs_zget(zfsvfs, zap->za_first_integer, &zp);
+		if (error != 0)
+			continue;
+
+		/* zfs_rmnode() requires a zero link count on disk. */
+		if (zp->z_links != 0) {
+			tx = dmu_tx_create(zfsvfs->z_os);
+			dmu_tx_hold_sa(tx, zp->z_sa_hdl, B_FALSE);
+			error = dmu_tx_assign(tx, DMU_TX_WAIT);
+			if (error != 0) {
+				dmu_tx_abort(tx);
+				zfs_zinactive(zp);
+				continue;
+			}
+			zp->z_links = 0;
+			VERIFY0(sa_update(zp->z_sa_hdl, SA_ZPL_LINKS(zfsvfs),
+			    &zp->z_links, sizeof (zp->z_links), tx));
+			dmu_tx_commit(tx);
+		}
+
+		zp->z_unlinked = B_TRUE;
+		zfs_zinactive(zp);
+	}
+	zap_cursor_fini(&zc);
+	zap_attribute_free(zap);
+}
+
+/*
+ * Free the data and the object of a file whose last link is gone, after
+ * its last reference was dropped, and remove it from the unlinked set.
+ *
+ * On any failure (no space for the final transaction, or an interrupted
+ * free) the object stays in the unlinked set and the next mount's
+ * zfs_unlinked_drain() retries it.  Either way the znode is freed.
+ *
+ * OSv cannot create extended-attribute directories (zfs_make_xattrdir()
+ * returns ENOTSUP), so there is no xattr directory to purge here; one
+ * found on a pool written elsewhere is moved to the unlinked set, as
+ * FreeBSD does.  shortcut: OSv never purges such a directory's entries, so
+ * they leak on pools imported from FreeBSD/Linux with xattr=dir files;
+ * port zfs_purgedir() if that ever matters.
+ */
+void
+zfs_rmnode(znode_t *zp)
+{
+	zfsvfs_t	*zfsvfs = zp->z_zfsvfs;
+	objset_t	*os = zfsvfs->z_os;
+	dmu_tx_t	*tx;
+	uint64_t	z_id = zp->z_id;
+	uint64_t	acl_obj;
+	uint64_t	xattr_obj;
+	uint64_t	count;
+	int		error;
+
+	ASSERT0(zp->z_links);
+
+	/* Free the file data first, in as many transactions as it takes. */
+	error = dmu_free_long_range(os, z_id, 0, DMU_OBJECT_END);
+	if (error != 0)
+		goto keep;
+
+	error = sa_lookup(zp->z_sa_hdl, SA_ZPL_XATTR(zfsvfs),
+	    &xattr_obj, sizeof (xattr_obj));
+	if (error != 0)
+		xattr_obj = 0;
+
+	acl_obj = zfs_external_acl(zp);
+
+	tx = dmu_tx_create(os);
+	dmu_tx_hold_free(tx, z_id, 0, DMU_OBJECT_END);
+	dmu_tx_hold_zap(tx, zfsvfs->z_unlinkedobj, FALSE, NULL);
+	if (xattr_obj)
+		dmu_tx_hold_zap(tx, zfsvfs->z_unlinkedobj, TRUE, NULL);
+	if (acl_obj)
+		dmu_tx_hold_free(tx, acl_obj, 0, DMU_OBJECT_END);
+	zfs_sa_upgrade_txholds(tx, zp);
+	error = dmu_tx_assign(tx, DMU_TX_WAIT);
+	if (error != 0) {
+		dmu_tx_abort(tx);
+		goto keep;
+	}
+
+	if (xattr_obj) {
+		VERIFY0(zap_add_int(os, zfsvfs->z_unlinkedobj,
+		    xattr_obj, tx));
+	}
+
+	mutex_enter(&os->os_dsl_dataset->ds_dir->dd_activity_lock);
+	VERIFY0(zap_remove_int(os, zfsvfs->z_unlinkedobj, z_id, tx));
+	if (zap_count(os, zfsvfs->z_unlinkedobj, &count) == 0 && count == 0)
+		cv_broadcast(&os->os_dsl_dataset->ds_dir->dd_activity_cv);
+	mutex_exit(&os->os_dsl_dataset->ds_dir->dd_activity_lock);
+
+	dataset_kstats_update_nunlinked_kstat(&zfsvfs->z_kstat, 1);
+
+	zfs_znode_delete(zp, tx);
+	zfs_znode_free(zp);
+	dmu_tx_commit(tx);
+	return;
+
+keep:
+	ZFS_OBJ_HOLD_ENTER(zfsvfs, z_id);
+	zfs_znode_dmu_fini(zp);
+	ZFS_OBJ_HOLD_EXIT(zfsvfs, z_id);
+	zfs_znode_free(zp);
 }
 
 /*

@@ -130,6 +130,8 @@ zfs-openzfs-only-tests := tst-zfs-recordsize.so tst-zfs-direct-io.so \
 	tst-zfs-encryption.so misc-zfs-db-sim.so tst-zfs-trim.so misc-zfs-mmap-bench.so
 zfs-openzfs-only-tests += tst-zfs-nested-umount.so
 zfs-openzfs-only-tests += tst-zfs-recordsize-mount.so
+zfs-openzfs-only-tests += tst-zfs-unlink-space.so
+zfs-openzfs-only-tests += tst-zfs-unlinked-readonly.so
 
 # OpenZFS user-space libraries needed by the dlopen("libzfs.so") tests above.
 # libsolaris.so is already resident as the mounted fs driver, so only these six.
