@@ -241,6 +241,7 @@ endif
 tests += tst-stdout-unbuffered.so
 
 tests += testrunner.so
+tests += tst-inotify.so
 
 tests += tst-libaio.so
 tests += tst-ramfs-unlink-race.so

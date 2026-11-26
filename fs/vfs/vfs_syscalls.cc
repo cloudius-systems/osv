@@ -41,6 +41,7 @@
 
 #include <sys/stat.h>
 #include <dirent.h>
+#include <sys/inotify.h>
 
 #include <limits.h>
 #include <unistd.h>
@@ -49,6 +50,7 @@
 #include <stdio.h>
 #include <errno.h>
 #include <fcntl.h>
+#include <atomic>
 
 #include <osv/prex.h>
 #include <osv/vnode.h>
@@ -141,6 +143,7 @@ sys_open(char *path, int flags, mode_t mode, struct file **fpp)
 
 			if (error)
 				return error;
+			osv_inotify_notify(path, IN_CREATE, 0, 0);
 			if ((error = namei(path, &dp)) != 0)
 				return error;
 
@@ -563,6 +566,11 @@ sys_mkdir(char *path, mode_t mode)
 
 	DPRINTF(VFSDB_SYSCALL, ("sys_mkdir: path=%s mode=%d\n",	path, mode));
 
+	/* POSIX allows trailing slashes in the name of the new directory. */
+	size_t len = strlen(path);
+	while (len > 1 && path[len - 1] == '/')
+		path[--len] = '\0';
+
 	error = namei(path, &dp);
 	if (!error) {
 		/* File already exists */
@@ -582,6 +590,9 @@ sys_mkdir(char *path, mode_t mode)
 	mode |= S_IFDIR;
 
 	error = VOP_MKDIR(ddp->d_vnode, name, mode);
+	if (!error) {
+		osv_inotify_notify(path, IN_CREATE, 1, 0);
+	}
  out:
 	vn_unlock(ddp->d_vnode);
 	drele(ddp);
@@ -623,6 +634,9 @@ sys_rmdir(char *path)
 	error = VOP_RMDIR(ddp->d_vnode, vp, name);
 	vn_unlock(ddp->d_vnode);
 
+	if (!error) {
+		osv_inotify_notify(path, IN_DELETE, 1, 0);
+	}
 	vn_unlock(vp);
 	dentry_remove(dp);
 	drele(ddp);
@@ -671,6 +685,9 @@ sys_mknod(char *path, mode_t mode)
 		error = VOP_MKDIR(ddp->d_vnode, name, mode);
 	else
 		error = VOP_CREATE(ddp->d_vnode, name, mode);
+	if (!error) {
+		osv_inotify_notify(path, IN_CREATE, S_ISDIR(mode) ? 1 : 0, 0);
+	}
  out:
 	vn_unlock(ddp->d_vnode);
 	drele(ddp);
@@ -843,6 +860,25 @@ sys_rename(char *src, char *dest)
 		dentry_move(dp1, ddp2, dname);
 		if (dp2)
 			dentry_remove(dp2);
+		/* After the dentry cache update, so a woken reader sees the new names. */
+		int is_dir = (vp1->v_type == VDIR) ? 1 : 0;
+		// `src` is still the full source path, but `dest` was truncated to its
+		// parent above (*dname was NUL'd), so rebuild the full dest path.
+		char full_dest[PATH_MAX];
+		if (dest[0] == '/' && dest[1] == '\0') {
+			snprintf(full_dest, sizeof(full_dest), "/%s", dname);
+		} else {
+			snprintf(full_dest, sizeof(full_dest), "%s/%s", dest, dname);
+		}
+		// A single move fires an IN_MOVED_FROM/IN_MOVED_TO pair that readers
+		// correlate by a shared non-zero cookie.
+		static std::atomic<uint32_t> move_cookie_seq{1};
+		uint32_t cookie = move_cookie_seq++;
+		if (cookie == 0) {
+			cookie = move_cookie_seq++;
+		}
+		osv_inotify_notify(src, IN_MOVED_FROM, is_dir, cookie);
+		osv_inotify_notify(full_dest, IN_MOVED_TO, is_dir, cookie);
 	}
 
  err3:
@@ -916,6 +952,9 @@ sys_symlink(const char *oldpath, const char *newpath)
 		goto out;
 	}
 	error = VOP_SYMLINK(newdirdp->d_vnode, name, op);
+	if (!error) {
+		osv_inotify_notify(np, IN_CREATE, 0, 0);
+	}
 
 out:
 	if (newdirdp != nullptr) {
@@ -978,6 +1017,9 @@ sys_link(char *oldpath, char *newpath)
 	}
 
 	error = VOP_LINK(newdirdp->d_vnode, vp, name);
+	if (!error) {
+		osv_inotify_notify(newpath, IN_CREATE, 0, 0);
+	}
  out1:
 	vn_unlock(newdirdp->d_vnode);
 	drele(newdirdp);
@@ -1033,6 +1075,9 @@ sys_unlink(char *path)
 	error = VOP_REMOVE(ddp->d_vnode, vp, name);
 	vn_unlock(ddp->d_vnode);
 
+	if (!error) {
+		osv_inotify_notify(path, IN_DELETE, 0, 0);
+	}
 	vn_unlock(vp);
 	dentry_remove(dp);
 	drele(ddp);
