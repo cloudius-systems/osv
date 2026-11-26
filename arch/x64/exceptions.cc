@@ -233,6 +233,16 @@ void interrupt_descriptor_table::invoke_interrupt(unsigned vector)
 
         auto ptr = _handlers[vector].read();
         if (!ptr) {
+            // Acknowledge it anyway: without an EOI the local APIC keeps
+            // the vector in service and blocks every vector of the same
+            // or lower priority on this CPU, the wakeup IPI and the
+            // timer among them.  This happens when a device signals a
+            // vector after its handler was unregistered.
+            processor::apic->eoi();
+            static std::atomic<unsigned> unhandled;
+            if (unhandled.fetch_add(1, std::memory_order_relaxed) < 10) {
+                debug_early_u64("interrupt on a vector with no handler: ", vector);
+            }
             return;
         }
 
