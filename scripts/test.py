@@ -5,6 +5,7 @@ import glob
 import time
 import sys
 import os
+import tempfile
 
 import tests.test_net as test_net
 import tests.test_tracing as test_tracing
@@ -46,9 +47,28 @@ if host_arch == 'aarch64':
 else:
     linux_ld = '/lib64/ld-linux-x86-64.so.2'
 
+# Tests that need a scratch NVMe disk, with the arguments they get.  Such a test
+# boots from NVMe (vblk0) and gets a fresh scratch image as a second NVMe disk
+# (vblk1); with another hypervisor it runs without arguments and SKIPs.
+scratch_nvme_tests = {
+    "tst-blk-inflight.so": "vblk1 100000 32",
+}
+
 class TestRunnerTest(SingleCommandTest):
     def __init__(self, name):
         super(TestRunnerTest, self).__init__(name, '%s /tests/%s' % (linux_ld if cmdargs.linux_ld else '', name))
+
+    def run(self):
+        scratch_args = scratch_nvme_tests.get(self.name)
+        if scratch_args is None or self.hypervisor != 'qemu':
+            super(TestRunnerTest, self).run()
+            return
+        with tempfile.TemporaryDirectory() as tmp:
+            image = os.path.join(tmp, 'scratch.qcow2')
+            subprocess.check_call(['qemu-img', 'create', '-q', '-f', 'qcow2', image, '128M'])
+            args = self.run_py_args + ['--nvme', '--second-nvme-image', image]
+            run_command_in_guest(self.command + ' ' + scratch_args, hypervisor=self.hypervisor,
+                                 run_py_args=args).join()
 
 # Not all files in build/release/tests/tst-*.so may be on the test image
 # (e.g., some may have actually remain there from old builds) - so lets take
