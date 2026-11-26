@@ -96,11 +96,13 @@ struct auto_inode_ref {
 
 struct ext_vdata {
     int ref_count;
-    bool delete_on_last_close;
+    // The file's last link was removed, so its inode is freed when the vnode
+    // is released (ext_inactive()).
+    bool delete_on_inactive;
 
     ext_vdata() {
         ref_count = 0;
-        delete_on_last_close = false;
+        delete_on_inactive = false;
     }
 };
 
@@ -163,13 +165,17 @@ set_inode_to_be_deleted(uint64_t inode)
     mutex_unlock(&inodes_to_delete_mutex);
 }
 
-static void
+// Returns whether the inode was there.
+static bool
 remove_inode_from_being_deleted(uint64_t inode)
 {
     mutex_lock(&inodes_to_delete_mutex);
-    inodes_to_delete.erase(inode);
+    bool erased = inodes_to_delete.erase(inode) != 0;
     mutex_unlock(&inodes_to_delete_mutex);
+    return erased;
 }
+
+static int ext_trunc_inode(struct ext4_fs *fs, uint32_t index, uint64_t new_size, bool *update_cmtimes);
 
 void ext_delete_outstanding_inodes(struct ext4_fs *fs)
 {
@@ -177,6 +183,10 @@ void ext_delete_outstanding_inodes(struct ext4_fs *fs)
         auto_inode_ref inode(fs, inode_no);
         if (inode._r != EOK) {
             continue;
+        }
+        // A removed file's data is kept until its inode is freed.
+        if (ext4_inode_type(&fs->sb, inode._ref.inode) != EXT4_INODE_MODE_DIRECTORY) {
+            ext_trunc_inode(fs, inode_no, 0, nullptr);
         }
         // Set a non-zero deletion time before freeing so Linux e2fsck does not
         // flag "deleted inode has zero dtime" (lwext4's own delete path does the
@@ -199,21 +209,6 @@ ext_close(vnode_t *vp, file_t *fp)
 
     ext_vdata *vdata = (ext_vdata*) vp->v_data;
     vdata->ref_count--;
-
-    if (vdata->delete_on_last_close && vdata->ref_count == 0) {
-        ext_debug("close: deleting i-node %ld on close\n", vp->v_ino);
-        vdata->delete_on_last_close = false;
-
-        struct ext4_fs *fs = (struct ext4_fs *)vp->v_mount->m_data;
-        auto_inode_ref inode(fs, vp->v_ino);
-        if (inode._r != EOK) {
-            return inode._r;
-        }
-        ext_mark_inode_deleted(inode._ref.inode);
-        ext4_fs_free_inode(&inode._ref);
-
-        remove_inode_from_being_deleted(vp->v_ino);
-    }
     return (EOK);
 }
 
@@ -1058,14 +1053,7 @@ ext_dir_remove_entry(struct vnode *dvp, struct vnode *vp, char *name)
 
     int r = EOK;
     uint32_t inode_type = ext4_inode_type(&fs->sb, child._ref.inode);
-    if (inode_type != EXT4_INODE_MODE_DIRECTORY) {
-        if (ext4_inode_get_links_cnt(child._ref.inode) == 1) {
-            r = ext_trunc_inode(fs, child._ref.index, 0, nullptr);
-            if (r != EOK) {
-                return r;
-            }
-        }
-    } else {
+    if (inode_type == EXT4_INODE_MODE_DIRECTORY) {
         r = ext_dir_trunc(fs, &parent._ref, &child._ref);
         if (r != EOK) {
             return r;
@@ -1078,34 +1066,26 @@ ext_dir_remove_entry(struct vnode *dvp, struct vnode *vp, char *name)
         return r;
     }
 
+    // Don't free the inode, or a file's data, until its vnode is released
+    // (ext_inactive()). A file removed while open must keep its data until
+    // it is closed. And while any vnode for the inode exists, a new file must
+    // not get the inode's number: vget() would return the old vnode for it,
+    // with the old file's type and size.
     ext_vdata *vdata = (ext_vdata*) vp->v_data;
     assert(vdata);
+    bool last_link = true;
     if (inode_type != EXT4_INODE_MODE_DIRECTORY) {
         int links_cnt = ext4_inode_get_links_cnt(child._ref.inode);
         if (links_cnt) {
             ext4_fs_inode_links_count_dec(&child._ref);
             child._ref.dirty = true;
-
-            if (links_cnt == 1) {//Zero now
-                if (vdata->ref_count == 0) {
-                    ext_mark_inode_deleted(child._ref.inode);
-                    ext4_fs_free_inode(&child._ref);
-                } else {
-                    ext_debug("dir_remove_entry: should remove i-node=%ld of %s on last close\n", vp->v_ino, name);
-                    vdata->delete_on_last_close = true;
-                    set_inode_to_be_deleted(vp->v_ino);
-                }
-            }
         }
-    } else {
-        if (vdata->ref_count == 0) {
-            ext_mark_inode_deleted(child._ref.inode);
-            ext4_fs_free_inode(&child._ref);
-        } else {
-            ext_debug("dir_remove_entry: should remove i-node=%ld of %s on last close\n", vp->v_ino, name);
-            vdata->delete_on_last_close = true;
-            set_inode_to_be_deleted(vp->v_ino);
-        }
+        last_link = links_cnt <= 1;
+    }
+    if (last_link) {
+        ext_debug("dir_remove_entry: will remove i-node=%ld of %s when its vnode is released\n", vp->v_ino, name);
+        vdata->delete_on_inactive = true;
+        set_inode_to_be_deleted(vp->v_ino);
     }
 
     if (r == EOK) {
@@ -1486,6 +1466,19 @@ ext_inactive(vnode_t *vp)
 {
     if (vp->v_data) {
         ext_debug("inactive i-node=%ld with ref_count=%d\n", vp->v_ino, ((ext_vdata*)vp->v_data)->ref_count);
+        // Free a removed file's inode, unless an unmount already did
+        // (ext_delete_outstanding_inodes()).
+        if (((ext_vdata*)vp->v_data)->delete_on_inactive && remove_inode_from_being_deleted(vp->v_ino)) {
+            struct ext4_fs *fs = (struct ext4_fs *)vp->v_mount->m_data;
+            if (vp->v_type != VDIR) {
+                ext_trunc_inode(fs, vp->v_ino, 0, nullptr);
+            }
+            auto_inode_ref inode(fs, vp->v_ino);
+            if (inode._r == EOK) {
+                ext_mark_inode_deleted(inode._ref.inode);
+                ext4_fs_free_inode(&inode._ref);
+            }
+        }
         delete (ext_vdata*)vp->v_data;
         vp->v_data = nullptr;
     } else {

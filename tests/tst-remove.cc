@@ -17,6 +17,7 @@
 #include <errno.h>
 
 #include <iostream>
+#include <string>
 
 static int tests = 0, fails = 0;
 
@@ -53,8 +54,20 @@ int main(int argc, char **argv)
     expect(unlink("/tmp/tst-remove/f"), 0);
     // unlink() normal file succeeds while file is open
     int fd = open("/tmp/tst-remove/f", O_CREAT | O_RDWR, 0777);
+    expect(write(fd, "hello", 5), (ssize_t)5);
     expect(unlink("/tmp/tst-remove/f"), 0);
     expect_errno(unlink("/tmp/tst-remove/f"), ENOENT);
+    // The open file keeps its data until it is closed, and can still be
+    // written and read
+    char buf[11] = {};
+    expect(pread(fd, buf, 10, 0), (ssize_t)5);
+    expect(std::string(buf), std::string("hello"));
+    struct stat st;
+    expect(fstat(fd, &st), 0);
+    expect(st.st_size, (off_t)5);
+    expect(pwrite(fd, " world", 6, 5), (ssize_t)6);
+    expect(pread(fd, buf, 10, 0), (ssize_t)10);
+    expect(std::string(buf), std::string("hello worl"));
     close(fd);
     // unlink() directory returns EISDIR on Linux (not EPERM as in Posix)
     expect(mkdir("/tmp/tst-remove/d", 0777), 0);
