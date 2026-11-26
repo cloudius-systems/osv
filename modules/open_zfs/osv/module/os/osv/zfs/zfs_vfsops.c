@@ -398,9 +398,12 @@ zfs_set_fuid_feature(zfsvfs_t *zfsvfs)
 /*
  * OSv implementation of zfsvfs_setup().
  *
- * On FreeBSD/Linux this registers property-change callbacks and then
- * replays the ZIL.  OSv has no dsl_prop callback infrastructure yet,
- * so we skip property registration and perform only the steps that are
+ * On FreeBSD/Linux this registers the ZPL's property-change callbacks
+ * (zfs_register_callbacks()) and then replays the ZIL.  The dsl_prop
+ * callback machinery is built on OSv too, and dmu_objset_open_impl()
+ * registers the objset's own callbacks, but the ZPL registers none:
+ * zfs_domount() reads the properties it honors (recordsize, readonly)
+ * once at mount instead.  This performs only the steps that are
  * required for the filesystem to be usable:
  *
  *   1. Open the ZIL.
@@ -408,8 +411,9 @@ zfs_set_fuid_feature(zfsvfs_t *zfsvfs)
  *   3. Replay the intent log.
  *   4. Associate the zfsvfs with the objset user pointer.
  *
- * TODO: add dsl_prop_register() calls when OSv property callbacks are
- * implemented.
+ * TODO: register the ZPL callbacks here, and unregister them at
+ * unmount, so a property changed after the mount takes effect without
+ * a remount.
  */
 static int
 zfsvfs_setup(zfsvfs_t *zfsvfs, boolean_t mounting)
@@ -533,6 +537,23 @@ zfs_domount(struct mount *mp, const char *osname)
 	 * on-disk ZPL version.
 	 */
 	zfs_set_fuid_feature(zfsvfs);
+
+	/*
+	 * Honor the dataset's recordsize.  Other platforms set z_max_blksz
+	 * from a dsl_prop_register() callback (blksz_changed_cb) before the
+	 * intent log is replayed; OSv registers no property callbacks, so
+	 * z_max_blksz stayed at SPA_OLD_MAXBLOCKSIZE and every file grew
+	 * 128 KiB records whatever recordsize said.  A small random read then
+	 * reads a whole 128 KiB record, and a small write rewrites one.  A
+	 * recordsize changed after the mount still needs a remount on OSv.
+	 */
+	{
+		uint64_t rs = 0;
+		if (dsl_prop_get_integer(osname, "recordsize", &rs, NULL) == 0 &&
+		    rs >= SPA_MINBLOCKSIZE && ISP2(rs) &&
+		    rs <= spa_maxblocksize(dmu_objset_spa(zfsvfs->z_os)))
+			zfsvfs->z_max_blksz = rs;
+	}
 
 	if (dmu_objset_is_snapshot(zfsvfs->z_os)) {
 		/*
