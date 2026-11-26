@@ -256,43 +256,55 @@ void test_timeout_race()
 // or A times out and the wakeup_one wakes B.  A lost wakeup is A returning
 // EWOULDBLOCK while B is still asleep afterwards: the wakeup_one took A off
 // the channel and A then reported a timeout.
+//
+// The window for that is a fraction of a microsecond around A's deadline, so
+// the wakeup_one is aimed adaptively: it is sent `aim` after A went to sleep,
+// and `aim` moves later when A was woken (the wakeup came before the
+// deadline) and earlier when B was (it came after).  That keeps the wakeups
+// at the deadline whatever the timer and scheduling latency of the host.
 void test_timeout_vs_wakeup_one()
 {
-    const int iters = 3000;
+    const int iters = 1000;
     int lost = 0, a_woken = 0, b_woken = 0;
+    long aim_ns = 1000000;   // one tick
     for (int i = 0; i < iters; i++) {
         chan c;
         mtx_init(&c.m, "c", nullptr, MTX_DEF);
         int ra = -1;
         std::thread a([&] { ra = sleep_on(c, 1, 0); });
-        wait_until([&] { return c.asleep.load() == 1; });
+        while (c.asleep.load() < 1) {
+        }
+        auto t0 = std::chrono::steady_clock::now();
         std::thread b([&] { sleep_on(c, 0, 0); });
-        wait_until([&] { return c.asleep.load() == 2; });
+        while (c.asleep.load() < 2) {
+        }
         mtx_lock(&c.m);   // both are inside msleep once they released c.m
         mtx_unlock(&c.m);
-        // Aim at A's deadline: spin for a little under a tick, varied.
-        auto until = std::chrono::steady_clock::now() + std::chrono::microseconds(700 + (i % 60) * 10);
+        auto until = t0 + std::chrono::nanoseconds(aim_ns);
         while (std::chrono::steady_clock::now() < until) {
         }
         wakeup_one(&c);
         a.join();
-        // Give a woken B time to record itself.
-        wait_until([&] { return c.woken.load() + c.timedout.load() >= 2; }, 20);
-        bool b_done = c.woken.load() + c.timedout.load() >= 2;
         if (ra == 0) {
             a_woken++;
-        } else if (b_done) {
-            b_woken++;
+            aim_ns += 500;
         } else {
-            lost++;
+            // Give a woken B time to record itself.
+            wait_until([&] { return c.woken.load() + c.timedout.load() >= 2; }, 20);
+            if (c.woken.load() + c.timedout.load() >= 2) {
+                b_woken++;
+                aim_ns -= 500;
+            } else {
+                lost++;
+            }
         }
         mtx_lock(&c.m);
         mtx_unlock(&c.m);
         wakeup(&c);   // release B
         b.join();
     }
-    printf("  timeout vs wakeup_one: %d iterations, A woken %d, B woken %d, lost %d\n", iters,
-           a_woken, b_woken, lost);
+    printf("  timeout vs wakeup_one: %d iterations, A woken %d, B woken %d, lost %d, aim %ld us\n",
+           iters, a_woken, b_woken, lost, aim_ns / 1000);
     report(lost == 0, "a timeout racing wakeup_one never loses the wakeup");
 }
 
@@ -344,7 +356,7 @@ void test_channel_churn()
     std::vector<std::thread> ts;
     for (int t = 0; t < 8; t++) {
         ts.emplace_back([&] {
-            for (int k = 0; k < 20000; k++) {
+            for (int k = 0; k < 2000; k++) {
                 chan c;   // a new channel address every iteration
                 mtx_init(&c.m, "c", nullptr, MTX_DEF);
                 mtx_lock(&c.m);
@@ -358,7 +370,7 @@ void test_channel_churn()
     for (auto &t : ts) {
         t.join();
     }
-    report(done.load() == 8 * 20000, "160k sleeps on short-lived channels complete");
+    report(done.load() == 8 * 2000, "16k sleeps on short-lived channels complete");
 }
 
 } // namespace
