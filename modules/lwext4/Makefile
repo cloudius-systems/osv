@@ -23,6 +23,11 @@ lwext4: upstream/lwext4/build_lib_only/src/liblwext4.so
 
 .PHONY: lwext4
 
+# lwext4's CMakeLists.txt asks for cmake_minimum_required(VERSION 3.4), and
+# CMake 4 refuses to configure projects that claim compatibility with
+# anything older than 3.5. CMAKE_POLICY_VERSION_MINIMUM lets it configure
+# anyway; older CMake versions at most warn that the variable is unused.
+
 # Pin the lwext4 checkout to an exact commit.  A bare `clone --depth 1` takes
 # whatever the remote HEAD happens to be at build time, so two builds of the
 # same OSv tree could link different lwext4 revisions and neither would record
@@ -39,7 +44,7 @@ upstream/lwext4/.git:
 upstream/lwext4/build_lib_only/src/liblwext4.so: upstream/lwext4/.git
 	cd $(module-dir)/upstream/lwext4 && \
 	rm -R -f build_lib_only && mkdir build_lib_only && \
-	cd build_lib_only && cmake $(COMMON_DEFINITIONS) -DLIB_ONLY=TRUE -DLWEXT4_BUILD_SHARED_LIB=ON .. && make
+	cd build_lib_only && cmake $(COMMON_DEFINITIONS) -DCMAKE_POLICY_VERSION_MINIMUM=3.5 -DLIB_ONLY=TRUE -DLWEXT4_BUILD_SHARED_LIB=ON .. && make
 
 clean:
 	cd $(module-dir) && rm -rf upstream
