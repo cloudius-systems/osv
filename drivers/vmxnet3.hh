@@ -168,6 +168,12 @@ public:
     void kick_pending();
     void kick_pending_with_thresh();
     bool kick_hw();
+    // Reap completed Tx descriptors before the xmitter worker sleeps.
+    // vmxnet3 has its own Tx-completion interrupt, so plain gc() is the correct
+    // (and already-covered) behavior here; the virtio enable-then-recheck idiom
+    // does not apply to this transport.  Provided so the shared xmitter
+    // template's reap-before-sleep works uniformly.
+    void reap_and_rearm() { gc(); }
     int xmit_prep(mbuf* m_head, void*& cooky);
     int try_xmit_one_locked(void* cooky);
     void xmit_one_locked(void *req);
