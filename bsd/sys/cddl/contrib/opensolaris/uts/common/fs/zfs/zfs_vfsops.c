@@ -1686,6 +1686,23 @@ zfs_umount(vfs_t *vfsp, int fflag)
 #endif
 	}
 
+#ifdef __OSV__
+	/*
+	 * Detach the file system from its objset before the busy check below,
+	 * so that getzfsvfs() (the zfs ioctls) cannot take a hold the check
+	 * misses.  It takes the hold (VFS_HOLD()) under os_user_ptr_lock but
+	 * without mount_lock: a hold taken before the detach is counted by
+	 * the check, and a lookup after it finds no file system.  A refused
+	 * unmount attaches it again.
+	 */
+	os = zfsvfs->z_os;
+	if (os != NULL) {
+		mutex_enter(&os->os_user_ptr_lock);
+		dmu_objset_set_user(os, NULL);
+		mutex_exit(&os->os_user_ptr_lock);
+	}
+#endif
+
 	if (fflag & MS_FORCE) {
 		/*
 		 * Mark file system as unmounted before calling
@@ -1723,7 +1740,7 @@ zfs_umount(vfs_t *vfsp, int fflag)
 		 * own, and any active references underneath are
 		 * reflected in the vnode count.
 		 */
-		int count = vfsp->m_count;
+		int count = __atomic_load_n(&vfsp->m_count, __ATOMIC_ACQUIRE);
 #ifdef __OSV__
 		/*
 		 * On OSv this check runs before release_mp_dentries() below,
@@ -1759,11 +1776,11 @@ zfs_umount(vfs_t *vfsp, int fflag)
 #endif
 		if (zfsvfs->z_ctldir == NULL) {
 			if (count > 1)
-				return (EBUSY);
+				goto busy;
 		} else {
 			if (count > 2 ||
 			    zfsvfs->z_ctldir->v_refcnt > 1)
-				return (EBUSY);
+				goto busy;
 		}
 	}
 
@@ -1817,6 +1834,16 @@ zfs_umount(vfs_t *vfsp, int fflag)
 	zfs_freevfs(vfsp);
 
 	return (0);
+
+busy:
+#ifdef __OSV__
+	if (os != NULL) {
+		mutex_enter(&os->os_user_ptr_lock);
+		dmu_objset_set_user(os, zfsvfs);
+		mutex_exit(&os->os_user_ptr_lock);
+	}
+#endif
+	return (EBUSY);
 }
 
 #ifdef notyet

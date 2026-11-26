@@ -471,23 +471,31 @@ vfs_putroot(struct mount *mp)
 
 /*
  * Mark a mount point as busy.
+ *
+ * Lock-free, because vget() calls this with the vnode table lock held, and
+ * sys_umount2() holds mount_lock while VFS_UNMOUNT() releases vnodes, which
+ * takes the vnode table lock. The busy checks in VFS_UNMOUNT() need no lock
+ * to keep the count from rising under them: a vnode of the mount is made
+ * only by a lookup or an operation on the mount, and sys_umount2() refuses
+ * the unmount while one holds the mount and keeps new ones out until it is
+ * done.
  */
 OSV_LIBSOLARIS_API void
 vfs_busy(struct mount *mp)
 {
-    SCOPE_LOCK(mount_lock);
-    mp->m_count++;
+    __atomic_fetch_add(&mp->m_count, 1, __ATOMIC_RELAXED);
 }
 
 
 /*
- * Mark a mount point as busy.
+ * Mark a mount point as no longer busy. The release pairs with the acquire
+ * load in the unmount checks (bsd ZFS, NFS): a check that sees the count
+ * drop is ordered after the holder's last use of the mount.
  */
 OSV_LIBSOLARIS_API void
 vfs_unbusy(struct mount *mp)
 {
-    SCOPE_LOCK(mount_lock);
-    mp->m_count--;
+    __atomic_fetch_sub(&mp->m_count, 1, __ATOMIC_RELEASE);
 }
 
 OSV_LIBSOLARIS_API int
