@@ -1438,6 +1438,37 @@ program::program(void* addr)
     initialize_libvdso();
 }
 
+program::~program()
+{
+    // The core object first: its destructor takes its entry out of the dtv
+    // list, which must still exist.  (A namespace's vdso object is the base
+    // program's.)  Then the lists, which the rcu_ptr members do not free.
+    _core.reset();
+    _libvdso.reset();
+    osv::rcu_dispose(_modules_rcu.read_by_owner());
+    osv::rcu_dispose(_module_index_list_rcu.read_by_owner());
+}
+
+bool program::idle()
+{
+    // remove_object() runs under _mutex, so once we hold it no unload of this
+    // program is still in progress.
+    SCOPE_LOCK(_mutex);
+    WITH_LOCK(_modules_delete_mutex) {
+        if (!_modules_to_delete.empty()) {
+            return false;
+        }
+    }
+    SCOPE_LOCK(_module_index_list_mutex);
+    auto list = _module_index_list_rcu.read_by_owner();
+    for (auto obj : *list) {
+        if (obj && obj != _core.get()) {
+            return false;
+        }
+    }
+    return true;
+}
+
 void program::initialize_libvdso()
 {
     if (!s_program) {

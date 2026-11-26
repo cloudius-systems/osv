@@ -191,7 +191,7 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-blk-
 	tst-zfs-mount.so tst-regex.so tst-tcp-siocoutq.so \
 	tst-select-timeout.so tst-faccessat.so \
 	tst-fstatat.so misc-reboot.so tst-fcntl.so payload-namespace.so \
-	tst-namespace.so tst-without-namespace.so payload-env.so \
+	tst-namespace.so tst-namespace-reuse.so tst-without-namespace.so payload-env.so \
 	payload-merge-env.so misc-execve.so misc-execve-payload.so misc-mutex2.so \
 	tst-pthread-setcancelstate.so tst-pin.so tst-run.so \
 	tst-pthread-affinity-inherit.so tst-sem-timed-wait.so \
@@ -224,7 +224,7 @@ internal-api-tests := tst-app.so tst-async.so tst-dns-decname.so tst-bsd-evh.so 
 	tst-bsd-kthread.so tst-bsd-taskqueue.so tst-bsd-tcp1-zrcv.so \
 	tst-bsd-tcp1-zsnd.so tst-bsd-tcp1-zsndrcv.so tst-clock.so \
 	tst-condvar.so tst-dax.so tst-fpu.so tst-fs-link.so tst-hub.so \
-	tst-huge.so tst-mmap.so tst-namespace.so tst-pin.so tst-preempt.so \
+	tst-huge.so tst-mmap.so tst-namespace.so tst-namespace-reuse.so tst-pin.so tst-preempt.so \
 	tst-rcu-hashtable.so tst-rcu-list.so tst-run.so tst-sampler.so \
 	tst-sem-timed-wait.so tst-small-malloc.so tst-solaris-taskq.so \
 	tst-threadcomplete.so tst-tracepoint.so tst-unordered-ring-mpsc.so \

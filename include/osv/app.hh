@@ -227,6 +227,7 @@ private:
 
     pthread_t _thread;
     std::unique_ptr<elf::program> _program; // namespace program
+    int _namespace = -1;                    // its index, with _program
     std::vector<std::string> _args;
     std::string _command;
     int _return_code;
