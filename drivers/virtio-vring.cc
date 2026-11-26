@@ -1,5 +1,6 @@
 /*
  * Copyright (C) 2013 Cloudius Systems, Ltd.
+ * Copyright (C) 2026 Greg Burd
  *
  * This work is open source software, licensed under the terms of the
  * BSD license as described in the LICENSE file in the top-level directory.
@@ -216,6 +217,18 @@ namespace virtio {
             return true;
     }
 
+    unsigned vring::checked_descriptor_index(u32 idx) const
+    {
+        if (idx >= _num) {
+            // Skipping the entry would lose the request it belongs to and
+            // leave the GC cursor behind, and not every queue user can reset
+            // its queue, so stop.
+            abort("virtio: queue %u invalid descriptor index %u (size %u)\n",
+                  _q_index, idx, _num);
+        }
+        return idx;
+    }
+
     void
     vring::get_buf_gc()
     {
@@ -226,20 +239,26 @@ namespace virtio {
 
             while (_used_ring_guest_head != _used_ring_host_head) {
 
-                int i = 1;
+                unsigned i = 1;
 
                 // need to trim the free running counter w/ the array size
                 int used_ptr = _used_ring_guest_head & (_num - 1);
 
                 elem = _used->_used_elements[used_ptr];
-                int idx = elem._id;
+                auto idx = checked_descriptor_index(elem._id);
 
                 if (_desc[idx]._flags & vring_desc::VRING_DESC_F_INDIRECT) {
                     free_phys_contiguous_aligned(mmu::phys_to_virt(_desc[idx]._paddr));
                 } else
                     while (_desc[idx]._flags & vring_desc::VRING_DESC_F_NEXT) {
-                        idx = _desc[idx]._next;
-                        i++;
+                        // The links are written by the guest, not the
+                        // device, but a corrupt one must not loop forever or
+                        // recycle descriptors that are not in this chain.
+                        if (i++ == _num) {
+                            abort("virtio: queue %u cyclic descriptor chain\n",
+                                  _q_index);
+                        }
+                        idx = checked_descriptor_index(_desc[idx]._next);
                     }
 
                 _used_ring_guest_head++;
@@ -256,7 +275,6 @@ namespace virtio {
     vring::get_buf_elem(u32* len)
     {
             vring_used_elem elem;
-            void* cookie = nullptr;
 
             // need to trim the free running counter w/ the array size
             int used_ptr = _used_ring_host_head & (_num - 1);
@@ -270,11 +288,10 @@ namespace virtio {
             }
 
             elem = _used->_used_elements[used_ptr];
+            auto idx = checked_descriptor_index(elem._id);
             *len = elem._len;
-
-            cookie = _cookie[elem._id];
-            _cookie[elem._id] = nullptr; //maybe use this array for the full size hdrs?
-
+            void* cookie = _cookie[idx];
+            _cookie[idx] = nullptr; //maybe use this array for the full size hdrs?
             return cookie;
     }
 
