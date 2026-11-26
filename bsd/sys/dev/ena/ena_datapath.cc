@@ -129,40 +129,58 @@ int
 ena_mq_start(if_t ifp, struct mbuf *m)
 {
 	struct ena_adapter *adapter = static_cast<ena_adapter *>(ifp->if_softc);
-	struct ena_ring *tx_ring;
-	int ret, is_br_empty;
+	struct ena_ring *tx_ring = NULL;
+	int ret = 0, is_br_empty;
 	uint32_t i;
+	bool running, locked = false;
 
-	if (unlikely((adapter->ifp->if_drv_flags & IFF_DRV_RUNNING) == 0))
+	/*
+	 * ena_down() clears IFF_DRV_RUNNING and then waits for an RCU grace
+	 * period before it frees the rings, so a sender that saw the flag set
+	 * may use them only inside this read section.  rcu_read_lock disables
+	 * preemption, so nothing in the section may sleep: the buf_ring
+	 * enqueue, the ring mutex try-lock and the thread wakes do not.
+	 * ena_start_xmit() and m_freem() run after it, under the ring mutex,
+	 * which ena_down() drains next.
+	 */
+	WITH_LOCK(osv::rcu_read_lock) {
+		running = (adapter->ifp->if_drv_flags & IFF_DRV_RUNNING) != 0;
+		if (likely(running)) {
+			/* Which queue to use */
+			/*
+			 * If everything is setup correctly, it should be the
+			 * same bucket that the current CPU we're on is.
+			 * It should improve performance.
+			 */
+			if (M_HASHTYPE_GET(m) != M_HASHTYPE_NONE) {
+				i = m->M_dat.MH.MH_pkthdr.flowid % adapter->num_io_queues;
+			} else {
+				i = sched::cpu::current()->id % adapter->num_io_queues;
+			}
+			tx_ring = &adapter->tx_ring[i];
+
+			/* Check if br is empty before putting packet */
+			is_br_empty = buf_ring_empty(tx_ring->br);
+			ret = buf_ring_enqueue(tx_ring->br, m);
+			if (ret == 0 && is_br_empty)
+				locked = ENA_RING_MTX_TRYLOCK(tx_ring) != 0;
+			if (!locked)
+				tx_ring->enqueue_thread->wake_with_irq_or_preemption_disabled(
+				    [tx_ring] { tx_ring->enqueue_pending++; });
+		}
+	}
+
+	if (unlikely(!running))
 		return (ENODEV);
 
-	/* Which queue to use */
-	/*
-	 * If everything is setup correctly, it should be the
-	 * same bucket that the current CPU we're on is.
-	 * It should improve performance.
-	 */
-	if (M_HASHTYPE_GET(m) != M_HASHTYPE_NONE) {
-		i = m->M_dat.MH.MH_pkthdr.flowid % adapter->num_io_queues;
-	} else {
-		i = sched::cpu::current()->id % adapter->num_io_queues;
-	}
-	tx_ring = &adapter->tx_ring[i];
-
-	/* Check if br is empty before putting packet */
-	is_br_empty = buf_ring_empty(tx_ring->br);
-	ret = buf_ring_enqueue(tx_ring->br, m);
 	if (unlikely(ret != 0)) {
 		m_freem(m);
-		tx_ring->enqueue_thread->wake_with([tx_ring] { tx_ring->enqueue_pending++; });
 		return (ret);
 	}
 
-	if (is_br_empty && (ENA_RING_MTX_TRYLOCK(tx_ring) != 0)) {
+	if (locked) {
 		ena_start_xmit(tx_ring, false);
 		ENA_RING_MTX_UNLOCK(tx_ring);
-	} else {
-		tx_ring->enqueue_thread->wake_with([tx_ring] { tx_ring->enqueue_pending++; });
 	}
 
 	return (0);

@@ -196,6 +196,13 @@ ena_dma_alloc(device_t dmadev, bus_size_t size, ena_mem_handle_t *dma,
 		dma->paddr = 0;
 		return ENA_COM_NO_MEM;
 	}
+	/*
+	 * A new IO completion queue must read as empty: ena_com starts it at
+	 * phase 1 and takes any descriptor whose phase bit matches for a
+	 * completion, so memory reused from the previous queue would be read
+	 * as stale completions.
+	 */
+	bzero(dma->vaddr, size);
 
 	dma->paddr = mmu::virt_to_phys(dma->vaddr);
 
@@ -1701,7 +1708,16 @@ ena_down(struct ena_adapter *adapter)
 	adapter->ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
 	adapter->ifp->if_drv_flags |= IFF_DRV_OACTIVE;
 
-	ena_free_io_irq(adapter);
+	/*
+	 * Senders may still be past ena_mq_start()'s IFF_DRV_RUNNING check:
+	 * wait out its RCU read section, then any ena_start_xmit() that holds
+	 * a ring mutex, before tearing the rings down.
+	 */
+	osv::rcu_synchronize();
+	for (int i = 0; i < adapter->num_io_queues; i++) {
+		ENA_RING_MTX_LOCK(&adapter->tx_ring[i]);
+		ENA_RING_MTX_UNLOCK(&adapter->tx_ring[i]);
+	}
 
 	if (ENA_FLAG_ISSET(ENA_FLAG_TRIGGER_RESET, adapter)) {
 		rc = ena_com_dev_reset(adapter->ena_dev, adapter->reset_reason);
@@ -1709,7 +1725,13 @@ ena_down(struct ena_adapter *adapter)
 			ena_log(adapter->pdev, ERR, "Device reset failed");
 	}
 
+	/*
+	 * The IO queues must be gone before their MSI-X vectors are freed: a
+	 * completion interrupt that arrives on a freed vector has no handler
+	 * to acknowledge it, and that CPU stops taking interrupts.
+	 */
 	ena_destroy_all_io_queues(adapter);
+	ena_free_io_irq(adapter);
 
 	ena_free_all_tx_bufs(adapter);
 	ena_free_all_rx_bufs(adapter);
