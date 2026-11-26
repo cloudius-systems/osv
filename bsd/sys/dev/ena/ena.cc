@@ -1701,6 +1701,17 @@ ena_down(struct ena_adapter *adapter)
 	adapter->ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
 	adapter->ifp->if_drv_flags |= IFF_DRV_OACTIVE;
 
+	/*
+	 * Senders may still be past ena_mq_start()'s IFF_DRV_RUNNING check:
+	 * wait out its RCU read section, then any ena_start_xmit() that holds
+	 * a ring mutex, before tearing the rings down.
+	 */
+	osv::rcu_synchronize();
+	for (int i = 0; i < adapter->num_io_queues; i++) {
+		ENA_RING_MTX_LOCK(&adapter->tx_ring[i]);
+		ENA_RING_MTX_UNLOCK(&adapter->tx_ring[i]);
+	}
+
 	if (ENA_FLAG_ISSET(ENA_FLAG_TRIGGER_RESET, adapter)) {
 		rc = ena_com_dev_reset(adapter->ena_dev, adapter->reset_reason);
 		if (unlikely(rc != 0))
