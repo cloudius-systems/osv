@@ -1775,18 +1775,26 @@ ena_set_queues_placement_policy(pci::device *pdev, struct ena_com_dev *ena_dev,
 	}
 	if (!(ena_dev->supported_features & BIT(ENA_ADMIN_LLQ)) ||
 	    llq->max_llq_num == 0) {
-		ena_log(pdev, WARN, "LLQ is not offered by the device. Using the host mode policy.");
+		printf("ena: LLQ is not offered by the device, using host placement\n");
 		return (0);
 	}
 	pci::bar *mem = pdev->get_bar(ENA_MEM_BAR + 1);
 	if (mem == NULL || !mem->is_mmio()) {
-		ena_log(pdev, WARN, "LLQ: no memory BAR. Using the host mode policy.");
+		printf("ena: LLQ has no memory BAR, using host placement\n");
 		return (0);
 	}
 	/* A device reset runs this again; map the BAR only once. */
 	if (!mem->is_mapped())
 		mem->map();
 	ena_dev->mem_bar = (void __iomem *)mem->get_mmio();
+	/*
+	 * Only 128-byte entries are supported, so with two descriptors before
+	 * the header the push header is at most 128 - 2 * 16 = 96 bytes.
+	 * Upstream FreeBSD's ena_set_llq_configurations() uses 256-byte entries
+	 * when the device recommends and supports them, and then caps the Tx
+	 * depth at max_wide_llq_depth; neither is ported (this ena_admin_defs.h
+	 * still has entry_size_recommended and max_wide_llq_depth as reserved1).
+	 */
 	struct ena_llq_configurations cfg;
 	cfg.llq_header_location = ENA_ADMIN_INLINE_HEADER;
 	cfg.llq_stride_ctrl = ENA_ADMIN_MULTIPLE_DESCS_PER_ENTRY;
@@ -1795,11 +1803,11 @@ ena_set_queues_placement_policy(pci::device *pdev, struct ena_com_dev *ena_dev,
 	cfg.llq_ring_entry_size_value = 128;
 	int rc = ena_com_config_dev_mode(ena_dev, llq, &cfg);
 	if (rc != 0) {
-		ena_log(pdev, WARN, "LLQ setup failed rc: %d. Using the host mode policy.", rc);
+		printf("ena: LLQ setup failed: %d, using host placement\n", rc);
 		ena_dev->tx_mem_queue_type = ENA_ADMIN_PLACEMENT_POLICY_HOST;
 		return (0);
 	}
-	ena_log(pdev, INFO, "LLQ Tx placement: %u queues, depth %u, header %u bytes",
+	printf("ena: LLQ Tx placement: %u queues, depth %u, header %u bytes\n",
 	    llq->max_llq_num, llq->max_llq_depth, ena_dev->tx_max_header_size);
 	return (0);
 }
