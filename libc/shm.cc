@@ -117,6 +117,15 @@ int shmctl(int shmid, int cmd, struct shmid_ds *buf)
         }
         WITH_LOCK(shm_lock) {
             shmstats.erase(fileref_from_fd(shmid).get());
+            // Forget the segment's key, so that a later shmget() with this key
+            // creates a new segment instead of returning this shmid, whose fd
+            // we close here and which may then be reused by an unrelated file.
+            for (auto it = shmkeys.begin(); it != shmkeys.end(); ++it) {
+                if (it->second == shmid) {
+                    shmkeys.erase(it);
+                    break;
+                }
+            }
         }
         close(shmid);
         return 0;
