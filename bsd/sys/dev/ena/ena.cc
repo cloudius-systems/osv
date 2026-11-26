@@ -1701,15 +1701,19 @@ ena_down(struct ena_adapter *adapter)
 	adapter->ifp->if_drv_flags &= ~IFF_DRV_RUNNING;
 	adapter->ifp->if_drv_flags |= IFF_DRV_OACTIVE;
 
-	ena_free_io_irq(adapter);
-
 	if (ENA_FLAG_ISSET(ENA_FLAG_TRIGGER_RESET, adapter)) {
 		rc = ena_com_dev_reset(adapter->ena_dev, adapter->reset_reason);
 		if (unlikely(rc != 0))
 			ena_log(adapter->pdev, ERR, "Device reset failed");
 	}
 
+	/*
+	 * The IO queues must be gone before their MSI-X vectors are freed: a
+	 * completion interrupt that arrives on a freed vector has no handler
+	 * to acknowledge it, and that CPU stops taking interrupts.
+	 */
 	ena_destroy_all_io_queues(adapter);
+	ena_free_io_irq(adapter);
 
 	ena_free_all_tx_bufs(adapter);
 	ena_free_all_rx_bufs(adapter);
