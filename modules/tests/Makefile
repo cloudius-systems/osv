@@ -249,6 +249,7 @@ tests += misc-nvme-sq-full.so
 tests += tst-close-range.so
 tests += tst-numa.so
 tests += tst-random-flush.so
+tests += tst-ramfs-rename.so
 tests += tst-dentry-rename-child.so
 tests += misc-tcp-syncache-flood.so
 tests += tst-umount-vget.so

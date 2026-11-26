@@ -599,7 +599,7 @@ static int
 ramfs_rename(struct vnode *dvp1, struct vnode *vp1, char *name1,
              struct vnode *dvp2, struct vnode *vp2, char *name2)
 {
-    struct ramfs_node *np, *old_np;
+    struct ramfs_node *np, *dnp1, *dnp2, **pp;
     int error;
 
     if (vp2) {
@@ -615,22 +615,33 @@ ramfs_rename(struct vnode *dvp1, struct vnode *vp1, char *name1,
         if (error)
             return error;
     } else {
-        /* Create new file or directory */
-        old_np = (ramfs_node *) vp1->v_data;
-        np = ramfs_add_node((ramfs_node *) dvp2->v_data, name2, old_np->rn_type);
-        if (np == NULL)
-            return ENOMEM;
-
-        np->rn_size = old_np->rn_size;
-        np->rn_file_segments_by_offset = old_np->rn_file_segments_by_offset;
-        np->rn_total_segments_size = old_np->rn_total_segments_size;
-        np->rn_owns_buf = old_np->rn_owns_buf;
-
-        old_np->rn_file_segments_by_offset = NULL;
-        old_np->rn_owns_buf = false;
-
-        /* Remove source file */
-        ramfs_remove_node((ramfs_node *) dvp1->v_data, (ramfs_node *) vp1->v_data);
+        /*
+         * Move the node itself, not a copy, so that its vnode, the files
+         * opened through it and a directory's children stay with it.
+         */
+        np = (ramfs_node *) vp1->v_data;
+        dnp1 = (ramfs_node *) dvp1->v_data;
+        dnp2 = (ramfs_node *) dvp2->v_data;
+        error = ramfs_rename_node(np, name2);
+        if (error)
+            return error;
+        mutex_lock(&ramfs_lock);
+        /* Unlink from the source directory list (unless an unlink did) */
+        for (pp = &dnp1->rn_child; *pp != np; pp = &(*pp)->rn_next) {
+            if (*pp == NULL) {
+                mutex_unlock(&ramfs_lock);
+                return ENOENT;
+            }
+        }
+        *pp = np->rn_next;
+        /* Link to the end of the destination directory list */
+        for (pp = &dnp2->rn_child; *pp != NULL; pp = &(*pp)->rn_next)
+            ;
+        *pp = np;
+        np->rn_next = NULL;
+        set_times_to_now(&(dnp1->rn_mtime), &(dnp1->rn_ctime));
+        set_times_to_now(&(dnp2->rn_mtime), &(dnp2->rn_ctime));
+        mutex_unlock(&ramfs_lock);
     }
     return 0;
 }
