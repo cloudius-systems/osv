@@ -1,6 +1,7 @@
 #include <unistd.h>
+#include <osv/pid.h>
 
 pid_t getpgrp(void)
 {
-	return 0;
+	return OSV_PID;
 }
