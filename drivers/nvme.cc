@@ -449,10 +449,10 @@ int driver::make_request(bio* bio, u32 nsid)
         NVME_ERROR("bio request not block-aligned length=%d, offset=%d blocksize=%d\n",bio->bio_bcount, bio->bio_offset, _ns_data[nsid]->blocksize);
         return EINVAL;
     }
-    bio->bio_offset = bio->bio_offset >> _ns_data[nsid]->blockshift;
-    bio->bio_bcount = bio->bio_bcount >> _ns_data[nsid]->blockshift;
-
-    assert((bio->bio_offset + bio->bio_bcount) <= _ns_data[nsid]->blockcount);
+    // Leave bio_offset and bio_bcount in bytes: whoever submitted the bio
+    // may use them after it completes (libext copies bio_bcount bytes out
+    // of its bounce buffer). The queue converts them to blocks.
+    assert(((bio->bio_offset + bio->bio_bcount) >> _ns_data[nsid]->blockshift) <= _ns_data[nsid]->blockcount);
 
     if (bio->bio_cmd == BIO_FLUSH && (_identify_controller->vwc == 0 || !NVME_VWC_ENABLED )) {
         biodone(bio, true);
