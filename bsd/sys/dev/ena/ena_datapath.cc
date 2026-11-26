@@ -170,8 +170,10 @@ ena_mq_start(if_t ifp, struct mbuf *m)
 		}
 	}
 
-	if (unlikely(!running))
+	if (unlikely(!running)) {
+		m_freem(m);
 		return (ENODEV);
+	}
 
 	if (unlikely(ret != 0)) {
 		m_freem(m);
