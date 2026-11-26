@@ -6,12 +6,21 @@
  */
 OUTPUT_ARCH(i386)
 OUTPUT_FORMAT(elf32-i386)
+PHDRS
+{
+    text PT_LOAD FLAGS(5); /* R-X */
+    data PT_LOAD FLAGS(6); /* RW- */
+    eh_frame_hdr PT_GNU_EH_FRAME;
+    stack PT_GNU_STACK FLAGS(6);
+}
 SECTIONS
 {
     . = OSV_LZKERNEL_BASE + 0x1000;
-    .text : { *(.text) }
+    .text : { *(.text) } :text
     .rodata : { *(.rodata .rodata.*) }
-    .data : { *(.data) }
+    .eh_frame : { *(.eh_frame) }
+    .eh_frame_hdr : { *(.eh_frame_hdr) } :text :eh_frame_hdr
+    .data : { *(.data) } :data
     .bss : { *(.bss) }
     .edata = .;
     .debug_info 0 : { *(.debug_info .gnu.linkonce.wi.*) }
