@@ -57,6 +57,9 @@ usage() {
 }
 
 trap 'status=$?; echo "$0 failed: $BASH_COMMAND" >&2; exit "$status"' ERR
+# Also stop on a failing command inside a function (e.g. create_zfs_disk) -
+# without errtrace, the ERR trap isn't inherited by functions.
+set -o errtrace
 
 # If "MAKEFLAGS" is set, we've been run from "make". The following hacks
 # allows our Makefile to forward "make image=..." requests to to us
@@ -345,9 +348,7 @@ create_zfs_disk() {
 	else
 		qemu-img convert -f raw -O qcow2 $raw_disk.raw $qcow2_disk.img
 		qemu-img resize $qcow2_disk.img ${image_size}b >/dev/null 2>&1
-		# The ERR trap does not fire inside a function (no errtrace),
-		# so propagate a failed upload explicitly.
-		"$SRC"/scripts/upload_manifest.py --arch=$arch -o $qcow2_disk.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir" || exit
+		"$SRC"/scripts/upload_manifest.py --arch=$arch -o $qcow2_disk.img -m usr.manifest -D libgcc_s_dir="$libgcc_s_dir"
 	fi
 	rm ${raw_disk}.raw
 }
