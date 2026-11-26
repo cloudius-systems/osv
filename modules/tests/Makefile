@@ -232,6 +232,8 @@ internal-api-tests := tst-app.so tst-async.so tst-dns-decname.so tst-bsd-evh.so 
 internal-api-tests += tst-vfs-mount-pins.so
 
 ifeq ($(arch),x64)
+tests += tst-x64-unhandled-vector.so
+internal-api-tests += tst-x64-unhandled-vector.so
 tests += tst-mmx-fpu.so tst-tls-desc.so tst-tls-pie-desc.so libtls_desc.so
 tests += tst-tls-pie-dlopen-desc.so tst-tls-pie-dlopen-desc-needed.so libtls_desc_user.so
 tests += tst-tls-dlopen-gd.so libtls_gd.so libtls_gd_user.so
