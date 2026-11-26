@@ -517,7 +517,9 @@ int pclose(FILE *stream)
 
 void exit(int status)
 {
-    debugf("program exited with status %ld\n", status);
+    if (status) {
+        debug_always("program exited with status %d\n", status);
+    }
     osv::shutdown();
 }
 

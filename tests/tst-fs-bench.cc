@@ -309,6 +309,7 @@ int main(int argc, char *argv[])
     print_statvfs(dir);
     printf("\n");
 
+    mkdir_p(dir);
     bool writable = !g_prebuilt && is_writable(dir);
 
     if (!writable && !g_prebuilt) {
@@ -318,7 +319,6 @@ int main(int argc, char *argv[])
 
     /* --- Create working directories and test files --- */
     if (writable) {
-        mkdir_p(dir);
         char mdir[512]; snprintf(mdir, sizeof(mdir), "%s/meta", dir);
         mkdir_p(mdir);
 

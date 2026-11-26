@@ -157,5 +157,5 @@ int main(int argc, char *argv[])
     // Report results.
     printf("SUMMARY: %d tests, %d failures\n", tests, fails);
     free(pathlnk);
-    return fails == 0;
+    return fails != 0;
 }
