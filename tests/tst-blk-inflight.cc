@@ -18,7 +18,8 @@
 //
 // Usage: tst-blk-inflight.so <dev> [reads] [depth], e.g.
 //   tst-blk-inflight.so vblk1 100000 32
-// With no device the test prints SKIP, so the standard run does not use it.
+// With no device the test prints SKIP.  scripts/test.py boots it from NVMe
+// with a scratch image as a second NVMe disk, and passes vblk1.
 
 #include <osv/bio.h>
 #include <osv/device.h>
