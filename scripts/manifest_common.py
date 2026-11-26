@@ -78,8 +78,17 @@ def strip_file(filename):
                 strip_cmd = os.environ.get('STRIP')
             else:
                 strip_cmd = 'strip'
-            ret = subprocess.call([strip_cmd, "-o", stripped_filename, filename])
+            # Several build steps can strip the same file at the same time
+            # (e.g., bootfs.bin and zfs_builder_bootfs.bin both contain
+            # libsolaris.so), and "strip -o" overwrites its output in place.
+            # So strip into a private temporary file and atomically rename it,
+            # so no one can see a partially-written stripped file.
+            tmp_filename = "%s.tmp.%d" % (stripped_filename, os.getpid())
+            ret = subprocess.call([strip_cmd, "-o", tmp_filename, filename])
             if ret != 0:
                 print("Failed stripping %s. Using original." % filename)
+                if os.path.exists(tmp_filename):
+                    os.remove(tmp_filename)
                 return filename
+            os.replace(tmp_filename, stripped_filename)
     return stripped_filename
