@@ -196,6 +196,13 @@ ena_dma_alloc(device_t dmadev, bus_size_t size, ena_mem_handle_t *dma,
 		dma->paddr = 0;
 		return ENA_COM_NO_MEM;
 	}
+	/*
+	 * A new IO completion queue must read as empty: ena_com starts it at
+	 * phase 1 and takes any descriptor whose phase bit matches for a
+	 * completion, so memory reused from the previous queue would be read
+	 * as stale completions.
+	 */
+	bzero(dma->vaddr, size);
 
 	dma->paddr = mmu::virt_to_phys(dma->vaddr);
 
