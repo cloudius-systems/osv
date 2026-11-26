@@ -5,8 +5,7 @@
  * BSD license as described in the LICENSE file in the top-level directory.
  */
 
-#include <map>
-#include <list>
+#include <boost/intrusive/list.hpp>
 #include <errno.h>
 #include <osv/sched.hh>
 #include "osv/trace.hh"
@@ -25,23 +24,22 @@ TRACEPOINT(trace_synch_wakeup_waking, "chan=%p thread=%p", void *, void *);
 TRACEPOINT(trace_synch_wakeup_one, "chan=%p", void *);
 TRACEPOINT(trace_synch_wakeup_one_waking, "chan=%p thread=%p", void *, void *);
 
+// A sleeper waits on its own stack frame: msleep() links it into the bucket
+// its channel hashes to and unlinks it before returning, so nothing is
+// allocated per sleep and no per-channel state outlives its last sleeper.
 struct synch_thread {
     sched::thread* _thread;
+    void* _chan;
     std::atomic<bool> _awake;
+    boost::intrusive::list_member_hook<> _hook;
 };
 
+// The sleep queue is a fixed table of buckets.  Each bucket has its own lock
+// and one FIFO list of the sleepers whose channels hash to it; a wakeup walks
+// only its bucket and skips sleepers of other channels.  Channels that share
+// a bucket share its lock but never wake each other.
 class synch_port {
 public:
-    synch_port() { }
-    virtual ~synch_port() { }
-
-    static synch_port* instance() {
-        if (_instance == nullptr) {
-            _instance = new synch_port();
-        }
-        return (_instance);
-    }
-
     int _msleep(void *chan, struct mtx *mtx, int priority, const char *wmesg,
          int timo);
 
@@ -50,15 +48,39 @@ public:
     void wakeup_one(void* chan);
 
 private:
-    static synch_port* _instance;
+    using waiter_list = boost::intrusive::list<synch_thread,
+        boost::intrusive::member_hook<synch_thread,
+            boost::intrusive::list_member_hook<>, &synch_thread::_hook>,
+        boost::intrusive::constant_time_size<false>>;
 
-    mutex_t _lock;
+    struct alignas(64) bucket {
+        mutex_t lock;
+        waiter_list waiters;
+    };
 
-    /* Make sure multimap is ordered */
-    std::multimap<void *, synch_thread *> _evlist;
+    static constexpr unsigned nbuckets = 256;
+
+    bucket& bucket_of(void* chan) {
+        // Channels are object addresses: drop the low bits that alignment
+        // makes constant, then mix so neighbouring objects spread out.
+        auto h = reinterpret_cast<uintptr_t>(chan) >> 4;
+        h ^= h >> 9;
+        h *= 0x9e3779b97f4a7c15ull;
+        return _buckets[h >> (64 - 8)];
+    }
+
+    bucket _buckets[nbuckets];
 };
 
-synch_port* synch_port::_instance = nullptr;
+static_assert(256 == 1u << 8, "bucket_of() takes the top 8 bits");
+
+// Constructed on first use, so a sleep or wakeup from an early static
+// constructor finds the buckets initialized.
+static synch_port& synch()
+{
+    static synch_port port;
+    return port;
+}
 
 int synch_port::_msleep(void *chan, struct mtx *mtx,
     int priority, const char *wmesg, int timo_hz)
@@ -70,16 +92,18 @@ int synch_port::_msleep(void *chan, struct mtx *mtx,
     // Init the wait
     synch_thread wait;
     wait._thread = sched::thread::current();
+    wait._chan = chan;
     wait._awake.store(false, std::memory_order_release);
 
     if (mtx) {
         wait_lock = &mtx->_mutex;
     }
 
-    if (chan) {
-        mutex_lock(&_lock);
-        _evlist.insert(std::make_pair(chan, &wait));
-        mutex_unlock(&_lock);
+    bucket* b = chan ? &bucket_of(chan) : nullptr;
+    if (b) {
+        mutex_lock(&b->lock);
+        b->waiters.push_back(wait);
+        mutex_unlock(&b->lock);
     }
 
     sched::timer t(*sched::thread::current());
@@ -117,22 +141,29 @@ int synch_port::_msleep(void *chan, struct mtx *mtx,
     // msleep timeout
     if (!wait._awake.load(std::memory_order_acquire)) {
         trace_synch_msleep_expired(chan);
-        if (chan) {
-            // A pointer to the local "wait" may still be on the list -
-            // need to remove it before we can return:
-            mutex_lock(&_lock);
-            auto ppp = _evlist.equal_range(chan);
-            for (auto it=ppp.first; it!=ppp.second; ++it) {
-                if ((*it).second == &wait) {
-                    _evlist.erase(it);
-                    break;
-                }
+        if (b) {
+            // A waker may have taken us off the list and set _awake after the
+            // check above; under the bucket lock the two cannot cross, so
+            // decide again there.  Only a waiter still linked has not been
+            // woken, and it must leave the list before its frame goes away.
+            mutex_lock(&b->lock);
+            bool woken = !wait._hook.is_linked();
+            if (!woken) {
+                b->waiters.erase(b->waiters.iterator_to(wait));
             }
-            mutex_unlock(&_lock);
+            mutex_unlock(&b->lock);
+            if (woken) {
+                // The wakeup won the race against the timeout: report it.
+                // Returning EWOULDBLOCK here would lose a wakeup_one, since
+                // it already took this sleeper instead of another one.
+                return (0);
+            }
         }
         return interrupted ? (EINTR) : (EWOULDBLOCK);
     }
 
+    // Woken: the waker unlinked this frame and its last access to it was the
+    // store to _awake we just saw, so the frame may go away now.
     return (0);
 }
 
@@ -140,38 +171,44 @@ void synch_port::wakeup(void* chan)
 {
     trace_synch_wakeup(chan);
 
-    mutex_lock(&_lock);
-    auto ppp = _evlist.equal_range(chan);
-
-    for (auto it=ppp.first; it!=ppp.second; ++it) {
-        synch_thread* wait = (*it).second;
+    bucket& b = bucket_of(chan);
+    mutex_lock(&b.lock);
+    for (auto it = b.waiters.begin(); it != b.waiters.end(); ) {
+        synch_thread* wait = &*it;
+        if (wait->_chan != chan) {
+            ++it;
+            continue;
+        }
+        it = b.waiters.erase(it);
         trace_synch_wakeup_waking(chan, wait->_thread);
         wait->_thread->wake_with([&] { wait->_awake.store(true, std::memory_order_release); });
     }
-    _evlist.erase(ppp.first, ppp.second);
-    mutex_unlock(&_lock);
+    mutex_unlock(&b.lock);
 }
 
 void synch_port::wakeup_one(void* chan)
 {
     trace_synch_wakeup_one(chan);
 
-    mutex_lock(&_lock);
-    auto ppp = _evlist.equal_range(chan);
-    if (ppp.first != ppp.second) {
-        auto it = ppp.first;
-        synch_thread* wait = (*it).second;
-        _evlist.erase(it);
+    bucket& b = bucket_of(chan);
+    mutex_lock(&b.lock);
+    for (auto it = b.waiters.begin(); it != b.waiters.end(); ++it) {
+        synch_thread* wait = &*it;
+        if (wait->_chan != chan) {
+            continue;
+        }
+        b.waiters.erase(it);
         trace_synch_wakeup_one_waking(chan, wait->_thread);
         wait->_thread->wake_with([&] { wait->_awake.store(true, std::memory_order_release); });
+        break;
     }
-    mutex_unlock(&_lock);
+    mutex_unlock(&b.lock);
 }
 
 extern "C" OSV_LIBSOLARIS_API int _msleep(void *chan, struct mtx *mtx, int priority, const char *wmesg,
      int timo)
 {
-    return (synch_port::instance()->_msleep(chan, mtx, priority, wmesg, timo));
+    return (synch()._msleep(chan, mtx, priority, wmesg, timo));
 }
 
 extern "C" int tsleep(void *chan, int priority, const char *wmesg, int timo)
@@ -186,10 +223,10 @@ extern "C" OSV_LIBSOLARIS_API void bsd_pause(const char *wmesg, int timo)
 
 extern "C" OSV_LIBSOLARIS_API void wakeup(void* chan)
 {
-    synch_port::instance()->wakeup(chan);
+    synch().wakeup(chan);
 }
 
 extern "C" void wakeup_one(void* chan)
 {
-    synch_port::instance()->wakeup_one(chan);
+    synch().wakeup_one(chan);
 }
