@@ -115,7 +115,9 @@ void queue_pair::wait_for_completion_queue_entries()
         if (!have_elements) {
             this->enable_interrupts();
             //check if we got a new cqe between completion_queue_not_empty()
-            //and enable_interrupts()
+            //and enable_interrupts(); only the admin queue needs this, as
+            //an IO queue's enable_interrupts() and disable_interrupts() do
+            //nothing
             have_elements = this->completion_queue_not_empty();
             if (have_elements) {
                 this->disable_interrupts();
@@ -224,6 +226,21 @@ bool queue_pair::completion_queue_not_empty() const
 // re-checks the CQ before it sleeps (wait_for_completion_queue_entries), so
 // an interrupt that lands while it is draining costs at most a spurious
 // wakeup.  The admin queue keeps the mask/unmask protocol.
+//
+// NB: a completion is not lost because the completion thread marks itself
+// waiting (the store in prepare_wait()) before completion_queue_not_empty()
+// loads the CQ entry's phase bit: a handler that finds the thread still
+// running leaves the new entry to that check.  Each IO queue's interrupt is
+// delivered on the CPU its completion thread is pinned to
+// (register_io_interrupt() pins the thread, then msix_register() sets the
+// vector's affinity to that CPU), so the handler is ordered with the thread
+// by program order.  A handler on another CPU would also be safe today: on
+// x86 the store is an xchg, a full barrier; on aarch64 it is an stlr, which
+// a later plain load may pass, but the phase-bit load follows the seq_cst
+// load of _cq._head (an ldar), and an ldar is never performed before an
+// earlier stlr.  A change that shares a vector or a queue between CPUs, or
+// drops the pinning, must keep that load seq_cst (an acquire load may
+// compile to an ldapr, which may pass the stlr) or add a full barrier.
 void queue_pair::enable_interrupts()
 {
     if (_id != 0) {
