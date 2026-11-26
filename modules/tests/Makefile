@@ -145,6 +145,7 @@ endif
 ext-only-tests := tst-readdir.so tst-concurrent-read.so tst-fs-link.so
 ext-only-tests += tst-ext-readlink.so
 ext-only-tests += tst-ext4-rw.so
+ext-only-tests += tst-ext-concurrent-io.so
 
 specific-fs-tests := $($(fs_type)-only-tests)
 
@@ -254,6 +255,7 @@ tests += tst-dentry-rename-child.so
 tests += misc-tcp-syncache-flood.so
 tests += tst-umount-vget.so
 tests += tst-signalfd.so
+tests += tst-mmap-cow.so
 internal-api-tests += tst-random-flush.so
 tests += tst-umount-release.so
 internal-api-tests += tst-umount-release.so
