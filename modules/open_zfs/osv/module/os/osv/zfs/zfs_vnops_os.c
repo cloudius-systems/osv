@@ -619,12 +619,79 @@ zfs_symlink(znode_t *dzp, const char *name, vattr_t *vap,
 	return (error);
 }
 
+/*
+ * zfs_link -- add the directory entry "name" in tdzp for the existing file szp
+ * (a hard link).  Adapted from the FreeBSD zfs_link(), without the project-ID
+ * and .zfs/shares checks, which do not apply on OSv.  Like this port's other
+ * directory operations, it writes no ZIL record: the link is durable once its
+ * txg syncs.  OSv's sys_link() has already refused a directory source
+ * (EPERM), an existing target (EEXIST) and a link between file systems
+ * (EXDEV), and holds both vnodes locked.
+ */
 int
-zfs_link(znode_t *tdzp, znode_t *sp,
+zfs_link(znode_t *tdzp, znode_t *szp,
     const char *name, cred_t *cr, int flags)
 {
-	(void) tdzp; (void) sp; (void) name; (void) cr; (void) flags;
-	return (SET_ERROR(ENOTSUP));
+	(void) cr; (void) flags;
+	zfsvfs_t	*zfsvfs = ZTOZSB(tdzp);
+	znode_t		*tzp;
+	dmu_tx_t	*tx;
+	int		error;
+
+	if (strlen(name) >= ZAP_MAXNAMELEN)
+		return (SET_ERROR(ENAMETOOLONG));
+
+	if ((error = zfs_enter_verify_zp(zfsvfs, tdzp, FTAG)) != 0)
+		return (error);
+
+	if ((error = zfs_verify_zp(szp)) != 0) {
+		zfs_exit(zfsvfs, FTAG);
+		return (error);
+	}
+
+	/* POSIX dictates EPERM for a hard link to a directory. */
+	if (S_ISDIR(szp->z_mode)) {
+		zfs_exit(zfsvfs, FTAG);
+		return (SET_ERROR(EPERM));
+	}
+
+	if (szp->z_pflags & (ZFS_APPENDONLY | ZFS_IMMUTABLE | ZFS_READONLY)) {
+		zfs_exit(zfsvfs, FTAG);
+		return (SET_ERROR(EPERM));
+	}
+
+	/* No links between extended attributes and ordinary files. */
+	if ((szp->z_pflags & ZFS_XATTR) != (tdzp->z_pflags & ZFS_XATTR)) {
+		zfs_exit(zfsvfs, FTAG);
+		return (SET_ERROR(EINVAL));
+	}
+
+	/* Fail if the entry already exists. */
+	error = zfs_dirent_lookup(tdzp, name, &tzp, ZNEW);
+	if (error) {
+		zfs_exit(zfsvfs, FTAG);
+		return (error);
+	}
+
+	tx = dmu_tx_create(zfsvfs->z_os);
+	dmu_tx_hold_sa(tx, szp->z_sa_hdl, B_FALSE);
+	dmu_tx_hold_sa(tx, tdzp->z_sa_hdl, B_FALSE);
+	dmu_tx_hold_zap(tx, tdzp->z_id, TRUE, name);
+	zfs_sa_upgrade_txholds(tx, szp);
+	zfs_sa_upgrade_txholds(tx, tdzp);
+	error = dmu_tx_assign(tx, DMU_TX_WAIT);
+	if (error) {
+		dmu_tx_abort(tx);
+		zfs_exit(zfsvfs, FTAG);
+		return (error);
+	}
+
+	/* Increments szp's link count and adds the entry to tdzp. */
+	error = zfs_link_create(tdzp, name, szp, tx, 0);
+
+	dmu_tx_commit(tx);
+	zfs_exit(zfsvfs, FTAG);
+	return (error);
 }
 
 /*
@@ -1316,13 +1383,14 @@ zfs_vop_truncate(struct vnode *vp, off_t new_size)
 }
 
 /*
- * zfs_vop_link - not yet implemented.
+ * zfs_vop_link - create the hard link "name" in directory tdvp to file svp.
  */
 static int
 zfs_vop_link(struct vnode *tdvp, struct vnode *svp, char *name)
 {
-	(void) tdvp; (void) svp; (void) name;
-	return (SET_ERROR(ENOTSUP));
+	if (zfs_is_readonly(ZTOZSB(VTOZ(tdvp))))
+		return (EROFS);
+	return (zfs_link(VTOZ(tdvp), VTOZ(svp), name, kcred, 0));
 }
 
 /*
