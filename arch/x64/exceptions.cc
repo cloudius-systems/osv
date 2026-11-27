@@ -100,7 +100,7 @@ interrupt_descriptor_table::load_on_cpu()
     processor::lidt(d);
 }
 
-unsigned interrupt_descriptor_table::register_interrupt_handler(
+unsigned interrupt_descriptor_table::try_register_interrupt_handler(
         std::function<bool ()> pre_eoi,
         std::function<void ()> eoi,
         std::function<void ()> post_eoi)
@@ -118,12 +118,19 @@ unsigned interrupt_descriptor_table::register_interrupt_handler(
             }
         }
     }
-    // No free IDT vector.  Vectors 0..31 are CPU exceptions and are never
-    // returned here, so 0 is an unambiguous "exhausted" sentinel.  Returning it
-    // rather than aborting lets MSI-X allocation (msix_vector) fail gracefully
-    // and lets a device fall back to fewer queues instead of crashing the boot
-    // when many multiqueue devices exhaust the 224 usable vectors.
     return 0;
+}
+
+unsigned interrupt_descriptor_table::register_interrupt_handler(
+        std::function<bool ()> pre_eoi,
+        std::function<void ()> eoi,
+        std::function<void ()> post_eoi)
+{
+    unsigned vector = try_register_interrupt_handler(pre_eoi, eoi, post_eoi);
+    if (!vector) {
+        abort("No free interrupt vector\n");
+    }
+    return vector;
 }
 
 void interrupt_descriptor_table::unregister_handler(unsigned vector)
@@ -194,6 +201,11 @@ unsigned interrupt_descriptor_table::available_vectors()
         }
     }
     return n;
+}
+
+unsigned interrupt_descriptor_table::try_register_handler(std::function<void ()> post_eoi)
+{
+    return try_register_interrupt_handler([] { return true; }, [] { processor::apic->eoi(); }, post_eoi);
 }
 
 void interrupt_descriptor_table::register_interrupt(inter_processor_interrupt *interrupt)
