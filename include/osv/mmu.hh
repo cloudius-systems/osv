@@ -22,6 +22,7 @@
 #include <osv/trace.hh>
 #include <osv/kernel_config_memory_debug.h>
 #include <osv/kernel_config_memory_jvm_balloon.h>
+#include <osv/kernel_config_fork.h>
 
 struct exception_frame;
 #if CONF_memory_jvm_balloon
@@ -372,6 +373,67 @@ void vcleanup(void* addr, size_t size);
 error  advise(void* addr, size_t size, int advice);
 
 void vm_fault(uintptr_t addr, exception_frame* ef);
+
+#if CONF_fork
+// -----------------------------------------------------------------------------
+// Per-process address space (Stage 2 fork COW).
+//
+// An address_space bundles a page-table root (the PML4 whose physical address
+// is loaded into CR3) with its own set of VMAs.  Historically OSv had a single
+// global address space shared by all threads; that global is now "address
+// space 0" (the kernel + the initial application), returned by
+// kernel_address_space().  fork() creates a child address_space whose kernel
+// half (PML4 entries for OSv text/data + the identity/phys maps) is shared
+// with AS0, while the application half is a COW clone of the parent's.
+//
+// The concrete type is defined in core/mmu.cc (it owns the internal vma_list
+// container); here it is opaque.  Each thread carries a pointer to its current
+// address_space; the arch context switch loads its page-table root.
+struct address_space;
+
+// The kernel / initial-application address space ("AS0").  Always valid.
+address_space *kernel_address_space();
+
+// Physical address of an address_space's page-table root (value for CR3).
+phys pt_root_phys(address_space *as);
+
+// Create a child address_space that COW-clones "parent" for fork().  Private
+// writable VMAs are write-protected in both parent and child and marked COW;
+// MAP_SHARED / shm VMAs are mapped to the same physical pages (truly shared).
+// The kernel half of the page table is shared with the parent.
+address_space *clone_address_space(address_space *parent);
+
+// Free the memory of a child address_space (its private page tables, VMAs
+// and arena extents), once nothing runs in it.  The object stays until its
+// last as_put().  Never call on the kernel address space.
+void destroy_address_space(address_space *as);
+
+// Lifetime of a child address space.  A use (as_hold/as_try_hold, dropped by
+// as_release) keeps its memory: every thread whose current address space it
+// is holds one (sched::thread does this itself), and so may a caller that
+// switches into it.  The last as_release() retires it: its memory is freed.
+// A reference (as_get, dropped by as_put) keeps only the object, so state
+// keyed by its pointer cannot alias a newer address space; the fork
+// bookkeeping holds one until the child is reaped.  as_hold() needs a use or
+// a reference already held; as_try_hold() fails once the address space is
+// retired.  AS0 is never counted.
+void as_hold(address_space *as);
+bool as_try_hold(address_space *as);
+void as_release(address_space *as);
+void as_get(address_space *as);
+void as_put(address_space *as);
+
+// Flush the TLB entries for [va, va + len) of @as on every CPU that can hold
+// them, and return when they are gone.  AS0 uses flush_tlb_all().
+void flush_tlb_as(address_space *as, uintptr_t va, size_t len);
+
+// The CPU mask of @as: bit N is set while CPU N may hold entries of @as.
+std::atomic<u64> *as_cpu_mask(address_space *as);
+
+// x86: the context switch calls this on CPU @cpu right before it loads the
+// page-table root of @as.
+void note_as_loaded(address_space *as, unsigned cpu);
+#endif // CONF_fork
 
 std::string procfs_maps();
 std::string sysfs_linear_maps();

@@ -118,16 +118,123 @@ void flush_tlb_all()
     tlb_flush_waiter.clear();
 }
 
+#if CONF_fork
+// The address space each CPU last loaded (its CR3), for flush_tlb_as().
+static std::atomic<address_space *> loaded_as[sched::max_cpus];
+
+void note_as_loaded(address_space *as, unsigned cpu)
+{
+    // Both stores precede the CR3 write, which serializes, so a flusher that
+    // changed a PTE before this CPU walks it sees this CPU in the mask.
+    loaded_as[cpu].store(as, std::memory_order_seq_cst);
+    auto &w = as_cpu_mask(as)[cpu / 64];
+    u64 bit = u64(1) << (cpu % 64);
+    if (!(w.load(std::memory_order_seq_cst) & bit)) {
+        w.fetch_or(bit, std::memory_order_seq_cst);
+    }
+}
+
+// Flush [va, va + len) of a child address space here, and on each other CPU
+// that may hold its entries: those in its mask that still have it loaded.
+// OSv uses neither PCID nor global pages, so a CPU that has loaded another
+// root since holds none of them; its bit is cleared, then rechecked, because
+// it may be switching back meanwhile (note_as_loaded() skips a set bit).
+void flush_tlb_as(address_space *as, uintptr_t va, size_t len)
+{
+    if (as == kernel_address_space()) {
+        flush_tlb_all();
+        return;
+    }
+    SCOPE_LOCK(migration_lock);
+    if (len > 32 * page_size) {
+        flush_tlb_local();
+    } else {
+        for (uintptr_t p = va; p < va + len; p += page_size) {
+            asm volatile("invlpg (%0)" : : "r"(p) : "memory");
+        }
+    }
+    if (sched::cpus.size() <= 1) {
+        return;
+    }
+    std::atomic_thread_fence(std::memory_order_seq_cst);
+    unsigned me = sched::cpu::current()->id;
+    auto mask = as_cpu_mask(as);
+    u64 targets[sched::max_cpus / 64] = {};
+    int count = 0;
+    for (unsigned w = 0; w < sched::max_cpus / 64; w++) {
+        u64 bits = mask[w].load(std::memory_order_seq_cst);
+        while (bits) {
+            unsigned b = __builtin_ctzll(bits);
+            u64 bit = u64(1) << b;
+            bits &= bits - 1;
+            unsigned c = w * 64 + b;
+            if (c == me) {
+                continue;
+            }
+            if (loaded_as[c].load(std::memory_order_seq_cst) != as) {
+                mask[w].fetch_and(~bit, std::memory_order_seq_cst);
+                if (loaded_as[c].load(std::memory_order_seq_cst) != as) {
+                    continue;
+                }
+                mask[w].fetch_or(bit, std::memory_order_seq_cst);
+            }
+            targets[w] |= bit;
+            count++;
+        }
+    }
+    if (!count) {
+        return;
+    }
+    std::lock_guard<mutex> guard(tlb_flush_mutex);
+    tlb_flush_waiter.reset(*sched::thread::current());
+    tlb_flush_pendingconfirms.store(count);
+    for (unsigned w = 0; w < sched::max_cpus / 64; w++) {
+        for (u64 bits = targets[w]; bits; bits &= bits - 1) {
+            tlb_flush_ipi.send(sched::cpus[w * 64 + __builtin_ctzll(bits)]);
+        }
+    }
+    sched::thread::wait_until([] {
+            return tlb_flush_pendingconfirms.load() == 0;
+    });
+    tlb_flush_waiter.clear();
+}
+#endif
+
 static pt_element<4> page_table_root __attribute__((init_priority((int)init_prio::pt_root)));
 
+#if CONF_fork
+// Virtual pointer to the current thread's PML4 (child AS's private PML4 when
+// running in a forked child, else the kernel PML4).  Defined in core/mmu.cc.
+pt_element<4> *current_pt_root();
+
+pt_element<4> *get_root_pt(uintptr_t virt __attribute__((unused))) {
+    return current_pt_root();
+}
+
+// Virtual pointer to the kernel (AS0) PML4.
+pt_element<4> *kernel_pml4() {
+    return &page_table_root;
+}
+#else
 pt_element<4> *get_root_pt(uintptr_t virt __attribute__((unused))) {
     return &page_table_root;
 }
+#endif // CONF_fork
 
 void switch_to_runtime_page_tables()
 {
     processor::write_cr3(page_table_root.next_pt_addr());
 }
+
+#if CONF_fork
+// Physical address of the kernel (AS0) PML4 -- the CR3 value that maps OSv
+// text/data + the identity/phys ranges.  Used as the shared base for cloned
+// child address spaces and as AS0's pt_root.
+phys kernel_pt_root_phys()
+{
+    return page_table_root.next_pt_addr();
+}
+#endif // CONF_fork
 
 enum {
     page_fault_prot  = 1ul << 0,

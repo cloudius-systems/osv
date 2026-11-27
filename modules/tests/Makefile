@@ -266,6 +266,13 @@ tests += tst-signalfd.so
 tests += tst-locale-builtin.so
 tests += tst-locale-ctype.so
 tests += misc-ctype-dump.so
+tests += tst-fork.so
+tests += tst-execve.so
+tests += payload-exit7.so
+tests += tst-fork-cow.so
+tests += tst-fork-deep.so
+tests += tst-fork-file-mmap.so
+tests += tst-fork-pagecache-ptes.so
 internal-api-tests += tst-random-flush.so
 tests += tst-umount-release.so
 internal-api-tests += tst-umount-release.so
@@ -274,6 +281,13 @@ $(out)/tests/tst-umount-release.o: COMMON += -DCONF_ZFS_OPENZFS
 endif
 tests += tst-blk-inflight.so
 internal-api-tests += tst-blk-inflight.so
+internal-api-tests += tst-fork-pagecache-ptes.so
+tests += tst-fork-xcpu-free.so
+internal-api-tests += tst-fork-xcpu-free.so
+tests += tst-fork-pthread-self.so
+tests += tst-fork-nested.so
+tests += tst-fork-shared-ro.so
+tests += tst-fork-stack-reshare.so
 
 # tst-pmu calls the kernel's x64 PMU readout, which only conf_pmu=1 builds.
 ifeq ($(arch),x64)
