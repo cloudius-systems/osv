@@ -6700,6 +6700,14 @@ spa_sync(spa_t *spa, uint64_t txg)
 	while (vd = txg_list_remove(&spa->spa_vdev_txg_list, TXG_CLEAN(txg)))
 		vdev_sync_done(vd, txg);
 
+	/*
+	 * metaslab_sync_done() has now counted this txg's log blocks in
+	 * mc_alloc, so stop counting them as unsynced ZIL space.  No log
+	 * block can be allocated in this txg any more, and the slot is not
+	 * reused until txg + TXG_SIZE opens.
+	 */
+	spa->spa_zil_alloc[txg & TXG_MASK] = 0;
+
 	spa_update_dspace(spa);
 
 	/*
