@@ -146,7 +146,7 @@ sys_mount(const char *dev, const char *dir, const char *fsname, int flags, const
     mp->m_count = 0;
     mp->m_lookups = 0;
     mp->m_op = fs->vs_op;
-    mp->m_flags = flags;
+    mp->m_flags = flags & ~MNT_NONAMECACHE;  /* the filesystem's to set */
     mp->m_dev = device;
     mp->m_data = nullptr;
     strlcpy(mp->m_path, dir, sizeof(mp->m_path));
@@ -193,7 +193,7 @@ sys_mount(const char *dev, const char *dir, const char *fsname, int flags, const
     /*
      * Call a file system specific routine.
      */
-    if ((error = VFS_MOUNT(mp, dev, flags, data)) != 0)
+    if ((error = VFS_MOUNT(mp, dev, mp->m_flags, data)) != 0)
         goto err4;
 
     if (mp->m_flags & MNT_RDONLY)
