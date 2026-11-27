@@ -81,6 +81,7 @@ public:
     virtual void dump_config();
     virtual void init();
     virtual void register_interrupt(interrupt_factory irq_factory);
+    virtual bool is_msix() { return _dev->is_msix(); }
 
     virtual unsigned get_irq() { return 0; }
     size_t get_vring_alignment() { return VIRTIO_PCI_VRING_ALIGN; }

@@ -13,6 +13,7 @@
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
 #include <lockfree/ring.hh>
+#include <cassert>
 #include <functional>
 #include <unordered_map>
 #include <osv/rcu.hh>
@@ -122,6 +123,11 @@ public:
     void remove(ipv4_tcp_conn_id id);
     // producer side operations
     bool post_packet(mbuf* m);
+    // Like post_packet(), but record the channel in "batch" instead of
+    // waking it; batch.flush() wakes each recorded channel once.  The caller
+    // holds osv::rcu_read_lock from this call until the flush, since
+    // channels are rcu_dispose()d when their connection closes.
+    bool post_packet(mbuf* m, class net_channel_wake_batch& batch);
 private:
     net_channel* classify_ipv4_tcp(mbuf* m);
 private:
@@ -141,6 +147,35 @@ private:
     using ipv4_tcp_channels = osv::rcu_hashtable<item, item_hash>;
     mutex _mtx;
     ipv4_tcp_channels _ipv4_tcp_channels;
+};
+
+// The distinct channels that received packets in one receive pass, so that
+// each is woken once at the end of the pass rather than once per packet.  It
+// holds at most "capacity" channels, which bounds the pass that fills it.
+class net_channel_wake_batch {
+public:
+    static constexpr unsigned capacity = 64;
+    // Record a channel, once.  NB: the caller adds at most capacity packets
+    // between flushes.
+    void add(net_channel* nc) {
+        for (unsigned i = 0; i < _n; i++) {
+            if (_chans[i] == nc) {
+                return;
+            }
+        }
+        assert(_n < capacity);
+        _chans[_n++] = nc;
+    }
+    // Wake every recorded channel once and empty the batch.
+    void flush() {
+        for (unsigned i = 0; i < _n; i++) {
+            _chans[i]->wake();
+        }
+        _n = 0;
+    }
+private:
+    unsigned _n = 0;
+    net_channel* _chans[capacity];
 };
 
 #endif /* NETCHANNEL_HH_ */
