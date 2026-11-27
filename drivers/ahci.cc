@@ -13,6 +13,7 @@
 #include <osv/device.h>
 #include <osv/bio.h>
 #include <osv/types.h>
+#include <osv/clock.hh>
 
 namespace ahci {
 
@@ -54,6 +55,21 @@ struct driver hba_driver = {
     sizeof(struct hba_priv),
 };
 
+// Polls done() until it returns true or the timeout expires, and returns
+// whether done() succeeded. done() is called once more after the deadline, so
+// a long preemption just before it cannot turn success into a timeout.
+template <typename Done>
+static bool poll_until(std::chrono::milliseconds timeout, Done done)
+{
+    auto deadline = osv::clock::uptime::now() + timeout;
+    while (osv::clock::uptime::now() < deadline) {
+        if (done()) {
+            return true;
+        }
+    }
+    return done();
+}
+
 port::port(u32 pnr, hba *hba)
     : _pnr(pnr),
       _hba(hba)
@@ -63,19 +79,49 @@ port::port(u32 pnr, hba *hba)
     if (!linkup()) {
         return;
     }
-    disk_identify();
+
+    // This driver supports plain ATA disks only. A port may also present an
+    // ATAPI device (typically an optical drive), a port multiplier or an
+    // enclosure management bridge, none of which accept the ATA IDENTIFY
+    // DEVICE command that disk_identify() issues. Reading the signature and
+    // skipping such a port avoids sending a command that is guaranteed to be
+    // aborted, and avoids the task file error handling that follows it.
+    //
+    // This is the common configuration rather than an exotic one. Machine
+    // types with a built-in AHCI controller, such as QEMU's q35 with its ICH9,
+    // attach an empty optical drive by default, so an ATAPI device is present
+    // on a port of the very controller this driver probes.
+    auto sig = port_readl(PORT_SIG);
+    if (sig != PORT_SIG_ATA) {
+        debugf("AHCI: port %d ignored, signature 0x%08x is not an ATA disk\n",
+               _pnr, sig);
+        return;
+    }
+
+    if (!disk_identify()) {
+        debugf("AHCI: port %d ignored, IDENTIFY DEVICE failed\n", _pnr);
+        return;
+    }
+
     enable_irq();
+    start_irq_thread();
+    _usable = true;
 }
 
-void port::reset()
+bool port::reset()
 {
     // Disable FIS and Command
-    for (;;) {
+    bool stopped = poll_until(port_stop_timeout, [this] {
         auto cmd = port_readl(PORT_CMD);
         if (!(cmd & (PORT_CMD_FRE | PORT_CMD_FR | PORT_CMD_ST | PORT_CMD_CR)))
-            break;
+            return true;
         cmd &= ~(PORT_CMD_FRE | PORT_CMD_ST);
         port_writel(PORT_CMD, cmd);
+        return false;
+    });
+    if (!stopped) {
+        debugf("AHCI: port %d did not stop, PxCMD=0x%08x\n",
+               _pnr, port_readl(PORT_CMD));
     }
 
     // Disable all IRQs.
@@ -84,6 +130,8 @@ void port::reset()
     // Clear all IRQs
     auto is = port_readl(PORT_IS);
     port_writel(PORT_IS, is);
+
+    return stopped;
 }
 
 void port::setup()
@@ -121,13 +169,18 @@ void port::setup()
     port_writel(PORT_SERR, err);
 
     // Wait for Device Becoming Ready
-    wait_device_ready();
+    if (!wait_device_ready()) {
+        _linkup = false;
+        return;
+    }
 
     // Start Device
     cmd |= PORT_CMD_ST;
     port_writel(PORT_CMD, cmd);
+}
 
-    // Register the per-port irq thread
+void port::start_irq_thread()
+{
     std::string name("ahci-port");
     name += std::to_string(_pnr);
     _irq_thread = sched::thread::make([this] { this->req_done(); },
@@ -143,24 +196,39 @@ void port::enable_irq()
     port_writel(PORT_IE, val);
 }
 
-void port::wait_device_ready()
+bool port::wait_device_ready()
 {
     // Wait for Device Becoming Ready
-    for (;;) {
-        auto tfd = port_readl(PORT_TFD);
-        if (!(tfd & (PORT_TFD_BSY | PORT_TFD_DRQ)))
-            break;
+    u32 tfd = 0;
+    poll_until(cmd_timeout, [&] {
+        tfd = port_readl(PORT_TFD);
+        return !(tfd & (PORT_TFD_BSY | PORT_TFD_DRQ)) || (tfd & PORT_TFD_ERR);
+    });
+    if (!(tfd & (PORT_TFD_BSY | PORT_TFD_DRQ))) {
+        return true;
     }
+    if (tfd & PORT_TFD_ERR) {
+        debugf("AHCI: port %d device reported an error while becoming "
+               "ready, PxTFD=0x%08x\n", _pnr, tfd);
+        return false;
+    }
+    debugf("AHCI: port %d timed out waiting for the device to become ready, "
+           "PxTFD=0x%08x\n", _pnr, tfd);
+    return false;
 }
 
-void port::wait_ci_ready(u8 slot)
+bool port::wait_ci_ready(u8 slot)
 {
     // Wait for Command Issue Becoming Ready
-    for (;;) {
-        auto ci = port_readl(PORT_CI);
-        if (!(ci & (1U << slot)))
-            break;
+    if (poll_until(cmd_timeout, [&] {
+            return !(port_readl(PORT_CI) & (1U << slot));
+        })) {
+        return true;
     }
+    debugf("AHCI: port %d timed out waiting for slot %d to retire, "
+           "PxCI=0x%08x PxTFD=0x%08x\n", _pnr, slot,
+           port_readl(PORT_CI), port_readl(PORT_TFD));
+    return false;
 }
 
 int port::send_cmd(u8 slot, int iswrite, void *buffer, u32 bsize)
@@ -205,33 +273,67 @@ int port::send_cmd(u8 slot, int iswrite, void *buffer, u32 bsize)
     return 0;
 }
 
-void port::wait_cmd_poll(u8 slot)
+bool port::wait_cmd_poll(u8 slot)
 {
     auto host_is = _hba->hba_readl(HOST_IS);
-    for (;;) {
+    bool ok = false;
+
+    auto deadline = osv::clock::uptime::now() + cmd_timeout;
+    while (osv::clock::uptime::now() < deadline) {
         auto is = port_readl(PORT_IS);
-        if (is) {
+        if (!is) {
+            continue;
+        }
+
+        // A task file error means the device rejected or failed the command.
+        // The error state has to be sampled before PxIS is acked, because
+        // writing PxIS clears the record of what went wrong. The HBA has also
+        // already cleared PxCMD.ST and will not retire the command slot, so
+        // neither PxTFD nor PxCI will ever settle for this command and waiting
+        // on them would never return (AHCI 1.3.1, section 6.2.2). Report the
+        // failure to the caller instead.
+        if (is & PORT_IS_TFES) {
+            auto tfd = port_readl(PORT_TFD);
             port_writel(PORT_IS, is);
+            debugf("AHCI: port %d command in slot %d failed, "
+                   "PxIS=0x%08x PxTFD=0x%08x\n", _pnr, slot, is, tfd);
+            break;
+        }
 
-            wait_device_ready();
-            wait_ci_ready(slot);
+        port_writel(PORT_IS, is);
 
-           if (is & 0x02) {
-               auto error  = _recv_fis->psfis[3];
-               assert(!error);
-               break;
-           }
+        if (!wait_device_ready() || !wait_ci_ready(slot)) {
+            break;
+        }
 
-           if (is & 0x01) {
-               auto error  = recv_fis_error();
-               assert(!error);
-               break;
+        if (is & PORT_IS_PSS) {
+            auto error = _recv_fis->psfis[3];
+            if (error) {
+                debugf("AHCI: port %d slot %d PIO setup FIS error 0x%02x\n",
+                       _pnr, slot, error);
+                break;
             }
+            ok = true;
+            break;
+        }
+
+        if (is & PORT_IS_DHRS) {
+            auto error = recv_fis_error();
+            if (error) {
+                debugf("AHCI: port %d slot %d device to host FIS error "
+                       "0x%02x\n", _pnr, slot, error);
+                break;
+            }
+            ok = true;
+            break;
         }
     }
+
     _hba->hba_writel(HOST_IS, host_is);
 
     _cmd_active &= ~(1U << slot);
+
+    return ok;
 }
 
 u32 port::done_mask()
@@ -307,8 +409,8 @@ int port::make_request(struct bio* bio)
 void port::poll_mode_done(struct bio *bio, u8 slot)
 {
     if (_hba->poll_mode()) {
-        wait_cmd_poll(slot);
-        biodone(bio, true);
+        bool ok = wait_cmd_poll(slot);
+        biodone(bio, ok);
     }
 }
 
@@ -363,7 +465,7 @@ void port::disk_flush(struct bio *bio)
     poll_mode_done(bio, slot);
 }
 
-void port::disk_identify()
+bool port::disk_identify()
 {
     u8 slot = 0;
     struct cmd_table &cmd = _cmd_table[slot];
@@ -376,7 +478,10 @@ void port::disk_identify()
     cmd.fis.command = ATA_CMD_IDENTIFY_DEVICE;
 
     send_cmd(slot, 0, buffer, 512);
-    wait_cmd_poll(slot);
+    if (!wait_cmd_poll(slot)) {
+        delete [] buffer;
+        return false;
+    }
 
     // Word 75 queue depth
     _queue_depth = buffer[75] & 0x1F;
@@ -393,6 +498,7 @@ void port::disk_identify()
     _devsize = sectors * 512;
 
     delete [] buffer;
+    return true;
 }
 
 bool port::used_slot()
@@ -457,7 +563,9 @@ hba::hba(pci::device& pci_dev)
     _driver_name = "ahci";
     parse_pci_config();
 
-    reset();
+    if (!reset()) {
+        return;
+    }
     setup();
     enable_irq();
     scan();
@@ -471,7 +579,7 @@ hba::~hba()
     }
 }
 
-void hba::reset()
+bool hba::reset()
 {
     auto val = hba_readl(HOST_GHC);
 
@@ -486,12 +594,17 @@ void hba::reset()
     val |= HOST_GHC_HR;
     hba_writel(HOST_GHC, val);
 
-    // Wait reset of HBA to finish
-    for (;;) {
-        val = hba_readl(HOST_GHC);
-        if ((val & HOST_GHC_HR) == 0x00)
-            break;
+    // Wait reset of HBA to finish. HR is self-clearing and the reset has to
+    // complete within one second (AHCI 1.3.1, section 10.4.3), so a controller
+    // that never clears it is broken and must not hold up the boot.
+    if (poll_until(hba_reset_timeout, [this] {
+            return !(hba_readl(HOST_GHC) & HOST_GHC_HR);
+        })) {
+        return true;
     }
+    debugf("AHCI: HBA reset did not complete, HOST_GHC=0x%08x\n",
+           hba_readl(HOST_GHC));
+    return false;
 }
 
 void hba::setup()
@@ -516,8 +629,13 @@ void hba::scan()
             continue;
 
         auto p = new port(pnr, this);
-        if (!p->linkup()) {
-            delete p;
+        if (!p->usable()) {
+            // setup() may have started FIS receive and the command engine,
+            // which DMA into the port's memory, so stop them before freeing
+            // it. A port that does not stop is leaked rather than freed.
+            if (p->reset()) {
+                delete p;
+            }
             continue;
         }
 

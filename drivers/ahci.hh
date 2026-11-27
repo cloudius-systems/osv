@@ -19,6 +19,7 @@
 #include <osv/mempool.hh>
 #include <osv/bio.h>
 #include <osv/types.h>
+#include <chrono>
 
 namespace ahci {
 
@@ -102,7 +103,9 @@ enum port_reg_ie_bits {
 // PORT_IS bits
 enum port_reg_is_bits {
     PORT_IS_DHRS    = 1U << 0,
+    PORT_IS_PSS     = 1U << 1,
     PORT_IS_SDBS    = 1U << 3,
+    PORT_IS_TFES    = 1U << 30,
 };
 
 // PORT_SSTS bits
@@ -111,6 +114,26 @@ enum port_reg_ssts_bits {
     PORT_SSTS_LINKUP    = 0x03,
     PORT_SSTS_RETRY     = 0x0F,
 };
+
+// PORT_SIG values. The signature register reports the type of device attached
+// to the port, latched by the HBA from the first Register Device to Host FIS
+// the device sends (AHCI 1.3.1, section 3.3.4).
+enum port_reg_sig_values {
+    PORT_SIG_ATA        = 0x00000101,
+    PORT_SIG_ATAPI      = 0xEB140101,
+    PORT_SIG_SEMB       = 0xC33C0101,
+    PORT_SIG_PM         = 0x96690101,
+    PORT_SIG_NONE       = 0xFFFFFFFF,
+};
+
+// How long the driver waits for a register to settle. The HBA reset and a
+// port's command engine stopping have to complete within the specification's
+// limits (AHCI 1.3.1, sections 10.4.3 and 10.1.2). A command has no deadline
+// in the specification, so its bound only has to be long enough for a healthy
+// device.
+constexpr std::chrono::milliseconds hba_reset_timeout{1000};
+constexpr std::chrono::milliseconds port_stop_timeout{500};
+constexpr std::chrono::milliseconds cmd_timeout{5000};
 
 // CIFS: Command FIS
 struct cfis {
@@ -202,7 +225,7 @@ public:
     void dump_config();
     bool ack_irq();
     void enable_irq();
-    void reset();
+    bool reset();
     void setup();
     void scan();
     void add_port(u32 pnr, port * port);
@@ -229,20 +252,27 @@ class port {
 public:
     port(u32 pnr, hba *hba);
 
-    void reset();
+    bool reset();
     void setup();
+    void start_irq_thread();
     int send_cmd(u8 slot, int iswrite, void *buffer, u32 bsize);
-    void wait_cmd_poll(u8 slot);
+    bool wait_cmd_poll(u8 slot);
     void wait_cmd_irq(u8 slot);
-    void disk_identify();
+    bool disk_identify();
     void disk_flush(struct bio *bio);
     void disk_rw(struct bio *bio, bool iswrite);
     int make_request(struct bio *bio);
     void enable_irq();
-    void wait_device_ready();
-    void wait_ci_ready(u8 slot);
+    bool wait_device_ready();
+    bool wait_ci_ready(u8 slot);
     void wakeup() { _irq_thread->wake_with_irq_disabled(); }
     bool linkup() { return _linkup; }
+
+    // A port is usable only once it has been identified as a working ATA disk.
+    // linkup() alone is not sufficient: a port can be linked up and still fail
+    // or reject IDENTIFY DEVICE, in which case it has no valid size and must
+    // not be published as a block device.
+    bool usable() { return _usable; }
 
     u32 port2hba(u32 port_reg)
     {
@@ -283,6 +313,7 @@ public:
 private:
     sched::thread_handle _cmd_send_waiter;
     bool _linkup = false;
+    bool _usable = false;
     u8 _queue_depth;
     size_t _devsize;
     mutex _lock;
