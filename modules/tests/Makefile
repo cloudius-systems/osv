@@ -188,6 +188,9 @@ tests := tst-iovcnt-guard.so tst-pthread.so misc-ramdisk.so tst-vblk.so tst-blk-
 	tst-concurrent-init.so tst-ring-spsc-wraparound.so tst-setsid.so tst-shm.so tst-shm-consistency.so \
 	tst-shm-nattch.so \
 	tst-io_uring.so \
+	tst-crucible-blk.so \
+	tst-crucible-zfs.so \
+	tst-crucible-bench.so \
 	tst-align.so tst-cxxlocale.so misc-tcp-close-without-reading.so \
 	tst-sigwait.so tst-sampler.so misc-malloc.so misc-memcpy.so \
 	misc-free-perf.so misc-printf.so tst-hostname.so \
