@@ -267,8 +267,8 @@ reseed(u_int fastslow)
 	printf("Yarrow: %s reseed\n", fastslow == FAST ? "fast" : "slow");
 #endif
 
-	/* Caller holds random_reseed_mtx. Discard pre-reseed output before
-	 * installing the new key, including a snapshot-copied partial block. */
+	/* Caller holds random_reseed_mtx. Discard any partial output block
+	 * made with the old key before installing the new key. */
 	random_state.cur = 0;
 	memset(random_state.genval, 0, sizeof(random_state.genval));
 
