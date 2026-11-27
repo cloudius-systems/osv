@@ -524,6 +524,11 @@ bool driver::msix_register(unsigned iv,
     _dev.msix_mask_entry(iv);
 
     auto vec = std::unique_ptr<msix_vector>(new msix_vector(&_dev));
+    // The callers do not fall back to fewer queues, and a queue without its
+    // interrupt would hang on its first command.
+    if (!vec->get_vector()) {
+        abort("nvme%d: no free interrupt vector for MSI-X entry %d\n", _id, iv);
+    }
     _msi.assign_isr(vec.get(),
         [=]() mutable {
                   isr();

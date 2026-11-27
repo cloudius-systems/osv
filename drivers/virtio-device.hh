@@ -59,6 +59,9 @@ public:
     virtual unsigned get_irq() = 0;
     virtual u8 read_and_ack_isr() = 0;
     virtual void register_interrupt(interrupt_factory irq_factory) = 0;
+    // True when register_interrupt() will bind one MSI-X vector per queue
+    // rather than a single interrupt shared by every queue.
+    virtual bool is_msix() { return false; }
 
     virtual void select_queue(int queue) = 0;
     virtual u16 get_queue_size() = 0;

@@ -52,6 +52,9 @@ public:
     void unregister_interrupt(interrupt *interrupt);
 
     unsigned register_handler(std::function<void ()> handler);
+    // Like register_handler(), but returns 0 (an SGI, never an MSI vector)
+    // instead of aborting when the MSI vectors are exhausted.
+    unsigned try_register_handler(std::function<void ()> handler);
     void unregister_handler(unsigned vector);
     // Number of MSI vectors register_handler() can still hand out.
     unsigned available_vectors();
