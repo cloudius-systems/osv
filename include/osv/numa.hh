@@ -68,6 +68,10 @@ bool raw_domain(unsigned node, uint32_t& domain);
 bool cpu_node_known(unsigned cpu_id);
 unsigned node_of_cpu(unsigned cpu_id);
 
+// Firmware-reported physical range owner, or -1 if unknown (also in flat
+// fallback). Not a virtual-address query or proof of allocator placement.
+int node_of_phys(uint64_t phys);
+
 // The SLIT distance from node `from` to node `to`.  Linux/ACPI convention:
 // The diagonal is 10; off-diagonal values are >= 10, with 255 unreachable.
 // Returns defaults (10 local / 20 remote) when no SLIT is present.
