@@ -1829,7 +1829,8 @@ ena_set_queues_placement_policy(pci::device *pdev, struct ena_com_dev *ena_dev,
 		ena_dev->tx_mem_queue_type = ENA_ADMIN_PLACEMENT_POLICY_HOST;
 		return (0);
 	}
-	printf("ena: LLQ Tx placement: %u queues, depth %u, header %u bytes\n",
+	printf("ena: LLQ Tx placement (device allows %u queues, depth %u), "
+	    "header %u bytes\n",
 	    llq->max_llq_num, llq->max_llq_depth, ena_dev->tx_max_header_size);
 	return (0);
 }
