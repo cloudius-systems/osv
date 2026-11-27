@@ -398,8 +398,10 @@ int kill(pid_t pid, int sig)
 {
     // OSv only implements one process, whose pid is getpid().
     // Sending a signal to pid 0 or -1 is also fine, as it will also send a
-    // signal to the same single process.
-    if (pid != getpid() && pid != 0 && pid != -1) {
+    // signal to the same single process.  So is -getpid(): the process
+    // leads its own process group (see getpgrp()), so killpg(getpgrp(), sig)
+    // and kill(-getpgrp(), sig) signal it.
+    if (pid != getpid() && pid != 0 && pid != -1 && pid != -getpid()) {
         errno = ESRCH;
         return -1;
     }
@@ -433,7 +435,7 @@ int kill(pid_t pid, int sig)
                 sig, strsignal(sig));
         osv::poweroff();
     } else if(!is_sig_ign(signal_actions[sigidx])) {
-        if ((pid == OSV_PID) || (pid == 0) || (pid == -1)) {
+        if ((pid == OSV_PID) || (pid == 0) || (pid == -1) || (pid == -OSV_PID)) {
             // This semantically means signalling everybody. So we will signal
             // every thread that is waiting for this.
             //

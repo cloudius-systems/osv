@@ -224,10 +224,11 @@ int fork()
     return -1;
 }
 
-// OSv runs one process and has no sessions or process groups, so there is
-// nothing to detach from: the caller already leads its only session. Report
-// success, with the session id equal to the pid as on Linux. Daemons and
-// servers (PostgreSQL's postmaster, for one) treat a failing setsid() as fatal.
+// A deliberate difference from Linux, where a caller that already leads a
+// process group or session gets EPERM. Callers such as PostgreSQL's children
+// call setsid() where it succeeds on Linux, and treat a failure as fatal. OSv
+// has no sessions, so report success with the session id equal to the pid, as
+// Linux returns.
 OSV_LIBC_API
 pid_t setsid(void)
 {
