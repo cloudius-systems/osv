@@ -183,6 +183,19 @@ unsigned interrupt_descriptor_table::register_handler(std::function<void ()> pos
     return register_interrupt_handler([] { return true; }, [] { processor::apic->eoi(); }, post_eoi);
 }
 
+unsigned interrupt_descriptor_table::available_vectors()
+{
+    unsigned n = 0;
+    WITH_LOCK(_lock) {
+        for (unsigned i = 32; i < 256; ++i) {
+            if (_handlers[i].read_by_owner() == nullptr) {
+                ++n;
+            }
+        }
+    }
+    return n;
+}
+
 void interrupt_descriptor_table::register_interrupt(inter_processor_interrupt *interrupt)
 {
     unsigned v = register_handler(interrupt->get_handler());
