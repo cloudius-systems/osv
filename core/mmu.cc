@@ -2176,8 +2176,10 @@ int file_vma::validate_perm(unsigned perm)
         }
     }
     // fail if prot asks for PROT_EXEC and the underlying FS was
-    // mounted no-exec.
-    if (perm & perm_exec && (_file->f_dentry->d_mount->m_flags & MNT_NOEXEC)) {
+    // mounted no-exec. A file that isn't in a filesystem (a shared-memory
+    // object, an io_uring ring) has no dentry, and no mount to check.
+    if (perm & perm_exec && _file->f_dentry &&
+        (_file->f_dentry->d_mount->m_flags & MNT_NOEXEC)) {
         return EPERM;
     }
     return 0;
@@ -2388,7 +2390,10 @@ std::string procfs_maps()
                 const file_vma &f_vma = static_cast<file_vma&>(vma);
                 unsigned dev_id_major = major(f_vma.file_dev_id());
                 unsigned dev_id_minor = minor(f_vma.file_dev_id());
-                output += osv::sprintf("%08x %02x:%02x %ld %s\n", f_vma.offset(), dev_id_major, dev_id_minor, f_vma.file_inode(), f_vma.file()->f_dentry->d_path);
+                // A file that isn't in a filesystem (a shared-memory
+                // object, an io_uring ring) has no dentry, so no path.
+                auto dentry = f_vma.file()->f_dentry.get();
+                output += osv::sprintf("%08x %02x:%02x %ld %s\n", f_vma.offset(), dev_id_major, dev_id_minor, f_vma.file_inode(), dentry ? dentry->d_path : "");
             } else {
                 output += osv::sprintf("00000000 00:00 0\n");
             }

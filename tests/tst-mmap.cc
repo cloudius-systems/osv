@@ -18,8 +18,10 @@
 #include <string.h>
 
 #include <iostream>
+#include <string>
 #include <cassert>
 #include <cstdlib>
+#include <cstdio>
 #include <fcntl.h>
 #include <unistd.h>
 
@@ -195,6 +197,29 @@ int main(int argc, char **argv)
     memset(buf, 'x', 4096*4);
     assert(msync(buf, 4096*4, MS_SYNC) == 0);
     assert(msync(buf, 4096*4, MS_ASYNC) == 0);
+
+    // Test that a shared-memory object can also be mapped with PROT_EXEC,
+    // and that /proc/self/maps lists its mappings. Having no dentry, the
+    // file used to crash both: the PROT_EXEC check looked up the mount of
+    // its dentry, and /proc/self/maps printed the dentry's path.
+    void *xbuf = mmap(NULL, 4096, PROT_READ|PROT_EXEC, MAP_SHARED, shm_fd, 0);
+    assert(xbuf != MAP_FAILED);
+    int maps_fd = open("/proc/self/maps", O_RDONLY);
+    assert(maps_fd >= 0);
+    std::string maps;
+    char maps_buf[4096];
+    ssize_t maps_n;
+    while ((maps_n = read(maps_fd, maps_buf, sizeof(maps_buf))) > 0) {
+        maps.append(maps_buf, maps_n);
+    }
+    assert(maps_n == 0);
+    close(maps_fd);
+    char xbuf_range[64];
+    snprintf(xbuf_range, sizeof(xbuf_range), "%lx-%lx r-x",
+             (unsigned long)xbuf, (unsigned long)xbuf + 4096);
+    assert(maps.find(xbuf_range) != std::string::npos);
+    assert(munmap(xbuf, 4096) == 0);
+
     assert(munmap(buf, 4096*4) == 0);
     close(shm_fd);
     shm_unlink("/tst-mmap-msync");
