@@ -295,8 +295,8 @@ void io_queue_pair::init_pending_bios(u32 level)
 
 int io_queue_pair::make_request(struct bio* bio, u32 nsid = 1)
 {
-    u64 slba = bio->bio_offset;
-    u32 nlb = bio->bio_bcount; //do the blockshift in nvme_driver
+    u64 slba = bio->bio_offset >> _ns[nsid]->blockshift;
+    u32 nlb = bio->bio_bcount >> _ns[nsid]->blockshift;
 
     SCOPE_LOCK(_lock);
     if (sq_full()) {
@@ -410,11 +410,12 @@ void io_queue_pair::req_done()
             // Call biodone
             if (cqe.sct != 0 || cqe.sc != 0) {
                 trace_nvme_req_done_error(_driver_id, _id, cid, cqe.sct, cqe.sc, pending_bio);
-                biodone(pending_bio, false);
-                NVME_ERROR("I/O queue: cid=%d, sct=%#x, sc=%#x, bio=%#x, slba=%llu, nlb=%llu\n",
+                // Before biodone(): after it, the bio's owner may free it.
+                NVME_ERROR("I/O queue: cid=%d, sct=%#x, sc=%#x, bio=%#x, offset=%llu, bytes=%llu\n",
                     cqe.cid, cqe.sct, cqe.sc, pending_bio,
                     pending_bio ? pending_bio->bio_offset : 0,
                     pending_bio ? pending_bio->bio_bcount : 0);
+                biodone(pending_bio, false);
             } else {
                 trace_nvme_req_done_success(_driver_id, _id, cid, pending_bio);
                 biodone(pending_bio, true);
