@@ -22,6 +22,19 @@ namespace osv {
     int stop_if(std::string if_name, std::string ip_addr);
     int ifup(std::string if_name);
     std::string if_ip(std::string if_name);
+
+    int if_add_addr(std::string if_name, std::string ip_addr, std::string netmask);
+    int if_del_addr(std::string if_name, std::string ip_addr, std::string netmask);
+
+#ifdef INET6
+    int set_ipv6_accept_rtadv(bool enable);
+    bool get_ipv6_accept_rtadv(void);
+    // Solicit and wait (up to timeout_ms) for a SLAAC-assigned global IPv6
+    // address on if_name. Returns 0 on success, ETIMEDOUT if none appeared.
+    int if_ipv6_autoconf(std::string if_name, int timeout_ms);
+    // True if the last RA on if_name had the Managed (M) flag: use DHCPv6.
+    bool if_ipv6_wants_dhcp(std::string if_name);
+#endif
 }
 
 #endif /* __NETWORKING_H__ */
