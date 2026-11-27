@@ -16,6 +16,7 @@
 
 #include <atomic>
 #include <cstdio>
+#include <cstdlib>
 
 #include <osv/sched.hh>
 #include <osv/debug.hh>
@@ -54,6 +55,8 @@ int main()
         printf("SKIP: needs 2 CPUs\n");
         return 0;
     }
+    // Keep this thread off CPU 1, which the interrupt may wedge.
+    sched::thread::pin(sched::cpus[0]);
     unsigned vector = free_high_vector();
     check(vector >= 0xe0, "found a free vector in the top priority class");
 
@@ -76,8 +79,11 @@ int main()
     check(sent, "the pinned thread sent the interrupt");
     check(timer_ok, "a timer still fires on the CPU that took it");
     if (!timer_ok) {
-        printf("%d failures (CPU 1 is wedged; not joining)\n", failures);
-        return 1;
+        // CPU 1 is wedged, so a normal exit would hang in the shutdown:
+        // abort, which test.py powers off.
+        printf("%d failures (CPU 1 is wedged; aborting)\n", failures);
+        fflush(stdout);
+        abort();
     }
 
     t->wake_with([&] { woken = true; });
