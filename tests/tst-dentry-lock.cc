@@ -6,12 +6,13 @@
  */
 
 // Concurrency stress for the dentry cache, aimed at the lock-order inversion
-// between dentry_hash_lock and the vnode lock.
+// between the dentry chain locks and the vnode lock.
 //
 // The inversion: namei() holds vn_lock(dvp) while calling
-// dentry_lookup()/dentry_alloc(), which take dentry_hash_lock -- so the order
-// is vn_lock -> dentry_hash_lock.  drele() used to take dentry_hash_lock and
-// then call vn_del_name(), which takes vn_lock internally -- the reverse.
+// dentry_lookup()/dentry_alloc(), which take a chain lock -- so the order is
+// vn_lock -> chain lock.  drele() used to take the (then single, global)
+// dentry_hash_lock and then call vn_del_name(), which takes vn_lock
+// internally -- the reverse.
 //
 // This test does NOT reproduce that deadlock, and cannot on ramfs.  Hitting it
 // requires two distinct dentries aliasing one vnode (see the fix commit), i.e.
@@ -57,7 +58,7 @@ static const char *DIR = "/tmp/tst-dentry-lock";
 
 // Open and close the same set of names repeatedly.  All of these live in one
 // directory, so every lookup takes that directory's vnode lock and then a
-// dentry_hash_lock; the names differ so they spread across hash buckets.
+// dentry chain lock; the names differ so they spread across hash chains.
 static void open_close_worker(int id, int iters, int names)
 {
     for (int i = 0; i < iters; i++) {
