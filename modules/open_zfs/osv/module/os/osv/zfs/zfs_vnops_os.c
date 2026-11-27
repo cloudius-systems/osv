@@ -29,6 +29,8 @@
 #include <fs/vfs/vfs_id.h>
 #include <sys/zap.h>
 #include <sys/zfs_dir.h>
+#include <sys/zil.h>
+#include <sys/u8_textprep.h>
 
 /*
  * OS-specific vnode operations.
@@ -619,12 +621,122 @@ zfs_symlink(znode_t *dzp, const char *name, vattr_t *vap,
 	return (error);
 }
 
+/*
+ * zfs_link -- add a directory entry @name in @tdzp for the existing file
+ * @szp, i.e. a hard link.  Called by zfs_vop_link() and by ZIL replay of a
+ * TX_LINK record (zfs_replay_link()).
+ *
+ * Follows FreeBSD's OpenZFS zfs_link() (module/os/freebsd/zfs/zfs_vnops_os.c),
+ * less what OSv does not have: owner and access policy (OSv runs one
+ * privileged user, and zfs_zaccess() allows everything) and vnode events.
+ * The type comes from z_mode rather than the vnode, because a znode that ZIL
+ * replay looks up has no vnode attached.
+ *
+ * Timestamps: tdzp ctime and mtime, szp ctime (zfs_link_create()).
+ */
 int
-zfs_link(znode_t *tdzp, znode_t *sp,
-    const char *name, cred_t *cr, int flags)
+zfs_link(znode_t *tdzp, znode_t *szp, const char *name, cred_t *cr,
+    int flags)
 {
-	(void) tdzp; (void) sp; (void) name; (void) cr; (void) flags;
-	return (SET_ERROR(ENOTSUP));
+	(void) cr; (void) flags;
+	zfsvfs_t	*zfsvfs = ZTOZSB(tdzp);
+	znode_t		*tzp;
+	zilog_t		*zilog;
+	dmu_tx_t	*tx;
+	uint64_t	parent;
+	size_t		namelen = strlen(name);
+	int		error;
+
+	if ((!zfsvfs->z_longname && namelen >= ZAP_MAXNAMELEN) ||
+	    namelen >= ZAP_MAXNAMELEN_NEW)
+		return (SET_ERROR(ENAMETOOLONG));
+
+	if ((error = zfs_enter_verify_zp(zfsvfs, tdzp, FTAG)) != 0)
+		return (error);
+	zilog = zfsvfs->z_log;
+
+	/* POSIX requires EPERM for a hard link to a directory. */
+	if (S_ISDIR(szp->z_mode)) {
+		zfs_exit(zfsvfs, FTAG);
+		return (SET_ERROR(EPERM));
+	}
+
+	if ((error = zfs_verify_zp(szp)) != 0) {
+		zfs_exit(zfsvfs, FTAG);
+		return (error);
+	}
+
+	/*
+	 * In a directory tree that inherits its project ID, only allow links
+	 * between files of the same project.
+	 */
+	if ((tdzp->z_pflags & ZFS_PROJINHERIT) &&
+	    tdzp->z_projid != szp->z_projid) {
+		zfs_exit(zfsvfs, FTAG);
+		return (SET_ERROR(EXDEV));
+	}
+
+	if (szp->z_pflags & (ZFS_APPENDONLY | ZFS_IMMUTABLE | ZFS_READONLY)) {
+		zfs_exit(zfsvfs, FTAG);
+		return (SET_ERROR(EPERM));
+	}
+
+	/* Prevent links to .zfs/shares files. */
+	if ((error = sa_lookup(szp->z_sa_hdl, SA_ZPL_PARENT(zfsvfs),
+	    &parent, sizeof (uint64_t))) != 0) {
+		zfs_exit(zfsvfs, FTAG);
+		return (error);
+	}
+	if (parent == zfsvfs->z_shares_dir) {
+		zfs_exit(zfsvfs, FTAG);
+		return (SET_ERROR(EPERM));
+	}
+
+	if (zfsvfs->z_utf8 && u8_validate(name, namelen, NULL,
+	    U8_VALIDATE_ENTIRE, &error) < 0) {
+		zfs_exit(zfsvfs, FTAG);
+		return (SET_ERROR(EILSEQ));
+	}
+
+	/*
+	 * Links between attributes and ordinary files would let a link into
+	 * ordinary file space bypass the restrictions of attribute space.
+	 */
+	if ((szp->z_pflags & ZFS_XATTR) != (tdzp->z_pflags & ZFS_XATTR)) {
+		zfs_exit(zfsvfs, FTAG);
+		return (SET_ERROR(EINVAL));
+	}
+
+	/* Fail if the entry already exists. */
+	error = zfs_dirent_lookup(tdzp, name, &tzp, ZNEW);
+	if (error) {
+		zfs_exit(zfsvfs, FTAG);
+		return (error);
+	}
+
+	tx = dmu_tx_create(zfsvfs->z_os);
+	dmu_tx_hold_sa(tx, szp->z_sa_hdl, B_FALSE);
+	dmu_tx_hold_zap(tx, tdzp->z_id, TRUE, name);
+	zfs_sa_upgrade_txholds(tx, szp);
+	zfs_sa_upgrade_txholds(tx, tdzp);
+	error = dmu_tx_assign(tx, DMU_TX_WAIT);
+	if (error) {
+		dmu_tx_abort(tx);
+		zfs_exit(zfsvfs, FTAG);
+		return (error);
+	}
+
+	error = zfs_link_create(tdzp, name, szp, tx, 0);
+	if (error == 0)
+		zfs_log_link(zilog, tx, TX_LINK, tdzp, szp, name);
+
+	dmu_tx_commit(tx);
+
+	if (error == 0 && zfsvfs->z_os->os_sync == ZFS_SYNC_ALWAYS)
+		error = zil_commit(zilog, 0);
+
+	zfs_exit(zfsvfs, FTAG);
+	return (error);
 }
 
 /*
@@ -1316,13 +1428,16 @@ zfs_vop_truncate(struct vnode *vp, off_t new_size)
 }
 
 /*
- * zfs_vop_link - not yet implemented.
+ * zfs_vop_link - create a hard link @name in directory @tdvp to @svp.
+ * sys_link() has already checked that both are on this mount and that @svp
+ * is not a directory.
  */
 static int
 zfs_vop_link(struct vnode *tdvp, struct vnode *svp, char *name)
 {
-	(void) tdvp; (void) svp; (void) name;
-	return (SET_ERROR(ENOTSUP));
+	if (zfs_is_readonly(ZTOZSB(VTOZ(tdvp))))
+		return (EROFS);
+	return (zfs_link(VTOZ(tdvp), VTOZ(svp), name, kcred, 0));
 }
 
 /*
