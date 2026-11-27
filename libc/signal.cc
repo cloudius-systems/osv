@@ -656,7 +656,8 @@ int kill(pid_t pid, int sig)
     // OSV_PID like the self/broadcast case (target_as stays nullptr -> AS0)
     // instead of ESRCH -- otherwise the postmaster never launches the workers
     // and the parallel Gather hangs (leader waits forever for workers that
-    // were never forked).
+    // were never forked).  -OSV_PID, the process group the top-level app
+    // leads (kill(-getpgrp(), sig)), goes to AS0 the same way.
     mmu::address_space *target_as = nullptr;
     // The target's address space is held until the handler thread is in it,
     // so the child cannot be torn down under either of them.
@@ -679,7 +680,7 @@ int kill(pid_t pid, int sig)
     bool self_inline = false;
     // The target is the calling process itself (a live fork child).
     bool to_own_process = false;
-    if (pid != getpid() && pid != 0 && pid != -1 && pid != OSV_PID) {
+    if (pid != getpid() && pid != 0 && pid != -1 && pid != OSV_PID && pid != -OSV_PID) {
         target_as = target_use.as = osv::fork::hold_as_for_pid(pid, &registered);
         if (!target_as) {
             if (registered) {
