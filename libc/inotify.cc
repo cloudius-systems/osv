@@ -29,7 +29,8 @@
 //   reports IN_MOVE_SELF and then goes silent (Linux keeps reporting events
 //   from its new location), and the watch reports events for whatever is
 //   later created at the old path.  For the same reason a watch on a hard
-//   link sees only changes made through that path.
+//   link, or on a symlink or through one, sees only changes made through
+//   that exact path.
 // - The event queue has no size limit, where Linux caps it at
 //   max_queued_events and then reports IN_Q_OVERFLOW.
 
