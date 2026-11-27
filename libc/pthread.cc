@@ -30,6 +30,8 @@
 #include <api/time.h>
 #include <osv/rwlock.h>
 #include <osv/export.h>
+#include <osv/fork_arena.hh>
+#include <osv/kernel_config_fork.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
 #include <osv/kernel_config_threads_default_pthread_stack_size.h>
@@ -89,6 +91,13 @@ namespace pthread_private {
     public:
         explicit pthread(void *(*start)(void *arg), void *arg, sigset_t sigset,
             const thread_attr* attr);
+#if CONF_fork
+        // For a thread that pthread_create() did not make (a fork child):
+        // refers to @t without owning it.
+        explicit pthread(sched::thread *t) : _retval(nullptr), _thread(t) {}
+        ~pthread() { if (_borrowed) { _thread.release(); } }
+        bool _borrowed = false;
+#endif
         void start();
         static pthread* from_libc(pthread_t p);
         pthread_t to_libc();
@@ -185,6 +194,22 @@ namespace pthread_private {
         return reinterpret_cast<pthread_t>(this);
     }
 
+#if CONF_fork
+    // Free a fork child's pthread object (see __osv_run_atfork_child) when
+    // its thread exits.
+    void __attribute__((constructor)) pthread_register_borrowed_notifier()
+    {
+        sched::thread::register_exit_notifier([] {
+            auto p = current_pthread ? pthread::from_libc(current_pthread) : nullptr;
+            if (p && p->_borrowed) {
+                current_pthread = 0;
+                fork_arena::kernel_heap_scope kh;
+                delete p;
+            }
+        });
+    }
+#endif
+
     thread_attr* from_libc(pthread_attr_t* a)
     {
         return reinterpret_cast<thread_attr*>(a);
@@ -276,9 +301,59 @@ int pthread_atfork(void (*prepare)(void), void (*parent)(void),
     return 0;
 }
 
+// atfork handlers registered via pthread_atfork()/__register_atfork().  glibc
+// and musl register these internally (e.g. to reset the malloc arena lock in
+// the child), so fork() must actually run them.  Stored here and invoked by
+// osv::fork::run_atfork_* from libc/process/fork.cc.
+namespace {
+struct atfork_entry {
+    void (*prepare)(void);
+    void (*parent)(void);
+    void (*child)(void);
+};
+mutex atfork_lock;
+std::vector<atfork_entry> atfork_handlers;
+}
+
+extern "C" void __osv_run_atfork_prepare()
+{
+    // POSIX: prepare handlers run in LIFO (reverse registration) order.
+    SCOPE_LOCK(atfork_lock);
+    for (auto it = atfork_handlers.rbegin(); it != atfork_handlers.rend(); ++it) {
+        if (it->prepare) it->prepare();
+    }
+}
+extern "C" void __osv_run_atfork_parent()
+{
+    SCOPE_LOCK(atfork_lock);
+    for (auto &h : atfork_handlers) {
+        if (h.parent) h.parent();
+    }
+}
+extern "C" void __osv_run_atfork_child()
+{
+#if CONF_fork
+    // The fork child is a new thread that pthread_create() did not make, so
+    // pthread_self() would be null and every pthread_*() call on it would
+    // fault.  Give it a pthread object for its own thread, freed at its exit.
+    {
+        fork_arena::kernel_heap_scope kh;
+        auto p = new pthread(sched::thread::current());
+        p->_borrowed = true;
+        current_pthread = p->to_libc();
+    }
+#endif
+    SCOPE_LOCK(atfork_lock);
+    for (auto &h : atfork_handlers) {
+        if (h.child) h.child();
+    }
+}
+
 extern "C" int register_atfork(void (*prepare)(void), void (*parent)(void),
                                 void (*child)(void), void *__dso_handle)
 {
+    SCOPE_LOCK(atfork_lock);
+    atfork_handlers.push_back({prepare, parent, child});
     return 0;
 }
 
