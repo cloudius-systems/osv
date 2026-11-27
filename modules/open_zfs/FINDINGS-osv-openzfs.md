@@ -128,7 +128,6 @@ the Tier 0-3 matrices above) is unaffected.
 | Test | Why it fails under OpenZFS |
 |---|---|
 | tst-fallocate | posix_fallocate/preallocation semantics not implemented on the OpenZFS vnops path (same class as the ramfs statfs/free-blocks gap noted for the rofs image). |
-| tst-fs-link | hard-link paths not fully wired through the OpenZFS zfs_link vnop on OSv. |
 | tst-utimensat | utimensat timestamp update not reflected through the OpenZFS SA path. |
 | tst-utimes | utimes/utimensat timestamp update, same root cause as tst-utimensat. |
 | tst-zfs-mount | in-guest mount/remount sequence the test drives is not fully supported by the OSv OpenZFS mount shim. |
