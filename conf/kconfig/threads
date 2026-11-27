@@ -38,3 +38,15 @@ config syscall_stack_size
   hex
   default $(shell,if [ $mode = "debug" ]; then echo 0x2000 ; else echo 0x800; fi)
 endif
+
+config sched_wake_pull
+  prompt "Idle-CPU pull work-stealing"
+  def_bool $(shell,grep -q ^conf_sched_wake_pull=1 conf/base.mk && echo y || echo n)
+  help
+    Let a CPU that becomes idle ask the busiest CPU, through an IPI, to give
+    it one queued thread, instead of waiting for the 100ms load balancer.
+    This helps when one thread repeatedly wakes many workers that all sit on
+    one CPU (new threads start on their creator's CPU, and the balancer moves
+    at most one thread per tick).  It hurts two threads that wake each other:
+    an idle CPU can take the just-woken thread before the waker blocks, and
+    from then on every wake between them crosses CPUs.  Off by default.

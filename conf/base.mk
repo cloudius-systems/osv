@@ -12,3 +12,5 @@ conf_cxx_level=gnu++14
 
 conf_lazy_stack=0
 conf_lazy_stack_invariant=0
+
+conf_sched_wake_pull=0
