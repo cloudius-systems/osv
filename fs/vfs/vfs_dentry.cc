@@ -40,6 +40,7 @@
 
 #include <osv/dentry.h>
 #include <osv/vnode.h>
+#include <osv/fork_arena.hh>
 #include "vfs.h"
 
 #define DENTRY_BUCKETS 32
@@ -120,6 +121,12 @@ struct dentry *
 dentry_alloc(struct dentry *parent_dp, struct vnode *vp, const char *path)
 {
     struct mount *mp = vp->v_mount;
+    // A dentry is shared filesystem cache infrastructure inherited across
+    // fork(); keep it off the COW fork arena (see the note in vget) so the
+    // child never COW-faults on it while servicing a demand fault.
+#if CONF_fork
+    fork_arena::kernel_heap_scope kh;
+#endif
     struct dentry *dp = (dentry*)calloc(sizeof(*dp), 1);
 
     if (!dp) {
@@ -195,7 +202,22 @@ dentry_move(struct dentry *dp, struct dentry *parent_dp, char *path)
     // block in the page allocator, and dentry_hash_lock serialises every name
     // lookup in the system; sleeping under it stalls all VFS name resolution
     // for the duration.  Nothing here needs the lock.
+    //
+    // Like dentry_alloc, d_path is shared dentry-cache infrastructure inherited
+    // across fork(); keep it off the COW fork arena so it stays freeable from
+    // any address space -- a rename from a forked backend (e.g. PG WAL-segment
+    // recycling during a checkpoint) must not leave d_path in that backend's
+    // COW-private arena, or a later drele() from AS0/another backend faults on
+    // the diverged header.
+#if CONF_fork
+    char *new_path;
+    {
+        fork_arena::kernel_heap_scope kh;
+        new_path = strdup(path);
+    }
+#else
     char *new_path = strdup(path);
+#endif
 
     if (old_pdp) {
         WITH_LOCK(old_pdp->d_lock) {

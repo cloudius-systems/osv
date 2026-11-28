@@ -13,6 +13,8 @@
 #include <osv/barrier.hh>
 #include <osv/kernel_config_preempt.h>
 #include <osv/kernel_config_threads_default_kernel_stack_size.h>
+#include <osv/kernel_config_fork.h>
+#include <osv/mempool.hh>
 #include <string.h>
 #include "arch-setup.hh"
 
@@ -55,7 +57,13 @@ void thread::init_stack()
         stack.size = CONF_threads_default_kernel_stack_size;
     }
     if (!stack.begin) {
+#if CONF_fork
+        // Shared by every address space, and not dependent on a free physically
+        // contiguous range (see memory::alloc_kernel_stack()).
+        stack.begin = memory::alloc_kernel_stack(stack.size);
+#else
         stack.begin = malloc(stack.size);
+#endif
         stack.deleter = stack.default_deleter;
     } else {
         // The thread will run thread_main_c() with preemption disabled
