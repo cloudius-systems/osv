@@ -17,6 +17,7 @@
 #include <osv/wait_record.hh>
 #include <osv/mempool.hh>
 #include <osv/kernel_config_core_rcu_defer_queue_size.h>
+#include <osv/kernel_config_fork.h>
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
 
@@ -212,9 +213,26 @@ void rcu_defer(std::function<void ()>&& func)
             // buffers. Make sure to re-awake on the same CPU.
             // FIXME: We have a starvation possibility: another thread looping
             // on rcu_defer() can cause us to always find a full queue.
+#if CONF_fork
+            // The wait_record is linked into *percpu_waiting_defers and later
+            // dereferenced (q->next, q->wake()) by the RCU quiescent-state
+            // thread, which runs in AS0 with preemption DISABLED.  On an
+            // on-stack record from a fork-child backend that VA is a child
+            // stack address (COW/app-slot), unmapped in AS0 -> a page fault in
+            // non-preemptable context (assert(preemptable()) in
+            // arch/x64/mmu.cc) aborts the whole VM.  PostgreSQL hits this under
+            // sustained concurrent load once the per-CPU rcu_defer queue fills.
+            // Put the record on the identity kernel heap (coherent in every
+            // AS) for a fork child; AS0/parent keep the on-stack fast path.
+            coherent_wait_record wr_holder(sched::thread::current());
+            wait_record &wr = wr_holder.get();
+            wr.next = *percpu_waiting_defers;
+            *percpu_waiting_defers = &wr;
+#else
             wait_record wr(sched::thread::current());
             wr.next = *percpu_waiting_defers;
             *percpu_waiting_defers = &wr;
+#endif
             WITH_LOCK(migration_lock) {
                 DROP_LOCK(preempt_lock) {
                     (*percpu_quiescent_state_thread).wake();
