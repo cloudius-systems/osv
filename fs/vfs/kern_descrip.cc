@@ -18,12 +18,24 @@
 #include <boost/range/algorithm/find.hpp>
 
 #include <bsd/sys/sys/queue.h>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 
 #include <osv/kernel_config_lazy_stack.h>
 #include <osv/kernel_config_lazy_stack_invariant.h>
 #include <osv/kernel_config_core_epoll.h>
 
 using namespace osv;
+
+#if CONF_fork
+// fork() fd-inheritance hooks (libc/process/fork.cc): record a child's own
+// post-fork fd allocation, and query whether a child owns @fd.  Declared here
+// (before _fdalloc/fdclose) so both can call them.
+extern "C" void fork_child_opened_fd(int fd, struct file *fp);
+extern "C" bool fork_child_owns_fd(int fd);
+#endif
 
 /*
  * Global file descriptors table - in OSv we have a single process so file
@@ -59,6 +71,13 @@ int _fdalloc(struct file *fp, int *newfd, int min_fd)
             *newfd = fd;
         }
 
+#if CONF_fork
+        // If a fork child allocated this fd, record it so the child's later
+        // close() of it nulls the shared slot normally (its own fd), as opposed
+        // to a numeric handle onto one of the parent's fds (which the child
+        // must not null on OSv's single shared fd table).
+        fork_child_opened_fd(fd, fp);
+#endif
         return 0;
     }
 
@@ -82,9 +101,49 @@ int fdalloc(struct file *fp, int *newfd)
     return (_fdalloc(fp, newfd, 0));
 }
 
+#if CONF_fork
+// fork() fd-inheritance hook (libc/process/fork.cc).  OSv keeps a SINGLE global
+// fd table shared by a fork parent and child, so a child's close() would
+// otherwise clear the shared gfdt slot and drop the only file reference --
+// tearing down a socket/file the parent still holds.  For an fd the current
+// fork child INHERITED from its parent, this drops only the child's inherited
+// reference and leaves the shared slot intact; it returns true when it handled
+// the close so fdclose() must not touch gfdt[].  Returns false (normal close)
+// for the top-level app and for fds the child opened itself after fork.
+extern "C" bool fork_child_close_inherited_fd(int fd);
+// A non-child (top-level app / postmaster) closing an fd that a LIVE fork child
+// inherited: drop the owner's reference but leave the shared gfdt slot intact
+// for the child (which finds the file via gfdt[fd] on OSv's single fd table).
+// Returns true when it handled the close (slot kept), false for a normal close.
+extern "C" bool fork_owner_close_inherited_fd(int fd, struct file *fp);
+#endif
+
 int fdclose(int fd)
 {
     struct file* fp;
+
+#if CONF_fork
+    // A fork child closing an fd it inherited only drops its own reference; the
+    // shared gfdt slot and the underlying file stay alive for the parent (or,
+    // if the parent already closed it, until the last inheriting child goes).
+    if (fork_child_close_inherited_fd(fd)) {
+        return 0;
+    }
+#endif
+
+#if CONF_fork
+    bool owner_keep_slot = false;
+    // A fork child closing an fd it did NOT inherit and did NOT open itself is
+    // holding only a numeric handle onto one of the PARENT's fds (OSv has one
+    // shared global fd table).  Nulling gfdt[fd] here would tear that fd out
+    // from under the parent -- exactly what corrupted PostgreSQL's postmaster
+    // when a backend's ClosePostmasterPorts() closed the postmaster-owned
+    // death-watch pipe fd.  Treat it as a harmless no-op on the shared slot
+    // (POSIX: the fd is "closed" in the child's process view).
+    if (!fork_child_owns_fd(fd)) {
+        return 0;
+    }
+#endif
 
     WITH_LOCK(gfdt_lock) {
 
@@ -93,13 +152,93 @@ int fdclose(int fd)
             return EBADF;
         }
 
+#if CONF_fork
+        // The top-level owner (postmaster) closing a connection fd that a live
+        // forked child still inherits: keep the shared gfdt slot pointing at
+        // the socket so the child's getsockname()/recv() on the inherited fd
+        // still resolves it (nulling the slot -> child sees EBADF, or a reused
+        // vnode -> ENOTSOCK).  Leave the slot; only the owner's reference is
+        // dropped (below, outside gfdt_lock).
+        owner_keep_slot = fork_owner_close_inherited_fd(fd, fp);
+        if (!owner_keep_slot) {
+            gfdt[fd].assign(nullptr);
+        }
+#else
         gfdt[fd].assign(nullptr);
+#endif
     }
 
     fdrop(fp);
 
     return 0;
 }
+
+#if CONF_fork
+// Close an fd that an exited fork child (backend) opened for ITSELF after fork
+// and never closed.  Called by the reaper (release_inherited_fds) so these
+// private fds do not leak in the shared gfdt across backend churn.  Plain
+// close semantics on the shared table: read the slot, null it, drop the
+// reference.  The fd was private to the exited backend, so nulling the slot
+// cannot disturb the parent or a sibling.
+extern "C" void fork_reap_close_child_opened_fd(int fd, struct file *fp)
+{
+    if (fd < 0 || fd >= FDMAX || fp == nullptr) {
+        return;
+    }
+    struct file *cur = nullptr;
+    WITH_LOCK(gfdt_lock) {
+        cur = gfdt[fd].read_by_owner();
+        if (cur != fp) {
+            // Slot was closed, freed, or reused for a DIFFERENT file (e.g. a
+            // dup2 onto this number after the child exited): not ours to close.
+            return;
+        }
+        gfdt[fd].assign(nullptr);
+    }
+    fdrop(fp);
+}
+
+#endif
+
+#if CONF_fork
+// Null gfdt[fd] iff it currently holds @fp.  Used by fork's inherited-fd
+// bookkeeping (libc/process/fork.cc) to release a shared fd slot once its last
+// live inheriting child is done with it, without disturbing a slot that has
+// since been reassigned to a different file.
+extern "C" void fork_clear_gfdt_slot_if(int fd, struct file *fp)
+{
+    if (fd < 0 || fd >= FDMAX) {
+        return;
+    }
+    WITH_LOCK(gfdt_lock) {
+        if (gfdt[fd].read_by_owner() == fp) {
+            gfdt[fd].assign(nullptr);
+        }
+    }
+}
+#endif
+
+#if CONF_fork
+// Snapshot the currently-open fds and take one reference (fhold) on each open
+// file, storing the fd->file pairs via the supplied callback.  Used by fork()
+// to give the child its OWN reference on every inherited open file, so the
+// child's later close()/exit drops only the child's ref rather than tearing
+// down a file the parent still uses.  Runs under gfdt_lock so the snapshot is
+// consistent against concurrent fdalloc/fdclose.
+extern "C" void fork_snapshot_open_fds(void (*emit)(void *ctx, int fd, struct file *fp),
+                                       void *ctx)
+{
+    WITH_LOCK(gfdt_lock) {
+        for (int fd = 0; fd < FDMAX; fd++) {
+            struct file *fp = gfdt[fd].read_by_owner();
+            if (fp) {
+                fhold(fp);
+                emit(ctx, fd, fp);
+            }
+        }
+    }
+}
+#endif
 
 /*
  * Assigns a file pointer to a specific file descriptor.
@@ -249,6 +388,21 @@ void file::epoll_add(epoll_ptr ep)
 {
 #if CONF_core_epoll
     WITH_LOCK(f_lock) {
+#if CONF_fork
+        // f_epolls records which epoll instances are watching this file.  The
+        // struct file is SHARED across forked processes (identity heap), and
+        // the WAKE side runs cross-AS: when data arrives, the RX/netisr thread
+        // (or another backend) walks so->fp->f_epolls and calls epoll_wake for
+        // each watcher (see tcp_input.cc, tcp_usrreq.cc).  If the vector (and
+        // its element storage) lived in the registering backend's COW fork
+        // arena, the waking thread's address space would see a divergent/empty
+        // f_epolls -> it never wakes the epoll -> the watching PG backend hangs
+        // in epoll_wait forever (concurrent connections stall).  Keep the
+        // vector and its growth on the identity kernel heap so every address
+        // space sees the same watcher list -- same rule as the struct file it
+        // hangs off.
+        fork_arena::kernel_heap_scope _fkh;
+#endif
         if (!f_epolls) {
             f_epolls.reset(new std::vector<epoll_ptr>);
         }
