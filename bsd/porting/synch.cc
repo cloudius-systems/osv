@@ -15,6 +15,12 @@
 #include <bsd/porting/synch.h>
 #include <bsd/porting/sync_stub.h>
 #include <bsd/sys/sys/param.h>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <memory>
+#include <osv/align.hh>
+#include <osv/fork_arena.hh>
+#endif
 
 TRACEPOINT(trace_synch_msleep, "chan=%p mtx=%p timo_hz=%d", void *, void *, int);
 TRACEPOINT(trace_synch_msleep_wait, "chan=%p timo_hz=%d", void *, int);
@@ -74,8 +80,59 @@ private:
 
 static_assert(256 == 1u << 8, "bucket_of() takes the top 8 bits");
 
+#if CONF_fork
+namespace {
+// A forked process's stack is private to its copy-on-write address space,
+// but a wakeup from another address space follows the bucket list into the
+// waiter.  So under CONF_fork the waiter must not live on the sleeper's
+// stack.  It must not be malloc'ed either: an allocation per sleep is the
+// hot-path cost, and a malloc that needs a page can sleep.  Take it from this
+// thread's TLS block, which setup_tcb() puts on the identity heap, so it is
+// coherent across address spaces (the lfmutex wait_record does the same).
+// msleep() does not nest: between linking the waiter and returning it calls
+// only mutexes, a timer, tracepoints and the scheduler, none of which sleeps
+// through this port.  Two slots cover a page fault in that window that might
+// some day sleep here; past them the waiter comes from the kernel heap.
+constexpr unsigned tls_waiters = 2;
+// Over-aligned TLS would change the kernel PT_TLS alignment that the static
+// TLS layout depends on, so keep a raw buffer and align by hand.
+__thread char tls_waiter_buf[tls_waiters * sizeof(synch_thread) + alignof(synch_thread)];
+__thread unsigned tls_waiters_used;
+
+class sleep_waiter {
+    synch_thread* _w;
+    bool _tls;
+public:
+    sleep_waiter() {
+        _tls = tls_waiters_used < tls_waiters;
+        if (_tls) {
+            auto base = align_up(reinterpret_cast<uintptr_t>(tls_waiter_buf),
+                                 alignof(synch_thread));
+            _w = new (reinterpret_cast<char*>(base) +
+                      tls_waiters_used++ * sizeof(synch_thread)) synch_thread;
+        } else {
+            fork_arena::kernel_heap_scope kh;
+            _w = new synch_thread;
+        }
+    }
+    ~sleep_waiter() {
+        if (_tls) {
+            _w->~synch_thread();
+            tls_waiters_used--;
+        } else {
+            fork_arena::kernel_heap_scope kh;
+            delete _w;
+        }
+    }
+    synch_thread& get() { return *_w; }
+};
+}
+#endif
+
 // Constructed on first use, so a sleep or wakeup from an early static
-// constructor finds the buckets initialized.
+// constructor finds the buckets initialized.  Under CONF_fork the port is a
+// kernel object every address space shares, so it must not be allocated in a
+// fork arena; a function-local static lives in the kernel image's BSS.
 static synch_port& synch()
 {
     static synch_port port;
@@ -90,7 +147,12 @@ int synch_port::_msleep(void *chan, struct mtx *mtx,
     mutex_t *wait_lock = nullptr;
 
     // Init the wait
+#if CONF_fork
+    sleep_waiter waiter_holder;
+    synch_thread& wait = waiter_holder.get();
+#else
     synch_thread wait;
+#endif
     wait._thread = sched::thread::current();
     wait._chan = chan;
     wait._awake.store(false, std::memory_order_release);
