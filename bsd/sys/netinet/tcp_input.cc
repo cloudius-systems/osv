@@ -91,6 +91,9 @@
 #include <osv/poll.h>
 #include <osv/net_trace.hh>
 #include <osv/aligned_new.hh>
+#include <osv/net_channel.hh>
+#include <osv/fork_arena.hh>
+#include <osv/kernel_config_fork.h>
 
 TRACEPOINT(trace_tcp_input_ack, "%p: We've got ACK: %u", void*, unsigned int);
 
@@ -3257,6 +3260,17 @@ static ipv4_tcp_conn_id tcp_connection_id(tcpcb* tp)
 void
 tcp_setup_net_channel(tcpcb* tp, struct ifnet* intf)
 {
+#if CONF_fork
+	// Everything allocated here -- the per-connection net_channel,
+	// its classifier hashtable entry, poller/epoll nodes -- is a SHARED RX object
+	// dereferenced by the virtio-net receiver thread in AS0 (preemption disabled).
+	// tcp_input() can run in the app backend's connect()/send() context during
+	// connection setup, so a default allocation lands in that backend's COW fork
+	// arena -> the RX thread faults on an unmapped arena VA with preemption off
+	// ("Assertion failed: sched::preemptable() (page_fault)").  Force the shared
+	// identity kernel heap for the whole setup.
+	fork_arena::kernel_heap_scope _nc_setup_kh;
+#endif
 	auto nc = aligned_new<net_channel>([=] (mbuf *m) { tcp_net_channel_packet(tp, m); });
 	tp->nc = nc;
 	tp->nc_intf = intf;

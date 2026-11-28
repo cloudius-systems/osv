@@ -10,6 +10,13 @@
 #include <cassert>
 #include <iostream>
 
+#ifdef __OSV__
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
+#endif
+
 extern "C" size_t malloc_usable_size (void *ptr);
 
 static void test_realloc(size_t original_size, size_t new_size)
@@ -39,10 +46,27 @@ static void test_realloc(size_t original_size, size_t new_size)
 }
 
 #ifdef __OSV__
+// The expected values are the mempool allocator's size classes. With
+// CONF_fork, an application allocation of up to 2 MiB comes from the fork
+// arena instead, whose classes differ, so for those only the generic
+// contract is checked: at least size bytes, all of them writable.
 static void test_usable_size(size_t size, size_t expected_usable_size)
 {
     void* ptr = malloc(size);
-    assert(expected_usable_size == malloc_usable_size(ptr));
+    assert(ptr);
+    size_t usable = malloc_usable_size(ptr);
+    assert(usable >= size);
+    memset(ptr, 0x5a, usable);
+#if CONF_fork
+    if (fork_arena::contains(ptr)) {
+        free(ptr);
+        std::cerr << "PASSED malloc_usable_size() for size: " << size
+                  << " (fork arena, usable " << usable
+                  << "; mempool class not checked)" << std::endl;
+        return;
+    }
+#endif
+    assert(expected_usable_size == usable);
     free(ptr);
 
     std::cerr << "PASSED malloc_usable_size() for size: " << size << std::endl;
