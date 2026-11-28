@@ -12,6 +12,10 @@
 #include <memory>
 #include "libc.hh"
 #include <unordered_map>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/fork_arena.hh>
+#endif
 
 // FIXME: smp safety
 
@@ -55,6 +59,22 @@ OSV_LIBC_API
 int sem_init(sem_t* s, int pshared, unsigned val)
 {
     static_assert(sizeof(indirect_semaphore) <= sizeof(*s), "sem_t overflow");
+#if CONF_fork
+    // A pshared semaphore lives in shared memory that a fork parent (PG's
+    // postmaster) and its forked children (backends) all map, but sem_t here
+    // holds only a POINTER; the posix_semaphore object (its _val, _mtx and
+    // _waiters wait-list) is heap-allocated.  If it landed in the COW fork
+    // arena, every backend would get its OWN copy-on-write copy of the
+    // semaphore state: a waiter (sem_wait) would block on its private _waiters
+    // list and a poster (sem_post) in another backend would bump a private
+    // _val -- the wakeup NEVER reaches the waiter, so the first cross-backend
+    // lock contention hangs every backend forever (the PG multi-writer hang).
+    // Force the object onto the identity kernel heap so all address spaces
+    // share ONE semaphore -- same rule as the app runtime and the shm/DSM
+    // registries.  (Applies to private semaphores too; harmless and simpler
+    // than branching on pshared, which PG sets to 1 for its shared semaphores.)
+    fork_arena::kernel_heap_scope _fkh;
+#endif
     posix_semaphore *sem = new posix_semaphore(val, 1, false);
     new (s) indirect_semaphore(sem);
     return 0;

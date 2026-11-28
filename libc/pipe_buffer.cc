@@ -11,6 +11,15 @@
 #include "pipe_buffer.hh"
 
 #include <osv/poll.h>
+#include <osv/fork_arena.hh>
+
+#if CONF_fork
+// The queue's blocks are shared by every process that holds the pipe, so they
+// must be identity memory whichever process's thread grows or frees them.
+#define PIPE_KH() fork_arena::kernel_heap_scope _pipe_kh
+#else
+#define PIPE_KH() do {} while (0)
+#endif
 
 void pipe_buffer::detach_sender()
 {
@@ -97,6 +106,7 @@ int pipe_buffer::read(uio* data, bool nonblock)
     if (!data->uio_resid) {
         return 0;
     }
+    PIPE_KH();
     std::unique_lock<mutex> lock(mtx);
     if (nonblock && q.empty()) {
         return sender ? EAGAIN : 0;
@@ -146,6 +156,7 @@ int pipe_buffer::write(uio* data, bool nonblock)
     if (!data->uio_resid) {
         return 0;
     }
+    PIPE_KH();
     WITH_LOCK(mtx) {
         // A write() smaller than PIPE_BUF (=4096 in Linux) will not be split
         // (i.e., will be "atomic"): For such a small write, we need to wait
