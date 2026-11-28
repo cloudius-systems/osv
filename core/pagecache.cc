@@ -164,8 +164,13 @@ protected:
             return 0;
         }
         int operator()(mmu::hw_ptep<0>& ptep) {
-            _ptes = nullptr;
-            return 0;
+            // Remove only the slot we were given.  Dropping a different,
+            // still-mapping slot would let the caller free the page under it.
+            if (ptep == _ptep) {
+                _ptes = nullptr;
+                return 0;
+            }
+            return 1;
         }
         int operator()(std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>>& set) {
             set->erase(_ptep);
@@ -225,19 +230,52 @@ public:
     void* addr() {
         return _page;
     }
+    // Does the PTE at @pte still map this page?  Every registered slot should;
+    // one that does not is a stale registration, and writing through it would
+    // clobber whatever the slot (or its page-table page) holds now.
+    bool maps(mmu::hw_ptep<0> pte) {
+        auto e = pte.read();
+        return !e.empty() && e.addr() == mmu::virt_to_phys(_page);
+    }
     int flush() {
-        return for_each_pte([] (mmu::hw_ptep<0> pte) { mmu::clear_pte(pte); return 1;});
+        return for_each_pte([this] (mmu::hw_ptep<0> pte) {
+            if (!maps(pte)) {
+                stale_flushes.fetch_add(1, std::memory_order_relaxed);
+                return 0;
+            }
+            mmu::clear_pte(pte);
+            return 1;
+        });
     }
     int clear_accessed() {
-        return for_each_pte([] (mmu::hw_ptep<0> pte) -> int { return mmu::clear_accessed(pte); });
+        return for_each_pte([this] (mmu::hw_ptep<0> pte) -> int { return maps(pte) && mmu::clear_accessed(pte); });
     }
     int clear_dirty() {
-        return for_each_pte([] (mmu::hw_ptep<0> pte) -> int { return mmu::clear_dirty(pte); });
+        return for_each_pte([this] (mmu::hw_ptep<0> pte) -> int { return maps(pte) && mmu::clear_dirty(pte); });
     }
+    // Count registered slots that no longer map this page (debug audit).
+    int stale_slots() {
+        return for_each_pte([this] (mmu::hw_ptep<0> pte) -> int { return !maps(pte); });
+    }
+    int nslots() {
+        return for_each_pte([] (mmu::hw_ptep<0>) { return 1; });
+    }
+    bool has_slot(mmu::hw_ptep<0> ptep) {
+        if (auto p = boost::get<mmu::hw_ptep<0>>(&_ptes)) {
+            return *p == ptep;
+        }
+        if (auto set = boost::get<std::unique_ptr<std::unordered_set<mmu::hw_ptep<0>>>>(&_ptes)) {
+            return (*set)->count(ptep);
+        }
+        return false;
+    }
+    static std::atomic<unsigned long> stale_flushes;
     const hashkey& key() {
         return _key;
     }
 };
+
+std::atomic<unsigned long> cached_page::stale_flushes{0};
 
 // A read-cache page whose backing memory is owned by the page cache and must
 // be freed when the entry is dropped.  ROFS and ZFS hand map_read_cached_page()
@@ -315,7 +353,13 @@ public:
         return was;
     }
     bool flush_check_dirty() {
-        return for_each_pte([] (mmu::hw_ptep<0> pte) { return mmu::clear_pte(pte).dirty(); }, std::logical_or<bool>(), false);
+        return for_each_pte([this] (mmu::hw_ptep<0> pte) {
+            if (!maps(pte)) {
+                stale_flushes.fetch_add(1, std::memory_order_relaxed);
+                return false;
+            }
+            return mmu::clear_pte(pte).dirty();
+        }, std::logical_or<bool>(), false);
     }
 };
 
@@ -816,6 +860,21 @@ static void insert(cached_page_write* cp) {
 
 #define IS_ZFS(st_dev) ((st_dev & (0xffULL<<56)) == ZFS_ID)
 
+// A PTE that maps a page owned by the page cache (registered in a
+// cached_page's _ptes, or the zero page) carries pte_pagecache, so the fault,
+// fork and teardown paths know to come back here for it.  A private copy does
+// not.
+static mmu::pt_element<0> cache_pte(mmu::pt_element<0> pte)
+{
+    pte.set_sw_bit(mmu::pte_pagecache, true);
+    return pte;
+}
+static mmu::pt_element<0> private_pte(mmu::pt_element<0> pte)
+{
+    pte.set_sw_bit(mmu::pte_pagecache, false);
+    return pte;
+}
+
 bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element<0> pte, bool write, bool shared)
 {
     struct stat st;
@@ -824,6 +883,17 @@ bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element<0> pt
     SCOPE_LOCK(write_lock);
     cached_page_write* wcp = find_in_cache(write_cache, key);
 
+    if (write && !shared) {
+        // The fault path runs this under the vma lock for READ, so two threads
+        // can write-fault the same page.  Every change to a page-cache PTE is
+        // made under write_lock: if another thread already gave this slot a
+        // private page, keep it rather than replace it with a fresh copy of
+        // the file (which would lose what that thread then wrote).
+        auto cur = ptep.read();
+        if (!cur.empty() && cur.writable() && !cur.sw_bit(mmu::pte_pagecache)) {
+            return false;
+        }
+    }
     if (write) {
         if (!wcp) {
             auto newcp = create_write_cached_page(fp, key);
@@ -848,13 +918,16 @@ bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element<0> pt
                     remove_read_mapping(key, ptep);
                 }
                 // cow (copy-on-write) of private page from read cache
-                return mmu::write_pte(newcp->release(), ptep, pte);
+                return mmu::write_pte(newcp->release(), ptep, private_pte(pte));
             }
         } else if (!shared) {
-            // cow (copy-on-write) of private page from write cache
+            // cow (copy-on-write) of private page from write cache.  The slot
+            // may currently map the write-cache page (a read fault mapped it
+            // there): it stops doing so, so it must stop being registered.
+            wcp->unmap(ptep);
             void* page = memory::alloc_page();
             memcpy(page, wcp->addr(), mmu::page_size);
-            return mmu::write_pte(page, ptep, pte);
+            return mmu::write_pte(page, ptep, private_pte(pte));
         }
     } else if (!wcp) {
         int ret;
@@ -865,7 +938,7 @@ bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element<0> pt
                     cached_page_arc* cp = find_in_cache(arc_read_cache, key);
                     if (cp) {
                         add_arc_read_mapping(cp, ptep);
-                        return mmu::write_pte(cp->addr(), ptep, mmu::pte_mark_cow(pte, true));
+                        return mmu::write_pte(cp->addr(), ptep, cache_pte(mmu::pte_mark_cow(pte, true)));
                     }
                 }
             } else {
@@ -874,7 +947,7 @@ bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element<0> pt
                     cached_page* cp = find_in_cache(read_cache, key);
                     if (cp) {
                         add_read_mapping(cp, ptep);
-                        return mmu::write_pte(cp->addr(), ptep, mmu::pte_mark_cow(pte, true));
+                        return mmu::write_pte(cp->addr(), ptep, cache_pte(mmu::pte_mark_cow(pte, true)));
                     }
                 }
             }
@@ -900,12 +973,12 @@ bool get(vfs_file* fp, off_t offset, mmu::hw_ptep<0> ptep, mmu::pt_element<0> pt
         } while (ret != -1);
 
         // try to access a hole in a file, map by zero_page
-        return mmu::write_pte(zero_page, ptep, mmu::pte_mark_cow(pte, true));
+        return mmu::write_pte(zero_page, ptep, cache_pte(mmu::pte_mark_cow(pte, true)));
     }
 
     wcp->map(ptep);
 
-    return mmu::write_pte(wcp->addr(), ptep, mmu::pte_mark_cow(pte, !shared));
+    return mmu::write_pte(wcp->addr(), ptep, cache_pte(mmu::pte_mark_cow(pte, !shared)));
 }
 
 bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep<0> ptep)
@@ -915,6 +988,11 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep<0> ptep)
     hashkey key {st.st_dev, st.st_ino, offset};
 
     auto old = clear_pte(ptep);
+    if (old.empty()) {
+        // Someone else (a page-cache drop) cleared this slot after the caller
+        // read it, so @addr is a page-cache page that is not ours to free.
+        return false;
+    }
 
     // page is either in ARC cache or write cache or zero page or private page
 
@@ -953,8 +1031,140 @@ bool release(vfs_file* fp, void *addr, off_t offset, mmu::hw_ptep<0> ptep)
         }
     }
 
+    // A page-cache PTE whose page is no longer cached was left behind by a
+    // drop that did not know about this slot; the frame is not ours.
+    if (old.sw_bit(mmu::pte_pagecache)) {
+        return false;
+    }
     // if a private page, caller will free it
     return addr != zero_page;
+}
+
+// Fork copied @n page-cache PTEs of a file (@dev, @ino) into a child's page
+// table.  Record each child slot with the page it maps, so a later drop of
+// that page clears it and the child's teardown can unregister it.  If the page
+// was dropped since the copy (the copy happened under the parent's vma lock,
+// this runs after it, before the child starts), clear the child slot instead:
+// the child refaults.  Each cache is checked under the lock its drops take,
+// one at a time, so this adds no new lock nesting.
+void inherit_mappings(dev_t dev, ino_t ino, const off_t *offsets,
+                      mmu::hw_ptep<0> *pteps, unsigned n)
+{
+    std::vector<bool> done(n);
+    auto pass = [&] (auto &cache) {
+        for (unsigned i = 0; i < n; i++) {
+            if (done[i]) {
+                continue;
+            }
+            auto pte = pteps[i].read();
+            void *page = pte.empty() ? nullptr : mmu::phys_to_virt(pte.addr());
+            if (!page || page == zero_page) {
+                done[i] = true;   // nothing mapped / permanent zero page
+                continue;
+            }
+            hashkey key {dev, ino, offsets[i]};
+            auto cp = find_in_cache(cache, key);
+            if (cp && cp->addr() == page) {
+                cp->map(pteps[i]);
+                done[i] = true;
+            }
+        }
+    };
+    WITH_LOCK(write_lock) { pass(write_cache); }
+    WITH_LOCK(read_lock) { pass(read_cache); }
+    WITH_LOCK(arc_read_lock) { pass(arc_read_cache); }
+    for (unsigned i = 0; i < n; i++) {
+        if (!done[i]) {
+            mmu::clear_pte(pteps[i]);
+        }
+    }
+}
+
+// Give the PTE at @ptep, which maps the cached page of (@dev, @ino, @offset),
+// a private copy of that page instead (writable if @writable), and stop
+// recording the slot.  Used by fork for a page that must be shared verbatim
+// with the child (a fork-shared range of a private file mapping): it has to
+// be private memory first, or each address space would copy it on its first
+// write and the two would diverge.  Caller holds the vma lock for write.
+void privatize_mapping(dev_t dev, ino_t ino, off_t offset, mmu::hw_ptep<0> ptep,
+                       bool writable)
+{
+    SCOPE_LOCK(write_lock);
+    auto pte = ptep.read();
+    if (pte.empty() || !pte.sw_bit(mmu::pte_pagecache)) {
+        return;
+    }
+    void *page = mmu::phys_to_virt(pte.addr());
+    void *priv = memory::alloc_page();
+    memcpy(priv, page, mmu::page_size);
+    hashkey key {dev, ino, offset};
+    auto wcp = find_in_cache(write_cache, key);
+    if (wcp && wcp->has_slot(ptep)) {
+        wcp->unmap(ptep);
+    }
+    WITH_LOCK(read_lock) {
+        auto rcp = find_in_cache(read_cache, key);
+        if (rcp && rcp->has_slot(ptep)) {
+            remove_read_mapping(read_cache, rcp, ptep);
+        }
+    }
+    WITH_LOCK(arc_read_lock) {
+        auto acp = find_in_cache(arc_read_cache, key);
+        if (acp && acp->has_slot(ptep)) {
+            remove_arc_read_mapping(acp, ptep);
+        }
+    }
+    auto npte = private_pte(mmu::pte_mark_cow(pte, false));
+    npte.set_writable(writable);
+    npte.set_addr(mmu::virt_to_phys(priv), false);
+    ptep.write(npte);
+}
+
+// A dying fork child's page-cache PTEs: unregister and clear each slot before
+// the child's page tables are freed.  Never frees the page (the cache owns
+// it), but drops the cache entry if this was its last mapping, as release()
+// does.  A dirty MAP_SHARED write-cache leaf marks its page dirty.
+void release_mappings(dev_t dev, ino_t ino, const off_t *offsets,
+                      mmu::hw_ptep<0> *pteps, unsigned n)
+{
+    WITH_LOCK(write_lock) {
+        for (unsigned i = 0; i < n; i++) {
+            hashkey key {dev, ino, offsets[i]};
+            auto wcp = find_in_cache(write_cache, key);
+            if (wcp && wcp->has_slot(pteps[i])) {
+                auto old = mmu::clear_pte(pteps[i]);
+                wcp->unmap(pteps[i]);
+                if (old.dirty()) {
+                    wcp->mark_dirty();
+                }
+            }
+        }
+    }
+    WITH_LOCK(read_lock) {
+        for (unsigned i = 0; i < n; i++) {
+            hashkey key {dev, ino, offsets[i]};
+            auto rcp = find_in_cache(read_cache, key);
+            if (rcp && rcp->has_slot(pteps[i])) {
+                mmu::clear_pte(pteps[i]);
+                remove_read_mapping(read_cache, rcp, pteps[i]);
+            }
+        }
+    }
+    WITH_LOCK(arc_read_lock) {
+        for (unsigned i = 0; i < n; i++) {
+            hashkey key {dev, ino, offsets[i]};
+            auto acp = find_in_cache(arc_read_cache, key);
+            if (acp && acp->has_slot(pteps[i])) {
+                mmu::clear_pte(pteps[i]);
+                remove_arc_read_mapping(acp, pteps[i]);
+            }
+        }
+    }
+    // Anything left was not registered (the zero page, or a slot a drop
+    // already cleared).
+    for (unsigned i = 0; i < n; i++) {
+        mmu::clear_pte(pteps[i]);
+    }
 }
 
 // Flush dirty MAP_SHARED pages for [start,end) back to the filesystem.
@@ -1293,6 +1503,36 @@ constexpr double access_scanner::_min_cpu;
 //the OpenZFS port routes reads through read_cache and never uses the scanner.
 extern "C" OSV_LIBSOLARIS_API void start_pagecache_access_scanner() {
     pagecache::s_access_scanner = new pagecache::access_scanner();
+}
+
+/*
+ * osv_pagecache_audit() — debug/test view of the page cache's PTE registry.
+ *
+ * Walks every read-cache and write-cache page and counts the PTE slots it has
+ * recorded, and how many of those no longer map the page (stale: a later drop
+ * would write through them).  stale_flushes counts drops that found such a
+ * slot and skipped it.  If (dev, ino) is non-zero, slots[] counts only pages
+ * of that file.  Takes the page-cache locks; not for hot paths.
+ */
+extern "C" OSV_LIBSOLARIS_API void osv_pagecache_audit(dev_t dev, ino_t ino,
+                                                    struct osv_pagecache_audit_result *r)
+{
+    using namespace pagecache;
+    memset(r, 0, sizeof(*r));
+    auto scan = [&] (auto &cache) {
+        for (auto &kv : cache) {
+            if ((dev || ino) && (kv.first.dev != dev || kv.first.ino != ino)) {
+                continue;
+            }
+            r->pages++;
+            r->slots += kv.second->nslots();
+            r->stale_slots += kv.second->stale_slots();
+        }
+    };
+    WITH_LOCK(write_lock) { scan(write_cache); }
+    WITH_LOCK(read_lock) { scan(read_cache); }
+    WITH_LOCK(arc_read_lock) { scan(arc_read_cache); }
+    r->stale_flushes = cached_page::stale_flushes.load(std::memory_order_relaxed);
 }
 
 /*

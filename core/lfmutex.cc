@@ -10,6 +10,84 @@
 #include <osv/sched.hh>
 #include <osv/wait_record.hh>
 #include <osv/export.h>
+#include <osv/kernel_config_fork.h>
+#if CONF_fork
+#include <osv/mmu.hh>
+#include <osv/align.hh>
+#endif
+
+#if CONF_fork
+namespace mmu {
+    // Live fork-child address-space count (defined in core/mmu.cc).  When > 0,
+    // more than one address space exists and a stack-resident wait_record on a
+    // shared kernel object can be dereferenced cross-AS.
+    extern std::atomic<int> live_child_address_spaces;
+}
+
+// See wait_record.hh: with per-child same-VA private stacks, a wait_record
+// queued on a SHARED kernel condvar/mutex must live in the identity-mapped
+// kernel heap (same VA->phys in every address space) whenever a cross-address-
+// space wake is possible.  That is true when EITHER the current thread runs in
+// a forked-child (non-AS0) address space (a child woken by the parent), OR any
+// child address space is currently live (the parent, in AS0, woken by a child
+// -- the child dereferences the parent's stack-resident wait_record through
+// its own page tables and would read a stale private stack copy).  Default OSv
+// (no fork, single AS) always takes the zero-overhead on-stack fast path.
+bool fork_child_needs_heap_wait_record()
+{
+    if (mmu::live_child_address_spaces.load(std::memory_order_relaxed) > 0) {
+        return true;
+    }
+    auto t = sched::thread::current();
+    return t && t->address_space() &&
+           t->address_space() != mmu::kernel_address_space();
+}
+
+// mutex::lock() publishes itself as a waiter (count.fetch_add) before it has a
+// wait_record to queue, and nobody can hand it the lock until that record is
+// pushed.  So the record must not come from malloc: a malloc that needs a page
+// takes free_page_ranges_lock, and if that is the contended mutex the nested
+// lock() allocates again, recursing until the stack overflows.  Take the record
+// from this thread's TLS block instead: it is on the identity heap (see
+// setup_tcb), so it is as coherent across address spaces as the heap record
+// was.  A lock() only nests inside another lock() through a page fault taken
+// before the record is queued, so a few slots are plenty; past them we fall
+// back to the heap record.
+namespace {
+constexpr unsigned tls_wait_records = 4;
+// Over-aligned TLS would change the kernel PT_TLS alignment that the static TLS
+// layout depends on, so keep a raw buffer and align by hand.
+__thread char tls_wr_buf[tls_wait_records * sizeof(wait_record) + alignof(wait_record)];
+__thread unsigned tls_wr_used;
+
+class lock_wait_record {
+    wait_record *_wr;
+    bool _tls;
+    alignas(coherent_wait_record) char _heap[sizeof(coherent_wait_record)];
+public:
+    explicit lock_wait_record(sched::thread *t) {
+        _tls = tls_wr_used < tls_wait_records;
+        if (_tls) {
+            auto base = align_up(reinterpret_cast<uintptr_t>(tls_wr_buf),
+                                 alignof(wait_record));
+            _wr = new (reinterpret_cast<char *>(base) + tls_wr_used++ * sizeof(wait_record))
+                wait_record(t);
+        } else {
+            _wr = &(new (_heap) coherent_wait_record(t))->get();
+        }
+    }
+    ~lock_wait_record() {
+        if (_tls) {
+            _wr->~wait_record();
+            tls_wr_used--;
+        } else {
+            reinterpret_cast<coherent_wait_record *>(_heap)->~coherent_wait_record();
+        }
+    }
+    wait_record &get() { return *_wr; }
+};
+}
+#endif
 
 namespace lockfree {
 
@@ -51,7 +129,16 @@ void mutex::lock()
     // when another thread releases the lock.
     // Note "waiter" is on the stack, so we must not return before making sure
     // it was popped from waitqueue (by another thread or by us.)
+#if CONF_fork
+    // The wait_record must stay coherent when a thread in another address
+    // space dereferences it off this shared kernel mutex, so it cannot live on
+    // this thread's (per-AS) stack.  It also must not be malloc'ed here; see
+    // lock_wait_record.
+    lock_wait_record waiter_holder(current);
+    wait_record &waiter = waiter_holder.get();
+#else
     wait_record waiter(current);
+#endif
     waitqueue.push(&waiter);
 
     // The "Responsibility Hand-Off" protocol where a lock() picks from
